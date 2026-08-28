@@ -1,0 +1,155 @@
+{
+  "msg": "",
+  "code": "00000",
+  "data": {
+    "tokens": {
+      "datamall_token": "<datamall_token-redacted>",
+      "nextbus_token": "<nextbus_token-redacted>",
+      "nextbus_token2": "<nextbus_token2-redacted>"
+    },
+    "bus_stops": [
+      {
+        "id": "KR-MRT",
+        "number": "18331"
+      },
+      {
+        "id": "LT27",
+        "number": "18301"
+      },
+      {
+        "id": "UHALL",
+        "number": "18311"
+      },
+      {
+        "id": "UHC-OPP",
+        "number": "18321"
+      },
+      {
+        "id": "MUSEUM",
+        "number": "16161"
+      },
+      {
+        "id": "UHC",
+        "number": "18329"
+      },
+      {
+        "id": "UHALL-OPP",
+        "number": "18319"
+      },
+      {
+        "id": "S17",
+        "number": "18309"
+      },
+      {
+        "id": "KR-MRT-OPP",
+        "number": "18339"
+      },
+      {
+        "id": "IT",
+        "number": "16189"
+      },
+      {
+        "id": "YIH-OPP",
+        "number": "16179"
+      },
+      {
+        "id": "YIH",
+        "number": "16171"
+      },
+      {
+        "id": "CLB",
+        "number": "16181"
+      },
+      {
+        "id": "KRB",
+        "number": "16009"
+      },
+      {
+        "id": "SDE3-OPP",
+        "number": "16141"
+      },
+      {
+        "id": "JP-SCH-16151",
+        "number": "16151"
+      },
+      {
+        "id": "BG-MRT",
+        "number": "41021"
+      },
+      {
+        "id": "CG",
+        "number": "41029"
+      },
+      {
+        "id": "RAFFLES",
+        "number": "16169"
+      },
+      {
+        "id": "EA",
+        "number": "16159"
+      },
+      {
+        "id": "SDE3",
+        "number": "16149"
+      }
+    ],
+    "bus-stop-color": [
+      {
+        "BUS": "A1",
+        "COLOR_CODE": "FB0101",
+        "COLOR_FONT": "FFFFFF"
+      },
+      {
+        "BUS": "A2",
+        "COLOR_CODE": "E3CF0E",
+        "COLOR_FONT": "000000"
+      },
+      {
+        "BUS": "D1",
+        "COLOR_CODE": "C77DE0",
+        "COLOR_FONT": "FFFFFF"
+      },
+      {
+        "BUS": "D2",
+        "COLOR_CODE": "6E1D72",
+        "COLOR_FONT": "FFFFFF"
+      },
+      {
+        "BUS": "K",
+        "COLOR_CODE": "33599C",
+        "COLOR_FONT": "FFFFFF"
+      },
+      {
+        "BUS": "E",
+        "COLOR_CODE": "02B050",
+        "COLOR_FONT": "FFFFFF"
+      },
+      {
+        "BUS": "BTC",
+        "COLOR_CODE": "EF8135",
+        "COLOR_FONT": "FFFFFF"
+      },
+      {
+        "BUS": "L",
+        "COLOR_CODE": "BFBFBF",
+        "COLOR_FONT": "000000"
+      },
+      {
+        "BUS": "R1",
+        "COLOR_CODE": "EE8136",
+        "COLOR_FONT": "FFFFFF"
+      },
+      {
+        "BUS": "R2",
+        "COLOR_CODE": "008000",
+        "COLOR_FONT": "FFFFFF"
+      },
+      {
+        "BUS": "P",
+        "COLOR_CODE": "BEBEBE",
+        "COLOR_FONT": "000000"
+      }
+    ]
+  },
+  "ts": "20260828002214"
+}

@@ -1,0 +1,145 @@
+{
+  "_help": [
+    "HAND-MAINTAINED. 'npm run scrape' never writes this file.",
+    "",
+    "The FMS does not publish operating hours, so guessing them into the",
+    "scraped graph would be fabricating facts. Fill them in here instead.",
+    "",
+    "Times are SGT (UTC+8, no DST), 24-hour HH:MM.",
+    "  [\"07:00\", \"23:00\"]   runs between those times",
+    "  [\"07:00\", \"01:00\"]   fine - a window may cross midnight",
+    "  null                 does NOT run that day",
+    "  [\"\", \"\"]             not yet filled in (see below)",
+    "",
+    "An unfilled or malformed window is treated as UNKNOWN, and an unknown",
+    "service is assumed to be running. That is the safe direction to fail, but",
+    "it means the 'ended' rung never fires: the tile will cheerfully offer you",
+    "a bus at 03:00. Filling these in is what turns 'No bus - walk 21 min'",
+    "from dead code into a real answer.",
+    "",
+    "You only need the services you actually use. Leaving one unfilled costs",
+    "nothing except that it never reports 'ended'."
+  ],
+  "_routes": {
+    "A1": "KRT > PGP > KR MRT > CLB > KRT",
+    "A2": "KRT > CLB > KR MRT > PGP > KRT",
+    "D1": "COM3 > CLB > UTown > COM3",
+    "D2": "PGP > UTown > CLB > PGP",
+    "K": "PGP > KR MRT > LT27 > PGP",
+    "P": "KV > CG > OTH > BG MRT > KR MRT > Opp UHC > UTown > KV",
+    "R1": "UTown > BIZ2 > KR MRT > UTown",
+    "R2": "UTown > KR MRT > BIZ2 > UTown"
+  },
+  "A1": {
+    "weekday": [
+      "07:15",
+      "23:00"
+    ],
+    "saturday": [
+      "07:15",
+      "23:00"
+    ],
+    "sunday": [
+      "09:07",
+      "23:00"
+    ]
+  },
+  "A2": {
+    "weekday": [
+      "07:15",
+      "23:00"
+    ],
+    "saturday": [
+      "07:15",
+      "23:00"
+    ],
+    "sunday": [
+      "09:00",
+      "23:00"
+    ]
+  },
+  "D1": {
+    "weekday": [
+      "07:15",
+      "23:00"
+    ],
+    "saturday": [
+      "07:20",
+      "23:00"
+    ],
+    "sunday": [
+      "09:10",
+      "23:00"
+    ]
+  },
+  "D2": {
+    "weekday": [
+      "07:15",
+      "23:00"
+    ],
+    "saturday": [
+      "07:15",
+      "23:00"
+    ],
+    "sunday": [
+      "09:00",
+      "23:00"
+    ]
+  },
+  "K": {
+    "weekday": [
+      "07:04",
+      "23:04"
+    ],
+    "saturday": [
+      "07:04",
+      "19:04"
+    ],
+    "sunday": [
+      null,
+      null
+    ]
+  },
+  "P": {
+    "weekday": [
+      "08:20",
+      "17:25"
+    ],
+    "saturday": [
+      null,
+      null
+    ],
+    "sunday": [
+      null,
+      null
+    ]
+  },
+  "R1": {
+    "weekday": [
+      "07:40",
+      "19:30"
+    ],
+    "saturday": [
+      null,
+      null
+    ],
+    "sunday": [
+      null,
+      null
+    ]
+  },
+  "R2": {
+    "weekday": [
+      "08:20",
+      "19:30"
+    ],
+    "saturday": [
+      null,
+      null
+    ],
+    "sunday": [
+      null,
+      null
+    ]
+  }
+}
