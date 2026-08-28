@@ -249,6 +249,37 @@ test('the PWA surface is served from the Worker itself', async () => {
   assert.equal(missing.status, 404);
 });
 
+test('/campus serves the static map + destination search data, cached hard', async () => {
+  const fetchImpl = makeFetch({});
+  const { res } = await call('/campus', { fetchImpl });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('cache-control'), /max-age=3600/);
+  const body = await res.json();
+  assert.equal(body.stops.length, 33, 'the real bundled stop graph');
+  assert.ok(body.routes.D2, 'D2 is one of the 8 real services');
+  assert.ok(Array.isArray(body.destinations) && body.destinations.length > body.stops.length);
+  assert.equal(fetchImpl.counts.shuttle, 0, 'a static payload never touches the upstream feed');
+});
+
+test('/arrivals reports one stop\'s board without needing a destination', async () => {
+  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
+  const { res } = await call('/arrivals?stop=com3', { fetchImpl }); // lowercase, like a URL a user might paste
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.stop.code, 'COM3');
+  const d2 = body.board.find((r) => r.svc === 'D2');
+  assert.ok(d2, 'D2 serves COM3 in the real graph');
+  assert.equal(d2.quality, 'live');
+  assert.ok(Number.isFinite(d2.etaS));
+});
+
+test('/arrivals on an unknown stop is a 400, not a fabricated empty board', async () => {
+  const fetchImpl = makeFetch({});
+  const { res } = await call('/arrivals?stop=narnia', { fetchImpl });
+  assert.equal(res.status, 400);
+  assert.equal(fetchImpl.counts.shuttle, 0);
+});
+
 test('walking is offered end to end when it beats the bus', async () => {
   // Standing at COM3, UTown is a ~14 min walk. A D1 fourteen minutes out plus
   // four stops of riding loses to that, and the endpoint must be willing to
