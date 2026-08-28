@@ -1,0 +1,23 @@
+name = "nusbus-edge"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# 08:40 SGT on weekdays. SGT is UTC+8 with no DST, so this is exact all year.
+[triggers]
+crons = ["40 0 * * 1-5"]
+
+# npx wrangler kv namespace create NUSBUS_KV
+# Holds ONLY the auth token and push subscriptions. Never arrivals.
+[[kv_namespaces]]
+binding = "NUSBUS_KV"
+id = "1f88f570f6e04f78aa2888ee7aa78e6a"
+preview_id = "1f88f570f6e04f78aa2888ee7aa78e6a"
+
+# Decision + segment-time logging. See the positional schema in analytics.ts.
+[[analytics_engine_datasets]]
+binding = "NUSBUS_AE"
+dataset = "nusbus_edge"
+
+[observability]
+enabled = true

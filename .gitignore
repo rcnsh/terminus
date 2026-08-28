@@ -1,0 +1,10 @@
+node_modules/
+.dev.vars
+.wrangler/
+dist/
+*.log
+__pycache__/
+.venv/
+
+# Captured API traffic. Contains live tokens.
+dev/

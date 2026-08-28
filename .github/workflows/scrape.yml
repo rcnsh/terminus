@@ -1,0 +1,54 @@
+name: scrape stop graph
+
+on:
+  schedule:
+    # 03:00 UTC Monday = 11:00 SGT Monday. Weekly is plenty: stop locations,
+    # route order and operating hours change a few times a year.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # This runner is an arbitrary US cloud IP. If the FMS endpoints are
+      # restricted to the NUS network this job fails, which is itself the
+      # answer to the open question in the README.
+      - name: Scrape
+        env:
+          NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
+          NEXTBUS_FMS_BASE: ${{ secrets.NEXTBUS_FMS_BASE }}
+          NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
+          NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
+          NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
+          NEXTBUS_FMS_TENANT_CODE: ${{ secrets.NEXTBUS_FMS_TENANT_CODE }}
+        run: python3 scripts/scrape_stops.py
+
+      # A bad graph is worse than a stale one, so the suite gates the commit.
+      - name: Test against the new graph
+        run: npm ci && npm test
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- data/stops.json; then
+            echo "stop graph unchanged"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/stops.json
+          git commit -m "data: refresh stop graph"
+          git push

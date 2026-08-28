@@ -1,0 +1,47 @@
+# Copy to .dev.vars and fill from a proxied uNivUS capture (mitmproxy + CA cert on
+# the device; uNivUS is Flutter/Dio). Commit NOTHING from here.
+#
+# Variable names match hewliyang/nus-nextbus-web's .env.example so that repo's
+# notes stay applicable.
+
+# CONFIRMED 2026-08-27 from a real capture. The flow is:
+#   POST {NEXTBUS_AUTH_BASE}/get-access-token
+#   headers: X-HTD-API, X-APP-API
+#   body:    {"deviceid","ipaddr","version"}
+#   ->       {"code":"00000","data":{"token","userid","domain","username"}}
+# Token lifetime is 24h and lives only in the JWT's exp claim; there is no
+# expires_in field. No NUSNET credentials anywhere -- domain is PUBLIC.
+NEXTBUS_AUTH_BASE="https://myizaac2.nus.edu.sg/univus-public/mobile"
+
+# CONFIRMED. Extracted from libapp.so and verified live.
+NEXTBUS_FMS_BASE="https://fms.connectx.com.sg/apiy/NUSETA"
+
+# Confirmed format.
+NEXTBUS_APP_VERSION="univus_android_2.59.1_139"
+
+# THE ONLY TWO SECRETS IN THE PROJECT. Read them off the REQUEST HEADERS of
+# the get-access-token call, not the body. Without them the endpoint returns
+# HTTP 200 with {"code":"10000","msg":"Invalid API KEY"}.
+NEXTBUS_HTD_API=""
+NEXTBUS_APP_API=""
+
+# Optional. Any 16 hex characters; generated and persisted in KV when absent.
+# Not a secret -- it is an Android ID -- but keep it stable so the upstream
+# sees one install rather than a new device on every cold start.
+NEXTBUS_DEVICE_ID=""
+
+# ConnectX ServiceID and TenantCode. CONFIRMED: both are the literal "NUS",
+# sent as query params on every FMS call. (Not secrets -- tenant identifiers.)
+# Without them ConnectX answers {"result":false,"error":4} at HTTP 200.
+NEXTBUS_FMS_SERVICE_ID="NUS"
+NEXTBUS_FMS_TENANT_CODE="NUS"
+
+# Optional. uNivUS sends these via Dio; the server does not require them.
+NEXTBUS_REQUESTED_BY=""
+NEXTBUS_SECURED_REQUEST=""
+
+# Optional. Push is disabled entirely unless VAPID_PUBLIC_KEY is set.
+# npx web-push generate-vapid-keys
+VAPID_PUBLIC_KEY=""
+VAPID_PRIVATE_KEY=""
+VAPID_SUBJECT="mailto:you@example.com"
