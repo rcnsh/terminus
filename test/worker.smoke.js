@@ -15,11 +15,11 @@ const D2_IN_4 = [
   { name: 'D1', arrivalTime: '-', nextArrivalTime: '-', passengers: '' },
 ];
 
-async function call(path, { fetchImpl, env, cache } = {}) {
+async function call(path, { fetchImpl, env, cache, headers } = {}) {
   const c = cache ?? installGlobals(fetchImpl);
   if (fetchImpl) globalThis.fetch = fetchImpl;
   const ctx = makeCtx();
-  const res = await worker.fetch(new Request(BASE + path), env ?? makeEnv(), ctx);
+  const res = await worker.fetch(new Request(BASE + path, { headers }), env ?? makeEnv(), ctx);
   // The real ExecutionContext keeps the Worker alive until these settle.
   // Not awaiting them races the cache writes the next call depends on.
   await ctx.settle();
@@ -354,4 +354,17 @@ test('/next with coordinates but no timetable shows nearby buses, no invented de
   // No destination was chosen, so the detail must not claim to send you anywhere.
   assert.ok(!/~\d+ min\b.*(UTown|PGP|COM)/.test(a.detail) || true);
   assert.notEqual(a.quality, undefined);
+});
+
+test('a browser opening /next?tt= is redirected to the app page, not shown JSON', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
+  // Accept: text/html is what an address-bar navigation sends.
+  const { res } = await call('/next?tt=abc', { fetchImpl, headers: { accept: 'text/html' } });
+  assert.equal(res.status, 302);
+  const loc = res.headers.get('location');
+  assert.ok(loc.endsWith('/?tt=abc'), 'lands on the page carrying the timetable: ' + loc);
+
+  // A fetch()/tile (Accept: */*) still gets JSON, not a redirect.
+  const api = await call('/next', { fetchImpl, headers: { accept: '*/*' } });
+  assert.equal(api.res.status, 200);
 });
