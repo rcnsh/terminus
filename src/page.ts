@@ -208,7 +208,7 @@ function timetable(){
   if(fromUrl){ try{ localStorage.setItem('tt',fromUrl); }catch(e){} return fromUrl; }
   try{ return localStorage.getItem('tt'); }catch(e){ return null; }
 }
-function personalLink(){ var tt=timetable(); return tt ? location.origin+'/next?tt='+tt : null; }
+function personalLink(){ var tt=timetable(); return tt ? location.origin+'/?tt='+tt : null; }
 
 /* ---- render the answer ---- */
 function ago(iso){

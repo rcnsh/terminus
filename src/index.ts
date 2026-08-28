@@ -273,12 +273,15 @@ async function handleImport(url: URL, env: Env, nowMs: number): Promise<Response
 
   const encoded = encodeTimetable({ home, trips });
   const origin = new URL(url);
-  origin.pathname = '/next';
+  // The shareable link opens the app page (which reads ?tt= and renders).
+  // The JSON API path is kept separately for the Android tile.
+  origin.pathname = '/';
   origin.search = `?tt=${encoded}`;
 
   return json({
     url: origin.toString(),
-    path: `/next?tt=${encoded}`,
+    path: `/?tt=${encoded}`,
+    tilePath: `/next?tt=${encoded}`,
     home,
     classes: trips.length,
     schedule: trips.map((t) => ({ day: t.day, at: t.arriveByMin, to: t.to, label: t.label })),
@@ -386,8 +389,15 @@ export default {
 
     try {
       switch (url.pathname) {
-        case '/next':
+        case '/next': {
+          const accept = req.headers.get('accept') ?? '';
+          if (req.method === 'GET' && accept.includes('text/html')) {
+            const to = new URL(url);
+            to.pathname = '/';
+            return Response.redirect(to.toString(), 302);
+          }
           return await handleNext(url, env, ctx, nowMs);
+        }
         case '/trip':
           return await handleTrip(url, env, ctx, nowMs);
         case '/health':
