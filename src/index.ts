@@ -24,6 +24,7 @@ import { authConfigured, authUrl, getSession } from './auth.ts';
 import { fmsConfigured, getArrivals } from './fms.ts';
 import { buildAnswer, shortStop } from './format.ts';
 import {
+  boardAt,
   candidateStops,
   confidence,
   indexGraph,
@@ -33,6 +34,7 @@ import {
   scoreOptions,
   walkAllTheWayS,
 } from './resolve.ts';
+import { buildCampusMap, buildDestinations } from './campus.ts';
 import { ICON_SVG, MANIFEST, SERVICE_WORKER } from './pwa.ts';
 import { PAGE } from './page.ts';
 import { pushConfigured, saveSubscription, tickleAll } from './push.ts';
@@ -47,6 +49,11 @@ const GRAPH = {
     serviceHoursJson as Record<string, unknown>,
   ),
 } as Graph;
+
+// Pure functions of the static GRAPH -- computed once per isolate, served
+// with a long client cache, same spirit as GRAPH itself.
+const CAMPUS_MAP = buildCampusMap(GRAPH);
+const DESTINATIONS = buildDestinations(GRAPH);
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -65,6 +72,12 @@ function json(body: unknown, status = 200, extra: Record<string, string> = {}): 
       ...CORS,
       ...extra,
     },
+  });
+}
+
+function jsonCached(body: unknown, maxAge: number): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': `public, max-age=${maxAge}`, ...CORS },
   });
 }
 
@@ -337,6 +350,43 @@ async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknow
   }
 }
 
+/**
+ * GET /campus -- static map + search data for the Map and Plan tabs. Pure
+ * function of the bundled stop graph, so it is cheap to cache hard: it only
+ * changes when a deploy ships a new scrape, same as the graph itself.
+ */
+function handleCampus(): Response {
+  return jsonCached({ viewBox: CAMPUS_MAP.viewBox, stops: CAMPUS_MAP.stops, routes: CAMPUS_MAP.routes, destinations: DESTINATIONS }, 3600);
+}
+
+/**
+ * GET /arrivals?stop=<code> -- what is coming at one stop, for the map's
+ * tap-a-stop popover. Goes through the same per-stop 15s edge cache as
+ * /next, so a map open does not cost more than checking that one stop would
+ * on its own -- there is no bulk "every stop at once" fetch anywhere.
+ */
+async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
+  const code = url.searchParams.get('stop')?.trim().toUpperCase() || '';
+  const idx = indexGraph(GRAPH);
+  const stop = idx.byCode.get(code);
+  if (!stop) return json({ error: 'unknown stop', stop: code }, 400);
+
+  // Same failure handling as collectArrivals(): a rejected fetch means "we
+  // never reached the feed", not "no bus is coming" -- those are different
+  // answers, and /next never lets this surface as a 500, so /arrivals must
+  // not either.
+  const sa = await getArrivals(env, ctx, code, nowMs).catch(
+    () => ({ code, arrivals: [], fetchedAt: nowMs, stale: false, available: false }) as StopArrivals,
+  );
+  const board = boardAt(GRAPH, idx, code, sa, nowMs);
+  return json({
+    stop: { code: stop.code, name: stop.name },
+    board,
+    asOf: new Date(sa.stale ? sa.fetchedAt : nowMs).toISOString(),
+    available: sa.available,
+  });
+}
+
 async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response> {
   const idx = indexGraph(GRAPH);
   const t = sgt(nowMs);
@@ -402,6 +452,10 @@ export default {
           return await handleTrip(url, env, ctx, nowMs);
         case '/health':
           return await handleHealth(url, env, nowMs);
+        case '/campus':
+          return handleCampus();
+        case '/arrivals':
+          return await handleArrivals(url, env, ctx, nowMs);
         case '/import':
           return await handleImport(url, env, nowMs);
         case '/subscribe':

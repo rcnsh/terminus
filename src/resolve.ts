@@ -16,6 +16,7 @@ import type {
   Candidate,
   Graph,
   GraphIndex,
+  Quality,
   ResolveInput,
   RouteIndex,
   ScoredOption,
@@ -232,6 +233,60 @@ export function resolveBerths(rows: Arrival[]): { usable: Arrival[]; ambiguousBe
 
 function headwayFor(graph: Graph, svc: string): number {
   return graph.headwayS?.[svc] ?? DEFAULT_HEADWAY_S;
+}
+
+export interface BoardRow {
+  svc: string;
+  /** Seconds until arrival. null means "no live time to show", never 0. */
+  etaS: number | null;
+  quality: Quality;
+  ambiguousBerth: boolean;
+}
+
+/**
+ * What is coming at a single stop, for every service that stops there --
+ * the map's tap-a-stop popover. Deliberately destination-less: no walk time,
+ * no hops, no "can I reach it" cutoff, because the visitor is already
+ * standing there (or checking before they leave), not racing to catch one.
+ * Shares its quality ladder and berth handling with scoreOptions() so a stop
+ * never disagrees with itself between the Now answer and the map.
+ */
+export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: StopArrivals | undefined, nowMs: number): BoardRow[] {
+  const services = idx.servingStop.get(stopCode) ?? [];
+  const available = sa !== undefined && sa.available !== false;
+  const out: BoardRow[] = [];
+
+  for (const svc of services) {
+    const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === svc);
+    const { usable, ambiguousBerth } = resolveBerths(forSvc);
+    const etas = usable
+      .filter((a) => a.etaS != null)
+      .sort((a, b) => (a.etaS as number) - (b.etaS as number));
+
+    let quality: Quality;
+    let etaS: number | null = null;
+    if (etas.length) {
+      quality = 'live';
+      etaS = etas[0].etaS;
+    } else if (!inService(graph, svc, nowMs)) {
+      continue; // ended: do not list a service that is not running
+    } else if (!available) {
+      quality = 'unknown';
+    } else {
+      quality = 'scheduled';
+    }
+    if (sa?.stale && quality !== 'unknown') quality = 'stale';
+
+    out.push({ svc, etaS, quality, ambiguousBerth });
+  }
+
+  out.sort(
+    (a, b) =>
+      Number(isMeasured(b.quality)) - Number(isMeasured(a.quality)) ||
+      (a.etaS ?? Infinity) - (b.etaS ?? Infinity) ||
+      a.svc.localeCompare(b.svc),
+  );
+  return out;
 }
 
 /**

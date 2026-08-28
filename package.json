@@ -7,8 +7,8 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "node --test test/logic.test.js test/worker.smoke.js test/nusmods.test.js",
-    "test:legacy": "node --test --experimental-strip-types test/logic.test.js test/worker.smoke.js",
+    "test": "node --test test/logic.test.js test/worker.smoke.js test/nusmods.test.js test/campus.test.js",
+    "test:legacy": "node --test --experimental-strip-types test/logic.test.js test/worker.smoke.js test/campus.test.js",
     "typecheck": "tsc --noEmit",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

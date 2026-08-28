@@ -8,3 +8,6 @@ __pycache__/
 
 # Captured API traffic. Contains live tokens.
 dev/
+
+# Impeccable build-review scratch (screenshots), not source
+.impeccable/review/
