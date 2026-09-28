@@ -128,6 +128,21 @@ test('on a loop route both sides reach UTown, but the wrong side loses on cost',
   assert.ok(confidence(options, true) > 0.9, 'a decisive margin should report high confidence');
 });
 
+test('near PGP Foyer, trips it would reach the long way round board at PGP instead', () => {
+  // Between the two stops, closer to Foyer (40 m against 78 m). Foyer's
+  // services leave the wrong way for everything except COM3.
+  const at = { lat: 1.29125, lon: 103.7809 };
+  const board = (to) => {
+    const cands = candidateStops(realGraph, { ...at, to, originCode: null });
+    const byStop = Object.fromEntries(
+      cands.map((c) => sa(c.stop.code, c.legs.map((l) => ({ svc: l.svc, etaS: 240, crowd: null, plate: null })))),
+    );
+    return scoreOptions(realGraph, cands, arrivalsFor(byStop), NOW)[0].stop.code;
+  };
+  for (const to of ['KR-MRT', 'UHC', 'UTOWN', 'LT27']) assert.equal(board(to), 'PGP', to);
+  assert.equal(board('COM3'), 'PGPR', 'COM3 really is the Foyer direction');
+});
+
 test('reach(): linear routes are strict, loop routes wrap', () => {
   const linear = indexGraph(PAIR_GRAPH);
   assert.deepEqual(reach(linear, 'NORTH', 'KRMRT', 'UTOWN'), { hops: 2 });
