@@ -1,54 +1,9 @@
 /**
- * THE PERSONALISATION SURFACE.
- *
- * The premise of this project is that Jacob has three recurring trips, not a
- * general routing problem. Hardcoding them is what removes the tap. Everything
- * outside this file is machinery.
- *
- * Edit the trips and priors; leave the tuning constants alone until phase 2
- * (segment travel-time logging) gives them real values.
+ * Tuning constants. Leave them alone until segment travel-time logging
+ * (analytics.ts) gives them measured values.
  */
 
 import type { Quality } from './types.ts';
-
-export interface Trip {
-  key: string;
-  /** Destination stop code. */
-  to: string;
-  /** Origin stop code, used when the client sends no coordinates. */
-  from: string;
-  /** Human name for the destination, used in `detail`. Keep it short. */
-  label: string;
-}
-
-export const TRIPS: Trip[] = [
-  { key: 'utown', to: 'UTOWN', from: 'PGP', label: 'UTown' },
-  { key: 'mrt', to: 'KR-MRT', from: 'PGP', label: 'KR MRT' },
-  { key: 'home', to: 'PGP', from: 'UTOWN', label: 'PGP' },
-];
-
-// Note on the codes above: they are real, from the live route graph. PGP to
-// COM3 is deliberately NOT here -- on the real topology that trip is beaten
-// outright on foot (651 m against thirteen stops round the D2 loop), so it
-// would only ever return "Walk · 8 min". Replace all three with yours.
-
-/**
- * Time-of-day priors. First match wins. Hours are SGT, [fromH, toH) on a
- * 24h clock. `days`: 'weekday' = Mon-Fri, 'weekend' = Sat/Sun, 'any' = both.
- */
-export interface Prior {
-  days: 'weekday' | 'weekend' | 'any';
-  fromH: number;
-  toH: number;
-  trip: string;
-}
-
-export const PRIORS: Prior[] = [
-  { days: 'weekday', fromH: 6, toH: 18, trip: 'utown' },
-  { days: 'weekday', fromH: 18, toH: 24, trip: 'home' },
-  { days: 'weekend', fromH: 9, toH: 24, trip: 'utown' },
-];
-
 
 export const TTL = {
   /** Edge cache freshness for a stop's arrivals. Every client inside this
@@ -98,18 +53,6 @@ export const DEFAULT_HEADWAY_S = 12 * 60;
 /** Hard cap from the API contract. `format.ts` targets much shorter. */
 export const LABEL_MAX = 40;
 
-/**
- * live and stale carry real numbers; scheduled and unknown are guesses.
- * Never recommend an estimate over a measurement.
- */
-export function isMeasured(q: Quality): boolean {
-  return q === 'live' || q === 'stale';
-}
-
-export function tripByKey(key: string | null): Trip | null {
-  if (!key) return null;
-  return TRIPS.find((t) => t.key === key) ?? null;
-}
 
 /** SGT is UTC+8, no DST. */
 export function sgt(nowMs: number): { day: number; hour: number; minutes: number } {
@@ -121,14 +64,11 @@ export function sgt(nowMs: number): { day: number; hour: number; minutes: number
   };
 }
 
-/** The trip a bare `/next` is about at this moment. Null outside all priors. */
-export function tripForTime(nowMs: number): Trip | null {
-  const { day, hour } = sgt(nowMs);
-  const weekend = day === 0 || day === 6;
-  for (const p of PRIORS) {
-    if (p.days === 'weekday' && weekend) continue;
-    if (p.days === 'weekend' && !weekend) continue;
-    if (hour >= p.fromH && hour < p.toH) return tripByKey(p.trip);
-  }
-  return null;
+
+/**
+ * live and stale carry real numbers; scheduled and unknown are guesses.
+ * Never recommend an estimate over a measurement.
+ */
+export function isMeasured(q: Quality): boolean {
+  return q === 'live' || q === 'stale';
 }

@@ -66,6 +66,14 @@ export interface Answer {
   /** ISO. On a stale answer this is the ORIGINAL fetch time. */
   asOf: string;
   arrivals: Arrival[];
+  /**
+   * When the bus leaves the boarding stop, as a clock time. Clients count
+   * down from this instead of trusting `label` after it was fetched. Null
+   * when there is no bus to board or no live time for it.
+   */
+  departsAt?: string | null;
+  /** When you reach the destination stop (by bus, or on foot for a walk answer). */
+  arriveAt?: string | null;
 }
 
 /* ------------------------------------------------------------------ */

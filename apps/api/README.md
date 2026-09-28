@@ -79,8 +79,8 @@ npx wrangler deploy
 | --- | --- |
 | `GET /` | API documentation (Stoplight Elements), with a live "Send API Request" panel. |
 | `GET /openapi.json` | The OpenAPI 3.1 description the docs render. Source: [src/openapi.ts](src/openapi.ts). |
-| `GET /next` | The answer. `?tt=` (timetable from `/import`) picks your next class; `?to=` names a trip key or stop code; `?lat&lon` alone gives the next buses at your nearest stop. With none of these it returns a "Set up" answer rather than inventing a destination. |
-| `GET /trip?to=<key\|stop>&lat&lon` | The answer for a named trip or stop code. Falls back to a configured origin without coordinates. |
+| `GET /next` | The answer. `?tt=` (timetable from `/import`) picks your next class; `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With none of these it returns a "Set up" answer rather than inventing a destination. |
+| `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
 | `GET /campus` | Static stop/route geometry and destination search data. Cached hard. |
 | `GET /import?share=<nusmods url>&home=<stop>` | NUSMods share URL -> a personal `/next?tt=` link. Stateless; nothing stored. |
@@ -90,9 +90,12 @@ npx wrangler deploy
 
 ## Personalisation
 
-Per-user trips come from a NUSMods timetable via `/import`, encoded into the
-user's own `/next?tt=` link. [`src/config.ts`](src/config.ts) still holds a few
-named trip keys usable with `?to=`, plus the cache TTLs and tuning constants.
+Per-user trips come from the account (`/me/next`) or, statelessly, a NUSMods
+timetable encoded into a `/next?tt=` link by `/import`. Imported classes only
+count in the weeks they run ([src/calendar.ts](src/calendar.ts), built from
+NUSMods' semester dates and MOM's public holidays by
+`scripts/fetch_calendar.py`). [`src/config.ts`](src/config.ts) holds the cache
+TTLs and tuning constants.
 
 ## Accounts
 
@@ -297,7 +300,8 @@ src/resolve.ts    Haversine, directional pairing, downstream reachability, scori
 src/format.ts     label/detail strings, the degrade ladder
 src/fms.ts        ShuttleService client + defensive response normalisation
 src/auth.ts       Public token, lazy refresh, KV + in-memory memo
-src/config.ts     THE PERSONALISATION SURFACE
+src/config.ts     Cache TTLs and tuning constants
+src/calendar.ts   NUS teaching weeks and public holidays
 src/nusmods.ts    NUSMods share URL -> trips, stateless ?tt= encoding
 src/campus.ts     /campus map geometry and destination search
 src/analytics.ts  Analytics Engine decision + arrival logging

@@ -165,18 +165,25 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       '/trip': {
         get: {
           tags: ['Answers'],
-          summary: 'Answer for a trip or stop',
+          summary: 'Answer for a destination',
           description:
-            'The same answer as `/next`, for an explicit destination. Without coordinates the trip\'s configured origin is used.',
+            'The same answer as `/next`, for an explicit destination. Send your location, or `from` to start at a stop.',
           operationId: 'getTrip',
           parameters: [
             {
               name: 'to',
               in: 'query',
               required: true,
-              description: 'A trip key (`utown`, `mrt`, `home`) or a stop code such as `UTOWN`.',
+              description: 'A stop code such as `UTOWN`, or a NUSMods venue code such as `COM1-0212`.',
               schema: { type: 'string' },
               example: 'UTOWN',
+            },
+            {
+              name: 'from',
+              in: 'query',
+              description: 'Stop code to start from. Required when no `lat`/`lon` is sent.',
+              schema: { type: 'string' },
+              example: 'PGP',
             },
             ...coordParams,
           ],
@@ -185,19 +192,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description: 'The answer.',
               content: { 'application/json': { schema: { $ref: '#/components/schemas/Answer' }, example: answerExample } },
             },
-            '400': {
-              description: 'Unknown trip key or stop code. Lists the valid trip keys.',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    required: ['error', 'trips'],
-                    properties: { error: { type: 'string' }, trips: { type: 'array', items: { type: 'string' } } },
-                  },
-                  example: { error: 'unknown trip', trips: ['utown', 'mrt', 'home'] },
-                },
-              },
-            },
+            '400': errorResponse('Unknown destination, or neither a location nor `from` was sent.', {
+              error: 'unknown destination: pass ?to= a stop or venue code',
+            }),
           },
         },
       },
@@ -351,7 +348,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     sgt: '09:14 day1',
                     graph: { generated: '2026-09-28T13:27:41Z', source: 'uNivUS bus proxy via scripts/scrape_stops.py', stops: 33, services: ['A1', 'A2', 'D1', 'D2', 'K', 'P', 'R1', 'R2'] },
                     config: { auth: true, proxy: true, analytics: true },
-                    trip: 'utown',
                   },
                 },
               },
@@ -516,6 +512,16 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             quality: { $ref: '#/components/schemas/Quality' },
             asOf: { type: 'string', format: 'date-time', description: 'When the data was fetched. On a `stale` answer this is the original fetch time.' },
             arrivals: { type: 'array', items: { $ref: '#/components/schemas/Arrival' }, description: 'Raw arrivals at the boarding stop.' },
+            departsAt: {
+              type: ['string', 'null'],
+              format: 'date-time',
+              description: 'When the bus leaves the boarding stop. Count down from this rather than re-showing `label` later. Null with no live time.',
+            },
+            arriveAt: {
+              type: ['string', 'null'],
+              format: 'date-time',
+              description: 'When you reach the destination stop, by bus or on foot.',
+            },
           },
         },
         Arrival: {
@@ -696,6 +702,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   },
                 },
                 places: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, label: { type: 'string' } } } },
+                timing: {
+                  type: ['object', 'null'],
+                  description: 'For a class: whether you will make it, counting the walk from the stop to the venue.',
+                  properties: {
+                    status: { type: 'string', enum: ['on-time', 'tight', 'late'] },
+                    text: { type: 'string', example: 'Arrive 09:52 · 8 min early' },
+                    classAt: { type: 'string', format: 'date-time' },
+                  },
+                },
               },
             },
           ],
@@ -708,7 +723,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             sgt: { type: 'string' },
             graph: { type: 'object' },
             config: { type: 'object', additionalProperties: { type: 'boolean' } },
-            trip: { type: ['string', 'null'] },
             auth: { type: 'object', description: 'Present only with `probe=1`.' },
           },
         },

@@ -319,3 +319,46 @@ export function restDetail(profile: Profile, nowMs: number): string {
           : shortDate(nowMs + n.daysAhead * 86_400_000);
   return `Next: ${n.trip.label}, ${when} ${hh}:${mm}`;
 }
+
+/* ------------------------------------------------------------------ */
+/* Will I make it?                                                    */
+/* ------------------------------------------------------------------ */
+
+export type OnTime = 'on-time' | 'tight' | 'late';
+
+export interface Timing {
+  status: OnTime;
+  /** "Arrive 09:56 · 4 min early", "Arrive 09:59 · just in time", "~5 min late". */
+  text: string;
+  /** Class start, ISO. */
+  classAt: string;
+}
+
+/** At least this much spare time counts as comfortably on time. */
+export const ON_TIME_SLACK_S = 180;
+
+/**
+ * Compare when you'd reach the class (arrival at the stop plus the walk to
+ * the venue) with when it starts. The class is today's: the planner only
+ * plans today.
+ */
+export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number): Timing | null {
+  if (!arriveAtIso) return null;
+  const day = new Date(nowMs + 8 * 3_600_000);
+  const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()) - 8 * 3_600_000;
+  const classAt = midnight + trip.arriveByMin * 60_000;
+  const reachMs = Date.parse(arriveAtIso) + walkToVenueS * 1000;
+  const slackS = Math.round((classAt - reachMs) / 1000);
+  const hhmm = (ms: number) => {
+    const d = new Date(ms + 8 * 3_600_000);
+    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  };
+  const status: OnTime = slackS >= ON_TIME_SLACK_S ? 'on-time' : slackS >= 0 ? 'tight' : 'late';
+  const text =
+    status === 'on-time'
+      ? `Arrive ${hhmm(reachMs)} · ${Math.round(slackS / 60)} min early`
+      : status === 'tight'
+        ? `Arrive ${hhmm(reachMs)} · just in time`
+        : `~${Math.max(1, Math.round(-slackS / 60))} min late`;
+  return { status, text, classAt: new Date(classAt).toISOString() };
+}
