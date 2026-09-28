@@ -3,12 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
-# 08:40 SGT on weekdays. SGT is UTC+8 with no DST, so this is exact all year.
-[triggers]
-crons = ["40 0 * * 1-5"]
 
 # npx wrangler kv namespace create NUSBUS_KV
-# Holds ONLY the auth token and push subscriptions. Never arrivals.
+# Holds ONLY auth tokens. Never arrivals.
 [[kv_namespaces]]
 binding = "NUSBUS_KV"
 id = "1f88f570f6e04f78aa2888ee7aa78e6a"

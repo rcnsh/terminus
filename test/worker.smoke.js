@@ -171,7 +171,6 @@ test('/health reports what is configured without leaking any of it', async () =>
   assert.equal(h.ok, true);
   assert.equal(h.config.auth, true);
   assert.equal(h.config.fms, true);
-  assert.equal(h.config.push, false, 'no VAPID keys in the test env');
   assert.match(h.graph.source, /bootstrap/, 'the graph is real but not yet self-scraped');
   assert.ok(h.graph.services.includes('D2'));
 
@@ -179,50 +178,6 @@ test('/health reports what is configured without leaking any of it', async () =>
   for (const secret of ['test-htd', 'test-app', 'test-service', 'test-tenant', 'example.test']) {
     assert.ok(!body.includes(secret), `/health leaked ${secret}`);
   }
-});
-
-test('push endpoints are inert until VAPID keys exist', async () => {
-  const fetchImpl = makeFetch({});
-  const { res: vapid } = await call('/vapid', { fetchImpl });
-  assert.equal(vapid.status, 501);
-
-  const ctx = makeCtx();
-  installGlobals(fetchImpl);
-  const sub = await worker.fetch(
-    new Request(`${BASE}/subscribe`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ endpoint: 'https://fcm.example.test/x' }),
-    }),
-    makeEnv(),
-    ctx,
-  );
-  await ctx.settle();
-  assert.equal(sub.status, 501);
-});
-
-test('/subscribe stores only the endpoint, never the browser keys', async () => {
-  const kv = makeKV();
-  const env = { ...makeEnv(kv), VAPID_PUBLIC_KEY: 'pub', VAPID_PRIVATE_KEY: 'priv', VAPID_SUBJECT: 'mailto:a@b.c' };
-  const fetchImpl = makeFetch({});
-  installGlobals(fetchImpl);
-  const ctx = makeCtx();
-
-  const res = await worker.fetch(
-    new Request(`${BASE}/subscribe`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ endpoint: 'https://fcm.example.test/abc', keys: { p256dh: 'SECRET', auth: 'SECRET2' } }),
-    }),
-    env,
-    ctx,
-  );
-  await ctx.settle();
-  assert.equal(res.status, 201);
-
-  const stored = [...kv._map.values()].join('');
-  assert.ok(stored.includes('https://fcm.example.test/abc'));
-  assert.ok(!stored.includes('SECRET'), 'payload-free push needs no browser keys, so none are kept');
 });
 
 test('an unknown trip key is a 400 that names the valid keys', async () => {
@@ -233,22 +188,27 @@ test('an unknown trip key is a 400 that names the valid keys', async () => {
   assert.ok(body.trips.includes('utown'));
 });
 
-test('the PWA surface is served from the Worker itself', async () => {
+test('/ is a JSON index of the API, and there is no UI left to serve', async () => {
   const fetchImpl = makeFetch({});
-  for (const [path, type] of [
-    ['/', 'text/html'],
-    ['/manifest.webmanifest', 'application/manifest+json'],
-    ['/sw.js', 'text/javascript'],
-    ['/icon.svg', 'image/svg+xml'],
-  ]) {
-    const { res } = await call(path, { fetchImpl });
-    assert.equal(res.status, 200, path);
-    assert.ok(res.headers.get('content-type').startsWith(type), path);
+  const { res } = await call('/', { fetchImpl });
+  assert.equal(res.status, 200);
+  assert.ok(res.headers.get('content-type').startsWith('application/json'));
+  const body = await res.json();
+  for (const ep of ['/next', '/trip', '/arrivals', '/campus', '/import', '/health']) {
+    assert.ok(body.endpoints[ep], `index lists ${ep}`);
   }
-  const { res: missing } = await call('/nope', { fetchImpl });
-  assert.equal(missing.status, 404);
+  for (const gone of ['/manifest.webmanifest', '/sw.js', '/icon.svg', '/vapid', '/subscribe', '/nope']) {
+    const { res: r } = await call(gone, { fetchImpl });
+    assert.equal(r.status, 404, gone);
+  }
 });
 
+test('/next opened in a browser returns JSON, not a redirect to a page that no longer exists', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
+  const { res } = await call('/next', { fetchImpl, headers: { accept: 'text/html' } });
+  assert.equal(res.status, 200);
+  assert.ok(res.headers.get('content-type').startsWith('application/json'));
+});
 test('/campus serves the static map + destination search data, cached hard', async () => {
   const fetchImpl = makeFetch({});
   const { res } = await call('/campus', { fetchImpl });
@@ -387,15 +347,3 @@ test('/next with coordinates but no timetable shows nearby buses, no invented de
   assert.notEqual(a.quality, undefined);
 });
 
-test('a browser opening /next?tt= is redirected to the app page, not shown JSON', async () => {
-  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  // Accept: text/html is what an address-bar navigation sends.
-  const { res } = await call('/next?tt=abc', { fetchImpl, headers: { accept: 'text/html' } });
-  assert.equal(res.status, 302);
-  const loc = res.headers.get('location');
-  assert.ok(loc.endsWith('/?tt=abc'), 'lands on the page carrying the timetable: ' + loc);
-
-  // A fetch()/tile (Accept: */*) still gets JSON, not a redirect.
-  const api = await call('/next', { fetchImpl, headers: { accept: '*/*' } });
-  assert.equal(api.res.status, 200);
-});
