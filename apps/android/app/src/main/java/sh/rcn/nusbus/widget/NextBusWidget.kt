@@ -8,7 +8,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
@@ -38,11 +41,13 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import sh.rcn.nusbus.NextAnswer
+import sh.rcn.nusbus.R
 import sh.rcn.nusbus.Store
 import sh.rcn.nusbus.ui.MainActivity
 import java.text.DateFormat
@@ -103,6 +108,28 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                 answer == null -> {
                     Text(error ?: "Loading…", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
                     Text("Tap to refresh", style = muted)
+                }
+                answer.mode == "rest" -> {
+                    // Outside the user's day: a moon and the next class, no bus.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            provider = ImageProvider(R.drawable.ic_moon),
+                            contentDescription = null,
+                            colorFilter = ColorFilter.tint(colors.primary),
+                            modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
+                        )
+                        Spacer(GlanceModifier.width(8.dp))
+                        Text(
+                            answer.label,
+                            style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp),
+                            maxLines = 1,
+                        )
+                    }
+                    Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
+                    if (large) {
+                        Spacer(GlanceModifier.defaultWeight())
+                        Chips(ctx, answer)
+                    }
                 }
                 else -> {
                     val heading = listOfNotNull(

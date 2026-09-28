@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFAULT_PROFILE, GAP_RETURN_MIN, parseProfile, planFor } from '../src/profile.ts';
+import { DEFAULT_PROFILE, GAP_RETURN_MIN, isResting, nextClass, parseProfile, planFor, restDetail } from '../src/profile.ts';
 
 const STOPS = new Set(['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27']);
 const isStop = (c) => STOPS.has(c);
@@ -96,4 +96,47 @@ test('parseProfile fills defaults and rejects bad input with a useful message', 
     assert.equal(r.ok, false, JSON.stringify(input));
     assert.match(r.error, re);
   }
+});
+
+test('resting hours: outside 06:00-18:00 by default', () => {
+  const p = profile([cls(10, 12, 'COM3')]);
+  assert.equal(isResting(p, thu(5, 59)), true);
+  assert.equal(isResting(p, thu(6)), false);
+  assert.equal(isResting(p, thu(17, 59)), false);
+  assert.equal(isResting(p, thu(18)), true);
+  assert.equal(isResting(p, thu(23)), true);
+});
+
+test('an evening class keeps the day open until 45 min after it ends', () => {
+  const p = profile([cls(18, 20, 'LT27')]);
+  assert.equal(isResting(p, thu(20, 30)), false);
+  assert.equal(isResting(p, thu(20, 45)), true);
+});
+
+test('an early class opens the day 90 min before it', () => {
+  const p = profile([{ ...cls(7, 8, 'COM3') }], { dayStartMin: 7 * 60 });
+  assert.equal(isResting(p, thu(5, 30)), false);
+  assert.equal(isResting(p, thu(5, 29)), true);
+});
+
+test('custom day hours are honoured', () => {
+  const p = profile([], { dayStartMin: 8 * 60, dayEndMin: 22 * 60 });
+  assert.equal(isResting(p, thu(7)), true);
+  assert.equal(isResting(p, thu(21)), false);
+});
+
+test('the rest message names the next class', () => {
+  const tt = [cls(10, 12, 'COM3', 'CS2030 @ COM1'), { ...cls(9, 10, 'UTOWN', 'GEA1000 @ UTown'), day: 5 }];
+  assert.equal(restDetail(profile(tt), thu(20)), 'Next: GEA1000 @ UTown, tomorrow 09:00');
+  assert.equal(restDetail(profile(tt), thu(5)), 'Next: CS2030 @ COM1, today 10:00');
+  const monOnly = [{ ...cls(10, 12, 'COM3', 'CS2030 @ COM1'), day: 1 }];
+  assert.equal(restDetail(profile(monOnly), thu(20)), 'Next: CS2030 @ COM1, Monday 10:00');
+  assert.equal(restDetail(profile([]), thu(20)), 'Nothing on your timetable');
+  assert.equal(nextClass(profile([]), thu(20)), null);
+});
+
+test('day hours must be ordered', () => {
+  const r = parseProfile({ dayStartMin: 1200, dayEndMin: 600 }, isStop);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /start before it ends/);
 });

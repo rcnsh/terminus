@@ -403,7 +403,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '- before your first class: that class, from home\n' +
             '- between classes: the next one, unless the gap is longer than `gapHours`, in which case home until an hour before it\n' +
             '- after your last class: home\n' +
-            '- no classes today: `mode: nearby`, the next buses at the nearest stop\n\n' +
+            '- no classes today: `mode: nearby`, the next buses at the nearest stop\n' +
+            '- outside your day hours (default 06:00-18:00, stretched for early or late classes): `mode: rest`, no bus\n\n' +
             'The response also carries your saved places, so a widget can show them as buttons.',
           operationId: 'meNext',
           security: [{ bearer: [] }, { cookie: [] }],
@@ -658,6 +659,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               },
             },
             gapHours: { type: 'number', minimum: 0.5, maximum: 12, default: 2, description: 'A gap between classes longer than this means going home in between.' },
+            dayStartMin: { type: 'integer', default: 360, description: 'Start of your day, minutes past midnight SGT. Earlier, `/me/next` rests.' },
+            dayEndMin: { type: 'integer', default: 1080, description: 'End of your day. Later, `/me/next` rests, unless a class runs late.' },
             trips: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'From the NUSMods import.' },
             manual: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'Entered by hand. Kept on re-import.' },
             places: {
@@ -679,7 +682,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'object',
               required: ['mode', 'dest', 'places'],
               properties: {
-                mode: { type: 'string', enum: ['trip', 'nearby'] },
+                mode: {
+                  type: 'string',
+                  enum: ['trip', 'nearby', 'rest'],
+                  description: '`rest` outside your day hours: no bus, and `detail` names your next class. Show a rest state, not a bus.',
+                },
                 dest: {
                   type: ['object', 'null'],
                   properties: {

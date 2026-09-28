@@ -70,6 +70,11 @@
       <p id="home-msg" role="status"></p>
       <label for="gap">Go home between classes when the gap is longer than</label>
       <div class="row narrow"><input id="gap" type="number" min="0.5" max="12" step="0.5"> <span>hours</span></div>
+      <label for="day-start">Show buses between</label>
+      <div class="row narrow">
+        <input id="day-start" type="time" aria-label="Day starts"> <span>and</span> <input id="day-end" type="time" aria-label="Day ends">
+      </div>
+      <p class="hint">Outside these hours the widget and menu bar show your next class instead of a bus. A class that starts early or runs late stretches the day to fit.</p>
     </section>
 
     <section>
