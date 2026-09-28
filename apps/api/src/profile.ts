@@ -7,6 +7,7 @@
 
 import type { ImportedTrip } from './nusmods.ts';
 import { sgt } from './config.ts';
+import { type LessonWeeks, type Term, importedClassRuns } from './calendar.ts';
 
 export interface Place {
   key: string;
@@ -37,6 +38,8 @@ export interface Profile {
   places: Place[];
   /** The NUSMods share link, kept so next semester is one click. */
   share: string | null;
+  /** The semester `trips` were imported for. Null on imports from before 1.0. */
+  term: Term | null;
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -48,6 +51,7 @@ export const DEFAULT_PROFILE: Profile = {
   manual: [],
   places: [],
   share: null,
+  term: null,
 };
 
 export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24 } as const;
@@ -106,7 +110,17 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean): R
       if (typeof t.to !== 'string' || !isStop(t.to)) return bad('to must be a known stop code');
       if (!str(t.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
       const venue = typeof t.venue === 'string' ? t.venue.slice(0, 40) : '';
-      out.push({ day: t.day, arriveByMin: t.arriveByMin, ...(t.endMin !== undefined ? { endMin: t.endMin as number } : {}), to: t.to, label: t.label.trim(), venue });
+      const weeks = parseWeeks(t.weeks);
+      if (weeks === false) return bad('weeks must be a list of week numbers or a date range');
+      out.push({
+        day: t.day,
+        arriveByMin: t.arriveByMin,
+        ...(t.endMin !== undefined ? { endMin: t.endMin as number } : {}),
+        ...(weeks ? { weeks } : {}),
+        to: t.to,
+        label: t.label.trim(),
+        venue,
+      });
     }
     out.sort((a, b) => a.day - b.day || a.arriveByMin - b.arriveByMin);
     p[field] = out;
@@ -126,12 +140,56 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean): R
     }
   }
 
+  if (raw.term !== undefined && raw.term !== null) {
+    const t = raw.term;
+    if (!isObj(t) || typeof t.acadYear !== 'string' || !/^\d{4}\/\d{4}$/.test(t.acadYear) || !isInt(t.semester, 1, 4)) {
+      return { ok: false, error: 'term must be {acadYear: "2026/2027", semester: 1-4}' };
+    }
+    p.term = { acadYear: t.acadYear, semester: t.semester };
+  }
+
   if (raw.share !== undefined && raw.share !== null) {
     if (typeof raw.share !== 'string' || raw.share.length > 2000) return { ok: false, error: 'share must be a NUSMods link' };
     p.share = raw.share;
   }
 
   return { ok: true, profile: p };
+}
+
+/** undefined = absent, false = malformed. */
+function parseWeeks(v: unknown): LessonWeeks | undefined | false {
+  if (v === undefined) return undefined;
+  if (Array.isArray(v)) return v.length <= 20 && v.every((w) => isInt(w, 1, 20)) ? (v as number[]) : false;
+  if (!isObj(v)) return false;
+  const date = /^\d{4}-\d{2}-\d{2}$/;
+  if (typeof v.start !== 'string' || typeof v.end !== 'string' || !date.test(v.start) || !date.test(v.end)) return false;
+  const out: LessonWeeks = { start: v.start, end: v.end };
+  if (v.weekInterval !== undefined) {
+    if (!isInt(v.weekInterval, 1, 10)) return false;
+    out.weekInterval = v.weekInterval;
+  }
+  if (v.weeks !== undefined) {
+    if (!Array.isArray(v.weeks) || !v.weeks.every((w) => isInt(w, 1, 30))) return false;
+    out.weeks = v.weeks as number[];
+  }
+  return out;
+}
+
+/**
+ * The classes actually on for the SGT day containing `atMs`: manual entries
+ * every week, imported ones only when the academic calendar says they run.
+ */
+export function classesOn(profile: Profile, atMs: number): ImportedTrip[] {
+  const day = sgt(atMs).day;
+  return [
+    ...profile.trips.filter((x) => x.day === day && importedClassRuns(x.weeks, profile.term, atMs)),
+    ...profile.manual.filter((x) => x.day === day),
+  ].sort((a, b) => a.arriveByMin - b.arriveByMin);
+}
+
+/** True when some imported classes predate week tracking and need a re-import. */
+export function needsReimport(profile: Profile): boolean {
+  return profile.trips.length > 0 && (profile.term === null || profile.trips.some((t) => t.weeks === undefined));
 }
 
 /* ------------------------------------------------------------------ */
@@ -173,9 +231,7 @@ const endOf = (t: ImportedTrip) => t.endMin ?? t.arriveByMin + DEFAULT_CLASS_MIN
 export function planFor(profile: Profile, nowMs: number): Plan | null {
   const t = sgt(nowMs);
   const nowMin = t.minutes;
-  const today = [...profile.trips, ...profile.manual]
-    .filter((x) => x.day === t.day)
-    .sort((a, b) => a.arriveByMin - b.arriveByMin);
+  const today = classesOn(profile, nowMs);
   if (!today.length) return null;
 
   const homeStop = profile.home?.stops[0] ?? null;
@@ -218,24 +274,31 @@ export const MORNING_LEAD_MIN = 90;
  */
 export function isResting(profile: Profile, nowMs: number): boolean {
   const t = sgt(nowMs);
-  const today = [...profile.trips, ...profile.manual].filter((x) => x.day === t.day);
+  const today = classesOn(profile, nowMs);
   const start = Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN));
   const end = Math.max(profile.dayEndMin, ...today.map((x) => endOf(x) + EVENING_GRACE_MIN));
   return t.minutes < start || t.minutes >= end;
 }
 
+/** How far ahead to look for the next class: a whole semester break. */
+const LOOKAHEAD_DAYS = 120;
+
 /** The first class after now, and how many days ahead it is. */
 export function nextClass(profile: Profile, nowMs: number): { trip: ImportedTrip; daysAhead: number } | null {
   const t = sgt(nowMs);
-  const all = [...profile.trips, ...profile.manual];
-  for (let ahead = 0; ahead <= 7; ahead++) {
-    const day = (t.day + ahead) % 7;
-    const found = all
-      .filter((x) => x.day === day && (ahead > 0 || x.arriveByMin > t.minutes))
-      .sort((a, b) => a.arriveByMin - b.arriveByMin)[0];
+  for (let ahead = 0; ahead <= LOOKAHEAD_DAYS; ahead++) {
+    const found = classesOn(profile, nowMs + ahead * 86_400_000).find((x) => ahead > 0 || x.arriveByMin > t.minutes);
     if (found) return { trip: found, daysAhead: ahead };
   }
   return null;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Mon 28 Sep" in SGT. Built by hand: Intl output varies by runtime. */
+function shortDate(atMs: number): string {
+  const d = new Date(atMs + 8 * 3_600_000);
+  return `${DAY_NAMES[d.getUTCDay()].slice(0, 3)} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -246,6 +309,13 @@ export function restDetail(profile: Profile, nowMs: number): string {
   if (!n) return 'Nothing on your timetable';
   const hh = String(Math.floor(n.trip.arriveByMin / 60)).padStart(2, '0');
   const mm = String(n.trip.arriveByMin % 60).padStart(2, '0');
-  const when = n.daysAhead === 0 ? 'today' : n.daysAhead === 1 ? 'tomorrow' : DAY_NAMES[n.trip.day];
+  const when =
+    n.daysAhead === 0
+      ? 'today'
+      : n.daysAhead === 1
+        ? 'tomorrow'
+        : n.daysAhead < 7
+          ? DAY_NAMES[n.trip.day]
+          : shortDate(nowMs + n.daysAhead * 86_400_000);
   return `Next: ${n.trip.label}, ${when} ${hh}:${mm}`;
 }

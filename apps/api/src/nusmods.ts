@@ -20,6 +20,7 @@
 
 import type { Stop } from './types.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
+import type { LessonWeeks } from './calendar.ts';
 
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
 
@@ -99,6 +100,7 @@ interface TimetableRow {
   startTime: string; // "HHMM"
   endTime?: string; // "HHMM"
   venue: string;
+  weeks?: LessonWeeks;
 }
 
 /** Venue code -> nearest ISB stop code. Tries the full code, then the building
@@ -121,6 +123,8 @@ export interface ImportedTrip {
   day: number; // 0=Sun..6=Sat
   arriveByMin: number; // minutes past midnight SGT, class start
   endMin?: number; // minutes past midnight SGT, class end, when known
+  /** NUSMods teaching weeks (or date range). Absent on manual entries, which run every week. */
+  weeks?: LessonWeeks;
   to: string; // destination stop code
   label: string; // e.g. "CS1010S @ COM1"
   venue: string;
@@ -183,6 +187,7 @@ export async function resolveTrips(
           day,
           arriveByMin: hhmm(r.startTime),
           ...(r.endTime ? { endMin: hhmm(r.endTime) } : {}),
+          ...(r.weeks ? { weeks: r.weeks } : {}),
           to: resolved.stop,
           label: `${module} @ ${r.venue.split('-')[0]}`,
           venue: r.venue,
