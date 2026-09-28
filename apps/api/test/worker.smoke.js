@@ -193,15 +193,16 @@ test('/trip accepts a NUSMods venue code', async () => {
   assert.equal(res.status, 200);
 });
 
-test('/ is the API documentation, rendered from /openapi.json', async () => {
+test('/docs is the API documentation, rendered from /openapi.json', async () => {
   const fetchImpl = makeFetch({});
-  const { res } = await call('/', { fetchImpl });
+  const { res } = await call('/docs', { fetchImpl });
   assert.equal(res.status, 200);
   assert.ok(res.headers.get('content-type').startsWith('text/html'));
   const html = await res.text();
   assert.match(html, /<elements-api[^>]+apiDescriptionUrl="\/openapi.json"/);
 
-  for (const gone of ['/manifest.webmanifest', '/sw.js', '/icon.svg', '/vapid', '/subscribe', '/nope']) {
+  // `/` is the static landing page, served by the assets layer before the Worker runs.
+  for (const gone of ['/', '/manifest.webmanifest', '/sw.js', '/icon.svg', '/vapid', '/subscribe', '/nope']) {
     const { res: r } = await call(gone, { fetchImpl });
     assert.equal(r.status, 404, gone);
   }

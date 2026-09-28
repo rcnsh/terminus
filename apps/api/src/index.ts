@@ -410,7 +410,8 @@ export default {
       }
 
       switch (url.pathname) {
-        case '/':
+        case '/docs':
+          // The landing page at / is a static asset (apps/web).
           return new Response(DOCS_PAGE, {
             headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
           });

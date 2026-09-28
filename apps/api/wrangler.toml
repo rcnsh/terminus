@@ -32,6 +32,12 @@ dataset = "nusbus_edge"
 [observability]
 enabled = true
 
+# Keep console logs, but not per-request invocation logs: those record the
+# full URL, and /next?lat=&lon= would put users' locations in a log.
+[observability.logs]
+enabled = true
+invocation_logs = false
+
 [vars]
 EMAIL_FROM = "login@nusbus.rcn.sh"
 

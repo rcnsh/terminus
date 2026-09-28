@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>terminus · know when to run</title>
+<meta name="description" content="The next NUS shuttle to wherever you're going next, from your timetable. A home-screen widget for Android and a menu bar app for Mac.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+  .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; padding: 56px 0 40px; }
+  .hero h1 { font-size: clamp(2.4rem, 5.4vw, 4rem); }
+  .hero h1 em { font-style: normal; color: var(--accent-bright); }
+  .hero .lede { font-size: 1.15rem; color: var(--muted); margin: 18px 0 28px; max-width: 34rem; }
+  .cta { display: flex; flex-wrap: wrap; gap: 10px; }
+  .cta-note { margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
+  .stack { display: grid; gap: 14px; position: relative; }
+  .stack .widget:nth-child(2) { margin-left: 44px; }
+  .menubar {
+    display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 8px 14px;
+    border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line);
+    font: 500 0.82rem/1 var(--font); color: var(--muted);
+  }
+  .menubar strong { color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+  .features .card h3 { font-size: 1.1rem; margin: 12px 0 6px; }
+  .features .card p { color: var(--muted); font-size: 0.95rem; }
+  .icon { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-bright); display: grid; place-items: center; }
+  .how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 64px; counter-reset: step; }
+  .how div::before { counter-increment: step; content: counter(step); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: var(--bg); font: 600 0.85rem/1 var(--font); margin-bottom: 12px; }
+  .how h3 { font-size: 1.05rem; margin-bottom: 6px; }
+  .how p { color: var(--muted); font-size: 0.95rem; }
+  .section-title { margin-top: 72px; font-size: 1.6rem; }
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; padding-top: 32px; gap: 36px; }
+    .features, .how { grid-template-columns: 1fr; }
+    .stack .widget:nth-child(2) { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header class="wrap nav">
+  <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
+  <nav class="nav-links">
+    <a href="#download" class="hide-sm">Download</a>
+    <a href="/docs" class="hide-sm">API</a>
+    <a class="btn small ghost" href="/account">Sign in</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">For the NUS internal shuttle</p>
+      <h1>Know when to <em>run</em>.</h1>
+      <p class="lede">terminus reads your timetable and tells you which shuttle to catch to your next class, whether you'll make it, and when walking is faster. On your home screen and in your menu bar.</p>
+      <div class="cta" id="download">
+        <a class="btn accent" href="/download/android">Get it for Android</a>
+        <a class="btn ghost" href="/download/mac">Download for Mac</a>
+      </div>
+      <p class="cta-note">Free. Sign in with your email, import your NUSMods timetable, pair your devices.</p>
+    </div>
+
+    <div class="stack" aria-label="What the widget shows">
+      <div class="menubar" aria-hidden="true"><span>Wi-Fi</span><strong><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12a3 3 0 0 1 3 3v10a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V6a3 3 0 0 1 3-3zM5 7v4h14V7H5z"/></svg>D2 4m</strong><span>9:38</span></div>
+      <div class="widget">
+        <div class="where">Next class · CS2030 @ COM1</div>
+        <div class="big">D2 · 09:42</div>
+        <div class="detail">PGP · 3 min walk · COM3 ~9 min · low crowd</div>
+        <span class="ontime on-time"><span class="dot"></span>Arrive 09:52 · 8 min early</span>
+        <div class="chips"><span>KR MRT</span><span>UTown</span><span>Gym</span><span>Nearby</span></div>
+      </div>
+      <div class="widget">
+        <div class="where">Heading home</div>
+        <div class="big">Walk · 7 min</div>
+        <div class="detail">Faster on foot · A1 would be 12 min</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="card">
+      <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/></svg></div>
+      <h3>Follows your timetable</h3>
+      <p>Import from NUSMods once. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps.</p>
+    </div>
+    <div class="card">
+      <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+      <h3>On time, or not</h3>
+      <p>Live arrivals, the walk to your venue included. It tells you if you'll be late, and when walking beats the bus.</p>
+    </div>
+    <div class="card">
+      <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
+      <h3>The right side of the road</h3>
+      <p>It picks the stop going your way, even when the one across the road is closer. Or check anywhere with one tap.</p>
+    </div>
+  </section>
+
+  <h2 class="section-title">Set up in two minutes</h2>
+  <section class="how">
+    <div><h3>Sign in</h3><p>Email link, no password. Import your NUSMods share link and pick your home stop.</p></div>
+    <div><h3>Install</h3><p>Android widget or Mac menu bar app. Scan the pairing QR code, or type the code.</p></div>
+    <div><h3>Glance</h3><p>That's it. It updates through the day and goes quiet in the evening.</p></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed.</p>
+    <nav><a href="/privacy">Privacy</a><a href="/docs">API</a><a href="/account">Account</a></nav>
+  </div>
+</footer>
+</body>
+</html>
