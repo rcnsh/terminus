@@ -59,7 +59,6 @@ student's credentials.
 | `NEXTBUS_PROXY_API_KEY` | Sent as `x-api-key` to the proxy |
 | `NEXTBUS_APP_VERSION` | Current uNivUS release, e.g. `univus_android_2.59.2_140`. **Must track the Play Store** (see below) |
 | `NEXTBUS_HTD_API` / `NEXTBUS_APP_API` | The two auth headers for the token mint |
-| `NEXTBUS_FMS_BASE` / `_SERVICE_ID` / `_TENANT_CODE` | Scraper only; the Worker no longer calls ConnectX |
 | `NEXTBUS_REQUESTED_BY` / `NEXTBUS_SECURED_REQUEST` | Optional; the server does not require them |
 
 Names match `hewliyang/nus-nextbus-web`'s `.env.example` so that repo's notes
@@ -70,7 +69,7 @@ Deploy:
 
 ```bash
 npx wrangler kv namespace create NUSBUS_KV      # paste the id into wrangler.toml
-for k in NEXTBUS_AUTH_BASE NEXTBUS_FMS_BASE NEXTBUS_APP_VERSION NEXTBUS_HTD_API NEXTBUS_APP_API NEXTBUS_FMS_SERVICE_ID NEXTBUS_FMS_TENANT_CODE; do npx wrangler secret put "$k"; done
+for k in NEXTBUS_AUTH_BASE NEXTBUS_APP_VERSION NEXTBUS_HTD_API NEXTBUS_APP_API NEXTBUS_PROXY_BASE NEXTBUS_PROXY_API_KEY; do npx wrangler secret put "$k"; done
 npx wrangler deploy
 ```
 
@@ -117,8 +116,12 @@ KV writes are rate-limited and propagation is eventual, which is wrong for
 15-second data.
 
 **The stop graph is static and bundled.** Stop locations, route order and
-operating hours change a few times a year. A weekly GitHub Action scrapes them
-into `data/stops.json`.
+operating hours change a few times a year. `npm run scrape` rebuilds
+`data/stops.json` from the bus proxy's `bus-stops` and `pickup-point` calls.
+The proxy has no `ServiceDescription`, so the route codes to fetch come from
+the existing graph plus `KNOWN_ROUTES` in the script; a new service with an
+unlisted code needs adding there. A weekly GitHub Action runs the same scrape,
+but only once the repo has a GitHub remote and the six secrets it reads.
 
 **Failure degrades in public.** `quality` walks `live → scheduled → stale →
 ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-

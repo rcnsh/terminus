@@ -23,6 +23,7 @@ import json
 import os
 import pathlib
 import re
+import secrets
 import sys
 import urllib.error
 import urllib.parse
@@ -33,14 +34,20 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 REQUIRED = [
     "NEXTBUS_AUTH_BASE",
-    "NEXTBUS_FMS_BASE",
     "NEXTBUS_HTD_API",
     "NEXTBUS_APP_API",
-    "NEXTBUS_FMS_TENANT_CODE",
+    "NEXTBUS_APP_VERSION",
+    "NEXTBUS_PROXY_BASE",
+    "NEXTBUS_PROXY_API_KEY",
 ]
 
-# Mirrors DEFAULT_AUTH_PATH in src/auth.ts. Confirm from your proxy capture.
-DEFAULT_AUTH_PATH = "/api/v1/auth/access_token"
+# Mirrors src/auth.ts.
+AUTH_PATH = "/get-access-token"
+
+# ServiceDescription is not exposed on the bus proxy, so there is no call that
+# lists the services. Route codes come from the current graph plus this list;
+# a code that returns no pickup points is skipped, so extras cost one request.
+KNOWN_ROUTES = ["A1", "A2", "D1", "D2", "K", "P", "R1", "R2", "E", "L", "BTC1", "BTC2"]
 
 WRAPPER_KEYS = (
     "ShuttleServiceResult",
@@ -107,15 +114,14 @@ def first(d: dict, *keys, default=None):
 
 
 def app_headers() -> dict:
+    # No X-Forwarded-Proto: it makes the NUS load balancer intermittently
+    # answer 400 "Contradictory scheme headers". See src/auth.ts.
     h = {
         "X-HTD-API": os.environ["NEXTBUS_HTD_API"],
         "X-APP-API": os.environ["NEXTBUS_APP_API"],
+        "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    version = os.environ.get("NEXTBUS_APP_VERSION")
-    if version:
-        h["X-APP-VERSION"] = version
-        h["appversion"] = version
     for env_key, header in (
         ("NEXTBUS_REQUESTED_BY", "X-Requested-By"),
         ("NEXTBUS_SECURED_REQUEST", "X-Secured-Request"),
@@ -125,56 +131,79 @@ def app_headers() -> dict:
     return h
 
 
-def request(url: str, headers: dict, method: str = "GET"):
-    req = urllib.request.Request(url, headers=headers, method=method)
+def post_json(url: str, headers: dict, body: dict) -> dict:
+    data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    path = urllib.parse.urlsplit(url).path
     try:
         with urllib.request.urlopen(req, timeout=30) as res:
             return json.loads(res.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        # Do not print the URL: it carries the service id.
-        raise SystemExit(f"{method} {urllib.parse.urlsplit(url).path} -> HTTP {exc.code}") from exc
+        raise SystemExit(f"POST {path} -> HTTP {exc.code}") from exc
     except urllib.error.URLError as exc:
-        raise SystemExit(
-            f"{method} {urllib.parse.urlsplit(url).path} -> unreachable ({exc.reason}).\n"
-            "If this is a timeout, run the off-campus curl test in the README first: "
-            "the FMS endpoints may be restricted to the NUS network."
-        ) from exc
+        raise SystemExit(f"POST {path} -> unreachable ({exc.reason})") from exc
 
 
-def find_token(node, depth=0):
-    if not isinstance(node, dict) or depth > 4:
-        return None
-    for k in ("access_token", "accessToken", "token", "jwt", "id_token"):
-        v = node.get(k)
-        if isinstance(v, str) and len(v) > 8:
-            return v
-    for v in node.values():
-        found = find_token(v, depth + 1)
-        if found:
-            return found
-    return None
+def device_id() -> str:
+    """One id for the whole run. The proxy rejects a call whose deviceid differs
+    from the one the token was minted with, so mint and calls must agree."""
+    return os.environ.get("NEXTBUS_DEVICE_ID") or secrets.token_hex(8)
 
 
-def get_token() -> str:
+def get_session() -> dict:
+    """Mint the PUBLIC guest JWT, exactly as src/auth.ts does."""
     base = os.environ["NEXTBUS_AUTH_BASE"].rstrip("/")
-    parsed = urllib.parse.urlsplit(base)
-    url = base if parsed.path not in ("", "/") else base + DEFAULT_AUTH_PATH
-    token = find_token(request(url, app_headers(), method="POST"))
-    if not token:
-        raise SystemExit("auth response contained no token")
-    return token
+    url = base if base.endswith(AUTH_PATH) else base + AUTH_PATH
+    dev = device_id()
+    body = post_json(url, app_headers(), {
+        "deviceid": dev,
+        "ipaddr": "127.0.0.1",
+        "version": os.environ["NEXTBUS_APP_VERSION"],
+    })
+    data = body.get("data") or {}
+    if body.get("code") != "00000" or not data.get("token"):
+        raise SystemExit(f"token mint rejected: code={body.get('code')} msg={body.get('msg')}")
+    return {
+        "token": data["token"],
+        "userid": data.get("userid", ""),
+        "domain": data.get("domain", "PUBLIC"),
+        "deviceid": dev,
+    }
 
 
-def fms(path: str, token: str, **params) -> dict:
-    base = os.environ["NEXTBUS_FMS_BASE"].rstrip("/")
-    query = {k: v for k, v in params.items() if v}
-    url = f"{base}/{path}"
-    if query:
-        url += "?" + urllib.parse.urlencode(query)
-    headers = app_headers()
-    headers["Authorization"] = f"Bearer {token}"
-    headers["X-Tenant-Code"] = os.environ["NEXTBUS_FMS_TENANT_CODE"]
-    return request(url, headers)
+def proxy(session: dict, endpoint: str, **extra) -> dict:
+    """POST to the uNivUS bus proxy and return its `data`. Failure is reported
+    at HTTP 200 with a non-"00000" code, so the code is what gets checked."""
+    url = os.environ["NEXTBUS_PROXY_BASE"].rstrip("/") + "/" + endpoint
+    headers = {
+        "x-api-key": os.environ["NEXTBUS_PROXY_API_KEY"],
+        "Authorization": f"Bearer {session['token']}",
+        "Content-Type": "application/json; charset=utf-8",
+        "User-Agent": "Dart/3.5 (dart:io)",
+        "Accept": "application/json",
+    }
+    body = post_json(url, headers, {
+        "token": session["token"],
+        "userid": session["userid"],
+        "domain": session["domain"],
+        "deviceid": session["deviceid"],
+        "ipaddr": "127.0.0.1",
+        "version": os.environ["NEXTBUS_APP_VERSION"],
+        **extra,
+    })
+    if body.get("code") != "00000":
+        raise SystemExit(f"{endpoint} rejected: code={body.get('code')} msg={body.get('msg')}")
+    return body.get("data") or {}
+
+
+def route_candidates(out_path: pathlib.Path) -> list:
+    existing = []
+    if out_path.exists():
+        try:
+            existing = list(json.loads(out_path.read_text()).get("routes", {}))
+        except (ValueError, OSError):
+            existing = []
+    return list(dict.fromkeys([*existing, *KNOWN_ROUTES]))
 
 
 def norm_code(v) -> str:
@@ -234,10 +263,10 @@ def parse_window(value):
     return [f"{int(h):02d}:{m}" for h, m in found[:2]]
 
 
-def scrape(tenant: str, token: str) -> dict:
-    raw_stops = pick_list(fms("BusStops", token, tenant_code=tenant), "BusStops", "busstops", "stops")
+def scrape(session: dict, route_codes: list) -> dict:
+    raw_stops = pick_list(proxy(session, "bus-stops"), "busstops", "BusStops", "stops")
     if not raw_stops:
-        raise SystemExit("BusStops returned nothing -- check the tenant code and the endpoint path")
+        raise SystemExit("bus-stops returned nothing")
 
     stops = []
     for s in raw_stops:
@@ -269,32 +298,14 @@ def scrape(tenant: str, token: str) -> dict:
     for s in stops:
         s["opposite"] = opposite_of(s, by_name, all_codes)
 
-    raw_services = pick_list(
-        fms("ServiceDescription", token, tenant_code=tenant),
-        "ServiceDescription",
-        "services",
-    )
-    services = []
     hours = {}
-    for entry in raw_services:
-        if not isinstance(entry, dict):
-            continue
-        svc = str(first(entry, "Route", "route", "name", "ServiceName", default="")).strip()
-        if not svc:
-            continue
-        services.append(svc)
-        window = parse_window(
-            first(entry, "OperatingHours", "operatinghours", "RouteMessage", "Description", "remark")
-        )
-        if window:
-            hours[svc] = {"weekday": window, "saturday": window, "sunday": None}
 
     routes = {}
     berths = {}
     loops = {}
-    for svc in services:
+    for svc in route_codes:
         points = pick_list(
-            fms("PickupPoint", token, route_code=svc, tenant_code=tenant),
+            proxy(session, "pickup-point", route_code=svc),
             "pickuppoint",
             "PickupPoint",
             "pickuppoints",
@@ -316,7 +327,7 @@ def scrape(tenant: str, token: str) -> dict:
             pass
         ordered_berths = [b for _, b in seq]
         if not ordered_berths:
-            print(f"warning: {svc} returned no pickup points; skipping", file=sys.stderr)
+            # Expected for speculative codes in KNOWN_ROUTES.
             continue
         ordered = [stop_of_berth(b, svc) for b in ordered_berths]
         loops[svc] = len(ordered) > 2 and ordered[0] == ordered[-1]
@@ -328,24 +339,16 @@ def scrape(tenant: str, token: str) -> dict:
     if orphans:
         print(f"warning: {len(orphans)} route codes are not in BusStops: {orphans[:10]}", file=sys.stderr)
 
-    missing_hours = [s for s in routes if s not in hours]
-    if missing_hours:
-        print(
-            f"warning: no operating hours parsed for {missing_hours}. "
-            "Fill them in data/service-hours.json -- this file does not own them.",
-            file=sys.stderr,
-        )
 
     return {
         "generated": datetime.now(timezone.utc).isoformat(),
-        "source": "ConnectX FMS via scripts/scrape_stops.py",
+        "source": "uNivUS bus proxy via scripts/scrape_stops.py",
         "stops": sorted(stops, key=lambda s: s["code"]),
         "routes": routes,
         "berths": berths,
         "loops": loops,
-        # Anything parsed out of ServiceDescription, which in practice is
-        # nothing. Hand-maintained hours live in data/service-hours.json and
-        # are merged over this at load time, so re-scraping never loses them.
+        # The proxy publishes no hours. They are hand-maintained in
+        # data/service-hours.json and merged over this at load time.
         "serviceHours": hours,
     }
 
@@ -362,7 +365,7 @@ def main() -> int:
         print(f"missing config: {', '.join(missing)} (see .dev.vars.example)", file=sys.stderr)
         return 2
 
-    graph = scrape(os.environ["NEXTBUS_FMS_TENANT_CODE"], get_token())
+    graph = scrape(get_session(), route_candidates(pathlib.Path(args.out)))
     print(
         f"{len(graph['stops'])} stops, {len(graph['routes'])} services: "
         + ", ".join(f"{k}({len(v)})" for k, v in sorted(graph["routes"].items()))

@@ -39,12 +39,6 @@ NEXTBUS_APP_API=""
 # sees one install rather than a new device on every cold start.
 NEXTBUS_DEVICE_ID=""
 
-# Scraper only (scripts/scrape_stops.py). The old direct ConnectX host; the
-# Worker no longer uses it, and it now rejects the guest token with error 4.
-NEXTBUS_FMS_BASE="https://fms.connectx.com.sg/apiy/NUSETA"
-NEXTBUS_FMS_SERVICE_ID="NUS"
-NEXTBUS_FMS_TENANT_CODE="NUS"
-
 # Optional. uNivUS sends these via Dio; the server does not require them.
 NEXTBUS_REQUESTED_BY=""
 NEXTBUS_SECURED_REQUEST=""

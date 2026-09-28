@@ -24,17 +24,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      # This runner is an arbitrary US cloud IP. If the FMS endpoints are
-      # restricted to the NUS network this job fails, which is itself the
-      # answer to the open question in the README.
+      # Same guest-token flow and bus proxy as the Worker (see src/auth.ts).
       - name: Scrape
         env:
           NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
-          NEXTBUS_FMS_BASE: ${{ secrets.NEXTBUS_FMS_BASE }}
           NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
           NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
           NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
-          NEXTBUS_FMS_TENANT_CODE: ${{ secrets.NEXTBUS_FMS_TENANT_CODE }}
+          NEXTBUS_PROXY_BASE: ${{ secrets.NEXTBUS_PROXY_BASE }}
+          NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
         run: python3 scripts/scrape_stops.py
 
       # A bad graph is worse than a stale one, so the suite gates the commit.

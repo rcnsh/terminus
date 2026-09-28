@@ -6,7 +6,6 @@ export interface Env {
   NUSBUS_AE?: AnalyticsEngineDataset;
 
   NEXTBUS_AUTH_BASE?: string;
-  NEXTBUS_FMS_BASE?: string;
   /** e.g. https://inetapps.nus.edu.sg/univus/api/bus-proxy */
   NEXTBUS_PROXY_BASE?: string;
   /** Fixed app constant sent as x-api-key to the bus proxy. */
@@ -16,8 +15,6 @@ export interface Env {
   NEXTBUS_DEVICE_ID?: string;
   NEXTBUS_HTD_API?: string;
   NEXTBUS_APP_API?: string;
-  NEXTBUS_FMS_SERVICE_ID?: string;
-  NEXTBUS_FMS_TENANT_CODE?: string;
   NEXTBUS_REQUESTED_BY?: string;
   NEXTBUS_SECURED_REQUEST?: string;
 

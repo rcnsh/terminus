@@ -152,6 +152,21 @@ export async function getSession(
     }
   }
 
+  // One mint per isolate at a time. On a cold cache /trip fetches several
+  // stops in parallel; without this each one minted its own token, and a
+  // single failed mint degraded that stop to "unknown". A forced caller that
+  // joins an in-flight mint still gets a freshly minted token.
+  if (!inflight) {
+    inflight = mint(env, nowMs).finally(() => {
+      inflight = null;
+    });
+  }
+  return inflight;
+}
+
+let inflight: Promise<Session> | null = null;
+
+async function mint(env: Env, nowMs: number): Promise<Session> {
   const res = await fetch(authUrl(env), {
     method: 'POST',
     headers: apiKeyHeaders(env),
