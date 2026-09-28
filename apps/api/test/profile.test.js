@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFAULT_PROFILE, GAP_RETURN_MIN, isResting, nextClass, parseProfile, planFor, restDetail } from '../src/profile.ts';
+import { DEFAULT_PROFILE, GAP_RETURN_MIN, isResting, nextClass, parseProfile, planFor, restDetail, timingFor } from '../src/profile.ts';
 
 const STOPS = new Set(['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27']);
 const isStop = (c) => STOPS.has(c);
@@ -139,4 +139,19 @@ test('day hours must be ordered', () => {
   const r = parseProfile({ dayStartMin: 1200, dayEndMin: 600 }, isStop);
   assert.equal(r.ok, false);
   assert.match(r.error, /start before it ends/);
+});
+
+test('timing: on time, tight and late against the class start', () => {
+  const c = cls(10, 12, 'COM3', 'CS2030 @ COM1');
+  const now = thu(9, 30);
+  const arrive = (h, m) => new Date(thu(h, m)).toISOString();
+  // Stop at 09:50 + 2 min walk = 09:52: 8 min early.
+  assert.deepEqual(
+    [timingFor(arrive(9, 50), c, 120, now).status, timingFor(arrive(9, 50), c, 120, now).text],
+    ['on-time', 'Arrive 09:52 · 8 min early'],
+  );
+  assert.equal(timingFor(arrive(9, 57), c, 60, now).status, 'tight');
+  assert.equal(timingFor(arrive(9, 57), c, 60, now).text, 'Arrive 09:58 · just in time');
+  assert.deepEqual([timingFor(arrive(10, 3), c, 120, now).status, timingFor(arrive(10, 3), c, 120, now).text], ['late', '~5 min late']);
+  assert.equal(timingFor(null, c, 0, now), null, 'no arrival time, no claim');
 });

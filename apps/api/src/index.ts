@@ -11,13 +11,14 @@ import graphJson from '../data/stops.json' with { type: 'json' };
 import serviceHoursJson from '../data/service-hours.json' with { type: 'json' };
 
 import type { Answer, Arrival, Env, Graph, ResolveInput, Stop, StopArrivals } from './types.ts';
-import { TRIPS, WALK, sgt, tripByKey, tripForTime } from './config.ts';
+import { WALK, sgt } from './config.ts';
 import {
   decodeTimetable,
   encodeTimetable,
   nextTrip,
   parseShareUrl,
   resolveTrips,
+  venueToStop,
 } from './nusmods.ts';
 import { authConfigured, authUrl, getSession } from './auth.ts';
 import { fmsConfigured, getArrivals } from './fms.ts';
@@ -97,12 +98,14 @@ export async function answerFor(
   // Already there: two classes in a row at the same stop, or standing at it.
   // Without this the degrade ladder says "Walk · now" and marks it ended.
   const dest = input.to ? idx.byCode.get(input.to) : undefined;
-  const atDest =
-    dest &&
-    (input.lat != null
-      ? haversineM(input.lat, input.lon!, dest.lat, dest.lon) / WALK.speedMs < 45
-      : input.originCode === dest.code);
-  if (atDest) return arrivedAnswer(dest, destLabel, nowMs);
+  // Either side of the road counts as there, same as for routing.
+  const destSides = dest ? [dest, ...(dest.opposite && idx.byCode.get(dest.opposite) ? [idx.byCode.get(dest.opposite)!] : [])] : [];
+  const atDest = destSides.find((d) =>
+    input.lat != null
+      ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs < 45
+      : input.originCode === d.code,
+  );
+  if (dest && atDest) return arrivedAnswer(dest, destLabel, nowMs);
 
   const byStop = await collectArrivals(
     env,
@@ -143,22 +146,20 @@ export async function answerFor(
   return answer;
 }
 
-function resolveDestination(url: URL, nowMs: number) {
+/** `?to=` as a stop code or a NUSMods venue code; `?from=` as an origin stop. */
+function resolveDestination(url: URL) {
   const idx = indexGraph(GRAPH);
-  const raw = url.searchParams.get('to')?.trim() || null;
+  const raw = url.searchParams.get('to')?.trim().toUpperCase() || null;
+  const fromRaw = url.searchParams.get('from')?.trim().toUpperCase() || null;
+  const from = fromRaw && idx.byCode.has(fromRaw) ? fromRaw : null;
+  if (!raw) return null;
 
-  // Only an explicitly named trip key resolves here. With no ?to= we do NOT
-  // invent a destination -- a user without a timetable gets "what's coming at
-  // your nearest stop", not someone else's hardcoded commute.
-  const trip = tripByKey(raw);
-  if (trip) return { to: trip.to, from: trip.from, label: trip.label, key: trip.key };
+  const stop = idx.byCode.get(raw);
+  // Abbreviated like every other stop name ("Information Technology" -> "IT").
+  if (stop) return { to: stop.code, from, label: shortStop(stop.name, 14) };
 
-  if (raw && idx.byCode.has(raw)) {
-    const stop = idx.byCode.get(raw)!;
-    // Abbreviate like every other stop name, so a bare code does not produce
-    // "Information Technology" where a trip key produces "UTown".
-    return { to: stop.code, from: null, label: shortStop(stop.name, 14), key: null };
-  }
+  const venue = venueToStop(raw);
+  if (venue) return { to: venue.stop, from, label: raw.split('-')[0] };
   return null;
 }
 
@@ -184,7 +185,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
     // Decoded but nothing scheduled ahead: fall through to the prior.
   }
 
-  const dest = resolveDestination(url, nowMs);
+  const dest = resolveDestination(url);
   const to = dest?.to ?? null;
   const originCode = dest?.from ?? null;
 
@@ -197,7 +198,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   // With coordinates but no destination, `to` stays null and the resolver
   // simply reports the next buses at the nearest stop.
   const input: ResolveInput = { lat, lon, to, originCode };
-  return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs, dest?.key ?? null));
+  return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs));
 }
 
 /** You are at the destination's stop. `live` because it is a current,
@@ -273,18 +274,13 @@ async function handleImport(url: URL, env: Env, nowMs: number): Promise<Response
 }
 
 async function handleTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
-  const dest = resolveDestination(url, nowMs);
-  if (!dest) {
-    return json({ error: 'unknown trip', trips: TRIPS.map((t) => t.key) }, 400);
-  }
+  const dest = resolveDestination(url);
+  if (!dest) return json({ error: 'unknown destination: pass ?to= a stop or venue code' }, 400);
   const { lat, lon } = coordsFrom(url);
-  // A bare stop code has no configured origin, so it needs the same fallback
-  // /next uses -- otherwise /trip?to=<code> with no coordinates resolves
-  // nothing at all.
-  const originCode = dest.from ?? (lat === null ? (TRIPS[0]?.from ?? null) : null);
-  return json(
-    await answerFor(env, ctx, { lat, lon, to: dest.to, originCode }, dest.label, nowMs, dest.key),
-  );
+  if (lat === null && !dest.from) {
+    return json({ error: 'pass lat and lon, or ?from= a stop code' }, 400);
+  }
+  return json(await answerFor(env, ctx, { lat, lon, to: dest.to, originCode: lat === null ? dest.from : null }, dest.label, nowMs));
 }
 
 /**
@@ -378,7 +374,6 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
       accounts: accountsConfigured(env),
       email: Boolean(env.EMAIL && env.EMAIL_FROM),
     },
-    trip: tripForTime(nowMs)?.key ?? null,
     // Opt-in: this one costs an upstream round trip on a cold token.
     auth: url.searchParams.get('probe') === '1' ? await probeAuth(env, nowMs) : undefined,
   });

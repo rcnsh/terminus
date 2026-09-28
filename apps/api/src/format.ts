@@ -169,6 +169,8 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
  * A three-minute-old answer honestly labelled beats a spinner, and beats an
  * empty tile that reads as "no buses".
  */
+const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString();
+
 export function buildAnswer(f: FormatInput): Answer {
   const best = f.options[0];
 
@@ -195,6 +197,8 @@ export function buildAnswer(f: FormatInput): Answer {
       quality: 'ended' as Quality,
       asOf: new Date(f.nowMs).toISOString(),
       arrivals: f.arrivals,
+      departsAt: null,
+      arriveAt: walk != null ? iso(f.nowMs + walk * 1000) : null,
     };
   }
 
@@ -212,6 +216,12 @@ export function buildAnswer(f: FormatInput): Answer {
     arrivals: f.arrivals,
   };
 
+  // Board and ride times count from when the arrivals were fetched. An
+  // 'unknown' option's times are sort keys, never clock times.
+  const timed = best.quality !== 'unknown';
+  const departsAt = timed ? iso(best.fetchedAt + best.boardS * 1000) : null;
+  const arriveAt = timed ? iso(best.fetchedAt + best.totalS * 1000) : null;
+
   if (verdict === 'win' && f.walkAllS != null) {
     const busPhrase =
       best.quality === 'unknown'
@@ -226,6 +236,8 @@ export function buildAnswer(f: FormatInput): Answer {
         `from ${shortStop(best.stop.name)}`,
       ].join(' · '),
       alt: renderAlt(best),
+      departsAt: null,
+      arriveAt: iso(f.nowMs + f.walkAllS * 1000),
     };
   }
 
@@ -234,5 +246,7 @@ export function buildAnswer(f: FormatInput): Answer {
     label: buildLabel(best, f.nowMs),
     detail: buildDetail(f, best, verdict),
     alt: f.alt ? renderAlt(f.alt) : null,
+    departsAt,
+    arriveAt,
   };
 }

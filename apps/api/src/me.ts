@@ -22,8 +22,8 @@ import {
   saveProfileJson,
   sessionCookie,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, type Profile, isResting, needsReimport, parseProfile, planFor, restDetail } from './profile.ts';
-import { acadYear, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
+import { DEFAULT_PROFILE, type Profile, isResting, needsReimport, parseProfile, planFor, restDetail, timingFor } from './profile.ts';
+import { type ImportedTrip, acadYear, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
 import { shortStop } from './format.ts';
 import { WALK } from './config.ts';
@@ -245,7 +245,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   const homeStop = profile.home?.stops[0] ?? null;
   const places = profile.places.map(({ key, label }) => ({ key, label }));
 
-  let dest: { to: string; label: string; why: string; from: string | null } | null = null;
+  let dest: { to: string; label: string; why: string; from: string | null; trip?: ImportedTrip | null } | null = null;
   const placeKey = url.searchParams.get('place');
   const toRaw = url.searchParams.get('to');
   if (placeKey) {
@@ -270,14 +270,18 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
     };
   } else {
     const plan = planFor(profile, nowMs);
-    if (plan) dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from };
+    if (plan) dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from, trip: plan.trip };
   }
 
   const preferStops = profile.home?.stops ?? [];
   if (dest) {
     const input: ResolveInput = { lat, lon, to: dest.to, originCode: lat === null ? dest.from : null, preferStops };
     const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
-    return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, places };
+    // For a class, say whether you'll make it: stop arrival plus the walk
+    // from the stop to the venue, against the start time.
+    const venueM = dest.trip?.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
+    const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, Math.round(venueM / WALK.speedMs), nowMs) : null;
+    return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, timing, places };
   }
 
   // Nothing planned: what's coming at the nearest stop.

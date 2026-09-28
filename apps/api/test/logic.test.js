@@ -25,7 +25,7 @@ import {
 } from '../src/resolve.ts';
 import { crowdFromLoad, normalize, parseCrowd, parseEtaS, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
-import { LABEL_MAX, tripForTime } from '../src/config.ts';
+import { LABEL_MAX } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
 
 const GRAPH = graphJson;
@@ -141,6 +141,24 @@ test('near PGP Foyer, trips it would reach the long way round board at PGP inste
   };
   for (const to of ['KR-MRT', 'UHC', 'UTOWN', 'LT27']) assert.equal(board(to), 'PGP', to);
   assert.equal(board('COM3'), 'PGPR', 'COM3 really is the Foyer direction');
+});
+
+test('either side of the road counts: PGP to UHC takes A1 to Opp UHC in 4 stops', () => {
+  const pgp = realGraph.stops.find((x) => x.code === 'PGP');
+  const cands = candidateStops(realGraph, { lat: pgp.lat, lon: pgp.lon, to: 'UHC', originCode: null });
+  const byStop = Object.fromEntries(
+    cands.map((c) => sa(c.stop.code, c.legs.map((l) => ({ svc: l.svc, etaS: 240, crowd: null, plate: null })))),
+  );
+  const best = scoreOptions(realGraph, cands, arrivalsFor(byStop), NOW)[0];
+  assert.equal(best.stop.code, 'PGP');
+  assert.equal(best.svc, 'A1');
+  assert.equal(best.hops, 4);
+});
+
+test('standing at the opposite stop of the destination is not a boarding option', () => {
+  const opp = realGraph.stops.find((x) => x.code === 'UHC-OPP');
+  const cands = candidateStops(realGraph, { lat: opp.lat, lon: opp.lon, to: 'UHC', originCode: null });
+  assert.ok(cands.every((c) => c.stop.code !== 'UHC-OPP' || c.legs.length === 0));
 });
 
 test('reach(): linear routes are strict, loop routes wrap', () => {
@@ -447,10 +465,6 @@ test('mins() says "now" rather than "0 min"', () => {
 test('shortStop abbreviates but never drops the direction word', () => {
   assert.equal(shortStop('Opp Kent Ridge MRT'), 'Opp KR MRT');
   assert.ok(shortStop('Opposite University Town Education Resource Centre').startsWith('Opp '));
-});
-
-test('time-of-day priors cover a weekday morning', () => {
-  assert.equal(tripForTime(NOW).key, 'utown');
 });
 
 /* ------------------------------------------------------------------ */

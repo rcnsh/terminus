@@ -60,7 +60,7 @@ test('/next with nothing at all prompts setup, not a fabricated destination', as
 
 test('the answer is a valid Answer and its label fits the contract', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const { res } = await call('/trip?to=utown', { fetchImpl });
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl });
   const a = await res.json();
 
   assert.ok(a.label.length <= LABEL_MAX, `label too long: ${a.label}`);
@@ -90,11 +90,11 @@ test('repeat calls within the TTL produce exactly one upstream call', async () =
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const cache = installGlobals(fetchImpl);
 
-  await call('/trip?to=utown', { fetchImpl, cache });
+  await call('/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
 
-  await call('/trip?to=utown', { fetchImpl, cache });
-  await call('/trip?to=utown', { fetchImpl, cache });
+  await call('/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
+  await call('/trip?to=UTOWN&from=PGP', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1, 'the 15 s edge cache absorbed the repeats');
 });
 
@@ -105,9 +105,9 @@ test('a cache-busting ?t= does not defeat the cache', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const cache = installGlobals(fetchImpl);
 
-  await call('/trip?to=utown&t=1', { fetchImpl, cache });
-  await call('/trip?to=utown&t=2', { fetchImpl, cache });
-  await call('/trip?to=utown&t=3', { fetchImpl, cache });
+  await call('/trip?to=UTOWN&from=PGP&t=1', { fetchImpl, cache });
+  await call('/trip?to=UTOWN&from=PGP&t=2', { fetchImpl, cache });
+  await call('/trip?to=UTOWN&from=PGP&t=3', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
 });
 
@@ -124,7 +124,7 @@ test('a dead upstream returns quality "stale" with the original timestamp', asyn
 
   // Reading the cached Response twice would throw here and turn "upstream is
   // down" into "the Worker is down". It must not.
-  const { res } = await call('/trip?to=utown', { fetchImpl: dead, cache });
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl: dead, cache });
   assert.equal(res.status, 200, 'upstream being down is not a Worker error');
 
   const a = await res.json();
@@ -138,7 +138,7 @@ test('a dead upstream returns quality "stale" with the original timestamp', asyn
 
 test('a dead upstream with a cold cache says so instead of inventing a time', async () => {
   const dead = makeFetch({ fail: true });
-  const { res } = await call('/trip?to=utown', { fetchImpl: dead });
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl: dead });
   assert.equal(res.status, 200, 'upstream being down is not a Worker error');
 
   const a = await res.json();
@@ -157,7 +157,7 @@ test('a stop the feed answered for is scheduled, not unknown', async () => {
   // Feed reachable, but every service reports "-": no bus, which is real
   // information and earns a headway estimate.
   const quiet = makeFetch({ byStop: { PGP: [{ name: 'D2', arrivalTime: '-', nextArrivalTime: '-' }] } });
-  const { res } = await call('/trip?to=utown', { fetchImpl: quiet });
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl: quiet });
   const a = await res.json();
   assert.equal(a.quality, 'scheduled');
   assert.match(a.label, /^D2 · ~\d+ min$/);
@@ -180,12 +180,17 @@ test('/health reports what is configured without leaking any of it', async () =>
   }
 });
 
-test('an unknown trip key is a 400 that names the valid keys', async () => {
+test('an unknown destination is a 400 that says what to send', async () => {
   const fetchImpl = makeFetch({});
-  const { res } = await call('/trip?to=narnia', { fetchImpl });
+  const { res } = await call('/trip?to=narnia&from=PGP', { fetchImpl });
   assert.equal(res.status, 400);
-  const body = await res.json();
-  assert.ok(body.trips.includes('utown'));
+  assert.match((await res.json()).error, /stop or venue code/);
+});
+
+test('/trip accepts a NUSMods venue code', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
+  const { res } = await call('/trip?to=COM1-0212&from=PGP', { fetchImpl });
+  assert.equal(res.status, 200);
 });
 
 test('/ is the API documentation, rendered from /openapi.json', async () => {
@@ -222,7 +227,8 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   for (const [path, item] of Object.entries(spec.paths)) {
     if (!item.get || item.get.security) continue;
     const q = new URLSearchParams();
-    for (const p of item.get.parameters ?? []) if (p.required) q.set(p.name, String(p.example));
+    // `from` is only conditionally required (no location), so fill it too.
+    for (const p of item.get.parameters ?? []) if (p.required || p.name === 'from') q.set(p.name, String(p.example));
     if (path === '/import') continue; // needs the live NUSMods API
     const { res: r } = await call(`${path}${q.size ? '?' + q : ''}`, { fetchImpl });
     assert.equal(r.status, 200, `${path} documented but answered ${r.status}`);
@@ -283,7 +289,7 @@ test('walking is offered end to end when it beats the bus', async () => {
   // four stops of riding loses to that, and the endpoint must be willing to
   // say so rather than dutifully reporting the bus.
   const slow = makeFetch({ byStop: { COM3: [{ name: 'D1', arrivalTime: '14', passengers: 'low' }] } });
-  const { res } = await call('/trip?to=utown&lat=1.29466&lon=103.77441', { fetchImpl: slow });
+  const { res } = await call('/trip?to=UTOWN&lat=1.29466&lon=103.77441', { fetchImpl: slow });
   const a = await res.json();
 
   assert.match(a.label, /^Walk · \d+ min$/);
@@ -301,12 +307,13 @@ test('the destination stop is never offered as somewhere to catch a bus', async 
   assert.notEqual(a.stop.code, 'COM3', 'boarding at your destination is not an option');
 });
 
-test('/trip with a bare stop code works with no coordinates', async () => {
+test('/trip with no location needs a starting stop, not someone else\'s default', async () => {
   const f = makeFetch({ byStop: { PGP: [{ name: 'D2', arrivalTime: '5' }] } });
-  const { res } = await call('/trip?to=UTOWN', { fetchImpl: f });
+  const bare = await call('/trip?to=UTOWN', { fetchImpl: f });
+  assert.equal(bare.res.status, 400);
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl: f });
   assert.equal(res.status, 200);
-  const a = await res.json();
-  assert.ok(a.stop.code.length > 0, 'falls back to a configured origin, like /next');
+  assert.equal((await res.json()).stop.code, 'PGP');
 });
 
 /* ------------------------------------------------------------------ */
@@ -316,7 +323,7 @@ test('/trip with a bare stop code works with no coordinates', async () => {
 test('an answer logs one decision row plus a row per timed arrival', async () => {
   const ae = makeAnalytics();
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const { res } = await call('/trip?to=utown', { fetchImpl, env: makeEnv(makeKV(), ae) });
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl, env: makeEnv(makeKV(), ae) });
   const a = await res.json();
 
   const answers = ae.rows('answer');
@@ -329,7 +336,7 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
   assert.equal(row.blobs[2], 'D2');
   assert.equal(row.blobs[3], 'UTOWN', 'destination, for checking the direction later');
   assert.equal(row.blobs[4], 'live');
-  assert.equal(row.blobs[7], 'utown', 'which configured trip this was');
+  assert.equal(row.blobs[7], '', 'no configured trips any more');
   assert.deepEqual(row.indexes, [a.stop.code]);
   assert.equal(row.doubles[6], a.stop.confidence);
   assert.equal(row.doubles[8], 0, 'no coordinates were sent');
@@ -353,7 +360,7 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
 test('logging is a no-op without the binding, and never breaks an answer', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   // makeEnv omits NUSBUS_AE by default.
-  const { res } = await call('/trip?to=utown', { fetchImpl });
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
   assert.match((await res.json()).label, /^D2 · /);
 });
@@ -365,7 +372,7 @@ test('a thrown analytics binding cannot take down a response', async () => {
     },
   };
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  const { res } = await call('/trip?to=utown', { fetchImpl, env: makeEnv(makeKV(), hostile) });
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl, env: makeEnv(makeKV(), hostile) });
   assert.equal(res.status, 200, 'losing a metric is not worth losing an answer');
   assert.match((await res.json()).label, /^D2 · /);
 });
@@ -422,7 +429,7 @@ test('a rejected proxy call retries once with a genuinely fresh token', async ()
 
 test('a proxy that keeps rejecting degrades to unknown, not a fake "no bus"', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99 });
-  const { res } = await call('/trip?to=utown', { fetchImpl });
+  const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
   const a = await res.json();
   // 'scheduled' would claim the feed answered and had no bus. It never answered.

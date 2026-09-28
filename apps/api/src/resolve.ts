@@ -131,18 +131,28 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
     base = [{ stop, distM: 0 }];
   }
 
+  // Either side of the road will do: arriving at "Opp UHC" gets you to UHC.
+  // Without this, a route that only serves the far side never counts, and
+  // the answer takes a longer bus to the exact stop.
+  const dest = to ? idx.byCode.get(to) : undefined;
+  const targets = to ? [to, ...(dest?.opposite && idx.byCode.has(dest.opposite) ? [dest.opposite] : [])] : [];
+
   const out: Candidate[] = base.map(({ stop, distM }) => {
     const legs = [];
     // Standing at the destination is not a boarding option. reach() returns
     // 0 hops for from === to, which would otherwise rank first every time.
-    const services = to && stop.code === to ? [] : (idx.servingStop.get(stop.code) ?? []);
+    const services = to && targets.includes(stop.code) ? [] : (idx.servingStop.get(stop.code) ?? []);
     for (const svc of services) {
       if (!to) {
         legs.push({ svc, hops: 0 });
         continue;
       }
-      const r = reach(idx, svc, stop.code, to);
-      if (r) legs.push({ svc, hops: r.hops });
+      let best: { hops: number } | null = null;
+      for (const t of targets) {
+        const r = reach(idx, svc, stop.code, t);
+        if (r && (!best || r.hops < best.hops)) best = r;
+      }
+      if (best) legs.push({ svc, hops: best.hops });
     }
     return { stop, distM, walkS: Math.round(distM / WALK.speedMs), legs };
   });
