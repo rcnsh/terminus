@@ -1,4 +1,4 @@
-# nusbus-edge
+# terminus API
 
 A Cloudflare Worker that answers one question about the NUS internal shuttle
 bus: **when is my bus, and should I run.**
@@ -44,8 +44,9 @@ npm run dev       # wrangler dev, needs .dev.vars for live data
 
 ## Configuration
 
-Copy `.dev.vars.example` to `.dev.vars` and fill it from a proxied uNivUS
-capture. **Commit no captured values, ever.** `.dev.vars` is gitignored.
+Copy `.dev.vars.example` to `.dev.vars` and fill in the values. They are not
+included in this repository, and this repository doesn't explain how to obtain
+them. **Never commit them.** `.dev.vars` is gitignored.
 
 Auth is a **public / guest access-token flow** — the same one that lets uNivUS
 show Bus Arrival without signing in. No NUSNET credentials are involved
@@ -61,9 +62,7 @@ student's credentials.
 | `NEXTBUS_HTD_API` / `NEXTBUS_APP_API` | The two auth headers for the token mint |
 | `NEXTBUS_REQUESTED_BY` / `NEXTBUS_SECURED_REQUEST` | Optional; the server does not require them |
 
-Names match `hewliyang/nus-nextbus-web`'s `.env.example` so that repo's notes
-stay applicable. uNivUS is a Flutter app, so capturing values means proxying it
-with a CA cert; there is no request signing to defeat.
+Names match `hewliyang/nus-nextbus-web`'s `.env.example`.
 
 Deploy:
 
@@ -195,7 +194,7 @@ minutes in the past alongside a positive `arrivalTime`. It is not used.
 
 ## Data flow, confirmed
 
-Re-captured from uNivUS 2.59.2 on 2026-09-28. On 2026-09-05 uNivUS stopped
+As of uNivUS 2.59.2 (2026-09-28). On 2026-09-05 uNivUS stopped
 calling ConnectX directly and moved bus data behind a proxy on its own host:
 
 ```
@@ -222,15 +221,15 @@ as a query param) now answers `{"result":false,"error":4}` to everything.
 carrying the old `version` start failing with code `10009` "We have a new
 release of uNivUS", and every answer degrades to `quality: unknown`. The fix
 is updating `NEXTBUS_APP_VERSION` to `univus_android_<versionName>_<versionCode>`
-of the current Play Store build (`adb shell dumpsys package sg.edu.nus.univus`
-on a device that has it).
+of the current Play Store build. The cron probe emails the operator when this
+happens (see `src/monitor.ts`).
 
 ## Auth, confirmed
 
 ```
 POST https://myizaac2.nus.edu.sg/univus-public/mobile/get-access-token
-X-HTD-API: <captured>
-X-APP-API: <captured>
+X-HTD-API: <key>
+X-APP-API: <key>
 
 {"deviceid": "<16 hex>", "ipaddr": "127.0.0.1", "version": "univus_android_2.59.2_140"}
 ```
@@ -288,9 +287,10 @@ that failed because logging failed would be an absurd way to miss a bus.
 
 ## Clients
 
-[docs/android-tile.md](docs/android-tile.md) — a Quick Settings tile against
-`/next`, with working Kotlin, plus a five-minute way to test with HTTP Request
-Shortcuts first.
+The Android widget and app ([apps/android](../android)), the Mac menu bar app
+([apps/macos](../macos)) and the website ([apps/web](../web)) all use `/me/next`.
+For local work, `node scripts/dev-stub.mjs` runs this Worker with a fake bus
+feed and a seeded test account.
 
 ## Layout
 
