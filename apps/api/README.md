@@ -122,7 +122,7 @@ npx wrangler d1 execute nusbus --remote --command "INSERT INTO invites VALUES ('
 ```
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
-needs the Workers Paid plan and rcn.sh onboarded under Email Service >
+needs the Workers Paid plan and nusbus.rcn.sh onboarded under Email Service >
 Email Sending in the dashboard.
 
 ## How it works

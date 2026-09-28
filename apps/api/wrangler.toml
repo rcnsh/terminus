@@ -29,7 +29,7 @@ dataset = "nusbus_edge"
 enabled = true
 
 [vars]
-EMAIL_FROM = "nusbus@rcn.sh"
+EMAIL_FROM = "login@nusbus.rcn.sh"
 
 # Accounts. Apply schema changes with:
 #   npx wrangler d1 migrations apply nusbus --remote
@@ -39,10 +39,10 @@ database_name = "nusbus"
 database_id = "e0957629-00a9-4984-b6df-a7eba0da47e9"
 migrations_dir = "migrations"
 
-# Sign-in links. rcn.sh must be onboarded under Email Service > Email Sending.
+# Sign-in links. nusbus.rcn.sh is onboarded under Email Service > Email Sending.
 [[send_email]]
 name = "EMAIL"
-allowed_sender_addresses = ["nusbus@rcn.sh"]
+allowed_sender_addresses = ["login@nusbus.rcn.sh"]
 
 # Per-IP limit on /auth/login and /pair.
 [[ratelimits]]

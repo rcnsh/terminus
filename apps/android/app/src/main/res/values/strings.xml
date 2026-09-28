@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">nusbus</string>
+    <string name="widget_name">Next bus</string>
+    <string name="widget_description">The next bus to wherever you\'re going next</string>
+</resources>
