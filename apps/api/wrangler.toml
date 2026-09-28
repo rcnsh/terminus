@@ -12,6 +12,12 @@ routes = [
 
 workers_dev = true
 
+# App downloads: /download/android, /download/mac, /download/latest.json.
+# Filled by scripts/release.sh.
+[[r2_buckets]]
+binding = "DOWNLOADS"
+bucket_name = "terminus-downloads"
+
 # Upstream probe + alert, and expired-session cleanup (src/monitor.ts).
 [triggers]
 crons = ["*/15 * * * *"]

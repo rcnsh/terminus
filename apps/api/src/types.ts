@@ -18,6 +18,8 @@ export interface Env {
   NEXTBUS_REQUESTED_BY?: string;
   NEXTBUS_SECURED_REQUEST?: string;
 
+  /** App builds for /download/*. */
+  DOWNLOADS?: R2Bucket;
   /** The static website (apps/web/public). Absent in tests. */
   ASSETS?: Fetcher;
   /** Accounts (migrations/). Optional so the public API runs without it. */

@@ -42,6 +42,7 @@ import { CORS, coordsFrom, json, jsonCached, numParam } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
 import { readUpstream, runCron } from './monitor.ts';
+import { handleDownload } from './downloads.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
@@ -423,6 +424,8 @@ export default {
     try {
       const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
       if (me) return me;
+      const dl = await handleDownload(url.pathname, env);
+      if (dl) return dl;
 
       // Public answer routes: a per-IP ceiling. The per-stop cache already
       // protects NUS; this protects the Worker from being a free proxy.
