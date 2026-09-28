@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 /// Creates the model at launch, so refreshing starts even before (or
 /// without) SwiftUI ever drawing the menu bar item.
@@ -35,6 +36,8 @@ struct NusbusApp: App {
 
 // MARK: - Shell
 
+private let windowLog = Logger(subsystem: "sh.rcn.nusbus", category: "window")
+
 struct Popover: View {
     @Bindable var model: AppModel
     /// Drives the opening animation. The popover's window is the only one
@@ -55,6 +58,10 @@ struct Popover: View {
             Footer(model: model)
         }
         .frame(width: 360)
+        // Hug the content, and run to the window's edges rather than inside
+        // its default margins, so there's no empty band round the popover.
+        .fixedSize(horizontal: false, vertical: true)
+        .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in open() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in close() }
         .onAppear { open() }
@@ -62,6 +69,10 @@ struct Popover: View {
 
     private func open() {
         guard !shown else { return }
+        if let w = NSApp.keyWindow, let v = w.contentView {
+            let i = v.safeAreaInsets
+            windowLog.notice("popover window \(Int(w.frame.width))x\(Int(w.frame.height)) content \(Int(v.fittingSize.width))x\(Int(v.fittingSize.height)) insets t\(Int(i.top)) l\(Int(i.left)) b\(Int(i.bottom)) r\(Int(i.right))")
+        }
         model.popoverOpen = true
         withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { shown = true }
     }
@@ -461,11 +472,12 @@ private struct NearbyList: View {
     }
 }
 
-/// One pill per service: "D2  4m".
+/// One pill per service: "D2  4m". Wraps onto more lines instead of
+/// squeezing when a stop has many services.
 private struct FlowPills: View {
     let rows: [BoardRow]
     var body: some View {
-        HStack(spacing: 6) {
+        Flow(spacing: 6) {
             ForEach(rows, id: \.self) { r in
                 HStack(spacing: 5) {
                     Text(r.svc).font(.system(size: 11, weight: .bold))
@@ -474,6 +486,7 @@ private struct FlowPills: View {
                         .foregroundStyle(.secondary)
                         .contentTransition(.numericText())
                 }
+                .fixedSize()
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(.primary.opacity(0.07)))
@@ -541,6 +554,44 @@ private struct Search: View {
                 .card(padding: 4)
                 .transition(.opacity)
             }
+        }
+    }
+}
+
+/// Left-to-right layout that wraps to a new line when the next item
+/// wouldn't fit.
+private struct Flow: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0, widest: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > 0 && x + s.width > width {
+                y += line + spacing
+                x = 0
+                line = 0
+            }
+            x += s.width + spacing
+            line = max(line, s.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: proposal.width ?? widest, height: y + line)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, line: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + s.width > bounds.maxX {
+                y += line + spacing
+                x = bounds.minX
+                line = 0
+            }
+            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing
+            line = max(line, s.height)
         }
     }
 }

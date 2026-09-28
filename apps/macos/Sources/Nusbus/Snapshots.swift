@@ -13,7 +13,7 @@ enum Snapshots {
         """
         let answer = try! JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
         let nearbyJSON = """
-        [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"quality":"live"},{"svc":"A1","etaS":540,"quality":"live"},{"svc":"K","etaS":20,"quality":"live"}]},
+        [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"quality":"live"},{"svc":"A1","etaS":540,"quality":"live"},{"svc":"K","etaS":20,"quality":"live"},{"svc":"R2","etaS":780,"quality":"live"},{"svc":"BTC1","etaS":1260,"quality":"scheduled"},{"svc":"E","etaS":null,"quality":"ended"}]},
          {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"quality":"live"}]}]
         """
         let nearby = try! JSONDecoder().decode([NearbyStop].self, from: Data(nearbyJSON.utf8))
