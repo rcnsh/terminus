@@ -17,6 +17,8 @@
  */
 
 import http from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
 import { installGlobals, makeEnv, makeCtx, shuttlePayload } from '../test/_stubs.mjs';
 import { makeD1, makeEmail } from '../test/_d1.mjs';
 
@@ -77,7 +79,27 @@ db.exec(`INSERT INTO users VALUES ('test-user', 'tester@example.test', 0)`);
 db._db.prepare('INSERT INTO profiles VALUES (?, ?, 0)').run('test-user', JSON.stringify(profile));
 for (const code of ['TEST67', 'TEST78', 'TEST89']) db.exec(`INSERT INTO pair_codes VALUES ('${code}', 'test-user', 9999999999999)`);
 
-const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test' };
+// The website, standing in for the Workers ASSETS binding.
+const WEB = new URL('../../web/public/', import.meta.url).pathname;
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.json': 'application/json' };
+const ASSETS = {
+  async fetch(req) {
+    let p = decodeURIComponent(new URL(req.url).pathname);
+    let file = path.join(WEB, p);
+    if (!file.startsWith(WEB)) return new Response('not found', { status: 404 });
+    try {
+      if ((await stat(file)).isDirectory()) {
+        if (!p.endsWith('/')) return Response.redirect(new URL(p + '/', req.url), 307);
+        file = path.join(file, 'index.html');
+      }
+      return new Response(await readFile(file), { headers: { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream' } });
+    } catch {
+      return new Response('not found', { status: 404 });
+    }
+  },
+};
+
+const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS };
 
 http
   .createServer(async (req, res) => {

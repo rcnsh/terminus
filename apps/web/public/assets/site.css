@@ -41,6 +41,8 @@
 }
 
 * { box-sizing: border-box; }
+/* Component display rules (.layout, .nav-links...) must never beat [hidden]. */
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -48,7 +50,13 @@ body {
   color: var(--ink);
   font: 16px/1.55 var(--font);
   -webkit-font-smoothing: antialiased;
+  /* Footer sits at the bottom even on short pages. */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
+body > * { width: 100%; }
+body > main { flex: 1; }
 a { color: var(--accent); text-underline-offset: 3px; }
 img, svg { display: block; }
 h1, h2, h3 { font-family: var(--display); letter-spacing: -0.02em; line-height: 1.15; margin: 0; }

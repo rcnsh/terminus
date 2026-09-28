@@ -268,27 +268,55 @@ async function setupTurnstile() {
     const s = el('script', { src: 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', onload: resolve, onerror: reject });
     document.head.append(s);
   });
-  window.turnstile.render('#turnstile', {
+  window.turnstile.render('#turnstile-box', {
     sitekey: turnstileSiteKey,
     callback: (t) => (turnstileToken = t),
     'expired-callback': () => (turnstileToken = null),
   });
 }
 
+async function sendLink(email) {
+  return api('/auth/login', { method: 'POST', body: { email, turnstile: turnstileToken } });
+}
+
+function resetTurnstile() {
+  turnstileToken = null;
+  if (typeof window.turnstile?.reset === 'function') window.turnstile.reset('#turnstile-box');
+}
+
 $('#login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const msg = $('#login-msg');
+  const err = $('#login-msg');
   const btn = e.target.querySelector('button');
+  const email = $('#login-email').value.trim();
+  err.textContent = '';
   btn.disabled = true;
+  btn.textContent = 'Sending…';
   try {
-    const r = await api('/auth/login', { method: 'POST', body: { email: $('#login-email').value, turnstile: turnstileToken } });
-    msg.textContent = r.message;
-  } catch (err) {
-    msg.textContent = err.message;
-    if (window.turnstile) window.turnstile.reset('#turnstile');
+    await sendLink(email);
+    $('#sent-to').textContent = email;
+    $('#login-step').hidden = true;
+    $('#sent-step').hidden = false;
+  } catch (e2) {
+    err.textContent = e2.message;
   } finally {
     btn.disabled = false;
+    btn.textContent = 'Email me a sign-in link';
+    resetTurnstile();
   }
+});
+
+$('#different').addEventListener('click', () => {
+  $('#sent-step').hidden = true;
+  $('#login-step').hidden = false;
+  $('#login-email').select();
+});
+
+// Resending needs a fresh Turnstile pass, so it goes back to the form.
+$('#resend').addEventListener('click', () => {
+  $('#sent-step').hidden = true;
+  $('#login-step').hidden = false;
+  $('#login-msg').textContent = 'Complete the check below, then send again.';
 });
 
 $('#logout').addEventListener('click', async () => {

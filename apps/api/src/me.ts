@@ -42,13 +42,15 @@ export interface MeDeps {
 const html = (body: string, status = 200, extra: Record<string, string> = {}) =>
   new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...extra } });
 
+/** Minimal pages served by the Worker itself, in the site's style. */
 const page = (title: string, inner: string) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>${title}</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:28rem;margin:4rem auto;padding:0 16px;color:#1a1a1a;background:#fff}
-button{font:inherit;padding:.6rem 1.2rem;border-radius:8px;border:0;background:#1a1a1a;color:#fff;cursor:pointer}
-@media (prefers-color-scheme:dark){body{background:#111;color:#eee}button{background:#eee;color:#111}}</style>
-</head><body>${inner}</body></html>`;
+<meta name="robots" content="noindex"><title>${title} · terminus</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px}.box img{width:44px;height:44px;margin-bottom:20px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}</style>
+</head><body><main class="wrap"><div class="card box"><img src="/assets/mark.svg" alt="">${inner}</div></main></body></html>`;
 
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   if (!(req.headers.get('content-type') ?? '').includes('application/json')) return null;
@@ -147,15 +149,16 @@ export async function handleMe(
       // only shows a button; the POST spends the token.
       const t = url.searchParams.get('t') ?? '';
       const safe = t.replace(/[^A-Za-z0-9_-]/g, '');
-      return html(page('Sign in to terminus', `<h1>Sign in to terminus</h1>
-<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit">Sign in</button></form>`));
+      return html(page('Sign in', `<h1>Sign in to terminus</h1>
+<p class="hint">Continue to sign in on this device.</p>
+<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit" class="btn accent">Sign in</button></form>`));
     }
     if (req.method === 'POST') {
       const form = await req.formData().catch(() => null);
       const t = form?.get('t');
       const token = typeof t === 'string' ? await redeemLink(db, t, nowMs) : null;
       if (!token) {
-        return html(page('Link expired', '<h1>That link has expired</h1><p>Sign-in links work once, for 15 minutes. <a href="/account">Request a new one</a>.</p>'), 400);
+        return html(page('Link expired', '<h1>That link has expired</h1><p class="hint">Sign-in links work once, for 15 minutes.</p><a class="btn accent" href="/account">Get a new link</a>'), 400);
       }
       return new Response(null, {
         status: 303,
