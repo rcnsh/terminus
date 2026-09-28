@@ -7,6 +7,10 @@ export interface Env {
 
   NEXTBUS_AUTH_BASE?: string;
   NEXTBUS_FMS_BASE?: string;
+  /** e.g. https://inetapps.nus.edu.sg/univus/api/bus-proxy */
+  NEXTBUS_PROXY_BASE?: string;
+  /** Fixed app constant sent as x-api-key to the bus proxy. */
+  NEXTBUS_PROXY_API_KEY?: string;
   NEXTBUS_APP_VERSION?: string;
   /** Optional. Any 16 hex chars; generated and persisted in KV when absent. */
   NEXTBUS_DEVICE_ID?: string;

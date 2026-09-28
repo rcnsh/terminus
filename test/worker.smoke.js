@@ -170,12 +170,12 @@ test('/health reports what is configured without leaking any of it', async () =>
   const h = await res.json();
   assert.equal(h.ok, true);
   assert.equal(h.config.auth, true);
-  assert.equal(h.config.fms, true);
+  assert.equal(h.config.proxy, true);
   assert.match(h.graph.source, /bootstrap/, 'the graph is real but not yet self-scraped');
   assert.ok(h.graph.services.includes('D2'));
 
   const body = JSON.stringify(h);
-  for (const secret of ['test-htd', 'test-app', 'test-service', 'test-tenant', 'example.test']) {
+  for (const secret of ['test-htd', 'test-app', 'test-proxy-key', 'example.test']) {
     assert.ok(!body.includes(secret), `/health leaked ${secret}`);
   }
 });
@@ -188,21 +188,45 @@ test('an unknown trip key is a 400 that names the valid keys', async () => {
   assert.ok(body.trips.includes('utown'));
 });
 
-test('/ is a JSON index of the API, and there is no UI left to serve', async () => {
+test('/ is the API documentation, rendered from /openapi.json', async () => {
   const fetchImpl = makeFetch({});
   const { res } = await call('/', { fetchImpl });
   assert.equal(res.status, 200);
-  assert.ok(res.headers.get('content-type').startsWith('application/json'));
-  const body = await res.json();
-  for (const ep of ['/next', '/trip', '/arrivals', '/campus', '/import', '/health']) {
-    assert.ok(body.endpoints[ep], `index lists ${ep}`);
-  }
+  assert.ok(res.headers.get('content-type').startsWith('text/html'));
+  const html = await res.text();
+  assert.match(html, /<elements-api[^>]+apiDescriptionUrl="\/openapi.json"/);
+
   for (const gone of ['/manifest.webmanifest', '/sw.js', '/icon.svg', '/vapid', '/subscribe', '/nope']) {
     const { res: r } = await call(gone, { fetchImpl });
     assert.equal(r.status, 404, gone);
   }
 });
 
+test('the OpenAPI spec documents exactly the routes that exist', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
+  const { res } = await call('/openapi.json', { fetchImpl });
+  assert.equal(res.status, 200);
+  const spec = await res.json();
+  assert.equal(spec.openapi, '3.1.0');
+  assert.equal(spec.servers[0].url, BASE, 'try-it requests go to whoever serves the docs');
+
+  const documented = Object.keys(spec.paths).sort();
+  assert.deepEqual(documented, ['/arrivals', '/campus', '/health', '/import', '/next', '/trip']);
+
+  // Every documented path answers with its required params filled from the
+  // spec's own examples -- a renamed route or param shows up here, not in prod.
+  for (const [path, item] of Object.entries(spec.paths)) {
+    const q = new URLSearchParams();
+    for (const p of item.get.parameters ?? []) if (p.required) q.set(p.name, String(p.example));
+    if (path === '/import') continue; // needs the live NUSMods API
+    const { res: r } = await call(`${path}${q.size ? '?' + q : ''}`, { fetchImpl });
+    assert.equal(r.status, 200, `${path} documented but answered ${r.status}`);
+  }
+
+  // Every $ref resolves.
+  const refs = [...JSON.stringify(spec).matchAll(/"#\/components\/schemas\/(\w+)"/g)].map((m) => m[1]);
+  for (const r of refs) assert.ok(spec.components.schemas[r], `dangling $ref ${r}`);
+});
 test('/next opened in a browser returns JSON, not a redirect to a page that no longer exists', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const { res } = await call('/next', { fetchImpl, headers: { accept: 'text/html' } });
@@ -347,3 +371,47 @@ test('/next with coordinates but no timetable shows nearby buses, no invented de
   assert.notEqual(a.quality, undefined);
 });
 
+
+/* ------------------------------------------------------------------ */
+/* Bus proxy transport                                                 */
+/* ------------------------------------------------------------------ */
+
+test('arrivals come from a POST to the bus proxy, authenticated like uNivUS 2.59.2', async () => {
+  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
+  const { res } = await call('/arrivals?stop=COM3', { fetchImpl });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).available, true);
+
+  const [req] = fetchImpl.requests;
+  assert.equal(req.method, 'POST');
+  assert.ok(req.url.endsWith('/bus-proxy/shuttle-service'), req.url);
+  assert.equal(req.headers.get('x-api-key'), 'test-proxy-key');
+  // The guest JWT rides in both the Bearer header and the body envelope.
+  assert.equal(req.headers.get('authorization'), `Bearer ${req.body.token}`);
+  assert.equal(req.body.busstopname, 'COM3');
+  assert.equal(req.body.domain, 'PUBLIC');
+  for (const k of ['userid', 'deviceid', 'ipaddr', 'version']) assert.ok(req.body[k], `body.${k}`);
+});
+
+test('a rejected proxy call retries once with a genuinely fresh token', async () => {
+  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 }, reject: 1 });
+  const { res } = await call('/arrivals?stop=COM3', { fetchImpl });
+  assert.equal((await res.json()).available, true, 'the retry succeeded');
+
+  assert.equal(fetchImpl.counts.shuttle, 2);
+  // The first call may reuse a token cached by an earlier test; the retry must
+  // mint rather than read the rejected token back out of KV.
+  assert.ok(fetchImpl.counts.auth >= 1, 'the retry minted a token');
+  const [first, second] = fetchImpl.requests;
+  assert.notEqual(first.body.token, second.body.token, 'the retry used a different token');
+});
+
+test('a proxy that keeps rejecting degrades to unknown, not a fake "no bus"', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99 });
+  const { res } = await call('/trip?to=utown', { fetchImpl });
+  assert.equal(res.status, 200);
+  const a = await res.json();
+  // 'scheduled' would claim the feed answered and had no bus. It never answered.
+  assert.equal(a.quality, 'unknown');
+  assert.equal(fetchImpl.counts.shuttle, 2, 'one retry, not a loop');
+});

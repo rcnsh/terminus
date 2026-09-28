@@ -1,5 +1,6 @@
 /**
- * ShuttleService client and defensive response normalisation.
+ * Bus-proxy client (inetapps.nus.edu.sg/univus/api/bus-proxy) and defensive
+ * response normalisation.
  *
  * `normalize()` is the ONLY place that touches the raw FMS shape. It is
  * undocumented and has changed before, so this function is deliberately
@@ -9,7 +10,8 @@
 
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { TTL } from './config.ts';
-import { fmsHeaders, getFmsToken, invalidateFmsToken } from './auth.ts';
+import { getSession, proxyEnvelope, proxyHeaders } from './auth.ts';
+import type { Session } from './auth.ts';
 
 /** Envelope keys the FMS wraps results in. It nests one level deeper than you
  *  expect on some endpoints, so unwrapping is a loop, not a single lookup. */
@@ -207,66 +209,68 @@ export function normalize(raw: unknown): Arrival[] {
 }
 
 export function fmsConfigured(env: Env): boolean {
-  return Boolean(env.NEXTBUS_FMS_BASE);
+  return Boolean(env.NEXTBUS_PROXY_BASE && env.NEXTBUS_PROXY_API_KEY);
 }
 
-/**
- * ConnectX ShuttleService URL. Query-param shape confirmed from
- * hewliyang/nus-nextbus-web's server client: ServiceID, TenantCode, the stop
- * name, and the FMS token all ride in the query string. `token` is the
- * nextbus_token2 from the buswidget hop, not a bearer header.
- */
-export function shuttleServiceUrl(env: Env, code: string, token: string): string {
-  const base = (env.NEXTBUS_FMS_BASE ?? '').replace(/\/+$/, '');
-  const u = new URL(`${base}/ShuttleService`);
-  u.searchParams.set('ServiceID', env.NEXTBUS_FMS_SERVICE_ID ?? '');
-  u.searchParams.set('TenantCode', env.NEXTBUS_FMS_TENANT_CODE ?? '');
-  u.searchParams.set('busstopname', code);
-  u.searchParams.set('token', token);
-  return u.toString();
+/** POST {NEXTBUS_PROXY_BASE}/{endpoint}, e.g. .../bus-proxy/shuttle-service. */
+export function proxyUrl(env: Env, endpoint: string): string {
+  return `${(env.NEXTBUS_PROXY_BASE ?? '').replace(/\/+$/, '')}/${endpoint.replace(/^\//, '')}`;
 }
 
-/**
- * ConnectX signals an expired token with { result:false, error:1|2|3 }, at
- * HTTP 200. error 4 is a server-side/config failure (bad ServiceID or
- * TenantCode), NOT an auth problem, so it must not trigger a token refresh --
- * retrying it just hammers the host. Convention taken from the reference.
- */
-export function isFmsAuthError(body: unknown): boolean {
-  const b = body as { result?: boolean; error?: number } | null;
-  return b?.result === false && [1, 2, 3].includes(b.error ?? -1);
+interface ProxyBody {
+  code?: string;
+  msg?: string;
+  data?: unknown;
 }
 
-async function fetchOnce(env: Env, code: string, token: string): Promise<unknown> {
-  const res = await fetch(shuttleServiceUrl(env, code, token), { headers: fmsHeaders(env) });
+/** The proxy wraps results as {code, msg, data}; anything but "00000" failed.
+ *  Like the auth host, it reports failure at HTTP 200. */
+export function proxyOk(body: unknown): body is ProxyBody {
+  return typeof body === 'object' && body !== null && (body as ProxyBody).code === '00000';
+}
+
+async function proxyCall(
+  env: Env,
+  session: Session,
+  endpoint: string,
+  params: Record<string, string>,
+): Promise<unknown> {
+  const res = await fetch(proxyUrl(env, endpoint), {
+    method: 'POST',
+    headers: proxyHeaders(env, session.token),
+    body: JSON.stringify({ ...(await proxyEnvelope(env, session)), ...params }),
+  });
   const text = await res.text();
-  if (!res.ok) throw new Error(`ShuttleService HTTP ${res.status}`);
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new Error(`ShuttleService non-JSON (${res.status}): ${text.slice(0, 80)}`);
+    throw new Error(`${endpoint} non-JSON (${res.status}): ${text.slice(0, 80)}`);
   }
 }
 
 /**
- * One stop's arrivals. Retries exactly once on an FMS auth error (1|2|3) with
- * a freshly minted token; error 4 falls through to normalize(), which finds no
- * shuttles and yields an empty (available) result rather than a refresh loop.
+ * One stop's arrivals via the bus proxy. Any non-"00000" code gets exactly one
+ * retry with a freshly minted token; a second rejection THROWS, so the stop is
+ * reported unavailable and the answer degrades to an honest `unknown` rather
+ * than passing an empty result off as "the feed says no bus".
  */
 export async function fetchArrivals(
   env: Env,
   code: string,
   nowMs: number = Date.now(),
 ): Promise<StopArrivals> {
-  if (!fmsConfigured(env)) throw new Error('FMS not configured');
-  let token = await getFmsToken(env, nowMs);
-  let body = await fetchOnce(env, code, token);
-  if (isFmsAuthError(body)) {
-    invalidateFmsToken();
-    token = await getFmsToken(env, nowMs);
-    body = await fetchOnce(env, code, token);
+  if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
+  let session = await getSession(env, nowMs);
+  let body = await proxyCall(env, session, 'shuttle-service', { busstopname: code });
+  if (!proxyOk(body)) {
+    session = await getSession(env, nowMs, { force: true });
+    body = await proxyCall(env, session, 'shuttle-service', { busstopname: code });
   }
-  return { code, arrivals: normalize(body), fetchedAt: nowMs, stale: false, available: true };
+  if (!proxyOk(body)) {
+    const b = body as ProxyBody | null;
+    throw new Error(`shuttle-service rejected: code=${b?.code ?? '?'} msg=${b?.msg ?? ''}`);
+  }
+  return { code, arrivals: normalize(body.data), fetchedAt: nowMs, stale: false, available: true };
 }
 
 /**
