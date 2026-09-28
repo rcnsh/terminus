@@ -249,7 +249,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     },
                     destinations: [
                       { code: 'AS5', label: 'AS 5', stopCode: 'AS5', kind: 'stop' },
-                      { code: 'COM1', label: 'COM1', stopCode: 'COM3', kind: 'building' },
+                      { code: 'COM1', label: 'School of Computing (COM1)', stopCode: 'COM3', kind: 'building' },
                     ],
                   },
                 },
@@ -337,7 +337,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     ok: true,
                     now: '2026-09-28T01:14:02.000Z',
                     sgt: '09:14 day1',
-                    graph: { generated: '2026-08-27T15:32:24Z', source: 'nusbus.app public proxy', stops: 33, services: ['A1', 'A2', 'D1', 'D2', 'K', 'P', 'R1', 'R2'] },
+                    graph: { generated: '2026-09-28T13:27:41Z', source: 'uNivUS bus proxy via scripts/scrape_stops.py', stops: 33, services: ['A1', 'A2', 'D1', 'D2', 'K', 'P', 'R1', 'R2'] },
                     config: { auth: true, proxy: true, analytics: true },
                     trip: 'utown',
                   },
