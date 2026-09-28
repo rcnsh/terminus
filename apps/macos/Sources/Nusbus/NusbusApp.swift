@@ -52,12 +52,14 @@ struct Popover: View {
     var body: some View {
         VStack(spacing: 0) {
             Group {
-                if model.paired { Main(model: model, shown: shown) } else { Pair(model: model, shown: shown) }
+                if model.paired { Main(model: model) } else { Pair(model: model) }
             }
             .padding(14)
             Footer(model: model)
         }
         .frame(width: 360)
+        // Opening is a plain fade of the whole popover; nothing moves.
+        .opacity(shown ? 1 : 0)
         // Hug the content, and run to the window's edges rather than inside
         // its default margins, so there's no empty band round the popover.
         .fixedSize(horizontal: false, vertical: true)
@@ -74,7 +76,7 @@ struct Popover: View {
             windowLog.notice("popover window \(Int(w.frame.width))x\(Int(w.frame.height)) content \(Int(v.fittingSize.width))x\(Int(v.fittingSize.height)) insets t\(Int(i.top)) l\(Int(i.left)) b\(Int(i.bottom)) r\(Int(i.right))")
         }
         model.popoverOpen = true
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { shown = true }
+        withAnimation(.easeOut(duration: 0.18)) { shown = true }
     }
 
     private func close() {
@@ -83,23 +85,7 @@ struct Popover: View {
     }
 }
 
-/// Each section fades up into place, a beat after the one above it.
-private struct Entrance: ViewModifier {
-    let shown: Bool
-    let order: Int
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 10)
-            .scaleEffect(shown ? 1 : 0.98, anchor: .top)
-            .animation(.spring(response: 0.45, dampingFraction: 0.8).delay(Double(order) * 0.045), value: shown)
-    }
-}
-
 private extension View {
-    func entrance(_ shown: Bool, _ order: Int) -> some View { modifier(Entrance(shown: shown, order: order)) }
-
     /// The inset card every section sits on.
     func card(padding: CGFloat = 12) -> some View {
         self
@@ -124,7 +110,6 @@ private struct SectionLabel: View {
 
 private struct Pair: View {
     @Bindable var model: AppModel
-    let shown: Bool
     @State private var code = ""
 
     var body: some View {
@@ -137,7 +122,6 @@ private struct Pair: View {
                 }
             }
             .card()
-            .entrance(shown, 0)
 
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Pair this Mac")
@@ -170,7 +154,6 @@ private struct Pair: View {
                 }
             }
             .card()
-            .entrance(shown, 1)
         }
     }
 }
@@ -179,14 +162,13 @@ private struct Pair: View {
 
 private struct Main: View {
     @Bindable var model: AppModel
-    let shown: Bool
     @State private var query = ""
 
     private var answer: NextAnswer? { model.shown }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Header(model: model).entrance(shown, 0)
+            Header(model: model)
 
             if model.needsLocation {
                 HStack(spacing: 10) {
@@ -196,10 +178,9 @@ private struct Main: View {
                     Button("Allow") { model.askLocation() }.controlSize(.small)
                 }
                 .card(padding: 10)
-                .entrance(shown, 1)
             }
 
-            Tabs(model: model).entrance(shown, 1)
+            Tabs(model: model)
 
             // Fixed minimum height: switching tabs never resizes the popover.
             ZStack(alignment: .top) {
@@ -212,9 +193,8 @@ private struct Main: View {
             .frame(maxWidth: .infinity, minHeight: 120, alignment: .top)
             .animation(.snappy(duration: 0.22), value: model.showNearby)
             .animation(.snappy(duration: 0.22), value: model.target)
-            .entrance(shown, 2)
 
-            Search(model: model, query: $query).entrance(shown, 3)
+            Search(model: model, query: $query)
         }
     }
 }
@@ -254,7 +234,6 @@ private struct Header: View {
             .help("Refresh")
         }
         .card()
-        .animation(.snappy(duration: 0.25), value: a?.label)
     }
 
     private func heading(_ a: NextAnswer?) -> String {
