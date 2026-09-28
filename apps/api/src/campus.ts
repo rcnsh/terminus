@@ -30,6 +30,8 @@ export interface ProjectedStop {
   opposite: string | null;
   x: number;
   y: number;
+  lat: number;
+  lon: number;
   /** False for a small number of real stops that sit far off the dense
    *  campus cluster (P's excursion to Botanic Gardens MRT is the current
    *  case) -- scaling the map to fit them too would shrink the other ~30
@@ -131,7 +133,7 @@ export function buildCampusMap(graph: Graph): CampusMap {
 
   const projected: ProjectedStop[] = stops.map((s) => {
     const { x, y } = project(s);
-    return { code: s.code, name: s.name, longName: s.name, opposite: s.opposite ?? null, x, y, core: isCore(s.code) };
+    return { code: s.code, name: s.name, longName: s.name, opposite: s.opposite ?? null, x, y, lat: s.lat, lon: s.lon, core: isCore(s.code) };
   });
 
   const routes: Record<string, ProjectedRoute> = {};

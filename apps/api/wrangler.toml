@@ -4,7 +4,13 @@ compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
 routes = [{ pattern = "nusbus.rcn.sh", custom_domain = true }]
+
 workers_dev = true
+
+# The account page (apps/web). Files are served before the Worker runs;
+# every other path, including /, falls through to the Worker.
+[assets]
+directory = "../web/public"
 
 
 # npx wrangler kv namespace create NUSBUS_KV
@@ -21,3 +27,25 @@ dataset = "nusbus_edge"
 
 [observability]
 enabled = true
+
+[vars]
+EMAIL_FROM = "nusbus@rcn.sh"
+
+# Accounts. Apply schema changes with:
+#   npx wrangler d1 migrations apply nusbus --remote
+[[d1_databases]]
+binding = "DB"
+database_name = "nusbus"
+database_id = "e0957629-00a9-4984-b6df-a7eba0da47e9"
+migrations_dir = "migrations"
+
+# Sign-in links. rcn.sh must be onboarded under Email Service > Email Sending.
+[[send_email]]
+name = "EMAIL"
+allowed_sender_addresses = ["nusbus@rcn.sh"]
+
+# Per-IP limit on /auth/login and /pair.
+[[ratelimits]]
+name = "RL_AUTH"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }

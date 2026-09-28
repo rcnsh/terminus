@@ -1,0 +1,190 @@
+/**
+ * A user's saved setup, and the planner that turns it into "where next".
+ *
+ * The profile is one JSON document. It is validated in full on every write,
+ * so the planner can trust what it reads back.
+ */
+
+import type { ImportedTrip } from './nusmods.ts';
+import { sgt } from './config.ts';
+
+export interface Place {
+  key: string;
+  label: string;
+  /** Destination stop code. */
+  to: string;
+}
+
+export interface Home {
+  lat: number;
+  lon: number;
+  /** Usual boarding stops near home, best first. */
+  stops: string[];
+}
+
+export interface Profile {
+  home: Home | null;
+  /** A gap between classes longer than this sends you home in between. */
+  gapHours: number;
+  /** From the NUSMods import. Replaced wholesale on re-import. */
+  trips: ImportedTrip[];
+  /** Entered by hand. Survives a re-import. */
+  manual: ImportedTrip[];
+  places: Place[];
+  /** The NUSMods share link, kept so next semester is one click. */
+  share: string | null;
+}
+
+export const DEFAULT_PROFILE: Profile = {
+  home: null,
+  gapHours: 2,
+  trips: [],
+  manual: [],
+  places: [],
+  share: null,
+};
+
+export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24 } as const;
+
+type Result = { ok: true; profile: Profile } | { ok: false; error: string };
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isInt = (v: unknown, lo: number, hi: number): v is number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
+const str = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+
+/**
+ * Validates a whole profile. Missing fields take their defaults, so a client
+ * can send only what it knows about; anything present must be well formed.
+ */
+export function parseProfile(raw: unknown, isStop: (code: string) => boolean): Result {
+  if (!isObj(raw)) return { ok: false, error: 'profile must be an object' };
+  const p: Profile = structuredClone(DEFAULT_PROFILE);
+
+  if (raw.home !== undefined && raw.home !== null) {
+    const h = raw.home;
+    if (!isObj(h) || typeof h.lat !== 'number' || typeof h.lon !== 'number') return { ok: false, error: 'home needs lat and lon' };
+    if (Math.abs(h.lat) > 90 || Math.abs(h.lon) > 180) return { ok: false, error: 'home is not a coordinate' };
+    const stops = h.stops ?? [];
+    if (!Array.isArray(stops) || stops.length > PROFILE_LIMITS.homeStops || !stops.every((s) => typeof s === 'string' && isStop(s))) {
+      return { ok: false, error: `home.stops must be up to ${PROFILE_LIMITS.homeStops} known stop codes` };
+    }
+    p.home = { lat: h.lat, lon: h.lon, stops: [...new Set(stops as string[])] };
+  }
+
+  if (raw.gapHours !== undefined) {
+    if (typeof raw.gapHours !== 'number' || raw.gapHours < 0.5 || raw.gapHours > 12) {
+      return { ok: false, error: 'gapHours must be between 0.5 and 12' };
+    }
+    p.gapHours = raw.gapHours;
+  }
+
+  for (const field of ['trips', 'manual'] as const) {
+    if (raw[field] === undefined) continue;
+    const list = raw[field];
+    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.trips) return { ok: false, error: `${field} must be a list of up to ${PROFILE_LIMITS.trips}` };
+    const out: ImportedTrip[] = [];
+    for (const [i, t] of list.entries()) {
+      const bad = (why: string): Result => ({ ok: false, error: `${field}[${i}]: ${why}` });
+      if (!isObj(t)) return bad('not an object');
+      if (!isInt(t.day, 0, 6)) return bad('day must be 0 (Sun) to 6 (Sat)');
+      if (!isInt(t.arriveByMin, 0, 1439)) return bad('arriveByMin must be minutes past midnight');
+      if (t.endMin !== undefined && !isInt(t.endMin, t.arriveByMin + 1, 1440)) return bad('endMin must be after arriveByMin');
+      if (typeof t.to !== 'string' || !isStop(t.to)) return bad('to must be a known stop code');
+      if (!str(t.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
+      const venue = typeof t.venue === 'string' ? t.venue.slice(0, 40) : '';
+      out.push({ day: t.day, arriveByMin: t.arriveByMin, ...(t.endMin !== undefined ? { endMin: t.endMin as number } : {}), to: t.to, label: t.label.trim(), venue });
+    }
+    out.sort((a, b) => a.day - b.day || a.arriveByMin - b.arriveByMin);
+    p[field] = out;
+  }
+
+  if (raw.places !== undefined) {
+    const list = raw.places;
+    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.places) return { ok: false, error: `places must be a list of up to ${PROFILE_LIMITS.places}` };
+    const keys = new Set<string>();
+    for (const [i, pl] of list.entries()) {
+      if (!isObj(pl) || typeof pl.key !== 'string' || !/^[a-z0-9-]{1,24}$/.test(pl.key)) return { ok: false, error: `places[${i}].key must be 1-24 of a-z, 0-9, -` };
+      if (keys.has(pl.key)) return { ok: false, error: `places[${i}].key is a duplicate` };
+      if (!str(pl.label, PROFILE_LIMITS.placeLabel)) return { ok: false, error: `places[${i}].label must be 1-${PROFILE_LIMITS.placeLabel} characters` };
+      if (typeof pl.to !== 'string' || !isStop(pl.to)) return { ok: false, error: `places[${i}].to must be a known stop code` };
+      keys.add(pl.key);
+      p.places.push({ key: pl.key, label: pl.label.trim(), to: pl.to });
+    }
+  }
+
+  if (raw.share !== undefined && raw.share !== null) {
+    if (typeof raw.share !== 'string' || raw.share.length > 2000) return { ok: false, error: 'share must be a NUSMods link' };
+    p.share = raw.share;
+  }
+
+  return { ok: true, profile: p };
+}
+
+/* ------------------------------------------------------------------ */
+/* Planner                                                            */
+/* ------------------------------------------------------------------ */
+
+export type PlanWhy = 'class' | 'home' | 'gap-home';
+
+export interface Plan {
+  /** Destination stop code. */
+  to: string;
+  label: string;
+  why: PlanWhy;
+  /** Where you are assumed to be when the client sends no location. */
+  from: string | null;
+  /** The class this plan is about, when there is one. */
+  trip: ImportedTrip | null;
+}
+
+/** During a long gap, switch back from "home" to "next class" this long
+ *  before the class starts. */
+export const GAP_RETURN_MIN = 60;
+/** Classes with no known end are assumed to last this long. */
+const DEFAULT_CLASS_MIN = 60;
+
+const endOf = (t: ImportedTrip) => t.endMin ?? t.arriveByMin + DEFAULT_CLASS_MIN;
+
+/**
+ * Where you should be heading now, from today's classes only:
+ *
+ * - before the first class: to it, from home
+ * - between classes: to the next one, unless the gap is longer than
+ *   gapHours, in which case home until GAP_RETURN_MIN before it
+ * - after the last class: home
+ * - no classes today: null, and the client shows nearby departures
+ *
+ * A class counts as "next" until it starts.
+ */
+export function planFor(profile: Profile, nowMs: number): Plan | null {
+  const t = sgt(nowMs);
+  const nowMin = t.minutes;
+  const today = [...profile.trips, ...profile.manual]
+    .filter((x) => x.day === t.day)
+    .sort((a, b) => a.arriveByMin - b.arriveByMin);
+  if (!today.length) return null;
+
+  const homeStop = profile.home?.stops[0] ?? null;
+  const next = today.find((x) => x.arriveByMin > nowMin) ?? null;
+  const prev = [...today].reverse().find((x) => x.arriveByMin <= nowMin) ?? null;
+
+  if (!next) {
+    // After the last class of the day.
+    if (!homeStop) return null;
+    return { to: homeStop, label: 'Home', why: 'home', from: prev!.to, trip: null };
+  }
+  if (!prev) {
+    return { to: next.to, label: next.label, why: 'class', from: homeStop, trip: next };
+  }
+
+  const gapMin = next.arriveByMin - endOf(prev);
+  const returnAt = next.arriveByMin - GAP_RETURN_MIN;
+  if (homeStop && gapMin > profile.gapHours * 60 && nowMin < returnAt && homeStop !== next.to) {
+    // Still in class: nothing to catch yet, but the answer is the trip home.
+    return { to: homeStop, label: 'Home', why: 'gap-home', from: prev.to, trip: null };
+  }
+  // In a long gap after going home, the origin is home, not the last class.
+  const wentHome = homeStop && gapMin > profile.gapHours * 60 && nowMin >= endOf(prev);
+  return { to: next.to, label: next.label, why: 'class', from: wentHome ? homeStop : prev.to, trip: next };
+}

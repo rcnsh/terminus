@@ -18,6 +18,14 @@ export interface Env {
   NEXTBUS_REQUESTED_BY?: string;
   NEXTBUS_SECURED_REQUEST?: string;
 
+  /** Accounts (migrations/). Optional so the public API runs without it. */
+  DB?: D1Database;
+  /** Cloudflare Email Sending, for sign-in links. */
+  EMAIL?: SendEmail;
+  /** Sender for sign-in links; must be on a domain onboarded to Email Sending. */
+  EMAIL_FROM?: string;
+  /** Workers rate limiting, keyed per IP, on sign-in and pairing. */
+  RL_AUTH?: RateLimit;
 }
 
 /* ------------------------------------------------------------------ */
@@ -163,4 +171,9 @@ export interface ResolveInput {
   to: string | null;
   /** Used when lat/lon are absent. */
   originCode: string | null;
+  /**
+   * Stops always considered when within walking range, even if three closer
+   * stops would otherwise crowd them out. A user's usual stops near home.
+   */
+  preferStops?: string[];
 }

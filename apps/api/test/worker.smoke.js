@@ -211,11 +211,16 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   assert.equal(spec.servers[0].url, BASE, 'try-it requests go to whoever serves the docs');
 
   const documented = Object.keys(spec.paths).sort();
-  assert.deepEqual(documented, ['/arrivals', '/campus', '/health', '/import', '/next', '/trip']);
+  assert.deepEqual(documented, [
+    '/arrivals', '/auth/login', '/campus', '/health', '/import',
+    '/me/import', '/me/nearby', '/me/next', '/me/profile', '/next', '/pair', '/trip',
+  ]);
 
-  // Every documented path answers with its required params filled from the
-  // spec's own examples -- a renamed route or param shows up here, not in prod.
+  // Every documented public GET answers with its required params filled from
+  // the spec's own examples -- a renamed route or param shows up here, not in
+  // prod. Account routes are exercised in accounts.test.js.
   for (const [path, item] of Object.entries(spec.paths)) {
+    if (!item.get || item.get.security) continue;
     const q = new URLSearchParams();
     for (const p of item.get.parameters ?? []) if (p.required) q.set(p.name, String(p.example));
     if (path === '/import') continue; // needs the live NUSMods API

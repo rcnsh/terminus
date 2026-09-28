@@ -5,7 +5,7 @@ The next NUS shuttle to wherever you're going next.
 | Path | What |
 | --- | --- |
 | [apps/api](apps/api) | Cloudflare Worker at https://nusbus.rcn.sh. The docs are at `/`. |
-| apps/web | Account page (planned) |
+| [apps/web](apps/web) | Account page at `/account`, served by the api Worker |
 | apps/android | Home-screen widget (planned) |
 | apps/macos | Menu bar app (planned) |
 

@@ -35,9 +35,19 @@ const coordParams = [
   },
 ];
 
-const errorResponse = (description: string, example: Record<string, unknown>) => ({
+const errorResponse = (description: string, example?: Record<string, unknown>) => ({
   description,
-  content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' }, example } },
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' }, ...(example ? { example } : {}) } },
+});
+
+const ok = (schema: Record<string, unknown>) => ({
+  description: 'OK',
+  content: { 'application/json': { schema } },
+});
+
+const jsonBody = (schema: Record<string, unknown>, example?: Record<string, unknown>) => ({
+  required: true,
+  content: { 'application/json': { schema, ...(example ? { example } : {}) } },
 });
 
 const answerExample = {
@@ -86,6 +96,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       { name: 'Stops', description: 'Per-stop arrivals and static campus data.' },
       { name: 'Timetable', description: 'Turn a NUSMods timetable into a personal link.' },
       { name: 'Service', description: 'Health and configuration.' },
+      { name: 'Account', description: 'Invite-only. Sign in on the account page, or pair a device with a code from it.' },
     ],
     paths: {
       '/next': {
@@ -348,8 +359,140 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/auth/login': {
+        post: {
+          tags: ['Account'],
+          summary: 'Email a sign-in link',
+          description:
+            'Sends a sign-in link to an invited address. The reply is the same whether or not the address is invited. ' +
+            'One link per address per minute.',
+          operationId: 'login',
+          requestBody: jsonBody({ type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } }, { email: 'you@u.nus.edu' }),
+          responses: {
+            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, message: { type: 'string' } } }),
+            '400': errorResponse('Not an email address.'),
+            '429': errorResponse('Too many attempts from this IP.'),
+          },
+        },
+      },
+      '/pair': {
+        post: {
+          tags: ['Account'],
+          summary: 'Pair a device',
+          description:
+            'Exchanges the 6-character code shown on the account page for a device token. Send the token as ' +
+            '`Authorization: Bearer <token>` on `/me` routes. It lasts until it is revoked on the account page. Codes work once, for 10 minutes.',
+          operationId: 'pair',
+          requestBody: jsonBody(
+            { type: 'object', required: ['code'], properties: { code: { type: 'string' }, name: { type: 'string', maxLength: 40, description: 'Shown in the device list.' } } },
+            { code: 'K7QX4M', name: 'Pixel 8' },
+          ),
+          responses: {
+            '200': ok({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
+            '400': errorResponse('Wrong or expired code.'),
+            '429': errorResponse('Too many attempts from this IP.'),
+          },
+        },
+      },
+      '/me/next': {
+        get: {
+          tags: ['Account'],
+          summary: 'Next bus to where you are going',
+          description:
+            'The personal version of `/next`. With no `place` or `to`, the destination comes from your timetable:\n\n' +
+            '- before your first class: that class, from home\n' +
+            '- between classes: the next one, unless the gap is longer than `gapHours`, in which case home until an hour before it\n' +
+            '- after your last class: home\n' +
+            '- no classes today: `mode: nearby`, the next buses at the nearest stop\n\n' +
+            'The response also carries your saved places, so a widget can show them as buttons.',
+          operationId: 'meNext',
+          security: [{ bearer: [] }, { cookie: [] }],
+          parameters: [
+            ...coordParams,
+            { name: 'place', in: 'query', description: 'Key of a saved place.', schema: { type: 'string' }, example: 'mrt' },
+            { name: 'to', in: 'query', description: 'Any stop code or NUSMods venue code.', schema: { type: 'string' }, example: 'COM3' },
+          ],
+          responses: { '200': ok({ $ref: '#/components/schemas/MeAnswer' }), '401': errorResponse('No valid session.') },
+        },
+      },
+      '/me/nearby': {
+        get: {
+          tags: ['Account'],
+          summary: 'Departures near you',
+          description: 'Upcoming buses at up to three stops within walking range. Without coordinates, uses your home.',
+          operationId: 'meNearby',
+          security: [{ bearer: [] }, { cookie: [] }],
+          parameters: coordParams,
+          responses: {
+            '200': ok({
+              type: 'object',
+              properties: {
+                stops: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      stop: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } },
+                      distM: { type: 'integer' },
+                      walkS: { type: 'integer' },
+                      available: { type: 'boolean' },
+                      board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
+                    },
+                  },
+                },
+                asOf: { type: 'string', format: 'date-time' },
+              },
+            }),
+            '400': errorResponse('No coordinates and no home set.'),
+            '401': errorResponse('No valid session.'),
+          },
+        },
+      },
+      '/me/profile': {
+        get: {
+          tags: ['Account'],
+          summary: 'Your setup',
+          operationId: 'getProfile',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: { '200': ok({ $ref: '#/components/schemas/Profile' }), '401': errorResponse('No valid session.') },
+        },
+        put: {
+          tags: ['Account'],
+          summary: 'Replace your setup',
+          description: 'Replaces the whole profile. Missing fields are reset to their defaults.',
+          operationId: 'putProfile',
+          security: [{ bearer: [] }, { cookie: [] }],
+          requestBody: jsonBody({ $ref: '#/components/schemas/Profile' }),
+          responses: { '200': ok({ $ref: '#/components/schemas/Profile' }), '400': errorResponse('Invalid field; the message names it.'), '401': errorResponse('No valid session.') },
+        },
+      },
+      '/me/import': {
+        post: {
+          tags: ['Account'],
+          summary: 'Import a NUSMods timetable',
+          description: 'Replaces `trips` with the classes in a NUSMods share link. Hand-entered classes in `manual` are kept.',
+          operationId: 'meImport',
+          security: [{ bearer: [] }, { cookie: [] }],
+          requestBody: jsonBody({ type: 'object', required: ['share'], properties: { share: { type: 'string', format: 'uri' } } }),
+          responses: {
+            '200': ok({
+              type: 'object',
+              properties: {
+                profile: { $ref: '#/components/schemas/Profile' },
+                unresolved: { type: 'array', items: { $ref: '#/components/schemas/Unresolved' } },
+              },
+            }),
+            '400': errorResponse('Not a NUSMods share link.'),
+            '401': errorResponse('No valid session.'),
+          },
+        },
+      },
     },
     components: {
+      securitySchemes: {
+        bearer: { type: 'http', scheme: 'bearer', description: 'A device token from `/pair`.' },
+        cookie: { type: 'apiKey', in: 'cookie', name: 'nb_s', description: 'Set by signing in on the account page.' },
+      },
       schemas: {
         Quality: quality,
         Answer: {
@@ -421,6 +564,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   opposite: { type: ['string', 'null'], description: 'The stop across the road, if any.' },
                   x: { type: 'number' },
                   y: { type: 'number' },
+                  lat: { type: 'number' },
+                  lon: { type: 'number' },
                   core: { type: 'boolean', description: 'False for the few stops far off the main campus cluster.' },
                 },
               },
@@ -474,9 +619,79 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             unresolved: {
               type: 'array',
               description: 'Classes whose venue could not be matched to a stop.',
-              items: { type: 'object', properties: { module: { type: 'string' }, venue: { type: 'string' } } },
+              items: { $ref: '#/components/schemas/Unresolved' },
             },
           },
+        },
+        Unresolved: {
+          type: 'object',
+          description: 'A class whose venue matched no stop, with its time so it can be placed by hand.',
+          properties: {
+            module: { type: 'string' },
+            venue: { type: 'string' },
+            day: { type: 'integer', minimum: 0, maximum: 6 },
+            arriveByMin: { type: 'integer' },
+            endMin: { type: 'integer' },
+          },
+        },
+        Trip: {
+          type: 'object',
+          required: ['day', 'arriveByMin', 'to', 'label'],
+          properties: {
+            day: { type: 'integer', minimum: 0, maximum: 6, description: '0 = Sunday.' },
+            arriveByMin: { type: 'integer', description: 'Class start, minutes past midnight SGT.' },
+            endMin: { type: 'integer', description: 'Class end, minutes past midnight SGT.' },
+            to: { type: 'string', description: 'Destination stop code.' },
+            label: { type: 'string', maxLength: 60 },
+            venue: { type: 'string' },
+          },
+        },
+        Profile: {
+          type: 'object',
+          properties: {
+            home: {
+              type: ['object', 'null'],
+              properties: {
+                lat: { type: 'number' },
+                lon: { type: 'number' },
+                stops: { type: 'array', maxItems: 3, items: { type: 'string' }, description: 'Usual boarding stops near home, best first.' },
+              },
+            },
+            gapHours: { type: 'number', minimum: 0.5, maximum: 12, default: 2, description: 'A gap between classes longer than this means going home in between.' },
+            trips: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'From the NUSMods import.' },
+            manual: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'Entered by hand. Kept on re-import.' },
+            places: {
+              type: 'array',
+              maxItems: 12,
+              items: {
+                type: 'object',
+                required: ['key', 'label', 'to'],
+                properties: { key: { type: 'string', pattern: '^[a-z0-9-]{1,24}$' }, label: { type: 'string', maxLength: 24 }, to: { type: 'string' } },
+              },
+            },
+            share: { type: ['string', 'null'], description: 'The NUSMods share link last imported.' },
+          },
+        },
+        MeAnswer: {
+          allOf: [
+            { $ref: '#/components/schemas/Answer' },
+            {
+              type: 'object',
+              required: ['mode', 'dest', 'places'],
+              properties: {
+                mode: { type: 'string', enum: ['trip', 'nearby'] },
+                dest: {
+                  type: ['object', 'null'],
+                  properties: {
+                    to: { type: 'string' },
+                    label: { type: 'string' },
+                    why: { type: 'string', enum: ['class', 'home', 'gap-home', 'place'] },
+                  },
+                },
+                places: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, label: { type: 'string' } } } },
+              },
+            },
+          ],
         },
         Health: {
           type: 'object',
