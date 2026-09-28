@@ -232,6 +232,15 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   const refs = [...JSON.stringify(spec).matchAll(/"#\/components\/schemas\/(\w+)"/g)].map((m) => m[1]);
   for (const r of refs) assert.ok(spec.components.schemas[r], `dangling $ref ${r}`);
 });
+test('standing at the destination answers "You\'re here", not an ended walk', async () => {
+  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
+  const { res } = await call('/trip?to=COM3&lat=1.294431&lon=103.775217', { fetchImpl });
+  const body = await res.json();
+  assert.equal(body.label, "You're here");
+  assert.equal(body.quality, 'live');
+  assert.doesNotMatch(body.detail, /now walk/);
+});
+
 test('/next opened in a browser returns JSON, not a redirect to a page that no longer exists', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const { res } = await call('/next', { fetchImpl, headers: { accept: 'text/html' } });

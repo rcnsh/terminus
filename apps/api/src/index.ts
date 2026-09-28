@@ -10,8 +10,8 @@
 import graphJson from '../data/stops.json' with { type: 'json' };
 import serviceHoursJson from '../data/service-hours.json' with { type: 'json' };
 
-import type { Answer, Arrival, Env, Graph, ResolveInput, StopArrivals } from './types.ts';
-import { TRIPS, sgt, tripByKey, tripForTime } from './config.ts';
+import type { Answer, Arrival, Env, Graph, ResolveInput, Stop, StopArrivals } from './types.ts';
+import { TRIPS, WALK, sgt, tripByKey, tripForTime } from './config.ts';
 import {
   decodeTimetable,
   encodeTimetable,
@@ -26,6 +26,7 @@ import {
   boardAt,
   candidateStops,
   confidence,
+  haversineM,
   indexGraph,
   mergeServiceHours,
   nearestStop,
@@ -92,6 +93,16 @@ export async function answerFor(
   const cands = candidateStops(GRAPH, input);
   const originStop = input.originCode ? (idx.byCode.get(input.originCode) ?? null) : null;
   const fallbackStop = cands[0]?.stop ?? originStop;
+
+  // Already there: two classes in a row at the same stop, or standing at it.
+  // Without this the degrade ladder says "Walk · now" and marks it ended.
+  const dest = input.to ? idx.byCode.get(input.to) : undefined;
+  const atDest =
+    dest &&
+    (input.lat != null
+      ? haversineM(input.lat, input.lon!, dest.lat, dest.lon) / WALK.speedMs < 45
+      : input.originCode === dest.code);
+  if (atDest) return arrivedAnswer(dest, destLabel, nowMs);
 
   const byStop = await collectArrivals(
     env,
@@ -187,6 +198,20 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   // simply reports the next buses at the nearest stop.
   const input: ResolveInput = { lat, lon, to, originCode };
   return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs, dest?.key ?? null));
+}
+
+/** You are at the destination's stop. `live` because it is a current,
+ *  certain answer, even though no bus data was needed for it. */
+export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: number): Answer {
+  return {
+    label: "You're here",
+    detail: destLabel ? `${destLabel} is at ${stop.name}` : `You're at ${stop.name}`,
+    alt: null,
+    stop: { code: stop.code, name: stop.name, confidence: 1 },
+    quality: 'live',
+    asOf: new Date(nowMs).toISOString(),
+    arrivals: [],
+  };
 }
 
 /** Honest zero-config answer when we have no location, destination or
