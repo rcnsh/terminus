@@ -1,13 +1,16 @@
 #if DEBUG
 import SwiftUI
 
-/// `NUSBUS_SNAPSHOT=/tmp/dir swift run` renders the popover with sample data
+/// `TERMINUS_SNAPSHOT=/tmp/dir swift run` renders the popover with sample data
 /// to PNGs and exits. For checking layout without clicking the menu bar.
 @MainActor
 enum Snapshots {
     static func render(to dir: String) {
         let json = """
-        {"label":"D2 · 4 min","detail":"Leave in 1 min · 3 min walk to PGP","alt":"A1 · 9 min","stop":{"code":"PGP","name":"PGP"},
+        {"label":"D2 · 4 min","detail":"PGP · 3 min walk · UTown ~12 min · or A1 9 min","alt":"A1 · 9 min","stop":{"code":"PGP","name":"PGP"},
+         "departsAt":"\(ISO8601DateFormatter().string(from: Date().addingTimeInterval(240)))",
+         "timing":{"status":"on-time","text":"Arrive 09:52 · 8 min early"},
+         "arrivals":[{"svc":"D2","crowd":"low"}],
          "quality":"live","asOf":"2026-09-29T01:00:00Z","mode":"trip","dest":{"to":"UTOWN","label":"GEA1000 @ UTown","why":"class"},
          "places":[{"key":"mrt","label":"KR MRT"},{"key":"utown","label":"UTown"},{"key":"gym","label":"Gym"}]}
         """
@@ -44,6 +47,7 @@ enum Snapshots {
         for (name, m) in cases {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
                 let view = Popover(model: m, startShown: true)
+                    .environment(\.fixedNow, Date())
                     .background(bg)
                     .environment(\.colorScheme, scheme)
                 let r = ImageRenderer(content: view)

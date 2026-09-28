@@ -8,7 +8,7 @@
  *     service, moving with the real clock (so countdowns and dimming behave)
  *   - every service treated as running at any hour
  *   - an in-memory database with a test account (tester@example.test),
- *     three saved places, a class later today, and pairing code TEST67
+ *     three saved places, a class later today, and pairing codes TEST67, TEST78, TEST89
  *
  * Point a debug Android build at it:
  *   ./gradlew installDebug -PapiBase=http://localhost:8787
@@ -75,7 +75,7 @@ const profile = {
 };
 db.exec(`INSERT INTO users VALUES ('test-user', 'tester@example.test', 0)`);
 db._db.prepare('INSERT INTO profiles VALUES (?, ?, 0)').run('test-user', JSON.stringify(profile));
-db.exec(`INSERT INTO pair_codes VALUES ('TEST67', 'test-user', 9999999999999)`);
+for (const code of ['TEST67', 'TEST78', 'TEST89']) db.exec(`INSERT INTO pair_codes VALUES ('${code}', 'test-user', 9999999999999)`);
 
 const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test' };
 
@@ -94,4 +94,4 @@ http
     res.end(Buffer.from(await out.arrayBuffer()));
     if (email.sent.length) console.log('sign-in link:', email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`), (email.sent.length = 0);
   })
-  .listen(PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT} (pairing code TEST67)`));
+  .listen(PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT} (pairing codes TEST67, TEST78, TEST89)`));
