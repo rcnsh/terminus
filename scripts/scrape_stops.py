@@ -374,6 +374,18 @@ def main() -> int:
         return 0
 
     out = pathlib.Path(args.out)
+    # `generated` differs on every run, so comparing whole files would make the
+    # weekly workflow commit a timestamp-only "refresh" every time. Only write
+    # when something other than the timestamp actually changed.
+    if out.exists():
+        try:
+            previous = json.loads(out.read_text())
+        except ValueError:
+            previous = None
+        strip = lambda g: {k: v for k, v in g.items() if k != "generated"}
+        if previous is not None and strip(previous) == strip(graph):
+            print(f"stop graph unchanged; left {out} as is")
+            return 0
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(graph, indent=2, ensure_ascii=False) + "\n")
     print(f"wrote {out}")
