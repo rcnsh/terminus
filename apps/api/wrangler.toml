@@ -3,7 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
-routes = [{ pattern = "nusbus.rcn.sh", custom_domain = true }]
+# terminus.rcn.sh is primary; nusbus.rcn.sh stays for installed apps and
+# redirects browsers (see oldHostRedirect in src/index.ts).
+routes = [
+  { pattern = "terminus.rcn.sh", custom_domain = true },
+  { pattern = "nusbus.rcn.sh", custom_domain = true },
+]
 
 workers_dev = true
 
@@ -11,10 +16,12 @@ workers_dev = true
 [triggers]
 crons = ["*/15 * * * *"]
 
-# The account page (apps/web). Files are served before the Worker runs;
-# every other path, including /, falls through to the Worker.
+# The website (apps/web). The Worker runs first so it can redirect the old
+# host, then hands anything that isn't an API route to ASSETS.
 [assets]
 directory = "../web/public"
+binding = "ASSETS"
+run_worker_first = true
 
 
 # npx wrangler kv namespace create NUSBUS_KV
