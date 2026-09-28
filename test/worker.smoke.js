@@ -171,7 +171,7 @@ test('/health reports what is configured without leaking any of it', async () =>
   assert.equal(h.ok, true);
   assert.equal(h.config.auth, true);
   assert.equal(h.config.proxy, true);
-  assert.match(h.graph.source, /bootstrap/, 'the graph is real but not yet self-scraped');
+  assert.match(h.graph.source, /scrape_stops\.py/, 'the graph comes from our own scraper');
   assert.ok(h.graph.services.includes('D2'));
 
   const body = JSON.stringify(h);
@@ -414,4 +414,21 @@ test('a proxy that keeps rejecting degrades to unknown, not a fake "no bus"', as
   // 'scheduled' would claim the feed answered and had no bus. It never answered.
   assert.equal(a.quality, 'unknown');
   assert.equal(fetchImpl.counts.shuttle, 2, 'one retry, not a loop');
+});
+
+test('concurrent token requests share one mint instead of each minting', async () => {
+  const fetchImpl = makeFetch({});
+  installGlobals(fetchImpl);
+  const env = makeEnv();
+  const { getSession } = await import('../src/auth.ts');
+
+  // force: true bypasses memo and KV, so all three would mint without dedupe.
+  const sessions = await Promise.all([1, 2, 3].map(() => getSession(env, Date.now(), { force: true })));
+  assert.equal(fetchImpl.counts.auth, 1, 'one mint shared by all three callers');
+  assert.ok(sessions.every((s) => s.token === sessions[0].token));
+
+  // Once it settles, the next forced refresh mints again rather than reusing
+  // a finished promise forever.
+  await getSession(env, Date.now(), { force: true });
+  assert.equal(fetchImpl.counts.auth, 2);
 });

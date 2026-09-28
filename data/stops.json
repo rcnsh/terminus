@@ -1,6 +1,6 @@
 {
-  "generated": "2026-08-27T15:32:24.038936Z",
-  "source": "nusbus.app public proxy - bootstrap only; regenerate with npm run scrape once FMS credentials exist",
+  "generated": "2026-09-28T13:20:12.778556+00:00",
+  "source": "uNivUS bus proxy via scripts/scrape_stops.py",
   "stops": [
     {
       "code": "AS5",
@@ -94,8 +94,8 @@
       "code": "KRB",
       "name": "KR Bus Ter",
       "longName": "Kent Ridge Bus Terminal",
-      "lat": 1.29443,
-      "lon": 103.769997,
+      "lat": 1.294536,
+      "lon": 103.77,
       "opposite": null
     },
     {
@@ -182,8 +182,8 @@
       "code": "S17",
       "name": "S 17",
       "longName": "S 17",
-      "lat": 1.297488,
-      "lon": 103.780707,
+      "lat": 1.297519,
+      "lon": 103.78073,
       "opposite": null
     },
     {
@@ -214,8 +214,8 @@
       "code": "UHALL",
       "name": "UHall",
       "longName": "University Hall",
-      "lat": 1.297372,
-      "lon": 103.778075,
+      "lat": 1.297127,
+      "lon": 103.778822,
       "opposite": "UHALL-OPP"
     },
     {
