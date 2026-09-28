@@ -205,7 +205,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: number): Answer {
   return {
     label: "You're here",
-    detail: destLabel ? `${destLabel} is at ${stop.name}` : `You're at ${stop.name}`,
+    detail: destLabel && destLabel !== stop.name && destLabel !== shortStop(stop.name, 14) ? `${destLabel} is at ${stop.name}` : `You're at ${stop.name}`,
     alt: null,
     stop: { code: stop.code, name: stop.name, confidence: 1 },
     quality: 'live',
