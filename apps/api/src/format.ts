@@ -189,7 +189,8 @@ export function buildAnswer(f: FormatInput): Answer {
     return {
       label,
       detail,
-      alt: walk != null ? `Walk · ${mins(walk)}` : null,
+      // The label already says to walk; repeating it as the alternative is noise.
+      alt: null,
       stop: { code: stop?.code ?? '', name: stop?.name ?? '', confidence: f.confidence },
       quality: 'ended' as Quality,
       asOf: new Date(f.nowMs).toISOString(),

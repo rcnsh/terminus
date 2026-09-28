@@ -1,7 +1,6 @@
 package sh.rcn.nusbus.widget
 
 import android.content.Context
-import androidx.glance.appwidget.updateAll
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -25,7 +24,7 @@ object Refresher {
         val token = store.token
         if (token == null) {
             store.lastError = null
-            NextBusWidget().updateAll(ctx)
+            redrawWidgets(ctx)
             return
         }
         // In the background this is a cached fix at best, and only with
@@ -41,7 +40,7 @@ object Refresher {
         } catch (e: Exception) {
             store.lastError = "Offline"
         }
-        NextBusWidget().updateAll(ctx)
+        redrawWidgets(ctx)
     }
 
     fun schedule(ctx: Context) {

@@ -2,7 +2,6 @@ package sh.rcn.nusbus.ui
 
 import android.app.Application
 import android.os.Build
-import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -19,7 +18,7 @@ import sh.rcn.nusbus.NextAnswer
 import sh.rcn.nusbus.Place
 import sh.rcn.nusbus.Store
 import sh.rcn.nusbus.Target
-import sh.rcn.nusbus.widget.NextBusWidget
+import sh.rcn.nusbus.widget.redrawWidgets
 import sh.rcn.nusbus.widget.Refresher
 
 data class UiState(
@@ -52,8 +51,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(paired = true, pairing = false) }
                 Refresher.schedule(getApplication())
                 load()
+            } catch (e: ApiError) {
+                _state.update { it.copy(pairing = false, pairError = e.message) }
             } catch (e: Exception) {
-                _state.update { it.copy(pairing = false, pairError = e.message ?: "Couldn't reach nusbus") }
+                _state.update { it.copy(pairing = false, pairError = "Couldn't reach nusbus. Check your connection and try again.") }
             }
         }
     }
@@ -64,7 +65,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             runCatching { Api(token).logout() }
             store.clear()
             Refresher.cancel(getApplication())
-            NextBusWidget().updateAll(getApplication())
+            redrawWidgets(getApplication())
             _state.value = UiState(paired = false)
         }
     }
@@ -102,14 +103,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (s.target == Target.Plan) {
                         store.saveAnswer(json, now)
                         store.lastError = null
-                        NextBusWidget().updateAll(ctx)
+                        redrawWidgets(ctx)
                     }
                     _state.update { it.copy(answer = answer, places = answer.places, loading = false, error = null, fetchedAt = now) }
                 }
             } catch (e: ApiError) {
                 if (e.status == 401) {
                     store.clear()
-                    NextBusWidget().updateAll(ctx)
+                    redrawWidgets(ctx)
                     _state.value = UiState(paired = false, pairError = "This phone was removed from your account. Pair it again.")
                 } else {
                     _state.update { it.copy(loading = false, error = e.message) }
