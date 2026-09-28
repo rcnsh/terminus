@@ -1,8 +1,9 @@
 package sh.rcn.nusbus.widget
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -21,6 +22,12 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
+import androidx.compose.runtime.remember
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.currentState
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -41,39 +48,52 @@ import sh.rcn.nusbus.ui.MainActivity
 import java.text.DateFormat
 import java.util.Date
 
-class NextBusWidget : GlanceAppWidget() {
+/**
+ * Two widgets in the picker. "Next bus" is one glanceable line; "Next bus +
+ * places" adds the alternative and one-tap buttons for saved places.
+ */
+abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
-    private val small = DpSize(110.dp, 50.dp)
-    private val tall = DpSize(180.dp, 110.dp)
-    override val sizeMode = SizeMode.Responsive(setOf(small, tall))
+    override val sizeMode = SizeMode.Exact
+
+    override val stateDefinition = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val store = Store(context)
-        val paired = store.paired
-        val last = store.lastAnswer()
-        val error = store.lastError
         provideContent {
+            // redrawWidgets() bumps VERSION. Reading the cache keyed on it is
+            // what makes a running Glance session pick up a new answer; values
+            // read once outside the composition would stay stale.
+            val version = currentState(VERSION) ?: 0L
+            val snap = remember(version) { Snap(store.paired, store.lastAnswer(), store.lastError) }
             GlanceTheme {
-                Content(paired, last?.first, last?.second, error)
+                Content(snap.paired, snap.last?.first, snap.last?.second, snap.error)
             }
         }
     }
 
+    private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?)
+
     @Composable
     private fun Content(paired: Boolean, answer: NextAnswer?, fetchedAt: Long?, error: String?) {
         val ctx = LocalContext.current
-        val size = LocalSize.current
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
+        val tiny = TextStyle(color = colors.onSurfaceVariant, fontSize = 10.sp)
+        // Layout follows the real size: a compact widget stretched to two
+        // rows gets the full layout rather than one line in a big box.
+        val height = LocalSize.current.height
+        val large = large || height >= 110.dp
+        val roomy = large || height >= 90.dp
 
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(colors.widgetBackground)
                 .cornerRadius(20.dp)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = 14.dp, vertical = if (large) 12.dp else 8.dp)
                 .clickable(if (paired) actionRunCallback<RefreshAction>() else actionStartActivity<MainActivity>()),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = if (large) Alignment.Top else Alignment.CenterVertically,
         ) {
             when {
                 !paired -> {
@@ -81,27 +101,30 @@ class NextBusWidget : GlanceAppWidget() {
                     Text(error ?: "Tap to pair this phone", style = muted, maxLines = 2)
                 }
                 answer == null -> {
-                    Text(if (error != null) error else "Loading…", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
+                    Text(error ?: "Loading…", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
                     Text("Tap to refresh", style = muted)
                 }
                 else -> {
-                    val heading = listOfNotNull(answer.destLabel ?: if (answer.mode == "nearby") "Nearby" else null, whyText(answer.why))
-                        .joinToString(" · ")
+                    val heading = listOfNotNull(
+                        answer.destLabel ?: if (answer.mode == "nearby") "Nearby" else null,
+                        if (answer.why == "gap-home") "long gap" else null,
+                    ).joinToString(" · ")
                     if (heading.isNotEmpty()) Text(heading, style = muted, maxLines = 1)
                     Text(
                         answer.label,
-                        style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                        style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
                         maxLines = 1,
                     )
-                    val stamp = fetchedAt?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) }
-                    val foot = listOfNotNull(error, stamp).joinToString(" · ")
-                    Text(answer.detail, style = muted, maxLines = if (size.height >= tall.height) 2 else 1)
-                    if (size.height >= tall.height) {
-                        Spacer(GlanceModifier.height(8.dp))
+                    Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
+                    if (large) {
+                        answer.alt?.let { Text("Or: $it", style = muted, maxLines = 1) }
+                        Spacer(GlanceModifier.defaultWeight())
                         Chips(ctx, answer)
                         Spacer(GlanceModifier.height(6.dp))
                     }
-                    Text(foot, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 10.sp), maxLines = 1)
+                    val stamp = fetchedAt?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) }
+                    val foot = listOfNotNull(error, stamp).joinToString(" · ")
+                    if (roomy && foot.isNotEmpty()) Text(foot, style = tiny, maxLines = 1)
                 }
             }
         }
@@ -118,19 +141,30 @@ class NextBusWidget : GlanceAppWidget() {
                 Box(
                     modifier = GlanceModifier
                         .background(colors.secondaryContainer)
-                        .cornerRadius(12.dp)
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                        .cornerRadius(14.dp)
+                        .padding(horizontal = 12.dp, vertical = 7.dp)
                         .clickable(actionStartActivity(intent)),
                 ) {
-                    Text(label, style = TextStyle(color = colors.onSecondaryContainer, fontSize = 12.sp), maxLines = 1)
+                    Text(label, style = TextStyle(color = colors.onSecondaryContainer, fontSize = 13.sp), maxLines = 1)
                 }
             }
         }
     }
+}
 
-    private fun whyText(why: String?) = when (why) {
-        "gap-home" -> "long gap"
-        else -> null
+class NextBusWidget : BaseWidget(large = false)
+class PlacesWidget : BaseWidget(large = true)
+
+private val VERSION = longPreferencesKey("version")
+
+/** Redraws every placed widget of both kinds with the latest cached answer. */
+suspend fun redrawWidgets(ctx: Context) {
+    val mgr = GlanceAppWidgetManager(ctx)
+    for (widget in listOf(NextBusWidget(), PlacesWidget())) {
+        for (id in mgr.getGlanceIds(widget.javaClass)) {
+            updateAppWidgetState(ctx, id) { it[VERSION] = System.currentTimeMillis() }
+            widget.update(ctx, id)
+        }
     }
 }
 
@@ -140,8 +174,8 @@ class RefreshAction : ActionCallback {
     }
 }
 
-class NextBusWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = NextBusWidget()
+open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = widget
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
@@ -150,6 +184,14 @@ class NextBusWidgetReceiver : GlanceAppWidgetReceiver() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        Refresher.cancel(context)
+        // Called when the last widget of THIS kind goes. Keep refreshing
+        // while a widget of the other kind is still on the home screen.
+        val mgr = AppWidgetManager.getInstance(context)
+        val left = listOf(NextBusWidgetReceiver::class.java, PlacesWidgetReceiver::class.java)
+            .sumOf { mgr.getAppWidgetIds(ComponentName(context, it)).size }
+        if (left == 0) Refresher.cancel(context)
     }
 }
+
+class NextBusWidgetReceiver : BusWidgetReceiver(NextBusWidget())
+class PlacesWidgetReceiver : BusWidgetReceiver(PlacesWidget())

@@ -11,9 +11,12 @@ android {
         applicationId = "sh.rcn.nusbus"
         minSdk = 31
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
-        buildConfigField("String", "API_BASE", "\"https://nusbus.rcn.sh\"")
+        versionCode = 2
+        versionName = "0.1.1"
+        // `./gradlew -PapiBase=http://localhost:8787 installDebug` plus
+        // `adb reverse tcp:8787 tcp:8787` points a debug build at a local wrangler dev.
+        val apiBase = providers.gradleProperty("apiBase").orElse("https://nusbus.rcn.sh").get()
+        buildConfigField("String", "API_BASE", "\"$apiBase\"")
     }
 
     buildTypes {
