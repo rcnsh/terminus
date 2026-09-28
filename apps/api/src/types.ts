@@ -28,6 +28,13 @@ export interface Env {
   RL_AUTH?: RateLimit;
   /** Where outage alerts go. A secret, so it never lands in the repo. */
   ALERT_EMAIL?: string;
+  /** Turnstile on sign-in. The site key is public; without the secret the check is skipped. */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET?: string;
+  /** Per-IP limit on the public answer routes. */
+  RL_PUBLIC?: RateLimit;
+  /** Per-account limit on /me. */
+  RL_ME?: RateLimit;
 }
 
 /* ------------------------------------------------------------------ */

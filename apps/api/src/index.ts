@@ -401,6 +401,14 @@ export default {
       const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
       if (me) return me;
 
+      // Public answer routes: a per-IP ceiling. The per-stop cache already
+      // protects NUS; this protects the Worker from being a free proxy.
+      if (env.RL_PUBLIC && ['/next', '/trip', '/arrivals', '/import'].includes(url.pathname)) {
+        const ip = req.headers.get('cf-connecting-ip') ?? 'unknown';
+        const { success } = await env.RL_PUBLIC.limit({ key: `pub:${ip}` });
+        if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+      }
+
       switch (url.pathname) {
         case '/':
           return new Response(DOCS_PAGE, {

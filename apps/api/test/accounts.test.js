@@ -8,11 +8,12 @@ import { newPairCode, normalizePairCode } from '../src/accounts.ts';
 
 const BASE = 'https://bus.example.test';
 const INVITED = 'friend@u.nus.edu';
+const BLOCKED = 'spammer@example.com';
 
 function setup() {
   installGlobals(makeFetch());
   const db = makeD1();
-  db.exec(`INSERT INTO invites VALUES ('${INVITED}', 0)`);
+  db.exec(`INSERT INTO blocklist VALUES ('${BLOCKED}', 0)`);
   const email = makeEmail();
   const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'nusbus@example.test' };
   return { db, email, env };
@@ -45,15 +46,33 @@ async function signIn(env, email) {
   return res.headers.get('set-cookie').split(';')[0];
 }
 
-test('an invited address gets a link; an uninvited one gets the same reply and no email', async () => {
+test('sign-up is open; a blocked address gets the same reply and no email', async () => {
   const { env, email } = setup();
   const a = await call(env, '/auth/login', { method: 'POST', body: { email: 'Friend@U.NUS.edu ' } });
-  const b = await call(env, '/auth/login', { method: 'POST', body: { email: 'stranger@example.com' } });
+  const b = await call(env, '/auth/login', { method: 'POST', body: { email: BLOCKED } });
+  const c = await call(env, '/auth/login', { method: 'POST', body: { email: 'anyone@gmail.com' } });
   assert.equal(a.status, 200);
-  assert.equal(b.status, 200);
-  assert.deepEqual(await a.json(), await b.json(), 'the reply must not reveal the invite list');
+  assert.deepEqual(await a.json(), await b.json(), 'the reply must not reveal the blocklist');
+  assert.equal(c.status, 200);
+  assert.deepEqual(email.sent.map((m) => m.to), [INVITED, 'anyone@gmail.com']);
+});
+
+test('Turnstile: enforced once a secret is set', async () => {
+  const { env, email } = setup();
+  const verify = [];
+  globalThis.fetch = async (url, init) => {
+    verify.push(String(url));
+    const token = init.body.get('response');
+    return Response.json({ success: token === 'good' });
+  };
+  const e = { ...env, TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  const cfg = await (await call(e, '/auth/config')).json();
+  assert.equal(cfg.turnstileSiteKey, 'site');
+  assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED } })).status, 400, 'no token');
+  assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'bad' } })).status, 400);
+  assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'good' } })).status, 200);
   assert.equal(email.sent.length, 1);
-  assert.equal(email.sent[0].to, INVITED);
+  assert.ok(verify.every((u) => u.includes('challenges.cloudflare.com')));
 });
 
 test('opening the link does not spend it; the POST does, once', async () => {
@@ -283,4 +302,65 @@ test('a device idle for 90 days is signed out', async () => {
   db.exec(`UPDATE sessions SET last_seen = 0 WHERE kind = 'device'`);
   installGlobals(makeFetch(), 91 * 86_400_000);
   assert.equal((await call(env, '/me', { token })).status, 401);
+});
+
+test('delete account removes every row for the user', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { places: [{ key: 'mrt', label: 'KR MRT', to: 'KR-MRT' }] } });
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const { token } = await (await call(env, '/pair', { method: 'POST', body: { code } })).json();
+  assert.equal((await call(env, '/me', { method: 'DELETE', token })).status, 403, 'a device cannot delete the account');
+
+  const res = await call(env, '/me', { method: 'DELETE', cookie });
+  assert.equal(res.status, 200);
+  for (const t of ['users', 'sessions', 'profiles', 'pair_codes', 'magic_links']) {
+    assert.equal(db._db.prepare(`SELECT count(*) AS n FROM ${t}`).get().n, 0, t);
+  }
+  assert.equal((await call(env, '/me', { token })).status, 401);
+});
+
+test('export returns the profile and sessions, never token hashes', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { gapHours: 3 } });
+  const res = await call(env, '/me/export', { cookie });
+  assert.match(res.headers.get('content-disposition'), /attachment/);
+  const body = await res.json();
+  assert.equal(body.email, INVITED);
+  assert.equal(body.profile.gapHours, 3);
+  assert.equal(body.sessions.length, 1);
+  assert.doesNotMatch(JSON.stringify(body), /[0-9a-f]{64}/);
+});
+
+test('sign out everywhere ends every session', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const { token } = await (await call(env, '/pair', { method: 'POST', body: { code } })).json();
+  const res = await call(env, '/me/sessions', { method: 'DELETE', cookie });
+  assert.equal((await res.json()).ended, 2);
+  assert.equal((await call(env, '/me', { token })).status, 401);
+  assert.equal((await call(env, '/me', { cookie })).status, 401);
+});
+
+test('home keeps stops only: coordinates are dropped on save', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { lat: 1.2918, lon: 103.7804, stops: ['PGP'] } } });
+  const raw = db._db.prepare('SELECT json FROM profiles').get().json;
+  assert.doesNotMatch(raw, /103\.78/);
+  assert.deepEqual(JSON.parse(raw).home, { stops: ['PGP'] });
+  const near = await call(env, '/me/nearby', { cookie });
+  assert.equal(near.status, 200, 'nearby without a location starts from the home stop');
+});
+
+test('rate limits answer 429', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const never = { limit: async () => ({ success: false }) };
+  assert.equal((await call({ ...env, RL_ME: never }, '/me', { cookie })).status, 429);
+  const pub = await call({ ...env, RL_PUBLIC: never }, '/next?lat=1.29&lon=103.78');
+  assert.equal(pub.status, 429);
+  assert.equal(pub.headers.get('retry-after'), '60');
 });

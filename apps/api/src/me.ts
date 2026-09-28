@@ -10,6 +10,10 @@ import {
   type SessionInfo,
   authenticate,
   createPairCode,
+  deleteAccount,
+  endAllSessions,
+  exportAccount,
+  verifyTurnstile,
   endSession,
   listDevices,
   loadProfileJson,
@@ -76,7 +80,7 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
   return {
     ...structuredClone(DEFAULT_PROFILE),
     gapHours: typeof p.gapHours === 'number' ? p.gapHours : DEFAULT_PROFILE.gapHours,
-    home: p.home ? { ...p.home, stops: (p.home.stops ?? []).filter(ok) } : null,
+    home: p.home?.stops?.some(ok) ? { stops: p.home.stops.filter(ok) } : null,
     trips: (p.trips ?? []).filter((t) => ok(t.to)),
     manual: (p.manual ?? []).filter((t) => ok(t.to)),
     places: (p.places ?? []).filter((x) => ok(x.to)),
@@ -113,19 +117,27 @@ export async function handleMe(
 
   /* ---------- sign-in ---------- */
 
+  if (path === '/auth/config' && req.method === 'GET') {
+    // What the sign-in form needs to render. Public by design.
+    return json({ turnstileSiteKey: env.TURNSTILE_SECRET ? (env.TURNSTILE_SITE_KEY ?? null) : null });
+  }
+
   if (path === '/auth/login' && req.method === 'POST') {
     if (await limited(env, req, 'login')) return json({ error: 'too many attempts, try again in a minute' }, 429);
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     if (!email) return json({ error: 'enter a valid email address' }, 400);
+    if (!(await verifyTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip')))) {
+      return json({ error: 'the human check failed, try again' }, 400);
+    }
     try {
       await requestLink(env, db, email, url.origin, nowMs);
     } catch (err) {
       console.error('sign-in email failed', String(err));
       return json({ error: 'could not send the email, try again later' }, 502);
     }
-    // Same answer whether or not the address is invited.
-    return json({ ok: true, message: 'If that address has an invite, a sign-in link is on its way.' });
+    // Same answer whether or not the address is blocked or already has an account.
+    return json({ ok: true, message: 'Check your email for a sign-in link.' });
   }
 
   if (path === '/auth/verify') {
@@ -135,7 +147,7 @@ export async function handleMe(
       // only shows a button; the POST spends the token.
       const t = url.searchParams.get('t') ?? '';
       const safe = t.replace(/[^A-Za-z0-9_-]/g, '');
-      return html(page('Sign in to nusbus', `<h1>Sign in to nusbus</h1>
+      return html(page('Sign in to terminus', `<h1>Sign in to terminus</h1>
 <form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit">Sign in</button></form>`));
     }
     if (req.method === 'POST') {
@@ -173,7 +185,34 @@ export async function handleMe(
   }
 
   if (!session) return json({ error: 'sign in first' }, 401);
+
+  // Per account: generous for a widget, an app and a browser tab together.
+  if (env.RL_ME) {
+    const { success } = await env.RL_ME.limit({ key: `me:${session.user.id}` });
+    if (!success) return json({ error: 'too many requests, slow down' }, 429);
+  }
   const webOnly = (s: SessionInfo) => (s.kind === 'web' ? null : json({ error: 'manage devices from the account page' }, 403));
+
+  if (path === '/me' && req.method === 'DELETE') {
+    const deny = webOnly(session);
+    if (deny) return deny;
+    await deleteAccount(db, session.user);
+    return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
+  }
+
+  if (path === '/me/export' && req.method === 'GET') {
+    return json(await exportAccount(db, session.user), 200, {
+      'content-disposition': 'attachment; filename="terminus-export.json"',
+    });
+  }
+
+  if (path === '/me/sessions' && req.method === 'DELETE') {
+    // Sign out everywhere, including this browser.
+    const deny = webOnly(session);
+    if (deny) return deny;
+    const ended = await endAllSessions(db, session.user.id);
+    return json({ ok: true, ended }, 200, { 'set-cookie': sessionCookie('', 0) });
+  }
 
   if (path === '/me' && req.method === 'GET') {
     const profile = await getProfile(db, session.user.id, deps.graph);
@@ -306,7 +345,9 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
 
 async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
   let { lat, lon } = coordsFrom(url);
-  if (lat === null && profile.home) ({ lat, lon } = profile.home);
+  // Without a location, start from the first home stop.
+  const homeStop = profile.home ? indexGraph(deps.graph).byCode.get(profile.home.stops[0]) : undefined;
+  if (lat === null && homeStop) ({ lat, lon } = homeStop);
   if (lat === null || lon === null) return json({ error: 'send lat and lon, or set a home' }, 400);
 
   const idx = indexGraph(deps.graph);

@@ -84,7 +84,7 @@ test('parseProfile fills defaults and rejects bad input with a useful message', 
 
   const cases = [
     [{ gapHours: 0 }, /gapHours/],
-    [{ home: { lat: 1.3 } }, /lat and lon/],
+    [{ home: 'PGP' }, /home must be/],
     [{ home: { lat: 1.3, lon: 103.7, stops: ['NOPE'] } }, /home.stops/],
     [{ manual: [{ day: 7, arriveByMin: 600, to: 'COM3', label: 'x' }] }, /manual\[0\]: day/],
     [{ manual: [{ day: 1, arriveByMin: 600, endMin: 500, to: 'COM3', label: 'x' }] }, /endMin/],
