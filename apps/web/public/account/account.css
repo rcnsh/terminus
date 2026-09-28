@@ -1,10 +1,20 @@
 /* Account page, on top of /assets/site.css. */
 
-.signin { max-width: 26rem; margin: 40px auto 0; }
-.signin h1 { font-size: 1.8rem; margin-bottom: 6px; }
+/* Sign-in: one centred card, two steps (form, then "check your inbox"). */
+.signin { max-width: 25rem; margin: 6vh auto 0; }
+.signin-card { padding: 32px 28px; text-align: left; }
+.signin-mark { width: 44px; height: 44px; margin-bottom: 20px; }
+.signin h1 { font-size: 1.6rem; margin-bottom: 8px; }
+.signin .hint { line-height: 1.5; }
+.signin .hint.small { font-size: 0.85rem; margin-top: 10px; }
+.signin form label { margin-top: 20px; }
 .signin .btn.wide { margin-top: 16px; }
-.turnstile:not(:empty) { margin-top: 14px; }
-.center { text-align: center; margin-top: 16px; }
+.turnstile:not(:empty) { margin-top: 14px; min-height: 65px; }
+.form-error { color: var(--bad); font-size: 0.9rem; margin-top: 10px; min-height: 1.2em; }
+.form-error:empty { display: none; }
+.sent-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-bright); margin-bottom: 16px; }
+#sent-step .btn { margin-top: 20px; }
+.center { text-align: center; margin-top: 18px; font-size: 0.85rem; }
 
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 20rem; gap: 20px; align-items: start; padding-top: 8px; }
 .col { display: grid; gap: 16px; min-width: 0; }
