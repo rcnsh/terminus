@@ -117,7 +117,7 @@ test('pairing: a code from the web session becomes a device token that can be re
   const { token } = await paired.json();
 
   const me = await (await call(env, '/me', { token })).json();
-  assert.deepEqual(me, { email: INVITED, kind: 'device' });
+  assert.deepEqual(me, { email: INVITED, kind: 'device', needsReimport: false });
 
   // Codes are single use.
   assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'x' } })).status, 400);

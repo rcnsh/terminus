@@ -35,18 +35,22 @@ jobs:
           NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
         run: python3 apps/api/scripts/scrape_stops.py
 
+      # Semester dates (NUSMods) and public holidays (MOM). No credentials.
+      - name: Refresh calendar
+        run: python3 apps/api/scripts/fetch_calendar.py
+
       # A bad graph is worse than a stale one, so the suite gates the commit.
       - name: Test against the new graph
         run: npm ci && npm test
 
       - name: Commit if changed
         run: |
-          if git diff --quiet -- apps/api/data/stops.json; then
-            echo "stop graph unchanged"
+          if git diff --quiet -- apps/api/data/stops.json apps/api/data/calendar.json; then
+            echo "stop graph and calendar unchanged"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/api/data/stops.json
-          git commit -m "data: refresh stop graph"
+          git add apps/api/data/stops.json apps/api/data/calendar.json
+          git commit -m "data: refresh stop graph and calendar"
           git push

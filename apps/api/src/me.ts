@@ -22,8 +22,8 @@ import {
   saveProfileJson,
   sessionCookie,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, type Profile, isResting, parseProfile, planFor, restDetail } from './profile.ts';
-import { parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
+import { DEFAULT_PROFILE, type Profile, isResting, needsReimport, parseProfile, planFor, restDetail } from './profile.ts';
+import { acadYear, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
 import { shortStop } from './format.ts';
 import { WALK } from './config.ts';
@@ -81,6 +81,7 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
     manual: (p.manual ?? []).filter((t) => ok(t.to)),
     places: (p.places ?? []).filter((x) => ok(x.to)),
     share: p.share ?? null,
+    term: p.term ?? null,
   };
 }
 
@@ -175,7 +176,8 @@ export async function handleMe(
   const webOnly = (s: SessionInfo) => (s.kind === 'web' ? null : json({ error: 'manage devices from the account page' }, 403));
 
   if (path === '/me' && req.method === 'GET') {
-    return json({ email: session.user.email, kind: session.kind });
+    const profile = await getProfile(db, session.user.id, deps.graph);
+    return json({ email: session.user.email, kind: session.kind, needsReimport: needsReimport(profile) });
   }
 
   if (path === '/me/profile') {
@@ -205,6 +207,7 @@ export async function handleMe(
     const profile = await getProfile(db, session.user.id, deps.graph);
     profile.trips = trips;
     profile.share = share;
+    profile.term = { acadYear: acadYear(nowMs, parsed.semester).replace('-', '/'), semester: parsed.semester };
     await saveProfileJson(db, session.user.id, profile, nowMs);
     return json({ profile, unresolved });
   }
