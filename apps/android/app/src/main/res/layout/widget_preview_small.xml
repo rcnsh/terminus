@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What "Next bus" looks like, for the widget picker. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:gravity="center_vertical"
+    android:background="@drawable/widget_preview_bg"
+    android:paddingHorizontal="14dp" android:paddingVertical="8dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Next class · CS2030 @ COM1" android:textSize="12sp"
+        android:textColor="@android:color/system_neutral2_700" android:maxLines="1" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="D2 · 09:42" android:textSize="20sp" android:textStyle="bold"
+        android:textColor="@android:color/system_neutral1_900" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="PGP · 3 min walk · COM3 ~9 min" android:textSize="12sp"
+        android:textColor="@android:color/system_neutral2_700" android:maxLines="1" />
+</LinearLayout>

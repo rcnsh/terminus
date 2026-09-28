@@ -4,19 +4,34 @@ plugins {
 }
 
 android {
-    namespace = "sh.rcn.nusbus"
+    namespace = "sh.rcn.terminus"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "sh.rcn.nusbus"
+        applicationId = "sh.rcn.terminus"
         minSdk = 31
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 10
+        versionName = "1.0.0"
         // `./gradlew -PapiBase=http://localhost:8787 installDebug` plus
         // `adb reverse tcp:8787 tcp:8787` points a debug build at a local wrangler dev.
-        val apiBase = providers.gradleProperty("apiBase").orElse("https://nusbus.rcn.sh").get()
+        val apiBase = providers.gradleProperty("apiBase").orElse("https://terminus.rcn.sh").get()
         buildConfigField("String", "API_BASE", "\"$apiBase\"")
+    }
+
+    // The release key lives outside the repo: its path and passwords come
+    // from ~/.gradle/gradle.properties (TERMINUS_*). Without them (anyone
+    // else building from source) release builds fall back to the debug key.
+    val keystore = providers.gradleProperty("TERMINUS_KEYSTORE").orNull
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = providers.gradleProperty("TERMINUS_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("TERMINUS_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("TERMINUS_KEY_PASSWORD").get()
+            }
+        }
     }
 
     buildTypes {
@@ -24,9 +39,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            // Sideloaded personal builds: the debug key is enough. Swap in a
-            // real key before this goes anywhere near a store.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     buildFeatures {

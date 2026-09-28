@@ -1,4 +1,4 @@
-package sh.rcn.nusbus
+package sh.rcn.terminus
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,7 +23,21 @@ data class NextAnswer(
     val destLabel: String?,
     val why: String?,
     val places: List<Place>,
+    /** When the bus leaves, epoch ms. Clients count down from this. */
+    val departsAtMs: Long?,
+    /** For a class: "on-time" | "tight" | "late", and its display text. */
+    val timingStatus: String?,
+    val timingText: String?,
+    /** Crowd on the next bus: "low" | "medium" | "high". */
+    val crowd: String?,
 ) {
+    /** "D2 · 09:42" when there's a departure time; otherwise the label as sent. */
+    fun clockLabel(format: (Long) -> String): String {
+        val at = departsAtMs ?: return label
+        if (quality == "unknown" || quality == "ended") return label
+        return "${label.substringBefore(" · ")} · ${format(at)}"
+    }
+
     companion object {
         fun parse(o: JSONObject): NextAnswer {
             val dest = o.optJSONObject("dest")
@@ -41,6 +55,15 @@ data class NextAnswer(
                 places = (0 until places.length()).map {
                     val p = places.getJSONObject(it)
                     Place(p.getString("key"), p.getString("label"))
+                },
+                departsAtMs = o.optStringOrNull("departsAt")?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() },
+                timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
+                timingText = o.optJSONObject("timing")?.optStringOrNull("text"),
+                // The recommended bus's crowd, not whichever bus is first in the list.
+                crowd = o.optJSONArray("arrivals")?.let { arr ->
+                    val svc = o.getString("label").substringBefore(" · ")
+                    (0 until arr.length()).map { arr.getJSONObject(it) }
+                        .firstOrNull { it.optString("svc") == svc }?.optStringOrNull("crowd")
                 },
             )
         }
@@ -155,4 +178,4 @@ class Api(private val token: String?) {
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 }
 
-fun JSONObject.optStringOrNull(key: String): String? = if (isNull(key)) null else optString(key)
+fun JSONObject.optStringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else optString(key)

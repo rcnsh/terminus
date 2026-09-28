@@ -1,4 +1,4 @@
-package sh.rcn.nusbus.widget
+package sh.rcn.terminus.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -46,10 +46,10 @@ import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import sh.rcn.nusbus.NextAnswer
-import sh.rcn.nusbus.R
-import sh.rcn.nusbus.Store
-import sh.rcn.nusbus.ui.MainActivity
+import sh.rcn.terminus.NextAnswer
+import sh.rcn.terminus.R
+import sh.rcn.terminus.Store
+import sh.rcn.terminus.ui.MainActivity
 import java.text.DateFormat
 import java.util.Date
 
@@ -102,7 +102,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         ) {
             when {
                 !paired -> {
-                    Text("nusbus", style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp))
+                    Text("terminus", style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp))
                     Text(error ?: "Tap to pair this phone", style = muted, maxLines = 2)
                 }
                 answer == null -> {
@@ -137,24 +137,40 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         if (answer.why == "gap-home") "long gap" else null,
                     ).joinToString(" · ")
                     if (heading.isNotEmpty()) Text(heading, style = muted, maxLines = 1)
+                    // A clock time stays true until the bus leaves; "4 min"
+                    // is wrong a minute later. Once the bus has gone, or the
+                    // data is old, dim it and ask for a tap rather than lie.
+                    val now = System.currentTimeMillis()
+                    val old = isOld(answer, fetchedAt, now)
                     Text(
-                        answer.label,
-                        style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
+                        answer.clockLabel(::clock),
+                        style = TextStyle(
+                            color = if (old) colors.onSurfaceVariant else colors.onSurface,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = if (large) 24.sp else 20.sp,
+                        ),
                         maxLines = 1,
                     )
-                    Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
+                    Text(if (old) "Old times · tap to refresh" else answer.detail, style = muted, maxLines = if (large) 2 else 1)
+                    if (large && !old) {
+                        answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
+                    }
                     if (large) {
-                        answer.alt?.let { Text("Or: $it", style = muted, maxLines = 1) }
                         Spacer(GlanceModifier.defaultWeight())
                         Chips(ctx, answer)
                         Spacer(GlanceModifier.height(6.dp))
                     }
-                    val stamp = fetchedAt?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) }
+                    val stamp = fetchedAt?.let { "Updated ${clock(it)}" }
                     val foot = listOfNotNull(error, stamp).joinToString(" · ")
                     if (roomy && foot.isNotEmpty()) Text(foot, style = tiny, maxLines = 1)
                 }
             }
         }
+    }
+
+    private fun timingColor(status: String?, colors: androidx.glance.color.ColorProviders) = when (status) {
+        "late" -> colors.error
+        else -> colors.primary
     }
 
     @Composable
@@ -222,3 +238,15 @@ open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver(
 
 class NextBusWidgetReceiver : BusWidgetReceiver(NextBusWidget())
 class PlacesWidgetReceiver : BusWidgetReceiver(PlacesWidget())
+
+/** Data this old is shown dimmed. */
+const val STALE_AFTER_MS = 3 * 60_000L
+
+/** The bus in the answer has left, or the answer is too old to trust. */
+fun isOld(answer: NextAnswer, fetchedAt: Long?, now: Long): Boolean {
+    val departed = answer.departsAtMs?.let { now > it + 30_000 } ?: false
+    val aged = fetchedAt != null && now - fetchedAt > STALE_AFTER_MS
+    return departed || aged
+}
+
+fun clock(ms: Long): String = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(ms))

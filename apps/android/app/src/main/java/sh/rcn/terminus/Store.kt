@@ -1,4 +1,4 @@
-package sh.rcn.nusbus
+package sh.rcn.terminus
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
@@ -16,7 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Keystore, plus the last answer the widget shows.
  */
 class Store(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences("nusbus", Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
 
     var token: String?
         get() = prefs.getString(KEY_TOKEN, null)?.let { runCatching { decrypt(it) }.getOrNull() }
@@ -72,7 +72,7 @@ class Store(context: Context) {
     }
 
     private companion object {
-        const val ALIAS = "nusbus-token"
+        const val ALIAS = "terminus-token"
         const val KEY_TOKEN = "token"
         const val KEY_ANSWER = "answer"
         const val KEY_FETCHED = "fetched"
