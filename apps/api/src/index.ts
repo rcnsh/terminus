@@ -36,6 +36,9 @@ import {
 import { buildCampusMap, buildDestinations } from './campus.ts';
 import { analyticsEnabled, logAnswer } from './analytics.ts';
 import { DOCS_PAGE, openApiSpec } from './openapi.ts';
+import { CORS, coordsFrom, json, jsonCached, numParam } from './http.ts';
+import { type MeDeps, handleMe } from './me.ts';
+import { accountsConfigured } from './accounts.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
@@ -52,55 +55,9 @@ export const GRAPH = {
 const CAMPUS_MAP = buildCampusMap(GRAPH);
 const DESTINATIONS = buildDestinations(GRAPH);
 
-const CORS = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'content-type',
-  'access-control-allow-methods': 'GET,POST,OPTIONS',
-};
+export { coordsFrom, numParam };
 
-function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      // The answer is coordinate-specific and cheap to recompute. The caching
-      // that matters happens per stop code inside getArrivals().
-      'cache-control': 'no-store',
-      ...CORS,
-      ...extra,
-    },
-  });
-}
-
-function jsonCached(body: unknown, maxAge: number): Response {
-  return new Response(JSON.stringify(body), {
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': `public, max-age=${maxAge}`, ...CORS },
-  });
-}
-
-/**
- * LANDMINE: Number(null) === 0 and Number('') === 0, not NaN. A missing lat
- * silently resolves to the Gulf of Guinea and reports "no stop nearby"
- * instead of falling back to the configured origin.
- */
-export function numParam(url: URL, key: string): number | null {
-  const raw = url.searchParams.get(key);
-  if (raw === null) return null;
-  const s = raw.trim();
-  if (s === '') return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
-
-export function coordsFrom(url: URL): { lat: number | null; lon: number | null } {
-  const lat = numParam(url, 'lat');
-  const lon = numParam(url, 'lon');
-  if (lat === null || lon === null) return { lat: null, lon: null };
-  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { lat: null, lon: null };
-  return { lat, lon };
-}
-
-async function collectArrivals(
+export async function collectArrivals(
   env: Env,
   ctx: ExecutionContext,
   codes: string[],
@@ -393,12 +350,16 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
       auth: authConfigured(env),
       proxy: fmsConfigured(env),
       analytics: analyticsEnabled(env),
+      accounts: accountsConfigured(env),
+      email: Boolean(env.EMAIL && env.EMAIL_FROM),
     },
     trip: tripForTime(nowMs)?.key ?? null,
     // Opt-in: this one costs an upstream round trip on a cold token.
     auth: url.searchParams.get('probe') === '1' ? await probeAuth(env, nowMs) : undefined,
   });
 }
+
+const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -408,6 +369,9 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
     try {
+      const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
+      if (me) return me;
+
       switch (url.pathname) {
         case '/':
           return new Response(DOCS_PAGE, {

@@ -13,3 +13,6 @@ dev/
 
 # Local output of the impeccable design plugin (screenshots, hook cache).
 .impeccable/
+
+# Local Claude Code preview config
+.claude/

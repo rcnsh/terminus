@@ -97,6 +97,7 @@ interface TimetableRow {
   classNo: string;
   day: string;
   startTime: string; // "HHMM"
+  endTime?: string; // "HHMM"
   venue: string;
 }
 
@@ -119,6 +120,7 @@ export function venueToStop(venue: string): { stop: string; m: number } | null {
 export interface ImportedTrip {
   day: number; // 0=Sun..6=Sat
   arriveByMin: number; // minutes past midnight SGT, class start
+  endMin?: number; // minutes past midnight SGT, class end, when known
   to: string; // destination stop code
   label: string; // e.g. "CS1010S @ COM1"
   venue: string;
@@ -127,10 +129,13 @@ export interface ImportedTrip {
 
 export interface ImportResult {
   trips: ImportedTrip[];
-  unresolved: Array<{ module: string; venue: string }>;
+  /** Classes whose venue matched no stop, with enough detail to place them by hand. */
+  unresolved: Array<{ module: string; venue: string; day: number; arriveByMin: number; endMin?: number }>;
 }
 
 type FetchLike = typeof fetch;
+
+const hhmm = (v: string) => Number(v.slice(0, 2)) * 60 + Number(v.slice(2));
 
 /**
  * Resolve selections into trips by querying NUSMods. One fetch per distinct
@@ -171,12 +176,13 @@ export async function resolveTrips(
         if (day < 0) continue;
         const resolved = venueToStop(r.venue);
         if (!resolved) {
-          unresolved.push({ module, venue: r.venue });
+          unresolved.push({ module, venue: r.venue, day, arriveByMin: hhmm(r.startTime), ...(r.endTime ? { endMin: hhmm(r.endTime) } : {}) });
           continue;
         }
         trips.push({
           day,
-          arriveByMin: Number(r.startTime.slice(0, 2)) * 60 + Number(r.startTime.slice(2)),
+          arriveByMin: hhmm(r.startTime),
+          ...(r.endTime ? { endMin: hhmm(r.endTime) } : {}),
           to: resolved.stop,
           label: `${module} @ ${r.venue.split('-')[0]}`,
           venue: r.venue,

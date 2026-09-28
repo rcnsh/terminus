@@ -85,12 +85,45 @@ npx wrangler deploy
 | `GET /campus` | Static stop/route geometry and destination search data. Cached hard. |
 | `GET /import?share=<nusmods url>&home=<stop>` | NUSMods share URL -> a personal `/next?tt=` link. Stateless; nothing stored. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
+| `GET /account` | The account page ([apps/web](../web)), served as static assets. |
+| `POST /auth/login`, `/pair`, `/me/*` | Accounts. See below. |
 
 ## Personalisation
 
 Per-user trips come from a NUSMods timetable via `/import`, encoded into the
 user's own `/next?tt=` link. [`src/config.ts`](src/config.ts) still holds a few
 named trip keys usable with `?to=`, plus the cache TTLs and tuning constants.
+
+## Accounts
+
+Invite-only. The account page at `/account` signs in with an emailed link and
+stores one profile per user in D1: timetable, home stops, gap threshold and
+saved places. Native apps don't sign in; they pair with a 6-character code
+from the page and get a device token (`Authorization: Bearer`).
+
+- `GET /me/next` is the widget's one call. It picks the destination from the
+  timetable (see `planFor` in [src/profile.ts](src/profile.ts)) or from
+  `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
+- `GET /me/nearby` lists departures at up to three stops near you.
+- Tokens are stored as SHA-256 hashes. Web sessions last 30 days; device
+  tokens last until revoked on the page.
+- The link in the email opens a page with a button, and only the button's
+  POST uses up the link. Outlook's link scanner opens links before the user
+  does, so a GET that spent the token would break NUS addresses.
+
+Setup:
+
+```bash
+npx wrangler d1 migrations apply nusbus --remote
+```
+
+```bash
+npx wrangler d1 execute nusbus --remote --command "INSERT INTO invites VALUES ('friend@u.nus.edu', unixepoch() * 1000)"
+```
+
+Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
+needs the Workers Paid plan and rcn.sh onboarded under Email Service >
+Email Sending in the dashboard.
 
 ## How it works
 
@@ -269,6 +302,11 @@ src/nusmods.ts    NUSMods share URL -> trips, stateless ?tt= encoding
 src/campus.ts     /campus map geometry and destination search
 src/analytics.ts  Analytics Engine decision + arrival logging
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
+src/http.ts       JSON responses, query parsing
+src/accounts.ts   Sign-in links, sessions, pairing codes (D1)
+src/profile.ts    Profile validation and the where-next planner
+src/me.ts         /auth, /pair and /me routes
+migrations/       D1 schema
 ```
 
 `normalize()` in `fms.ts` is the only function that touches the raw FMS shape.

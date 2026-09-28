@@ -117,6 +117,12 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
       .map((stop) => ({ stop, distM: haversineM(input.lat!, input.lon!, stop.lat, stop.lon) }))
       .sort((a, b) => a.distM - b.distM);
     const near = all.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
+    // A user's usual stops (near home) join the set when in range, so a dense
+    // cluster of closer stops cannot push out the one they actually use.
+    for (const code of input.preferStops ?? []) {
+      const c = all.find((x) => x.stop.code === code);
+      if (c && c.distM <= WALK.maxRadiusM && !near.includes(c)) near.push(c);
+    }
     // Never answer "no stop nearby" -- degrade to the nearest one, however far.
     base = near.length ? near : all.slice(0, 1);
   } else {
