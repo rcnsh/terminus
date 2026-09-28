@@ -19,3 +19,6 @@ dev/
 
 # Release builds (scripts/release.sh)
 /build/
+
+# Private notes, never published
+.private/

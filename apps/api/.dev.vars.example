@@ -1,10 +1,10 @@
-# Copy to .dev.vars and fill from a proxied uNivUS capture (mitmproxy + CA cert on
-# the device; uNivUS is Flutter/Dio). Commit NOTHING from here.
+# Copy to .dev.vars and fill in. The keys are not included in this repository.
+# Commit NOTHING from here.
 #
 # Variable names match hewliyang/nus-nextbus-web's .env.example so that repo's
 # notes stay applicable.
 
-# CONFIRMED 2026-08-27 from a real capture. The flow is:
+# The flow:
 #   POST {NEXTBUS_AUTH_BASE}/get-access-token
 #   headers: X-HTD-API, X-APP-API
 #   body:    {"deviceid","ipaddr","version"}
@@ -14,12 +14,11 @@
 NEXTBUS_AUTH_BASE="https://myizaac2.nus.edu.sg/univus-public/mobile"
 
 # Bus data. Since 2026-09-05 uNivUS POSTs to this proxy instead of calling
-# ConnectX directly (captured from uNivUS 2.59.2). Auth is the same guest JWT
+# ConnectX directly (as of uNivUS 2.59.2). Auth is the same guest JWT
 # from get-access-token, as a Bearer header AND in the body, plus x-api-key.
 NEXTBUS_PROXY_BASE="https://inetapps.nus.edu.sg/univus/api/bus-proxy"
 
-# Fixed app constant sent as x-api-key to the proxy. Same class of value as
-# the two keys below: read it off a captured bus-proxy request.
+# Fixed app constant sent as x-api-key to the proxy.
 NEXTBUS_PROXY_API_KEY=""
 
 # Must track the current Play Store release. When NUS ships a new uNivUS, the
@@ -28,8 +27,7 @@ NEXTBUS_PROXY_API_KEY=""
 # univus_android_<versionName>_<versionCode>.
 NEXTBUS_APP_VERSION="univus_android_2.59.2_140"
 
-# THE ONLY TWO SECRETS IN THE PROJECT. Read them off the REQUEST HEADERS of
-# the get-access-token call, not the body. Without them the endpoint returns
+# The auth headers for get-access-token. Without them the endpoint returns
 # HTTP 200 with {"code":"10000","msg":"Invalid API KEY"}.
 NEXTBUS_HTD_API=""
 NEXTBUS_APP_API=""
