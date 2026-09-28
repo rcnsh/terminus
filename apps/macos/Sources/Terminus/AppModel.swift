@@ -34,19 +34,29 @@ final class AppModel {
 
     var error: String?
     var updated: Date?
-    var popoverOpen = false { didSet { if popoverOpen { kick() } } }
+    var popoverOpen = false { didSet { if popoverOpen { refreshLoginItem(); kick() } } }
     var needsLocation: Bool { locator.undecided }
 
-    var openAtLogin: Bool {
-        get { SMAppService.mainApp.status == .enabled }
-        set {
-            do {
-                if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            } catch {
-                self.error = "Couldn't change the login item: \(error.localizedDescription)"
-            }
+    /// Mirrors the system's login-item status. A stored property, so the
+    /// Settings toggle re-renders when it changes; refreshed on every open.
+    private(set) var loginItem: SMAppService.Status = SMAppService.mainApp.status
+    var openAtLogin: Bool { loginItem == .enabled }
+
+    func setOpenAtLogin(_ on: Bool) {
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        } catch {
+            self.error = "Couldn't change the login item: \(error.localizedDescription)"
+        }
+        refreshLoginItem()
+        // An app outside the App Store may need the user's OK first.
+        if on && loginItem == .requiresApproval {
+            self.error = "Allow terminus in System Settings → General → Login Items"
+            SMAppService.openSystemSettingsLoginItems()
         }
     }
+
+    func refreshLoginItem() { loginItem = SMAppService.mainApp.status }
 
     /// Ticks every 30 s for the menu bar's countdown.
     var clock = Date()

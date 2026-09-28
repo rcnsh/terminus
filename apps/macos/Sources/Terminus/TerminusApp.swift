@@ -99,8 +99,18 @@ struct Popover: View {
         .opacity(shown ? 1 : 0)
         .frame(maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in open() }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in close() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { n in
+            if window == nil || n.object as? NSWindow === window { open() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { n in
+            if n.object as? NSWindow === window { close() }
+        }
+        // The definitive "it's gone": the window stops being visible.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { n in
+            guard let w = n.object as? NSWindow, w === window, !w.occlusionState.contains(.visible) else { return }
+            model.popoverOpen = false
+            shown = false
+        }
         .onAppear { open() }
     }
 
@@ -110,9 +120,15 @@ struct Popover: View {
         withAnimation(.easeOut(duration: 0.18)) { shown = true }
     }
 
+    /// Losing key status doesn't mean the popover closed: opening the
+    /// Settings menu takes key away while the popover stays on screen. Only
+    /// treat it as closed once the window has actually gone.
     private func close() {
-        model.popoverOpen = false
-        shown = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            guard let window, !window.isVisible || !window.occlusionState.contains(.visible) else { return }
+            model.popoverOpen = false
+            shown = false
+        }
     }
 
     private func fit(height: CGFloat) {
@@ -701,7 +717,7 @@ private struct Footer: View {
         HStack {
             if model.paired {
                 Menu {
-                    Toggle("Open at login", isOn: $model.openAtLogin)
+                    Toggle("Open at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
                     Button("Refresh now") { Task { await model.refresh() } }
                     Divider()
                     Button("Unpair this Mac") { model.unpair() }
