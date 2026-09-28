@@ -17,9 +17,6 @@ export interface Env {
   NEXTBUS_REQUESTED_BY?: string;
   NEXTBUS_SECURED_REQUEST?: string;
 
-  VAPID_PUBLIC_KEY?: string;
-  VAPID_PRIVATE_KEY?: string;
-  VAPID_SUBJECT?: string;
 }
 
 /* ------------------------------------------------------------------ */

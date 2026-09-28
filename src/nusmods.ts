@@ -195,7 +195,7 @@ export async function resolveTrips(
 /* ------------------------------------------------------------------ */
 
 export interface Timetable {
-  home: string | null; // origin stop for pushes / no-GPS
+  home: string | null; // origin stop for calls without coordinates
   trips: ImportedTrip[];
 }
 

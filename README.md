@@ -16,49 +16,30 @@ GET /next  ->  { "label": "D2 · 4 min",
 ```
 
 The server returns a pre-rendered string; clients render it without computing
-anything. A Quick Settings tile, a push notification, this page and (later) an
-MCP tool all consume the same `label` and `detail`. The moment a client starts
+anything. A Quick Settings tile, a web page, a notification and (later) an MCP
+tool would all consume the same `label` and `detail`. The moment a client starts
 formatting for itself, four interfaces begin to drift apart and there are four
 places to fix every bug.
 
+**This repo is the API only.** There is no bundled UI; `GET /` returns a JSON
+index of the endpoints. Clients are separate.
+
 ---
 
-## Step zero: is the FMS reachable from outside NUS?
+## Reachability
 
-**Nobody has verified this, and everything below depends on it.** There are
-user reports that uNivUS requires NUS wifi. If the endpoints are IP-restricted
-then no edge platform can reach them, and this needs a box on campus with the
-Worker as a thin front — a different architecture.
-
-From **mobile data, off campus**, with `.dev.vars` filled in:
-
-```bash
-set -a && . ./.dev.vars && set +a && curl -sv --max-time 15 "$NEXTBUS_FMS_BASE/ShuttleService?busstopname=COM3&serviceId=$NEXTBUS_FMS_SERVICE_ID" -H "X-HTD-API: $NEXTBUS_HTD_API" -H "X-APP-API: $NEXTBUS_APP_API" -H "Authorization: Bearer $TOKEN" | head -c 400
-```
-
-Evidence leans favourable: `hewliyang/nus-nextbus-web` ran these same endpoints
-from Vercel, which is arbitrary cloud IPs. But it is unconfirmed. Do not deploy
-on the assumption.
-
-A second, free signal: once the GitHub secrets are set, run the
-`scrape stop graph` workflow by hand. The runner is a US cloud IP. If it
-succeeds, the endpoints are not NUS-network-restricted.
-
-You can build and test everything before answering this — the suite runs with
-no credentials at all.
+Resolved. The token host and ConnectX both answer from Cloudflare's edge and
+from mobile data off campus, so no on-campus box is needed. `GET /health?probe=1`
+reports live auth state from wherever the Worker is running.
 
 ## Quick start
 
 ```bash
 npm install
-npm test          # 30 tests, zero credentials, zero network
+npm test          # zero credentials, zero network
 npm run typecheck
-npm run dev       # wrangler dev; /next answers off the placeholder graph
+npm run dev       # wrangler dev, needs .dev.vars for live data
 ```
-
-`data/stops.json` ships as a clearly-labelled synthetic placeholder so the
-tests and `wrangler dev` work before any credential exists. `npm run scrape`
-replaces it with the real thing.
 
 ## Configuration
 
@@ -79,17 +60,10 @@ student's credentials.
 | `NEXTBUS_FMS_SERVICE_ID` | Required by `ShuttleService` |
 | `NEXTBUS_FMS_TENANT_CODE` | Required by `BusStops`, `ServiceDescription`, `PickupPoint` |
 | `NEXTBUS_REQUESTED_BY` / `NEXTBUS_SECURED_REQUEST` | Optional; the server does not require them |
-| `VAPID_*` | Optional; push is off entirely without `VAPID_PUBLIC_KEY` |
 
 Names match `hewliyang/nus-nextbus-web`'s `.env.example` so that repo's notes
 stay applicable. uNivUS is a Flutter app, so capturing values means proxying it
 with a CA cert; there is no request signing to defeat.
-
-**Two values are guesses, not captures**, because the reference `.env.example`
-does not document them. Confirm both against your own capture:
-
-- `DEFAULT_AUTH_PATH` in [src/auth.ts](src/auth.ts) — the token endpoint path
-- `shuttleServiceUrl()` in [src/fms.ts](src/fms.ts) — the query parameter names
 
 Deploy:
 
@@ -103,26 +77,19 @@ npx wrangler deploy
 
 | Route | |
 | --- | --- |
-| `GET /next?lat&lon` | The answer. Destination comes from the time-of-day prior. |
-| `GET /trip?to=<key>&lat&lon` | The answer for a named trip (or a bare stop code). |
-| `GET /health` | Graph age and which config is present. Never values. |
-| `POST /subscribe` | `{ endpoint }` for Web Push. Stores the endpoint only. |
-| `GET /vapid` | Public key, or 501 when push is unconfigured. |
-| `GET /`, `/manifest.webmanifest`, `/sw.js`, `/icon.svg` | The one-answer PWA. |
-
-**Both `/next` and `/trip` work with no coordinates at all**, falling back to
-the trip's configured origin. That is what lets the morning push work with zero
-location permissions — a service worker has no `navigator.geolocation`.
+| `GET /` | JSON index of these endpoints. |
+| `GET /next` | The answer. `?tt=` (timetable from `/import`) picks your next class; `?to=` names a trip key or stop code; `?lat&lon` alone gives the next buses at your nearest stop. With none of these it returns a "Set up" answer rather than inventing a destination. |
+| `GET /trip?to=<key\|stop>&lat&lon` | The answer for a named trip or stop code. Falls back to a configured origin without coordinates. |
+| `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
+| `GET /campus` | Static stop/route geometry and destination search data. Cached hard. |
+| `GET /import?share=<nusmods url>&home=<stop>` | NUSMods share URL -> a personal `/next?tt=` link. Stateless; nothing stored. |
+| `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
 
 ## Personalisation
 
-[`src/config.ts`](src/config.ts) is the entire personalisation surface: three
-named recurring trips, time-of-day priors mapping hour ranges to a trip key,
-and the cache TTLs. Everything else is machinery.
-
-The premise is three recurring trips, not a general routing problem. Hardcoding
-them is what removes the tap. There is deliberately **no stop picker in any
-UI** — that would reintroduce the exact tap this exists to delete.
+Per-user trips come from a NUSMods timetable via `/import`, encoded into the
+user's own `/next?tt=` link. [`src/config.ts`](src/config.ts) still holds a few
+named trip keys usable with `?to=`, plus the cache TTLs and tuning constants.
 
 ## How it works
 
@@ -143,7 +110,7 @@ cache entry is keyed on the **resolved stop code**, not the request URL —
 `getLastKnownLocation` jitters the coordinates on every call and the tile
 appends a cache-buster, so a URL-keyed cache would never hit.
 
-**KV holds only the auth token and push subscriptions.** Never the arrivals —
+**KV holds only auth tokens.** Never the arrivals —
 KV writes are rate-limited and propagation is eventual, which is wrong for
 15-second data.
 
@@ -155,13 +122,6 @@ into `data/stops.json`.
 ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-
 old answer honestly labelled beats a spinner, and beats an empty tile that
 reads as "no buses".
-
-**Push instead of geofencing.** Background location on Android is
-permission-heavy and gets killed by OEM battery managers. The cron sends a
-payload-free push; the service worker wakes and calls the API itself, so times
-are fresh at display time. `crons = ["40 0 * * 1-5"]` is 08:40 SGT on weekdays
-— SGT is UTC+8 with no DST, so Cloudflare's UTC-only cron is exact rather than
-a seasonal approximation.
 
 ## What the feed actually looks like
 
@@ -298,26 +258,25 @@ that failed because logging failed would be an absurd way to miss a bus.
 - The fixtures come from `bus.hewliyang.com`'s proxy, not the FMS directly.
   The rows are passthrough; the envelope is his. Replace them with raw
   `ShuttleService` bodies once you have the capture.
-- The web page is a fallback. The tile is the product.
 
-## Client
+## Clients
 
-[docs/android-tile.md](docs/android-tile.md) — the Quick Settings tile, with
-working Kotlin, plus a five-minute way to test the whole idea with HTTP Request
-Shortcuts before writing an APK.
+[docs/android-tile.md](docs/android-tile.md) — a Quick Settings tile against
+`/next`, with working Kotlin, plus a five-minute way to test with HTTP Request
+Shortcuts first.
 
 ## Layout
 
 ```
-src/index.ts      Router, scheduled handler
+src/index.ts      Router
 src/resolve.ts    Haversine, directional pairing, downstream reachability, scoring
 src/format.ts     label/detail strings, the degrade ladder
 src/fms.ts        ShuttleService client + defensive response normalisation
 src/auth.ts       Public token, lazy refresh, KV + in-memory memo
 src/config.ts     THE PERSONALISATION SURFACE
-src/page.ts       One-answer PWA fallback page
-src/push.ts       VAPID JWT via Web Crypto, payload-free push
-src/pwa.ts        Manifest, service worker, icon
+src/nusmods.ts    NUSMods share URL -> trips, stateless ?tt= encoding
+src/campus.ts     /campus map geometry and destination search
+src/analytics.ts  Analytics Engine decision + arrival logging
 ```
 
 `normalize()` in `fms.ts` is the only function that touches the raw FMS shape.

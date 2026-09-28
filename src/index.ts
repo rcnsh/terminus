@@ -11,7 +11,7 @@ import graphJson from '../data/stops.json' with { type: 'json' };
 import serviceHoursJson from '../data/service-hours.json' with { type: 'json' };
 
 import type { Answer, Arrival, Env, Graph, ResolveInput, StopArrivals } from './types.ts';
-import { PUSH_TRIP, TRIPS, sgt, tripByKey, tripForTime } from './config.ts';
+import { TRIPS, sgt, tripByKey, tripForTime } from './config.ts';
 import {
   decodeTimetable,
   encodeTimetable,
@@ -19,7 +19,6 @@ import {
   parseShareUrl,
   resolveTrips,
 } from './nusmods.ts';
-import { WALK } from './config.ts';
 import { authConfigured, authUrl, getSession } from './auth.ts';
 import { fmsConfigured, getArrivals } from './fms.ts';
 import { buildAnswer, shortStop } from './format.ts';
@@ -35,14 +34,11 @@ import {
   walkAllTheWayS,
 } from './resolve.ts';
 import { buildCampusMap, buildDestinations } from './campus.ts';
-import { ICON_SVG, MANIFEST, SERVICE_WORKER } from './pwa.ts';
-import { PAGE } from './page.ts';
-import { pushConfigured, saveSubscription, tickleAll } from './push.ts';
 import { analyticsEnabled, logAnswer } from './analytics.ts';
 
-export // Operating hours are hand-maintained in their own file so `npm run scrape`
+// Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
-const GRAPH = {
+export const GRAPH = {
   ...(graphJson as unknown as Graph),
   serviceHours: mergeServiceHours(
     (graphJson as unknown as Graph).serviceHours,
@@ -78,12 +74,6 @@ function json(body: unknown, status = 200, extra: Record<string, string> = {}): 
 function jsonCached(body: unknown, maxAge: number): Response {
   return new Response(JSON.stringify(body), {
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': `public, max-age=${maxAge}`, ...CORS },
-  });
-}
-
-function text(body: string, contentType: string, maxAge: number): Response {
-  return new Response(body, {
-    headers: { 'content-type': contentType, 'cache-control': `public, max-age=${maxAge}` },
   });
 }
 
@@ -246,7 +236,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 function needsSetupAnswer(nowMs: number): Answer {
   return {
     label: 'Set up',
-    detail: 'Turn on location for nearby buses, or open Menu to add your timetable',
+    detail: 'Send lat/lon for nearby buses, or a timetable (?tt=) from /import',
     alt: null,
     stop: { code: '', name: '', confidence: 0 },
     quality: 'unknown',
@@ -259,8 +249,8 @@ function needsSetupAnswer(nowMs: number): Answer {
  * GET /import?share=<nusmods url>&home=<stop code>
  *
  * Stateless: returns the user's personal /next link with the whole timetable
- * encoded into it. Nothing is stored. `home` is optional but needed for the
- * morning push and any no-GPS call.
+ * encoded into it. Nothing is stored. `home` is optional but needed for any
+ * call made without coordinates.
  */
 async function handleImport(url: URL, env: Env, nowMs: number): Promise<Response> {
   const share = url.searchParams.get('share');
@@ -285,16 +275,13 @@ async function handleImport(url: URL, env: Env, nowMs: number): Promise<Response
   }
 
   const encoded = encodeTimetable({ home, trips });
-  const origin = new URL(url);
-  // The shareable link opens the app page (which reads ?tt= and renders).
-  // The JSON API path is kept separately for the Android tile.
-  origin.pathname = '/';
-  origin.search = `?tt=${encoded}`;
+  const next = new URL(url);
+  next.pathname = '/next';
+  next.search = `?tt=${encoded}`;
 
   return json({
-    url: origin.toString(),
-    path: `/?tt=${encoded}`,
-    tilePath: `/next?tt=${encoded}`,
+    url: next.toString(),
+    path: `/next?tt=${encoded}`,
     home,
     classes: trips.length,
     schedule: trips.map((t) => ({ day: t.day, at: t.arriveByMin, to: t.to, label: t.label })),
@@ -406,7 +393,6 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
       fms: fmsConfigured(env),
       serviceId: Boolean(env.NEXTBUS_FMS_SERVICE_ID),
       tenantCode: Boolean(env.NEXTBUS_FMS_TENANT_CODE),
-      push: pushConfigured(env),
       analytics: analyticsEnabled(env),
     },
     trip: tripForTime(nowMs)?.key ?? null,
@@ -415,20 +401,18 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
   });
 }
 
-async function handleSubscribe(req: Request, env: Env, nowMs: number): Promise<Response> {
-  if (!pushConfigured(env)) return json({ error: 'push not configured' }, 501);
-  let endpoint: unknown;
-  try {
-    endpoint = ((await req.json()) as { endpoint?: unknown }).endpoint;
-  } catch {
-    return json({ error: 'bad json' }, 400);
-  }
-  if (typeof endpoint !== 'string' || !/^https:\/\//.test(endpoint)) {
-    return json({ error: 'endpoint must be an https url' }, 400);
-  }
-  await saveSubscription(env, endpoint, nowMs);
-  return json({ ok: true }, 201);
-}
+/** GET / -- what this API serves. There is no UI. */
+const INDEX = {
+  name: 'nusbus-edge',
+  endpoints: {
+    '/next': 'next bus: ?lat&lon, ?to=<trip key|stop code>, ?tt=<timetable from /import>',
+    '/trip': 'a named trip or stop: ?to=<trip key|stop code>&lat&lon',
+    '/arrivals': "one stop's board: ?stop=<code>",
+    '/campus': 'static stop/route geometry and destination search data',
+    '/import': 'NUSMods share URL -> personal /next link: ?share=<url>&home=<stop>',
+    '/health': 'config presence and graph info; ?probe=1 tests auth',
+  },
+};
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -439,15 +423,10 @@ export default {
 
     try {
       switch (url.pathname) {
-        case '/next': {
-          const accept = req.headers.get('accept') ?? '';
-          if (req.method === 'GET' && accept.includes('text/html')) {
-            const to = new URL(url);
-            to.pathname = '/';
-            return Response.redirect(to.toString(), 302);
-          }
+        case '/':
+          return json(INDEX);
+        case '/next':
           return await handleNext(url, env, ctx, nowMs);
-        }
         case '/trip':
           return await handleTrip(url, env, ctx, nowMs);
         case '/health':
@@ -458,37 +437,11 @@ export default {
           return await handleArrivals(url, env, ctx, nowMs);
         case '/import':
           return await handleImport(url, env, nowMs);
-        case '/subscribe':
-          if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
-          return await handleSubscribe(req, env, nowMs);
-        case '/vapid':
-          return pushConfigured(env)
-            ? json({ publicKey: env.VAPID_PUBLIC_KEY })
-            : json({ error: 'push not configured' }, 501);
-        case '/manifest.webmanifest':
-          return text(MANIFEST, 'application/manifest+json', 3600);
-        case '/sw.js':
-          return text(SERVICE_WORKER, 'text/javascript; charset=utf-8', 0);
-        case '/icon.svg':
-          return text(ICON_SVG, 'image/svg+xml', 86400);
-        case '/':
-          return text(PAGE, 'text/html; charset=utf-8', 0);
         default:
           return json({ error: 'not found' }, 404);
       }
     } catch (err) {
       return json({ error: 'internal', message: String(err) }, 500);
     }
-  },
-
-  /** 08:40 SGT weekdays. Payload-free: the service worker fetches its own
-   *  times so the notification is fresh at display time, not at send time. */
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(
-      (async () => {
-        const result = await tickleAll(env, Date.now());
-        console.log(`push trip=${PUSH_TRIP} sent=${result.sent} failed=${result.failed}`);
-      })(),
-    );
   },
 };

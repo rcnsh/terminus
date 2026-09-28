@@ -49,8 +49,6 @@ export const PRIORS: Prior[] = [
   { days: 'weekend', fromH: 9, toH: 24, trip: 'utown' },
 ];
 
-/** Which trip the morning cron push is about. */
-export const PUSH_TRIP = 'utown';
 
 export const TTL = {
   /** Edge cache freshness for a stop's arrivals. Every client inside this

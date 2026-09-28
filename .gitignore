@@ -10,4 +10,6 @@ __pycache__/
 dev/
 
 # Impeccable build-review scratch (screenshots), not source
-.impeccable/review/
+
+# Local output of the impeccable design plugin (screenshots, hook cache).
+.impeccable/
