@@ -7,6 +7,10 @@ routes = [{ pattern = "nusbus.rcn.sh", custom_domain = true }]
 
 workers_dev = true
 
+# Upstream probe + alert, and expired-session cleanup (src/monitor.ts).
+[triggers]
+crons = ["*/15 * * * *"]
+
 # The account page (apps/web). Files are served before the Worker runs;
 # every other path, including /, falls through to the Worker.
 [assets]

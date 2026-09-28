@@ -7,6 +7,7 @@
  */
 
 import type { Env } from './types.ts';
+import { DEVICE_IDLE_MS } from './monitor.ts';
 
 export const ACCOUNT_TTL = {
   linkMs: 15 * 60_000,
@@ -194,6 +195,8 @@ export async function authenticate(
     .first<{ kind: 'web' | 'device'; last_seen: number; expires: number | null; id: string; email: string }>();
   if (!row) return null;
   if (row.expires !== null && row.expires < nowMs) return null;
+  // Paired devices lapse after 90 idle days (the cron deletes them too).
+  if (row.kind === 'device' && nowMs - row.last_seen > DEVICE_IDLE_MS) return null;
 
   if (nowMs - row.last_seen > ACCOUNT_TTL.touchMs) {
     const touch = db.prepare('UPDATE sessions SET last_seen = ? WHERE token_hash = ?').bind(nowMs, hash).run();

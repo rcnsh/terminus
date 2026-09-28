@@ -26,6 +26,8 @@ export interface Env {
   EMAIL_FROM?: string;
   /** Workers rate limiting, keyed per IP, on sign-in and pairing. */
   RL_AUTH?: RateLimit;
+  /** Where outage alerts go. A secret, so it never lands in the repo. */
+  ALERT_EMAIL?: string;
 }
 
 /* ------------------------------------------------------------------ */

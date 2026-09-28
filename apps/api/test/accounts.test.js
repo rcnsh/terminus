@@ -273,3 +273,14 @@ test('/me/next rests outside the day, but saved places still answer', async () =
   const place = await (await call(env, '/me/next?place=mrt', { cookie })).json();
   assert.equal(place.mode, 'trip');
 });
+
+test('a device idle for 90 days is signed out', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const { token } = await (await call(env, '/pair', { method: 'POST', body: { code } })).json();
+  assert.equal((await call(env, '/me', { token })).status, 200);
+  db.exec(`UPDATE sessions SET last_seen = 0 WHERE kind = 'device'`);
+  installGlobals(makeFetch(), 91 * 86_400_000);
+  assert.equal((await call(env, '/me', { token })).status, 401);
+});
