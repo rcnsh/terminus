@@ -49,7 +49,10 @@ final class AppModel {
     private var paused = false
     private var loop: Task<Void, Never>?
 
-    init() {
+    /// `snapshot` builds an inert model for rendering previews: no refresh
+    /// loop, no sleep observers.
+    init(snapshot: Bool = false) {
+        if snapshot { return }
         log.notice("start: paired=\(self.paired) base=\(Api.base, privacy: .public)")
         observeSleep()
         start()
