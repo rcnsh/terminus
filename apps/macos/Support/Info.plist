@@ -7,8 +7,8 @@
     <key>CFBundleDisplayName</key><string>nusbus</string>
     <key>CFBundleExecutable</key><string>Nusbus</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.2.0</string>
-    <key>CFBundleVersion</key><string>3</string>
+    <key>CFBundleShortVersionString</key><string>0.3.0</string>
+    <key>CFBundleVersion</key><string>4</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <!-- Menu bar only: no Dock icon, no app menu. -->
     <key>LSUIElement</key><true/>

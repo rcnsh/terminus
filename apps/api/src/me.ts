@@ -22,7 +22,7 @@ import {
   saveProfileJson,
   sessionCookie,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, type Profile, parseProfile, planFor } from './profile.ts';
+import { DEFAULT_PROFILE, type Profile, isResting, parseProfile, planFor, restDetail } from './profile.ts';
 import { parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
 import { shortStop } from './format.ts';
@@ -251,6 +251,20 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   } else if (toRaw) {
     const r = resolveTo(deps.graph, toRaw);
     if (r) dest = { ...r, why: 'place', from: homeStop };
+  } else if (isResting(profile, nowMs)) {
+    // Outside the user's day: no bus, and the same answer for every client.
+    return {
+      label: 'Done for today',
+      detail: restDetail(profile, nowMs),
+      alt: null,
+      stop: { code: '', name: '', confidence: 0 },
+      quality: 'ended',
+      asOf: new Date(nowMs).toISOString(),
+      arrivals: [],
+      mode: 'rest',
+      dest: null,
+      places,
+    };
   } else {
     const plan = planFor(profile, nowMs);
     if (plan) dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from };

@@ -250,3 +250,26 @@ test('pairing codes avoid look-alike characters and normalise user input', () =>
   assert.equal(normalizePairCode(' abc-def '), 'ABCDEF');
   assert.equal(normalizePairCode('ABCDE0'), null, 'zero is not in the alphabet');
 });
+
+test('/me/next rests outside the day, but saved places still answer', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  await call(env, '/me/profile', {
+    method: 'PUT',
+    cookie,
+    body: {
+      home: { lat: 1.2918, lon: 103.7804, stops: ['PGP'] },
+      places: [{ key: 'mrt', label: 'KR MRT', to: 'KR-MRT' }],
+      manual: [{ day: 5, arriveByMin: 600, endMin: 720, to: 'COM3', label: 'CS2030 @ COM1' }],
+    },
+  });
+  installGlobals(makeFetch(), Date.UTC(2026, 7, 27, 12, 30)); // Thu 20:30 SGT
+  const rest = await (await call(env, '/me/next', { cookie })).json();
+  assert.equal(rest.mode, 'rest');
+  assert.equal(rest.label, 'Done for today');
+  assert.equal(rest.detail, 'Next: CS2030 @ COM1, tomorrow 10:00');
+  assert.deepEqual(rest.places, [{ key: 'mrt', label: 'KR MRT' }]);
+
+  const place = await (await call(env, '/me/next?place=mrt', { cookie })).json();
+  assert.equal(place.mode, 'trip');
+});

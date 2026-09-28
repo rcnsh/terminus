@@ -18,10 +18,16 @@ enum Snapshots {
         """
         let nearby = try! JSONDecoder().decode([NearbyStop].self, from: Data(nearbyJSON.utf8))
 
-        func model(nearbyTab: Bool, paired: Bool = true) -> AppModel {
+        let restJSON = """
+        {"label":"Done for today","detail":"Next: CS2030 @ COM1, tomorrow 10:00","alt":null,"stop":{"code":"","name":""},
+         "quality":"ended","asOf":"2026-09-29T12:00:00Z","mode":"rest","dest":null,"places":[{"key":"mrt","label":"KR MRT"}]}
+        """
+        let rest = try! JSONDecoder().decode(NextAnswer.self, from: Data(restJSON.utf8))
+
+        func model(nearbyTab: Bool, paired: Bool = true, resting: Bool = false) -> AppModel {
             let m = AppModel(snapshot: true)
             m.paired = paired
-            m.answers = [.plan: answer]
+            m.answers = [.plan: resting ? rest : answer]
             m.places = answer.places ?? []
             m.nearby = nearby
             m.showNearby = nearbyTab
@@ -33,6 +39,7 @@ enum Snapshots {
             ("next", model(nearbyTab: false)),
             ("nearby", model(nearbyTab: true)),
             ("pair", model(nearbyTab: false, paired: false)),
+            ("rest", model(nearbyTab: false, resting: true)),
         ]
         for (name, m) in cases {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {

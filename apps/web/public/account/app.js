@@ -170,6 +170,8 @@ function renderHome() {
   $('#home-1').replaceWith(Object.assign(stopSelect(stopsNow[0], pick(0), { blank: 'Main stop' }), { id: 'home-1' }));
   $('#home-2').replaceWith(Object.assign(stopSelect(stopsNow[1], pick(1), { blank: 'Second stop (optional)' }), { id: 'home-2' }));
   $('#gap').value = profile.gapHours;
+  $('#day-start').value = hhmm(profile.dayStartMin ?? 360);
+  $('#day-end').value = hhmm(profile.dayEndMin ?? 1080);
 }
 
 function renderPlaces() {
@@ -301,6 +303,21 @@ $('#gap').addEventListener('change', (e) => {
     save();
   }
 });
+
+for (const [id, field] of [['#day-start', 'dayStartMin'], ['#day-end', 'dayEndMin']]) {
+  $(id).addEventListener('change', (e) => {
+    const v = toMin(e.target.value);
+    if (v == null) return;
+    const next = { ...profile, [field]: v };
+    if (next.dayStartMin >= next.dayEndMin) {
+      $('#saved').textContent = 'The day has to start before it ends';
+      e.target.value = hhmm(profile[field]);
+      return;
+    }
+    profile[field] = v;
+    save();
+  });
+}
 
 $('#locate').addEventListener('click', () => {
   const msg = $('#home-msg');

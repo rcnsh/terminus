@@ -24,7 +24,9 @@ struct NusbusApp: App {
         MenuBarExtra {
             Popover(model: model)
         } label: {
-            if let title = model.menuTitle {
+            if model.resting {
+                Image(systemName: "moon.zzz.fill")
+            } else if let title = model.menuTitle {
                 Label(title, systemImage: "bus.fill").labelStyle(.titleAndIcon)
             } else {
                 Image(systemName: "bus.fill")
@@ -243,8 +245,12 @@ private struct Header: View {
 
     var body: some View {
         let a = model.showNearby ? model.plan : model.shown
+        let resting = !model.showNearby && a?.mode == "rest"
         HStack(alignment: .center, spacing: 12) {
-            IconTile(system: model.showNearby ? "location.fill" : "bus.fill")
+            IconTile(
+                system: model.showNearby ? "location.fill" : resting ? "moon.zzz.fill" : "bus.fill",
+                tint: resting ? .indigo : .orange
+            )
             VStack(alignment: .leading, spacing: 3) {
                 Text(heading(a))
                     .font(.system(size: 12, weight: .medium))
@@ -255,7 +261,7 @@ private struct Header: View {
                     .contentTransition(.numericText())
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                StatusLine(color: dotColor(model.showNearby ? nil : a?.quality), text: status(a))
+                StatusLine(color: resting ? .indigo : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : status(a))
             }
             Spacer(minLength: 0)
             Button {
@@ -274,9 +280,15 @@ private struct Header: View {
         .card()
     }
 
+    private var restStatus: String {
+        let when = model.updated.map { " · \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
+        return "No buses until your day starts" + when
+    }
+
     private func heading(_ a: NextAnswer?) -> String {
         if model.showNearby { return "Nearby" }
         guard let a else { return "Next bus" }
+        if a.mode == "rest" { return "Off hours" }
         if a.mode == "nearby" { return "Nearby" }
         guard let d = a.dest else { return "Next bus" }
         let why = switch d.why {
@@ -315,12 +327,13 @@ private struct Header: View {
 
 private struct IconTile: View {
     let system: String
+    var tint: Color = .orange
     var body: some View {
         Image(systemName: system)
             .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(.orange)
+            .foregroundStyle(tint)
             .frame(width: 42, height: 42)
-            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(.orange.opacity(0.16)))
+            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(tint.opacity(0.16)))
             .contentTransition(.symbolEffect(.replace))
     }
 }
@@ -431,7 +444,7 @@ private struct AnswerDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
-                Row(icon: "text.alignleft", text: a.detail)
+                Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                 if let alt = a.alt { Row(icon: "arrow.triangle.branch", text: "Or: \(alt)") }
                 if !a.stop.name.isEmpty { Row(icon: "mappin.circle", text: "Board at \(a.stop.name)") }
             } else {

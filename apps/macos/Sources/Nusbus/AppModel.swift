@@ -58,6 +58,9 @@ final class AppModel {
         start()
     }
 
+    /// Outside the user's day the plan rests: no bus, a moon in the menu bar.
+    var resting: Bool { plan?.mode == "rest" }
+
     /// The menu bar text: "D2 4m", or nil for the plain icon.
     var menuTitle: String? {
         guard let plan, plan.quality != "ended", plan.label != "Set up" else { return nil }

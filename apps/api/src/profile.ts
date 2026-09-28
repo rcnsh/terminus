@@ -26,6 +26,10 @@ export interface Profile {
   home: Home | null;
   /** A gap between classes longer than this sends you home in between. */
   gapHours: number;
+  /** Outside [dayStartMin, dayEndMin) the planned answer rests. Minutes
+   *  past midnight SGT. */
+  dayStartMin: number;
+  dayEndMin: number;
   /** From the NUSMods import. Replaced wholesale on re-import. */
   trips: ImportedTrip[];
   /** Entered by hand. Survives a re-import. */
@@ -38,6 +42,8 @@ export interface Profile {
 export const DEFAULT_PROFILE: Profile = {
   home: null,
   gapHours: 2,
+  dayStartMin: 6 * 60,
+  dayEndMin: 18 * 60,
   trips: [],
   manual: [],
   places: [],
@@ -78,6 +84,13 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean): R
     }
     p.gapHours = raw.gapHours;
   }
+
+  for (const field of ['dayStartMin', 'dayEndMin'] as const) {
+    if (raw[field] === undefined) continue;
+    if (!isInt(raw[field], 0, 1439)) return { ok: false, error: `${field} must be minutes past midnight` };
+    p[field] = raw[field] as number;
+  }
+  if (p.dayStartMin >= p.dayEndMin) return { ok: false, error: 'the day must start before it ends' };
 
   for (const field of ['trips', 'manual'] as const) {
     if (raw[field] === undefined) continue;
@@ -187,4 +200,52 @@ export function planFor(profile: Profile, nowMs: number): Plan | null {
   // In a long gap after going home, the origin is home, not the last class.
   const wentHome = homeStop && gapMin > profile.gapHours * 60 && nowMin >= endOf(prev);
   return { to: next.to, label: next.label, why: 'class', from: wentHome ? homeStop : prev.to, trip: next };
+}
+
+/* ------------------------------------------------------------------ */
+/* Resting hours                                                      */
+/* ------------------------------------------------------------------ */
+
+/** A class running past dayEnd keeps the day open this long after it ends,
+ *  so the trip home still gets an answer. */
+export const EVENING_GRACE_MIN = 45;
+/** A class starting near or before dayStart opens the day this early. */
+export const MORNING_LEAD_MIN = 90;
+
+/**
+ * Whether the planned answer should rest: outside the user's day, stretched
+ * to cover any class that starts early or ends late.
+ */
+export function isResting(profile: Profile, nowMs: number): boolean {
+  const t = sgt(nowMs);
+  const today = [...profile.trips, ...profile.manual].filter((x) => x.day === t.day);
+  const start = Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN));
+  const end = Math.max(profile.dayEndMin, ...today.map((x) => endOf(x) + EVENING_GRACE_MIN));
+  return t.minutes < start || t.minutes >= end;
+}
+
+/** The first class after now, and how many days ahead it is. */
+export function nextClass(profile: Profile, nowMs: number): { trip: ImportedTrip; daysAhead: number } | null {
+  const t = sgt(nowMs);
+  const all = [...profile.trips, ...profile.manual];
+  for (let ahead = 0; ahead <= 7; ahead++) {
+    const day = (t.day + ahead) % 7;
+    const found = all
+      .filter((x) => x.day === day && (ahead > 0 || x.arriveByMin > t.minutes))
+      .sort((a, b) => a.arriveByMin - b.arriveByMin)[0];
+    if (found) return { trip: found, daysAhead: ahead };
+  }
+  return null;
+}
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** "Next: CS2030 @ COM1, tomorrow 10:00", or a plain line when nothing is scheduled. */
+export function restDetail(profile: Profile, nowMs: number): string {
+  const n = nextClass(profile, nowMs);
+  if (!n) return 'Nothing on your timetable';
+  const hh = String(Math.floor(n.trip.arriveByMin / 60)).padStart(2, '0');
+  const mm = String(n.trip.arriveByMin % 60).padStart(2, '0');
+  const when = n.daysAhead === 0 ? 'today' : n.daysAhead === 1 ? 'tomorrow' : DAY_NAMES[n.trip.day];
+  return `Next: ${n.trip.label}, ${when} ${hh}:${mm}`;
 }
