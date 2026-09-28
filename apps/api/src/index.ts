@@ -385,7 +385,7 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
   });
 }
 
-export const PRIMARY_HOST = 'terminus.rcn.sh';
+const PRIMARY_HOST = 'terminus.rcn.sh';
 const OLD_HOST = 'nusbus.rcn.sh';
 /** Paths apps already installed call on the old host. These keep working there. */
 const API_PREFIXES = ['/me', '/auth/', '/pair', '/next', '/trip', '/arrivals', '/campus', '/health', '/import', '/openapi.json'];
