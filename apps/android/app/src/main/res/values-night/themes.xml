@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.Nusbus" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+    <color name="bg">#141211</color>
+</resources>
