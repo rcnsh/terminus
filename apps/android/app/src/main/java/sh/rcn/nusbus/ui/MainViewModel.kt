@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +26,8 @@ data class UiState(
     val paired: Boolean = false,
     val target: Target = Target.Plan,
     val showNearby: Boolean = false,
-    val answer: NextAnswer? = null,
+    /** Last answer per view, so switching views never blanks the screen. */
+    val answers: Map<Target, NextAnswer> = emptyMap(),
     val nearby: List<NearbyStop>? = null,
     val places: List<Place> = emptyList(),
     val loading: Boolean = false,
@@ -34,7 +36,9 @@ data class UiState(
     val pairing: Boolean = false,
     val pairError: String? = null,
     val destinations: List<Destination> = emptyList(),
-)
+) {
+    val answer: NextAnswer? get() = answers[target]
+}
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
@@ -71,19 +75,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun select(target: Target) {
-        _state.update { it.copy(target = target, showNearby = false, answer = null, error = null) }
-        load()
+        _state.update { it.copy(target = target, showNearby = false, error = null) }
+        load(restart = true)
     }
 
     fun showNearby() {
-        _state.update { it.copy(showNearby = true, nearby = null, error = null) }
-        load()
+        _state.update { it.copy(showNearby = true, error = null) }
+        load(restart = true)
     }
 
-    /** Fetch whatever is on screen. Safe to call repeatedly; only one runs. */
-    fun load() {
+    /**
+     * Fetch whatever is on screen. Safe to call repeatedly; only one runs.
+     * `restart` drops a fetch in flight, so a newly chosen view loads now
+     * rather than after the one it replaced.
+     */
+    fun load(restart: Boolean = false) {
         val token = store.token ?: return
-        if (loadJob?.isActive == true) return
+        if (loadJob?.isActive == true) {
+            if (!restart) return
+            loadJob?.cancel()
+        }
         loadJob = viewModelScope.launch {
             _state.update { it.copy(loading = true) }
             val ctx = getApplication<Application>()
@@ -105,8 +116,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         store.lastError = null
                         redrawWidgets(ctx)
                     }
-                    _state.update { it.copy(answer = answer, places = answer.places, loading = false, error = null, fetchedAt = now) }
+                    _state.update { it.copy(answers = it.answers + (s.target to answer), places = answer.places, loading = false, error = null, fetchedAt = now) }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: ApiError) {
                 if (e.status == 401) {
                     store.clear()
