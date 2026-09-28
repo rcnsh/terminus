@@ -384,6 +384,26 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
   });
 }
 
+export const PRIMARY_HOST = 'terminus.rcn.sh';
+const OLD_HOST = 'nusbus.rcn.sh';
+/** Paths apps already installed call on the old host. These keep working there. */
+const API_PREFIXES = ['/me', '/auth/', '/pair', '/next', '/trip', '/arrivals', '/campus', '/health', '/import', '/openapi.json'];
+
+/**
+ * Browsers on the old host move to the new one. API calls don't: HTTP
+ * clients don't follow redirects for POSTs, and apps paired before the
+ * rename still call nusbus.rcn.sh. (`/pair` the page is a GET with a
+ * `code`, and is redirected too.)
+ */
+export function oldHostRedirect(req: Request, url: URL): Response | null {
+  if (url.hostname !== OLD_HOST || (req.method !== 'GET' && req.method !== 'HEAD')) return null;
+  const isPairPage = url.pathname.startsWith('/pair') && url.searchParams.has('code');
+  if (!isPairPage && API_PREFIXES.some((p) => url.pathname === p || url.pathname.startsWith(p.endsWith('/') ? p : `${p}/`))) return null;
+  const to = new URL(url);
+  to.hostname = PRIMARY_HOST;
+  return new Response(null, { status: 301, headers: { location: to.toString(), 'cache-control': 'public, max-age=86400' } });
+}
+
 const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
 export default {
@@ -396,6 +416,9 @@ export default {
     const nowMs = Date.now();
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+
+    const moved = oldHostRedirect(req, url);
+    if (moved) return moved;
 
     try {
       const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
@@ -432,6 +455,8 @@ export default {
         case '/import':
           return await handleImport(url, env, nowMs);
         default:
+          // Everything else is the website.
+          if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return env.ASSETS.fetch(req);
           return json({ error: 'not found' }, 404);
       }
     } catch (err) {

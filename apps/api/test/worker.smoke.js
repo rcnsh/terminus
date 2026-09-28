@@ -454,3 +454,17 @@ test('concurrent token requests share one mint instead of each minting', async (
   await getSession(env, Date.now(), { force: true });
   assert.equal(fetchImpl.counts.auth, 2);
 });
+
+test('the old host redirects browsers but keeps serving the API', async () => {
+  const { oldHostRedirect } = await import('../src/index.ts');
+  const r = (path, method = 'GET') => oldHostRedirect(new Request(`https://nusbus.rcn.sh${path}`, { method }), new URL(`https://nusbus.rcn.sh${path}`));
+  assert.equal(r('/').status, 301);
+  assert.equal(r('/').headers.get('location'), 'https://terminus.rcn.sh/');
+  assert.equal(r('/account/').headers.get('location'), 'https://terminus.rcn.sh/account/');
+  assert.equal(r('/pair?code=ABC234').headers.get('location'), 'https://terminus.rcn.sh/pair?code=ABC234');
+  for (const api of ['/me', '/me/next?lat=1&lon=2', '/auth/verify?t=x', '/next', '/trip?to=UTOWN', '/campus', '/health', '/openapi.json']) {
+    assert.equal(r(api), null, api);
+  }
+  assert.equal(r('/pair', 'POST'), null, 'pairing POST from an old app');
+  assert.equal(oldHostRedirect(new Request('https://terminus.rcn.sh/'), new URL('https://terminus.rcn.sh/')), null);
+});
