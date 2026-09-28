@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Same guest-token flow and bus proxy as the Worker (see src/auth.ts).
+      # Same guest-token flow and bus proxy as the Worker (see apps/api/src/auth.ts).
       - name: Scrape
         env:
           NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
@@ -33,7 +33,7 @@ jobs:
           NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
           NEXTBUS_PROXY_BASE: ${{ secrets.NEXTBUS_PROXY_BASE }}
           NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
-        run: python3 scripts/scrape_stops.py
+        run: python3 apps/api/scripts/scrape_stops.py
 
       # A bad graph is worse than a stale one, so the suite gates the commit.
       - name: Test against the new graph
@@ -41,12 +41,12 @@ jobs:
 
       - name: Commit if changed
         run: |
-          if git diff --quiet -- data/stops.json; then
+          if git diff --quiet -- apps/api/data/stops.json; then
             echo "stop graph unchanged"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/stops.json
+          git add apps/api/data/stops.json
           git commit -m "data: refresh stop graph"
           git push

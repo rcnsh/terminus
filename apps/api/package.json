@@ -1,0 +1,23 @@
+{
+  "name": "@nusbus/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test test/logic.test.js test/worker.smoke.js test/nusmods.test.js test/campus.test.js",
+    "test:legacy": "node --test --experimental-strip-types test/logic.test.js test/worker.smoke.js test/campus.test.js",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "scrape": "python3 scripts/scrape_stops.py",
+    "check": "npm test && npm run typecheck"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260826.1",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.0.0"
+  }
+}
