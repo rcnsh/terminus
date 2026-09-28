@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">nusbus</string>
+    <string name="app_name">terminus</string>
     <string name="widget_name">Next bus</string>
     <string name="widget_places_name">Next bus + places</string>
     <string name="widget_places_description">The next bus, plus buttons for your saved places and nearby departures</string>

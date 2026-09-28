@@ -1,4 +1,4 @@
-package sh.rcn.nusbus.ui
+package sh.rcn.terminus.ui
 
 import android.Manifest
 import android.content.Context
@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -49,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -66,11 +68,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
-import sh.rcn.nusbus.Locator
-import sh.rcn.nusbus.R
-import sh.rcn.nusbus.NearbyStop
-import sh.rcn.nusbus.NextAnswer
-import sh.rcn.nusbus.Target
+import sh.rcn.terminus.Locator
+import sh.rcn.terminus.R
+import sh.rcn.terminus.NearbyStop
+import sh.rcn.terminus.NextAnswer
+import sh.rcn.terminus.Target
+import sh.rcn.terminus.widget.clock
 import java.text.DateFormat
 import java.util.Date
 
@@ -92,7 +95,13 @@ class MainActivity : ComponentActivity() {
     /** Widget chips open the app on a place or on nearby departures. */
     private fun handle(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme != "nusbus") return
+        // https://terminus.rcn.sh/pair?code=… from the account page's QR code.
+        if (data.scheme == "https" && data.path?.startsWith("/pair") == true) {
+            val code = data.getQueryParameter("code")?.filter { it.isLetterOrDigit() }?.uppercase()
+            if (code != null && code.length == 6 && !vm.state.value.paired) vm.pair(code)
+            return
+        }
+        if (data.scheme != "terminus") return
         when (data.host) {
             "place" -> data.lastPathSegment?.let { vm.select(Target.SavedPlace(it)) }
             "nearby" -> vm.showNearby()
@@ -104,9 +113,9 @@ class MainActivity : ComponentActivity() {
         fun intentFor(ctx: Context, place: String? = null, nearby: Boolean = false): Intent =
             Intent(ctx, MainActivity::class.java).apply {
                 data = when {
-                    place != null -> Uri.parse("nusbus://place/${Uri.encode(place)}")
-                    nearby -> Uri.parse("nusbus://nearby")
-                    else -> Uri.parse("nusbus://plan")
+                    place != null -> Uri.parse("terminus://place/${Uri.encode(place)}")
+                    nearby -> Uri.parse("terminus://nearby")
+                    else -> Uri.parse("terminus://plan")
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
@@ -139,8 +148,8 @@ private fun App(vm: MainViewModel) {
 private fun PairScreen(state: UiState, onPair: (String) -> Unit) {
     var code by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxWidth().padding(top = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("nusbus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("Pair this phone with your account. On nusbus.rcn.sh/account, tap \"Get a pairing code\" and type it here.")
+        Text("terminus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("Pair this phone with your account. On terminus.rcn.sh/account, tap \"Get a pairing code\" and type it here.")
         OutlinedTextField(
             value = code,
             onValueChange = { v -> code = v.filter { it.isLetterOrDigit() }.uppercase().take(6) },
@@ -181,7 +190,7 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("nusbus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text("terminus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             TextButton(onClick = vm::unpair) { Text("Unpair") }
         }
 
@@ -269,12 +278,48 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
                 else -> answer.destLabel
             }
             heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(answer.clockLabel(::clock), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Countdown(answer)
             Text(answer.detail)
-            answer.alt?.let { Text("Or: $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                answer.timingText?.let { Pill(it, if (answer.timingStatus == "late") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+                answer.crowd?.let { Pill("${it.replaceFirstChar { c -> c.uppercase() }} crowd", MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            // The alternative is already at the end of `detail`.
             qualityNote(answer.quality)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
+}
+
+/** Ticks every second from `departsAt`, so the app never shows an old "4 min". */
+@Composable
+private fun Countdown(answer: NextAnswer) {
+    val at = answer.departsAtMs ?: return
+    val now by produceState(System.currentTimeMillis(), at) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    val left = (at - now) / 1000
+    val text = when {
+        left > 60 -> "Leaves in ${left / 60} min ${left % 60} s"
+        left > 0 -> "Leaves in $left s"
+        else -> "Left ${(-left + 59) / 60} min ago · refreshing"
+    }
+    Text(text, style = MaterialTheme.typography.titleSmall, color = if (left > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = color,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.12f), androidx.compose.foundation.shape.RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    )
 }
 
 private fun qualityNote(q: String) = when (q) {

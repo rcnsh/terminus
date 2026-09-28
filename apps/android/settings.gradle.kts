@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "nusbus"
+rootProject.name = "terminus"
 include(":app")

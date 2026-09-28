@@ -1,4 +1,4 @@
-package sh.rcn.nusbus
+package sh.rcn.terminus
 
 import android.Manifest
 import android.content.Context

@@ -1,4 +1,4 @@
-package sh.rcn.nusbus.ui
+package sh.rcn.terminus.ui
 
 import android.app.Application
 import android.os.Build
@@ -10,17 +10,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import sh.rcn.nusbus.Api
-import sh.rcn.nusbus.ApiError
-import sh.rcn.nusbus.Destination
-import sh.rcn.nusbus.Locator
-import sh.rcn.nusbus.NearbyStop
-import sh.rcn.nusbus.NextAnswer
-import sh.rcn.nusbus.Place
-import sh.rcn.nusbus.Store
-import sh.rcn.nusbus.Target
-import sh.rcn.nusbus.widget.redrawWidgets
-import sh.rcn.nusbus.widget.Refresher
+import sh.rcn.terminus.Api
+import sh.rcn.terminus.ApiError
+import sh.rcn.terminus.Destination
+import sh.rcn.terminus.Locator
+import sh.rcn.terminus.NearbyStop
+import sh.rcn.terminus.NextAnswer
+import sh.rcn.terminus.Place
+import sh.rcn.terminus.Store
+import sh.rcn.terminus.Target
+import sh.rcn.terminus.widget.redrawWidgets
+import sh.rcn.terminus.widget.Refresher
 
 data class UiState(
     val paired: Boolean = false,
@@ -58,7 +58,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: ApiError) {
                 _state.update { it.copy(pairing = false, pairError = e.message) }
             } catch (e: Exception) {
-                _state.update { it.copy(pairing = false, pairError = "Couldn't reach nusbus. Check your connection and try again.") }
+                _state.update { it.copy(pairing = false, pairError = "Couldn't reach terminus. Check your connection and try again.") }
             }
         }
     }
@@ -113,6 +113,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // keep the widget in step while the app is open.
                     if (s.target == Target.Plan) {
                         store.saveAnswer(json, now)
+                        Refresher.scheduleDim(ctx, answer, now)
                         store.lastError = null
                         redrawWidgets(ctx)
                     }

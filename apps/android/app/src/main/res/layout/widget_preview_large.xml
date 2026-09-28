@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What "Next bus + places" looks like, for the widget picker. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_preview_bg"
+    android:paddingHorizontal="14dp" android:paddingVertical="12dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Next class · CS2030 @ COM1" android:textSize="12sp"
+        android:textColor="@android:color/system_neutral2_700" android:maxLines="1" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="D2 · 09:42" android:textSize="24sp" android:textStyle="bold"
+        android:textColor="@android:color/system_neutral1_900" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="PGP · 3 min walk · COM3 ~9 min" android:textSize="12sp"
+        android:textColor="@android:color/system_neutral2_700" android:maxLines="1" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Arrive 09:52 · 8 min early" android:textSize="12sp"
+        android:textColor="@android:color/system_accent1_600" />
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="KR MRT"
+            android:textSize="12sp" android:background="@drawable/widget_preview_chip" android:paddingHorizontal="10dp" android:paddingVertical="5dp"
+            android:textColor="@android:color/system_neutral1_900" android:layout_marginEnd="6dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="UTown"
+            android:textSize="12sp" android:background="@drawable/widget_preview_chip" android:paddingHorizontal="10dp" android:paddingVertical="5dp"
+            android:textColor="@android:color/system_neutral1_900" android:layout_marginEnd="6dp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Nearby"
+            android:textSize="12sp" android:background="@drawable/widget_preview_chip" android:paddingHorizontal="10dp" android:paddingVertical="5dp"
+            android:textColor="@android:color/system_neutral1_900" />
+    </LinearLayout>
+</LinearLayout>
