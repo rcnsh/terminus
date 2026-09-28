@@ -88,16 +88,22 @@ private struct Main: View {
 
         chips
 
-        if model.showNearby {
-            NearbyList(stops: model.nearby)
-        } else {
-            AnswerCard(answer: model.target == .plan ? model.plan : model.shown)
+        // A fixed minimum height keeps the popover from resizing as views
+        // switch or data arrives.
+        Group {
+            if model.showNearby {
+                NearbyList(stops: model.nearby)
+            } else {
+                AnswerCard(answer: model.shown)
+            }
         }
+        .frame(maxWidth: .infinity, minHeight: 150, alignment: .top)
 
         search
 
         Divider()
         HStack {
+            if model.loading { ProgressView().controlSize(.mini) }
             Text(footer).font(.caption).foregroundStyle(.secondary)
             Spacer()
             Menu {

@@ -16,12 +16,16 @@ final class AppModel {
     var pairError: String?
 
     /// Always the planned trip: this is what the menu bar shows.
-    var plan: NextAnswer?
-    /// Whatever the popover is showing, when it isn't the plan.
+    var plan: NextAnswer? { answers[.plan] }
     var target: Target = .plan
-    var shown: NextAnswer?
+    /// The last answer per view. Switching views shows the cached one at once
+    /// and refreshes it in place, instead of blanking the popover (which made
+    /// it collapse and then grow back when the data arrived).
+    var answers: [Target: NextAnswer] = [:]
+    var shown: NextAnswer? { answers[target] }
     var showNearby = false
     var nearby: [NearbyStop]?
+    var loading = false
     var places: [Place] = []
     var destinations: [Destination] = []
 
@@ -90,8 +94,7 @@ final class AppModel {
             try? await Api(token: token).logout()
             TokenStore.write(nil)
             paired = false
-            plan = nil
-            shown = nil
+            answers = [:]
             nearby = nil
             places = []
             target = .plan
@@ -106,13 +109,11 @@ final class AppModel {
     func select(_ t: Target) {
         target = t
         showNearby = false
-        shown = nil
         kick()
     }
 
     func selectNearby() {
         showNearby = true
-        nearby = nil
         kick()
     }
 
@@ -147,17 +148,18 @@ final class AppModel {
         let api = Api(token: token)
         let loc = await locator.current()
         let lat = loc?.coordinate.latitude, lon = loc?.coordinate.longitude
+        loading = true
+        defer { loading = false }
         do {
-            let p = try await api.next(.plan, lat: lat, lon: lon)
-            plan = p
-            places = p.places ?? []
-            if popoverOpen || showNearby || target != .plan {
-                if showNearby {
-                    nearby = try await api.nearby(lat: lat, lon: lon)
-                } else if target != .plan {
-                    shown = try await api.next(target, lat: lat, lon: lon)
-                }
+            // What's on screen first; the plan (for the menu bar) after.
+            if showNearby {
+                nearby = try await api.nearby(lat: lat, lon: lon)
+            } else if target != .plan {
+                answers[target] = try await api.next(target, lat: lat, lon: lon)
             }
+            let p = try await api.next(.plan, lat: lat, lon: lon)
+            answers[.plan] = p
+            places = p.places ?? []
             error = nil
             updated = Date()
         } catch let e as ApiError where e.status == 401 {

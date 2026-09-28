@@ -16,12 +16,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -31,6 +35,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -213,14 +218,22 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
         }
         Spacer(Modifier.height(12.dp))
 
-        if (state.showNearby) NearbyList(state.nearby, state.loading) else AnswerCard(state.answer, state.loading)
+        // A minimum height keeps the chips and search from jumping as views
+        // switch or data arrives.
+        Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
+            if (state.showNearby) NearbyList(state.nearby, state.loading) else AnswerCard(state.answer, state.loading)
+        }
 
         val footer = listOfNotNull(
             state.error,
             state.fetchedAt?.let { "Updated ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it))}" },
         ).joinToString(" · ")
-        if (footer.isNotEmpty()) {
-            Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+        Row(Modifier.padding(top = 8.dp).height(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (state.loading) {
+                CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         Spacer(Modifier.height(24.dp))
