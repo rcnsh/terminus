@@ -3,6 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
+routes = [{ pattern = "nusbus.rcn.sh", custom_domain = true }]
+workers_dev = true
+
 
 # npx wrangler kv namespace create NUSBUS_KV
 # Holds ONLY auth tokens. Never arrivals.
