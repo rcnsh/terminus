@@ -468,3 +468,34 @@ test('the old host redirects browsers but keeps serving the API', async () => {
   assert.equal(r('/pair', 'POST'), null, 'pairing POST from an old app');
   assert.equal(oldHostRedirect(new Request('https://terminus.rcn.sh/'), new URL('https://terminus.rcn.sh/')), null);
 });
+
+test('downloads serve whatever latest.json points at', async () => {
+  const files = new Map();
+  const put = (k, v) => files.set(k, v);
+  const bucket = {
+    async get(k) {
+      if (!files.has(k)) return null;
+      const v = files.get(k);
+      return { body: v, size: v.length, json: async () => JSON.parse(v) };
+    },
+  };
+  const env = { ...makeEnv(), DOWNLOADS: bucket };
+  const get = async (p) => (await call(p, { fetchImpl: makeFetch({}), env })).res;
+
+  assert.equal((await get('/download/android')).status, 404, 'no release yet');
+  put('releases/1.0.0/terminus-1.0.0.apk', 'APK');
+  put('releases/1.0.0/terminus-1.0.0-mac.zip', 'ZIP');
+  put('latest.json', JSON.stringify({
+    version: '1.0.0', released: '2026-09-29',
+    android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
+    mac: { file: 'releases/1.0.0/terminus-1.0.0-mac.zip', sha256: 'bb', size: 3 },
+  }));
+  const apk = await get('/download/android');
+  assert.equal(apk.status, 200);
+  assert.equal(apk.headers.get('content-type'), 'application/vnd.android.package-archive');
+  assert.match(apk.headers.get('content-disposition'), /terminus-1.0.0.apk/);
+  assert.equal(await apk.text(), 'APK');
+  assert.equal((await get('/download/mac')).headers.get('x-sha256'), 'bb');
+  assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.0');
+  assert.equal((await get('/download/ios')).status, 404);
+});

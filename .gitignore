@@ -16,3 +16,6 @@ dev/
 
 # Local Claude Code preview config
 .claude/
+
+# Release builds (scripts/release.sh)
+/build/

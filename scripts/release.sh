@@ -1,0 +1,67 @@
+#!/bin/sh
+# Build both apps, upload them to R2 and point /download/* at them.
+#
+#   scripts/release.sh --dry-run   # build and hash, upload nothing
+#   scripts/release.sh             # build, upload, tag v<version>
+#
+# The version is the Android versionName. The Android release key must be
+# set up in ~/.gradle/gradle.properties (TERMINUS_*), or the APK would be
+# debug-signed and refuse to install over the real one.
+set -eu
+cd "$(dirname "$0")/.."
+ROOT=$(pwd)
+DRY=0
+[ "${1:-}" = "--dry-run" ] && DRY=1
+
+VERSION=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' apps/android/app/build.gradle.kts)
+[ -n "$VERSION" ] || { echo "no versionName found"; exit 1; }
+grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || { echo "Android release key not configured (TERMINUS_KEYSTORE)"; exit 1; }
+if [ $DRY -eq 0 ] && git rev-parse "v$VERSION" >/dev/null 2>&1; then
+  echo "v$VERSION is already tagged; bump versionName first"; exit 1
+fi
+
+echo "== terminus $VERSION"
+echo "== tests"
+npm test --silent >/dev/null && echo "api tests pass"
+
+OUT="$ROOT/build/release/$VERSION"
+rm -rf "$OUT"
+mkdir -p "$OUT"
+
+echo "== android"
+(cd apps/android && JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}" ./gradlew :app:assembleRelease --console=plain -q)
+APK="$OUT/terminus-$VERSION.apk"
+cp apps/android/app/build/outputs/apk/release/app-release.apk "$APK"
+
+echo "== mac"
+(cd apps/macos && ./build.sh >/dev/null)
+ZIP="$OUT/terminus-$VERSION-mac.zip"
+ditto -c -k --keepParent apps/macos/build/terminus.app "$ZIP"
+
+sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
+size() { stat -f%z "$1"; }
+cat > "$OUT/latest.json" <<EOF
+{
+  "version": "$VERSION",
+  "released": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "android": { "file": "releases/$VERSION/terminus-$VERSION.apk", "sha256": "$(sha "$APK")", "size": $(size "$APK") },
+  "mac": { "file": "releases/$VERSION/terminus-$VERSION-mac.zip", "sha256": "$(sha "$ZIP")", "size": $(size "$ZIP") }
+}
+EOF
+cat "$OUT/latest.json"
+
+if [ $DRY -eq 1 ]; then
+  echo "== dry run: nothing uploaded (files in $OUT)"
+  exit 0
+fi
+
+echo "== upload"
+cd apps/api
+npx wrangler r2 object put "terminus-downloads/releases/$VERSION/terminus-$VERSION.apk" --file "$APK" --content-type application/vnd.android.package-archive --remote
+npx wrangler r2 object put "terminus-downloads/releases/$VERSION/terminus-$VERSION-mac.zip" --file "$ZIP" --content-type application/zip --remote
+# latest.json last, so /download/* never points at a file that isn't there yet.
+npx wrangler r2 object put "terminus-downloads/latest.json" --file "$OUT/latest.json" --content-type application/json --remote
+cd "$ROOT"
+
+git tag -a "v$VERSION" -m "terminus $VERSION"
+echo "== released $VERSION (tag v$VERSION created; push it with: git push origin v$VERSION)"
