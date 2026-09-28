@@ -7,7 +7,7 @@ const WALK_RADIUS_M = 450;
 
 let profile = null;
 let stops = []; // [{code, name, lat, lon}]
-let destByValue = new Map(); // datalist value -> stop code
+const destByValue = new Map(); // datalist value -> stop code
 
 /* ---------- helpers ---------- */
 
@@ -28,15 +28,17 @@ function el(tag, props = {}, ...children) {
   for (const [k, v] of Object.entries(props)) {
     if (k === 'class') node.className = v;
     else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else if (k.startsWith('aria-')) node.setAttribute(k, v);
     else node[k] = v;
   }
-  for (const c of children) node.append(c);
+  for (const c of children) if (c != null) node.append(c);
   return node;
 }
 
 const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : null);
 const stopName = (code) => stops.find((s) => s.code === code)?.name ?? code;
+const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 function haversineM(aLat, aLon, bLat, bLon) {
   const r = (d) => (d * Math.PI) / 180;
@@ -60,20 +62,58 @@ function resolveWhere(text) {
   return stops.some((s) => s.code === code) ? code : null;
 }
 
+let toastTimer = null;
+function toast(text) {
+  const t = $('#saved');
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
 /* ---------- saving ---------- */
 
 let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
-  $('#saved').textContent = 'Saving…';
   saveTimer = setTimeout(async () => {
     try {
       profile = await api('/me/profile', { method: 'PUT', body: profile });
-      $('#saved').textContent = 'Saved';
+      toast('Saved');
+      renderPreview();
     } catch (err) {
-      $('#saved').textContent = `Not saved: ${err.message}`;
+      toast(`Not saved: ${err.message}`);
     }
   }, 400);
+}
+
+/* ---------- widget preview ---------- */
+
+/** Renders /me/next the way the widget does, so settings changes show up. */
+async function renderPreview() {
+  const box = $('#preview');
+  let a;
+  try {
+    a = await api('/me/next');
+  } catch {
+    box.replaceChildren(el('div', { class: 'detail', textContent: 'Preview unavailable right now.' }));
+    return;
+  }
+  const where =
+    a.mode === 'rest' ? 'Off hours' : a.mode === 'nearby' ? 'Nearby' : a.dest?.why === 'class' ? `Next class · ${a.dest.label}` : a.dest?.why === 'gap-home' ? `Long gap · ${a.dest.label}` : a.dest?.label ?? 'Next bus';
+  // Show a departure as a clock time, the way the widget does, so it can't go stale.
+  const svc = a.label.split(' · ')[0];
+  const big = a.departsAt && a.quality !== 'unknown' ? `${svc} · ${clock(a.departsAt)}` : a.label;
+  const crowd = a.arrivals?.[0]?.crowd;
+  const parts = [
+    el('div', { class: 'where', textContent: where }),
+    el('div', { class: 'big', textContent: big }),
+    el('div', { class: 'detail', textContent: a.detail }),
+    a.timing ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
+    crowd ? el('div', { class: 'detail', textContent: `Crowd: ${crowd}` }) : null,
+    a.places?.length ? el('div', { class: 'chips' }, ...a.places.slice(0, 3).map((p) => el('span', { textContent: p.label })), el('span', { textContent: 'Nearby' })) : null,
+  ];
+  box.replaceChildren(...parts.filter(Boolean));
 }
 
 /* ---------- rendering ---------- */
@@ -85,8 +125,9 @@ function renderClasses() {
     ...profile.trips.map((t, i) => ({ t, list: 'trips', i })),
     ...profile.manual.map((t, i) => ({ t, list: 'manual', i })),
   ];
+  $('#class-count').textContent = all.length ? `${all.length} class${all.length === 1 ? '' : 'es'}` : '';
   if (!all.length) {
-    box.append(el('p', { class: 'hint', textContent: 'No classes yet.' }));
+    box.append(el('p', { class: 'hint', textContent: 'No classes yet. Import from NUSMods or add them by hand.' }));
     return;
   }
   for (const day of DAY_ORDER) {
@@ -95,12 +136,13 @@ function renderClasses() {
     box.append(el('div', { class: 'day', textContent: DAYS[day] }));
     for (const { t, list, i } of rows) {
       const time = t.endMin ? `${hhmm(t.arriveByMin)}–${hhmm(t.endMin)}` : hhmm(t.arriveByMin);
+      const weeks = Array.isArray(t.weeks) && t.weeks.length < 13 ? ` · wk ${t.weeks[0]}–${t.weeks.at(-1)}` : '';
       box.append(
         el(
           'div',
           { class: 'cls' },
           el('span', { class: 'time', textContent: time }),
-          el('span', { textContent: t.label }),
+          el('span', { class: 'name', textContent: t.label + weeks, title: t.label }),
           stopSelect(t.to, (v) => {
             profile[list][i].to = v;
             save();
@@ -126,10 +168,10 @@ function renderUnresolved(list) {
   const box = $('#unresolved');
   box.replaceChildren();
   if (!list?.length) return;
-  box.append(el('p', { class: 'warn', textContent: `${list.length} class${list.length === 1 ? '' : 'es'} had a venue we couldn't place. Pick the nearest stop:` }));
+  box.append(el('p', { class: 'warn-text', textContent: `${list.length} class${list.length === 1 ? '' : 'es'} had a venue we couldn't place. Pick the nearest stop:` }));
   const ul = el('ul', { class: 'list' });
-  list.forEach((u) => {
-    const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${hhmm(u.arriveByMin)} ${u.module} @ ${u.venue}` }));
+  for (const u of list) {
+    const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}` }));
     li.append(
       stopSelect(
         '',
@@ -144,31 +186,22 @@ function renderUnresolved(list) {
       ),
     );
     ul.append(li);
-  });
+  }
   box.append(ul);
 }
 
 function renderHome() {
-  const stopsNow = profile.home?.stops ?? [];
+  const now = profile.home?.stops ?? [];
   const pick = (idx) => (v) => {
-    const next = [...(profile.home?.stops ?? [])];
+    const next = [...now];
     next[idx] = v;
     const clean = next.filter(Boolean).filter((c, i, a) => a.indexOf(c) === i);
-    if (!clean.length) {
-      profile.home = null;
-    } else {
-      // A home set with "Use my location" keeps its coordinates. Otherwise the
-      // main stop stands in for home, and follows it when it changes.
-      const main = stops.find((s) => s.code === clean[0]);
-      const h = profile.home;
-      const derived = !h || stops.some((s) => s.lat === h.lat && s.lon === h.lon);
-      profile.home = { lat: derived ? main.lat : h.lat, lon: derived ? main.lon : h.lon, stops: clean };
-    }
+    profile.home = clean.length ? { stops: clean } : null;
     renderHome();
     save();
   };
-  $('#home-1').replaceWith(Object.assign(stopSelect(stopsNow[0], pick(0), { blank: 'Main stop' }), { id: 'home-1' }));
-  $('#home-2').replaceWith(Object.assign(stopSelect(stopsNow[1], pick(1), { blank: 'Second stop (optional)' }), { id: 'home-2' }));
+  $('#home-1').replaceWith(Object.assign(stopSelect(now[0], pick(0), { blank: 'Main stop' }), { id: 'home-1' }));
+  $('#home-2').replaceWith(Object.assign(stopSelect(now[1], pick(1), { blank: 'Second stop (optional)' }), { id: 'home-2' }));
   $('#gap').value = profile.gapHours;
   $('#day-start').value = hhmm(profile.dayStartMin ?? 360);
   $('#day-end').value = hhmm(profile.dayEndMin ?? 1080);
@@ -182,7 +215,7 @@ function renderPlaces() {
       el(
         'li',
         {},
-        el('span', { textContent: `${p.label} → ${stopName(p.to)}` }),
+        el('span', {}, el('strong', { textContent: p.label }), el('span', { class: 'meta', textContent: ` → ${stopName(p.to)}` })),
         el('button', {
           type: 'button',
           class: 'remove',
@@ -208,7 +241,7 @@ async function renderDevices() {
       el(
         'li',
         {},
-        el('span', { textContent: `${d.name ?? 'Device'} · added ${fmt(d.created)} · last used ${fmt(d.lastSeen)}` }),
+        el('span', {}, el('strong', { textContent: d.name ?? 'Device' }), el('div', { class: 'meta', textContent: `Added ${fmt(d.created)} · used ${fmt(d.lastSeen)}` })),
         el('button', {
           type: 'button',
           class: 'remove',
@@ -224,16 +257,37 @@ async function renderDevices() {
   return devices.length;
 }
 
-/* ---------- events ---------- */
+/* ---------- sign in ---------- */
+
+let turnstileToken = null;
+
+async function setupTurnstile() {
+  const { turnstileSiteKey } = await api('/auth/config').catch(() => ({}));
+  if (!turnstileSiteKey) return;
+  await new Promise((resolve, reject) => {
+    const s = el('script', { src: 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', onload: resolve, onerror: reject });
+    document.head.append(s);
+  });
+  window.turnstile.render('#turnstile', {
+    sitekey: turnstileSiteKey,
+    callback: (t) => (turnstileToken = t),
+    'expired-callback': () => (turnstileToken = null),
+  });
+}
 
 $('#login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = $('#login-msg');
+  const btn = e.target.querySelector('button');
+  btn.disabled = true;
   try {
-    const r = await api('/auth/login', { method: 'POST', body: { email: $('#login-email').value } });
+    const r = await api('/auth/login', { method: 'POST', body: { email: $('#login-email').value, turnstile: turnstileToken } });
     msg.textContent = r.message;
   } catch (err) {
     msg.textContent = err.message;
+    if (window.turnstile) window.turnstile.reset('#turnstile');
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -241,6 +295,8 @@ $('#logout').addEventListener('click', async () => {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
   location.reload();
 });
+
+/* ---------- timetable, day, places ---------- */
 
 $('#import-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -250,8 +306,10 @@ $('#import-form').addEventListener('submit', async (e) => {
     const r = await api('/me/import', { method: 'POST', body: { share: $('#share').value } });
     profile = r.profile;
     msg.textContent = `Imported ${profile.trips.length} class${profile.trips.length === 1 ? '' : 'es'}.`;
+    $('#reimport').hidden = true;
     renderClasses();
     renderUnresolved(r.unresolved);
+    renderPreview();
   } catch (err) {
     msg.textContent = err.message;
   }
@@ -310,7 +368,7 @@ for (const [id, field] of [['#day-start', 'dayStartMin'], ['#day-end', 'dayEndMi
     if (v == null) return;
     const next = { ...profile, [field]: v };
     if (next.dayStartMin >= next.dayEndMin) {
-      $('#saved').textContent = 'The day has to start before it ends';
+      toast('The day has to start before it ends');
       e.target.value = hhmm(profile[field]);
       return;
     }
@@ -319,24 +377,23 @@ for (const [id, field] of [['#day-start', 'dayStartMin'], ['#day-end', 'dayEndMi
   });
 }
 
+// Finds the nearest stops in the browser. The location itself is never sent.
 $('#locate').addEventListener('click', () => {
   const msg = $('#home-msg');
   if (!navigator.geolocation) {
     msg.textContent = 'This browser cannot share its location.';
     return;
   }
-  msg.textContent = 'Finding you…';
+  msg.textContent = 'Finding the nearest stops…';
   navigator.geolocation.getCurrentPosition(
     ({ coords }) => {
-      const near = stops
-        .map((s) => ({ s, d: haversineM(coords.latitude, coords.longitude, s.lat, s.lon) }))
-        .sort((a, b) => a.d - b.d);
+      const near = stops.map((s) => ({ s, d: haversineM(coords.latitude, coords.longitude, s.lat, s.lon) })).sort((a, b) => a.d - b.d);
       const within = near.filter((n) => n.d <= WALK_RADIUS_M).slice(0, 2);
       const picked = (within.length ? within : near.slice(0, 1)).map((n) => n.s.code);
-      profile.home = { lat: coords.latitude, lon: coords.longitude, stops: picked };
+      profile.home = { stops: picked };
       msg.textContent = within.length
-        ? `Home set here. Nearest stops: ${picked.map(stopName).join(', ')}. Change them if you use a different one.`
-        : `No stop within ${WALK_RADIUS_M} m; picked the nearest, ${stopName(picked[0])}.`;
+        ? `Picked ${picked.map(stopName).join(' and ')}. Change them if you use a different stop.`
+        : `No stop within ${WALK_RADIUS_M} m, so we picked the nearest: ${stopName(picked[0])}.`;
       renderHome();
       save();
     },
@@ -347,26 +404,61 @@ $('#locate').addEventListener('click', () => {
   );
 });
 
+/* ---------- devices ---------- */
+
 let pairPoll = null;
 $('#pair').addEventListener('click', async () => {
   const { code, expires } = await api('/me/pair-code', { method: 'POST' });
-  const out = $('#pair-code');
-  out.hidden = false;
+  const link = `${location.origin}/pair?code=${code}`;
+  $('#pairing').hidden = false;
+  if (window.qrcode) {
+    const qr = window.qrcode(0, 'M');
+    qr.addData(link);
+    qr.make();
+    $('#qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+  }
   const before = await renderDevices();
   clearInterval(pairPoll);
   const tick = async () => {
     const left = Math.max(0, Math.round((expires - Date.now()) / 1000));
-    out.textContent = left ? `${code.slice(0, 3)} ${code.slice(3)}` : 'Expired';
-    out.title = `Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-    if (!left) return clearInterval(pairPoll);
+    $('#pair-code').textContent = left ? `${code.slice(0, 3)} ${code.slice(3)}` : 'Expired';
+    $('#pair-hint').textContent = left
+      ? `Scan with your phone's camera, or type the code in the app. Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}.`
+      : 'Get a new code to pair.';
+    if (!left) {
+      $('#qr').replaceChildren();
+      return clearInterval(pairPoll);
+    }
     // Hide the code once a device has used it.
-    if (left % 5 === 0 && (await renderDevices()) > before) {
+    if (left % 4 === 0 && (await renderDevices()) > before) {
       clearInterval(pairPoll);
-      out.textContent = 'Paired.';
+      $('#qr').replaceChildren();
+      $('#pair-code').textContent = 'Paired';
+      $('#pair-hint').textContent = 'That device is now signed in.';
+      renderPreview();
     }
   };
   tick();
   pairPoll = setInterval(tick, 1000);
+});
+
+/* ---------- account ---------- */
+
+$('#signout-all').addEventListener('click', async () => {
+  if (!confirm('Sign out of every browser and device, including this one?')) return;
+  await api('/me/sessions', { method: 'DELETE' });
+  location.reload();
+});
+
+$('#delete').addEventListener('click', async () => {
+  const typed = prompt('This deletes your account, timetable, places and paired devices immediately. Type DELETE to confirm.');
+  if (typed !== 'DELETE') return;
+  try {
+    await api('/me', { method: 'DELETE' });
+    location.href = '/';
+  } catch (err) {
+    $('#account-msg').textContent = err.message;
+  }
 });
 
 /* ---------- start ---------- */
@@ -378,12 +470,14 @@ async function start() {
   } catch (err) {
     if (err.status === 401) {
       $('#signin').hidden = false;
+      await setupTurnstile().catch(() => {});
       return;
     }
     throw err;
   }
   $('#email').textContent = me.email;
   $('#who').hidden = false;
+  $('#reimport').hidden = !me.needsReimport;
 
   const [p, campus] = await Promise.all([api('/me/profile'), api('/campus')]);
   profile = p;
@@ -400,10 +494,11 @@ async function start() {
   renderClasses();
   renderHome();
   renderPlaces();
-  await renderDevices();
   $('#app').hidden = false;
+  await Promise.all([renderDevices(), renderPreview()]);
+  setInterval(() => document.visibilityState === 'visible' && renderPreview(), 60_000);
 }
 
 start().catch((err) => {
-  document.querySelector('main').append(el('p', { class: 'warn', textContent: `Something went wrong: ${err.message}` }));
+  document.querySelector('main').append(el('p', { class: 'hint', textContent: `Something went wrong: ${err.message}` }));
 });

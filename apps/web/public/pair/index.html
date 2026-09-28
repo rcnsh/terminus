@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pair a device · terminus</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+  main { padding-top: 32px; }
+  .code { font: 700 2.6rem/1 ui-monospace, "SF Mono", monospace; letter-spacing: 0.18em; margin: 18px 0 6px; }
+  ol { padding-left: 20px; }
+  li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<header class="wrap nav">
+  <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
+</header>
+<main class="wrap narrow">
+  <div class="card">
+    <p class="eyebrow">Pair a device</p>
+    <p class="code" id="code">------</p>
+    <p class="hint">This code works once, for 10 minutes.</p>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2 style="font-size:1.15rem;margin-bottom:8px">This phone doesn't have terminus yet</h2>
+    <ol>
+      <li><a href="/download/android">Download the Android app</a> and install it.</li>
+      <li>Scan the QR code on the account page again, or open the app and type the code above.</li>
+    </ol>
+    <p class="hint">On a Mac, open the terminus menu bar app and type the code.</p>
+  </div>
+</main>
+<script>
+  // Only ever display the code; never send it anywhere from this page.
+  const c = (new URLSearchParams(location.search).get('code') || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+  if (c.length === 6) document.getElementById('code').textContent = c.slice(0, 3) + ' ' + c.slice(3);
+</script>
+</body>
+</html>

@@ -4,101 +4,154 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>nusbus account</title>
-<link rel="stylesheet" href="/account/style.css">
+<title>Account · terminus</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/account/account.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" integrity="sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1" crossorigin="anonymous" defer></script>
 <script type="module" src="/account/app.js"></script>
 </head>
 <body>
-<main>
-  <header>
-    <h1>nusbus</h1>
-    <p id="who" hidden><span id="email"></span> · <button type="button" class="link" id="logout">Sign out</button></p>
-  </header>
+<header class="wrap nav">
+  <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
+  <nav class="nav-links" id="who" hidden>
+    <span class="hint hide-sm" id="email"></span>
+    <button type="button" class="btn small ghost" id="logout">Sign out</button>
+  </nav>
+</header>
 
-  <section id="signin" hidden>
-    <p>Invite only. Enter the email address you were invited with and we'll send you a sign-in link.</p>
-    <form id="login-form">
-      <label for="login-email">Email</label>
-      <div class="row">
+<main class="wrap">
+  <!-- Signed out -->
+  <section id="signin" class="signin" hidden>
+    <div class="card">
+      <h1>Sign in</h1>
+      <p class="hint">No password. We'll email you a link that signs you in on this browser.</p>
+      <form id="login-form">
+        <label for="login-email">Email</label>
         <input id="login-email" type="email" autocomplete="email" required>
-        <button type="submit">Email me a link</button>
-      </div>
-    </form>
-    <p id="login-msg" role="status"></p>
+        <div id="turnstile" class="turnstile"></div>
+        <button type="submit" class="btn accent wide">Email me a link</button>
+      </form>
+      <p id="login-msg" class="hint" role="status"></p>
+    </div>
+    <p class="hint center">New here? The same link creates your account. <a href="/privacy">What we store</a>.</p>
   </section>
 
-  <div id="app" hidden>
-    <section>
-      <h2>Timetable</h2>
-      <form id="import-form">
-        <label for="share">NUSMods share link</label>
-        <div class="row">
-          <input id="share" type="url" placeholder="https://nusmods.com/timetable/sem-1/share?…">
-          <button type="submit">Import</button>
-        </div>
-        <p class="hint">On NUSMods: Timetable → Share/Sync → Copy. Re-import each semester.</p>
-      </form>
-      <p id="import-msg" role="status"></p>
-      <div id="unresolved"></div>
-      <div id="classes"></div>
-      <details>
-        <summary>Add a class or commitment by hand</summary>
-        <form id="manual-form" class="grid">
-          <label>Day
-            <select name="day" required>
-              <option value="1">Mon</option><option value="2">Tue</option><option value="3">Wed</option>
-              <option value="4">Thu</option><option value="5">Fri</option><option value="6">Sat</option><option value="0">Sun</option>
-            </select>
-          </label>
-          <label>Starts <input name="start" type="time" required></label>
-          <label>Ends <input name="end" type="time"></label>
-          <label>Name <input name="label" maxlength="60" required placeholder="Gym"></label>
-          <label class="wide">Where <input name="where" list="destinations" required placeholder="Stop, building or room"></label>
-          <button type="submit">Add</button>
+  <!-- Signed in -->
+  <div id="app" class="layout" hidden>
+    <div class="col">
+      <div id="reimport" class="banner" hidden>
+        <strong>Re-import your timetable.</strong> It was imported before terminus knew about teaching weeks, so it may count classes in weeks they don't run.
+      </div>
+
+      <section class="card">
+        <div class="head"><h2>Timetable</h2><span class="hint" id="class-count"></span></div>
+        <form id="import-form">
+          <label for="share">NUSMods share link</label>
+          <div class="row">
+            <input id="share" type="url" placeholder="https://nusmods.com/timetable/sem-1/share?…">
+            <button type="submit" class="btn">Import</button>
+          </div>
+          <p class="hint">In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester.</p>
         </form>
-      </details>
-    </section>
+        <p id="import-msg" class="hint" role="status"></p>
+        <div id="unresolved"></div>
+        <div id="classes" class="classes"></div>
+        <details class="add">
+          <summary>Add a class or commitment by hand</summary>
+          <form id="manual-form" class="grid">
+            <label>Day
+              <select name="day" required>
+                <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
+                <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
+              </select>
+            </label>
+            <label>Starts <input name="start" type="time" required></label>
+            <label>Ends <input name="end" type="time"></label>
+            <label class="wide">Name <input name="label" maxlength="60" required placeholder="e.g. Gym"></label>
+            <label class="wide">Where <input name="where" list="destinations" required placeholder="Stop, building or room"></label>
+            <button type="submit" class="btn wide">Add</button>
+          </form>
+        </details>
+      </section>
 
-    <section>
-      <h2>Home</h2>
-      <p class="hint">Where your day starts and ends. Pick the stops you normally use.</p>
-      <div class="row">
-        <select id="home-1" aria-label="Main home stop"></select>
-        <select id="home-2" aria-label="Second home stop"></select>
-      </div>
-      <button type="button" class="secondary" id="locate">Use my location</button>
-      <p id="home-msg" role="status"></p>
-      <label for="gap">Go home between classes when the gap is longer than</label>
-      <div class="row narrow"><input id="gap" type="number" min="0.5" max="12" step="0.5"> <span>hours</span></div>
-      <label for="day-start">Show buses between</label>
-      <div class="row narrow">
-        <input id="day-start" type="time" aria-label="Day starts"> <span>and</span> <input id="day-end" type="time" aria-label="Day ends">
-      </div>
-      <p class="hint">Outside these hours the widget and menu bar show your next class instead of a bus. A class that starts early or runs late stretches the day to fit.</p>
-    </section>
+      <section class="card">
+        <h2>Your day</h2>
+        <label>Home stops</label>
+        <p class="hint">Where your day starts and ends. Only the stops are saved, never where you live.</p>
+        <div class="row">
+          <select id="home-1" aria-label="Main home stop"></select>
+          <select id="home-2" aria-label="Second home stop"></select>
+        </div>
+        <button type="button" class="link-btn locate" id="locate">Pick the stops nearest me</button>
+        <p id="home-msg" class="hint" role="status"></p>
 
-    <section>
-      <h2>Saved places</h2>
-      <p class="hint">Shown as buttons on the widget and menu bar.</p>
-      <ul id="places" class="list"></ul>
-      <form id="place-form" class="row">
-        <input name="label" maxlength="24" required placeholder="Name, e.g. Gym" aria-label="Place name">
-        <input name="where" list="destinations" required placeholder="Stop, building or room" aria-label="Where">
-        <button type="submit">Add</button>
-      </form>
-    </section>
+        <div class="split">
+          <div>
+            <label for="day-start">Show buses between</label>
+            <div class="row tight"><input id="day-start" type="time" aria-label="Day starts"><span>and</span><input id="day-end" type="time" aria-label="Day ends"></div>
+          </div>
+          <div>
+            <label for="gap">Go home in gaps longer than</label>
+            <div class="row tight"><input id="gap" type="number" min="0.5" max="12" step="0.5"><span>hours</span></div>
+          </div>
+        </div>
+        <p class="hint">Outside your day, the widget shows your next class instead of a bus. A class that starts early or runs late stretches the day to fit.</p>
+      </section>
 
-    <section>
-      <h2>Devices</h2>
-      <p class="hint">To set up the widget or menu bar app, get a code and type it into the app.</p>
-      <button type="button" id="pair">Get a pairing code</button>
-      <p id="pair-code" class="code" hidden></p>
-      <ul id="devices" class="list"></ul>
-    </section>
+      <section class="card">
+        <h2>Saved places</h2>
+        <p class="hint">One-tap buttons on the widget and in the menu bar.</p>
+        <ul id="places" class="list"></ul>
+        <form id="place-form" class="row">
+          <input name="label" maxlength="24" required placeholder="Name, e.g. Gym" aria-label="Place name">
+          <input name="where" list="destinations" required placeholder="Stop, building or room" aria-label="Where">
+          <button type="submit" class="btn">Add</button>
+        </form>
+      </section>
 
-    <p id="saved" role="status" aria-live="polite"></p>
+      <section class="card">
+        <h2>Account</h2>
+        <div class="actions">
+          <a class="btn ghost small" href="/me/export" download>Download my data</a>
+          <button type="button" class="btn ghost small" id="signout-all">Sign out everywhere</button>
+          <button type="button" class="btn danger small" id="delete">Delete account</button>
+        </div>
+        <p id="account-msg" class="hint" role="status"></p>
+      </section>
+    </div>
+
+    <aside class="col side">
+      <section>
+        <p class="eyebrow">Your widget right now</p>
+        <div class="widget" id="preview"><div class="big">…</div></div>
+      </section>
+
+      <section class="card">
+        <h2>Devices</h2>
+        <p class="hint">Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a>, then pair it here.</p>
+        <button type="button" class="btn wide" id="pair">Pair a device</button>
+        <div id="pairing" class="pairing" hidden>
+          <div id="qr" class="qr" aria-label="QR code to pair a phone"></div>
+          <p class="code" id="pair-code"></p>
+          <p class="hint" id="pair-hint">Scan with your phone's camera, or type the code in the app.</p>
+        </div>
+        <ul id="devices" class="list"></ul>
+      </section>
+    </aside>
   </div>
+  <p id="saved" class="toast" role="status" aria-live="polite"></p>
 </main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>terminus is an independent student project, not affiliated with NUS.</p>
+    <nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/docs">API</a></nav>
+  </div>
+</footer>
 <datalist id="destinations"></datalist>
 </body>
 </html>

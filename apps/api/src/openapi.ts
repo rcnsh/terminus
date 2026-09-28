@@ -68,7 +68,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'NUS Bus API',
+      title: 'terminus API',
       version: '1.0.0',
       description: [
         'Arrival times for the NUS internal shuttle buses, returned as short text ready to display.',
@@ -745,7 +745,8 @@ export const DOCS_PAGE = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NUS Bus API</title>
+  <title>API · terminus</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script src="${ELEMENTS}/web-components.min.js"></script>
   <link rel="stylesheet" href="${ELEMENTS}/styles.min.css">
   <style>html, body { margin: 0; height: 100%; } elements-api { display: block; height: 100vh; }</style>
