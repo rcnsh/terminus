@@ -82,16 +82,16 @@ export function normalizePairCode(raw: unknown): string | null {
 /* Sign-in links                                                      */
 /* ------------------------------------------------------------------ */
 
-export type LinkOutcome = 'sent' | 'not-invited' | 'cooldown';
+export type LinkOutcome = 'sent' | 'blocked' | 'cooldown';
 
 /**
- * Creates a sign-in link and emails it, but only to an invited address.
- * The caller shows the same message for every outcome, so the endpoint
- * does not reveal who is on the invite list.
+ * Creates a sign-in link and emails it. Sign-up is open; addresses on the
+ * blocklist are refused. The caller shows the same message for every
+ * outcome, so the endpoint doesn't reveal who has an account or is blocked.
  */
 export async function requestLink(env: Env, db: D1Database, email: string, origin: string, nowMs: number): Promise<LinkOutcome> {
-  const invited = await db.prepare('SELECT 1 FROM invites WHERE email = ?').bind(email).first();
-  if (!invited) return 'not-invited';
+  const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email = ?').bind(email).first();
+  if (blocked) return 'blocked';
 
   const recent = await db
     .prepare('SELECT 1 FROM magic_links WHERE email = ? AND created > ?')
@@ -110,11 +110,11 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   const link = `${origin}/auth/verify?t=${token}`;
   if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');
   await env.EMAIL.send({
-    from: { email: env.EMAIL_FROM, name: 'nusbus' },
+    from: { email: env.EMAIL_FROM, name: 'terminus' },
     to: email,
-    subject: 'Sign in to nusbus',
-    text: `Sign in to nusbus:\n\n${link}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.`,
-    html: `<p><a href="${link}">Sign in to nusbus</a></p><p>The link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.</p>`,
+    subject: 'Sign in to terminus',
+    text: `Sign in to terminus:\n\n${link}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.`,
+    html: `<p><a href="${link}">Sign in to terminus</a></p><p>The link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.</p>`,
   });
   return 'sent';
 }
@@ -283,4 +283,71 @@ export async function saveProfileJson(db: D1Database, userId: string, profile: u
     )
     .bind(userId, JSON.stringify(profile), nowMs)
     .run();
+}
+
+/* ------------------------------------------------------------------ */
+/* Account-wide actions                                               */
+/* ------------------------------------------------------------------ */
+
+/** Signs out every browser and device on the account. */
+export async function endAllSessions(db: D1Database, userId: string): Promise<number> {
+  const r = await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+  return r.meta?.changes ?? 0;
+}
+
+/** Deletes the account and everything hanging off it (the schema cascades). */
+export async function deleteAccount(db: D1Database, user: User): Promise<void> {
+  await db.batch([
+    db.prepare('DELETE FROM magic_links WHERE email = ?').bind(user.email),
+    db.prepare('DELETE FROM users WHERE id = ?').bind(user.id),
+  ]);
+}
+
+/** Everything stored about the user, for a data export. Token hashes are left out. */
+export async function exportAccount(db: D1Database, user: User): Promise<Record<string, unknown>> {
+  const row = await db.prepare('SELECT created FROM users WHERE id = ?').bind(user.id).first<{ created: number }>();
+  const profile = await loadProfileJson(db, user.id);
+  const { results: sessions } = await db
+    .prepare('SELECT kind, name, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created')
+    .bind(user.id)
+    .all();
+  return {
+    email: user.email,
+    created: row ? new Date(row.created).toISOString() : null,
+    profile,
+    sessions: sessions.map((x) => {
+      const r = x as { kind: string; name: string | null; created: number; lastSeen: number; expires: number | null };
+      return {
+        kind: r.kind,
+        name: r.name,
+        created: new Date(r.created).toISOString(),
+        lastSeen: new Date(r.lastSeen).toISOString(),
+        expires: r.expires ? new Date(r.expires).toISOString() : null,
+      };
+    }),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Turnstile                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Verifies a Turnstile token. With no secret configured (local dev, tests)
+ * it passes, so the check can ship before the widget is set up.
+ */
+export async function verifyTurnstile(env: Env, token: unknown, ip: string | null, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  if (!env.TURNSTILE_SECRET) return true;
+  if (typeof token !== 'string' || !token) return false;
+  const body = new FormData();
+  body.set('secret', env.TURNSTILE_SECRET);
+  body.set('response', token);
+  if (ip) body.set('remoteip', ip);
+  try {
+    const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body });
+    const out = (await res.json()) as { success?: boolean };
+    return out.success === true;
+  } catch {
+    return false;
+  }
 }

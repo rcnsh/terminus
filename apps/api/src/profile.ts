@@ -16,9 +16,11 @@ export interface Place {
   to: string;
 }
 
+/**
+ * Home is stops only. Exact coordinates of where someone lives are more than
+ * the planner needs, and not something to keep for strangers.
+ */
 export interface Home {
-  lat: number;
-  lon: number;
   /** Usual boarding stops near home, best first. */
   stops: string[];
 }
@@ -73,13 +75,14 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean): R
 
   if (raw.home !== undefined && raw.home !== null) {
     const h = raw.home;
-    if (!isObj(h) || typeof h.lat !== 'number' || typeof h.lon !== 'number') return { ok: false, error: 'home needs lat and lon' };
-    if (Math.abs(h.lat) > 90 || Math.abs(h.lon) > 180) return { ok: false, error: 'home is not a coordinate' };
+    // Older clients also send lat/lon; they are accepted and dropped.
+    if (!isObj(h)) return { ok: false, error: 'home must be {stops: [...]}' };
     const stops = h.stops ?? [];
     if (!Array.isArray(stops) || stops.length > PROFILE_LIMITS.homeStops || !stops.every((s) => typeof s === 'string' && isStop(s))) {
       return { ok: false, error: `home.stops must be up to ${PROFILE_LIMITS.homeStops} known stop codes` };
     }
-    p.home = { lat: h.lat, lon: h.lon, stops: [...new Set(stops as string[])] };
+    const unique = [...new Set(stops as string[])];
+    p.home = unique.length ? { stops: unique } : null;
   }
 
   if (raw.gapHours !== undefined) {
