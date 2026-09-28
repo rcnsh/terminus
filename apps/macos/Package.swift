@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "Nusbus",
+    name: "Terminus",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "Nusbus", path: "Sources/Nusbus"),
+        .executableTarget(name: "Terminus", path: "Sources/Terminus"),
     ]
 )

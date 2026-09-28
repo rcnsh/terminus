@@ -19,6 +19,19 @@ struct NextAnswer: Decodable {
     let mode: String?
     let dest: Dest?
     let places: [Place]?
+    /// When the bus leaves. Count down from this; `label` is only true when fetched.
+    let departsAt: String?
+    let timing: Timing?
+    let arrivals: [ArrivalLite]?
+
+    struct Timing: Decodable { let status: String; let text: String }
+    struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
+
+    var departure: Date? { departsAt.flatMap { ISO8601DateFormatter().date(from: $0) } }
+    var service: String { label.components(separatedBy: " · ").first ?? label }
+    /// Crowd on the recommended bus, not whichever is first in the list.
+    var crowd: String? { arrivals?.first { $0.svc == service }?.crowd }
+    var hasLiveTime: Bool { departure != nil && quality != "unknown" && quality != "ended" }
 }
 
 struct BoardRow: Decodable, Hashable {
@@ -57,8 +70,8 @@ struct ApiError: LocalizedError {
 }
 
 struct Api {
-    /// Override with NUSBUS_API_BASE=http://localhost:8787 for a local wrangler dev.
-    static let base = ProcessInfo.processInfo.environment["NUSBUS_API_BASE"] ?? "https://nusbus.rcn.sh"
+    /// Override with TERMINUS_API_BASE=http://localhost:8787 for a local wrangler dev.
+    static let base = ProcessInfo.processInfo.environment["TERMINUS_API_BASE"] ?? "https://terminus.rcn.sh"
 
     let token: String?
 

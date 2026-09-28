@@ -6,7 +6,7 @@ import os
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
-        if let dir = ProcessInfo.processInfo.environment["NUSBUS_SNAPSHOT"] {
+        if let dir = ProcessInfo.processInfo.environment["TERMINUS_SNAPSHOT"] {
             MainActor.assumeIsolated { Snapshots.render(to: dir) }
             exit(0)
         }
@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct NusbusApp: App {
+struct TerminusApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel.shared
 
@@ -24,9 +24,12 @@ struct NusbusApp: App {
         MenuBarExtra {
             Popover(model: model)
         } label: {
+            // Recomputed from the departure time on the model's 30 s clock,
+            // so the menu bar never shows a count that was true two refreshes
+            // ago. (A TimelineView here starves app launch.)
             if model.resting {
                 Image(systemName: "moon.zzz.fill")
-            } else if let title = model.menuTitle {
+            } else if let title = model.menuTitle(at: model.clock) {
                 Label(title, systemImage: "bus.fill").labelStyle(.titleAndIcon)
             } else {
                 Image(systemName: "bus.fill")
@@ -38,7 +41,30 @@ struct NusbusApp: App {
 
 // MARK: - Shell
 
-private let windowLog = Logger(subsystem: "sh.rcn.nusbus", category: "window")
+/// A fixed "now" for snapshot renders, which can't run a TimelineView.
+struct FixedNowKey: EnvironmentKey { static let defaultValue: Date? = nil }
+extension EnvironmentValues {
+    var fixedNow: Date? {
+        get { self[FixedNowKey.self] }
+        set { self[FixedNowKey.self] = newValue }
+    }
+}
+
+/// Re-renders its content every `every` seconds with the current time.
+struct Ticking<Content: View>: View {
+    let every: TimeInterval
+    @ViewBuilder let content: (Date) -> Content
+    @Environment(\.fixedNow) private var fixedNow
+
+    var body: some View {
+        if let fixedNow {
+            content(fixedNow)
+        } else {
+            TimelineView(.periodic(from: .now, by: every)) { ctx in content(ctx.date) }
+        }
+    }
+}
+
 
 struct Popover: View {
     @Bindable var model: AppModel
@@ -80,10 +106,6 @@ struct Popover: View {
 
     private func open() {
         guard !shown else { return }
-        if let w = NSApp.keyWindow, let v = w.contentView {
-            let i = v.safeAreaInsets
-            windowLog.notice("popover window \(Int(w.frame.width))x\(Int(w.frame.height)) content \(Int(v.fittingSize.width))x\(Int(v.fittingSize.height)) insets t\(Int(i.top)) l\(Int(i.left)) b\(Int(i.bottom)) r\(Int(i.right))")
-        }
         model.popoverOpen = true
         withAnimation(.easeOut(duration: 0.18)) { shown = true }
     }
@@ -157,7 +179,7 @@ private struct Pair: View {
             HStack(spacing: 12) {
                 IconTile(system: "bus.fill")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("nusbus").font(.system(size: 17, weight: .semibold))
+                    Text("terminus").font(.system(size: 17, weight: .semibold))
                     StatusLine(color: .gray, text: "Not paired")
                 }
             }
@@ -165,7 +187,7 @@ private struct Pair: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Pair this Mac")
-                Text("On nusbus.rcn.sh/account, click \u{201C}Get a pairing code\u{201D} and type it here.")
+                Text("On terminus.rcn.sh/account, click \u{201C}Get a pairing code\u{201D} and type it here.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -256,12 +278,25 @@ private struct Header: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(model.showNearby ? "Departures near you" : (a?.label ?? "Checking…"))
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .contentTransition(.numericText())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                StatusLine(color: resting ? .indigo : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : status(a))
+                // Ticks every second: the countdown and the dimming are
+                // computed from the departure time, never from `label`.
+                Ticking(every: 1) { now in
+                    let old = !model.showNearby && !resting && model.isOld(a, at: now)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(model.showNearby ? "Departures near you" : big(a))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundStyle(old ? .secondary : .primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        if old {
+                            StatusLine(color: .gray, text: "Old times · refreshing")
+                        } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
+                            StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
+                        } else {
+                            StatusLine(color: resting ? .indigo : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : status(a))
+                        }
+                    }
+                }
             }
             Spacer(minLength: 0)
             Button {
@@ -278,6 +313,19 @@ private struct Header: View {
             .help("Refresh")
         }
         .card()
+    }
+
+    /// "D2 · 09:42" when there's a live departure; otherwise the label.
+    private func big(_ a: NextAnswer?) -> String {
+        guard let a else { return "Checking…" }
+        guard a.hasLiveTime, let at = a.departure else { return a.label }
+        return "\(a.service) · \(at.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private func countdown(to at: Date, now: Date) -> String {
+        let left = Int(at.timeIntervalSince(now))
+        if left <= 0 { return "Leaving now" }
+        return left >= 60 ? "Leaves in \(left / 60) min \(left % 60) s" : "Leaves in \(left) s"
     }
 
     private var restStatus: String {
@@ -445,7 +493,12 @@ private struct AnswerDetail: View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
-                if let alt = a.alt { Row(icon: "arrow.triangle.branch", text: "Or: \(alt)") }
+                if a.timing != nil || a.crowd != nil {
+                    HStack(spacing: 6) {
+                        if let t = a.timing { Pill(text: t.text, color: t.status == "late" ? .red : t.status == "tight" ? .orange : .green) }
+                        if let c = a.crowd { Pill(text: "\(c.capitalized) crowd", color: .secondary) }
+                    }
+                }
                 if !a.stop.name.isEmpty { Row(icon: "mappin.circle", text: "Board at \(a.stop.name)") }
             } else {
                 HStack(spacing: 8) {
@@ -466,6 +519,19 @@ private struct AnswerDetail: View {
                 Text(text).font(.callout).fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+private struct Pill: View {
+    let text: String
+    let color: Color
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(color.opacity(0.14)))
     }
 }
 

@@ -4,14 +4,17 @@ import Observation
 import os
 import ServiceManagement
 
-private let log = Logger(subsystem: "sh.rcn.nusbus", category: "refresh")
+private let log = Logger(subsystem: "sh.rcn.terminus", category: "refresh")
 
 @MainActor
 @Observable
 final class AppModel {
     static let shared = AppModel()
 
-    var paired = TokenStore.read() != nil
+    var paired: Bool = {
+        TokenStore.migrate()
+        return TokenStore.read() != nil
+    }()
     var pairing = false
     var pairError: String?
 
@@ -45,6 +48,10 @@ final class AppModel {
         }
     }
 
+    /// Ticks every 30 s for the menu bar's countdown.
+    var clock = Date()
+    private var clockTask: Task<Void, Never>?
+
     private let locator = Locator()
     private var paused = false
     private var loop: Task<Void, Never>?
@@ -56,18 +63,35 @@ final class AppModel {
         log.notice("start: paired=\(self.paired) base=\(Api.base, privacy: .public)")
         observeSleep()
         start()
+        clockTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                self?.clock = Date()
+            }
+        }
     }
 
     /// Outside the user's day the plan rests: no bus, a moon in the menu bar.
     var resting: Bool { plan?.mode == "rest" }
 
-    /// The menu bar text: "D2 4m", or nil for the plain icon.
-    var menuTitle: String? {
+    /// The menu bar text at `now`: "D2 4m" counted from the departure time,
+    /// or nil for the plain icon once the bus has gone or there's no bus.
+    func menuTitle(at now: Date) -> String? {
         guard let plan, plan.quality != "ended", plan.label != "Set up" else { return nil }
-        let short = plan.label
-            .replacingOccurrences(of: " · ", with: " ")
-            .replacingOccurrences(of: " min", with: "m")
-        return short.count > 16 ? String(short.prefix(15)) + "…" : short
+        guard plan.hasLiveTime, let at = plan.departure else {
+            let short = plan.label.replacingOccurrences(of: " · ", with: " ").replacingOccurrences(of: " min", with: "m")
+            return short.count > 16 ? String(short.prefix(15)) + "…" : short
+        }
+        let left = at.timeIntervalSince(now)
+        if left < -30 { return nil }
+        return left < 45 ? "\(plan.service) now" : "\(plan.service) \(Int((left / 60).rounded()))m"
+    }
+
+    /// Data this old, or a bus that has left, is shown dimmed.
+    func isOld(_ a: NextAnswer?, at now: Date) -> Bool {
+        if let at = a?.departure, now.timeIntervalSince(at) > 30 { return true }
+        if let updated, now.timeIntervalSince(updated) > 180 { return true }
+        return false
     }
 
     // MARK: pairing
@@ -89,7 +113,7 @@ final class AppModel {
                 pairError = e.message
             } catch {
                 pairing = false
-                pairError = "Couldn't reach nusbus. Check your connection and try again."
+                pairError = "Couldn't reach terminus. Check your connection and try again."
             }
         }
     }

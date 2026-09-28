@@ -7,10 +7,22 @@ import Foundation
 /// code identity and the Keychain would block on an access prompt after every
 /// update. With a signing certificate, move this back to the Keychain.
 enum TokenStore {
+    private static var support: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    }
+
     private static var url: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("nusbus", isDirectory: true)
-        return dir.appendingPathComponent("device-token")
+        support.appendingPathComponent("terminus", isDirectory: true).appendingPathComponent("device-token")
+    }
+
+    /// Before the rename the token lived under "nusbus". Move it once, so an
+    /// update doesn't sign the Mac out.
+    static func migrate() {
+        let old = support.appendingPathComponent("nusbus/device-token")
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: url.path), let token = try? String(contentsOf: old, encoding: .utf8) else { return }
+        write(token.trimmingCharacters(in: .whitespacesAndNewlines))
+        try? fm.removeItem(at: old.deletingLastPathComponent())
     }
 
     static func read() -> String? {
