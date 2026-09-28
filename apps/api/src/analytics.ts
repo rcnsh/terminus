@@ -32,7 +32,7 @@
  *   blob5   quality     live | scheduled | unknown | stale | ended
  *   blob6   plate       arrival rows only
  *   blob7   crowd       low | medium | high | ''
- *   blob8   trip        config trip key, '' if no prior matched
+ *   blob8   trip        unused since configured trips were removed; always ''
  *   blob9   berth       raw busStopCode, arrival rows only
  *
  *   double1  etaS            arrival rows: seconds to arrival

@@ -106,7 +106,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             'Returns the next bus. The destination depends on which parameters you send:\n\n' +
             '- `tt`: your next class from an imported timetable (see `/import`). Coordinates pick the boarding stop; without them, the timetable\'s home stop is used.\n' +
-            '- `to`: a named trip key or stop code.\n' +
+            '- `to`: a stop code or NUSMods venue code.\n' +
             '- `lat` and `lon` only: the next buses at your nearest stop, without a destination.\n' +
             '- none of these: a "Set up" answer that tells the client what to send, instead of guessing a destination.',
           operationId: 'getNext',
@@ -115,7 +115,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             {
               name: 'to',
               in: 'query',
-              description: 'A trip key (`utown`, `mrt`, `home`) or a stop code such as `UTOWN`.',
+              description: 'A stop code such as `UTOWN`, or a NUSMods venue code such as `COM1-0212`.',
               schema: { type: 'string' },
               example: 'UTOWN',
             },
