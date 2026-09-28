@@ -43,6 +43,7 @@ struct Popover: View {
     /// Drives the opening animation. The popover's window is the only one
     /// this app has, so its key state is exactly "the popover is open".
     @State private var shown: Bool
+    @State private var window: NSWindow?
 
     init(model: AppModel, startShown: Bool = false) {
         self.model = model
@@ -58,11 +59,17 @@ struct Popover: View {
             Footer(model: model)
         }
         .frame(width: 360)
+        .fixedSize(horizontal: false, vertical: true)
+        // The menu bar window grows to fit taller content but never shrinks
+        // back on its own, leaving the shorter content centred with a gap
+        // above it. Measure the content and size the window to it, top edge
+        // pinned under the menu bar.
+        .background(GeometryReader { g in Color.clear.preference(key: ContentHeight.self, value: g.size.height) })
+        .onPreferenceChange(ContentHeight.self) { h in fit(height: h) }
+        .background(WindowReader { if window !== $0 { window = $0 } })
         // Opening is a plain fade of the whole popover; nothing moves.
         .opacity(shown ? 1 : 0)
-        // Hug the content, and run to the window's edges rather than inside
-        // its default margins, so there's no empty band round the popover.
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in open() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in close() }
@@ -82,6 +89,37 @@ struct Popover: View {
     private func close() {
         model.popoverOpen = false
         shown = false
+    }
+
+    private func fit(height: CGFloat) {
+        guard let window, height > 0 else { return }
+        let content = window.contentRect(forFrameRect: window.frame)
+        guard abs(content.height - height) > 0.5 else { return }
+        var frame = window.frameRect(forContentRect: NSRect(x: content.minX, y: content.minY, width: content.width, height: height))
+        frame.origin.y = window.frame.maxY - frame.height
+        window.setFrame(frame, display: true, animate: false)
+    }
+}
+
+private struct ContentHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+/// Hands back the NSWindow this view ends up in.
+private struct WindowReader: NSViewRepresentable {
+    let found: (NSWindow) -> Void
+
+    init(_ found: @escaping (NSWindow) -> Void) { self.found = found }
+
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async { if let w = v.window { found(w) } }
+        return v
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { if let w = nsView.window { found(w) } }
     }
 }
 
