@@ -41,6 +41,7 @@ import { DOCS_PAGE, openApiSpec } from './openapi.ts';
 import { CORS, coordsFrom, json, jsonCached, numParam } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
+import { readUpstream, runCron } from './monitor.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
@@ -374,6 +375,10 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
       accounts: accountsConfigured(env),
       email: Boolean(env.EMAIL && env.EMAIL_FROM),
     },
+    // From the cron probe: whether the NUS feed answered, and since when.
+    upstream: await readUpstream(env).then(
+      (u) => (u ? { up: u.up, since: new Date(u.since).toISOString(), checkedAt: new Date(u.checkedAt).toISOString() } : null),
+    ),
     // Opt-in: this one costs an upstream round trip on a cold token.
     auth: url.searchParams.get('probe') === '1' ? await probeAuth(env, nowMs) : undefined,
   });
@@ -382,6 +387,10 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
 const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
 export default {
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runCron(env, Date.now()));
+  },
+
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     const nowMs = Date.now();
