@@ -11,11 +11,11 @@ const quality = {
   type: 'string',
   enum: ['live', 'scheduled', 'unknown', 'stale', 'ended'],
   description:
-    'How degraded the answer is, best to worst. `live`: a real vehicle ETA. ' +
-    '`scheduled`: the feed answered with no vehicle, so this is a headway estimate. ' +
-    '`unknown`: the feed could not be reached; no time is invented. ' +
-    '`stale`: a cached live answer served because upstream is down; `asOf` keeps the original fetch time. ' +
-    '`ended`: outside operating hours.',
+    'How reliable the answer is, best to worst. `live`: a real ETA for a tracked bus. ' +
+    '`scheduled`: the feed responded but listed no bus, so the time is an estimate from the usual gap between buses. ' +
+    '`unknown`: the feed could not be reached, so no time is given. ' +
+    '`stale`: the last cached live answer, returned because the feed is down; `asOf` is when it was originally fetched. ' +
+    '`ended`: the service is outside its operating hours.',
 };
 
 const coordParams = [
@@ -61,27 +61,28 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       title: 'NUS Bus API',
       version: '1.0.0',
       description: [
-        'Answers one question about the NUS internal shuttle bus: **when is my bus, and should I run.**',
+        'Arrival times for the NUS internal shuttle buses, returned as short text ready to display.',
         '',
-        'The answer endpoints return a pre-rendered `label` and `detail`. Clients display them as-is ' +
-          'rather than formatting times themselves, so every client says the same thing.',
+        '`/next` and `/trip` return a `label` (for example `D2 · 4 min`) and a one-line `detail`. Clients ' +
+          'show these as they are instead of formatting times themselves, so every client shows the same text.',
         '',
-        '**Direction comes from route order, not distance.** NUS stops come in pairs a few metres apart ' +
-          '(`KR-MRT` / `KR-MRT-OPP`), inside GPS error. The API checks which side is genuinely upstream of ' +
-          'the destination and will tell you to cross the road.',
+        'NUS stops come in pairs on opposite sides of the road, often a few metres apart (`KR-MRT` and ' +
+          '`KR-MRT-OPP`), which is within GPS error. The API picks the side using the route order rather ' +
+          'than distance: it checks which stop has a bus that goes on to your destination, and tells you ' +
+          'when you need to cross the road.',
         '',
-        '**Answers degrade in public.** Every answer carries a `quality`. A stale answer keeps its original ' +
-          '`asOf`; an unreachable feed says so instead of inventing a time.',
+        'Every answer has a `quality` field. When the upstream feed is down, the API returns the last cached ' +
+          'answer with its original `asOf` time, or says that live times are unavailable. It does not make up a time.',
         '',
-        'No API key is needed. Live arrivals are cached for 15 seconds per stop, so repeated calls are cheap ' +
-          'and never multiply load on the upstream NUS feed. Please keep it that way: no bulk polling.',
+        'No API key is needed. Arrivals are cached for 15 seconds per stop, so repeated requests for the same ' +
+          'stop do not reach the NUS feed. Please do not poll many stops in bulk.',
       ].join('\n'),
     },
     servers: [{ url: origin }],
     // Explicitly unauthenticated: no API key, no account.
     security: [],
     tags: [
-      { name: 'Answers', description: 'The pre-rendered "when is my bus" answer.' },
+      { name: 'Answers', description: 'Next-bus answers as ready-to-display text.' },
       { name: 'Stops', description: 'Per-stop arrivals and static campus data.' },
       { name: 'Timetable', description: 'Turn a NUSMods timetable into a personal link.' },
       { name: 'Service', description: 'Health and configuration.' },
@@ -92,11 +93,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Answers'],
           summary: 'Next bus',
           description:
-            'The zero-configuration answer. What it answers depends on what you send:\n\n' +
-            '- `tt` — your next class from an imported timetable (see `/import`). Coordinates pick the boarding stop; without them the timetable\'s home stop is used.\n' +
-            '- `to` — a named trip key or stop code.\n' +
-            '- `lat` + `lon` alone — the next buses at your nearest stop, with no destination.\n' +
-            '- nothing — a "Set up" answer. It never invents a destination.',
+            'Returns the next bus. The destination depends on which parameters you send:\n\n' +
+            '- `tt`: your next class from an imported timetable (see `/import`). Coordinates pick the boarding stop; without them, the timetable\'s home stop is used.\n' +
+            '- `to`: a named trip key or stop code.\n' +
+            '- `lat` and `lon` only: the next buses at your nearest stop, without a destination.\n' +
+            '- none of these: a "Set up" answer that tells the client what to send, instead of guessing a destination.',
           operationId: 'getNext',
           parameters: [
             ...coordParams,
@@ -116,7 +117,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ],
           responses: {
             '200': {
-              description: 'The answer. Always 200, including when upstream is down: check `quality`.',
+              description: 'The answer. Always 200, even when the upstream feed is down; check `quality` to see how reliable it is.',
               content: {
                 'application/json': {
                   schema: { $ref: '#/components/schemas/Answer' },
@@ -194,7 +195,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Arrivals at one stop',
           description:
-            'Every service at one stop, with no destination and no walking maths. Shares the 15-second per-stop cache with the answer endpoints.',
+            'Lists the next arrivals for every service at one stop. There is no destination, so walking time and route direction are not considered. Uses the same 15-second per-stop cache as `/next` and `/trip`.',
           operationId: 'getArrivals',
           parameters: [
             {
@@ -233,7 +234,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Campus map and destinations',
           description:
-            'Static stop and route geometry, projected into an SVG coordinate space, plus a destination search list covering stops and NUSMods buildings/rooms. Changes only on deploy; cached for an hour.',
+            'Returns stop positions and route shapes as SVG coordinates, plus a destination search list of stops and NUSMods buildings and rooms, each mapped to its nearest stop. The data only changes when the API is redeployed, and responses are cached for an hour.',
           operationId: 'getCampus',
           responses: {
             '200': {
@@ -263,8 +264,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Timetable'],
           summary: 'Import a NUSMods timetable',
           description:
-            'Turns a NUSMods share URL into a personal `/next?tt=` link. Each class becomes a destination: the stop nearest its venue. ' +
-            'Stateless: the whole timetable is encoded into the link and nothing is stored.',
+            'Turns a NUSMods share URL into a personal `/next?tt=` link. Each class\'s destination is the stop nearest its venue. ' +
+            'The whole timetable is encoded in the link itself; the server stores nothing.',
           operationId: 'importTimetable',
           parameters: [
             {
@@ -317,7 +318,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Service'],
           summary: 'Health',
           description:
-            'Stop-graph info and which configuration is present. Reports presence only, never values. `probe=1` also checks the upstream auth token.',
+            'Returns stop graph details and which settings are configured (whether each is set, never its value). With `probe=1` it also checks that the upstream auth token works.',
           operationId: 'getHealth',
           parameters: [
             {
@@ -357,7 +358,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           properties: {
             label: { type: 'string', maxLength: 40, description: 'The headline, e.g. `D2 · 4 min`. Display verbatim.', example: 'D2 · 4 min' },
             detail: { type: 'string', description: 'One line of supporting detail. Display verbatim.' },
-            alt: { type: ['string', 'null'], description: 'A second option with a different first leg, or null when there is none.' },
+            alt: { type: ['string', 'null'], description: 'A second option using a different bus or stop, or null if there is none.' },
             stop: {
               type: 'object',
               description: 'Where to board.',
