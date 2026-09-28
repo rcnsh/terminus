@@ -69,20 +69,10 @@ export function apiKeyHeaders(env: Env): Record<string, string> {
     'X-APP-API': env.NEXTBUS_APP_API ?? '',
     'content-type': 'application/json',
     accept: 'application/json',
-    /**
-     * NOT OPTIONAL, and the reason is genuinely nasty.
-     *
-     * Cloudflare's fetch() injects both `CF-Visitor: {"scheme":"https"}` and
-     * an `X-Forwarded-Proto` reflecting the INCOMING request's scheme. Behind
-     * a plain-http hop that lands as `X-Forwarded-Proto: http`, the upstream
-     * sees the two disagree and answers `400 Bad Request - Contradictory
-     * scheme headers` as HTML. Verified by isolation: XFP http alone triggers
-     * it, CF-Visitor alone does not, and pinning XFP to https always works.
-     *
-     * The symptom is "identical curl succeeds, Worker gets 400", which is a
-     * horrible thing to chase in production.
-     */
-    'X-Forwarded-Proto': 'https',
+    // Do NOT add X-Forwarded-Proto. Sending it makes the NUS load balancer
+    // intermittently answer 400 "Contradictory scheme headers" (2 of 6 mints
+    // in a direct A/B, 0 of 6 without). Cloudflare strips it from Worker
+    // subrequests anyway, so it never helped there either.
   };
   if (env.NEXTBUS_REQUESTED_BY) h['X-Requested-By'] = env.NEXTBUS_REQUESTED_BY;
   if (env.NEXTBUS_SECURED_REQUEST) h['X-Secured-Request'] = env.NEXTBUS_SECURED_REQUEST;
@@ -141,18 +131,25 @@ export async function deviceId(env: Env): Promise<string> {
   return id;
 }
 
-export function invalidateToken(): void {
-  memo = null;
-}
-
-export async function getSession(env: Env, nowMs: number = Date.now()): Promise<Session> {
+/**
+ * `force` skips BOTH caches and mints. Clearing only the in-memory memo is not
+ * enough: the next call would read the same rejected token straight back out
+ * of KV, so a "retry with a fresh token" would silently reuse the stale one.
+ */
+export async function getSession(
+  env: Env,
+  nowMs: number = Date.now(),
+  { force = false }: { force?: boolean } = {},
+): Promise<Session> {
   if (!authConfigured(env)) throw new Error('auth not configured');
-  if (memo && memo.expMs > nowMs) return memo;
+  if (!force && memo && memo.expMs > nowMs) return memo;
 
-  const cached = (await env.NUSBUS_KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
-  if (cached && cached.expMs > nowMs) {
-    memo = cached;
-    return cached;
+  if (!force) {
+    const cached = (await env.NUSBUS_KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
+    if (cached && cached.expMs > nowMs) {
+      memo = cached;
+      return cached;
+    }
   }
 
   const res = await fetch(authUrl(env), {
@@ -188,94 +185,35 @@ export async function getSession(env: Env, nowMs: number = Date.now()): Promise<
   return session;
 }
 
-const KV_FMS = 'auth:fms';
-const BUSWIDGET_PATH = '/univus/mobile/buswidget/get-init-data';
-
-interface FmsSession {
-  /** ConnectX auth value. This is nextbus_token2, NOT nextbus_token -- the
-   *  reference client uses token2 and token is unused. */
-  token: string;
-  expMs: number;
-}
-
-let fmsMemo: FmsSession | null = null;
-
-/** Where get-init-data lives. NEXTBUS_AUTH_BASE ends at .../mobile for the
- *  public token, so strip that suffix before appending the univus path. */
-export function buswidgetUrl(env: Env): string {
-  const base = (env.NEXTBUS_AUTH_BASE ?? '').replace(/\/+$/, '');
-  const host = base.replace(/\/univus-public\/mobile$/, '').replace(/\/univus\/mobile$/, '');
-  return host + BUSWIDGET_PATH;
-}
-
-export function extractFmsToken(body: unknown): string | null {
-  const data = (body as { data?: { tokens?: Record<string, unknown> } })?.data;
-  const t = data?.tokens?.nextbus_token2 ?? data?.tokens?.nextbus_token;
-  return typeof t === 'string' && t.length > 4 ? t : null;
-}
-
-export function invalidateFmsToken(): void {
-  fmsMemo = null;
+/**
+ * The body envelope every bus-proxy call carries, alongside the Bearer header.
+ * Confirmed from a capture of uNivUS 2.59.2: the JWT rides in both places.
+ */
+export async function proxyEnvelope(env: Env, session: Session): Promise<Record<string, string>> {
+  return {
+    token: session.token,
+    userid: session.userid,
+    domain: session.domain,
+    deviceid: await deviceId(env),
+    ipaddr: PLACEHOLDER_IP,
+    version: env.NEXTBUS_APP_VERSION ?? '',
+  };
 }
 
 /**
- * Stage 2: exchange the PUBLIC JWT for the ConnectX FMS token.
+ * Headers for a bus-proxy call.
  *
- * Kept separate from the arrivals cache -- this is a 12h credential, not
- * 15-second data -- and memoised so a tile tap does not re-run the handshake.
+ * Since 2026-09-05 uNivUS no longer calls ConnectX directly: it POSTs to a
+ * proxy on inetapps.nus.edu.sg with this header set. `x-api-key` is a fixed
+ * app constant (it sits in libapp.so); the Bearer is the same PUBLIC guest JWT
+ * get-access-token mints, so no captured seed token is needed.
  */
-export async function getFmsToken(env: Env, nowMs: number = Date.now()): Promise<string> {
-  if (fmsMemo && fmsMemo.expMs > nowMs) return fmsMemo.token;
-
-  const cached = (await env.NUSBUS_KV.get(KV_FMS, 'json').catch(() => null)) as FmsSession | null;
-  if (cached && cached.expMs > nowMs) {
-    fmsMemo = cached;
-    return cached.token;
-  }
-
-  const session = await getSession(env, nowMs);
-  const res = await fetch(buswidgetUrl(env), {
-    method: 'POST',
-    headers: apiKeyHeaders(env),
-    body: JSON.stringify({
-      deviceid: await deviceId(env),
-      domain: session.domain,
-      ipaddr: '0.0.0.0',
-      token: session.token,
-      userid: session.userid,
-      version: env.NEXTBUS_APP_VERSION ?? '',
-    }),
-  });
-  if (!res.ok) throw new Error(`buswidget HTTP ${res.status}`);
-
-  const body = (await res.json()) as { code?: string; msg?: string };
-  const token = extractFmsToken(body);
-  if (!token) throw new Error(`buswidget rejected: code=${body?.code ?? '?'} msg=${body?.msg ?? ''}`);
-
-  // The response gives no explicit lifetime; the reference client assumes 12h.
-  const entry: FmsSession = { token, expMs: nowMs + 12 * 3600_000 - TTL.tokenSkewS * 1000 };
-  fmsMemo = entry;
-  const ttlS = Math.max(60, Math.floor((entry.expMs - nowMs) / 1000));
-  await env.NUSBUS_KV.put(KV_FMS, JSON.stringify(entry), { expirationTtl: ttlS }).catch(() => {});
-  return token;
-}
-
-/** Back-compat for callers that only want the bearer string. */
-export async function getToken(env: Env, nowMs: number = Date.now()): Promise<string> {
-  return (await getSession(env, nowMs)).token;
-}
-
-/**
- * Headers for a ConnectX FMS request.
- *
- * CONFIRMED from hewliyang/nus-nextbus-web's server client: the FMS token is
- * NOT a header. It goes in as a `token` query parameter (see fms.ts), and the
- * only header the host wants is `accept`. The X-HTD/X-APP keys are not sent to
- * ConnectX at all; the optional Dio "secure" headers are attached if set.
- */
-export function fmsHeaders(env: Env): Record<string, string> {
-  const h: Record<string, string> = { accept: 'application/json' };
-  if (env.NEXTBUS_REQUESTED_BY) h['x-requested-by'] = env.NEXTBUS_REQUESTED_BY;
-  if (env.NEXTBUS_SECURED_REQUEST) h['x-secured-request'] = env.NEXTBUS_SECURED_REQUEST;
-  return h;
+export function proxyHeaders(env: Env, token: string): Record<string, string> {
+  return {
+    'x-api-key': env.NEXTBUS_PROXY_API_KEY ?? '',
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json; charset=utf-8',
+    'user-agent': 'Dart/3.5 (dart:io)',
+    accept: 'application/json',
+  };
 }

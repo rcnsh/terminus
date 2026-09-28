@@ -35,6 +35,7 @@ import {
 } from './resolve.ts';
 import { buildCampusMap, buildDestinations } from './campus.ts';
 import { analyticsEnabled, logAnswer } from './analytics.ts';
+import { DOCS_PAGE, openApiSpec } from './openapi.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
@@ -390,9 +391,7 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
     // Presence only. Never the values.
     config: {
       auth: authConfigured(env),
-      fms: fmsConfigured(env),
-      serviceId: Boolean(env.NEXTBUS_FMS_SERVICE_ID),
-      tenantCode: Boolean(env.NEXTBUS_FMS_TENANT_CODE),
+      proxy: fmsConfigured(env),
       analytics: analyticsEnabled(env),
     },
     trip: tripForTime(nowMs)?.key ?? null,
@@ -400,19 +399,6 @@ async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response
     auth: url.searchParams.get('probe') === '1' ? await probeAuth(env, nowMs) : undefined,
   });
 }
-
-/** GET / -- what this API serves. There is no UI. */
-const INDEX = {
-  name: 'nusbus-edge',
-  endpoints: {
-    '/next': 'next bus: ?lat&lon, ?to=<trip key|stop code>, ?tt=<timetable from /import>',
-    '/trip': 'a named trip or stop: ?to=<trip key|stop code>&lat&lon',
-    '/arrivals': "one stop's board: ?stop=<code>",
-    '/campus': 'static stop/route geometry and destination search data',
-    '/import': 'NUSMods share URL -> personal /next link: ?share=<url>&home=<stop>',
-    '/health': 'config presence and graph info; ?probe=1 tests auth',
-  },
-};
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -424,7 +410,13 @@ export default {
     try {
       switch (url.pathname) {
         case '/':
-          return json(INDEX);
+          return new Response(DOCS_PAGE, {
+            headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
+          });
+        case '/openapi.json':
+          // servers[] is this request's origin, so the docs' "Send API Request"
+          // hits whichever deployment is serving them.
+          return jsonCached(openApiSpec(url.origin), 300);
         case '/next':
           return await handleNext(url, env, ctx, nowMs);
         case '/trip':

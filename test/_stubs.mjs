@@ -97,42 +97,40 @@ export function makeEnv(kv = makeKV(), ae = undefined) {
     // Absent by default: logging must be a no-op without the binding.
     NUSBUS_AE: ae,
     NEXTBUS_AUTH_BASE: 'https://auth.example.test',
-    NEXTBUS_FMS_BASE: 'https://fms.example.test/fms',
+    NEXTBUS_PROXY_BASE: 'https://proxy.example.test/univus/api/bus-proxy',
+    NEXTBUS_PROXY_API_KEY: 'test-proxy-key',
     NEXTBUS_APP_VERSION: '0.0.0-test',
     NEXTBUS_HTD_API: 'test-htd',
     NEXTBUS_APP_API: 'test-app',
-    NEXTBUS_FMS_SERVICE_ID: 'test-service',
-    NEXTBUS_FMS_TENANT_CODE: 'test-tenant',
   };
 }
 
-/** A ShuttleService payload in the real nested shape, with the real quirks. */
+/** The bus proxy's shuttle-service reply: {code, msg, data}, with the old
+ *  ShuttleServiceResult contents now sitting under `data`. */
 export function shuttlePayload(shuttles) {
   return {
-    ShuttleServiceResult: {
-      TimeStamp: new Date().toISOString(),
-      // One level deeper than you expect.
-      data: { shuttles },
-    },
+    code: '00000',
+    msg: '',
+    data: { TimeStamp: new Date().toISOString(), name: 'STUB', shuttles, hints: [] },
+    ts: '20260928204939',
   };
 }
 
-/**
- * Fake FMS. Counts ShuttleService calls separately from auth calls, because
- * "exactly one upstream call" is about arrivals, not tokens.
- */
-/** A structurally real PUBLIC-domain JWT that expires an hour from now. */
-function fakeJwt() {
+// Global, so every mint in a test run is distinct even with Date.now frozen.
+let tokenSerial = 0;
+
+/** A structurally real PUBLIC-domain JWT that expires an hour from now. The
+ *  serial makes each mint distinct, so a forced refresh is observable. */
+function fakeJwt(serial = 0) {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
   return [
     b64({ alg: 'RS256', typ: 'JWT' }),
-    b64({ domain: 'PUBLIC', iss: 'HTD', jti: 'stubdevice000000', exp: now + 3600, iat: now }),
+    b64({ domain: 'PUBLIC', iss: 'HTD', jti: 'stubdevice000000', exp: now + 3600, iat: now, n: serial }),
     'c2lnbmF0dXJlLXJlbW92ZWQ',
   ].join('.');
 }
 
-/** Collects Analytics Engine writes so tests can assert on the schema. */
 export function makeAnalytics() {
   const events = [];
   return {
@@ -146,45 +144,48 @@ export function makeAnalytics() {
   };
 }
 
-export function makeFetch({ byStop = {}, fail = false } = {}) {
-  const counts = { auth: 0, buswidget: 0, shuttle: 0 };
-  const fn = async (input) => {
+/**
+ * Fake upstream: the auth host plus the bus proxy. `reject` makes the next N
+ * proxy calls answer with a non-"00000" code (at HTTP 200, like the real one)
+ * so the forced-refresh retry can be exercised. Every proxy request is kept in
+ * `requests` so tests can assert on headers and body.
+ */
+export function makeFetch({ byStop = {}, fail = false, reject = 0 } = {}) {
+  const counts = { auth: 0, shuttle: 0 };
+  const requests = [];
+  const fn = async (input, init = {}) => {
     const url = String(typeof input === 'string' ? input : input.url);
 
-    // Stage 1: the PUBLIC access token.
     if (url.includes('get-access-token')) {
       counts.auth++;
+      tokenSerial++;
       return Response.json({
         msg: '',
         code: '00000',
         // No expires_in: the lifetime lives in the JWT exp, so this must be a
         // real three-part token or nothing downstream works.
-        data: { username: 'User', token: fakeJwt(), userid: 'STUB-USER-ID', domain: 'PUBLIC' },
+        data: { username: 'User', token: fakeJwt(tokenSerial), userid: 'STUB-USER-ID', domain: 'PUBLIC' },
         ts: '20260827234622',
       });
     }
 
-    // Stage 2: the buswidget hop that mints the ConnectX token.
-    if (url.includes('buswidget') || url.includes('get-init-data')) {
-      counts.buswidget++;
-      return Response.json({
-        msg: '',
-        code: '00000',
-        data: {
-          tokens: { nextbus_token: 'stub-nb1', nextbus_token2: 'stub-fms-token' },
-          bus_stops: [],
-          'bus-stop-color': [],
-        },
-      });
+    if (url.includes('bus-proxy')) {
+      counts.shuttle++;
+      if (fail) throw new TypeError('upstream unreachable');
+      const headers = new Headers(init.headers);
+      const body = JSON.parse(init.body ?? '{}');
+      requests.push({ url, method: init.method, headers, body });
+      if (reject > 0) {
+        reject--;
+        return Response.json({ code: '10009', msg: 'We have a new release of uNivUS', data: null });
+      }
+      return Response.json(shuttlePayload(byStop[body.busstopname] ?? []));
     }
 
-    // Stage 3: ConnectX ShuttleService.
-    counts.shuttle++;
-    if (fail) throw new TypeError('upstream unreachable');
-    const code = new URL(url).searchParams.get('busstopname');
-    return Response.json(shuttlePayload(byStop[code] ?? []));
+    return new Response('unexpected upstream ' + url, { status: 599 });
   };
   fn.counts = counts;
+  fn.requests = requests;
   return fn;
 }
 

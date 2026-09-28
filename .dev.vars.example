@@ -13,11 +13,20 @@
 # expires_in field. No NUSNET credentials anywhere -- domain is PUBLIC.
 NEXTBUS_AUTH_BASE="https://myizaac2.nus.edu.sg/univus-public/mobile"
 
-# CONFIRMED. Extracted from libapp.so and verified live.
-NEXTBUS_FMS_BASE="https://fms.connectx.com.sg/apiy/NUSETA"
+# Bus data. Since 2026-09-05 uNivUS POSTs to this proxy instead of calling
+# ConnectX directly (captured from uNivUS 2.59.2). Auth is the same guest JWT
+# from get-access-token, as a Bearer header AND in the body, plus x-api-key.
+NEXTBUS_PROXY_BASE="https://inetapps.nus.edu.sg/univus/api/bus-proxy"
 
-# Confirmed format.
-NEXTBUS_APP_VERSION="univus_android_2.59.1_139"
+# Fixed app constant sent as x-api-key to the proxy. Same class of value as
+# the two keys below: read it off a captured bus-proxy request.
+NEXTBUS_PROXY_API_KEY=""
+
+# Must track the current Play Store release. When NUS ships a new uNivUS, the
+# old string starts being rejected with code 10009 "We have a new release of
+# uNivUS" and every answer degrades to `unknown`. Format:
+# univus_android_<versionName>_<versionCode>.
+NEXTBUS_APP_VERSION="univus_android_2.59.2_140"
 
 # THE ONLY TWO SECRETS IN THE PROJECT. Read them off the REQUEST HEADERS of
 # the get-access-token call, not the body. Without them the endpoint returns
@@ -30,9 +39,9 @@ NEXTBUS_APP_API=""
 # sees one install rather than a new device on every cold start.
 NEXTBUS_DEVICE_ID=""
 
-# ConnectX ServiceID and TenantCode. CONFIRMED: both are the literal "NUS",
-# sent as query params on every FMS call. (Not secrets -- tenant identifiers.)
-# Without them ConnectX answers {"result":false,"error":4} at HTTP 200.
+# Scraper only (scripts/scrape_stops.py). The old direct ConnectX host; the
+# Worker no longer uses it, and it now rejects the guest token with error 4.
+NEXTBUS_FMS_BASE="https://fms.connectx.com.sg/apiy/NUSETA"
 NEXTBUS_FMS_SERVICE_ID="NUS"
 NEXTBUS_FMS_TENANT_CODE="NUS"
 

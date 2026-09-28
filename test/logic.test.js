@@ -23,10 +23,10 @@ import {
   nearestStop,
   walkAllTheWayS,
 } from '../src/resolve.ts';
-import { crowdFromLoad, isFmsAuthError, normalize, parseCrowd, parseEtaS, pickList, shuttleServiceUrl, unwrap } from '../src/fms.ts';
+import { crowdFromLoad, normalize, parseCrowd, parseEtaS, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
 import { LABEL_MAX, tripForTime } from '../src/config.ts';
-import { apiKeyHeaders, authUrl, extractSession, fmsHeaders, jwtExpMs } from '../src/auth.ts';
+import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
 
 const GRAPH = graphJson;
 const NOW = Date.UTC(2026, 7, 27, 1, 0, 0); // Thu 09:00 SGT
@@ -837,20 +837,14 @@ test('authUrl appends the endpoint to a base that carries a path prefix', () => 
   assert.equal(at('https://example.test'), 'https://example.test/get-access-token');
 });
 
-test('outgoing headers pin X-Forwarded-Proto to https', () => {
-  // Cloudflare injects an X-Forwarded-Proto matching the incoming request. If
-  // that is http, the upstream rejects it against CF-Visitor's https with a
-  // 400 and an HTML body. Pinning it is the fix; this is the regression guard.
+test('outgoing headers do not send X-Forwarded-Proto', () => {
+  // Sending it made the NUS load balancer intermittently reject the token mint
+  // with 400 "Contradictory scheme headers". This guards against re-adding it.
   const h = apiKeyHeaders({ NEXTBUS_HTD_API: 'k1', NEXTBUS_APP_API: 'k2' });
-  assert.equal(h['X-Forwarded-Proto'], 'https');
+  assert.ok(!Object.keys(h).some((k) => k.toLowerCase() === 'x-forwarded-proto'));
   assert.equal(h['X-HTD-API'], 'k1');
   assert.equal(h['X-APP-API'], 'k2');
 });
-
-/* ------------------------------------------------------------------ */
-/* Hand-maintained operating hours                                     */
-/* ------------------------------------------------------------------ */
-
 test('the hours template covers every service in the real graph', () => {
   for (const svc of Object.keys(realGraph.routes)) {
     assert.ok(svc in serviceHoursJson, `no hours entry for ${svc}`);
@@ -911,29 +905,6 @@ test('a filled window actually gates the ended rung', () => {
 /* ConnectX FMS: the confirmed query-param scheme                      */
 /* ------------------------------------------------------------------ */
 
-test('the FMS token rides in the query string, not a header', () => {
-  const env = { NEXTBUS_FMS_BASE: 'https://fms.connectx.com.sg/apiy/NUSETA', NEXTBUS_FMS_SERVICE_ID: 'SID', NEXTBUS_FMS_TENANT_CODE: 'TEN' };
-  const u = new URL(shuttleServiceUrl(env, 'COM3', 'fms-tok'));
-  assert.equal(u.pathname, '/apiy/NUSETA/ShuttleService');
-  assert.equal(u.searchParams.get('token'), 'fms-tok');
-  assert.equal(u.searchParams.get('ServiceID'), 'SID');
-  assert.equal(u.searchParams.get('TenantCode'), 'TEN');
-  assert.equal(u.searchParams.get('busstopname'), 'COM3');
-  // No bearer header: fmsHeaders takes only env now.
-  assert.equal(fmsHeaders(env).authorization, undefined);
-  assert.equal(fmsHeaders(env).accept, 'application/json');
-});
-
-test('only ConnectX errors 1-3 are auth failures; 4 is not', () => {
-  // error 4 is a bad ServiceID/TenantCode -- a config fault. Treating it as an
-  // auth error would refetch a token and retry forever against a broken call.
-  assert.equal(isFmsAuthError({ result: false, error: 1 }), true);
-  assert.equal(isFmsAuthError({ result: false, error: 3 }), true);
-  assert.equal(isFmsAuthError({ result: false, error: 4 }), false);
-  assert.equal(isFmsAuthError({ ShuttleServiceResult: { shuttles: [] } }), false);
-  assert.equal(isFmsAuthError(null), false);
-});
-
 test('normalize handles the raw ConnectX ShuttleService shape', () => {
   // The real thing, straight from fms.connectx.com.sg -- richer than the
   // hewliyang proxy: an `_etas` array per service with eta / eta_s / plate /
@@ -951,4 +922,20 @@ test('normalize handles the raw ConnectX ShuttleService shape', () => {
   // Terminus split survives, and -S is the boardable berth.
   const berths = new Set(out.filter((a) => a.svc === 'D2').map((a) => a.berth));
   assert.ok(berths.has('COM3-D2-S') && berths.has('COM3-D2-E'));
+});
+
+test('bus proxy URL and headers match the captured uNivUS request', () => {
+  const env = { NEXTBUS_PROXY_BASE: 'https://inetapps.nus.edu.sg/univus/api/bus-proxy/', NEXTBUS_PROXY_API_KEY: 'k' };
+  assert.equal(proxyUrl(env, 'shuttle-service'), 'https://inetapps.nus.edu.sg/univus/api/bus-proxy/shuttle-service');
+  const h = proxyHeaders(env, 'jwt');
+  assert.equal(h['x-api-key'], 'k');
+  assert.equal(h.authorization, 'Bearer jwt');
+  assert.match(h['content-type'], /^application\/json/);
+});
+
+test('the proxy reports failure at HTTP 200, so only code "00000" counts as success', () => {
+  assert.equal(proxyOk({ code: '00000', data: {} }), true);
+  assert.equal(proxyOk({ code: '10009', msg: 'We have a new release of uNivUS' }), false);
+  assert.equal(proxyOk({ result: false, error: 4 }), false, 'the old ConnectX error shape is not success either');
+  assert.equal(proxyOk(null), false);
 });

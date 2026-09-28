@@ -21,14 +21,15 @@ tool would all consume the same `label` and `detail`. The moment a client starts
 formatting for itself, four interfaces begin to drift apart and there are four
 places to fix every bug.
 
-**This repo is the API only.** There is no bundled UI; `GET /` returns a JSON
-index of the endpoints. Clients are separate.
+**This repo is the API only.** `GET /` serves its documentation; clients are
+separate. The OpenAPI spec lives in [src/openapi.ts](src/openapi.ts) and a test
+fails if a route and the spec drift apart.
 
 ---
 
 ## Reachability
 
-Resolved. The token host and ConnectX both answer from Cloudflare's edge and
+Resolved. The token host and the bus proxy both answer from Cloudflare's edge and
 from mobile data off campus, so no on-campus box is needed. `GET /health?probe=1`
 reports live auth state from wherever the Worker is running.
 
@@ -54,11 +55,11 @@ student's credentials.
 | Variable | Purpose |
 | --- | --- |
 | `NEXTBUS_AUTH_BASE` | uNivUS auth host for the public token |
-| `NEXTBUS_FMS_BASE` | ConnectX FMS data host |
-| `NEXTBUS_APP_VERSION` | App version string sent with every request |
-| `NEXTBUS_HTD_API` / `NEXTBUS_APP_API` | The two auth headers |
-| `NEXTBUS_FMS_SERVICE_ID` | Required by `ShuttleService` |
-| `NEXTBUS_FMS_TENANT_CODE` | Required by `BusStops`, `ServiceDescription`, `PickupPoint` |
+| `NEXTBUS_PROXY_BASE` | The uNivUS bus proxy, `https://inetapps.nus.edu.sg/univus/api/bus-proxy` |
+| `NEXTBUS_PROXY_API_KEY` | Sent as `x-api-key` to the proxy |
+| `NEXTBUS_APP_VERSION` | Current uNivUS release, e.g. `univus_android_2.59.2_140`. **Must track the Play Store** (see below) |
+| `NEXTBUS_HTD_API` / `NEXTBUS_APP_API` | The two auth headers for the token mint |
+| `NEXTBUS_FMS_BASE` / `_SERVICE_ID` / `_TENANT_CODE` | Scraper only; the Worker no longer calls ConnectX |
 | `NEXTBUS_REQUESTED_BY` / `NEXTBUS_SECURED_REQUEST` | Optional; the server does not require them |
 
 Names match `hewliyang/nus-nextbus-web`'s `.env.example` so that repo's notes
@@ -77,7 +78,8 @@ npx wrangler deploy
 
 | Route | |
 | --- | --- |
-| `GET /` | JSON index of these endpoints. |
+| `GET /` | API documentation (Stoplight Elements), with a live "Send API Request" panel. |
+| `GET /openapi.json` | The OpenAPI 3.1 description the docs render. Source: [src/openapi.ts](src/openapi.ts). |
 | `GET /next` | The answer. `?tt=` (timetable from `/import`) picks your next class; `?to=` names a trip key or stop code; `?lat&lon` alone gives the next buses at your nearest stop. With none of these it returns a "Set up" answer rather than inventing a destination. |
 | `GET /trip?to=<key\|stop>&lat&lon` | The answer for a named trip or stop code. Falls back to a configured origin without coordinates. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
@@ -154,53 +156,35 @@ minutes in the past alongside a positive `arrivalTime`. It is not used.
 
 ## Data flow, confirmed
 
-Extracted from `libapp.so` in the APK (Flutter keeps Dart string literals in
-the AOT snapshot) and verified live. There are THREE stages, not two:
+Re-captured from uNivUS 2.59.2 on 2026-09-28. On 2026-09-05 uNivUS stopped
+calling ConnectX directly and moved bus data behind a proxy on its own host:
 
 ```
 1. POST myizaac2.nus.edu.sg/univus-public/mobile/get-access-token
      headers X-HTD-API, X-APP-API ; body {deviceid, ipaddr, version}
-     -> a 24h PUBLIC-domain JWT (+ userid)
+     -> a 24h PUBLIC-domain guest JWT (+ userid)
 
-2. POST myizaac2.nus.edu.sg/univus/mobile/buswidget/get-init-data
-     body {token, userid, domain, deviceid, ipaddr, version}
-     -> data.tokens.nextbus_token, nextbus_token2  (the FMS credentials)
-     -> also data.bus_stops (favourites) and bus-stop-color
-
-3. GET  fms.connectx.com.sg/apiy/NUSETA/ShuttleService?busstopname=...
-     authenticated with the nextbus_token(s) from stage 2
+2. POST inetapps.nus.edu.sg/univus/api/bus-proxy/shuttle-service
+     headers x-api-key, Authorization: Bearer <JWT>
+     body    {token, userid, domain, deviceid, ipaddr, version, busstopname}
+     -> {code: "00000", data: {TimeStamp, name, shuttles: [...], hints}}
 ```
 
-So `NEXTBUS_FMS_BASE = https://fms.connectx.com.sg/apiy/NUSETA`, and the FMS
-credentials are NOT static env values -- they are minted per session at stage
-2 and expire. This changes the design: `auth.ts` currently models only stage 1.
-It needs a second hop (or `fms.ts` needs to fetch and cache the nextbus_token),
-which is why `NEXTBUS_FMS_SERVICE_ID` / `NEXTBUS_FMS_TENANT_CODE` in the
-template are likely dead -- the token, not a static id, is what authenticates.
+The guest JWT from step 1 is accepted by the proxy directly -- no seed token,
+no refresh endpoint, no buswidget hop. `data` is the old `ShuttleServiceResult`
+contents, so `normalize()` is unchanged. Like every uNivUS endpoint, failure
+comes back at HTTP 200 with a non-`"00000"` code; `fms.ts` retries once with a
+freshly minted token and otherwise reports the stop unavailable.
 
-**Stage 3 uses no auth headers.** Read from `hewliyang/nus-nextbus-web`'s
-server client: ConnectX takes the FMS token as a `token` QUERY PARAMETER (it is
-`nextbus_token2`, not `nextbus_token`), alongside `ServiceID` and `TenantCode`
-query params; the only header is `accept: application/json`. Error 4 was my
-Bearer-header guess, not a real rejection.
+The retired ConnectX path (`fms.connectx.com.sg/apiy/NUSETA`, `nextbus_token2`
+as a query param) now answers `{"result":false,"error":4}` to everything.
 
-Its error convention, also adopted here: `{result:false, error:1|2|3}` at HTTP
-200 means the token expired -> refetch and retry once. `error:4` is a bad
-ServiceID/TenantCode -- a config fault, NOT auth -- so it must never trigger a
-refetch loop.
-
-**Resolved.** `ServiceID` and `TenantCode` are both the literal `NUS`, sent as
-query params. A live end-to-end call returns real arrivals.
-
-The raw ConnectX `ShuttleService` response is richer than the proxy fixtures:
-each service carries an `_etas` array (full upcoming list, not just first +
-next) with `eta` (minutes), `eta_s` (seconds -- preferred, more precise),
-`plate`, `ts` (absolute arrival), and `px` (per-arrival crowd). `normalize()`
-consumes all of it. Real fixture: `test/fixtures/connectx-ShuttleService-COM3.json`.
-
-Nothing about the FMS surface is unknown any more. The remaining work is
-operational, not investigative: fill in the trips you actually take, decide
-whether to deploy, and use it.
+**The version string is a kill switch.** When NUS ships a new uNivUS, requests
+carrying the old `version` start failing with code `10009` "We have a new
+release of uNivUS", and every answer degrades to `quality: unknown`. The fix
+is updating `NEXTBUS_APP_VERSION` to `univus_android_<versionName>_<versionCode>`
+of the current Play Store build (`adb shell dumpsys package sg.edu.nus.univus`
+on a device that has it).
 
 ## Auth, confirmed
 
@@ -209,7 +193,7 @@ POST https://myizaac2.nus.edu.sg/univus-public/mobile/get-access-token
 X-HTD-API: <captured>
 X-APP-API: <captured>
 
-{"deviceid": "<16 hex>", "ipaddr": "127.0.0.1", "version": "univus_android_2.59.1_139"}
+{"deviceid": "<16 hex>", "ipaddr": "127.0.0.1", "version": "univus_android_2.59.2_140"}
 ```
 
 returns `{"code":"00000","data":{"token","userid","domain","username"}}`. The
@@ -227,8 +211,12 @@ Three things that will bite you:
   back with a 200 status line, so anything checking `res.ok` sails straight
   past it.
 
-The two API keys are the only secrets in the project. Everything else in
-`.dev.vars.example` is either a public URL or a version string.
+- **Do not send `X-Forwarded-Proto`.** It makes the NUS load balancer
+  intermittently answer 400 "Contradictory scheme headers" (2 of 6 mints in a
+  direct A/B, 0 of 6 without).
+
+The three API keys (`X-HTD-API`, `X-APP-API`, the proxy's `x-api-key`) are the
+only secrets. Everything else in `.dev.vars.example` is a URL or a version.
 
 ## Analytics
 
@@ -277,6 +265,7 @@ src/config.ts     THE PERSONALISATION SURFACE
 src/nusmods.ts    NUSMods share URL -> trips, stateless ?tt= encoding
 src/campus.ts     /campus map geometry and destination search
 src/analytics.ts  Analytics Engine decision + arrival logging
+src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
 ```
 
 `normalize()` in `fms.ts` is the only function that touches the raw FMS shape.
