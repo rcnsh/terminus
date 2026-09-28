@@ -18,7 +18,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // Sideloaded personal builds: the debug key is enough. Swap in a
+            // real key before this goes anywhere near a store.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     buildFeatures {
