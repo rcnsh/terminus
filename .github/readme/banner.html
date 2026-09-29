@@ -1,0 +1,64 @@
+<!doctype html>
+<!--
+  The README banner: the landing page's hero as a still image, in the site's
+  own tokens and fonts. Re-render both themes after changing it or the app
+  screenshot:  sh .github/readme/render.sh
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="../../apps/web/public/assets/site.css">
+<style>
+  html, body { margin: 0; width: 1280px; height: 580px; overflow: hidden; background: var(--bg); }
+  .banner {
+    position: relative; width: 1280px; height: 580px; box-sizing: border-box; padding: 0 88px;
+    display: grid; grid-template-columns: 1fr 340px; gap: 56px; align-items: center; overflow: hidden;
+  }
+  /* The glow behind the phone, as on the site. */
+  .banner::before {
+    content: ''; position: absolute; right: -40px; top: 40px; width: 620px; height: 620px; border-radius: 50%;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 24%, transparent), transparent);
+    filter: blur(30px);
+  }
+
+  .copy { position: relative; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand img { width: 46px; height: 46px; border-radius: 12px; }
+  .brand .wordmark { font-size: 2rem; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 34px; padding: 6px 12px 6px 10px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); font: 600 0.85rem/1 var(--font); letter-spacing: 0.01em;
+  }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  h1 { font-size: 5.1rem; margin-top: 18px; letter-spacing: -0.035em; line-height: 1; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { font-size: 1.3rem; color: var(--muted); margin: 22px 0 0; max-width: 36rem; line-height: 1.5; }
+
+  .phone {
+    position: relative; align-self: start; margin-top: 64px; width: 320px; padding: 10px; border-radius: 50px; background: #0c0a09;
+    box-shadow: 0 40px 80px -24px rgb(28 25 23 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06) inset, 0 0 0 1px var(--line);
+  }
+  .phone img { display: block; width: 100%; border-radius: 41px; }
+  .phone .dark { display: none; }
+  @media (prefers-color-scheme: dark) {
+    .phone .light { display: none; }
+    .phone .dark { display: block; }
+  }
+</style>
+</head>
+<body>
+<div class="banner">
+  <div class="copy">
+    <div class="brand"><img src="../../apps/web/public/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></div>
+    <span class="pill"><i></i>Public beta · for the NUS internal shuttle</span>
+    <h1>Know when<br>to <em>run</em>.</h1>
+    <p class="lede">Your timetable in, one answer out: which shuttle, from which stop, and when to leave. Or when walking is faster.</p>
+  </div>
+  <div class="phone">
+    <img class="light" src="../../apps/web/public/assets/shots/app-light.webp" alt="">
+    <img class="dark" src="../../apps/web/public/assets/shots/app-dark.webp" alt="">
+  </div>
+</div>
+</body>
+</html>
