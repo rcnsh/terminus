@@ -13,6 +13,14 @@
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <!-- Menu bar only: no Dock icon, no app menu. -->
     <key>LSUIElement</key><true/>
+    <!-- Sparkle: check every 6 hours, download and install without asking.
+         Updates must be signed with this EdDSA key (private half in
+         ~/.terminus/sparkle-ed25519.key and the SPARKLE_ED_PRIVATE_KEY secret). -->
+    <key>SUFeedURL</key><string>https://terminus.rcn.sh/download/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>hVfiuBLXkgVXlxhaM13MRWLb3C0SrY2PDsg0zAkMx5I=</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAutomaticallyUpdate</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>21600</integer>
     <key>NSLocationUsageDescription</key>
     <string>terminus uses your location to start from the bus stop you're nearest.</string>
     <key>NSLocationWhenInUseUsageDescription</key>

@@ -12,7 +12,9 @@ private let log = Logger(subsystem: "sh.rcn.terminus", category: "refresh")
 final class AppModel {
     static let shared = AppModel()
 
-    var paired: Bool = TokenStore.read() != nil
+    /// Set from the Keychain at launch; snapshots and tests set it themselves
+    /// and never touch the real token.
+    var paired = false
     var pairing = false
     var pairError: String?
 
@@ -32,7 +34,9 @@ final class AppModel {
 
     var error: String?
     var updated: Date?
-    var popoverOpen = false { didSet { if popoverOpen { refreshLoginItem(); kick() } } }
+    var popoverOpen = false {
+        didSet { if popoverOpen { refreshLoginItem(); kick() } else { Updater.shared.popoverClosed() } }
+    }
     var needsLocation: Bool { !isSnapshot && locator.undecided }
     /// A render for screenshots: native controls (text fields, menus), which
     /// ImageRenderer can't draw, are swapped for look-alikes.
@@ -86,10 +90,12 @@ final class AppModel {
     init(snapshot: Bool = false) {
         isSnapshot = snapshot
         if snapshot { return }
+        paired = TokenStore.read() != nil
         log.notice("start: paired=\(self.paired) base=\(Api.base, privacy: .public)")
         observeSleep()
         observeNetwork()
         start()
+        Updater.shared.start(misplaced: misplaced)
         checkForUpdate()
         clockTask = Task { [weak self] in
             while !Task.isCancelled {

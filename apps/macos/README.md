@@ -34,6 +34,13 @@ keeps its location permission, login item and the device token's Keychain
 access across updates. It isn't notarised, which needs a paid Apple Developer
 account, so macOS asks once on first open.
 
+Installed copies update themselves with [Sparkle](https://sparkle-project.org)
+(`Sources/Terminus/Updater.swift`): every 6 hours they check
+`/download/appcast.xml`, download a new version in the background and install
+it when the popover is closed. An update installs only if its DMG is signed
+with the update key (`SUPublicEDKey` in `Support/Info.plist`) and the app with
+the terminus certificate. `TERMINUS_APPCAST=<url>` points a build at a test feed.
+
 `./build.sh` signs with that certificate too if it's in your keychain, and
 ad-hoc otherwise. An ad-hoc build is a new identity every time, so macOS asks
 before letting it read the device token.

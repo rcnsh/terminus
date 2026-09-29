@@ -2,8 +2,9 @@ name: release
 
 # Pushing a v* tag (after scripts/release.sh has built and uploaded the APK)
 # builds the Mac app, signs it with the terminus self-signed certificate,
-# packages it as a DMG, uploads it to R2, points latest.json at the new
-# version and publishes the GitHub release with the APK and the DMG.
+# packages it as a DMG, uploads it to R2, writes the Sparkle appcast that
+# installed Mac apps update from, points latest.json at the new version and
+# publishes the GitHub release with the APK and the DMG.
 #
 # Run by hand (Actions > release > Run workflow) it only builds, signs and
 # packages, and keeps the DMG as a workflow artifact: a check on signing that
@@ -47,6 +48,8 @@ jobs:
 
       - name: Version
         id: v
+        env:
+          HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
         run: |
           MAC=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/macos/Support/Info.plist)
           ANDROID=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' apps/android/app/build.gradle.kts)
@@ -56,6 +59,9 @@ jobs:
           fi
           if [ "$PUBLISH" = true ] && [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::error::the CLOUDFLARE_API_TOKEN secret is not set"; exit 1
+          fi
+          if [ "$PUBLISH" = true ] && [ "$HAS_SPARKLE_KEY" != true ]; then
+            echo "::error::the SPARKLE_ED_PRIVATE_KEY secret is not set"; exit 1
           fi
           echo "version=$MAC" >> "$GITHUB_OUTPUT"
 
@@ -90,8 +96,10 @@ jobs:
           name: terminus-${{ steps.v.outputs.version }}-dmg
           path: build/release/${{ steps.v.outputs.version }}/terminus-${{ steps.v.outputs.version }}.dmg
 
-      - name: Upload to R2 and update latest.json
+      - name: Upload to R2, write the appcast, update latest.json
         if: env.PUBLISH == 'true'
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: scripts/publish-mac.sh "${{ steps.v.outputs.version }}"
 
       - name: GitHub release
