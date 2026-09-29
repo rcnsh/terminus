@@ -53,8 +53,12 @@
     <p class="hint center">By continuing you agree to the <a href="/privacy">privacy policy</a>.</p>
   </section>
 
+  <!-- First sign-in: setup, one step at a time. Filled in by onboarding.js. -->
+  <section id="onboarding" class="onboard" hidden aria-live="polite"></section>
+
   <!-- Signed in -->
   <div id="app" class="layout" hidden>
+    <div id="pace-prompt" class="col-span" hidden></div>
     <div class="col">
       <div id="reimport" class="banner" hidden>
         <strong>Re-import your timetable.</strong> <span id="reimport-text"></span>
@@ -117,6 +121,21 @@
           </div>
         </div>
         <p class="hint">Outside your day, the widget shows your next class instead of a bus. A class that starts early or runs late stretches the day to fit.</p>
+
+        <div class="split">
+          <div>
+            <label for="pace">Walking pace</label>
+            <select id="pace">
+              <option value="slow">Slow, about 4 km/h</option>
+              <option value="normal">Normal, about 4.7 km/h</option>
+              <option value="fast">Fast, about 5.4 km/h</option>
+            </select>
+          </div>
+          <div>
+            <label class="check"><input id="full-bus" type="checkbox"> Aim one bus earlier when the bus is often packed</label>
+          </div>
+        </div>
+        <p class="hint">Walks follow the paths on campus. Pace changes every walk except the one from home, which you set above.</p>
       </section>
 
       <section class="card">

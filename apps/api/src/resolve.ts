@@ -26,6 +26,7 @@ import type {
   StopArrivals,
 } from './types.ts';
 import { DEFAULT_HEADWAY_S, RIDE, WALK, isMeasured, sgt } from './config.ts';
+import { footM, stopFootM } from './walk.ts';
 
 const EARTH_R = 6_371_000;
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -112,11 +113,13 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
   const idx = indexGraph(graph);
   const { to } = input;
 
-  let base: Array<{ stop: Stop; distM: number }>;
+  let base: Array<{ stop: Stop; distM: number; footM: number }>;
   if (input.lat != null && input.lon != null) {
+    // Range is the straight line; the walk itself follows the paths.
     const all = graph.stops
       .map((stop) => ({ stop, distM: haversineM(input.lat!, input.lon!, stop.lat, stop.lon) }))
-      .sort((a, b) => a.distM - b.distM);
+      .sort((a, b) => a.distM - b.distM)
+      .map((c) => ({ ...c, footM: footM(input.lat!, input.lon!, c.stop) }));
     const near = all.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
     // A user's usual stops (near home) join the set when in range, so a dense
     // cluster of closer stops cannot push out the one they actually use.
@@ -130,7 +133,7 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
     const stop = input.originCode ? idx.byCode.get(input.originCode) : undefined;
     if (!stop) return [];
     // Starting from home: the walk to the stop decides which bus is catchable.
-    base = [{ stop, distM: (input.originWalkS ?? 0) * WALK.speedMs }];
+    base = [{ stop, distM: 0, footM: 0 }];
   }
 
   // Either side of the road will do: arriving at "Opp UHC" gets you to UHC.
@@ -139,7 +142,8 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
   const dest = to ? idx.byCode.get(to) : undefined;
   const targets = to ? [to, ...(dest?.opposite && idx.byCode.has(dest.opposite) ? [dest.opposite] : [])] : [];
 
-  const out: Candidate[] = base.map(({ stop, distM }) => {
+  const speed = input.walkSpeedMs ?? WALK.speedMs;
+  const out: Candidate[] = base.map(({ stop, distM, footM: foot }) => {
     const legs = [];
     // Standing at the destination is not a boarding option. reach() returns
     // 0 hops for from === to, which would otherwise rank first every time.
@@ -156,7 +160,9 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
       }
       if (best) legs.push({ svc, hops: best.hops });
     }
-    return { stop, distM, walkS: Math.round(distM / WALK.speedMs), legs };
+    // Starting from home or a room without coordinates: that walk comes first.
+    const walkS = input.lat != null ? Math.round(foot / speed) : (input.originWalkS ?? 0);
+    return { stop, distM, walkS, legs };
   });
 
   const useful = out.filter((c) => c.legs.length > 0);
@@ -464,10 +470,9 @@ export function walkAllTheWayS(
   const idx = indexGraph(graph);
   const dest = input.to ? idx.byCode.get(input.to) : null;
   if (!dest) return null;
-  const lat = input.lat ?? fallbackFrom?.lat;
-  const lon = input.lon ?? fallbackFrom?.lon;
-  if (lat == null || lon == null) return null;
+  const speed = input.walkSpeedMs ?? WALK.speedMs;
+  if (input.lat != null && input.lon != null) return Math.round(footM(input.lat, input.lon, dest) / speed);
+  if (!fallbackFrom) return null;
   // From the origin stop, the walk to it (from home) comes first, same as for the bus.
-  const toOrigin = input.lat == null ? (input.originWalkS ?? 0) : 0;
-  return Math.round(haversineM(lat, lon, dest.lat, dest.lon) / WALK.speedMs) + toOrigin;
+  return Math.round(stopFootM(fallbackFrom, dest) / speed) + (input.originWalkS ?? 0);
 }

@@ -17,6 +17,7 @@ import { RIDE, WALK } from './config.ts';
 import { headwayFor, resolveBerths } from './resolve.ts';
 import { ON_TIME_SLACK_S } from './profile.ts';
 import { isoSeconds, shortStop } from './format.ts';
+import { type CrowdRisk, OFTEN_PACKED } from './crowd.ts';
 
 export interface LeaveInput {
   /** Ranked options, best first. */
@@ -30,6 +31,8 @@ export interface LeaveInput {
    *  starting there); null otherwise. */
   walkAllS: number | null;
   nowMs: number;
+  /** How often a bus is packed at a stop around a time; null when unknown. */
+  crowdRisk?: CrowdRisk;
 }
 
 /** Nothing worth saying: leaving within this is just "now". */
@@ -48,7 +51,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
     // On foot: only a class gives a reason to wait.
     if (!f.arriveBy) return null;
     const at = f.arriveBy.atMs - (ON_TIME_SLACK_S + f.arriveBy.venueWalkS + f.walkAllS) * 1000;
-    return { at: isoSeconds(at), estimated: false, svc: null, stop: null, board: null, arrive: isoSeconds(at + (f.walkAllS + f.arriveBy.venueWalkS) * 1000) };
+    return { at: isoSeconds(at), estimated: false, svc: null, stop: null, board: null, arrive: isoSeconds(at + (f.walkAllS + f.arriveBy.venueWalkS) * 1000), note: null };
   }
 
   if (!f.arriveBy) {
@@ -56,7 +59,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
     if (!b || b.quality === 'unknown') return null;
     const at = b.fetchedAt + b.boardS * 1000 - b.walkS * 1000 - BUFFER_MS;
     if (at - f.nowMs < NOW_S * 1000) return null;
-    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000) };
+    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000), note: null };
   }
 
   const legs: Leg[] = f.options.length
@@ -65,8 +68,8 @@ export function leaveBy(f: LeaveInput): Leave | null {
   let onTime: (Leave & { ms: number }) | null = null;
   let late: (Leave & { ms: number }) | null = null;
   for (const leg of legs) {
-    const r = forLeg(leg, f.byStop.get(leg.stop.code), f.graph, f.arriveBy, f.nowMs);
-    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: leg.svc, stop: shortStop(leg.stop.name), board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), ms: r.ms };
+    const r = forLeg(leg, f.byStop.get(leg.stop.code), f.graph, f.arriveBy, f.nowMs, f.crowdRisk);
+    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: leg.svc, stop: shortStop(leg.stop.name), board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, ms: r.ms };
     // The latest on-time departure wins; if nothing is on time, the soonest.
     if (!r.late && (!onTime || r.ms > onTime.ms || (r.ms === onTime.ms && onTime.estimated && !r.estimated))) onTime = out;
     if (r.late && (!late || r.ms < late.ms)) late = out;
@@ -82,7 +85,16 @@ export function leaveBy(f: LeaveInput): Leave | null {
   return { ...leave, at: isoSeconds(Math.min(late.ms, f.nowMs)) };
 }
 
-function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number): { ms: number; board: number; arrive: number; estimated: boolean; late: boolean } {
+interface LegLeave {
+  ms: number;
+  board: number;
+  arrive: number;
+  estimated: boolean;
+  late: boolean;
+  note: string | null;
+}
+
+function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number, risk?: CrowdRisk): LegLeave {
   const headway = Math.max(60, headwayFor(graph, leg.svc)) * 1000;
   const walk = leg.walkS * 1000 + BUFFER_MS;
   const latestBoard = arriveBy.atMs - (ON_TIME_SLACK_S + arriveBy.venueWalkS + leg.rideS) * 1000;
@@ -98,9 +110,11 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
 
   if (!live.length) {
     // No live times: arrive a whole headway early and a bus is sure to come.
-    const ms = latestBoard - headway - walk;
-    // With no live times the bus is somewhere in that headway: this is when you reach the stop.
-    return { ms, board: ms + walk, arrive: arriveAfter(latestBoard), estimated: true, late: ms < nowMs };
+    // With no live times the bus is somewhere in that headway: `board` is
+    // when you reach the stop. Often packed then: one more headway early.
+    const crowd = crowdCheck(leg, latestBoard, arriveBy, risk);
+    const ms = latestBoard - headway * (crowd.earlier ? 2 : 1) - walk;
+    return { ms, board: ms + walk, arrive: arriveAfter(latestBoard - (crowd.earlier ? headway : 0)), estimated: true, late: ms < nowMs, note: crowd.note };
   }
 
   const earliest = nowMs + walk;
@@ -112,11 +126,25 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
 
   const fits = buses.filter((b) => b.at <= latestBoard);
   if (fits.length) {
-    const b = fits[fits.length - 1];
-    return { ms: b.at - walk, board: b.at, arrive: arriveAfter(b.at), estimated: b.estimated, late: false };
+    let b = fits[fits.length - 1];
+    const crowd = crowdCheck(leg, b.at, arriveBy, risk);
+    // Often packed: take the one before, when there is one.
+    if (crowd.earlier && fits.length > 1) b = fits[fits.length - 2];
+    const note = crowd.earlier && fits.length === 1 ? crowd.warnOnly : crowd.note;
+    return { ms: b.at - walk, board: b.at, arrive: arriveAfter(b.at), estimated: b.estimated, late: false, note };
   }
   // Nothing gets you there on time: the first bus you can catch.
-  return { ms: buses[0].at - walk, board: buses[0].at, arrive: arriveAfter(buses[0].at), estimated: buses[0].estimated, late: true };
+  return { ms: buses[0].at - walk, board: buses[0].at, arrive: arriveAfter(buses[0].at), estimated: buses[0].estimated, late: true, note: null };
+}
+
+/** Whether the bus you'd wait for is often packed, and what to say. */
+function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk): { earlier: boolean; note: string | null; warnOnly: string | null } {
+  const r = risk?.(leg.svc, leg.stop.code, atMs);
+  if (r == null || r < OFTEN_PACKED) return { earlier: false, note: null, warnOnly: null };
+  const where = shortStop(leg.stop.name);
+  const warnOnly = `${leg.svc} is often packed at ${where} around then`;
+  if (arriveBy.fullBusMargin === false) return { earlier: false, note: warnOnly, warnOnly };
+  return { earlier: true, note: `${warnOnly}, so this is one bus earlier`, warnOnly };
 }
 
 /** Every service from every candidate stop, ignoring service hours. */

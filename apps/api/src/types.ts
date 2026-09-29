@@ -112,7 +112,8 @@ export interface Leave {
    *  the stop (`estimated`). Null when walking. */
   board: string | null;
   /** When you get there that way: the venue for a class, else the stop. ISO. */
-  arrive: string | null;
+  arrive: string | null;  /** A reason the time is earlier than it could be ("D2 is often packed…"). Display verbatim. */
+  note?: string | null;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -121,6 +122,8 @@ export interface ArriveBy {
   atMs: number;
   /** Walk from the destination stop to the venue. */
   venueWalkS: number;
+  /** Aim one bus earlier when the one to wait for is often packed. */
+  fullBusMargin?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,6 +236,8 @@ export interface ResolveInput {
   preferStops?: string[];
   /** Walk to `originCode` when there are no coordinates (home to home stop). */
   originWalkS?: number;
+  /** Metres per second on foot (the user's pace). Defaults to WALK.speedMs. */
+  walkSpeedMs?: number;
   /** Set for a class: leave-by then aims at this, not the next bus. */
   arriveBy?: ArriveBy | null;
 }

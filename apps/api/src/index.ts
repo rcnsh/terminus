@@ -46,6 +46,7 @@ import { readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
 import { handleDownload } from './downloads.ts';
 import { leaveBy } from './leave.ts';
+import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
@@ -124,6 +125,10 @@ export async function answerFor(
     nowMs,
   );
 
+  // Tally who's packed for the full-bus risk, off the response path.
+  if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));
+  const crowdRisk = input.arriveBy && env.DB ? await loadCrowdRisk(env.DB, cands.map((c) => c.stop.code), nowMs) : undefined;
+
   const options = scoreOptions(GRAPH, cands, byStop, nowMs);
   const alt = pickAlt(options);
   const chosen = options[0]?.stop.code ?? fallbackStop?.code ?? '';
@@ -151,6 +156,7 @@ export async function answerFor(
     arriveBy: input.arriveBy,
     walkAllS: walking ? walkAllS : null,
     nowMs,
+    crowdRisk,
   });
 
   // Synchronous, non-blocking, and swallows its own errors. Deliberately not

@@ -8,6 +8,7 @@
 import type { ImportedTrip } from './nusmods.ts';
 import { sgt } from './config.ts';
 import { isoSeconds } from './format.ts';
+import { PACES, type Pace } from './walk.ts';
 import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, termEnded, termName } from './calendar.ts';
 
 export interface Place {
@@ -37,6 +38,12 @@ export interface Profile {
   /** Walk from home to the home stop. Counts when a trip starts from home
    *  and the client sends no location. */
   homeWalkMin: number;
+  /** How fast you walk. Scales every walk except homeWalkMin, which is yours. */
+  walkPace: Pace;
+  /** Aim one bus earlier when the bus you'd wait for is often packed. */
+  fullBusMargin: boolean;
+  /** One-time screens already shown (the web onboarding, "new: walking pace"). */
+  seen: string[];
   /** From the NUSMods import. Replaced wholesale on re-import. */
   trips: ImportedTrip[];
   /** Entered by hand. Survives a re-import. */
@@ -54,6 +61,9 @@ export const DEFAULT_PROFILE: Profile = {
   dayStartMin: 6 * 60,
   dayEndMin: 18 * 60,
   homeWalkMin: 5,
+  walkPace: 'normal',
+  fullBusMargin: true,
+  seen: [],
   trips: [],
   manual: [],
   places: [],
@@ -103,6 +113,24 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean): R
     p[field] = raw[field] as number;
   }
   if (p.dayStartMin >= p.dayEndMin) return { ok: false, error: 'the day must start before it ends' };
+
+  if (raw.walkPace !== undefined) {
+    if (typeof raw.walkPace !== 'string' || !PACES.includes(raw.walkPace as Pace)) return { ok: false, error: 'walkPace must be slow, normal or fast' };
+    p.walkPace = raw.walkPace as Pace;
+  }
+
+  if (raw.fullBusMargin !== undefined) {
+    if (typeof raw.fullBusMargin !== 'boolean') return { ok: false, error: 'fullBusMargin must be true or false' };
+    p.fullBusMargin = raw.fullBusMargin;
+  }
+
+  if (raw.seen !== undefined) {
+    const v = raw.seen;
+    if (!Array.isArray(v) || v.length > 20 || !v.every((x) => typeof x === 'string' && /^[a-z0-9-]{1,32}$/.test(x))) {
+      return { ok: false, error: 'seen must be a short list of names' };
+    }
+    p.seen = [...new Set(v as string[])];
+  }
 
   if (raw.homeWalkMin !== undefined) {
     if (!isInt(raw.homeWalkMin, 0, 30)) return { ok: false, error: 'homeWalkMin must be 0 to 30 minutes' };

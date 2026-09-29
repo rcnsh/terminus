@@ -5,6 +5,7 @@ import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { newPairCode, normalizePairCode } from '../src/accounts.ts';
+import venuesJson from '../data/venues.json' with { type: 'json' };
 
 const BASE = 'https://bus.example.test';
 const INVITED = 'friend@u.nus.edu';
@@ -136,7 +137,7 @@ test('pairing: a code from the web session becomes a device token that can be re
   const { token } = await paired.json();
 
   const me = await (await call(env, '/me', { token })).json();
-  assert.deepEqual(me, { email: INVITED, kind: 'device', needsReimport: false, reimportReason: null, term: null });
+  assert.deepEqual(me, { email: INVITED, kind: 'device', needsReimport: false, reimportReason: null, term: null, onboarding: 'full' });
 
   // Codes are single use.
   assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'x' } })).status, 400);
@@ -545,7 +546,7 @@ test('/me/next: a class carries a leave-by time, moved by the walk from home', a
 test('/me/next between classes counts the walk from the last room to its stop', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
-  // Frozen clock: Thursday 09:00. An 08:00 class in the Arts building (a 164 m
+  // Frozen clock: Thursday 09:00. An 08:00 class in the Arts building (a short
   // walk to AS5) just ended; the next is at 10:00.
   const put = (venue) =>
     call(env, '/me/profile', {
@@ -564,5 +565,45 @@ test('/me/next between classes counts the walk from the last room to its stop', 
   await put('ARTSCTN');
   const b = await (await call(env, '/me/next', { cookie })).json();
   assert.equal(b.dest.label, 'CS2030');
-  assert.equal(Date.parse(a.leave.at) - Date.parse(b.leave.at), Math.round(164 / 1.3) * 1000);
+  assert.equal(Date.parse(a.leave.at) - Date.parse(b.leave.at), Math.round(venuesJson.venues.ARTSCTN.m / 1.3) * 1000);
+});
+
+test('/me/next: a slower walking pace means leaving earlier', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const m = venuesJson.venues.ARTSCTN.m;
+  const put = (walkPace) =>
+    call(env, '/me/profile', {
+      method: 'PUT',
+      cookie,
+      body: {
+        home: { stops: ['PGP'] },
+        walkPace,
+        manual: [
+          { day: 4, arriveByMin: 480, endMin: 530, to: 'AS5', label: 'EC1101E', venue: 'ARTSCTN' },
+          { day: 4, arriveByMin: 600, endMin: 660, to: 'COM3', label: 'CS2030' },
+        ],
+      },
+    });
+  await put('normal');
+  const normal = await (await call(env, '/me/next', { cookie })).json();
+  await put('slow');
+  const slow = await (await call(env, '/me/next', { cookie })).json();
+  // At least the extra time on the room's walk; more when the slower walk
+  // changes which way wins.
+  assert.ok(Date.parse(normal.leave.at) - Date.parse(slow.leave.at) >= (Math.round(m / 1.1) - Math.round(m / 1.3)) * 1000);
+});
+
+test('/me: a new account gets the full setup, an older one just the pace screen, then neither', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const me = async () => (await (await call(env, '/me', { cookie })).json()).onboarding;
+  assert.equal(await me(), 'full');
+  // Saved something before onboarding existed: only what's new.
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] } } });
+  assert.equal(await me(), 'pace');
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, seen: ['pace'] } });
+  assert.equal(await me(), null);
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { seen: ['onboarding'] } });
+  assert.equal(await me(), null);
 });

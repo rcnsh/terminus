@@ -149,7 +149,7 @@ class LiveService : Service() {
                 val catch = answer.catchLine(fmt)
                 b.setContentTitle(answer.leaveHeadline(now, fmt))
                     .setContentText(catch)
-                    .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(catch, answer.goNowLine(fmt)).joinToString("\n")))
+                    .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(catch, answer.leaveNote, answer.goNowLine(fmt)).joinToString("\n")))
                     .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "))
                 val leaveAt = answer.leaveAtMs!!
                 if (leaveAt > now) b.setWhen(leaveAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)

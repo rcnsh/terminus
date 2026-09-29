@@ -36,7 +36,8 @@
     <ul>
       <li><strong>Your email address</strong>, to send sign-in links. No password is ever stored.</li>
       <li><strong>Your timetable</strong>: each class's day, time, venue and nearest bus stop, and the NUSMods share link you imported.</li>
-      <li><strong>Your settings</strong>: home stops (stop names only, never your address or coordinates), saved places, and your gap and day-hours preferences.</li>
+      <li><strong>Your settings</strong>: home stops (stop names only, never your address or coordinates), the minutes it takes you to walk to them, your walking pace, saved places, your gap and day-hours preferences, and which one-time setup screens you have seen.</li>
+      <li><strong>How full buses are, in total</strong>: when a bus is about to reach a stop someone asked about, terminus adds one to a count of how often that service is packed at that stop, by kind of day and half hour. The count has no link to you or your request; the bus's plate number is kept for two days only so the same bus is not counted twice.</li>
       <li><strong>Your devices</strong>: the name each paired device reported (for example "Google Pixel 8"), when it was added and when it was last used. Sign-in and device tokens are stored only as one-way hashes.</li>
     </ul>
 
@@ -58,6 +59,7 @@
       <li><strong>unpkg</strong> for the API documentation page only.</li>
     </ul>
     <p>When you import a timetable, terminus asks <strong>NUSMods</strong> for the timetables of the modules in your link. It sends module codes only, nothing about you.</p>
+    <p>Walking times follow footpaths from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> (map data &copy; OpenStreetMap contributors), with room positions from NUSMods. Both were downloaded once to work out distances; nothing about you is ever sent to either.</p>
 
     <h2>How long it is kept</h2>
     <ul>

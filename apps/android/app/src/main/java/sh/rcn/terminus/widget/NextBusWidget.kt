@@ -190,7 +190,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Text(line, style = muted, maxLines = if (large) 2 else 1)
                         if (roomy && !old) answer.goNowLine(fmt)?.let { Text(it, style = muted, maxLines = 1) }
                         if (large && !old) {
-                            if (answer.leaveEstimated) Text("~ estimated from the usual bus gap", style = tiny, maxLines = 1)
+                            if (answer.leaveNote != null) Text(answer.leaveNote, style = tiny, maxLines = 2)
+                            else if (answer.leaveEstimated) Text("~ estimated from the usual bus gap", style = tiny, maxLines = 1)
                             else qualityNote(answer.quality)?.let { Text(it, style = muted, maxLines = 1) }
                         }
                         if (large) {
