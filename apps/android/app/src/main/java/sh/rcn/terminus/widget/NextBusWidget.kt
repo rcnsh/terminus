@@ -199,6 +199,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         if (roomy && !old) answer.goNowLine?.let { Text(it, style = muted, maxLines = 1) }
                         if (large && !old) {
                             if (answer.leaveNote != null) Text(answer.leaveNote, style = tiny, maxLines = 2)
+                            // Deliberately shorter than the card's estimate note: one line of widget.
                             else if (answer.leaveEstimated) Text("~ estimated from the usual bus gap", style = tiny, maxLines = 1)
                             else answer.qualityText?.let { Text(it, style = muted, maxLines = 1) }
                         }
