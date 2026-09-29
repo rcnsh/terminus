@@ -17,28 +17,53 @@ fetch('/me', { credentials: 'same-origin' })
 
 // The hero's text is centred beside the phone, so opening "How to install"
 // would re-centre it and shove the heading and buttons up, and the taller row
-// would then drag the phone down. While it's open, both columns are pinned
-// where they were and only the text grows, downward. Done in the click,
-// before the details opens, so no shifted frame is ever painted.
+// would drag the phone and everything below it down. While it's open, both
+// columns are pinned where they were and the row keeps its height, so the
+// steps spill into the empty space under the hero and nothing moves. If they
+// would reach the next heading (narrow two-column widths wrap more), the row
+// grows instead, pushing only what's below. All of it happens in the click,
+// before anything is painted.
 const install = document.getElementById('install');
-const holdHeroText = (opening) => {
+const twoColumns = window.matchMedia('(min-width: 861px)');
+const setInstall = (open) => {
   const hero = document.querySelector('.hero');
   const cols = [...hero.children];
-  for (const c of cols) {
-    c.style.alignSelf = '';
-    c.style.marginTop = '';
+  const release = () => {
+    hero.style.gridTemplateRows = '';
+    for (const c of cols) {
+      c.style.alignSelf = '';
+      c.style.marginTop = '';
+    }
+  };
+  if (!open || !twoColumns.matches) {
+    release();
+    install.open = open;
+    return;
   }
-  if (!opening || !window.matchMedia('(min-width: 861px)').matches) return;
-  const start = hero.getBoundingClientRect().top + parseFloat(getComputedStyle(hero).paddingTop);
+  const padTop = parseFloat(getComputedStyle(hero).paddingTop);
+  const start = hero.getBoundingClientRect().top + padTop;
   const tops = cols.map((c) => c.getBoundingClientRect().top - start);
+  const rowH = hero.getBoundingClientRect().height - padTop - parseFloat(getComputedStyle(hero).paddingBottom);
   cols.forEach((c, i) => {
     c.style.alignSelf = 'start';
     c.style.marginTop = `${tops[i]}px`;
   });
+  hero.style.gridTemplateRows = `${rowH}px`;
+  install.open = true;
+  // Reading layout here forces it, still before the next paint.
+  const next = hero.nextElementSibling;
+  if (next && cols[0].getBoundingClientRect().bottom > next.getBoundingClientRect().top - 16) hero.style.gridTemplateRows = '';
 };
-install.querySelector('summary').addEventListener('click', () => holdHeroText(!install.open));
-// A held offset is meaningless once the layout changes.
-window.matchMedia('(min-width: 861px)').addEventListener('change', () => holdHeroText(false));
+install.querySelector('summary').addEventListener('click', (e) => {
+  e.preventDefault();
+  setInstall(!install.open);
+});
+// A held layout is meaningless once the layout changes.
+twoColumns.addEventListener('change', () => {
+  const open = install.open;
+  setInstall(false);
+  install.open = open;
+});
 
 // The header's download menu, placed under its button. It closes on scroll
 // rather than drifting away from the button it belongs to.
@@ -67,8 +92,7 @@ window.matchMedia('(min-width: 861px)').addEventListener('change', () => holdHer
     document.getElementById('dl-install').addEventListener('click', (e) => {
       e.preventDefault();
       close();
-      if (!install.open) holdHeroText(true);
-      install.open = true;
+      if (!install.open) setInstall(true);
       install.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
     });
   }
