@@ -90,7 +90,7 @@ export function cardFor(a: MeAnswer, h12 = false): Card {
     crowd: crowd ? CROWD[crowd] : null,
     quality: QUALITY[a.quality] ?? null,
     leaveBy: l ? `Leave by ${t}${at(l.at)}` : null,
-    leaveVia: l?.svc ? `catch the ${l.board ? `${t}${at(l.board)} ` : ''}${l.svc} at ${l.stop}` : null,
+    leaveVia: l?.svc ? `catch the ${l.board ? `${t}${at(l.board)} ` : ''}${l.svc} at ${l.stop}${l.off ? `, off at ${l.off}` : ''}` : null,
     catch: null,
     arrive: null,
     catchLine: null,
@@ -102,7 +102,9 @@ export function cardFor(a: MeAnswer, h12 = false): Card {
   if (kind !== 'class' || !l || !a.timing) return card;
 
   const classAt = Date.parse(a.timing.classAt);
-  card.catch = l.svc ? (l.board ? `Catch the ${t}${at(l.board)} ${l.svc} at ${l.stop}` : `Catch the ${l.svc} at ${l.stop}`) : 'Walk there';
+  // The bus stops across the road from the class's stop: say where to get off.
+  const off = l.off ? `, off at ${l.off}` : '';
+  card.catch = l.svc ? (l.board ? `Catch the ${t}${at(l.board)} ${l.svc} at ${l.stop}${off}` : `Catch the ${l.svc} at ${l.stop}${off}`) : 'Walk there';
   if (l.arrive) {
     const arrive = Date.parse(l.arrive);
     const slack = slackText((classAt - arrive) / 1000);

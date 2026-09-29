@@ -644,6 +644,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 board: { type: ['string', 'null'], format: 'date-time', description: 'When that bus leaves the stop. With `estimated`, when you reach the stop. Null when walking.' },
                 arrive: { type: ['string', 'null'], format: 'date-time', description: 'When you get there by leaving at `at`: the venue for a class, otherwise the stop.' },
                 note: { type: ['string', 'null'], description: 'Why the time is earlier than it could be, e.g. the bus is often packed then. Display verbatim.' },
+                off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination (e.g. `Opp NUSS` for AS 5). `arrive` includes the walk back across. Absent otherwise.' },
                 estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
               },
             },

@@ -13,8 +13,8 @@
  */
 
 import type { ArriveBy, Candidate, Graph, Leave, ScoredOption, StopArrivals } from './types.ts';
-import { RIDE, WALK } from './config.ts';
-import { headwayFor, resolveBerths } from './resolve.ts';
+import { WALK } from './config.ts';
+import { headwayFor, legRideS, resolveBerths } from './resolve.ts';
 import { ON_TIME_SLACK_S } from './profile.ts';
 import { isoSeconds, shortStop } from './format.ts';
 import { type CrowdRisk, OFTEN_PACKED } from './crowd.ts';
@@ -44,7 +44,11 @@ interface Leg {
   stop: { code: string; name: string };
   walkS: number;
   rideS: number;
+  off?: { name: string };
 }
+
+/** `off` only when there is one, so answers without a crossing are unchanged. */
+const offOf = (leg: { off?: { name: string } }) => (leg.off ? { off: shortStop(leg.off.name) } : {});
 
 export function leaveBy(f: LeaveInput): Leave | null {
   if (f.walkAllS != null) {
@@ -59,17 +63,17 @@ export function leaveBy(f: LeaveInput): Leave | null {
     if (!b || b.quality === 'unknown') return null;
     const at = b.fetchedAt + b.boardS * 1000 - b.walkS * 1000 - BUFFER_MS;
     if (at - f.nowMs < NOW_S * 1000) return null;
-    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000), note: null };
+    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000), note: null, ...offOf(b) };
   }
 
   const legs: Leg[] = f.options.length
-    ? f.options.map((o) => ({ svc: o.svc, stop: o.stop, walkS: o.walkS, rideS: o.rideS }))
+    ? f.options.map((o) => ({ svc: o.svc, stop: o.stop, walkS: o.walkS, rideS: o.rideS, off: o.off }))
     : fallbackLegs(f.candidates);
   let onTime: (Leave & { ms: number }) | null = null;
   let late: (Leave & { ms: number }) | null = null;
   for (const leg of legs) {
     const r = forLeg(leg, f.byStop.get(leg.stop.code), f.graph, f.arriveBy, f.nowMs, f.crowdRisk);
-    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: leg.svc, stop: shortStop(leg.stop.name), board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, ms: r.ms };
+    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: leg.svc, stop: shortStop(leg.stop.name), board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, ...offOf(leg), ms: r.ms };
     // The latest on-time departure wins; if nothing is on time, the soonest.
     if (!r.late && (!onTime || r.ms > onTime.ms || (r.ms === onTime.ms && onTime.estimated && !r.estimated))) onTime = out;
     if (r.late && (!late || r.ms < late.ms)) late = out;
@@ -149,5 +153,5 @@ function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk
 
 /** Every service from every candidate stop, ignoring service hours. */
 function fallbackLegs(cands: Candidate[]): Leg[] {
-  return cands.flatMap((c) => c.legs.map((l) => ({ svc: l.svc, stop: c.stop, walkS: c.walkS, rideS: l.hops * RIDE.secondsPerHop })));
+  return cands.flatMap((c) => c.legs.map((l) => ({ svc: l.svc, stop: c.stop, walkS: c.walkS, rideS: legRideS(l), off: l.off })));
 }

@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { stopPairs } from '../src/pairs.ts';
-import { GRAPH } from '../src/graph.ts';
+import { GRAPH, mergeOpposites } from '../src/graph.ts';
+import { candidateStops, legRideS } from '../src/resolve.ts';
+import { RIDE } from '../src/config.ts';
+import oppositesJson from '../data/opposites.json' with { type: 'json' };
 
 const stop = (code, name, lat, lon, opposite = null) => ({ code, name, longName: name, lat, lon, opposite });
 
@@ -66,4 +69,50 @@ test('on the real graph: every stop once, pairs across real roads', () => {
   const d2 = kr.sides.map((s) => s.services.find((c) => c.svc === 'D2')?.next);
   assert.equal(d2.length, 2);
   assert.notEqual(d2[0], d2[1]);
+});
+
+test('hand-listed pairs join the scraped ones and stay mutual', () => {
+  const stops = [stop('A', 'A', 1, 1, 'A-OPP'), stop('A-OPP', 'Opp A', 1, 1, 'A'), stop('B', 'B', 1, 1), stop('C', 'C', 1, 1)];
+  const merged = mergeOpposites(stops, [['A', 'B'], ['C', 'NOPE']]);
+  const by = Object.fromEntries(merged.map((s) => [s.code, s.opposite]));
+  assert.deepEqual(by, { A: 'B', B: 'A', 'A-OPP': null, C: null }, "A's old twin is let go; an unknown code is ignored");
+  assert.equal(stops[0].opposite, 'A-OPP', 'the input is not mutated');
+});
+
+test('the hand-listed pairs: BIZ 2 and Opp HSSML, AS 5 and Opp NUSS', () => {
+  const by = new Map(GRAPH.stops.map((s) => [s.code, s]));
+  for (const [a, b] of oppositesJson.pairs) {
+    assert.ok(by.has(a) && by.has(b), `${a} and ${b} are real stops`);
+    assert.equal(by.get(a).opposite, b);
+    assert.equal(by.get(b).opposite, a);
+  }
+  for (const s of GRAPH.stops) if (s.opposite) assert.equal(by.get(s.opposite)?.opposite, s.code, `${s.code} pairs both ways`);
+  assert.equal(by.get('SDE3-OPP').opposite ?? null, null, 'SDE3-OPP has no twin');
+  const ids = stopPairs(GRAPH).places.filter((p) => p.sides.length === 2).map((p) => p.sides.map((s) => s.code).join('+'));
+  assert.ok(ids.includes('AS5+NUSS-OPP') && ids.includes('BIZ2+HSSML-OPP'), ids.join(' '));
+});
+
+test('a bus that stops on the far side counts, with the walk back across in its ride time', () => {
+  // PGP to AS 5: R2 calls at Opp NUSS two stops on; A1 goes the long way round.
+  const [c] = candidateStops(GRAPH, { to: 'AS5', originCode: 'PGP', lat: null, lon: null });
+  const r2 = c.legs.find((l) => l.svc === 'R2');
+  const a1 = c.legs.find((l) => l.svc === 'A1');
+  assert.ok(r2 && r2.crossS > 60 && r2.crossS < 240, `R2 crosses in ${r2?.crossS}s`);
+  assert.equal(legRideS(r2), r2.hops * RIDE.secondsPerHop + r2.crossS);
+  assert.ok(a1 && !a1.crossS, 'the bus to the stop itself has no crossing');
+  // Both sides reachable: the cheaper one wins, crossing counted.
+  const [it] = candidateStops(GRAPH, { to: 'AS5', originCode: 'IT', lat: null, lon: null });
+  for (const l of it.legs) assert.ok(legRideS(l) > 0);
+});
+
+test('the class card names the stop to get off at, only when there is one', async () => {
+  const { cardFor } = await import('../src/card.ts');
+  const { default: fixture } = await import('./fixtures/answers/class-from-dorm.json', { with: { type: 'json' } });
+  const { card: _card, refreshAt: _r, ...answer } = fixture;
+  const plain = cardFor(answer);
+  assert.equal(plain.catch, 'Catch the ~09:42 R2 at PGP');
+  const off = cardFor({ ...answer, leave: { ...answer.leave, off: 'Opp NUSS' } });
+  assert.equal(off.catch, 'Catch the ~09:42 R2 at PGP, off at Opp NUSS');
+  assert.match(off.catchLine, /^Catch the ~09:42 R2 at PGP, off at Opp NUSS · arrive /);
+  assert.match(off.leaveVia, /R2 at PGP, off at Opp NUSS$/);
 });

@@ -164,6 +164,9 @@ export interface Leave {
   arrive: string | null;
   /** A reason the time is earlier than it could be ("D2 is often packed…"). Display verbatim. */
   note?: string | null;
+  /** Where to get off, when the bus only stops across the road from the
+   *  destination. Absent otherwise. Short stop name. */
+  off?: string;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -232,6 +235,11 @@ export interface Leg {
   svc: string;
   /** Stops ridden from the boarding stop to the destination. */
   hops: number;
+  /** Seconds to walk across from where the bus stops to the destination's
+   *  side of the road, when it only calls at the twin. Absent when it's 0. */
+  crossS?: number;
+  /** Where to get off, when that's the twin rather than the destination. */
+  off?: Stop;
 }
 
 export interface Candidate {
@@ -270,6 +278,8 @@ export interface ScoredOption {
    * route sequence carries berth codes, this can only be declared, not fixed.
    */
   ambiguousBerth: boolean;
+  /** Where to get off, when the bus only stops across the road from the destination. */
+  off?: Stop;
 }
 
 export interface ResolveInput {
