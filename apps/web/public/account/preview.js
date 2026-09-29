@@ -54,7 +54,8 @@ export async function renderPreview() {
     head.innerHTML = MOON; // a constant, never data
     head.append(el('div', { class: 'big', textContent: a.label }));
     box.className = 'widget';
-    box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), chips);
+    // replaceChildren prints a null as the text "null": no places, no chips.
+    box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), chips ?? '');
     return;
   }
   if (a.card?.kind === 'class' && !isOld(a)) {
