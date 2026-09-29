@@ -34,7 +34,23 @@ data class NextAnswer(
     val refreshAtMs: Long? = null,
     /** Already at the destination: no bus, no countdown. */
     val arrived: Boolean = false,
+    /** The latest time to set off, epoch ms; for a class, the latest that's still on time. */
+    val leaveAtMs: Long? = null,
+    /** Rests on a headway, not a live time: shown with a "~". */
+    val leaveEstimated: Boolean = false,
+    /** The bus the leave time is for, and its stop. Null when walking. */
+    val leaveSvc: String? = null,
+    val leaveStop: String? = null,
+    /** For a class, when it starts, epoch ms. */
+    val classAtMs: Long? = null,
 ) {
+    /** "Leave by 09:38 · D2 from PGP", "Leave by ~09:38 …", or "Leave now …" once it has passed. */
+    fun leaveText(now: Long, format: (Long) -> String): String? {
+        val at = leaveAtMs ?: return null
+        val bus = leaveSvc?.let { " · $it from $leaveStop" }.orEmpty()
+        return if (now >= at) "Leave now$bus" else "Leave by ${if (leaveEstimated) "~" else ""}${format(at)}$bus"
+    }
+
     /** "D2 · 09:42" when there's a departure time; otherwise the label as sent.
      *  A timetable estimate gets a "~": it is not a live time. */
     fun clockLabel(format: (Long) -> String): String {
@@ -64,6 +80,11 @@ data class NextAnswer(
                 departsAtMs = o.optStringOrNull("departsAt")?.let(::parseInstant),
                 refreshAtMs = o.optStringOrNull("refreshAt")?.let(::parseInstant),
                 arrived = o.optBoolean("arrived", false),
+                leaveAtMs = o.optJSONObject("leave")?.optStringOrNull("at")?.let(::parseInstant),
+                leaveEstimated = o.optJSONObject("leave")?.optBoolean("estimated", false) ?: false,
+                leaveSvc = o.optJSONObject("leave")?.optStringOrNull("svc"),
+                leaveStop = o.optJSONObject("leave")?.optStringOrNull("stop"),
+                classAtMs = o.optJSONObject("timing")?.optStringOrNull("classAt")?.let(::parseInstant),
                 timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
                 timingText = o.optJSONObject("timing")?.optStringOrNull("text"),
                 // The recommended bus's crowd, not whichever bus is first in the list.

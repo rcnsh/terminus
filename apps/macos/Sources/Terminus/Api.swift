@@ -29,10 +29,13 @@ struct NextAnswer: Decodable {
     let refreshAt: String?
     let timing: Timing?
     let arrivals: [ArrivalLite]?
+    /// The latest time to set off; for a class, the latest that's still on time.
+    let leave: Leave?
 
     struct Timing: Decodable { let status: String?; let text: String? }
+    struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String? }
 
-    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived }
+    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave }
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -50,6 +53,7 @@ struct NextAnswer: Decodable {
         timing = try? c.decodeIfPresent(Timing.self, forKey: .timing)
         arrivals = try? c.decodeIfPresent([ArrivalLite].self, forKey: .arrivals)
         arrived = (try? c.decodeIfPresent(Bool.self, forKey: .arrived)) ?? false
+        leave = try? c.decodeIfPresent(Leave.self, forKey: .leave)
     }
     struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
 
@@ -58,6 +62,13 @@ struct NextAnswer: Decodable {
     var service: String { label.components(separatedBy: " · ").first ?? label }
     /// Crowd on the recommended bus, not whichever is first in the list.
     var crowd: String? { arrivals?.first { $0.svc == service }?.crowd }
+    /// "Leave by 09:38 · D2 from PGP", "~" for an estimate, "Leave now" once it has passed.
+    func leaveText(now: Date = Date()) -> String? {
+        guard let l = leave, let at = parseISODate(l.at) else { return nil }
+        let bus = l.svc.map { " · \($0) from \(l.stop ?? "")" } ?? ""
+        if now >= at { return "Leave now\(bus)" }
+        return "Leave by \(l.estimated == true ? "~" : "")\(campusTime(at))\(bus)"
+    }
     var hasLiveTime: Bool { departure != nil && quality != "unknown" && quality != "ended" }
 }
 

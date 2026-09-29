@@ -9,6 +9,14 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- Re-arms the widget refresh after a restart. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- "Time to leave" for class, if turned on in the app. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The heads-up has to be on time. Granted at install; the app is
+         sideloaded, so Play's limit on this permission doesn't apply. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- The optional live notification during your day. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="false"
@@ -73,5 +81,22 @@
                 <action android:name="android.intent.action.LOCALE_CHANGED" />
             </intent-filter>
         </receiver>
+        <!-- Leave-alert alarms. Only this app's own PendingIntents reach it. -->
+        <receiver
+            android:name=".LeaveReceiver"
+            android:exported="false" />
+        <!-- Live notification. specialUse: none of the typed services fit a
+             bus countdown, and dataSync is capped at 6 hours a day. -->
+        <service
+            android:name=".LiveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Live campus bus countdown in an ongoing notification, on only while the user's day is on and the user has turned it on." />
+        </service>
+        <receiver
+            android:name=".LiveReceiver"
+            android:exported="false" />
     </application>
 </manifest>

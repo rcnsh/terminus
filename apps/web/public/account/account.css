@@ -19,6 +19,7 @@
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 20rem; gap: 20px; align-items: start; padding-top: 8px; }
 .col { display: grid; gap: 16px; min-width: 0; }
 .side { position: sticky; top: 16px; }
+.side .eyebrow { margin-bottom: 10px; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .side { position: static; order: -1; }
@@ -37,6 +38,10 @@
 }
 .btn.wide { width: 100%; }
 .locate { margin-top: 10px; font-size: 0.9rem; }
+label[for="home-walk"] { margin-top: 14px; }
+
+/* Preview: when to set off, under the detail line. */
+.widget .leave { margin-top: 8px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 
 .banner {
   border-radius: var(--radius); padding: 14px 16px; font-size: 0.95rem;

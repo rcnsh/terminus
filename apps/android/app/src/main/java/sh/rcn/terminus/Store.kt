@@ -66,6 +66,21 @@ class Store(context: Context) {
         get() = prefs.getString(KEY_LATEST, null)
         set(value) = prefs.edit().putString(KEY_LATEST, value).apply()
 
+    /** "Notify me when to leave for class". Off until the user turns it on. */
+    var leaveAlerts: Boolean
+        get() = prefs.getBoolean(KEY_LEAVE_ALERTS, false)
+        set(value) = prefs.edit().putBoolean(KEY_LEAVE_ALERTS, value).apply()
+
+    /** The live notification during your day (LiveService). */
+    var liveUpdates: Boolean
+        get() = prefs.getBoolean(KEY_LIVE, false)
+        set(value) = prefs.edit().putBoolean(KEY_LIVE, value).apply()
+
+    /** The class (its start, epoch ms) the last heads-up was for: one per class. */
+    var leaveNotifiedFor: Long
+        get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
+        set(value) = prefs.edit().putLong(KEY_LEAVE_NOTIFIED, value).apply()
+
     fun clear() = synchronized(Store) {
         prefs.edit().clear().commit()
         cached = null
@@ -108,5 +123,8 @@ class Store(context: Context) {
         const val KEY_ANSWER = "answer"
         const val KEY_FETCHED = "fetched"
         const val KEY_ERROR = "error"
+        const val KEY_LEAVE_ALERTS = "leave-alerts"
+        const val KEY_LIVE = "live-updates"
+        const val KEY_LEAVE_NOTIFIED = "leave-notified"
     }
 }

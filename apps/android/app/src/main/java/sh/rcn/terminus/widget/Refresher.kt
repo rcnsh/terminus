@@ -21,6 +21,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Api
+import sh.rcn.terminus.LeaveAlerts
+import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NextAnswer
@@ -37,6 +39,9 @@ import java.util.concurrent.TimeUnit
  *   job: Doze defers jobs for hours, and a departed bus must not sit bright.
  * - a 30-minute periodic job as the floor, in case an alarm is missed.
  * - after a reboot or app update, and on a time or timezone change.
+ *
+ * Leave alerts (LeaveAlerts) ride on the same chain, so it also runs with no
+ * widget when they are on: then only when the plan changes, plus the floor.
  */
 object Refresher {
     private const val WORK = "terminus-refresh"
@@ -66,20 +71,34 @@ object Refresher {
             if (e.status == 401) {
                 store.token = null
                 cancel(ctx)
+            } else {
+                armFromCache(ctx, store)
             }
             store.lastError = if (e.status == 401) "Device removed. Pair again in the app." else e.message
         } catch (e: Exception) {
             store.lastError = "Offline"
+            armFromCache(ctx, store)
         }
         redrawWidgets(ctx)
     }
 
-    /** When this answer next needs a network refresh. */
-    fun nextRefreshAt(answer: NextAnswer, fetchedAt: Long, now: Long): Long {
+    /** Offline when a leave check fires: the last answer's time beats no heads-up. */
+    private fun armFromCache(ctx: Context, store: Store) {
+        store.lastAnswer()?.let { (answer, _) -> LeaveAlerts.arm(ctx, answer) }
+    }
+
+    /** Anything on screen, or on the lock screen, that needs this chain. */
+    fun active(ctx: Context): Boolean = widgetCount(ctx) > 0 || Store(ctx).let { (it.leaveAlerts || it.liveUpdates) && it.paired }
+
+    /**
+     * When this answer next needs a network refresh. With no widget, only
+     * when the plan changes: the leave check fetches its own fresh times.
+     */
+    fun nextRefreshAt(answer: NextAnswer, fetchedAt: Long, now: Long, widget: Boolean = true): Long {
         val marks = buildList {
             answer.refreshAtMs?.let(::add)
             // A rest answer holds until the day starts; it does not age.
-            if (answer.mode != "rest") {
+            if (widget && answer.mode != "rest") {
                 answer.departsAtMs?.let { add(it + DEPARTED_GRACE_MS + 1_000) }
                 add(fetchedAt + MAX_AGE_MS)
             }
@@ -87,10 +106,11 @@ object Refresher {
         return (marks.minOrNull() ?: (fetchedAt + MAX_AGE_MS)).coerceAtLeast(now + MIN_GAP_MS)
     }
 
-    /** Arm the next refresh. Only while a widget is on the home screen. */
+    /** Arm the next refresh, and the leave alert. Only while something needs them. */
     fun scheduleNext(ctx: Context, answer: NextAnswer, fetchedAt: Long) {
-        if (widgetCount(ctx) == 0) return
-        val at = nextRefreshAt(answer, fetchedAt, System.currentTimeMillis())
+        LeaveAlerts.arm(ctx, answer)
+        if (!active(ctx)) return
+        val at = nextRefreshAt(answer, fetchedAt, System.currentTimeMillis(), widget = widgetCount(ctx) > 0)
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         // Honoured in Doze (at most every ~9 min there) and needs no exact-alarm
         // permission. The system may run it a few minutes late; the widget
@@ -108,7 +128,7 @@ object Refresher {
     }
 
     fun schedule(ctx: Context) {
-        if (widgetCount(ctx) == 0) return
+        if (!active(ctx)) return
         val request = PeriodicWorkRequestBuilder<RefreshWorker>(30, TimeUnit.MINUTES)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
@@ -116,6 +136,15 @@ object Refresher {
     }
 
     fun cancel(ctx: Context) {
+        WorkManager.getInstance(ctx).cancelUniqueWork(WORK)
+        ctx.getSystemService(AlarmManager::class.java)?.cancel(alarmIntent(ctx))
+        LeaveAlerts.cancel(ctx)
+        LiveService.stop(ctx)
+    }
+
+    /** The last widget went away: stop, unless leave alerts still need the chain. */
+    fun widgetsGone(ctx: Context) {
+        if (active(ctx)) return
         WorkManager.getInstance(ctx).cancelUniqueWork(WORK)
         ctx.getSystemService(AlarmManager::class.java)?.cancel(alarmIntent(ctx))
     }
@@ -153,7 +182,9 @@ class RefreshReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Refresher.ACTION_REFRESH, Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                if (Refresher.widgetCount(context) > 0) {
+                // Boot or update: the live notification comes back if it was on.
+                if (intent.action != Refresher.ACTION_REFRESH) LiveService.start(context)
+                if (Refresher.active(context)) {
                     Refresher.refreshSoon(context)
                     Refresher.schedule(context)
                 }

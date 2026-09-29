@@ -45,6 +45,7 @@ import { accountsConfigured } from './accounts.ts';
 import { readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
 import { handleDownload } from './downloads.ts';
+import { leaveBy } from './leave.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
@@ -140,6 +141,17 @@ export async function answerFor(
     arrivals,
     nowMs,
   });
+  // departsAt null with an arrival time: the answer is to walk.
+  const walking = answer.departsAt == null && answer.arriveAt != null;
+  answer.leave = leaveBy({
+    options,
+    candidates: cands,
+    byStop,
+    graph: GRAPH,
+    arriveBy: input.arriveBy,
+    walkAllS: walking ? walkAllS : null,
+    nowMs,
+  });
 
   // Synchronous, non-blocking, and swallows its own errors. Deliberately not
   // behind waitUntil: there is nothing to await.
@@ -222,6 +234,7 @@ export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: numbe
     asOf: new Date(nowMs).toISOString(),
     arrivals: [],
     arrived: true,
+    leave: null,
   };
 }
 

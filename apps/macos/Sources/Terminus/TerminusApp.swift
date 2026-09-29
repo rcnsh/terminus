@@ -566,6 +566,7 @@ private struct AnswerDetail: View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
+                if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
                 if a.timing?.text != nil || crowdWord(a.crowd) != nil {
                     HStack(spacing: 6) {
                         if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .green) }

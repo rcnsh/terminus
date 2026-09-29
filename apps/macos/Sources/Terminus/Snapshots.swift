@@ -8,10 +8,12 @@ enum Snapshots {
     static func render(to dir: String) {
         // Milliseconds, like the API used to send: keeps the parser honest.
         let departs = ISO8601DateFormatter().string(from: Date().addingTimeInterval(240)).replacingOccurrences(of: "Z", with: ".000Z")
+        let leaves = ISO8601DateFormatter().string(from: Date().addingTimeInterval(1080))
         let json = """
         {"label":"D2 · 4 min","detail":"PGP · 3 min walk · UTown ~12 min · or A1 9 min","alt":"A1 · 9 min","stop":{"code":"PGP","name":"PGP"},
          "departsAt":"\(departs)",
          "timing":{"status":"on-time","text":"Arrive 09:52 · 8 min early"},
+         "leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"},
          "arrivals":[{"svc":"D2","crowd":"low"}],
          "quality":"live","asOf":"2026-09-29T01:00:00Z","mode":"trip","dest":{"to":"UTOWN","label":"GEA1000 @ UTown","why":"class"},
          "places":[{"key":"mrt","label":"KR MRT"},{"key":"utown","label":"UTown"},{"key":"gym","label":"Gym"}]}

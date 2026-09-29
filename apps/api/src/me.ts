@@ -29,7 +29,7 @@ import {
   saveProfileJson,
   sessionCookie,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, isResting, parseProfile, planChangesAt, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
+import { DEFAULT_PROFILE, MAX_VENUE_WALK_S, PROFILE_LIMITS, type Profile, classStartMs, isResting, parseProfile, planChangesAt, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
@@ -104,6 +104,7 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
   return {
     ...structuredClone(DEFAULT_PROFILE),
     gapHours: typeof p.gapHours === 'number' ? p.gapHours : DEFAULT_PROFILE.gapHours,
+    homeWalkMin: typeof p.homeWalkMin === 'number' ? p.homeWalkMin : DEFAULT_PROFILE.homeWalkMin,
     home: p.home?.stops?.some(ok) ? { stops: p.home.stops.filter(ok) } : null,
     trips: (p.trips ?? []).filter((t) => ok(t.to)),
     manual: (p.manual ?? []).filter((t) => ok(t.to)),
@@ -410,12 +411,22 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
     };
   }
   if (dest) {
-    const input: ResolveInput = { lat, lon, to: dest.to, originCode: lat === null ? dest.from : null, preferStops };
+    const venueM = dest.trip?.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
+    const venueWalkS = Math.round(venueM / WALK.speedMs);
+    const input: ResolveInput = {
+      lat,
+      lon,
+      to: dest.to,
+      originCode: lat === null ? dest.from : null,
+      preferStops,
+      // Starting from home without a location: the walk to the stop counts.
+      originWalkS: lat === null && dest.from !== null && dest.from === homeStop ? profile.homeWalkMin * 60 : 0,
+      arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS } : null,
+    };
     const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
     // For a class, say whether you'll make it: stop arrival plus the walk
     // from the stop to the venue, against the start time.
-    const venueM = dest.trip?.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
-    const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, Math.round(venueM / WALK.speedMs), nowMs) : null;
+    const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs) : null;
     return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, timing, places };
   }
 
@@ -423,7 +434,14 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   if (lat === null && !homeStop) {
     return { ...setupAnswer(nowMs, 'Set up', 'Add your timetable or home on the account page, or send your location'), mode: 'nearby', dest: null, places };
   }
-  const input: ResolveInput = { lat, lon, to: null, originCode: lat === null ? homeStop : null, preferStops };
+  const input: ResolveInput = {
+    lat,
+    lon,
+    to: null,
+    originCode: lat === null ? homeStop : null,
+    preferStops,
+    originWalkS: lat === null ? profile.homeWalkMin * 60 : 0,
+  };
   const answer = await deps.answerFor(env, ctx, input, null, nowMs);
   return { ...answer, mode: 'nearby', dest: null, places };
 }

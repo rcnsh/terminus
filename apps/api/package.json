@@ -7,7 +7,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "node --test test/logic.test.js test/worker.smoke.js test/nusmods.test.js test/campus.test.js test/profile.test.js test/accounts.test.js test/calendar.test.js test/monitor.test.js",
+    "test": "node --test test/logic.test.js test/worker.smoke.js test/nusmods.test.js test/campus.test.js test/profile.test.js test/accounts.test.js test/calendar.test.js test/monitor.test.js test/leave.test.js",
     "test:legacy": "node --test --experimental-strip-types test/logic.test.js test/worker.smoke.js test/campus.test.js",
     "typecheck": "tsc --noEmit",
     "dev": "wrangler dev",

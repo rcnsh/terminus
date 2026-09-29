@@ -104,6 +104,13 @@ function isOld(a, fetchedAt) {
   return now - fetchedAt > 15 * 60_000;
 }
 
+/** "Leave by 09:38", "~" for a headway estimate, "Leave now" once it has passed. */
+function leaveText(l) {
+  const bus = l.svc ? ` · ${l.svc} from ${l.stop}` : '';
+  if (Date.now() >= Date.parse(l.at)) return `Leave now${bus}`;
+  return `Leave by ${l.estimated ? '~' : ''}${clock(l.at)}${bus}`;
+}
+
 /** Renders /me/next the way the widget does, so settings changes show up. */
 async function renderPreview() {
   const box = $('#preview');
@@ -142,6 +149,7 @@ async function renderPreview() {
       el('div', { class: 'where', textContent: where }),
       el('div', { class: 'big', textContent: big }),
       el('div', { class: 'detail', textContent: old ? 'Old times · refreshing' : a.detail }),
+      a.leave && !old ? el('div', { class: 'leave', textContent: leaveText(a.leave) }) : null,
       a.timing && !old ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
       notes ? el('div', { class: 'note', textContent: notes }) : null,
       chips,
@@ -237,6 +245,7 @@ function renderHome() {
   $('#home-1').replaceWith(Object.assign(stopSelect(now[0], pick(0), { blank: 'Main stop' }), { id: 'home-1' }));
   $('#home-2').replaceWith(Object.assign(stopSelect(now[1], pick(1), { blank: 'Second stop (optional)' }), { id: 'home-2' }));
   $('#gap').value = profile.gapHours;
+  $('#home-walk').value = profile.homeWalkMin ?? 5;
   $('#day-start').value = hhmm(profile.dayStartMin ?? 360);
   $('#day-end').value = hhmm(profile.dayEndMin ?? 1080);
 }
@@ -431,6 +440,17 @@ $('#gap').addEventListener('change', (e) => {
   if (v >= 0.5 && v <= 12) {
     profile.gapHours = v;
     save();
+  }
+});
+
+$('#home-walk').addEventListener('change', (e) => {
+  const v = Number(e.target.value);
+  if (Number.isInteger(v) && v >= 0 && v <= 30) {
+    profile.homeWalkMin = v;
+    save();
+  } else {
+    toast('Between 0 and 30 minutes');
+    e.target.value = profile.homeWalkMin ?? 5;
   }
 });
 
