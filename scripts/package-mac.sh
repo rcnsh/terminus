@@ -2,7 +2,7 @@
 # Build, sign and package the Mac app as build/release/<version>/terminus-<version>.dmg:
 # a disk image holding terminus.app and an Applications shortcut to drag it onto.
 #
-#   SIGN_IDENTITY="terminus (self-signed)" SIGN_KEYCHAIN=<keychain> scripts/package-mac.sh
+#   SIGN_IDENTITY=<certificate SHA-1> SIGN_KEYCHAIN=<keychain> scripts/package-mac.sh
 #
 # The release workflow (.github/workflows/release.yml) runs this with the
 # terminus self-signed certificate. That certificate is not trusted by macOS
