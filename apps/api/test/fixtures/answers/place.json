@@ -1,0 +1,98 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.75
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "high",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 360,
+      "crowd": "medium",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 1080,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 420,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 1020,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "A1 · 9 min",
+  "detail": "PGP · 5 min walk · KR MRT ~11 min · packed · or D2 14 min",
+  "alt": "D2 · 14 min · PGP",
+  "departsAt": "2026-08-27T01:09:00Z",
+  "arriveAt": "2026-08-27T01:10:35Z",
+  "leave": {
+    "at": "2026-08-27T01:03:40Z",
+    "estimated": false,
+    "svc": "A1",
+    "stop": "PGP",
+    "board": "2026-08-27T01:09:00Z",
+    "arrive": "2026-08-27T01:10:35Z",
+    "note": null
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "KR-MRT",
+    "label": "KR MRT",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ]
+}

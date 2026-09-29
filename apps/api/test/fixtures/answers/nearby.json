@@ -1,0 +1,94 @@
+{
+  "stop": {
+    "code": "CLB",
+    "name": "CLB",
+    "confidence": 0.57
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "high",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 360,
+      "crowd": "medium",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 1080,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 420,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 1020,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "D1 · 7 min",
+  "detail": "CLB · right here · quiet · or A1 9 min",
+  "alt": "A1 · 9 min · CLB",
+  "departsAt": "2026-08-27T01:07:00Z",
+  "arriveAt": "2026-08-27T01:07:00Z",
+  "leave": {
+    "at": "2026-08-27T01:06:22Z",
+    "estimated": false,
+    "svc": "D1",
+    "stop": "CLB",
+    "board": "2026-08-27T01:07:00Z",
+    "arrive": "2026-08-27T01:07:00Z",
+    "note": null
+  },
+  "mode": "nearby",
+  "dest": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T10:00:00Z"
+}

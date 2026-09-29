@@ -1,0 +1,17 @@
+{
+  "label": "Set up",
+  "detail": "Add your timetable or home on the account page, or send your location",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "unknown",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [],
+  "mode": "nearby",
+  "dest": null,
+  "places": [],
+  "refreshAt": "2026-08-27T10:00:00Z"
+}
