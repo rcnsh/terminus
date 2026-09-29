@@ -974,6 +974,8 @@ export const DOCS_PAGE = `<!doctype html>
          over the page, and since the page never scrolls it never hides, so
          without this the end of the docs stays underneath it. */
       elements-api .sl-overflow-y-auto.sl-flex-1 { padding-bottom: 12px; padding-bottom: calc((100lvh - 100svh + 24px) / 2); }
+      /* And a quarter of that above the title, under the mobile bar. */
+      elements-api .sl-overflow-y-auto.sl-flex-1 { padding-top: 6px; padding-top: calc((100lvh - 100svh + 24px) / 4); }
     }
   </style>
 </head>
