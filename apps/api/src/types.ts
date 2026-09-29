@@ -39,6 +39,8 @@ export interface Env {
   RL_PUBLIC?: RateLimit;
   /** Per-account limit on /me. */
   RL_ME?: RateLimit;
+  /** One global ceiling on sign-in emails. */
+  RL_MAIL?: RateLimit;
 }
 
 /* ------------------------------------------------------------------ */

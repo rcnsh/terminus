@@ -47,3 +47,14 @@ export function coordsFrom(url: URL): { lat: number | null; lon: number | null }
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { lat: null, lon: null };
   return { lat, lon };
 }
+
+/**
+ * Rate-limit key for the caller. One IPv6 host usually owns a whole /64, so
+ * keying on the full address gives it 2^64 buckets.
+ */
+export function clientKey(req: Request): string {
+  const ip = req.headers.get('cf-connecting-ip') ?? 'unknown';
+  if (!ip.includes(':')) return ip;
+  const groups = ip.split('::')[0].split(':');
+  return `${groups.slice(0, 4).join(':')}::/64`;
+}

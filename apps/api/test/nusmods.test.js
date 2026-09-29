@@ -125,3 +125,36 @@ test('nextTrip finds the next class ahead today, else the next scheduled day', (
 
   assert.equal(nextTrip({ home: null, trips: [] }, tueMorning), null);
 });
+
+test('online and TBA lessons are counted, not sent to "pick a stop"; off-campus rooms are flagged', async () => {
+  const mods = {
+    GEA1000: { semesterData: [{ semester: 1, timetable: [
+      { lessonType: 'Tutorial', classNo: '1', day: 'Monday', startTime: '1000', endTime: '1200', venue: 'E-Learn_C' },
+      { lessonType: 'Tutorial', classNo: '1', day: 'Tuesday', startTime: '1000', endTime: '1200', venue: '' },
+      { lessonType: 'Tutorial', classNo: '1', day: 'Friday', startTime: '1000', endTime: '1200', venue: 'DUKENUS' },
+    ] }] },
+  };
+  const r = await resolveTrips(parseShareUrl('https://nusmods.com/timetable/sem-1/share?GEA1000=TUT:1'), Date.UTC(2026, 7, 28), stubFetch(mods));
+  assert.equal(r.online, 2);
+  assert.equal(r.trips.length, 0);
+  assert.equal(r.unresolved.length, 1);
+  assert.equal(r.unresolved[0].offCampus, true);
+});
+
+test('a sem-1 link in July reads next academic year, and falls back when NUSMods has none yet', async () => {
+  const seen = [];
+  const f = async (u) => {
+    seen.push(String(u));
+    return String(u).includes('2025-2026') ? Response.json(MODULES.MA1100) : new Response('nf', { status: 404 });
+  };
+  const r = await resolveTrips(parseShareUrl('https://nusmods.com/timetable/sem-1/share?MA1100=LEC:1'), Date.UTC(2026, 6, 1), f);
+  assert.match(seen[0], /2026-2027/, 'tries the coming year first');
+  assert.deepEqual(r.term, { acadYear: '2025/2026', semester: 1 });
+  assert.equal(r.trips.length, 1);
+});
+
+test('a network failure is reported per module, never thrown', async () => {
+  const f = async () => { throw new TypeError('network down'); };
+  const r = await resolveTrips(parseShareUrl(SHARE), Date.UTC(2026, 7, 28), f);
+  assert.deepEqual(r.failed.sort(), ['EC1101E', 'MA1100']);
+});

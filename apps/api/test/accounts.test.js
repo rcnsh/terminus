@@ -136,7 +136,7 @@ test('pairing: a code from the web session becomes a device token that can be re
   const { token } = await paired.json();
 
   const me = await (await call(env, '/me', { token })).json();
-  assert.deepEqual(me, { email: INVITED, kind: 'device', needsReimport: false });
+  assert.deepEqual(me, { email: INVITED, kind: 'device', needsReimport: false, reimportReason: null, term: null });
 
   // Codes are single use.
   assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'x' } })).status, 400);
@@ -363,4 +363,106 @@ test('rate limits answer 429', async () => {
   const pub = await call({ ...env, RL_PUBLIC: never }, '/next?lat=1.29&lon=103.78');
   assert.equal(pub.status, 429);
   assert.equal(pub.headers.get('retry-after'), '60');
+});
+
+/** A global fetch that answers NUSMods module requests, and delegates the rest. */
+function withNusmods(modules, { down = [] } = {}) {
+  const inner = globalThis.fetch;
+  globalThis.fetch = async (u, init) => {
+    const m = /api\.nusmods\.com\/v2\/[^/]+\/modules\/([^.]+)\.json/.exec(String(u));
+    if (!m) return inner(u, init);
+    if (down.includes(m[1])) return new Response('bad gateway', { status: 502 });
+    const mod = modules[m[1]];
+    return mod ? Response.json(mod) : new Response('not found', { status: 404 });
+  };
+}
+
+const LAB = { semesterData: [{ semester: 1, timetable: [{ lessonType: 'Laboratory', classNo: 'B1', day: 'Monday', startTime: '1000', endTime: '1200', venue: 'COM3-0120', weeks: [3, 4, 5] }] }] };
+
+test('import: a NUSMods failure changes nothing and names the module', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  withNusmods({ CS2030: LAB });
+  const ok = await call(env, '/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1' } });
+  assert.equal(ok.status, 200);
+  const first = await ok.json();
+  assert.equal(first.profile.trips.length, 1);
+  assert.equal(first.term, 'Sem 1 2026/27');
+
+  withNusmods({ CS2030: LAB }, { down: ['MA1521'] });
+  const bad = await call(env, '/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1&MA1521=LEC:1' } });
+  assert.equal(bad.status, 502);
+  assert.match((await bad.json()).error, /MA1521/);
+  const after = await (await call(env, '/me/profile', { cookie })).json();
+  assert.equal(after.trips.length, 1, 'the working timetable survives');
+});
+
+test('import: nothing found is refused, not saved as an empty timetable', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { manual: [{ day: 1, arriveByMin: 600, to: 'COM3', label: 'Gym' }] } });
+  withNusmods({});
+  const r = await call(env, '/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?CS9999=LEC:1' } });
+  assert.equal(r.status, 422);
+  assert.match((await r.json()).error, /CS9999/);
+});
+
+test('import: bad module codes and oversized links are rejected up front', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  withNusmods({});
+  const odd = await call(env, '/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?..%2Fx=LEC:1' } });
+  assert.equal(odd.status, 400);
+  const many = Array.from({ length: 16 }, (_, i) => `CS${1000 + i}=LEC:1`).join('&');
+  const big = await call(env, '/me/import', { method: 'POST', cookie, body: { share: `https://nusmods.com/timetable/sem-1/share?${many}` } });
+  assert.equal(big.status, 400);
+  assert.match((await big.json()).error, /limit is 15/);
+});
+
+test('/me/next: a class but no home stop and no location asks for a home stop', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { manual: [{ day: 4, arriveByMin: 600, to: 'COM3', label: 'CS2030' }] } });
+  const body = await (await call(env, '/me/next', { cookie })).json();
+  assert.equal(body.label, 'Add a home stop');
+  assert.notEqual(body.quality, 'ended', 'never "Services ended" at 9 am');
+});
+
+test('email: odd characters are refused; +tags and gmail dots share one cooldown and the blocklist', async () => {
+  const { env, email } = setup();
+  assert.equal((await call(env, '/auth/login', { method: 'POST', body: { email: 'x,spammer@example.com' } })).status, 400);
+  assert.equal((await call(env, '/auth/login', { method: 'POST', body: { email: '<a>@example.com' } })).status, 400);
+  await call(env, '/auth/login', { method: 'POST', body: { email: 'spammer+1@example.com' } });
+  await call(env, '/auth/login', { method: 'POST', body: { email: 'Jo.Tan@gmail.com' } });
+  await call(env, '/auth/login', { method: 'POST', body: { email: 'jotan+x@gmail.com' } });
+  assert.deepEqual(email.sent.map((m) => m.to), ['jo.tan@gmail.com'], 'blocked via +tag; second gmail spelling cooled down');
+});
+
+test('a failed send does not hold the cooldown, and the log has no address', async () => {
+  const { env, email } = setup();
+  const errors = [];
+  const orig = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  const send = env.EMAIL.send;
+  env.EMAIL.send = async () => { throw new Error(`could not deliver to ${INVITED}`); };
+  const failed = await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  env.EMAIL.send = send;
+  console.error = orig;
+  assert.equal(failed.status, 502);
+  assert.ok(!errors.join('\n').includes(INVITED));
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  assert.deepEqual(email.sent.map((m) => m.to), [INVITED], 'the retry goes out straight away');
+});
+
+test('an unexpected error is logged and answered with a bare 500', async () => {
+  const { env } = setup();
+  const errors = [];
+  const orig = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  env.DB.prepare = () => { throw new Error('D1_ERROR: secret internals'); };
+  const r = await call(env, '/me?lat=1.29&lon=103.77', { cookie: 'nb_s=whatever' });
+  console.error = orig;
+  assert.equal(r.status, 500);
+  assert.deepEqual(await r.json(), { error: 'internal' });
+  assert.ok(errors.some((e) => e.includes('/me') && !e.includes('103.77')));
 });

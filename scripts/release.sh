@@ -20,9 +20,15 @@ if [ $DRY -eq 0 ] && git rev-parse "v$VERSION" >/dev/null 2>&1; then
   echo "v$VERSION is already tagged; bump versionName first"; exit 1
 fi
 
+mkdir -p build
 echo "== terminus $VERSION"
 echo "== tests"
-npm test --silent >/dev/null && echo "api tests pass"
+# Not `npm test && echo`: under set -e a failure on the left of && does not
+# stop the script, so a failing suite would still build, upload and tag.
+if ! npm run check --silent >"$ROOT/build/test.log" 2>&1; then
+  tail -40 "$ROOT/build/test.log"; echo "== tests or typecheck FAILED; nothing released"; exit 1
+fi
+echo "api tests and typecheck pass"
 
 OUT="$ROOT/build/release/$VERSION"
 rm -rf "$OUT"

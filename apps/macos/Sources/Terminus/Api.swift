@@ -27,11 +27,26 @@ struct NextAnswer: Decodable {
     struct Timing: Decodable { let status: String; let text: String }
     struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
 
-    var departure: Date? { departsAt.flatMap { ISO8601DateFormatter().date(from: $0) } }
+    var departure: Date? { departsAt.flatMap(parseISODate) }
     var service: String { label.components(separatedBy: " · ").first ?? label }
     /// Crowd on the recommended bus, not whichever is first in the list.
     var crowd: String? { arrivals?.first { $0.svc == service }?.crowd }
     var hasLiveTime: Bool { departure != nil && quality != "unknown" && quality != "ended" }
+}
+
+/// The API's times may or may not carry milliseconds ("…:02Z" or "…:02.000Z").
+/// A default ISO8601DateFormatter rejects the second form, so try both.
+func parseISODate(_ s: String) -> Date? {
+    ISOFormats.plain.date(from: s) ?? ISOFormats.fractional.date(from: s)
+}
+
+private enum ISOFormats {
+    nonisolated(unsafe) static let plain = ISO8601DateFormatter()
+    nonisolated(unsafe) static let fractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 }
 
 struct BoardRow: Decodable, Hashable {
