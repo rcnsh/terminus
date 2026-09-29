@@ -10,6 +10,7 @@
 
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { TTL } from './config.ts';
+import { timedFetch } from './http.ts';
 import { getSession, proxyEnvelope, proxyHeaders } from './auth.ts';
 import type { Session } from './auth.ts';
 
@@ -235,7 +236,7 @@ async function proxyCall(
   endpoint: string,
   params: Record<string, string>,
 ): Promise<unknown> {
-  const res = await fetch(proxyUrl(env, endpoint), {
+  const res = await timedFetch(`${endpoint}`, proxyUrl(env, endpoint), {
     method: 'POST',
     headers: proxyHeaders(env, session.token),
     body: JSON.stringify({ ...(await proxyEnvelope(env, session)), ...params }),
@@ -249,10 +250,17 @@ async function proxyCall(
 }
 
 /**
- * One stop's arrivals via the bus proxy. Any non-"00000" code gets exactly one
- * retry with a freshly minted token; a second rejection THROWS, so the stop is
- * reported unavailable and the answer degrades to an honest `unknown` rather
- * than passing an empty result off as "the feed says no bus".
+ * Codes a fresh token cannot fix: a refused app version (10009) and refused
+ * API keys (10000). Re-minting on these only adds load while NUS is unhappy.
+ */
+export const NO_REMINT_CODES = new Set(['10009', '10000']);
+
+/**
+ * One stop's arrivals via the bus proxy. A rejection gets exactly one retry
+ * with a freshly minted token, unless its code says a token cannot help; a
+ * second rejection THROWS, so the stop is reported unavailable and the answer
+ * degrades to an honest `unknown` rather than passing an empty result off as
+ * "the feed says no bus".
  */
 export async function fetchArrivals(
   env: Env,
@@ -262,15 +270,34 @@ export async function fetchArrivals(
   if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
   let session = await getSession(env, nowMs);
   let body = await proxyCall(env, session, 'shuttle-service', { busstopname: code });
-  if (!proxyOk(body)) {
+  if (!proxyOk(body) && !NO_REMINT_CODES.has(String((body as ProxyBody | null)?.code))) {
     session = await getSession(env, nowMs, { force: true });
     body = await proxyCall(env, session, 'shuttle-service', { busstopname: code });
   }
   if (!proxyOk(body)) {
     const b = body as ProxyBody | null;
-    throw new Error(`shuttle-service rejected: code=${b?.code ?? '?'} msg=${b?.msg ?? ''}`);
+    throw new UpstreamRejected(String(b?.code ?? '?'), `shuttle-service rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`);
   }
+  // "00000" with no list anywhere is not "no bus": the payload changed shape,
+  // and reading it as an empty board would print confident headway guesses.
+  if (!hasList(body.data)) throw new Error('shuttle-service answered in an unknown shape (no arrivals list)');
   return { code, arrivals: normalize(body.data), fetchedAt: nowMs, stale: false, available: true };
+}
+
+export class UpstreamRejected extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+/** Whether a payload carries an arrivals list at all, even an empty one. */
+export function hasList(data: unknown): boolean {
+  const root = unwrap(data);
+  if (Array.isArray(root)) return true;
+  if (!root || typeof root !== 'object') return false;
+  return Object.values(root as Record<string, unknown>).some((v) => Array.isArray(unwrap(v)));
 }
 
 /**
@@ -280,7 +307,13 @@ export async function fetchArrivals(
  * getLastKnownLocation, whose coordinates jitter on every call, so a cache
  * keyed on the raw URL would never hit. Keying on the resolved stop is what
  * makes "one upstream call per stop per 15 seconds however hard the tile
- * refreshes" actually true, and it shares the entry between /next and /trip.
+ * refreshes" true per location, and it shares the entry between /next and
+ * /trip. Concurrent misses in one isolate share one fetch (`inflight`).
+ *
+ * Under failure it gets quieter, not louder: a failed stop is not asked
+ * again for failMemoS, and a refused version or key trips a breaker that
+ * stops every stop for breakerS. A slow fetch with a stale answer on hand
+ * serves the stale one and lets the fetch land in the cache in the background.
  */
 export async function getArrivals(
   env: Env,
@@ -289,7 +322,7 @@ export async function getArrivals(
   nowMs: number = Date.now(),
 ): Promise<StopArrivals> {
   const cache = caches.default;
-  const key = new Request(`https://nusbus-edge.internal/arrivals/${encodeURIComponent(code)}`);
+  const key = new Request(`${CACHE_BASE}/arrivals/${encodeURIComponent(code)}`);
 
   // LANDMINE: a Response body is single-use. Parse it ONCE, here, into a
   // variable. Reading `hit` again on the catch path below would turn
@@ -307,25 +340,63 @@ export async function getArrivals(
   if (cached && nowMs - cached.fetchedAt < TTL.arrivalsMs) {
     return { ...cached, stale: false, available: true };
   }
+  const stale = cached ? { ...cached, stale: true, available: true } : null;
 
-  try {
-    const fresh = await fetchArrivals(env, code, nowMs);
-    ctx.waitUntil(
-      cache.put(
-        key,
-        new Response(JSON.stringify(fresh), {
+  const quiet = (await cache.match(BREAKER)) ?? (await cache.match(failKey(code)));
+  if (quiet) {
+    if (stale) return stale;
+    throw new Error(`upstream recently failed: ${(await quiet.text()).slice(0, 120)}`);
+  }
+
+  let job = inflight.get(code);
+  if (!job) {
+    job = fetchArrivals(env, code, nowMs)
+      .then(async (fresh) => {
+        await cache.put(key, new Response(JSON.stringify(fresh), {
           headers: {
             'content-type': 'application/json',
             // Long max-age so the stale fallback survives; freshness is
             // decided above from fetchedAt, not by the cache.
             'cache-control': `max-age=${TTL.staleMaxS}`,
           },
-        }),
-      ),
-    );
-    return fresh;
+        }));
+        return fresh;
+      })
+      .catch(async (err) => {
+        const reason = String((err as Error)?.message ?? err);
+        await cache.put(failKey(code), memo(reason, TTL.failMemoS)).catch(() => {});
+        if (err instanceof UpstreamRejected && NO_REMINT_CODES.has(err.code)) {
+          await cache.put(BREAKER, memo(reason, TTL.breakerS)).catch(() => {});
+        }
+        throw err;
+      })
+      .finally(() => inflight.delete(code));
+    inflight.set(code, job);
+  }
+  // The fetch finishes (and fills the cache) even when this request stops
+  // waiting for it.
+  ctx.waitUntil(job.catch(() => {}));
+
+  try {
+    if (!stale) return await job;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const slow = new Promise<null>((r) => (timer = setTimeout(() => r(null), TTL.staleRaceMs)));
+    try {
+      return (await Promise.race([job, slow])) ?? stale;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   } catch (err) {
-    if (cached) return { ...cached, stale: true, available: true };
+    if (stale) return stale;
     throw err;
   }
 }
+
+const CACHE_BASE = 'https://nusbus-edge.internal';
+const BREAKER = new Request(`${CACHE_BASE}/breaker`);
+const failKey = (code: string) => new Request(`${CACHE_BASE}/failed/${encodeURIComponent(code)}`);
+const memo = (reason: string, maxAgeS: number) =>
+  new Response(reason.slice(0, 200), { headers: { 'cache-control': `max-age=${maxAgeS}` } });
+
+/** One upstream fetch per stop per isolate, however many requests want it. */
+const inflight = new Map<string, Promise<StopArrivals>>();

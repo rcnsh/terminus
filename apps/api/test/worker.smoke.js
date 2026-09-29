@@ -416,7 +416,7 @@ test('arrivals come from a POST to the bus proxy, authenticated like uNivUS 2.59
 });
 
 test('a rejected proxy call retries once with a genuinely fresh token', async () => {
-  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 }, reject: 1 });
+  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 }, reject: 1, rejectCode: '10008' });
   const { res } = await call('/arrivals?stop=COM3', { fetchImpl });
   assert.equal((await res.json()).available, true, 'the retry succeeded');
 
@@ -429,13 +429,63 @@ test('a rejected proxy call retries once with a genuinely fresh token', async ()
 });
 
 test('a proxy that keeps rejecting degrades to unknown, not a fake "no bus"', async () => {
-  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99 });
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99, rejectCode: '10008' });
   const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
   const a = await res.json();
   // 'scheduled' would claim the feed answered and had no bus. It never answered.
   assert.equal(a.quality, 'unknown');
   assert.equal(fetchImpl.counts.shuttle, 2, 'one retry, not a loop');
+});
+
+test('a refused app version (10009) does not re-mint, and trips a breaker for every stop', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99 });
+  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+  assert.equal(fetchImpl.counts.shuttle, 1, 'a fresh token cannot fix a version refusal');
+  const mints = fetchImpl.counts.auth;
+  for (const stop of ['PGP', 'COM3', 'UTOWN', 'KR-MRT']) {
+    const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+    assert.equal((await res.json()).available, false);
+  }
+  assert.equal(fetchImpl.counts.shuttle, 1, 'the breaker kept every stop off the feed');
+  assert.equal(fetchImpl.counts.auth, mints, 'and minted nothing');
+});
+
+test('a failed stop is not asked again straight away', async () => {
+  const dead = makeFetch({ fail: true });
+  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl: dead });
+  await call('/arrivals?stop=PGP', { fetchImpl: dead, cache });
+  await call('/trip?to=UTOWN&from=PGP', { fetchImpl: dead, cache });
+  assert.equal(dead.counts.shuttle, 1);
+});
+
+test('concurrent requests for a cold stop share one upstream call', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
+  installGlobals(fetchImpl);
+  const env = makeEnv();
+  const ctx = makeCtx();
+  const reqs = Array.from({ length: 10 }, () => worker.fetch(new Request(`${BASE}/arrivals?stop=PGP`), env, ctx));
+  const out = await Promise.all(reqs);
+  await ctx.settle();
+  assert.ok(out.every((r) => r.status === 200));
+  assert.equal(fetchImpl.counts.shuttle, 1);
+});
+
+test('a hung feed times out; with a stale answer on hand it is served instead', async () => {
+  const hung = makeFetch({ hang: true });
+  const cache = installGlobals(hung);
+  cache.seed(ARRIVALS_KEY('PGP'), { code: 'PGP', arrivals: [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt: Date.now() - 60_000, stale: false });
+  const t0 = performance.now();
+  const { res } = await call('/arrivals?stop=PGP', { fetchImpl: hung, cache });
+  const ms = performance.now() - t0;
+  assert.equal((await res.json()).available, true);
+  assert.ok(ms < 8_000, `took ${ms}ms`);
+});
+
+test('a feed that says OK but has no arrivals list is a failure, not "no bus"', async () => {
+  const odd = makeFetch({ raw: { code: '00000', msg: '', data: { somethingNew: 'x' } } });
+  const { res } = await call('/arrivals?stop=PGP', { fetchImpl: odd });
+  assert.equal((await res.json()).available, false);
 });
 
 test('concurrent token requests share one mint instead of each minting', async () => {
@@ -498,4 +548,28 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.equal((await get('/download/mac')).headers.get('x-sha256'), 'bb');
   assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.0');
   assert.equal((await get('/download/ios')).status, 404);
+});
+
+test('/health: no probe without the operator token, 503 when the feed is confirmed down', async () => {
+  const fetchImpl = makeFetch({});
+  const kv = makeKV();
+  const env = makeEnv(kv);
+  const { res } = await call('/health?probe=1', { fetchImpl, env });
+  const h = await res.json();
+  assert.equal(h.auth, undefined, 'probe ignored without HEALTH_TOKEN');
+  assert.ok(h.calendar.daysLeft > 0);
+  await kv.put('monitor:upstream', JSON.stringify({ up: false, since: Date.now() - 1000, checkedAt: Date.now() - 1000, reason: 'x' }));
+  const down = await call('/health', { fetchImpl, env });
+  assert.equal(down.res.status, 503);
+  await kv.put('monitor:upstream', JSON.stringify({ up: true, since: 0, checkedAt: Date.now() - 3_600_000, reason: null }));
+  const stale = await (await call('/health', { fetchImpl, env })).res.json();
+  assert.equal(stale.upstream.cronStale, true);
+  assert.equal(stale.ok, false);
+});
+
+test('the entry module exports no plain values (workerd rejects the module, and cron stops)', async () => {
+  const mod = await import('../src/index.ts');
+  for (const [name, value] of Object.entries(mod)) {
+    assert.ok(typeof value === 'function' || (typeof value === 'object' && value !== null), `export ${name} is a ${typeof value}`);
+  }
 });

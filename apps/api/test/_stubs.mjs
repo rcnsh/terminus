@@ -150,7 +150,7 @@ export function makeAnalytics() {
  * so the forced-refresh retry can be exercised. Every proxy request is kept in
  * `requests` so tests can assert on headers and body.
  */
-export function makeFetch({ byStop = {}, fail = false, reject = 0 } = {}) {
+export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null } = {}) {
   const counts = { auth: 0, shuttle: 0 };
   const requests = [];
   const fn = async (input, init = {}) => {
@@ -172,13 +172,16 @@ export function makeFetch({ byStop = {}, fail = false, reject = 0 } = {}) {
     if (url.includes('bus-proxy')) {
       counts.shuttle++;
       if (fail) throw new TypeError('upstream unreachable');
+      // Never answers; only an abort signal ends it.
+      if (hang) return new Promise((_, rej) => init.signal?.addEventListener('abort', () => rej(init.signal.reason)));
       const headers = new Headers(init.headers);
       const body = JSON.parse(init.body ?? '{}');
       requests.push({ url, method: init.method, headers, body });
       if (reject > 0) {
         reject--;
-        return Response.json({ code: '10009', msg: 'We have a new release of uNivUS', data: null });
+        return Response.json({ code: rejectCode, msg: rejectCode === '10009' ? 'We have a new release of uNivUS' : 'token invalid', data: null });
       }
+      if (raw) return Response.json(raw);
       return Response.json(shuttlePayload(byStop[body.busstopname] ?? []));
     }
 

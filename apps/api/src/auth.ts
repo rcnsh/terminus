@@ -19,6 +19,7 @@
 
 import type { Env } from './types.ts';
 import { TTL } from './config.ts';
+import { timedFetch } from './http.ts';
 
 const KV_TOKEN = 'auth:session';
 const KV_DEVICE = 'auth:deviceid';
@@ -167,7 +168,7 @@ export async function getSession(
 let inflight: Promise<Session> | null = null;
 
 async function mint(env: Env, nowMs: number): Promise<Session> {
-  const res = await fetch(authUrl(env), {
+  const res = await timedFetch('auth', authUrl(env), {
     method: 'POST',
     headers: apiKeyHeaders(env),
     body: JSON.stringify({

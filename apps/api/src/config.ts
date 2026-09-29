@@ -12,6 +12,16 @@ export const TTL = {
   /** How long a stale answer stays usable as a fallback. Beyond this the edge
    *  cache entry is allowed to expire and a dead upstream becomes an error. */
   staleMaxS: 300,
+  /** After a failed fetch for a stop, don't ask again for this long. An
+   *  outage must not turn every request into another call to NUS. */
+  failMemoS: 20,
+  /** After the feed refuses our version or keys (10009, 10000), stop calling
+   *  it for this long: a fresh token cannot fix either. */
+  breakerS: 60,
+  /** Per upstream call. A hung NUS must not hang the widget. */
+  upstreamTimeoutMs: 5_000,
+  /** How long to wait for a fresh fetch when a stale answer is ready to serve. */
+  staleRaceMs: 2_500,
   /** Safety margin subtracted from a token's advertised lifetime. */
   tokenSkewS: 60,
   /** Fallback token lifetime when the auth response omits expires_in. */
