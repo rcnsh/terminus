@@ -31,11 +31,27 @@ struct NextAnswer: Decodable {
     let arrivals: [ArrivalLite]?
     /// The latest time to set off; for a class, the latest that's still on time.
     let leave: Leave?
+    /// Display-ready text and the stale time, worded on the server (card.ts).
+    let card: Card?
 
     struct Timing: Decodable { let status: String?; let text: String?; let classAt: String?; let reachAt: String? }
     struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String?; let board: String?; let arrive: String?; let note: String? }
+    struct Card: Decodable {
+        let kind: String
+        let staleAt: String?
+        let crowd: String?
+        let quality: String?
+        let leaveBy: String?
+        let leaveVia: String?
+        let `catch`: String?
+        let arrive: String?
+        let late: Bool?
+        let goNow: String?
+        let note: String?
+        let estimate: String?
+    }
 
-    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave }
+    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card }
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -54,64 +70,35 @@ struct NextAnswer: Decodable {
         arrivals = try? c.decodeIfPresent([ArrivalLite].self, forKey: .arrivals)
         arrived = (try? c.decodeIfPresent(Bool.self, forKey: .arrived)) ?? false
         leave = try? c.decodeIfPresent(Leave.self, forKey: .leave)
+        card = try? c.decodeIfPresent(Card.self, forKey: .card)
     }
     struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
 
     var departure: Date? { departsAt.flatMap(parseISODate) }
     var planChanges: Date? { refreshAt.flatMap(parseISODate) }
     var service: String { label.components(separatedBy: " · ").first ?? label }
-    /// Crowd on the recommended bus, not whichever is first in the list.
-    var crowd: String? { arrivals?.first { $0.svc == service }?.crowd }
-    private var tilde: String { leave?.estimated == true ? "~" : "" }
     var leaveAt: Date? { leave.flatMap { parseISODate($0.at) } }
     var classAt: Date? { timing?.classAt.flatMap(parseISODate) }
+    /// Dim from this instant (the bus has gone, the plan moved on, or it's old).
+    var staleAt: Date? { card?.staleAt.flatMap(parseISODate) }
 
-    /// A class with a leave-by time: lead with when to leave, and offer the
-    /// next bus as "or go now". Same rule as the Android app.
-    var isClassPlan: Bool { dest?.why == "class" && leaveAt != nil && classAt != nil && !arrived && mode == "trip" }
-
-    /// "Leave by ~09:38", or "Leave now" once it has passed.
+    // Every line below is worded on the server (card.ts), once for all clients.
+    var isClassPlan: Bool { card?.kind == "class" }
+    /// "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks.
     func leaveHeadline(now: Date = Date()) -> String? {
         guard let at = leaveAt else { return nil }
-        return now >= at ? "Leave now" : "Leave by \(tilde)\(campusTime(at))"
+        return now >= at ? "Leave now" : card?.leaveBy
     }
-
-    /// "Catch the ~09:41 D2 at PGP", or "Walk there".
-    var catchHow: String? {
-        guard let l = leave else { return nil }
-        guard let svc = l.svc else { return "Walk there" }
-        return l.board.flatMap(parseISODate).map { "Catch the \(tilde)\(campusTime($0)) \(svc) at \(l.stop ?? "")" } ?? "Catch the \(svc) at \(l.stop ?? "")"
-    }
-
-    /// "Arrive ~09:55 · 3 min early". Same wording as the Android app.
-    var catchArrive: String? {
-        guard let arrive = leave?.arrive.flatMap(parseISODate) else { return nil }
-        let slack = classAt.map { c -> String in
-            let m = Int((c.timeIntervalSince(arrive) / 60).rounded())
-            return m > 0 ? " · \(m) min early" : m == 0 ? " · just in time" : " · ~\(-m) min late"
-        } ?? ""
-        return "Arrive \(tilde)\(campusTime(arrive))\(slack)"
-    }
-
-    var leaveLate: Bool {
-        guard let a = leave?.arrive.flatMap(parseISODate), let c = classAt else { return false }
-        return a > c
-    }
-
-    /// The headline bus when it isn't the one to wait for.
-    var goNowLine: String? {
-        guard hasLiveTime, let d = departure else { return nil }
-        if let b = leave?.board.flatMap(parseISODate), abs(b.timeIntervalSince(d)) < 60 { return nil }
-        let reach = timing?.reachAt.flatMap(parseISODate).map { " · arrive \(campusTime($0))" } ?? ""
-        return "Or go now: \(service) at \(quality == "scheduled" ? "~" : "")\(campusTime(d))\(reach)"
-    }
-
+    var catchHow: String? { card?.catch }
+    var catchArrive: String? { card?.arrive }
+    var leaveLate: Bool { card?.late ?? false }
+    var goNowLine: String? { card?.goNow }
+    var crowdText: String? { card?.crowd }
+    var qualityText: String? { card?.quality }
     /// Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP".
     func leaveText(now: Date = Date()) -> String? {
-        guard let head = leaveHeadline(now: now), let l = leave else { return nil }
-        guard let svc = l.svc else { return head }
-        let t = l.board.flatMap(parseISODate).map { "\(tilde)\(campusTime($0)) " } ?? ""
-        return "\(head) · catch the \(t)\(svc) at \(l.stop ?? "")"
+        guard let head = leaveHeadline(now: now) else { return nil }
+        return card?.leaveVia.map { "\(head) · \($0)" } ?? head
     }
 
     var hasLiveTime: Bool { departure != nil && quality != "unknown" && quality != "ended" }
@@ -138,14 +125,10 @@ func campusTime(_ d: Date) -> String {
     d.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: TimeZone(identifier: "Asia/Singapore")!))
 }
 
-/// One vocabulary everywhere, matching the API's detail line.
-func crowdWord(_ c: String?) -> String? {
-    switch c {
-    case "low": "Quiet"
-    case "medium": "Filling"
-    case "high": "Packed"
-    default: nil
-    }
+
+/// Whether this Mac shows 12-hour times (the "j" skeleton picks up an "a").
+var usesHour12: Bool {
+    (DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current) ?? "").contains("a")
 }
 
 /// "1.0.10" is newer than "1.0.9".
@@ -247,6 +230,8 @@ struct Api {
         case .place(let key): q.append(URLQueryItem(name: "place", value: key))
         case .code(let code, _): q.append(URLQueryItem(name: "to", value: code))
         }
+        // The card's clock times, in this Mac's 12- or 24-hour style.
+        if usesHour12 { q.append(URLQueryItem(name: "h12", value: "1")) }
         return try await request("GET", "/me/next", query: q)
     }
 
