@@ -714,29 +714,26 @@ private struct Search: View {
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.08)))
 
             let q = query.trimmingCharacters(in: .whitespaces)
-            if q.count >= 2 {
-                let matches = model.destinations
-                    .filter { $0.label.localizedCaseInsensitiveContains(q) || $0.code.localizedCaseInsensitiveContains(q) }
-                    .sorted { a, b in
-                        let ax = a.code.caseInsensitiveCompare(q) != .orderedSame, bx = b.code.caseInsensitiveCompare(q) != .orderedSame
-                        if ax != bx { return !ax }
-                        if (a.kind == "room") != (b.kind == "room") { return b.kind == "room" }
-                        return a.label.count < b.label.count
-                    }
-                    .prefix(5)
+            if !q.isEmpty {
+                let matches = rankDestinations(model.destinations, q)
+                let stopName = { (code: String) in model.destinations.first { $0.kind == "stop" && $0.code == code }?.label ?? code }
                 VStack(spacing: 0) {
                     ForEach(Array(matches), id: \.self) { d in
                         Button {
                             query = ""
                             model.select(.code(d.code, label: d.kind == "stop" ? d.label : d.code))
                         } label: {
-                            HStack {
-                                Image(systemName: d.kind == "stop" ? "bus" : "building.2").foregroundStyle(.secondary).frame(width: 16)
-                                Text(d.label == d.code ? d.code : d.label)
+                            HStack(alignment: .firstTextBaseline) {
+                                Image(systemName: d.kind == "stop" ? "bus" : d.kind == "room" ? "door.left.hand.open" : "building.2")
+                                    .foregroundStyle(.secondary).frame(width: 16)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(d.label)
+                                    Text(d.kind == "stop" ? "Bus stop" : "\(d.label != d.code ? "\(d.code) · " : "")\(stopName(d.stopCode)) stop\(d.walkM.map { ", \(Swift.max(1, Int((Double($0) / 1.3 / 60).rounded()))) min walk" } ?? "")")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
                                 Spacer()
-                                if d.label != d.code { Text(d.code).font(.caption).foregroundStyle(.secondary) }
                             }
-                            .padding(.vertical, 6)
+                            .padding(.vertical, 5)
                             .padding(.horizontal, 8)
                             .contentShape(Rectangle())
                         }

@@ -169,7 +169,47 @@ data class NearbyStop(
     val board: List<BoardRow>,
 )
 
-data class Destination(val code: String, val label: String, val stopCode: String, val kind: String)
+data class Destination(
+    val code: String,
+    val label: String,
+    val stopCode: String,
+    val kind: String,
+    /** Metres on foot from the stop; null for a stop. */
+    val walkM: Int? = null,
+    /** Other names people search for, lower case ("soc", "mrt"). */
+    val aliases: List<String> = emptyList(),
+)
+
+/**
+ * The destination search, same rules as the account page: exact, then starts
+ * with, then a word starts with, then contains; stops before buildings before
+ * rooms, and rooms only once two characters say which.
+ */
+fun rankDestinations(all: List<Destination>, query: String, max: Int = 8): List<Destination> {
+    val q = query.trim().lowercase()
+    if (q.isEmpty()) return emptyList()
+    val norm = { s: String -> s.lowercase().replace(Regex("[\\s\\-_]+"), "") }
+    val nq = norm(q)
+    val kinds = listOf("stop", "building", "room")
+    fun score(d: Destination): Int {
+        val names = listOf(d.code.lowercase(), d.label.lowercase()) + d.aliases
+        return when {
+            names.any { it == q } || norm(d.code) == nq -> 0
+            names.any { it.startsWith(q) } || norm(d.code).startsWith(nq) -> 1
+            names.any { n -> n.split(Regex("[\\s()·,/&-]+")).any { it.isNotEmpty() && it.startsWith(q) } } -> 2
+            names.any { it.contains(q) } -> 3
+            else -> -1
+        }
+    }
+    return all.asSequence()
+        .filter { it.kind != "room" || q.length >= 2 }
+        .map { it to score(it) }
+        .filter { it.second >= 0 }
+        .sortedWith(compareBy({ it.second }, { kinds.indexOf(it.first.kind) }, { it.first.label.length }))
+        .take(max)
+        .map { it.first }
+        .toList()
+}
 
 /** What the user asked for: the planned trip, a saved place, or any stop/venue. */
 sealed interface Target {
@@ -230,7 +270,11 @@ class Api(private val token: String?, private val fast: Boolean = false) {
         val list = request("GET", "/campus").getJSONArray("destinations")
         return (0 until list.length()).map {
             val d = list.getJSONObject(it)
-            Destination(d.getString("code"), d.getString("label"), d.getString("stopCode"), d.optString("kind"))
+            Destination(
+                d.getString("code"), d.getString("label"), d.getString("stopCode"), d.optString("kind"),
+                walkM = if (d.has("walkM")) d.optInt("walkM") else null,
+                aliases = d.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
+            )
         }
     }
 

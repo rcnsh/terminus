@@ -242,7 +242,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Campus map and destinations',
           description:
-            'Returns stop positions and route shapes as SVG coordinates, plus a destination search list of stops and NUSMods buildings and rooms, each mapped to its nearest stop. The data only changes when the API is redeployed, and responses are cached for an hour.',
+            'Returns stop positions and route shapes as SVG coordinates, plus a destination search list: every stop, named buildings and NUSMods rooms, each mapped to the stop an import would use. The data only changes when the API is redeployed, and responses are cached for an hour.',
           operationId: 'getCampus',
           responses: {
             '200': {
@@ -629,6 +629,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   label: { type: 'string' },
                   stopCode: { type: 'string', description: 'The stop to route to for this destination.' },
                   kind: { type: 'string', enum: ['stop', 'building', 'room'] },
+                  walkM: { type: 'integer', description: 'Metres on foot from `stopCode`, along campus paths. Absent for a stop.' },
+                  aliases: { type: 'array', items: { type: 'string' }, description: 'Other names people search for, lower case.' },
                 },
               },
             },

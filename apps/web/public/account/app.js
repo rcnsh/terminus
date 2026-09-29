@@ -1,6 +1,7 @@
 // Account page. Same origin as the API, so the session cookie just works.
 
 import { pacePrompt, runOnboarding } from './onboarding.js';
+import { attachSearch } from './search.js';
 
 const $ = (sel) => document.querySelector(sel);
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -10,7 +11,7 @@ const WALK_RADIUS_M = 450;
 let profile = null;
 let term = null; // "Sem 1 2026/27", the semester the imported classes are for
 let stops = []; // [{code, name, lat, lon}]
-const destByValue = new Map(); // datalist value -> stop code
+let destinations = []; // the search list from /campus
 
 /* ---------- helpers ---------- */
 
@@ -58,10 +59,13 @@ function stopSelect(value, onChange, { blank } = {}) {
   return sel;
 }
 
-/** A typed destination: a datalist entry, or a bare stop code. */
-function resolveWhere(text) {
-  const t = text.trim();
-  if (destByValue.has(t)) return destByValue.get(t);
+/** A picked search result, or text that names one exactly (a code, a stop). */
+function resolveWhere(input) {
+  if (input.dataset.stop) return input.dataset.stop;
+  const t = input.value.trim();
+  const lower = t.toLowerCase();
+  const hit = destinations.find((d) => d.code.toLowerCase() === lower || d.label.toLowerCase() === lower);
+  if (hit) return hit.stopCode;
   const code = t.toUpperCase();
   return stops.some((s) => s.code === code) ? code : null;
 }
@@ -121,6 +125,17 @@ const onboardingCtx = {
     renderPreview();
   },
 };
+
+/** Before anything is typed: saved places, then where classes are. */
+function mySuggestions() {
+  const places = (profile?.places ?? []).map((p) => ({ code: p.to, label: p.label, stopCode: p.to, kind: 'place' }));
+  const seen = new Set();
+  const classes = [...(profile?.trips ?? []), ...(profile?.manual ?? [])]
+    .filter((t) => !seen.has(t.to) && seen.add(t.to))
+    .slice(0, 4)
+    .map((t) => ({ code: t.to, label: t.label, stopCode: t.to, kind: 'class' }));
+  return [...places.slice(0, 4), ...classes];
+}
 
 /* ---------- widget preview ---------- */
 
@@ -474,7 +489,7 @@ $('#reimport-now').addEventListener('click', () => runImport(profile.share));
 $('#manual-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
-  const to = resolveWhere(f.get('where'));
+  const to = resolveWhere(e.target.where);
   if (!to) {
     e.target.where.setCustomValidity('Pick a stop, building or room from the list');
     e.target.where.reportValidity();
@@ -484,6 +499,7 @@ $('#manual-form').addEventListener('submit', (e) => {
   const end = toMin(f.get('end'));
   profile.manual.push({ day: Number(f.get('day')), arriveByMin: start, ...(end && end > start ? { endMin: end } : {}), to, label: f.get('label').trim(), venue: '' });
   e.target.reset();
+  delete e.target.where.dataset.stop;
   renderClasses();
   save();
 });
@@ -491,7 +507,7 @@ $('#manual-form').addEventListener('submit', (e) => {
 $('#place-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
-  const to = resolveWhere(f.get('where'));
+  const to = resolveWhere(e.target.where);
   if (!to) {
     e.target.where.setCustomValidity('Pick a stop, building or room from the list');
     e.target.where.reportValidity();
@@ -502,6 +518,7 @@ $('#place-form').addEventListener('submit', (e) => {
   while (profile.places.some((p) => p.key === key)) key = `${key.slice(0, 21)}-${Math.floor(Math.random() * 90 + 10)}`;
   profile.places.push({ key, label, to });
   e.target.reset();
+  delete e.target.where.dataset.stop;
   renderPlaces();
   save();
 });
@@ -664,11 +681,9 @@ async function start() {
   profile = p;
   stops = campus.stops.map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));
 
-  const dl = $('#destinations');
-  for (const d of campus.destinations) {
-    const value = d.label === d.code ? d.code : `${d.label} · ${d.code}`;
-    destByValue.set(value, d.stopCode);
-    dl.append(el('option', { value }));
+  destinations = campus.destinations;
+  for (const form of ['#manual-form', '#place-form']) {
+    attachSearch($(form).where, { source: () => destinations, suggestions: mySuggestions, stopName });
   }
   if (profile.share) $('#share').value = profile.share;
   // Same link, fresh data: only useful when the semester hasn't changed.
