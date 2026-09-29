@@ -76,21 +76,21 @@ struct NextAnswer: Decodable {
         return now >= at ? "Leave now" : "Leave by \(tilde)\(campusTime(at))"
     }
 
-    /// "Catch the ~09:41 D2 at PGP · arrive ~09:55, 3 min early", or on foot.
-    var catchLine: String? {
+    /// "Catch the ~09:41 D2 at PGP", or "Walk there".
+    var catchHow: String? {
         guard let l = leave else { return nil }
-        let how: String
-        if let svc = l.svc {
-            how = l.board.flatMap(parseISODate).map { "Catch the \(tilde)\(campusTime($0)) \(svc) at \(l.stop ?? "")" } ?? "Catch the \(svc) at \(l.stop ?? "")"
-        } else {
-            how = "Walk there"
-        }
-        guard let arrive = l.arrive.flatMap(parseISODate) else { return how }
+        guard let svc = l.svc else { return "Walk there" }
+        return l.board.flatMap(parseISODate).map { "Catch the \(tilde)\(campusTime($0)) \(svc) at \(l.stop ?? "")" } ?? "Catch the \(svc) at \(l.stop ?? "")"
+    }
+
+    /// "Arrive ~09:55 · 3 min early". Same wording as the Android app.
+    var catchArrive: String? {
+        guard let arrive = leave?.arrive.flatMap(parseISODate) else { return nil }
         let slack = classAt.map { c -> String in
             let m = Int((c.timeIntervalSince(arrive) / 60).rounded())
-            return m > 0 ? ", \(m) min early" : m == 0 ? ", just in time" : ", ~\(-m) min late"
+            return m > 0 ? " · \(m) min early" : m == 0 ? " · just in time" : " · ~\(-m) min late"
         } ?? ""
-        return "\(how) · arrive \(tilde)\(campusTime(arrive))\(slack)"
+        return "Arrive \(tilde)\(campusTime(arrive))\(slack)"
     }
 
     var leaveLate: Bool {
