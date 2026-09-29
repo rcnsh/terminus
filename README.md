@@ -26,11 +26,6 @@ screen, in your menu bar and on the web.
 
 The same answer on your phone, your Mac and the web, in light or dark.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/assets/shots/web-dark.webp">
-  <img alt="The account page: a timetable of three classes, and a live preview of your widget saying leave by 6:33 PM and catch the 6:38 PM D2 at PGP Foyer, arriving 13 minutes early." src="apps/web/public/assets/shots/web-light.webp" width="100%">
-</picture>
-
 <table>
   <tr>
     <td width="56%" valign="top">
@@ -90,17 +85,14 @@ That's it. It updates through the day and goes quiet in the evening.
 
 ## How it fits together
 
-```mermaid
-flowchart LR
-  feed["NUS shuttle feed,<br/>cached 15 s per stop"] --> worker
-  mods["NUSMods timetables"] --> worker
-  cal["NUS calendar,<br/>public holidays"] --> worker
-  osm["OpenStreetMap<br/>campus paths"] --> worker
-  worker(["Cloudflare Worker<br/><b>apps/api</b>"])
-  worker --> android["Android widget"]
-  worker --> mac["Mac menu bar"]
-  worker --> web["Website"]
-  style worker fill:#fb923c,stroke:#c2410c,color:#1c1917
+```
+NUS shuttle feed (cached 15 s per stop) ─┐
+NUSMods timetables ──────────────────────┤
+NUS calendar, public holidays ───────────┼──▶  Cloudflare Worker (apps/api)
+OpenStreetMap campus paths ──────────────┘          │
+                                                    ├──▶  Android widget
+                                                    ├──▶  Mac menu bar
+                                                    └──▶  Website
 ```
 
 The Worker does all the thinking. Every client shows the same ready-made card
@@ -130,7 +122,6 @@ Sending) and the NUS feed configuration described in
 <br>
 
 <p align="center">
-  <img src="apps/web/public/assets/mark.svg" width="36" alt=""><br>
   <sub>An independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed.<br>
   Walking routes use map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors. <a href="LICENSE">MIT licensed</a>.</sub>
 </p>
