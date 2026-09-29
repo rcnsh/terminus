@@ -45,7 +45,7 @@ else:
 sha = lambda p: hashlib.sha256(open(p, 'rb').read()).hexdigest()
 print(f'''## Install
 - **Android** (12 or later): `terminus-{version}.apk`. Open it and allow your browser to install apps when asked.
-- **Mac** (macOS 14 or later, Apple silicon): `terminus-{version}.dmg`. Open it and drag terminus to Applications. The first time, right-click terminus and choose Open (on macOS 15 and later, allow it in System Settings → Privacy & Security): it is signed but not notarised by Apple.
+- **Mac** (macOS 14 or later, Apple silicon): `terminus-{version}.dmg`. Open it and drag terminus to Applications.
 
 Then sign in at https://terminus.rcn.sh/account and pair the app with the code shown there.
 
