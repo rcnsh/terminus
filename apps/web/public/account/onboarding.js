@@ -39,10 +39,11 @@ export function runOnboarding(ctx) {
       bar.setAttribute('aria-valuemax', String(steps.length));
       bar.setAttribute('aria-valuenow', String(n + 1));
       const fill = el('div', { class: 'ob-fill' });
-      // Starts at the previous step's width, so the bar grows into place.
-      fill.style.width = `${(Math.max(n, 1) / steps.length) * 100}%`;
+      // Starts at the previous step's length, so the bar grows into place.
+      // Scaled, not resized: a width change would re-lay out the page.
+      fill.style.transform = `scaleX(${n / steps.length})`;
       bar.append(fill);
-      requestAnimationFrame(() => requestAnimationFrame(() => (fill.style.width = `${((n + 1) / steps.length) * 100}%`)));
+      requestAnimationFrame(() => requestAnimationFrame(() => (fill.style.transform = `scaleX(${(n + 1) / steps.length})`)));
       const top = el(
         'div',
         { class: 'ob-top' },
