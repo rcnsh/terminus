@@ -90,7 +90,7 @@
             <label>Starts <input name="start" type="time" required></label>
             <label>Ends <input name="end" type="time"></label>
             <label class="wide">Name <input name="label" maxlength="60" required placeholder="e.g. Gym"></label>
-            <label class="wide">Where <input name="where" list="destinations" required placeholder="Stop, building or room"></label>
+            <label class="wide">Where <input name="where" required placeholder="Stop, building or room"></label>
             <button type="submit" class="btn wide">Add</button>
           </form>
         </details>
@@ -144,7 +144,7 @@
         <ul id="places" class="list"></ul>
         <form id="place-form" class="row">
           <input name="label" maxlength="24" required placeholder="Name, e.g. Gym" aria-label="Place name">
-          <input name="where" list="destinations" required placeholder="Stop, building or room" aria-label="Where">
+          <input name="where" required placeholder="Stop, building or room" aria-label="Where">
           <button type="submit" class="btn">Add</button>
         </form>
       </section>
@@ -188,6 +188,5 @@
     <nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/docs">API</a></nav>
   </div>
 </footer>
-<datalist id="destinations"></datalist>
 </body>
 </html>

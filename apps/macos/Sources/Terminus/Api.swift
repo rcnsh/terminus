@@ -173,6 +173,42 @@ struct Destination: Decodable, Hashable {
     let label: String
     let stopCode: String
     let kind: String
+    /// Metres on foot from the stop; nil for a stop.
+    let walkM: Int?
+    /// Other names people search for, lower case ("soc", "mrt").
+    let aliases: [String]?
+}
+
+/// The destination search, same rules as the account page and Android: exact,
+/// then starts with, then a word starts with, then contains; stops before
+/// buildings before rooms, and rooms only once two characters say which.
+func rankDestinations(_ all: [Destination], _ query: String, max: Int = 6) -> [Destination] {
+    let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+    guard !q.isEmpty else { return [] }
+    let norm = { (s: String) in s.lowercased().filter { !" -_".contains($0) } }
+    let nq = norm(q)
+    let kinds = ["stop", "building", "room"]
+    func score(_ d: Destination) -> Int {
+        let names = [d.code.lowercased(), d.label.lowercased()] + (d.aliases ?? [])
+        if names.contains(q) || norm(d.code) == nq { return 0 }
+        if names.contains(where: { $0.hasPrefix(q) }) || norm(d.code).hasPrefix(nq) { return 1 }
+        let words = names.flatMap { $0.split(whereSeparator: { " ()·,/&-".contains($0) }) }
+        if words.contains(where: { $0.hasPrefix(q) }) { return 2 }
+        if names.contains(where: { $0.contains(q) }) { return 3 }
+        return -1
+    }
+    return all
+        .filter { $0.kind != "room" || q.count >= 2 }
+        .map { ($0, score($0)) }
+        .filter { $0.1 >= 0 }
+        .sorted { a, b in
+            if a.1 != b.1 { return a.1 < b.1 }
+            let ka = kinds.firstIndex(of: a.0.kind) ?? 3, kb = kinds.firstIndex(of: b.0.kind) ?? 3
+            if ka != kb { return ka < kb }
+            return a.0.label.count < b.0.label.count
+        }
+        .prefix(max)
+        .map { $0.0 }
 }
 
 /// What the popover shows: the planned trip, a saved place, or any stop/venue.

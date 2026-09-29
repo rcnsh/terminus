@@ -15,9 +15,11 @@
  */
 
 import venuesJson from '../data/venues.json' with { type: 'json' };
+import roomsJson from '../data/rooms.json' with { type: 'json' };
 import type { Graph, Stop } from './types.ts';
 
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
+const ROOMS = roomsJson as { rooms: Record<string, { name: string; stop: string; m: number }> };
 
 /* ------------------------------------------------------------------ */
 /* Projection                                                          */
@@ -215,6 +217,39 @@ export interface Destination {
   /** Always a real stop code -- the client never resolves a venue itself. */
   stopCode: string;
   kind: 'stop' | 'building' | 'room';
+  /** Metres on foot from `stopCode` to here. Absent for a stop. */
+  walkM?: number;
+  /** Other names people search for ("soc", "mrt"). Lower case. */
+  aliases?: string[];
+}
+
+/**
+ * Short names students actually type. Only ones that are certain: a wrong
+ * nickname sends someone to the wrong side of campus. Keyed by destination
+ * code, or by a building-code pattern for whole faculties.
+ */
+const ALIASES: Record<string, string[]> = {
+  'KR-MRT': ['mrt', 'kent ridge mrt'],
+  UTOWN: ['utown', 'university town'],
+  PGP: ['pgp', "prince george's park"],
+  CLB: ['library', 'central library', 'clb'],
+  UHC: ['health centre', 'clinic'],
+  YIH: ['yih'],
+  KV: ['kent vale'],
+};
+const FACULTY_ALIASES: Array<[RegExp, string[]]> = [
+  [/^COM\d$/, ['soc', 'computing']],
+  [/^BIZ\d$/, ['biz', 'business']],
+  [/^AS\d$/, ['fass', 'arts']],
+  [/^SDE\d$/, ['cde', 'sde', 'design']],
+  [/^E\d+A?$/, ['engineering', 'cde']],
+  [/^S\d+[A-Z]?$/, ['science', 'fos']],
+];
+
+function aliasesFor(code: string): string[] | undefined {
+  const out = [...(ALIASES[code] ?? [])];
+  for (const [re, names] of FACULTY_ALIASES) if (re.test(code)) out.push(...names);
+  return out.length ? out : undefined;
 }
 
 /**
@@ -224,14 +259,30 @@ export interface Destination {
  * `/trip?to=`; venue resolution (data/venues.json, prefix fallback) happens
  * here once, server-side, the same way it already does for NUSMods import.
  */
+/**
+ * What the destination search offers: every stop, every building with a
+ * real name, and NUSMods' rooms. Not the import lookup table (venues.json):
+ * that also holds the NUS map's internal ids, bare room numbers and codes no
+ * one would type, which still resolve when typed but are never listed.
+ */
 export function buildDestinations(graph: Graph): Destination[] {
+  const stops = new Set(graph.stops.map((s) => s.code));
   const out: Destination[] = [];
   for (const s of graph.stops) {
-    out.push({ code: s.code, label: s.name, stopCode: s.code, kind: 'stop' });
+    out.push({ code: s.code, label: s.name, stopCode: s.code, kind: 'stop', ...(aliasesFor(s.code) ? { aliases: aliasesFor(s.code) } : {}) });
   }
-  for (const [code, v] of Object.entries(VENUES.venues)) {
+  // Several codes can name one building (CLB, CLIB): list it once.
+  const named = new Set<string>();
+  for (const [code, v] of Object.entries(VENUES.venues).sort(([a], [b]) => a.length - b.length || a.localeCompare(b))) {
     const label = friendlyLabel(code);
-    out.push({ code, label: label ?? code, stopCode: v.stop, kind: label ? 'building' : 'room' });
+    if (!label || !stops.has(v.stop) || named.has(`${label}|${v.stop}`)) continue;
+    named.add(`${label}|${v.stop}`);
+    const aliases = aliasesFor(code);
+    out.push({ code, label, stopCode: v.stop, kind: 'building', walkM: v.m, ...(aliases ? { aliases } : {}) });
+  }
+  for (const [code, r] of Object.entries(ROOMS.rooms)) {
+    if (!stops.has(r.stop)) continue;
+    out.push({ code, label: r.name || code, stopCode: r.stop, kind: 'room', walkM: r.m });
   }
   return out;
 }

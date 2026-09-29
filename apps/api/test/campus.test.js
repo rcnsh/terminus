@@ -85,8 +85,6 @@ test('buildDestinations covers every stop and resolves every known venue to a re
   const stopEntries = dest.filter((d) => d.kind === 'stop');
   assert.equal(stopEntries.length, realGraph.stops.length);
 
-  const venueCount = Object.keys(venuesJson.venues).length;
-  assert.equal(dest.length, realGraph.stops.length + venueCount);
 
   for (const d of dest) {
     assert.ok(byCode.has(d.stopCode), `${d.code} resolves to unknown stop ${d.stopCode}`);
@@ -96,6 +94,33 @@ test('buildDestinations covers every stop and resolves every known venue to a re
   assert.ok(com1, 'COM1 must be a known venue');
   assert.equal(com1.kind, 'building');
   assert.match(com1.label, /School of Computing/);
+});
+
+test('the search list has no junk: no internal ids, bare room numbers or unnamed codes', () => {
+  const dest = buildDestinations(realGraph);
+  for (const d of dest) {
+    assert.ok(!/^\d+$/.test(d.code), `bare number ${d.code}`);
+    if (d.kind === 'building') assert.notEqual(d.label, d.code, `${d.code} has no name`);
+  }
+  // Junk stays in the import lookup table, just never listed.
+  assert.ok(venuesJson.venues['1770998002592394']);
+  assert.ok(!dest.some((d) => d.code === '1770998002592394'));
+  const lt27 = dest.find((d) => d.code === 'LT27');
+  assert.ok(lt27, 'lecture theatres are searchable');
+  const room = dest.find((d) => d.kind === 'room' && d.label !== d.code);
+  assert.ok(room, 'rooms carry their NUSMods names');
+  assert.ok(dest.filter((d) => d.kind !== 'stop').every((d) => Number.isFinite(d.walkM)));
+  const buildings = dest.filter((d) => d.kind === 'building').map((d) => `${d.label}|${d.stopCode}`);
+  assert.equal(new Set(buildings).size, buildings.length, 'one entry per building');
+});
+
+test('nicknames: faculty short names and the obvious ones', () => {
+  const dest = buildDestinations(realGraph);
+  const has = (code, alias) => assert.ok(dest.find((d) => d.code === code)?.aliases?.includes(alias), `${code} ~ ${alias}`);
+  has('COM1', 'soc');
+  has('AS5', 'fass');
+  has('KR-MRT', 'mrt');
+  has('CLB', 'library');
 });
 
 test('boardAt: live etas sort first, an ended service is dropped, an unreachable feed is unknown not silent', () => {

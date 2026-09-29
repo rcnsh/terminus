@@ -14,6 +14,8 @@ Sources, fetched once and cached in the gitignored dev/ folder:
 Writes:
   - data/walks.json: routed metres between every pair of stops, and per stop
     how much longer than the straight line a walk to it usually is.
+  - data/rooms.json: NUSMods' rooms with their names, stop and routed walk,
+    for the destination search.
   - data/venues.json: each building's walk to its stop, routed. The stop a
     building maps to is kept as it was (saved timetables point at it); only
     buildings new to the file get the stop nearest by path.
@@ -252,6 +254,38 @@ def main():
         "detour": detour,
         "stopPairs": pairs,
     }, indent=1, sort_keys=True) + "\n")
+    # Named rooms, for the destination search: each resolves the way an
+    # import does (its building's stop), and walks from the room itself.
+    def building_of(room):
+        r = room.upper()
+        if r in venues:
+            return r
+        b = r.split("-")[0]
+        if b in venues:
+            return b
+        stripped = b.rstrip("0123456789")
+        return stripped if stripped and stripped in venues else None
+
+    named = {}
+    for room, info in rooms.items():
+        b = building_of(room)
+        loc = (info or {}).get("location") or {}
+        if not b or not isinstance(loc.get("x"), (int, float)):
+            continue
+        stop = venues[b]["stop"]
+        m = routed(stop, (loc["y"], loc["x"]))
+        # Same guard as buildings: a room far past its building's walk is misplaced.
+        if m is None or m > 2 * max(venues[b]["m"], 60):
+            m = venues[b]["m"]
+        name = " ".join(str(info.get("roomName") or "").split())
+        named[room] = {"name": name if name and name.upper() != room.upper() else "", "stop": stop, "m": round(m)}
+    (ROOT / "data/rooms.json").write_text(json.dumps({
+        "generated": date.today().isoformat(),
+        "source": "NUSMods room map (names, positions); stops as for imports; walks routed on OpenStreetMap paths",
+        "rooms": dict(sorted(named.items())),
+    }, separators=(",", ":"), ensure_ascii=False))
+    print(f"{len(named)} named rooms for search")
+
     venues_doc["venues"] = dict(sorted(venues.items()))
     venues_doc["generated"] = date.today().isoformat()
     venues_doc["source"] = "uNivUS building->stop assignments; walks routed on OpenStreetMap paths (scripts/walk_routes.py); new buildings from the NUSMods room map"
