@@ -104,11 +104,45 @@ function isOld(a, fetchedAt) {
   return now - fetchedAt > 15 * 60_000;
 }
 
-/** "Leave by 09:38", "~" for a headway estimate, "Leave now" once it has passed. */
+/** "Leave by 09:38 · 09:41 D2 from PGP", "~" for a headway estimate, "Leave now" once it has passed. */
 function leaveText(l) {
-  const bus = l.svc ? ` · ${l.svc} from ${l.stop}` : '';
+  const tilde = l.estimated ? '~' : '';
+  const bus = l.svc ? ` · ${l.board ? `${tilde}${clock(l.board)} ` : ''}${l.svc} from ${l.stop}` : '';
   if (Date.now() >= Date.parse(l.at)) return `Leave now${bus}`;
-  return `Leave by ${l.estimated ? '~' : ''}${clock(l.at)}${bus}`;
+  return `Leave by ${tilde}${clock(l.at)}${bus}`;
+}
+
+/**
+ * A class: when to leave is the headline, the bus that goes with it and when
+ * it gets you there underneath, and the next bus as "or go now". Every
+ * arrival sits next to the bus it belongs to. Same as the apps.
+ */
+function classPlan(a) {
+  const l = a.leave;
+  const t = l.estimated ? '~' : '';
+  const classAt = Date.parse(a.timing.classAt);
+  const late = l.arrive && Date.parse(l.arrive) > classAt;
+  const head = Date.now() >= Date.parse(l.at) ? 'Leave now' : `Leave by ${t}${clock(l.at)}`;
+  const how = l.svc ? `Catch the ${l.board ? `${t}${clock(l.board)} ` : ''}${l.svc} at ${l.stop}` : 'Walk there';
+  let catchLine = how;
+  if (l.arrive) {
+    const m = Math.round((classAt - Date.parse(l.arrive)) / 60_000);
+    catchLine += ` · arrive ${t}${clock(l.arrive)}, ${m > 0 ? `${m} min early` : m === 0 ? 'just in time' : `~${-m} min late`}`;
+  }
+  const svc = a.label.split(' · ')[0];
+  const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
+  const same = l.board && timed && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt)) < 60_000;
+  const goNow = timed && !same
+    ? `Or go now: ${svc} at ${a.quality === 'scheduled' ? '~' : ''}${clock(a.departsAt)}${a.timing.reachAt ? ` · arrive ${clock(a.timing.reachAt)}` : ''}`
+    : null;
+  return [
+    el('div', { class: 'where', textContent: `${a.dest.label} · starts ${clock(a.timing.classAt)}` }),
+    el('div', { class: `big${late ? ' late' : ''}`, textContent: head }),
+    el('div', { class: `catch${late ? ' late' : ''}`, textContent: catchLine }),
+    l.estimated ? el('div', { class: 'note', textContent: 'Estimated from the usual gap between buses. Live times show nearer the time.' }) : null,
+    goNow ? el('div', { class: 'go-now', textContent: goNow }) : null,
+    el('div', { class: 'note', textContent: a.detail }),
+  ].filter(Boolean);
 }
 
 /** Renders /me/next the way the widget does, so settings changes show up. */
@@ -132,6 +166,11 @@ async function renderPreview() {
     head.append(el('div', { class: 'big', textContent: a.label }));
     box.className = 'widget';
     box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), chips);
+    return;
+  }
+  if (a.dest?.why === 'class' && a.leave && a.timing?.classAt && !a.arrived && !isOld(a, fetchedAt)) {
+    box.className = 'widget';
+    box.replaceChildren(...classPlan(a), chips ?? '');
     return;
   }
   const where =

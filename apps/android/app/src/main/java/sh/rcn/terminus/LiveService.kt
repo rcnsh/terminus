@@ -143,8 +143,21 @@ class LiveService : Service() {
 
             // Collapsed, one line each: the bus, then when to leave. Where to
             // goes in the header, next to the ticking countdown.
-            val title = if (answer.arrived) answer.label else answer.clockLabel { clock(ctx, it) }
-            val leave = answer.leaveText(now) { clock(ctx, it) }
+            val fmt = { ms: Long -> clock(ctx, ms) }
+            if (answer.isClassPlan) {
+                // A class: count down to leaving, not to the next bus.
+                val catch = answer.catchLine(fmt)
+                b.setContentTitle(answer.leaveHeadline(now, fmt))
+                    .setContentText(catch)
+                    .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(catch, answer.goNowLine(fmt)).joinToString("\n")))
+                    .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "))
+                val leaveAt = answer.leaveAtMs!!
+                if (leaveAt > now) b.setWhen(leaveAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
+                else b.setShowWhen(false)
+                return b.build()
+            }
+            val title = if (answer.arrived) answer.label else answer.clockLabel(fmt)
+            val leave = answer.leaveText(now, fmt)
             b.setContentTitle(title)
                 .setContentText(leave ?: answer.detail)
                 .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(leave, answer.detail).joinToString("\n")))

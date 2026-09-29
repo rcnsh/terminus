@@ -542,11 +542,13 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description:
                 'The latest time to set off. On `/me/next` for a class, the latest that still gets you there on time; otherwise, for the bus in `departsAt`. ' +
                 'When you will be late whatever you do, `at` is now. Null or absent when you should simply go now. Once `at` has passed, show "Leave now".',
-              required: ['at', 'estimated', 'svc', 'stop'],
+              required: ['at', 'estimated', 'svc', 'stop', 'board', 'arrive'],
               properties: {
                 at: { type: 'string', format: 'date-time' },
                 svc: { type: ['string', 'null'], description: 'The bus this time is for. For a class it can differ from the headline bus. Null when walking.' },
                 stop: { type: ['string', 'null'], description: 'Where to board it, short name.' },
+                board: { type: ['string', 'null'], format: 'date-time', description: 'When that bus leaves the stop. With `estimated`, when you reach the stop. Null when walking.' },
+                arrive: { type: ['string', 'null'], format: 'date-time', description: 'When you get there by leaving at `at`: the venue for a class, otherwise the stop.' },
                 estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
               },
             },
@@ -743,6 +745,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     status: { type: 'string', enum: ['on-time', 'tight', 'late'] },
                     text: { type: 'string', example: 'Arrive 09:52 · 8 min early' },
                     classAt: { type: 'string', format: 'date-time' },
+                    reachAt: { type: 'string', format: 'date-time', description: 'When you reach the class on the headline bus.' },
                   },
                 },
               },

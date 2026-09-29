@@ -381,7 +381,7 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
                 answer.why == "gap-home" -> "${answer.destLabel} · long gap"
                 else -> answer.destLabel
             }
-            heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            if (!answer.isClassPlan) heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (answer.arrived) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(painterResource(R.drawable.ic_check), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
@@ -389,6 +389,10 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
                     Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
                 Text(answer.detail)
+                return@Column
+            }
+            if (answer.isClassPlan) {
+                ClassPlan(answer)
                 return@Column
             }
             val ctx = LocalContext.current
@@ -405,6 +409,61 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
         }
     }
 }
+
+/**
+ * A class: when to leave is the headline, the bus that goes with it and when
+ * it gets you there underneath, and the next bus as the "or go now" option.
+ * Every arrival sits next to the bus it belongs to.
+ */
+@Composable
+private fun ClassPlan(answer: NextAnswer) {
+    val ctx = LocalContext.current
+    val at = answer.leaveAtMs ?: return
+    val fmt = { ms: Long -> clock(ctx, ms) }
+    // Minute resolution is enough for "in 24 min"; seconds near the end.
+    val now by produceState(System.currentTimeMillis(), at) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(if (at - value < 120_000) 1_000 else 15_000)
+        }
+    }
+    val late = answer.leaveLate
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "),
+        color = muted,
+    )
+    Text(
+        answer.leaveHeadline(now, fmt).orEmpty(),
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        color = if (late) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+    )
+    val left = (at - now) / 1000
+    if (left > 0) {
+        Text(
+            if (left >= 120) "in ${(left + 30) / 60} min" else "in ${left / 60} min ${left % 60} s",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+    answer.catchLine(fmt)?.let {
+        Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = if (late) MaterialTheme.colorScheme.error else goodColor())
+    }
+    if (answer.leaveEstimated) {
+        Text("Estimated from the usual gap between buses. Live times show nearer the time.", style = MaterialTheme.typography.bodySmall, color = muted)
+    }
+    answer.goNowLine(fmt)?.let {
+        HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+        Text(it, style = MaterialTheme.typography.bodyMedium)
+        Countdown(answer)
+    }
+    Text(answer.detail, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 6.dp))
+    qualityNote(answer.quality)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+}
+
+@Composable
+private fun goodColor() = if (isSystemInDarkTheme()) GoodDark else GoodLight
 
 /** "Leave by 09:38 · D2 from PGP", turning into "Leave now" when the time comes. */
 @Composable
@@ -446,7 +505,7 @@ private fun Countdown(answer: NextAnswer) {
 private fun timingColor(status: String?) = when (status) {
     "late" -> MaterialTheme.colorScheme.error
     "tight" -> MaterialTheme.colorScheme.tertiary
-    else -> MaterialTheme.colorScheme.primary
+    else -> goodColor()
 }
 
 @Composable

@@ -172,6 +172,12 @@ extension Color {
             : NSColor(red: 0xC2 / 255, green: 0x41 / 255, blue: 0x0C / 255, alpha: 1)
     })
     /// Warning amber for "tight", matching the web's --warn.
+    /// "On time", matching the site's --good-ink.
+    static let good = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+            ? NSColor(red: 0x4A / 255, green: 0xDE / 255, blue: 0x80 / 255, alpha: 1)
+            : NSColor(red: 0x16 / 255, green: 0x65 / 255, blue: 0x34 / 255, alpha: 1)
+    })
     static let warn = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
             ? NSColor(red: 0xFB / 255, green: 0xBF / 255, blue: 0x24 / 255, alpha: 1)
@@ -346,13 +352,16 @@ private struct Header: View {
                 Ticking(every: 1) { now in
                     let old = !model.showNearby && !resting && a?.arrived != true && model.isOld(a, at: now)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(model.showNearby ? "Departures near you" : big(a))
+                        Text(model.showNearby ? "Departures near you" : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)))
                             .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundStyle(old ? .secondary : .primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                         if old {
                             StatusLine(color: .gray, text: "Old times · refreshing")
+                        } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
+                            let left = Int(at.timeIntervalSince(now))
+                            StatusLine(color: a.leaveLate ? .red : .brand, text: left <= 0 ? "Time to go" : left >= 120 ? "in \((left + 30) / 60) min" : "in \(left / 60) min \(left % 60) s")
                         } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
                             StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
                         } else {
@@ -407,6 +416,7 @@ private struct Header: View {
         if a.mode == "rest" { return "Off hours" }
         if a.mode == "nearby" { return "Nearby" }
         guard let d = a.dest else { return "Next bus" }
+        if a.isClassPlan, let c = a.classAt { return "\(d.label) · starts \(campusTime(c))" }
         let why = switch d.why {
         case "class": "Next class"
         case "gap-home": "Long gap · home"
@@ -565,11 +575,21 @@ private struct AnswerDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
+                if a.isClassPlan {
+                    // Each arrival next to the bus it belongs to.
+                    if let c = a.catchLine { Row(icon: "figure.walk", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.red : Color.good) }
+                    if a.leave?.estimated == true {
+                        Row(icon: "info.circle", text: "Estimated from the usual gap between buses. Live times show nearer the time.").foregroundStyle(.secondary)
+                    }
+                    if let g = a.goNowLine { Row(icon: "bus", text: g) }
+                    Row(icon: "text.alignleft", text: a.detail).foregroundStyle(.secondary)
+                } else {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                 if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
-                if a.timing?.text != nil || crowdWord(a.crowd) != nil {
+                }
+                if !a.isClassPlan, a.timing?.text != nil || crowdWord(a.crowd) != nil {
                     HStack(spacing: 6) {
-                        if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .green) }
+                        if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .good) }
                         if let c = crowdWord(a.crowd) { Pill(text: c, color: .secondary) }
                     }
                 }

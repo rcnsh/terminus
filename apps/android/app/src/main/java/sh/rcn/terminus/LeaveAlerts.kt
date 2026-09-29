@@ -84,9 +84,11 @@ object LeaveAlerts {
                 description = "When to set off for your next class"
             },
         )
-        val title = answer.leaveText(now) { clock(ctx, it) } ?: return
+        val fmt = { ms: Long -> clock(ctx, ms) }
+        val title = answer.leaveHeadline(now, fmt) ?: return
         // Not `timingText`: that is for the headline bus, which may not be the one to wait for.
-        val body = listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${clock(ctx, it)}" }).joinToString(" · ")
+        val body = answer.catchLine(fmt) ?: answer.destLabel.orEmpty()
+        val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · ")
         val open = PendingIntent.getActivity(
             ctx, 0, MainActivity.intentFor(ctx),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -95,6 +97,7 @@ object LeaveAlerts {
             .setSmallIcon(Icon.createWithResource(ctx, R.drawable.ic_bus))
             .setContentTitle(title)
             .setContentText(body)
+            .setSubText(where)
             .setContentIntent(open)
             .setAutoCancel(true)
             .setCategory(android.app.Notification.CATEGORY_REMINDER)
