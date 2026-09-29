@@ -9,10 +9,10 @@
 .signin .hint.small { font-size: 0.85rem; margin-top: 10px; }
 .signin form label { margin-top: 20px; }
 .signin .btn.wide { margin-top: 16px; }
-.turnstile:not(:empty) { margin-top: 14px; min-height: 65px; }
-.form-error { color: var(--bad); font-size: 0.9rem; margin-top: 10px; min-height: 1.2em; }
-.form-error:empty { display: none; }
-.sent-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-bright); margin-bottom: 16px; }
+.turnstile { margin-top: 14px; min-height: 65px; }
+.turnstile:empty { display: none; }
+.form-error { color: var(--bad); font-size: 0.9rem; margin-top: 10px; min-height: 1.4em; }
+.sent-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 16px; }
 #sent-step .btn { margin-top: 20px; }
 .center { text-align: center; margin-top: 18px; font-size: 0.85rem; }
 
@@ -55,7 +55,7 @@
   .cls { grid-template-columns: 5.6rem minmax(0, 1fr) auto; }
   .cls select { grid-column: 1 / -1; }
 }
-.remove { background: none; border: 0; color: var(--faint); cursor: pointer; font: inherit; font-size: 0.85rem; padding: 4px 6px; border-radius: 6px; }
+.remove { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: 0.85rem; padding: 10px 8px; border-radius: 6px; }
 .remove:hover { color: var(--bad); }
 .warn-text { color: var(--warn); font-weight: 600; margin: 10px 0 4px; }
 details.add { margin-top: 14px; }

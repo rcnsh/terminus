@@ -221,6 +221,7 @@ export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: numbe
     quality: 'live',
     asOf: new Date(nowMs).toISOString(),
     arrivals: [],
+    arrived: true,
   };
 }
 

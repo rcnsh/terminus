@@ -92,8 +92,9 @@ object Refresher {
         if (widgetCount(ctx) == 0) return
         val at = nextRefreshAt(answer, fetchedAt, System.currentTimeMillis())
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
-        // Inexact but honoured in Doze (at most every ~9 min there), and needs
-        // no exact-alarm permission.
+        // Honoured in Doze (at most every ~9 min there) and needs no exact-alarm
+        // permission. The system may run it a few minutes late; the widget
+        // shows a clock time, which stays true until then.
         am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, alarmIntent(ctx))
     }
 

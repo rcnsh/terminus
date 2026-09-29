@@ -39,7 +39,8 @@ function el(tag, props = {}, ...children) {
 const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : null);
 const stopName = (code) => stops.find((s) => s.code === code)?.name ?? code;
-const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// Campus time, like the apps: class times from the server are Singapore time.
+const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' });
 
 function haversineM(aLat, aLon, bLat, bLon) {
   const r = (d) => (d * Math.PI) / 180;
@@ -90,6 +91,19 @@ function save() {
 
 /* ---------- widget preview ---------- */
 
+const MOON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+const CROWD = { low: 'quiet', medium: 'filling', high: 'packed' };
+const QUALITY = { scheduled: 'Timetable estimate', stale: 'Live data a few minutes old', unknown: 'No live data' };
+
+/** Same rule as the apps: the bus has left, the plan moved on, or 15 minutes old. */
+function isOld(a, fetchedAt) {
+  const now = Date.now();
+  if (a.refreshAt && now >= Date.parse(a.refreshAt)) return true;
+  if (a.mode === 'rest') return false;
+  if (a.departsAt && now > Date.parse(a.departsAt) + 30_000) return true;
+  return now - fetchedAt > 15 * 60_000;
+}
+
 /** Renders /me/next the way the widget does, so settings changes show up. */
 async function renderPreview() {
   const box = $('#preview');
@@ -97,24 +111,42 @@ async function renderPreview() {
   try {
     a = await api('/me/next');
   } catch {
-    box.replaceChildren(el('div', { class: 'detail', textContent: 'Preview unavailable right now.' }));
+    box.replaceChildren(
+      el('div', { class: 'detail', textContent: 'Preview unavailable right now.' }),
+      el('button', { type: 'button', class: 'link-btn', textContent: 'Try again', onclick: renderPreview }),
+    );
+    return;
+  }
+  const fetchedAt = Date.now();
+  const chips = a.places?.length ? el('div', { class: 'chips' }, ...a.places.slice(0, 3).map((p) => el('span', { textContent: p.label })), el('span', { textContent: 'Nearby' })) : null;
+  if (a.mode === 'rest') {
+    const head = el('div', { class: 'rest' });
+    head.innerHTML = MOON; // a constant, never data
+    head.append(el('div', { class: 'big', textContent: a.label }));
+    box.className = 'widget';
+    box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), chips);
     return;
   }
   const where =
-    a.mode === 'rest' ? 'Off hours' : a.mode === 'nearby' ? 'Nearby' : a.dest?.why === 'class' ? `Next class · ${a.dest.label}` : a.dest?.why === 'gap-home' ? `Long gap · ${a.dest.label}` : a.dest?.label ?? 'Next bus';
+    a.mode === 'nearby' ? 'Nearby' : a.dest?.why === 'class' ? `Next class · ${a.dest.label}` : a.dest?.why === 'gap-home' ? `Long gap · ${a.dest.label}` : a.dest?.label ?? 'Next bus';
   // Show a departure as a clock time, the way the widget does, so it can't go stale.
   const svc = a.label.split(' · ')[0];
-  const big = a.departsAt && a.quality !== 'unknown' ? `${svc} · ${clock(a.departsAt)}` : a.label;
-  const crowd = a.arrivals?.[0]?.crowd;
-  const parts = [
-    el('div', { class: 'where', textContent: where }),
-    el('div', { class: 'big', textContent: big }),
-    el('div', { class: 'detail', textContent: a.detail }),
-    a.timing ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
-    crowd ? el('div', { class: 'detail', textContent: `Crowd: ${crowd}` }) : null,
-    a.places?.length ? el('div', { class: 'chips' }, ...a.places.slice(0, 3).map((p) => el('span', { textContent: p.label })), el('span', { textContent: 'Nearby' })) : null,
-  ];
-  box.replaceChildren(...parts.filter(Boolean));
+  const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
+  const big = timed ? `${svc} · ${a.quality === 'scheduled' ? '~' : ''}${clock(a.departsAt)}` : a.label;
+  const old = isOld(a, fetchedAt);
+  const crowd = a.arrivals?.find((x) => x.svc === svc)?.crowd;
+  const notes = [QUALITY[a.quality], crowd && `Crowd: ${CROWD[crowd]}`].filter(Boolean).join(' · ');
+  box.className = old ? 'widget old' : 'widget';
+  box.replaceChildren(
+    ...[
+      el('div', { class: 'where', textContent: where }),
+      el('div', { class: 'big', textContent: big }),
+      el('div', { class: 'detail', textContent: old ? 'Old times · refreshing' : a.detail }),
+      a.timing && !old ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
+      notes ? el('div', { class: 'note', textContent: notes }) : null,
+      chips,
+    ].filter(Boolean),
+  );
 }
 
 /* ---------- rendering ---------- */

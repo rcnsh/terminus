@@ -49,7 +49,10 @@ import androidx.glance.text.TextStyle
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Store
+import sh.rcn.terminus.ui.BrandDark
+import sh.rcn.terminus.ui.BrandLight
 import sh.rcn.terminus.ui.MainActivity
+import sh.rcn.terminus.ui.qualityNote
 import java.util.Date
 
 /**
@@ -70,7 +73,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             // read once outside the composition would stay stale.
             val version = currentState(VERSION) ?: 0L
             val snap = remember(version) { Snap(store.paired, store.lastAnswer(), store.lastError) }
-            GlanceTheme {
+            GlanceTheme(colors = BrandColors) {
                 Content(snap.paired, snap.last?.first, snap.last?.second, snap.error)
             }
         }
@@ -110,6 +113,23 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                 answer == null -> {
                     Text(error ?: "Loading…", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
                     Text("Tap to refresh", style = muted)
+                }
+                answer.arrived -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            provider = ImageProvider(R.drawable.ic_check),
+                            contentDescription = null,
+                            colorFilter = ColorFilter.tint(colors.primary),
+                            modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
+                        )
+                        Spacer(GlanceModifier.width(8.dp))
+                        Text(answer.label, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
+                    }
+                    Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
+                    if (large) {
+                        Spacer(GlanceModifier.defaultWeight())
+                        Chips(ctx, answer)
+                    }
                 }
                 answer.mode == "rest" -> {
                     // Outside the user's day: a moon and the next class, no bus.
@@ -162,6 +182,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     }
                     Text(line, style = muted, maxLines = if (large) 2 else 1)
                     if (large && !old) {
+                        // Crowd is already in the detail line; only the data quality is new here.
+                        qualityNote(answer.quality)?.let { Text(it, style = muted, maxLines = 1) }
                         answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
                     }
                     if (large) {
@@ -220,6 +242,9 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
     )
     return parts.joinToString(". ") + ". Double tap to refresh."
 }
+
+/** The app's brand colours, so the widget doesn't take the wallpaper's. */
+private val BrandColors = androidx.glance.material3.ColorProviders(light = BrandLight, dark = BrandDark)
 
 class NextBusWidget : BaseWidget(large = false)
 class PlacesWidget : BaseWidget(large = true)

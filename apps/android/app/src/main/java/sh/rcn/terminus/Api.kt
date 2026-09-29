@@ -32,12 +32,15 @@ data class NextAnswer(
     val crowd: String?,
     /** Planned answers: when the plan changes by itself (a class starts, the day ends). */
     val refreshAtMs: Long? = null,
+    /** Already at the destination: no bus, no countdown. */
+    val arrived: Boolean = false,
 ) {
-    /** "D2 · 09:42" when there's a departure time; otherwise the label as sent. */
+    /** "D2 · 09:42" when there's a departure time; otherwise the label as sent.
+     *  A timetable estimate gets a "~": it is not a live time. */
     fun clockLabel(format: (Long) -> String): String {
         val at = departsAtMs ?: return label
         if (quality == "unknown" || quality == "ended") return label
-        return "${label.substringBefore(" · ")} · ${format(at)}"
+        return "${label.substringBefore(" · ")} · ${if (quality == "scheduled") "~" else ""}${format(at)}"
     }
 
     companion object {
@@ -60,6 +63,7 @@ data class NextAnswer(
                 },
                 departsAtMs = o.optStringOrNull("departsAt")?.let(::parseInstant),
                 refreshAtMs = o.optStringOrNull("refreshAt")?.let(::parseInstant),
+                arrived = o.optBoolean("arrived", false),
                 timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
                 timingText = o.optJSONObject("timing")?.optStringOrNull("text"),
                 // The recommended bus's crowd, not whichever bus is first in the list.

@@ -13,7 +13,7 @@
 <style>
   .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; padding: 56px 0 40px; }
   .hero h1 { font-size: clamp(2.4rem, 5.4vw, 4rem); }
-  .hero h1 em { font-style: normal; color: var(--accent-bright); }
+  .hero h1 em { font-style: normal; color: var(--accent); }
   .hero .lede { font-size: 1.15rem; color: var(--muted); margin: 18px 0 28px; max-width: 34rem; }
   .cta { display: flex; flex-wrap: wrap; gap: 10px; }
   .cta-note { margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
@@ -28,12 +28,15 @@
   .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
   .features .card h3 { font-size: 1.1rem; margin: 12px 0 6px; }
   .features .card p { color: var(--muted); font-size: 0.95rem; }
-  .icon { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-bright); display: grid; place-items: center; }
+  .icon { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
   .how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 64px; counter-reset: step; }
   .how div::before { counter-increment: step; content: counter(step); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: var(--bg); font: 600 0.85rem/1 var(--font); margin-bottom: 12px; }
   .how h3 { font-size: 1.05rem; margin-bottom: 6px; }
   .how p { color: var(--muted); font-size: 0.95rem; }
   .section-title { margin-top: 72px; font-size: 1.6rem; }
+  .install { margin-top: 12px; font-size: 0.9rem; color: var(--muted); }
+  .install summary { cursor: pointer; color: var(--accent); padding: 8px 0; }
+  .install ol { margin: 6px 0 0; padding-left: 1.2rem; display: grid; gap: 6px; }
   @media (max-width: 860px) {
     .hero { grid-template-columns: 1fr; padding-top: 32px; gap: 36px; }
     .features, .how { grid-template-columns: 1fr; }
@@ -54,22 +57,30 @@
 <main class="wrap">
   <section class="hero">
     <div>
-      <p class="eyebrow">For the NUS internal shuttle</p>
+      <p class="eyebrow">For the NUS internal shuttle <span class="beta">Public beta</span></p>
       <h1>Know when to <em>run</em>.</h1>
       <p class="lede">terminus reads your timetable and tells you which shuttle to catch to your next class, whether you'll make it, and when walking is faster. On your home screen and in your menu bar.</p>
       <div class="cta" id="download">
         <a class="btn accent" href="/download/android">Get it for Android</a>
         <a class="btn ghost" href="/download/mac">Download for Mac</a>
       </div>
-      <p class="cta-note">Free. Sign in with your email, import your NUSMods timetable, pair your devices.</p>
+      <p class="cta-note">Free. Android 12 or later, macOS 14 or later on Apple silicon.<span id="version"></span></p>
+      <details class="install">
+        <summary>How to install</summary>
+        <ol>
+          <li><strong>Android:</strong> open the downloaded file and allow your browser to install apps when asked. It's installed directly, not from the Play Store, so Play Protect may ask you to confirm.</li>
+          <li><strong>Mac:</strong> unzip, drag terminus to Applications, then right-click it and choose Open. macOS asks once because the app isn't from the App Store; on macOS 15 and later, allow it in System Settings → Privacy &amp; Security.</li>
+          <li>Sign in at <a href="/account">your account</a>, import your NUSMods timetable, and pair each device with the code or QR shown there.</li>
+        </ol>
+      </details>
     </div>
 
     <div class="stack" aria-label="What the widget shows">
-      <div class="menubar" aria-hidden="true"><span>Wi-Fi</span><strong><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12a3 3 0 0 1 3 3v10a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V6a3 3 0 0 1 3-3zM5 7v4h14V7H5z"/></svg>D2 4m</strong><span>9:38</span></div>
+      <div class="menubar" aria-hidden="true"><strong><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12a3 3 0 0 1 3 3v10a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V6a3 3 0 0 1 3-3zM5 7v4h14V7H5z"/></svg>D2 4m</strong><span>9:38</span></div>
       <div class="widget">
         <div class="where">Next class · CS2030 @ COM1</div>
         <div class="big">D2 · 09:42</div>
-        <div class="detail">PGP · 3 min walk · COM3 ~9 min · low crowd</div>
+        <div class="detail">PGP · 3 min walk · COM3 ~9 min · quiet</div>
         <span class="ontime on-time"><span class="dot"></span>Arrive 09:52 · 8 min early</span>
         <div class="chips"><span>KR MRT</span><span>UTown</span><span>Gym</span><span>Nearby</span></div>
       </div>
@@ -77,6 +88,10 @@
         <div class="where">Heading home</div>
         <div class="big">Walk · 7 min</div>
         <div class="detail">Faster on foot · A1 would be 12 min</div>
+      </div>
+      <div class="widget">
+        <div class="rest"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><div class="big">Done for today</div></div>
+        <div class="detail">In the evening it goes quiet · Next: CS2030, tomorrow 10:00</div>
       </div>
     </div>
   </section>
@@ -113,5 +128,6 @@
     <nav><a href="/privacy">Privacy</a><a href="/docs">API</a><a href="/account">Account</a></nav>
   </div>
 </footer>
+<script src="/assets/landing.js" defer></script>
 </body>
 </html>

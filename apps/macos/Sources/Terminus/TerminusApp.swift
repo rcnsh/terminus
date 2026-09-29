@@ -163,6 +163,32 @@ private struct WindowReader: NSViewRepresentable {
     }
 }
 
+/// The site's accent (#c2410c light, #fb923c dark), so the menu bar app
+/// looks like the same product as the web and the widget.
+extension Color {
+    static let brand = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+            ? NSColor(red: 0xFB / 255, green: 0x92 / 255, blue: 0x3C / 255, alpha: 1)
+            : NSColor(red: 0xC2 / 255, green: 0x41 / 255, blue: 0x0C / 255, alpha: 1)
+    })
+    /// Warning amber for "tight", matching the web's --warn.
+    static let warn = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+            ? NSColor(red: 0xFB / 255, green: 0xBF / 255, blue: 0x24 / 255, alpha: 1)
+            : NSColor(red: 0xB4 / 255, green: 0x53 / 255, blue: 0x09 / 255, alpha: 1)
+    })
+}
+
+/// "termi" + "nus" in the accent, as on the site.
+struct Wordmark: View {
+    var size: CGFloat = 17
+    var body: some View {
+        (Text("termi") + Text("nus").foregroundColor(.brand))
+            .font(.system(size: size, weight: .semibold))
+            .accessibilityLabel("terminus")
+    }
+}
+
 private extension View {
     /// The inset card every section sits on.
     func card(padding: CGFloat = 12) -> some View {
@@ -195,7 +221,7 @@ private struct Pair: View {
             HStack(spacing: 12) {
                 IconTile(system: "bus.fill")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("terminus").font(.system(size: 17, weight: .semibold))
+                    Wordmark()
                     StatusLine(color: .gray, text: "Not paired")
                 }
             }
@@ -241,6 +267,7 @@ private struct Pair: View {
 private struct Main: View {
     @Bindable var model: AppModel
     @State private var query = ""
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var answer: NextAnswer? { model.shown }
 
@@ -289,8 +316,8 @@ private struct Main: View {
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 120, alignment: .top)
-            .animation(.snappy(duration: 0.22), value: model.showNearby)
-            .animation(.snappy(duration: 0.22), value: model.target)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.showNearby)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.target)
 
             Search(model: model, query: $query)
         }
@@ -306,8 +333,8 @@ private struct Header: View {
         let resting = !model.showNearby && a?.mode == "rest"
         HStack(alignment: .center, spacing: 12) {
             IconTile(
-                system: model.showNearby ? "location.fill" : resting ? "moon.zzz.fill" : "bus.fill",
-                tint: resting ? .indigo : .orange
+                system: model.showNearby ? "location.fill" : resting ? "moon.zzz.fill" : a?.arrived == true ? "checkmark.circle.fill" : "bus.fill",
+                tint: .brand
             )
             VStack(alignment: .leading, spacing: 3) {
                 Text(heading(a))
@@ -317,7 +344,7 @@ private struct Header: View {
                 // Ticks every second: the countdown and the dimming are
                 // computed from the departure time, never from `label`.
                 Ticking(every: 1) { now in
-                    let old = !model.showNearby && !resting && model.isOld(a, at: now)
+                    let old = !model.showNearby && !resting && a?.arrived != true && model.isOld(a, at: now)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(model.showNearby ? "Departures near you" : big(a))
                             .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -329,7 +356,7 @@ private struct Header: View {
                         } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
                             StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
                         } else {
-                            StatusLine(color: resting ? .indigo : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : status(a))
+                            StatusLine(color: resting ? .brand : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : a?.arrived == true ? "You're at the stop" : status(a))
                         }
                     }
                 }
@@ -340,22 +367,27 @@ private struct Header: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12, weight: .semibold))
-                    .rotationEffect(.degrees(model.loading ? 360 : 0))
-                    .animation(model.loading ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: model.loading)
+                    .rotationEffect(.degrees(model.loading && !reduceMotion ? 360 : 0))
+                    .opacity(model.loading && reduceMotion ? 0.4 : 1)
+                    .animation(model.loading && !reduceMotion ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: model.loading)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(.primary.opacity(0.06)))
             }
             .buttonStyle(.plain)
             .help("Refresh")
+            .accessibilityLabel(model.loading ? "Refreshing" : "Refresh")
         }
         .card()
     }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// "D2 · 09:42" when there's a live departure; otherwise the label.
     private func big(_ a: NextAnswer?) -> String {
         guard let a else { return "Checking…" }
         guard a.hasLiveTime, let at = a.departure else { return a.label }
-        return "\(a.service) · \(campusTime(at))"
+        // A timetable estimate is not a live time: mark it, as the widget does.
+        return "\(a.service) · \(a.quality == "scheduled" ? "~" : "")\(campusTime(at))"
     }
 
     private func countdown(to at: Date, now: Date) -> String {
@@ -391,7 +423,7 @@ private struct Header: View {
         switch a?.quality {
         case "live": return "Live" + when
         case "scheduled": return "Timetable estimate" + when
-        case "stale": return "A few minutes old" + when
+        case "stale": return "Live data a few minutes old" + when
         case "ended": return "Services ended" + when
         case "unknown": return "No live data" + when
         default: return "Loading"
@@ -419,6 +451,7 @@ private struct IconTile: View {
             .frame(width: 42, height: 42)
             .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(tint.opacity(0.16)))
             .contentTransition(.symbolEffect(.replace))
+            .accessibilityHidden(true)
     }
 }
 
@@ -427,8 +460,9 @@ private struct StatusLine: View {
     let text: String
     var body: some View {
         HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 6, height: 6)
-            Text(text).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            // Colour repeats what the text says; VoiceOver gets the text.
+            Circle().fill(color).frame(width: 6, height: 6).accessibilityHidden(true)
+            Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 }
@@ -438,6 +472,7 @@ private struct StatusLine: View {
 private struct Tabs: View {
     @Bindable var model: AppModel
     @Namespace private var pill
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Tab: Hashable { case plan, place(String), code(String, String), nearby }
 
@@ -475,7 +510,7 @@ private struct Tabs: View {
             ForEach(tabs, id: \.0) { tab, title, icon in
                 let on = tab == current
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { choose(tab) }
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { choose(tab) }
                 } label: {
                     Label(title, systemImage: icon)
                         .font(.system(size: 12, weight: on ? .semibold : .medium))
@@ -495,6 +530,8 @@ private struct Tabs: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(title)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .padding(3)
@@ -529,10 +566,10 @@ private struct AnswerDetail: View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
-                if a.timing?.text != nil || a.crowd != nil {
+                if a.timing?.text != nil || crowdWord(a.crowd) != nil {
                     HStack(spacing: 6) {
-                        if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .orange : .green) }
-                        if let c = a.crowd { Pill(text: "\(c.capitalized) crowd", color: .secondary) }
+                        if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .green) }
+                        if let c = crowdWord(a.crowd) { Pill(text: c, color: .secondary) }
                     }
                 }
                 if let name = a.stop?.name, !name.isEmpty { Row(icon: "mappin.circle", text: "Board at \(name)") }
@@ -646,6 +683,7 @@ private struct Search: View {
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal, 10)
