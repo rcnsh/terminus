@@ -79,7 +79,7 @@ That's it. It updates through the day and goes quiet in the evening.
 <br>
 
 - **Android:** open the downloaded file and allow your browser to install apps when asked. Play Protect may ask you to confirm, since it isn't from the Play Store.
-- **Mac:** open the disk image, drag terminus to Applications, then right-click it and choose Open. On macOS 15 and later, allow it in System Settings → Privacy & Security.
+- **Mac:** open the disk image, drag terminus to Applications, then right-click it and choose Open. On macOS 15 and later, allow it in System Settings → Privacy & Security. From 1.3.8 it updates itself.
 
 </details>
 
@@ -119,7 +119,8 @@ Sending) and the NUS feed configuration described in
 [apps/api/docs/internals.md](apps/api/docs/internals.md). Releases start with
 `scripts/release.sh` (tests, the Android build, the tag); pushing the tag runs
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which signs
-and packages the Mac app and publishes the release. See [CONTRIBUTING.md](CONTRIBUTING.md).
+and packages the Mac app, publishes the appcast installed Macs update from,
+and publishes the release. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <br>
 

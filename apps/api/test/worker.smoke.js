@@ -604,6 +604,19 @@ test('downloads serve whatever latest.json points at', async () => {
   const dmg = await get('/download/mac');
   assert.equal(dmg.headers.get('content-type'), 'application/x-apple-diskimage');
   assert.match(dmg.headers.get('content-disposition'), /terminus-1\.0\.1\.dmg/);
+
+  // Sparkle: the appcast, and release files by their versioned path.
+  assert.equal((await get('/download/appcast.xml')).status, 404, 'no appcast yet');
+  put('appcast.xml', '<rss/>');
+  const feed = await get('/download/appcast.xml');
+  assert.equal(feed.headers.get('content-type'), 'application/xml; charset=utf-8');
+  assert.equal(await feed.text(), '<rss/>');
+  const byPath = await get('/download/releases/1.0.1/terminus-1.0.1.dmg');
+  assert.equal(byPath.status, 200);
+  assert.equal(byPath.headers.get('content-type'), 'application/x-apple-diskimage');
+  assert.equal(await byPath.text(), 'DMG');
+  assert.equal((await get('/download/releases/9.9.9/terminus-9.9.9.dmg')).status, 404);
+  assert.equal((await get('/download/releases/1.0.1/other.dmg')).status, 404, 'only release files');
 });
 
 test('/health: no probe without the operator token, 503 when the feed is confirmed down', async () => {

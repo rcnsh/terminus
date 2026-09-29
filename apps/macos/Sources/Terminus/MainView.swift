@@ -20,7 +20,13 @@ struct Main: View {
                     Image(systemName: "arrow.down.circle.fill").foregroundStyle(.orange).accessibilityHidden(true)
                     Text("terminus \(v) is out").font(.callout)
                     Spacer()
-                    Button("Download") { NSWorkspace.shared.open(URL(string: "https://terminus.rcn.sh/download/mac")!) }.controlSize(.small)
+                    // Sparkle usually gets there first; this is for when it hasn't
+                    // yet, or can't (a copy outside Applications).
+                    if Updater.shared.running {
+                        Button("Update") { Updater.shared.checkNow() }.controlSize(.small)
+                    } else {
+                        Button("Download") { NSWorkspace.shared.open(URL(string: "https://terminus.rcn.sh/download/mac")!) }.controlSize(.small)
+                    }
                 }
                 .card(padding: 10)
             }
