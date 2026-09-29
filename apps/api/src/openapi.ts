@@ -946,21 +946,25 @@ export const DOCS_PAGE = `<!doctype html>
   <script src="${ELEMENTS}/web-components.min.js" integrity="sha384-X5kH2B8aH81JEl8IfSBwwnr8FYcCqMzdxpqjmmlRbhIl7SsQ9Zn0xk+csQmU37zN" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="${ELEMENTS}/styles.min.css" integrity="sha384-NzdOiocfnINlXfuCXi4OpL/xvdbgLiKaLHQ07Z+IwhVaxHqLShn5rVD5OHt/LYgz" crossorigin="anonymous">
   <style>
-    html, body { margin: 0; height: 100%; }
-    .bar { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; border-bottom: 1px solid #e7e5e2; font: 500 14px/1 system-ui, -apple-system, sans-serif; background: #fafaf9; }
+    /* The page never scrolls; only the docs inside it do. Pinning the body to
+       the screen, rather than sizing with vh, means a phone's collapsing
+       address bar or rubber-band scroll can't move our bar out from above
+       Elements' fixed mobile bar, or leave uncovered page below the docs. */
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; }
+    body { position: fixed; inset: 0; display: flex; flex-direction: column; }
+    .bar { flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; border-bottom: 1px solid #e7e5e2; font: 500 14px/1 system-ui, -apple-system, sans-serif; background: #fafaf9; }
     .bar a { color: #1c1917; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
     .bar b { color: #c2410c; font-weight: inherit; }
     .bar .back { color: #6b6560; padding: 12px 0; }
-    /* dvh: on phones, 100vh is taller than the screen while the browser's
-       address bar shows, which hides the bottom of the docs. */
-    elements-api { display: block; height: calc(100vh - 49px); height: calc(100dvh - 49px); }
+    elements-api { display: block; flex: 1; min-height: 0; }
     /* Below Elements' breakpoint the sidebar becomes a drawer (layout="responsive").
        Inputs under 16px make iOS Safari zoom in on focus and stay zoomed. */
     @media (max-width: 767px) {
       elements-api input, elements-api select, elements-api textarea { font-size: 16px !important; }
       /* Elements' fixed mobile bar has no z-index, so sticky schema headings
-         (z-index 10) slide over it while scrolling. */
-      elements-api .TopNav--mosaic { z-index: 20; }
+         (z-index 10) slide over it while scrolling; and no top, so it sat
+         wherever the page flow put it. It goes right under our 48px bar. */
+      elements-api .TopNav--mosaic { z-index: 20; top: 48px; }
       elements-api .sl-drawer-container > .sl-fixed { z-index: 30; }
     }
   </style>
