@@ -29,13 +29,14 @@ import {
   saveProfileJson,
   sessionCookie,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, MAX_VENUE_WALK_S, PROFILE_LIMITS, type Profile, classStartMs, isResting, parseProfile, planChangesAt, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
+import { DEFAULT_PROFILE, MAX_VENUE_WALK_S, PROFILE_LIMITS, type Profile, classStartMs, isResting, nextClass, parseProfile, planChangesAt, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
 import { isoSeconds, shortStop } from './format.ts';
 import { WALK } from './config.ts';
 import { landmark, targetStops } from './landmarks.ts';
+import { atHome } from './residences.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 
@@ -383,6 +384,24 @@ export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | 'pa
   return seen.includes('pace') ? null : 'pace';
 }
 
+/** In your residence with nothing left today: no bus, and what's next. */
+function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: Array<{ key: string; label: string }>) {
+  return {
+    label: "You're home",
+    detail: restDetail(profile, nowMs),
+    alt: null,
+    stop: { code: homeStop ?? '', name: '', confidence: 1 },
+    quality: 'live' as const,
+    asOf: new Date(nowMs).toISOString(),
+    arrivals: [],
+    arrived: true,
+    leave: null,
+    mode: 'trip',
+    dest: { to: homeStop ?? '', label: 'Home', why: 'home' },
+    places,
+  };
+}
+
 function setupAnswer(nowMs: number, label: string, detail: string): Answer {
   return { label, detail, alt: null, stop: { code: '', name: '', confidence: 0 }, quality: 'unknown', asOf: new Date(nowMs).toISOString(), arrivals: [] };
 }
@@ -419,6 +438,16 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   } else {
     const plan = planFor(profile, nowMs);
     if (plan) dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from, trip: plan.trip, fromVenue: plan.fromVenue };
+    // Already in your residence: "Home" is not somewhere to go.
+    if (plan && (plan.why === 'home' || plan.why === 'gap-home') && atHome(lat, lon, profile.home?.stops ?? [])) {
+      const next = nextClass(profile, nowMs);
+      if (plan.why === 'gap-home' && next?.daysAhead === 0) {
+        // Between classes: when to leave home for the next one.
+        dest = { to: next.trip.to, label: next.trip.label, why: 'class', from: homeStop, trip: next.trip, fromVenue: null };
+      } else {
+        return youreHome(profile, nowMs, homeStop, places);
+      }
+    }
   }
 
   const preferStops = profile.home?.stops ?? [];

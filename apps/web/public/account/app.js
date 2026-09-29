@@ -12,6 +12,7 @@ let profile = null;
 let term = null; // "Sem 1 2026/27", the semester the imported classes are for
 let stops = []; // [{code, name, lat, lon}]
 let destinations = []; // the search list from /campus
+let residences = []; // on-campus residences and their stops, from /campus
 
 /* ---------- helpers ---------- */
 
@@ -117,6 +118,9 @@ const onboardingCtx = {
   stopSelect,
   toast,
   nearestStop: nearestStopTo,
+  get residences() {
+    return residences;
+  },
   save: saveNow,
   get profile() {
     return profile;
@@ -338,6 +342,7 @@ function renderHome() {
   $('#home-2').replaceWith(Object.assign(stopSelect(now[1], pick(1), { blank: 'Second stop (optional)' }), { id: 'home-2' }));
   $('#gap').value = profile.gapHours;
   $('#home-walk').value = profile.homeWalkMin ?? 5;
+  $('#residence').value = residenceFor(now)?.code ?? '';
   $('#pace').value = profile.walkPace ?? 'normal';
   $('#full-bus').checked = profile.fullBusMargin !== false;
   $('#day-start').value = hhmm(profile.dayStartMin ?? 360);
@@ -539,6 +544,26 @@ $('#gap').addEventListener('change', (e) => {
   }
 });
 
+/** The residence whose stops are exactly these, if any. Only stops are saved. */
+function residenceFor(homeStops) {
+  const key = [...homeStops].sort().join();
+  return residences.find((r) => [...r.stops].sort().join() === key) ?? null;
+}
+
+/** A residence's stops and walk, as home. */
+function useResidence(r) {
+  profile.home = { stops: [...r.stops] };
+  profile.homeWalkMin = Math.max(1, Math.round(r.walkM / 1.3 / 60));
+}
+
+$('#residence').addEventListener('change', (e) => {
+  const r = residences.find((x) => x.code === e.target.value);
+  if (!r) return; // "Off campus": keep the stops, pick them below
+  useResidence(r);
+  renderHome();
+  save();
+});
+
 $('#pace').addEventListener('change', (e) => {
   profile.walkPace = e.target.value;
   save();
@@ -686,6 +711,8 @@ async function start() {
   stops = campus.stops.map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));
 
   destinations = campus.destinations;
+  residences = (campus.residences ?? []).sort((a, b) => a.name.localeCompare(b.name));
+  for (const r of residences) $('#residence').append(el('option', { value: r.code, textContent: r.name }));
   for (const form of ['#manual-form', '#place-form']) {
     attachSearch($(form).where, { source: () => destinations, suggestions: mySuggestions, stopName });
   }
