@@ -4,7 +4,7 @@
  * public routes in index.ts never do.
  */
 
-import type { Answer, Env, Graph, ResolveInput, StopArrivals } from './types.ts';
+import type { Answer, Env, Graph, MeAnswer, PlaceChip, ResolveInput, StopArrivals, Why } from './types.ts';
 import {
   ACCOUNT_TTL,
   type SessionInfo,
@@ -410,7 +410,7 @@ export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | 'pa
 }
 
 /** In your residence with nothing left today: no bus, and what's next. */
-function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: Array<{ key: string; label: string }>) {
+function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: PlaceChip[]): MeAnswer {
   return {
     label: "You're home",
     detail: restDetail(profile, nowMs),
@@ -431,13 +431,13 @@ function setupAnswer(nowMs: number, label: string, detail: string): Answer {
   return { label, detail, alt: null, stop: { code: '', name: '', confidence: 0 }, quality: 'unknown', asOf: new Date(nowMs).toISOString(), arrivals: [] };
 }
 
-export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
+export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile): Promise<MeAnswer> {
   const { lat, lon } = coordsFrom(url);
   const speed = paceSpeed(profile.walkPace);
   const homeStop = profile.home?.stops[0] ?? null;
-  const places = profile.places.map(({ key, label }) => ({ key, label }));
+  const places: PlaceChip[] = profile.places.map(({ key, label }) => ({ key, label }));
 
-  let dest: { to: string; label: string; why: string; from: string | null; trip?: ImportedTrip | null; fromVenue?: string | null } | null = null;
+  let dest: { to: string; label: string; why: Why; from: string | null; trip?: ImportedTrip | null; fromVenue?: string | null } | null = null;
   const placeKey = url.searchParams.get('place');
   const toRaw = url.searchParams.get('to');
   if (placeKey) {

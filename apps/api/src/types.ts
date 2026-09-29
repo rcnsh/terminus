@@ -103,6 +103,51 @@ export interface Answer {
   leave?: Leave | null;
 }
 
+/* ------------------------------------------------------------------ */
+/* /me/next: the personal answer every client renders                  */
+/* ------------------------------------------------------------------ */
+
+/** What kind of answer: a trip somewhere, what's near you, or resting. */
+export type Mode = 'trip' | 'nearby' | 'rest';
+/** Why you're going there. */
+export type Why = 'class' | 'home' | 'gap-home' | 'place';
+
+export interface Dest {
+  to: string;
+  label: string;
+  why: Why;
+}
+
+/** A saved place, as a one-tap chip. */
+export interface PlaceChip {
+  key: string;
+  label: string;
+}
+
+export interface Timing {
+  status: 'on-time' | 'tight' | 'late';
+  /** "Arrive 09:56 · 4 min early", "Arrive 09:59 · just in time", "~5 min late". */
+  text: string;
+  /** Class start, ISO. */
+  classAt: string;
+  /** When you reach the class on the headline bus, ISO. */
+  reachAt: string;
+}
+
+/**
+ * The /me/next response. Clients parse this in Api.kt, Api.swift and the
+ * account page; test/fixtures/answers holds one of each kind, checked by the
+ * golden test here and parsed by the Android and Mac unit tests.
+ */
+export interface MeAnswer extends Answer {
+  mode: Mode;
+  dest: Dest | null;
+  places: PlaceChip[];
+  timing?: Timing | null;
+  /** Planned answers only: when the plan changes by itself. */
+  refreshAt?: string;
+}
+
 export interface Leave {
   /** ISO, whole seconds. */
   at: string;
@@ -114,7 +159,8 @@ export interface Leave {
    *  the stop (`estimated`). Null when walking. */
   board: string | null;
   /** When you get there that way: the venue for a class, else the stop. ISO. */
-  arrive: string | null;  /** A reason the time is earlier than it could be ("D2 is often packed…"). Display verbatim. */
+  arrive: string | null;
+  /** A reason the time is earlier than it could be ("D2 is often packed…"). Display verbatim. */
   note?: string | null;
 }
 
