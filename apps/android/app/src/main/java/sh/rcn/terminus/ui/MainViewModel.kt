@@ -126,6 +126,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             LiveService.stop(ctx)
             if (!Refresher.active(ctx)) Refresher.cancel(ctx)
         }
+        // The widget's refresh button comes and goes with this setting.
+        viewModelScope.launch { redrawWidgets(ctx) }
     }
 
     fun dismissPairLink() = _state.update { it.copy(pendingPair = null) }
