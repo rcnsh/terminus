@@ -30,6 +30,9 @@ jobs:
       PUBLISH: ${{ github.event_name == 'push' }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      # SHA-1 of the terminus self-signed certificate (~/.terminus/mac-signing.p12).
+      # Signing by hash rather than name, as the certificate isn't trusted.
+      SIGN_IDENTITY: C4EE234DA75ED3CD7699A31394C276801F93C4A9
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,11 +73,14 @@ jobs:
           security import "$RUNNER_TEMP/signing.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PASSWORD" "$KC" > /dev/null
           rm "$RUNNER_TEMP/signing.p12"
+          # On the search list too: some codesign versions only find identities there.
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          # Self-signed, so listed as not trusted; codesign signs with it all the same.
+          security find-identity -p codesigning "$KC" | grep -q "$SIGN_IDENTITY" || {
+            echo "::error::the certificate $SIGN_IDENTITY is not in MAC_SIGNING_P12"; exit 1; }
           echo "SIGN_KEYCHAIN=$KC" >> "$GITHUB_ENV"
 
       - name: Build, sign and package
-        env:
-          SIGN_IDENTITY: terminus (self-signed)
         run: scripts/package-mac.sh
 
       - name: Keep the DMG
