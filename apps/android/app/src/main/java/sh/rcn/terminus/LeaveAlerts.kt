@@ -85,9 +85,9 @@ object LeaveAlerts {
             },
         )
         val fmt = { ms: Long -> clock(ctx, ms) }
-        val title = answer.leaveHeadline(now, fmt) ?: return
+        val title = answer.leaveHeadline(now) ?: return
         // Not `timingText`: that is for the headline bus, which may not be the one to wait for.
-        val body = answer.catchLine(fmt) ?: answer.destLabel.orEmpty()
+        val body = answer.catchLine ?: answer.destLabel.orEmpty()
         val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · ")
         val open = PendingIntent.getActivity(
             ctx, 0, MainActivity.intentFor(ctx),

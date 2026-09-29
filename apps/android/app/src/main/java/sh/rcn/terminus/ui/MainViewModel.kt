@@ -21,6 +21,8 @@ import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.Place
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
+import sh.rcn.terminus.ParseError
+import sh.rcn.terminus.hour12
 import sh.rcn.terminus.isNewer
 import sh.rcn.terminus.widget.redrawWidgets
 import sh.rcn.terminus.widget.Refresher
@@ -192,7 +194,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // A fix from the last minute is as good as a new one, and costs no
             // wait: polling every 30 s must not mean a GPS request every 30 s.
             val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
-            val api = Api(token)
+            val api = Api(token, hour12 = hour12(ctx))
             val s = _state.value
             try {
                 if (s.showNearby) {
@@ -223,6 +225,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } else {
                     _state.update { it.copy(loading = false, error = e.message) }
                 }
+            } catch (e: ParseError) {
+                // Not the network: the server said something this version can't read.
+                _state.update { it.copy(loading = false, error = if (it.update != null) "Update terminus to keep going" else "Unexpected answer from terminus") }
             } catch (e: Exception) {
                 _state.update { it.copy(loading = false, error = "Offline") }
             }
