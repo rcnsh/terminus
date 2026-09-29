@@ -24,6 +24,7 @@ import { fmsConfigured, getArrivals } from './fms.ts';
 import { shortStop } from './format.ts';
 import { boardAt, indexGraph } from './resolve.ts';
 import { buildCampusMap, buildDestinations } from './campus.ts';
+import { stopPairs } from './pairs.ts';
 import { analyticsEnabled } from './analytics.ts';
 import { DOCS_PAGE, openApiSpec } from './openapi.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
@@ -43,6 +44,7 @@ import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './a
 // with a long client cache, same spirit as GRAPH itself.
 const CAMPUS_MAP = buildCampusMap(GRAPH);
 const DESTINATIONS = buildDestinations(GRAPH);
+const STOP_PAIRS = stopPairs(GRAPH);
 // For "Where do you live?": names and stops only. The outlines stay here.
 const RESIDENCE_LIST = allResidences().map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0] }));
 
@@ -302,7 +304,7 @@ export function oldHostRedirect(req: Request, url: URL): Response | null {
 const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
-const KEYED = ['/next', '/trip', '/arrivals', '/import', '/campus'];
+const KEYED = ['/next', '/trip', '/arrivals', '/import', '/campus', '/stops/pairs'];
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
@@ -369,6 +371,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return await handleHealth(req, url, env, nowMs);
         case '/campus':
           return handleCampus();
+        case '/stops/pairs':
+          // Static like /campus: changes only with a new scrape.
+          return jsonCached(STOP_PAIRS, 3600);
         case '/arrivals':
           return await handleArrivals(url, env, ctx, nowMs);
         case '/import':

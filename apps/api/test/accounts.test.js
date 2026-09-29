@@ -716,7 +716,7 @@ test('/me/next in your residence: "You\'re home" after the last class, leave-by 
 test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
   const { env, email } = setup();
   delete env.PUBLIC_API_OPEN; // locked, as in production
-  for (const path of ['/next?lat=1.2966&lon=103.7764', '/trip?to=UTOWN&from=PGP', '/arrivals?stop=COM3', '/campus', '/import?share=x']) {
+  for (const path of ['/next?lat=1.2966&lon=103.7764', '/trip?to=UTOWN&from=PGP', '/arrivals?stop=COM3', '/campus', '/stops/pairs', '/import?share=x']) {
     const res = await call(env, path);
     assert.equal(res.status, 401, path);
     assert.match((await res.json()).error, /API key/);
@@ -726,6 +726,7 @@ test('the bus answers need a key or an account; downloads, health and docs stay 
   // A signed-in browser or a paired device gets through without a key.
   const cookie = await signIn(env, email);
   assert.equal((await call(env, '/campus', { cookie })).status, 200);
+  assert.equal((await call(env, '/stops/pairs', { cookie })).status, 200);
   assert.equal((await call(env, '/arrivals?stop=COM3', { cookie })).status, 200);
 });
 
