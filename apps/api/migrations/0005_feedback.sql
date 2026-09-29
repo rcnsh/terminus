@@ -13,3 +13,7 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS feedback_user ON feedback(user_id, created);
 CREATE INDEX IF NOT EXISTS feedback_created ON feedback(created);
+
+-- Which app a paired device runs, for the operator dashboard: from the
+-- User-Agent when it pairs, or on its next request for devices paired before.
+ALTER TABLE sessions ADD COLUMN platform TEXT;

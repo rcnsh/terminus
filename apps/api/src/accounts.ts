@@ -200,15 +200,28 @@ async function openSession(
   kind: 'web' | 'device',
   name: string | null,
   nowMs: number,
+  platform: string | null = null,
 ): Promise<string> {
   const token = newToken();
   await db
     .prepare(
-      'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(await hashToken(token), userId, kind, name, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null)
+    .bind(await hashToken(token), userId, kind, name, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null, platform)
     .run();
   return token;
+}
+
+/**
+ * Which app is calling, from its User-Agent: Android's HTTP stack says
+ * Dalvik, the Mac app's says CFNetwork. Null for anything else (a browser
+ * session doesn't need one).
+ */
+export function platformFromAgent(ua: string | null): 'android' | 'mac' | null {
+  if (!ua) return null;
+  if (/Dalvik|Android/i.test(ua)) return 'android';
+  if (/CFNetwork|Darwin/i.test(ua)) return 'mac';
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -249,7 +262,12 @@ export async function authenticate(
   if (row.kind === 'device' && nowMs - row.last_seen > DEVICE_IDLE_MS) return null;
 
   if (nowMs - row.last_seen > ACCOUNT_TTL.touchMs) {
-    const touch = db.prepare('UPDATE sessions SET last_seen = ? WHERE token_hash = ?').bind(nowMs, hash).run();
+    // Devices paired before sessions had a platform get one here.
+    const platform = row.kind === 'device' ? platformFromAgent(req.headers.get('user-agent')) : null;
+    const touch = db
+      .prepare('UPDATE sessions SET last_seen = ?, platform = COALESCE(platform, ?) WHERE token_hash = ?')
+      .bind(nowMs, platform, hash)
+      .run();
     if (ctx) ctx.waitUntil(touch.catch(() => {}));
     else await touch;
   }
@@ -295,13 +313,19 @@ export function maskEmail(email: string): string {
 }
 
 /** Spends a pairing code and returns a device token, or null. */
-export async function redeemPairCode(db: D1Database, code: string, name: string, nowMs: number): Promise<string | null> {
+export async function redeemPairCode(
+  db: D1Database,
+  code: string,
+  name: string,
+  nowMs: number,
+  platform: string | null = null,
+): Promise<string | null> {
   const row = await db
     .prepare('DELETE FROM pair_codes WHERE code = ? RETURNING user_id, expires')
     .bind(code)
     .first<{ user_id: string; expires: number }>();
   if (!row || row.expires < nowMs) return null;
-  return openSession(db, row.user_id, 'device', name, nowMs);
+  return openSession(db, row.user_id, 'device', name, nowMs, platform);
 }
 
 export interface DeviceRow {

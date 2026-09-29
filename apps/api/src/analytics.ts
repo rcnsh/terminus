@@ -25,8 +25,8 @@
  * never reorder, never repurpose, or every query written before the change
  * starts lying.
  *
- *   blob1   kind        'answer' | 'arrival'
- *   blob2   stop        boarding stop code
+ *   blob1   kind        'answer' | 'arrival' | 'error'
+ *   blob2   stop        boarding stop code; for 'error', the route (no query)
  *   blob3   svc         service, '' on an ended answer
  *   blob4   dest        destination stop code, '' for a bare /next
  *   blob5   quality     live | scheduled | unknown | stale | ended
@@ -127,4 +127,19 @@ export function logAnswer(env: Env, input: LogInput): void {
 /** Convenience for the arrivals of a stop we did not end up recommending. */
 export function arrivalCount(arrivals: Arrival[]): number {
   return arrivals.filter((a) => a.etaS != null).length;
+}
+
+/**
+ * An unhandled error, for the dashboard's error count: the route only, since
+ * a query string can hold coordinates. Nothing else is filled in.
+ */
+export function logError(env: Env, path: string): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    // /me/devices/abc123 is one route, not one per device.
+    const route = path.split('/').slice(0, 3).join('/') || '/';
+    env.AE!.writeDataPoint({ blobs: ['error', route], doubles: [], indexes: ['error'] });
+  } catch {
+    // Same rule as above: logging never breaks a response.
+  }
 }

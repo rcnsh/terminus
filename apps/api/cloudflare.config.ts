@@ -36,6 +36,8 @@ export default defineConfig({
 		env: {
 			EMAIL_FROM: bindings.text("login@terminus.rcn.sh"),
 			TURNSTILE_SITE_KEY: bindings.text("0x4AAAAAAFHR71tKL907Buou"),
+			// For the dashboard's Analytics Engine queries (with the optional ANALYTICS_TOKEN secret).
+			CF_ACCOUNT_ID: bindings.text("31e51704ff7169c03d7014c3a1e5f110"),
 			AE: bindings.analyticsEngineDataset({
 				name: "terminus",
 			}),

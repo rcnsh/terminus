@@ -39,8 +39,13 @@ export interface Env {
   RL_PUBLIC?: RateLimit;
   /** Per-account limit on /me. */
   RL_ME?: RateLimit;
-  /** Unlocks /health?probe=1 via the x-health-token header. Unset: no probe. */
+  /** Unlocks /health?probe=1 and the /admin dashboard via the x-health-token header. Unset: neither. */
   HEALTH_TOKEN?: string;
+  /** Optional. An API token with Account Analytics Read, so the dashboard can
+   *  query Analytics Engine. Without it the dashboard skips those charts. */
+  ANALYTICS_TOKEN?: string;
+  /** The account that owns the Analytics Engine dataset. */
+  CF_ACCOUNT_ID?: string;
   /** One global ceiling on sign-in emails. */
   RL_MAIL?: RateLimit;
   /** Tests only: "1" lets anyone call the bus-answer routes without a key. */

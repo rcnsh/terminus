@@ -18,7 +18,8 @@ import { shortStop } from './format.ts';
 import { boardAt, indexGraph } from './resolve.ts';
 import { buildCampusMap, buildDestinations } from './campus.ts';
 import { stopPairs } from './pairs.ts';
-import { analyticsEnabled } from './analytics.ts';
+import { adminStats, isOperator } from './admin.ts';
+import { analyticsEnabled, logError } from './analytics.ts';
 import { DOCS_PAGE, openApiSpec } from './openapi.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
@@ -192,7 +193,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
   // fresh deploy before the first cron run) is not that.
   const ok = u?.up !== false && cronStale !== true && daysLeft > 0;
   // The probe spends an upstream call, so only the operator gets it.
-  const operator = Boolean(env.HEALTH_TOKEN && req.headers.get('x-health-token') === env.HEALTH_TOKEN);
+  const operator = isOperator(env, req);
   const probe = operator && url.searchParams.get('probe') === '1';
   // Reads the Play and APKCombo pages (no NUS calls), to see what the
   // automatic version update would find today.
@@ -269,7 +270,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       // Public routes: a per-IP ceiling. The per-stop cache already protects
       // NUS; this protects the Worker from being a free proxy, and D1/R2 from
       // being a free bill.
-      if (env.RL_PUBLIC && (KEYED.includes(url.pathname) || url.pathname === '/health' || url.pathname === '/status.json' || url.pathname.startsWith('/download/'))) {
+      if (env.RL_PUBLIC && (KEYED.includes(url.pathname) || url.pathname === '/health' || url.pathname === '/status.json' || url.pathname === '/admin/stats' || url.pathname.startsWith('/download/'))) {
         const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
         if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
       }
@@ -307,6 +308,10 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return await handleHealth(req, url, env, nowMs);
         case '/status.json':
           return await handleStatus(env, nowMs);
+        case '/admin/stats':
+          // The dashboard's data: operator only, never cached.
+          if (!isOperator(env, req)) return json({ error: 'not found' }, 404);
+          return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
         case '/campus':
           return handleCampus();
         case '/stops/pairs':
@@ -323,6 +328,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       // Logged, because a caught error never shows up as an exception in the
       // dashboard. The path only: the query can hold coordinates.
       console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
+      logError(env, url.pathname);
       return json({ error: 'internal' }, 500);
     }
 }

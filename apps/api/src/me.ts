@@ -25,6 +25,7 @@ import {
   pairCodeOwner,
   maskEmail,
   redeemLink,
+  platformFromAgent,
   redeemPairCode,
   requestLink,
   revokeDevice,
@@ -456,7 +457,7 @@ export async function handleMe(
     const code = normalizePairCode(body?.code);
     const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) || 'Device' : 'Device';
     if (!code) return json({ error: 'enter the 6-character code from the account page' }, 400);
-    const token = await redeemPairCode(db, code, name, nowMs);
+    const token = await redeemPairCode(db, code, name, nowMs, platformFromAgent(req.headers.get('user-agent')));
     if (!token) return json({ error: 'that code is wrong or has expired' }, 400);
     return json({ token });
   }

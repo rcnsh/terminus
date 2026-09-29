@@ -88,8 +88,10 @@ pnpm run deploy
 | `GET /campus` | Static stop/route geometry and destination search data. Cached hard. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
+| `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
+| `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set). Needs `x-health-token`; anything else gets a 404. |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
-| `POST /auth/login`, `/pair`, `/me/*` | Accounts. See below. |
+| `POST /auth/login`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. |
 
 `/next`, `/trip`, `/arrivals`, `/campus` and `/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`) or a signed-in session.
