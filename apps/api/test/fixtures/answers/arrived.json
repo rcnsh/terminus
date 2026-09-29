@@ -1,0 +1,32 @@
+{
+  "label": "You're here",
+  "detail": "You're at COM 3",
+  "alt": null,
+  "stop": {
+    "code": "COM3",
+    "name": "COM 3",
+    "confidence": 1
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [],
+  "arrived": true,
+  "leave": null,
+  "mode": "trip",
+  "dest": {
+    "to": "COM3",
+    "label": "COM 3",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ]
+}

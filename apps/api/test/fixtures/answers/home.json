@@ -1,0 +1,32 @@
+{
+  "label": "You're home",
+  "detail": "Next: CS2030 @ COM1, Thu 3 Sep 07:00",
+  "alt": null,
+  "stop": {
+    "code": "PGPR",
+    "name": "",
+    "confidence": 1
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [],
+  "arrived": true,
+  "leave": null,
+  "mode": "trip",
+  "dest": {
+    "to": "PGPR",
+    "label": "Home",
+    "why": "home"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T10:00:00Z"
+}
