@@ -43,6 +43,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -128,7 +129,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun NusbusTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) BrandDark else BrandLight, content = content)
+    // The Surface sets the default text colour to onBackground. Without it,
+    // any Text with no explicit colour is black, invisible in dark mode.
+    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) BrandDark else BrandLight) {
+        Surface(color = MaterialTheme.colorScheme.background, content = content)
+    }
 }
 
 @Composable
