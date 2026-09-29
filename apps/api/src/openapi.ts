@@ -270,6 +270,52 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/stops/pairs': {
+        get: {
+          tags: ['Stops'],
+          summary: 'Stops by side of the road',
+          description:
+            'Every stop grouped with its twin across the road, with the buses that call at each side and the stop each one goes to next. ' +
+            'NUS stops come in pairs a few metres apart, one for each direction of travel, so this is how to tell which side goes where. ' +
+            'A stop with no twin is a place with one side.\n\n' +
+            '`crossingM` is the straight-line distance between the two stops, not a walking distance. ' +
+            '`next` is null where the bus terminates. For whole routes in order, see `/campus`.\n\n' +
+            'The data only changes when the stop graph is re-scraped; `version` says when that was, and stop codes can change between versions. ' +
+            'Responses are cached for an hour. Credit the source as given in `attribution`.',
+          operationId: 'getStopPairs',
+          responses: {
+            '200': {
+              description: 'Places, each with one or two sides.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/StopPairs' },
+                  example: {
+                    version: '2026-09-28T13:26:23.237956+00:00',
+                    attribution: "Stop names, positions and routes from NUS's internal shuttle feed, via terminus (https://terminus.rcn.sh). Unofficial, not affiliated with NUS.",
+                    places: [
+                      {
+                        id: 'KR-MRT',
+                        name: 'Kent Ridge MRT',
+                        crossingM: 22,
+                        sides: [
+                          {
+                            code: 'KR-MRT', name: 'KR MRT', longName: 'Kent Ridge MRT', lat: 1.29482, lon: 103.784413,
+                            services: [{ svc: 'A1', next: 'LT27' }, { svc: 'D2', next: 'LT27' }, { svc: 'K', next: 'LT27' }, { svc: 'P', next: 'UHC-OPP' }],
+                          },
+                          {
+                            code: 'KR-MRT-OPP', name: 'Opp KR MRT', longName: 'Opp Kent Ridge MRT', lat: 1.294962, lon: 103.784556,
+                            services: [{ svc: 'A2', next: 'PGPR' }, { svc: 'D2', next: 'PGPR' }, { svc: 'K', next: 'PGPR' }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       '/import': {
         get: {
           deprecated: true,
@@ -632,6 +678,54 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
             asOf: { type: 'string', format: 'date-time' },
             available: { type: 'boolean', description: 'False when the upstream feed could not be reached.' },
+          },
+        },
+        StopPairs: {
+          type: 'object',
+          required: ['version', 'attribution', 'places'],
+          properties: {
+            version: { type: 'string', description: 'When the stop graph was scraped.' },
+            attribution: { type: 'string', description: 'Credit line for the data.' },
+            places: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['id', 'name', 'crossingM', 'sides'],
+                properties: {
+                  id: { type: 'string', description: 'The code of the side that is not "Opp", or of the only side.' },
+                  name: { type: 'string' },
+                  crossingM: { type: ['integer', 'null'], description: 'Straight-line metres between the two sides. Null with one side.' },
+                  sides: {
+                    type: 'array',
+                    minItems: 1,
+                    maxItems: 2,
+                    items: {
+                      type: 'object',
+                      required: ['code', 'name', 'longName', 'lat', 'lon', 'services'],
+                      properties: {
+                        code: { type: 'string', description: 'Stop code, as used by every other route.' },
+                        name: { type: 'string' },
+                        longName: { type: 'string' },
+                        lat: { type: 'number' },
+                        lon: { type: 'number' },
+                        services: {
+                          type: 'array',
+                          description: 'Buses that call here, in service order.',
+                          items: {
+                            type: 'object',
+                            required: ['svc', 'next'],
+                            properties: {
+                              svc: { type: 'string' },
+                              next: { type: ['string', 'null'], description: 'The next stop on this service; null where it terminates.' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         Campus: {
