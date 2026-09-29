@@ -131,6 +131,10 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   // No nearestStop means no coordinates, so we cannot claim you are anywhere.
   else if (f.nearestStop) parts.push('right here');
 
+  // The bus only stops across the road from the destination: say where to
+  // get off, or you ride on waiting for a stop it never calls at.
+  if (best.off && best.hops > 0) parts.push(`off at ${shortStop(best.off.name)}`);
+
   if (f.destLabel && best.hops > 0) {
     parts.push(
       best.quality === 'unknown'

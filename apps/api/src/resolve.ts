@@ -17,6 +17,7 @@ import type {
   Candidate,
   Graph,
   GraphIndex,
+  Leg,
   Quality,
   ResolveInput,
   RouteIndex,
@@ -78,6 +79,11 @@ export function indexGraph(graph: Graph): GraphIndex {
  * seconds, so riding the wrong way round loses on cost rather than on a
  * special case. Returns null when unreachable.
  */
+/** Riding, plus the walk back across the road when the bus stops on the far side. */
+export function legRideS(leg: Leg): number {
+  return leg.hops * RIDE.secondsPerHop + (leg.crossS ?? 0);
+}
+
 export function reach(idx: GraphIndex, svc: string, from: string, to: string): { hops: number } | null {
   if (from === to) return { hops: 0 };
   const r = idx.routes.get(svc);
@@ -133,32 +139,38 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
 
   // Either side of the road will do: arriving at "Opp UHC" gets you to UHC.
   // Without this, a route that only serves the far side never counts, and
-  // the answer takes a longer bus to the exact stop.
+  // the answer takes a longer bus to the exact stop. Getting off on the far
+  // side costs the walk back across, which is part of the journey.
   // Every stop that serves the destination, and the far side of each road.
-  const targets = to
+  const speed = input.walkSpeedMs ?? WALK.speedMs;
+  const targets: Array<{ code: string; crossS: number }> = to
     ? [to, ...(input.toAlso ?? [])].flatMap((code) => {
         const s = idx.byCode.get(code);
-        return s ? [code, ...(s.opposite && idx.byCode.has(s.opposite) ? [s.opposite] : [])] : [];
+        if (!s) return [];
+        const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+        return [{ code, crossS: 0 }, ...(twin ? [{ code: twin.code, crossS: Math.round(stopFootM(twin, s) / speed) }] : [])];
       })
     : [];
+  const targetCodes = new Set(targets.map((t) => t.code));
 
-  const speed = input.walkSpeedMs ?? WALK.speedMs;
   const out: Candidate[] = base.map(({ stop, distM, footM: foot }) => {
     const legs = [];
     // Standing at the destination is not a boarding option. reach() returns
     // 0 hops for from === to, which would otherwise rank first every time.
-    const services = to && targets.includes(stop.code) ? [] : (idx.servingStop.get(stop.code) ?? []);
+    const services = to && targetCodes.has(stop.code) ? [] : (idx.servingStop.get(stop.code) ?? []);
     for (const svc of services) {
       if (!to) {
         legs.push({ svc, hops: 0 });
         continue;
       }
-      let best: { hops: number } | null = null;
+      // Where to get off: the stop that gets you there soonest, crossing included.
+      let best: { hops: number; crossS: number; code: string } | null = null;
+      const cost = (b: { hops: number; crossS: number }) => b.hops * RIDE.secondsPerHop + b.crossS;
       for (const t of targets) {
-        const r = reach(idx, svc, stop.code, t);
-        if (r && (!best || r.hops < best.hops)) best = r;
+        const r = reach(idx, svc, stop.code, t.code);
+        if (r && (!best || cost({ hops: r.hops, crossS: t.crossS }) < cost(best))) best = { hops: r.hops, crossS: t.crossS, code: t.code };
       }
-      if (best) legs.push({ svc, hops: best.hops });
+      if (best) legs.push({ svc, hops: best.hops, ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}) });
     }
     // Starting from home or a room without coordinates: that walk comes first.
     const walkS = input.lat != null ? Math.round(foot / speed) : (input.originWalkS ?? 0);
@@ -380,7 +392,7 @@ export function scoreOptions(
 
       if (sa?.stale && quality !== 'unknown') quality = 'stale';
 
-      const rideS = leg.hops * RIDE.secondsPerHop;
+      const rideS = legRideS(leg);
       out.push({
         stop: c.stop,
         svc: leg.svc,
@@ -394,6 +406,7 @@ export function scoreOptions(
         arrival,
         fetchedAt: sa?.fetchedAt ?? nowMs,
         ambiguousBerth,
+        ...(leg.off ? { off: leg.off } : {}),
       });
     }
   }
