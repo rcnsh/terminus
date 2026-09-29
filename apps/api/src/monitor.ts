@@ -33,6 +33,21 @@ export interface UpstreamState {
 }
 
 const KEY = 'monitor:upstream';
+const INCIDENTS_KEY = 'monitor:incidents';
+/** Outages kept for the status page, newest first. */
+export const INCIDENTS_KEPT = 20;
+
+/**
+ * A confirmed outage, as the public status page shows it: when, and the kind
+ * of cause, never NUS's error text.
+ */
+export interface Incident {
+  start: number;
+  /** When the feed came back; null while it's still down. */
+  end: number | null;
+  /** 'version': NUS wants a newer uNivUS version string. 'feed': anything else. */
+  cause: 'version' | 'feed';
+}
 const CALENDAR_KEY = 'monitor:calendar-alert';
 /** The KV namespace in cloudflare.config.ts, for the fix commands in alerts
  *  (a test keeps the two in step). */
@@ -47,6 +62,31 @@ export const DEVICE_IDLE_MS = 90 * 86_400_000;
 export const FAILS_TO_ALERT = 2;
 /** Warn this long before calendar.json runs out. */
 export const CALENDAR_WARN_DAYS = 45;
+
+export async function readIncidents(env: Env): Promise<Incident[]> {
+  const raw = await env.KV.get(INCIDENTS_KEY).catch(() => null);
+  if (!raw) return [];
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? (list as Incident[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Opens an incident when the feed is confirmed down, closes it when it's back. */
+async function recordIncident(env: Env, state: UpstreamState, nowMs: number): Promise<void> {
+  const list = await readIncidents(env);
+  if (!state.up) {
+    const cause = /10009/.test(state.reason ?? '') ? 'version' : 'feed';
+    list.unshift({ start: nowMs, end: null, cause });
+  } else if (list[0] && list[0].end === null) {
+    list[0].end = nowMs;
+  } else {
+    return;
+  }
+  await env.KV.put(INCIDENTS_KEY, JSON.stringify(list.slice(0, INCIDENTS_KEPT)));
+}
 
 export async function readUpstream(env: Env): Promise<UpstreamState | null> {
   const raw = await env.KV.get(KEY).catch(() => null);
@@ -129,6 +169,10 @@ export async function checkUpstream(
     }
   }
   await env.KV.put(KEY, JSON.stringify(state));
+  // Only on a change of confirmed state, so a KV write per outage, not per run.
+  if (changed && (prev || !up)) {
+    await recordIncident(env, state, nowMs).catch((e) => console.error('incident not recorded', (e as Error)?.name ?? 'error'));
+  }
   return { state, changed };
 }
 
