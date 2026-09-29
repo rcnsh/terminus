@@ -28,5 +28,20 @@
       "label": "The Deck"
     }
   ],
-  "refreshAt": "2026-08-27T10:00:00Z"
+  "refreshAt": "2026-08-27T10:00:00Z",
+  "card": {
+    "kind": "arrived",
+    "staleAt": "2026-08-27T01:15:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null
+  }
 }

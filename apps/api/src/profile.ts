@@ -11,6 +11,7 @@ import type { Timing, Why } from './types.ts';
 
 export type { Timing };
 import { isoSeconds } from './format.ts';
+import { clockAt, clockMin, slackText } from './clock.ts';
 import { PACES, type Pace } from './walk.ts';
 import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, termEnded, termName } from './calendar.ts';
 
@@ -362,15 +363,14 @@ export function planChangesAt(profile: Profile, nowMs: number): number {
   return midnight + (next ?? 1440) * 60_000;
 }
 
-const hhmmOf = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
 /**
  * The resting headline. "Done for today" at 05:00 beside "Next: ..., today
  * 10:00" reads as a contradiction, so the morning says when the day starts.
  */
-export function restLabel(profile: Profile, nowMs: number): string {
+export function restLabel(profile: Profile, nowMs: number, h12 = false): string {
   const r = restSide(profile, nowMs);
-  if (r?.side === 'before' && classesOn(profile, nowMs).length) return `Day starts ${hhmmOf(r.startMin)}`;
+  if (r?.side === 'before' && classesOn(profile, nowMs).length) return `Day starts ${clockMin(r.startMin, h12)}`;
   return 'Done for today';
 }
 
@@ -398,7 +398,7 @@ function shortDate(atMs: number): string {
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /** "Next: CS2030 @ COM1, tomorrow 10:00", or a plain line when nothing is scheduled. */
-export function restDetail(profile: Profile, nowMs: number): string {
+export function restDetail(profile: Profile, nowMs: number, h12 = false): string {
   if (reimportReason(profile, nowMs) === 'ended' && profile.term) {
     return `Your timetable is for ${termName(profile.term)} · import this semester's on the account page`;
   }
@@ -406,8 +406,6 @@ export function restDetail(profile: Profile, nowMs: number): string {
   if (!n) return profile.trips.length || profile.manual.length ? 'No classes coming up' : 'Nothing on your timetable';
   // Recess, exams, a public holiday: say why today is empty.
   const off = classesOn(profile, nowMs).length ? null : dayOffReason(nowMs);
-  const hh = String(Math.floor(n.trip.arriveByMin / 60)).padStart(2, '0');
-  const mm = String(n.trip.arriveByMin % 60).padStart(2, '0');
   const when =
     n.daysAhead === 0
       ? 'today'
@@ -416,7 +414,7 @@ export function restDetail(profile: Profile, nowMs: number): string {
         : n.daysAhead < 7
           ? DAY_NAMES[n.trip.day]
           : shortDate(nowMs + n.daysAhead * 86_400_000);
-  return `${off ? `${off} · ` : ''}Next: ${n.trip.label}, ${when} ${hh}:${mm}`;
+  return `${off ? `${off} · ` : ''}Next: ${n.trip.label}, ${when} ${clockMin(n.trip.arriveByMin, h12)}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -445,21 +443,13 @@ export function classStartMs(trip: ImportedTrip, nowMs: number): number {
   return midnight + trip.arriveByMin * 60_000;
 }
 
-export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number): Timing | null {
+export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number, h12 = false): Timing | null {
   if (!arriveAtIso || walkToVenueS > MAX_VENUE_WALK_S) return null;
   const classAt = classStartMs(trip, nowMs);
   const reachMs = Date.parse(arriveAtIso) + walkToVenueS * 1000;
   const slackS = Math.round((classAt - reachMs) / 1000);
-  const hhmm = (ms: number) => {
-    const d = new Date(ms + 8 * 3_600_000);
-    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-  };
   const status: OnTime = slackS >= ON_TIME_SLACK_S ? 'on-time' : slackS >= 0 ? 'tight' : 'late';
-  const text =
-    status === 'on-time'
-      ? `Arrive ${hhmm(reachMs)} · ${Math.round(slackS / 60)} min early`
-      : status === 'tight'
-        ? `Arrive ${hhmm(reachMs)} · just in time`
-        : `~${Math.max(1, Math.round(-slackS / 60))} min late`;
+  // Same words as the class card (clock.ts): the colour carries "tight".
+  const text = status === 'late' ? `~${Math.max(1, Math.round(-slackS / 60))} min late` : `Arrive ${clockAt(reachMs, h12)} · ${slackText(slackS)}`;
   return { status, text, classAt: isoSeconds(classAt), reachAt: isoSeconds(reachMs) };
 }

@@ -36,6 +36,7 @@ import { termName } from './calendar.ts';
 import { boardAt, indexGraph } from './resolve.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds, shortStop } from './format.ts';
+import { cardFor } from './card.ts';
 import { WALK } from './config.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { atHome, residenceStops } from './residences.ts';
@@ -387,7 +388,9 @@ export async function handleMe(
     // When the plan itself moves on (class starts, day ends). Only the planned
     // answer has one; a place or a stop never changes by itself.
     const planned = !url.searchParams.get('place') && !url.searchParams.get('to');
-    return json(planned ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer);
+    const full: MeAnswer = planned ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
+    // The display-ready card, in the client's 12- or 24-hour style.
+    return json({ ...full, card: cardFor(full, hour12(url)) });
   }
 
   if (path === '/me/nearby' && req.method === 'GET') {
@@ -410,10 +413,10 @@ export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | 'pa
 }
 
 /** In your residence with nothing left today: no bus, and what's next. */
-function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: PlaceChip[]): MeAnswer {
+function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: PlaceChip[], h12: boolean): MeAnswer {
   return {
     label: "You're home",
-    detail: restDetail(profile, nowMs),
+    detail: restDetail(profile, nowMs, h12),
     alt: null,
     stop: { code: homeStop ?? '', name: '', confidence: 1 },
     quality: 'live' as const,
@@ -427,12 +430,16 @@ function youreHome(profile: Profile, nowMs: number, homeStop: string | null, pla
   };
 }
 
+/** `?h12=1`: the client shows 12-hour times. Default 24-hour, as always. */
+const hour12 = (url: URL) => url.searchParams.get('h12') === '1';
+
 function setupAnswer(nowMs: number, label: string, detail: string): Answer {
   return { label, detail, alt: null, stop: { code: '', name: '', confidence: 0 }, quality: 'unknown', asOf: new Date(nowMs).toISOString(), arrivals: [] };
 }
 
 export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile): Promise<MeAnswer> {
   const { lat, lon } = coordsFrom(url);
+  const h12 = hour12(url);
   const speed = paceSpeed(profile.walkPace);
   const homeStop = profile.home?.stops[0] ?? null;
   const places: PlaceChip[] = profile.places.map(({ key, label }) => ({ key, label }));
@@ -449,8 +456,8 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   } else if (isResting(profile, nowMs)) {
     // Outside the user's day: no bus, and the same answer for every client.
     return {
-      label: restLabel(profile, nowMs),
-      detail: restDetail(profile, nowMs),
+      label: restLabel(profile, nowMs, h12),
+      detail: restDetail(profile, nowMs, h12),
       alt: null,
       stop: { code: '', name: '', confidence: 0 },
       quality: 'ended',
@@ -470,7 +477,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
         // Between classes: when to leave home for the next one.
         dest = { to: next.trip.to, label: next.trip.label, why: 'class', from: homeStop, trip: next.trip, fromVenue: null };
       } else {
-        return youreHome(profile, nowMs, homeStop, places);
+        return youreHome(profile, nowMs, homeStop, places, h12);
       }
     }
   }
@@ -506,7 +513,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
     const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
     // For a class, say whether you'll make it: stop arrival plus the walk
     // from the stop to the venue, against the start time.
-    const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs) : null;
+    const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs, h12) : null;
     return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, timing, places };
   }
 

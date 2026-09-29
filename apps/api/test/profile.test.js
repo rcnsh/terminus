@@ -151,7 +151,10 @@ test('timing: on time, tight and late against the class start', () => {
     ['on-time', 'Arrive 09:52 · 8 min early'],
   );
   assert.equal(timingFor(arrive(9, 57), c, 60, now).status, 'tight');
-  assert.equal(timingFor(arrive(9, 57), c, 60, now).text, 'Arrive 09:58 · just in time');
+  // Tight is the colour; the words count the minutes, same as the class card.
+  assert.equal(timingFor(arrive(9, 57), c, 60, now).text, 'Arrive 09:58 · 2 min early');
+  assert.equal(timingFor(arrive(9, 59), c, 60, now).text, 'Arrive 10:00 · just in time');
+  assert.equal(timingFor(arrive(9, 57), c, 60, now, true).text, 'Arrive 9:58 AM · 2 min early');
   assert.deepEqual([timingFor(arrive(10, 3), c, 120, now).status, timingFor(arrive(10, 3), c, 120, now).text], ['late', '~5 min late']);
   assert.equal(timingFor(null, c, 0, now), null, 'no arrival time, no claim');
 });
@@ -182,4 +185,10 @@ test('between classes the plan names the room you leave from; from home it does 
   assert.equal(planFor(profile(tt), thu(8)).fromVenue, null);
   // After the last class, the trip home starts from that room too.
   assert.equal(planFor(profile(tt), thu(14, 30)).fromVenue, 'LT27');
+});
+
+test('clock and card text: campus time in the client\'s 12- or 24-hour style', async () => {
+  const { clockMin, slackText } = await import('../src/clock.ts');
+  assert.deepEqual([clockMin(0), clockMin(0, true), clockMin(754, true), clockMin(1110, true), clockMin(1110)], ['00:00', '12:00 AM', '12:34 PM', '6:30 PM', '18:30']);
+  assert.deepEqual([slackText(260), slackText(20), slackText(-200)], ['4 min early', 'just in time', '~3 min late']);
 });
