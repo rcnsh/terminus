@@ -92,7 +92,7 @@ That's it. It updates through the day and goes quiet in the evening.
 
 ```mermaid
 flowchart LR
-  feed["NUS shuttle feed<br/><sub>15 s cache per stop</sub>"] --> worker
+  feed["NUS shuttle feed,<br/>cached 15 s per stop"] --> worker
   mods["NUSMods timetables"] --> worker
   cal["NUS calendar,<br/>public holidays"] --> worker
   osm["OpenStreetMap<br/>campus paths"] --> worker
