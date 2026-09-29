@@ -72,17 +72,19 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             // what makes a running Glance session pick up a new answer; values
             // read once outside the composition would stay stale.
             val version = currentState(VERSION) ?: 0L
-            val snap = remember(version) { Snap(store.paired, store.lastAnswer(), store.lastError) }
+            val snap = remember(version) { Snap(store.paired, store.lastAnswer(), store.lastError, store.liveUpdates) }
             GlanceTheme(colors = BrandColors) {
-                Content(snap.paired, snap.last?.first, snap.last?.second, snap.error)
+                Content(snap.paired, snap.last?.first, snap.last?.second, snap.error, snap.live)
             }
         }
     }
 
-    private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?)
+    private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?, val live: Boolean)
 
     @Composable
-    private fun Content(paired: Boolean, answer: NextAnswer?, fetchedAt: Long?, error: String?) {
+    private fun Content(paired: Boolean, answer: NextAnswer?, fetchedAt: Long?, error: String?, live: Boolean) {
+        // The live notification keeps the widget current, so no refresh button then.
+        val refreshButton = paired && !live
         val ctx = LocalContext.current
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
@@ -107,7 +109,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     .fillMaxSize()
                     .semantics { contentDescription = spoken }
                     // A compact widget's text runs the full width: keep it clear of the button.
-                    .padding(start = 14.dp, end = if (paired && !large) 36.dp else 14.dp, top = if (large) 12.dp else 8.dp, bottom = if (large) 12.dp else 8.dp)
+                    .padding(start = 14.dp, end = if (refreshButton && !large) 36.dp else 14.dp, top = if (large) 12.dp else 8.dp, bottom = if (large) 12.dp else 8.dp)
                     .clickable(if (paired) actionRunCallback<RefreshAction>() else actionStartActivity<MainActivity>()),
                 verticalAlignment = if (large) Alignment.Top else Alignment.CenterVertically,
             ) {
@@ -256,7 +258,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     }
                 }
             }
-            if (paired) RefreshButton()
+            if (refreshButton) RefreshButton()
         }
     }
 

@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.clock
+import sh.rcn.terminus.widget.redrawWidgets
 
 /**
  * The live notification: while your day is on, a silent ongoing notification
@@ -45,6 +46,9 @@ class LiveService : Service() {
             Store(this).liveUpdates = false
             getSystemService(AlarmManager::class.java)?.cancel(startIntent(this))
             stopForeground(STOP_FOREGROUND_REMOVE)
+            // Turned off from the notification: the widget's refresh button returns.
+            val app = applicationContext
+            CoroutineScope(Dispatchers.Default).launch { redrawWidgets(app) }
             stopSelf()
             return START_NOT_STICKY
         }
