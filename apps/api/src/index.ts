@@ -23,7 +23,7 @@ import { DOCS_PAGE, openApiSpec } from './openapi.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
-import { readUpstream, runCron } from './monitor.ts';
+import { readIncidents, readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
 import { handleDownload } from './downloads.ts';
 import { landmark, targetStops } from './landmarks.ts';
@@ -160,6 +160,27 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
 /** The cron runs every 15 minutes; older than this and it has stopped. */
 const CRON_STALE_MS = 40 * 60_000;
 
+/**
+ * The public status page's data: whether NUS's live feed is answering, as
+ * the cron sees it, and recent outages. Causes are a kind, never NUS's error.
+ */
+async function handleStatus(env: Env, nowMs: number): Promise<Response> {
+  const [u, incidents] = await Promise.all([readUpstream(env), readIncidents(env)]);
+  const iso = (ms: number | null) => (ms == null ? null : new Date(ms).toISOString());
+  return json(
+    {
+      feed: u ? (u.up ? 'up' : 'down') : 'unknown',
+      since: u ? iso(u.since) : null,
+      checkedAt: u ? iso(u.checkedAt) : null,
+      // Checks every 15 minutes; if they've stopped, what's above is old news.
+      checking: u ? nowMs - u.checkedAt <= CRON_STALE_MS : false,
+      incidents: incidents.map((i) => ({ start: iso(i.start), end: iso(i.end), cause: i.cause })),
+    },
+    200,
+    { 'cache-control': 'public, max-age=60' },
+  );
+}
+
 async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Promise<Response> {
   const idx = indexGraph(GRAPH);
   const t = sgt(nowMs);
@@ -248,7 +269,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       // Public routes: a per-IP ceiling. The per-stop cache already protects
       // NUS; this protects the Worker from being a free proxy, and D1/R2 from
       // being a free bill.
-      if (env.RL_PUBLIC && (KEYED.includes(url.pathname) || url.pathname === '/health' || url.pathname.startsWith('/download/'))) {
+      if (env.RL_PUBLIC && (KEYED.includes(url.pathname) || url.pathname === '/health' || url.pathname === '/status.json' || url.pathname.startsWith('/download/'))) {
         const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
         if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
       }
@@ -284,6 +305,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return await handleTrip(url, env, ctx, nowMs);
         case '/health':
           return await handleHealth(req, url, env, nowMs);
+        case '/status.json':
+          return await handleStatus(env, nowMs);
         case '/campus':
           return handleCampus();
         case '/stops/pairs':

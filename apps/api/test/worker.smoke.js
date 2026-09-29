@@ -619,6 +619,26 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.equal((await get('/download/releases/1.0.1/other.dmg')).status, 404, 'only release files');
 });
 
+test('/status.json: the feed state and outages, public and cached', async () => {
+  const kv = makeKV();
+  const env = makeEnv(kv);
+  let res = (await call('/status.json', { fetchImpl: makeFetch({}), env })).res;
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { feed: 'unknown', since: null, checkedAt: null, checking: false, incidents: [] });
+
+  const now = Date.now();
+  await kv.put('monitor:upstream', JSON.stringify({ up: false, since: now - 3_600_000, reason: 'auth rejected: code=10009 secret detail', checkedAt: now - 60_000 }));
+  await kv.put('monitor:incidents', JSON.stringify([{ start: now - 3_600_000, end: null, cause: 'version' }]));
+  res = (await call('/status.json', { fetchImpl: makeFetch({}), env })).res;
+  assert.equal(res.headers.get('cache-control'), 'public, max-age=60');
+  const s = await res.json();
+  assert.equal(s.feed, 'down');
+  assert.equal(s.checking, true);
+  assert.equal(s.since, new Date(now - 3_600_000).toISOString());
+  assert.deepEqual(s.incidents, [{ start: new Date(now - 3_600_000).toISOString(), end: null, cause: 'version' }]);
+  assert.ok(!JSON.stringify(s).includes('secret detail'), 'no error text');
+});
+
 test('/health: no probe without the operator token, 503 when the feed is confirmed down', async () => {
   const fetchImpl = makeFetch({});
   const kv = makeKV();

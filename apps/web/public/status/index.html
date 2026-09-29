@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status · terminus</title>
+<meta name="description" content="Whether NUS's live bus feed is answering, and recent outages.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+  main { padding-top: 32px; }
+  h1 { font-size: 2.2rem; margin-bottom: 20px; }
+  h2 { font-size: 1.2rem; margin: 40px 0 12px; }
+  .now { display: flex; gap: 14px; align-items: flex-start; }
+  .now .dot { width: 12px; height: 12px; margin-top: 8px; flex: none; }
+  .now .dot.bad { background: var(--bad); }
+  .now strong { display: block; font: 600 1.3rem/1.3 var(--display); letter-spacing: -0.02em; }
+  .now p { margin: 4px 0 0; }
+  .incidents { list-style: none; padding: 0; margin: 0; }
+  .incidents li { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .incidents li:last-child { border-bottom: 0; }
+  .incidents .when { font-weight: 600; }
+  .incidents .what { color: var(--muted); font-size: 0.9rem; }
+  .incidents .how-long { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ongoing { color: var(--bad-ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<header class="wrap nav">
+  <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
+  <nav class="nav-links"><a class="btn small ghost" href="/account">Account</a></nav>
+</header>
+
+<main class="wrap narrow">
+  <h1>Status</h1>
+  <div class="card now" id="now" aria-live="polite">
+    <span class="dot off" id="dot"></span>
+    <div><strong id="headline">Checking…</strong><p class="hint" id="detail"></p></div>
+  </div>
+
+  <h2>Recent outages</h2>
+  <div class="card"><ul class="incidents" id="incidents"><li class="hint">Loading…</li></ul></div>
+
+  <p class="hint" style="margin-top:24px">terminus checks NUS's shuttle feed every 15 minutes. When it isn't answering, the apps fall back to the timetable and say so, so answers are estimates until it's back. Outages come from NUS's side; terminus can't fix them, only work around them.</p>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed.</p>
+    <nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/docs">API</a><a href="/account">Account</a></nav>
+  </div>
+</footer>
+<script src="/status/status.js" defer></script>
+</body>
+</html>

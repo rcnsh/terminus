@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import { readFileSync } from 'node:fs';
-import { DEVICE_IDLE_MS, KV_NAMESPACE_ID, adviceFor, checkCalendar, checkUpstream, housekeeping, readUpstream, runCron } from '../src/monitor.ts';
+import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_ID, adviceFor, checkCalendar, checkUpstream, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
 import { UpstreamRejected } from '../src/auth.ts';
 
 function env() {
@@ -38,6 +38,36 @@ test('alerts once when the feed goes down, once when it recovers', async () => {
   await checkUpstream(e, 4000, ok);
   assert.equal(e.EMAIL.sent.length, 2);
   assert.match(e.EMAIL.sent[1].subject, /recovered/);
+});
+
+test('confirmed outages are kept for the status page, with a cause and no error text', async () => {
+  const e = env();
+  await checkUpstream(e, 1000, ok);
+  assert.deepEqual(await readIncidents(e), [], 'the first "up" is not an incident');
+  await checkUpstream(e, 2000, fail('network'));
+  assert.deepEqual(await readIncidents(e), [], 'one failed check is a blip');
+  await checkUpstream(e, 3000, fail('network'));
+  await checkUpstream(e, 3500, fail('network'));
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: null, cause: 'feed' }]);
+  await checkUpstream(e, 4000, ok);
+  await checkUpstream(e, 4500, ok);
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 4000, cause: 'feed' }]);
+
+  const refused = fail('auth rejected: code=10009 msg=We have a new release of uNivUS');
+  const noFix = async () => ({ status: 'failed', note: 'nothing found' });
+  await checkUpstream(e, 5000, refused, noFix);
+  await checkUpstream(e, 6000, refused, noFix);
+  const list = await readIncidents(e);
+  assert.equal(list.length, 2, 'newest first');
+  assert.deepEqual(list[0], { start: 6000, end: null, cause: 'version' });
+  assert.ok(!JSON.stringify(list).includes('uNivUS'), "NUS's text stays private");
+
+  for (let i = 0, t = 7000; i < INCIDENTS_KEPT; i++, t += 3000) {
+    await checkUpstream(e, t, ok);
+    await checkUpstream(e, t + 1000, fail('network'));
+    await checkUpstream(e, t + 2000, fail('network'));
+  }
+  assert.equal((await readIncidents(e)).length, INCIDENTS_KEPT, 'capped');
 });
 
 test('down from the very first checks still alerts', async () => {
