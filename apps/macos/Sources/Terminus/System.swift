@@ -15,16 +15,6 @@ enum TokenStore {
         support.appendingPathComponent("terminus", isDirectory: true).appendingPathComponent("device-token")
     }
 
-    /// Before the rename the token lived under "nusbus". Move it once, so an
-    /// update doesn't sign the Mac out.
-    static func migrate() {
-        let old = support.appendingPathComponent("nusbus/device-token")
-        let fm = FileManager.default
-        guard !fm.fileExists(atPath: url.path), let token = try? String(contentsOf: old, encoding: .utf8) else { return }
-        write(token.trimmingCharacters(in: .whitespacesAndNewlines))
-        try? fm.removeItem(at: old.deletingLastPathComponent())
-    }
-
     static var exists: Bool { FileManager.default.fileExists(atPath: url.path) }
 
     static func read() -> String? {

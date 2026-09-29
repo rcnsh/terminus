@@ -96,9 +96,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
     tags: [
       { name: 'Answers', description: 'Next-bus answers as ready-to-display text.' },
       { name: 'Stops', description: 'Per-stop arrivals and static campus data.' },
-      { name: 'Timetable', description: 'Turn a NUSMods timetable into a personal link.' },
       { name: 'Service', description: 'Health and configuration.' },
-      { name: 'Account', description: 'Invite-only. Sign in on the account page, or pair a device with a code from it.' },
+      { name: 'Account', description: 'Sign in on the account page, or pair a device with a code from it.' },
     ],
     paths: {
       '/next': {
@@ -107,7 +106,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Next bus',
           description:
             'Returns the next bus. The destination depends on which parameters you send:\n\n' +
-            '- `tt`: your next class from an imported timetable (see `/import`). Coordinates pick the boarding stop; without them, the timetable\'s home stop is used.\n' +
             '- `to`: a stop code or NUSMods venue code.\n' +
             '- `lat` and `lon` only: the next buses at your nearest stop, without a destination.\n' +
             '- none of these: a "Set up" answer that tells the client what to send, instead of guessing a destination.',
@@ -120,13 +118,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description: 'A stop code such as `UTOWN`, or a NUSMods venue code such as `COM1-0212`.',
               schema: { type: 'string' },
               example: 'UTOWN',
-            },
-            {
-              name: 'tt',
-              in: 'query',
-              description: 'Deprecated: an encoded timetable from `/import`, from before accounts. Use `/me/next` with a signed-in device instead.',
-              deprecated: true,
-              schema: { type: 'string' },
             },
           ],
           responses: {
@@ -150,7 +141,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       summary: 'Nothing to go on',
                       value: {
                         label: 'Set up',
-                        detail: 'Send lat/lon for nearby buses, or a timetable (?tt=) from /import',
+                        detail: 'Send lat/lon for nearby buses, or ?to= a stop or venue',
                         alt: null,
                         stop: { code: '', name: '', confidence: 0 },
                         quality: 'unknown',
@@ -313,61 +304,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 },
               },
             },
-          },
-        },
-      },
-      '/import': {
-        get: {
-          deprecated: true,
-          tags: ['Timetable'],
-          summary: 'Import a NUSMods timetable',
-          description:
-            'Turns a NUSMods share URL into a personal `/next?tt=` link. Each class\'s destination is the stop nearest its venue. ' +
-            'The whole timetable is encoded in the link itself; the server stores nothing.',
-          operationId: 'importTimetable',
-          parameters: [
-            {
-              name: 'share',
-              in: 'query',
-              required: true,
-              description: 'A NUSMods share URL (Timetable → Share/Sync → copy link).',
-              schema: { type: 'string', format: 'uri' },
-              example: 'https://nusmods.com/timetable/sem-1/share?MA1100=LEC:1',
-            },
-            {
-              name: 'home',
-              in: 'query',
-              description: 'Your home stop code, used as the origin when no coordinates are sent.',
-              schema: { type: 'string' },
-              example: 'PGP',
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'Your personal link and the schedule it encodes.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ImportResult' },
-                  example: {
-                    url: `${origin}/next?tt=WyJQR1AiLFtbMSw0ODAsIlVIQUxMIiwiTUExMTAwIEAgTFQyMSJdXV0`,
-                    path: '/next?tt=WyJQR1AiLFtbMSw0ODAsIlVIQUxMIiwiTUExMTAwIEAgTFQyMSJdXV0',
-                    home: 'PGP',
-                    classes: 2,
-                    schedule: [
-                      { day: 1, at: 480, to: 'UHALL', label: 'MA1100 @ LT21' },
-                      { day: 4, at: 480, to: 'UHALL', label: 'MA1100 @ LT21' },
-                    ],
-                    unresolved: [],
-                  },
-                },
-              },
-            },
-            '400': errorResponse('Missing or invalid share URL, or unknown home stop.', {
-              error: 'not a valid NUSMods share URL',
-            }),
-            '422': errorResponse('No class in the timetable could be matched to a stop.', {
-              error: 'could not resolve any classes to a stop',
-            }),
           },
         },
       },
@@ -596,7 +532,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       securitySchemes: {
         apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key', description: 'A key from the account page (API keys). Starts with `tk_`.' },
         bearer: { type: 'http', scheme: 'bearer', description: 'An API key, or a device token from `/pair`.' },
-        cookie: { type: 'apiKey', in: 'cookie', name: 'nb_s', description: 'Set by signing in on the account page.' },
+        cookie: { type: 'apiKey', in: 'cookie', name: '__Host-nb_s', description: 'Set by signing in on the account page.' },
       },
       schemas: {
         Quality: quality,
@@ -855,7 +791,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             dayEndMin: { type: 'integer', default: 1080, description: 'End of your day. Later, `/me/next` rests, unless a class runs late.' },
             walkPace: { type: 'string', enum: ['slow', 'normal', 'fast'], default: 'normal', description: 'How fast you walk: 1.1, 1.3 or 1.5 m/s. Scales every walk except `homeWalkMin`.' },
             fullBusMargin: { type: 'boolean', default: true, description: 'Aim one bus earlier when the bus to wait for is often packed at that stop and time.' },
-            seen: { type: 'array', items: { type: 'string' }, description: 'One-time screens already shown, e.g. `onboarding`, `pace`.' },
+            seen: { type: 'array', items: { type: 'string' }, description: 'One-time screens already shown, e.g. `onboarding`.' },
             homeWalkMin: { type: 'integer', minimum: 0, maximum: 30, default: 5, description: 'Minutes from home to your home stop. Counts when a trip starts from home without a location.' },
             trips: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'From the NUSMods import.' },
             manual: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'Entered by hand. Kept on re-import.' },

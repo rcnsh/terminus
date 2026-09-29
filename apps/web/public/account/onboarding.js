@@ -22,7 +22,7 @@ export function runOnboarding(ctx) {
 
   return new Promise((done) => {
     const finish = async () => {
-      ctx.profile.seen = [...new Set([...(ctx.profile.seen ?? []), 'onboarding', 'pace'])];
+      ctx.profile.seen = [...new Set([...(ctx.profile.seen ?? []), 'onboarding'])];
       await ctx.save().catch(() => {});
       root.classList.add('leaving');
       setTimeout(() => {
@@ -311,42 +311,4 @@ export function fullBusToggle(ctx) {
     ),
   );
   return { node, value: () => box.checked };
-}
-
-/** For accounts set up before walking pace existed: once, then never again. */
-export function pacePrompt(ctx) {
-  const { el } = ctx;
-  const root = document.querySelector('#pace-prompt');
-  const picker = pacePicker(ctx);
-  const full = fullBusToggle(ctx);
-  const close = async (save) => {
-    if (save) {
-      ctx.profile.walkPace = picker.value();
-      ctx.profile.fullBusMargin = full.value();
-    }
-    ctx.profile.seen = [...new Set([...(ctx.profile.seen ?? []), 'pace'])];
-    await ctx.save().catch(() => {});
-    ctx.onChange?.();
-    root.classList.add('leaving');
-    setTimeout(() => (root.hidden = true), reduced() ? 0 : 200);
-  };
-  root.replaceChildren(
-    el(
-      'section',
-      { class: 'card ob-new' },
-      el('span', { class: 'ob-badge', textContent: 'New' }),
-      el('h2', { textContent: 'Walks now follow the real paths' }),
-      el('p', { class: 'hint', textContent: 'Leave-by times now count the actual route to the stop and to your room. Tell terminus how fast you walk to make them fit you.' }),
-      picker.node,
-      full.node,
-      el(
-        'div',
-        { class: 'ob-actions' },
-        el('span', { class: 'ob-grow' }),
-        el('button', { type: 'button', class: 'link-btn', textContent: 'Not now', onclick: () => close(false) }),
-        el('button', { type: 'button', class: 'btn accent', textContent: 'Save', onclick: () => close(true) }),
-      ),
-    ),
-  );
-  root.hidden = false;
 }

@@ -55,7 +55,7 @@ export interface Profile {
   places: Place[];
   /** The NUSMods share link, kept so next semester is one click. */
   share: string | null;
-  /** The semester `trips` were imported for. Null on imports from before 1.0. */
+  /** The semester `trips` were imported for. Null until something is imported. */
   term: Term | null;
 }
 
@@ -232,16 +232,15 @@ export function classesOn(profile: Profile, atMs: number): ImportedTrip[] {
   ].sort((a, b) => a.arriveByMin - b.arriveByMin);
 }
 
-export type ReimportReason = 'legacy' | 'ended';
+export type ReimportReason = 'ended';
 
 /**
  * Why the imported timetable needs a fresh import, or null when it doesn't:
- * 'legacy' for imports from before week tracking, 'ended' once its semester
- * (exams included) is over and the classes will never run again.
+ * 'ended' once its semester (exams included) is over and the classes will
+ * never run again.
  */
 export function reimportReason(profile: Profile, nowMs: number): ReimportReason | null {
-  if (!profile.trips.length) return null;
-  if (profile.term === null || profile.trips.some((t) => t.weeks === undefined)) return 'legacy';
+  if (!profile.trips.length || !profile.term) return null;
   return termEnded(profile.term, nowMs) ? 'ended' : null;
 }
 

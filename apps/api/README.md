@@ -76,21 +76,24 @@ npx wrangler deploy
 
 | Route | |
 | --- | --- |
-| `GET /` | API documentation (Stoplight Elements), with a live "Send API Request" panel. |
+| `GET /docs` | API documentation (Stoplight Elements), with a live "Send API Request" panel. |
 | `GET /openapi.json` | The OpenAPI 3.1 description the docs render. Source: [src/openapi.ts](src/openapi.ts). |
-| `GET /next` | The answer. `?tt=` (timetable from `/import`) picks your next class; `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With none of these it returns a "Set up" answer rather than inventing a destination. |
+| `GET /next` | The answer. `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With neither it returns a "Set up" answer rather than inventing a destination. |
 | `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
 | `GET /campus` | Static stop/route geometry and destination search data. Cached hard. |
-| `GET /import?share=<nusmods url>&home=<stop>` | NUSMods share URL -> a personal `/next?tt=` link. Stateless; nothing stored. |
+| `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
 | `GET /account` | The account page ([apps/web](../web)), served as static assets. |
-| `POST /auth/login`, `/pair`, `/me/*` | Accounts. See below. |
+| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. |
+
+`/next`, `/trip`, `/arrivals`, `/campus` and `/stops/pairs` need an API key
+(made on the account page, sent as `x-api-key`) or a signed-in session.
 
 ## Personalisation
 
-Per-user trips come from the account (`/me/next`) or, statelessly, a NUSMods
-timetable encoded into a `/next?tt=` link by `/import`. Imported classes only
+Per-user trips come from the account (`/me/next`): a NUSMods timetable
+imported with `POST /me/import`, plus classes entered by hand. Imported classes only
 count in the weeks they run ([src/calendar.ts](src/calendar.ts), built from
 NUSMods' semester dates and MOM's public holidays by
 `scripts/fetch_calendar.py`). [`src/config.ts`](src/config.ts) holds the cache
@@ -98,8 +101,9 @@ TTLs and tuning constants.
 
 ## Accounts
 
-Invite-only. The account page at `/account` signs in with an emailed link and
-stores one profile per user in D1: timetable, home stops, gap threshold and
+Sign-up is open; addresses on the `blocklist` table are refused. The account
+page at `/account` signs in with an emailed code (or the link in the same
+email) and stores one profile per user in D1: timetable, home stops, gap threshold and
 saved places. Native apps don't sign in; they pair with a 6-character code
 from the page and get a device token (`Authorization: Bearer`).
 
@@ -119,12 +123,8 @@ Setup:
 npx wrangler d1 migrations apply nusbus --remote
 ```
 
-```bash
-npx wrangler d1 execute nusbus --remote --command "INSERT INTO invites VALUES ('friend@u.nus.edu', unixepoch() * 1000)"
-```
-
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
-needs the Workers Paid plan and nusbus.rcn.sh onboarded under Email Service >
+needs the Workers Paid plan and terminus.rcn.sh onboarded under Email Service >
 Email Sending in the dashboard.
 
 ## How it works
@@ -302,12 +302,14 @@ src/fms.ts        ShuttleService client + defensive response normalisation
 src/auth.ts       Public token, lazy refresh, KV + in-memory memo
 src/config.ts     Cache TTLs and tuning constants
 src/calendar.ts   NUS teaching weeks and public holidays
-src/nusmods.ts    NUSMods share URL -> trips, stateless ?tt= encoding
+src/nusmods.ts    NUSMods share URL -> trips
 src/campus.ts     /campus map geometry and destination search
+src/pairs.ts      /stops/pairs
 src/analytics.ts  Analytics Engine decision + arrival logging
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
 src/http.ts       JSON responses, query parsing
-src/accounts.ts   Sign-in links, sessions, pairing codes (D1)
+src/accounts.ts   Sign-in codes and links, sessions, pairing codes (D1)
+src/access.ts     API keys, and who may call the keyed routes
 src/profile.ts    Profile validation and the where-next planner
 src/me.ts         /auth, /pair and /me routes
 migrations/       D1 schema

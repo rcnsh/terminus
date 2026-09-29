@@ -12,10 +12,7 @@ private let log = Logger(subsystem: "sh.rcn.terminus", category: "refresh")
 final class AppModel {
     static let shared = AppModel()
 
-    var paired: Bool = {
-        TokenStore.migrate()
-        return TokenStore.read() != nil
-    }()
+    var paired: Bool = TokenStore.read() != nil
     var pairing = false
     var pairError: String?
 

@@ -19,7 +19,7 @@
  * Point a debug Android build at it:
  *   ./gradlew installDebug -PapiBase=http://localhost:8787
  *   adb reverse tcp:8787 tcp:8787
- * and the Mac app: NUSBUS_API_BASE=http://localhost:8787
+ * and the Mac app: TERMINUS_API_BASE=http://localhost:8787
  */
 
 import http from 'node:http';

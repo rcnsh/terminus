@@ -17,9 +17,7 @@ cp Support/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 codesign --force --sign - --identifier sh.rcn.terminus "$APP"
 echo "built $APP"
 if [ "${1:-}" = install ]; then
-  pkill -x Nusbus 2>/dev/null || true
   pkill -x Terminus 2>/dev/null || true
-  rm -rf /Applications/nusbus.app
   rm -rf /Applications/terminus.app
   cp -R "$APP" /Applications/terminus.app
   open /Applications/terminus.app
