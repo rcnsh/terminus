@@ -856,7 +856,18 @@ export const DOCS_PAGE = `<!doctype html>
     .bar a { color: #1c1917; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
     .bar b { color: #c2410c; font-weight: inherit; }
     .bar .back { color: #6b6560; padding: 12px 0; }
-    elements-api { display: block; height: calc(100vh - 49px); }
+    /* dvh: on phones, 100vh is taller than the screen while the browser's
+       address bar shows, which hides the bottom of the docs. */
+    elements-api { display: block; height: calc(100vh - 49px); height: calc(100dvh - 49px); }
+    /* Below Elements' breakpoint the sidebar becomes a drawer (layout="responsive").
+       Inputs under 16px make iOS Safari zoom in on focus and stay zoomed. */
+    @media (max-width: 767px) {
+      elements-api input, elements-api select, elements-api textarea { font-size: 16px !important; }
+      /* Elements' fixed mobile bar has no z-index, so sticky schema headings
+         (z-index 10) slide over it while scrolling. */
+      elements-api .TopNav--mosaic { z-index: 20; }
+      elements-api .sl-drawer-container > .sl-fixed { z-index: 30; }
+    }
   </style>
 </head>
 <body>
@@ -865,6 +876,6 @@ export const DOCS_PAGE = `<!doctype html>
     <a class="back" href="/">Back to terminus</a>
   </div>
   <noscript><p style="padding:16px">The docs need JavaScript. The raw spec is at <a href="/openapi.json">/openapi.json</a>.</p></noscript>
-  <elements-api apiDescriptionUrl="/openapi.json" router="hash" layout="sidebar"></elements-api>
+  <elements-api apiDescriptionUrl="/openapi.json" router="hash" layout="responsive"></elements-api>
 </body>
 </html>`;
