@@ -712,3 +712,43 @@ test('/me without any token is a plain 401 and does not count as a guess', async
   assert.equal(calls, 0);
   assert.equal((await call(env, '/me', { token: 'nonsense' })).status, 429, 'a presented bad token still counts');
 });
+
+test('feedback: a wrong answer is kept with the account, emailed with the address, exported and deleted with it', async () => {
+  const { env, email, db } = setup();
+  env.ALERT_EMAIL = 'ops@example.test';
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const { token } = await (await call(env, '/pair', { method: 'POST', body: { code } })).json();
+  assert.equal((await call(env, '/me/feedback', { method: 'POST', body: { platform: 'mac' } })).status, 401);
+
+  const answer = { label: 'D2 · 4 min', stop: { code: 'PGP', name: 'Prince George\'s Park' }, quality: 'live' };
+  const res = await call(env, '/me/feedback', { method: 'POST', token, body: { note: 'It never came', platform: 'mac', appVersion: '1.3.9', context: answer } });
+  assert.equal(res.status, 201, 'from a paired device too');
+  const sent = email.sent.at(-1);
+  assert.equal(sent.to, 'ops@example.test');
+  assert.match(sent.subject, /D2 · 4 min at Prince George's Park \(live\)/);
+  assert.match(sent.text, new RegExp(INVITED));
+  assert.match(sent.text, /It never came/);
+
+  const row = db._db.prepare('SELECT kind, note, platform, app_version, context FROM feedback').get();
+  assert.deepEqual({ ...row }, { kind: 'wrong', note: 'It never came', platform: 'mac', app_version: '1.3.9', context: JSON.stringify(answer) });
+  const exported = await (await call(env, '/me/export', { cookie })).json();
+  assert.deepEqual(exported.feedback.map((f) => [f.note, f.answer.label]), [['It never came', 'D2 · 4 min']]);
+
+  await call(env, '/me', { method: 'DELETE', cookie });
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 0);
+});
+
+test('feedback: validated, and capped at ten a day per account', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const post = (body) => call(env, '/me/feedback', { method: 'POST', cookie, body });
+  assert.equal((await post({ platform: 'web' })).status, 400, 'a wrong answer needs the answer or a note');
+  assert.equal((await post({ kind: 'other', platform: 'web' })).status, 400, "'other' needs a note");
+  assert.equal((await post({ note: 'x', platform: 'ios' })).status, 400);
+  assert.equal((await post({ note: 'x'.repeat(1001), platform: 'web' })).status, 400);
+  assert.equal((await post({ platform: 'web', context: 'D2' })).status, 400, 'context is an object');
+  assert.equal((await post({ platform: 'web', context: { pad: 'x'.repeat(17_000) } })).status, 400);
+  for (let i = 0; i < 10; i++) assert.equal((await post({ note: `report ${i}`, platform: 'web' })).status, 201);
+  assert.equal((await post({ note: 'one more', platform: 'web' })).status, 429);
+});

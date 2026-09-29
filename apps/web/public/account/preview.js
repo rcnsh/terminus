@@ -35,13 +35,18 @@ function classPlan(a) {
   ].filter(Boolean);
 }
 
+/** The answer on screen, sent with an "Is this wrong?" report. */
+let shown = null;
+
 /** Renders /me/next the way the widget does, so settings changes show up. */
 export async function renderPreview() {
   const box = $('#preview');
   let a;
   try {
     a = await api(`/me/next${HOUR12 ? '?h12=1' : ''}`);
+    shown = a;
   } catch {
+    shown = null;
     box.replaceChildren(
       el('div', { class: 'detail', textContent: 'Preview unavailable right now.' }),
       el('button', { type: 'button', class: 'link-btn', textContent: 'Try again', onclick: renderPreview }),
@@ -85,3 +90,44 @@ export async function renderPreview() {
   );
 }
 
+
+/** "Is this wrong?": sends the answer on screen, with an optional note. */
+export function wireReport() {
+  const form = $('#report');
+  const open = $('#report-open');
+  const msg = $('#report-msg');
+  // The preview refreshes every minute; report the answer the user saw when they opened the form.
+  let reported = null;
+  const close = () => {
+    form.hidden = true;
+    open.hidden = false;
+    $('#report-note').value = '';
+  };
+  open.addEventListener('click', () => {
+    reported = shown;
+    msg.textContent = '';
+    form.hidden = false;
+    open.hidden = true;
+    $('#report-note').focus();
+  });
+  $('#report-cancel').addEventListener('click', close);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const note = $('#report-note').value.trim();
+    if (!reported && !note) {
+      msg.textContent = 'Say what was wrong: the preview has no answer to send.';
+      return;
+    }
+    const send = $('#report-send');
+    send.disabled = true;
+    try {
+      await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note, platform: 'web', context: reported ?? undefined } });
+      close();
+      msg.textContent = 'Thanks, sent. It helps make the answers better.';
+    } catch (err) {
+      msg.textContent = err.message;
+    } finally {
+      send.disabled = false;
+    }
+  });
+}

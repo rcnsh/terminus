@@ -307,6 +307,40 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/status.json': {
+        get: {
+          tags: ['Service'],
+          summary: 'Feed status',
+          security: [],
+          description:
+            "Whether NUS's live feed is answering, as the 15-minute check last saw it, and the last 20 confirmed outages. What the status page at /status shows.",
+          operationId: 'getStatus',
+          responses: {
+            '200': ok(
+              {
+                type: 'object',
+                properties: {
+                  feed: { type: 'string', enum: ['up', 'down', 'unknown'] },
+                  since: { type: ['string', 'null'], format: 'date-time' },
+                  checkedAt: { type: ['string', 'null'], format: 'date-time' },
+                  checking: { type: 'boolean', description: 'False when the checks have stopped running.' },
+                  incidents: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        start: { type: 'string', format: 'date-time' },
+                        end: { type: ['string', 'null'], format: 'date-time' },
+                        cause: { type: 'string', enum: ['version', 'feed'], description: "'version': NUS wanted a newer uNivUS version string." },
+                      },
+                    },
+                  },
+                },
+              },
+            ),
+          },
+        },
+      },
       '/health': {
         get: {
           tags: ['Service'],
@@ -443,6 +477,36 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             }),
             '400': errorResponse('No coordinates and no home set.'),
             '401': errorResponse('No valid session.'),
+          },
+        },
+      },
+      '/me/feedback': {
+        post: {
+          tags: ['Account'],
+          summary: 'Report a wrong answer',
+          description:
+            'Sends the answer you were looking at, with an optional note, for checking against what the buses did. Kept with your account (in the export, deleted with it) and emailed to the operator with your address, so they can reply. Up to ten a day.',
+          operationId: 'sendFeedback',
+          security: [{ bearer: [] }, { cookie: [] }],
+          requestBody: jsonBody(
+            {
+              type: 'object',
+              required: ['platform'],
+              properties: {
+                kind: { type: 'string', enum: ['wrong', 'other'], default: 'wrong' },
+                note: { type: 'string', maxLength: 1000, description: "What was wrong. Required for 'other', or for 'wrong' without a context." },
+                platform: { type: 'string', enum: ['android', 'mac', 'web'] },
+                appVersion: { type: 'string', maxLength: 20 },
+                context: { type: 'object', description: 'The answer as shown (a /me/next response), up to 16 KB.' },
+              },
+            },
+            { kind: 'wrong', note: 'The D2 never came', platform: 'web', context: { label: 'D2 · 4 min' } },
+          ),
+          responses: {
+            '201': ok({ type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } }),
+            '400': errorResponse('Missing or invalid field; the message names it.'),
+            '401': errorResponse('No valid session.'),
+            '429': errorResponse('Ten reports already today.'),
           },
         },
       },
