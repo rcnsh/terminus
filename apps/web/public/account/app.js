@@ -148,58 +148,34 @@ function mySuggestions() {
 /* ---------- widget preview ---------- */
 
 const MOON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
-const CROWD = { low: 'quiet', medium: 'filling', high: 'packed' };
-const QUALITY = { scheduled: 'Timetable estimate', stale: 'Live data a few minutes old', unknown: 'No live data' };
+/** This browser shows 12-hour times: ask for the card in that style. */
+const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
 
-/** Same rule as the apps: the bus has left, the plan moved on, or 15 minutes old. */
-function isOld(a, fetchedAt) {
-  const now = Date.now();
-  if (a.refreshAt && now >= Date.parse(a.refreshAt)) return true;
-  if (a.mode === 'rest') return false;
-  if (a.departsAt && now > Date.parse(a.departsAt) + 30_000) return true;
-  return now - fetchedAt > 15 * 60_000;
-}
+/** Dim once the server's staleAt passes: the bus has left, the plan moved on, or it's 15 minutes old. */
+const isOld = (a) => Boolean(a.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
 
-/** "Leave by 09:38 · 09:41 D2 from PGP", "~" for a headway estimate, "Leave now" once it has passed. */
-function leaveText(l) {
-  const tilde = l.estimated ? '~' : '';
-  const bus = l.svc ? ` · ${l.board ? `${tilde}${clock(l.board)} ` : ''}${l.svc} from ${l.stop}` : '';
-  if (Date.now() >= Date.parse(l.at)) return `Leave now${bus}`;
-  return `Leave by ${tilde}${clock(l.at)}${bus}`;
-}
+/** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts). */
+const leaveHead = (a) => (Date.now() >= Date.parse(a.leave.at) ? 'Leave now' : a.card.leaveBy);
+
+/** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
+const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
 
 /**
  * A class: when to leave is the headline, the bus that goes with it and when
- * it gets you there underneath, and the next bus as "or go now". Every
- * arrival sits next to the bus it belongs to. Same as the apps.
+ * it gets you there underneath, and the next bus as "or go now". Same lines
+ * as the apps, because they all come from the server's card.
  */
 function classPlan(a) {
-  const l = a.leave;
-  const t = l.estimated ? '~' : '';
-  const classAt = Date.parse(a.timing.classAt);
-  const late = l.arrive && Date.parse(l.arrive) > classAt;
-  const head = Date.now() >= Date.parse(l.at) ? 'Leave now' : `Leave by ${t}${clock(l.at)}`;
-  const how = l.svc ? `Catch the ${l.board ? `${t}${clock(l.board)} ` : ''}${l.svc} at ${l.stop}` : 'Walk there';
-  let arrive = null;
-  if (l.arrive) {
-    const m = Math.round((classAt - Date.parse(l.arrive)) / 60_000);
-    arrive = `Arrive ${t}${clock(l.arrive)} · ${m > 0 ? `${m} min early` : m === 0 ? 'just in time' : `~${-m} min late`}`;
-  }
-  const svc = a.label.split(' · ')[0];
-  const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
-  const same = l.board && timed && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt)) < 60_000;
-  const goNow = timed && !same
-    ? `Or go now: ${svc} at ${a.quality === 'scheduled' ? '~' : ''}${clock(a.departsAt)}${a.timing.reachAt ? ` · arrive ${clock(a.timing.reachAt)}` : ''}`
-    : null;
+  const c = a.card;
+  const late = c.late ? ' late' : '';
   return [
     el('div', { class: 'where', textContent: `${a.dest.label} · starts ${clock(a.timing.classAt)}` }),
-    el('div', { class: `big${late ? ' late' : ''}`, textContent: head }),
-    // The bus to catch names the stop, so there's no general detail line below.
-    el('div', { class: `catch${late ? ' late' : ''}`, textContent: how }),
-    arrive ? el('div', { class: `arrive${late ? ' late' : ''}`, textContent: arrive }) : null,
-    l.note ? el('div', { class: 'crowd-note', textContent: l.note }) : null,
-    l.estimated ? el('div', { class: 'note', textContent: 'Estimated from the usual gap between buses. Live times show nearer the time.' }) : null,
-    goNow ? el('div', { class: 'go-now', textContent: goNow }) : null,
+    el('div', { class: `big${late}`, textContent: leaveHead(a) }),
+    el('div', { class: `catch${late}`, textContent: c.catch }),
+    c.arrive ? el('div', { class: `arrive${late}`, textContent: c.arrive }) : null,
+    c.note ? el('div', { class: 'crowd-note', textContent: c.note }) : null,
+    c.estimate ? el('div', { class: 'note', textContent: c.estimate }) : null,
+    c.goNow ? el('div', { class: 'go-now', textContent: c.goNow }) : null,
   ].filter(Boolean);
 }
 
@@ -208,7 +184,7 @@ async function renderPreview() {
   const box = $('#preview');
   let a;
   try {
-    a = await api('/me/next');
+    a = await api(`/me/next${HOUR12 ? '?h12=1' : ''}`);
   } catch {
     box.replaceChildren(
       el('div', { class: 'detail', textContent: 'Preview unavailable right now.' }),
@@ -216,7 +192,6 @@ async function renderPreview() {
     );
     return;
   }
-  const fetchedAt = Date.now();
   const chips = a.places?.length ? el('div', { class: 'chips' }, ...a.places.slice(0, 3).map((p) => el('span', { textContent: p.label })), el('span', { textContent: 'Nearby' })) : null;
   if (a.mode === 'rest') {
     const head = el('div', { class: 'rest' });
@@ -226,7 +201,7 @@ async function renderPreview() {
     box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), chips);
     return;
   }
-  if (a.dest?.why === 'class' && a.leave && a.timing?.classAt && !a.arrived && !isOld(a, fetchedAt)) {
+  if (a.card?.kind === 'class' && !isOld(a)) {
     box.className = 'widget';
     box.replaceChildren(...classPlan(a), chips ?? '');
     return;
@@ -237,16 +212,15 @@ async function renderPreview() {
   const svc = a.label.split(' · ')[0];
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const big = timed ? `${svc} · ${a.quality === 'scheduled' ? '~' : ''}${clock(a.departsAt)}` : a.label;
-  const old = isOld(a, fetchedAt);
-  const crowd = a.arrivals?.find((x) => x.svc === svc)?.crowd;
-  const notes = [QUALITY[a.quality], crowd && `Crowd: ${CROWD[crowd]}`].filter(Boolean).join(' · ');
+  const old = isOld(a);
+  const notes = [a.card?.quality, a.card?.crowd].filter(Boolean).join(' · ');
   box.className = old ? 'widget old' : 'widget';
   box.replaceChildren(
     ...[
       el('div', { class: 'where', textContent: where }),
       el('div', { class: 'big', textContent: big }),
       el('div', { class: 'detail', textContent: old ? 'Old times · refreshing' : a.detail }),
-      a.leave && !old ? el('div', { class: 'leave', textContent: leaveText(a.leave) }) : null,
+      a.leave && a.card && !old ? el('div', { class: 'leave', textContent: leaveText(a) }) : null,
       a.timing && !old ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
       notes ? el('div', { class: 'note', textContent: notes }) : null,
       chips,
