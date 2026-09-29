@@ -6,7 +6,7 @@ serves the website in [`apps/web`](../web).
 
 - **Answers:** `/me/next` (the widget's one call) and `/me/nearby`, plus keyed
   `/next`, `/trip` and `/arrivals`. Docs at [terminus.rcn.sh/docs](https://terminus.rcn.sh/docs).
-- **Accounts:** sign-in by emailed code or link, device pairing, profiles in D1.
+- **Accounts:** sign-in by emailed link, device pairing, profiles in D1.
 - **Cron:** every 15 minutes, checks the NUS feed is up and emails if it isn't.
 
 ## Run it
@@ -19,7 +19,7 @@ node scripts/dev-stub.mjs          # the Worker with fake buses on :8787
 pnpm dev                           # cf dev against the live feed (needs .dev.vars)
 ```
 
-The dev stub has a test account, `you@u.nus.edu`. Its sign-in code prints in
+The dev stub has a test account, `you@u.nus.edu`. Its sign-in link prints in
 the terminal.
 
 ## Deploy

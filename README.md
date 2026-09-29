@@ -68,7 +68,7 @@ The same answer on your phone, your Mac and the web, in light or dark.
 
 ## Set up in two minutes
 
-1. **Sign in** at [terminus.rcn.sh/account](https://terminus.rcn.sh/account) with a code sent to your email. No password.
+1. **Sign in** at [terminus.rcn.sh/account](https://terminus.rcn.sh/account) with a link sent to your email. No password.
 2. **Import** your NUSMods share link and pick your home stop.
 3. **Install** the Android widget or the Mac menu bar app, and pair it by scanning the QR code or typing the code.
 
