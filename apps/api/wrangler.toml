@@ -81,6 +81,13 @@ name = "RL_PUBLIC"
 namespace_id = "1002"
 simple = { limit = 60, period = 60 }
 
+# One key for all sign-in emails. Counters are per Cloudflare location, so
+# this is a ceiling per location, not worldwide.
+[[ratelimits]]
+name = "RL_MAIL"
+namespace_id = "1004"
+simple = { limit = 30, period = 60 }
+
 # Per account on /me: a widget, the app and a browser tab together.
 [[ratelimits]]
 name = "RL_ME"

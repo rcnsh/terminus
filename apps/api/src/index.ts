@@ -19,6 +19,7 @@ import {
   parseShareUrl,
   resolveTrips,
   venueToStop,
+  ImportInputError,
 } from './nusmods.ts';
 import { authConfigured, authUrl, getSession } from './auth.ts';
 import { fmsConfigured, getArrivals } from './fms.ts';
@@ -38,7 +39,7 @@ import {
 import { buildCampusMap, buildDestinations } from './campus.ts';
 import { analyticsEnabled, logAnswer } from './analytics.ts';
 import { DOCS_PAGE, openApiSpec } from './openapi.ts';
-import { CORS, coordsFrom, json, jsonCached, numParam } from './http.ts';
+import { CORS, clientKey, coordsFrom, json, jsonCached, numParam } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
 import { readUpstream, runCron } from './monitor.ts';
@@ -108,6 +109,11 @@ export async function answerFor(
       : input.originCode === d.code,
   );
   if (dest && atDest) return arrivedAnswer(dest, destLabel, nowMs);
+  // No coordinates and no origin stop: nothing to resolve from. Saying
+  // "No buses running" here would be a claim about the network.
+  if (!cands.length) {
+    return { ...needsSetupAnswer(nowMs), label: 'No start point', detail: 'Send your location, or a stop to start from' };
+  }
 
   const byStop = await collectArrivals(
     env,
@@ -255,9 +261,17 @@ async function handleImport(url: URL, env: Env, nowMs: number): Promise<Response
     return json({ error: `unknown home stop ${home}` }, 400);
   }
 
-  const { trips, unresolved } = await resolveTrips(parsed, nowMs);
+  let r;
+  try {
+    r = await resolveTrips(parsed, nowMs);
+  } catch (err) {
+    if (err instanceof ImportInputError) return json({ error: err.message }, 400);
+    throw err;
+  }
+  if (r.failed.length) return json({ error: `NUSMods didn't answer for ${r.failed.join(', ')}; try again in a minute`, failed: r.failed }, 502);
+  const { trips, unresolved } = r;
   if (!trips.length) {
-    return json({ error: 'could not resolve any classes to a stop', unresolved }, 422);
+    return json({ error: 'could not resolve any classes to a stop', unresolved, missing: r.missing }, 422);
   }
 
   const encoded = encodeTimetable({ home, trips });
@@ -430,8 +444,7 @@ export default {
       // Public answer routes: a per-IP ceiling. The per-stop cache already
       // protects NUS; this protects the Worker from being a free proxy.
       if (env.RL_PUBLIC && ['/next', '/trip', '/arrivals', '/import'].includes(url.pathname)) {
-        const ip = req.headers.get('cf-connecting-ip') ?? 'unknown';
-        const { success } = await env.RL_PUBLIC.limit({ key: `pub:${ip}` });
+        const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
         if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
       }
 
@@ -463,7 +476,10 @@ export default {
           return json({ error: 'not found' }, 404);
       }
     } catch (err) {
-      return json({ error: 'internal', message: String(err) }, 500);
+      // Logged, because a caught error never shows up as an exception in the
+      // dashboard. The path only: the query can hold coordinates.
+      console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
+      return json({ error: 'internal' }, 500);
     }
   },
 };

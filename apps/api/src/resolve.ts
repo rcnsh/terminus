@@ -11,6 +11,7 @@
  * the same unit (seconds) so the trade-off is legible.
  */
 
+import { termDay } from './calendar.ts';
 import type {
   Arrival,
   Candidate,
@@ -213,7 +214,10 @@ export function inService(graph: Graph, svc: string, nowMs: number): boolean {
   const hours: ServiceHours | undefined = graph.serviceHours?.[svc];
   if (!hours) return true; // unknown hours: assume running, let the feed decide
   const { day, minutes } = sgt(nowMs);
-  const win = day === 0 ? hours.sunday : day === 6 ? hours.saturday : hours.weekday;
+  // NUS runs the Sunday timetable on public holidays. Without this a holiday
+  // morning gets a headway guess for services that are not running.
+  const sunday = day === 0 || termDay(nowMs).holiday !== null;
+  const win = sunday ? hours.sunday : day === 6 ? hours.saturday : hours.weekday;
   if (win === null) return false; // explicitly does not run today
   if (!win) return true; // hours unknown: assume running, let the feed decide
   const open = hhmmToMin(win[0]);

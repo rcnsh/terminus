@@ -7,7 +7,8 @@
 
 import type { ImportedTrip } from './nusmods.ts';
 import { sgt } from './config.ts';
-import { type LessonWeeks, type Term, importedClassRuns } from './calendar.ts';
+import { isoSeconds } from './format.ts';
+import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, termEnded, termName } from './calendar.ts';
 
 export interface Place {
   key: string;
@@ -190,9 +191,21 @@ export function classesOn(profile: Profile, atMs: number): ImportedTrip[] {
   ].sort((a, b) => a.arriveByMin - b.arriveByMin);
 }
 
-/** True when some imported classes predate week tracking and need a re-import. */
-export function needsReimport(profile: Profile): boolean {
-  return profile.trips.length > 0 && (profile.term === null || profile.trips.some((t) => t.weeks === undefined));
+export type ReimportReason = 'legacy' | 'ended';
+
+/**
+ * Why the imported timetable needs a fresh import, or null when it doesn't:
+ * 'legacy' for imports from before week tracking, 'ended' once its semester
+ * (exams included) is over and the classes will never run again.
+ */
+export function reimportReason(profile: Profile, nowMs: number): ReimportReason | null {
+  if (!profile.trips.length) return null;
+  if (profile.term === null || profile.trips.some((t) => t.weeks === undefined)) return 'legacy';
+  return termEnded(profile.term, nowMs) ? 'ended' : null;
+}
+
+export function needsReimport(profile: Profile, nowMs: number): boolean {
+  return reimportReason(profile, nowMs) !== null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -276,11 +289,30 @@ export const MORNING_LEAD_MIN = 90;
  * to cover any class that starts early or ends late.
  */
 export function isResting(profile: Profile, nowMs: number): boolean {
+  return restSide(profile, nowMs) !== null;
+}
+
+/** Which end of the day we are resting at, with today's effective start. */
+export function restSide(profile: Profile, nowMs: number): { side: 'before' | 'after'; startMin: number } | null {
   const t = sgt(nowMs);
   const today = classesOn(profile, nowMs);
-  const start = Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN));
+  const start = Math.max(0, Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN)));
   const end = Math.max(profile.dayEndMin, ...today.map((x) => endOf(x) + EVENING_GRACE_MIN));
-  return t.minutes < start || t.minutes >= end;
+  if (t.minutes < start) return { side: 'before', startMin: start };
+  if (t.minutes >= end) return { side: 'after', startMin: start };
+  return null;
+}
+
+const hhmmOf = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+/**
+ * The resting headline. "Done for today" at 05:00 beside "Next: ..., today
+ * 10:00" reads as a contradiction, so the morning says when the day starts.
+ */
+export function restLabel(profile: Profile, nowMs: number): string {
+  const r = restSide(profile, nowMs);
+  if (r?.side === 'before' && classesOn(profile, nowMs).length) return `Day starts ${hhmmOf(r.startMin)}`;
+  return 'Done for today';
 }
 
 /** How far ahead to look for the next class: a whole semester break. */
@@ -308,8 +340,13 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 
 /** "Next: CS2030 @ COM1, tomorrow 10:00", or a plain line when nothing is scheduled. */
 export function restDetail(profile: Profile, nowMs: number): string {
+  if (reimportReason(profile, nowMs) === 'ended' && profile.term) {
+    return `Your timetable is for ${termName(profile.term)} · import this semester's on the account page`;
+  }
   const n = nextClass(profile, nowMs);
-  if (!n) return 'Nothing on your timetable';
+  if (!n) return profile.trips.length || profile.manual.length ? 'No classes coming up' : 'Nothing on your timetable';
+  // Recess, exams, a public holiday: say why today is empty.
+  const off = classesOn(profile, nowMs).length ? null : dayOffReason(nowMs);
   const hh = String(Math.floor(n.trip.arriveByMin / 60)).padStart(2, '0');
   const mm = String(n.trip.arriveByMin % 60).padStart(2, '0');
   const when =
@@ -320,7 +357,7 @@ export function restDetail(profile: Profile, nowMs: number): string {
         : n.daysAhead < 7
           ? DAY_NAMES[n.trip.day]
           : shortDate(nowMs + n.daysAhead * 86_400_000);
-  return `Next: ${n.trip.label}, ${when} ${hh}:${mm}`;
+  return `${off ? `${off} · ` : ''}Next: ${n.trip.label}, ${when} ${hh}:${mm}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -345,8 +382,12 @@ export const ON_TIME_SLACK_S = 180;
  * the venue) with when it starts. The class is today's: the planner only
  * plans today.
  */
+/** Past this, the stop is not really the venue's stop (off campus, bad data):
+ *  a lateness figure would be noise. */
+export const MAX_VENUE_WALK_S = 20 * 60;
+
 export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number): Timing | null {
-  if (!arriveAtIso) return null;
+  if (!arriveAtIso || walkToVenueS > MAX_VENUE_WALK_S) return null;
   const day = new Date(nowMs + 8 * 3_600_000);
   const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()) - 8 * 3_600_000;
   const classAt = midnight + trip.arriveByMin * 60_000;
@@ -363,5 +404,5 @@ export function timingFor(arriveAtIso: string | null | undefined, trip: Imported
       : status === 'tight'
         ? `Arrive ${hhmm(reachMs)} · just in time`
         : `~${Math.max(1, Math.round(-slackS / 60))} min late`;
-  return { status, text, classAt: new Date(classAt).toISOString() };
+  return { status, text, classAt: isoSeconds(classAt) };
 }

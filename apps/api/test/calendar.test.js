@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { importedClassRuns, sgtDate, termDay } from '../src/calendar.ts';
-import { DEFAULT_PROFILE, classesOn, needsReimport, nextClass, restDetail } from '../src/profile.ts';
+import { calendarThrough, importedClassRuns, sgtDate, termDay, termsForImport } from '../src/calendar.ts';
+import { DEFAULT_PROFILE, classesOn, needsReimport, nextClass, reimportReason, restDetail } from '../src/profile.ts';
 
 // Fixed calendar, so these tests don't move when data/calendar.json refreshes.
 const CAL = {
@@ -96,7 +96,41 @@ test('the rest message skips recess to the first real class', () => {
 
 test('old imports without weeks ask for a re-import', () => {
   const p = { ...structuredClone(DEFAULT_PROFILE), trips: [{ ...lab(1), weeks: undefined }] };
-  assert.equal(needsReimport(p), true);
-  assert.equal(needsReimport({ ...p, trips: [lab(1)], term: SEM1 }), false);
-  assert.equal(needsReimport({ ...p, trips: [] }), false);
+  const now = at('2026-09-01');
+  assert.equal(needsReimport(p, now), true);
+  assert.equal(needsReimport({ ...p, trips: [lab(1)], term: SEM1 }, now), false);
+  assert.equal(needsReimport({ ...p, trips: [] }, now), false);
+});
+
+test('a timetable whose semester has ended asks for this semester, and says so', () => {
+  const p = { ...structuredClone(DEFAULT_PROFILE), trips: [lab(1)], term: SEM1 };
+  const sem2Week1 = at('2027-01-11');
+  assert.equal(reimportReason(p, at('2026-11-20')), null, 'still sem 1 (exams)');
+  assert.equal(reimportReason(p, sem2Week1), 'ended');
+  assert.match(restDetail(p, sem2Week1), /Sem 1 2026\/27/);
+});
+
+test('import picks the coming semester: a sem-1 link in July means August', () => {
+  assert.deepEqual(termsForImport(1, at('2026-07-01'))[0], SEM1);
+  assert.deepEqual(termsForImport(2, at('2026-12-20'))[0], { acadYear: '2026/2027', semester: 2 });
+  assert.deepEqual(termsForImport(1, at('2026-10-01'))[0], SEM1, 'during sem 1, sem 1');
+});
+
+test('past the end of the calendar data, imported classes run every week (fail open)', () => {
+  const far = at('2031-03-03'); // a Monday
+  assert.equal(termDay(far).kind, 'unknown');
+  assert.equal(importedClassRuns([3], SEM1, far), true);
+  assert.ok(calendarThrough() > '2027-01-01');
+});
+
+test('the real calendar covers the next 60 days', () => {
+  // Fails when data/calendar.json has not been refreshed: the moment to redeploy.
+  const now = Date.now();
+  for (let d = 0; d <= 60; d += 5) assert.notEqual(termDay(now + d * 86_400_000).kind, 'unknown');
+});
+
+test('the rest message says why today is empty', () => {
+  const p = { ...structuredClone(DEFAULT_PROFILE), trips: [lab(1)], term: SEM1 };
+  // Recess Monday evening: next class is week 7.
+  assert.match(restDetail(p, Date.parse('2026-09-21T12:00:00Z')), /^Recess week · Next: /);
 });

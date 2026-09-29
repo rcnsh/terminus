@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFAULT_PROFILE, GAP_RETURN_MIN, isResting, nextClass, parseProfile, planFor, restDetail, timingFor } from '../src/profile.ts';
+import { DEFAULT_PROFILE, GAP_RETURN_MIN, MAX_VENUE_WALK_S, isResting, nextClass, parseProfile, planFor, restDetail, restLabel, timingFor } from '../src/profile.ts';
 
 const STOPS = new Set(['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27']);
 const isStop = (c) => STOPS.has(c);
@@ -154,4 +154,21 @@ test('timing: on time, tight and late against the class start', () => {
   assert.equal(timingFor(arrive(9, 57), c, 60, now).text, 'Arrive 09:58 · just in time');
   assert.deepEqual([timingFor(arrive(10, 3), c, 120, now).status, timingFor(arrive(10, 3), c, 120, now).text], ['late', '~5 min late']);
   assert.equal(timingFor(null, c, 0, now), null, 'no arrival time, no claim');
+});
+
+test('rest label: early morning says when the day starts, not "Done for today"', () => {
+  const tt = [{ day: 4, arriveByMin: 600, to: 'COM3', label: 'CS2030 @ COM1', venue: '' }];
+  assert.equal(restLabel(profile(tt), thu(5)), 'Day starts 06:00');
+  assert.equal(restLabel(profile(tt), thu(20)), 'Done for today');
+});
+
+test('timing: an absurd walk from the stop to the venue gives no lateness figure', () => {
+  const trip = { day: 4, arriveByMin: 600, to: 'COM3', label: 'x', venue: '' };
+  assert.equal(timingFor('2026-08-27T01:50:00Z', trip, MAX_VENUE_WALK_S + 1, thu(9, 30)), null);
+  assert.ok(timingFor('2026-08-27T01:50:00Z', trip, 120, thu(9, 30)));
+});
+
+test('clock times go out without milliseconds', () => {
+  const trip = { day: 4, arriveByMin: 600, to: 'COM3', label: 'x', venue: '' };
+  assert.doesNotMatch(timingFor('2026-08-27T01:50:00Z', trip, 0, thu(9, 30)).classAt, /\.\d{3}Z$/);
 });

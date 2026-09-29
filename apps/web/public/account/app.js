@@ -6,6 +6,7 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const WALK_RADIUS_M = 450;
 
 let profile = null;
+let term = null; // "Sem 1 2026/27", the semester the imported classes are for
 let stops = []; // [{code, name, lat, lon}]
 const destByValue = new Map(); // datalist value -> stop code
 
@@ -125,7 +126,7 @@ function renderClasses() {
     ...profile.trips.map((t, i) => ({ t, list: 'trips', i })),
     ...profile.manual.map((t, i) => ({ t, list: 'manual', i })),
   ];
-  $('#class-count').textContent = all.length ? `${all.length} class${all.length === 1 ? '' : 'es'}` : '';
+  $('#class-count').textContent = all.length ? `${all.length} class${all.length === 1 ? '' : 'es'}${term && profile.trips.length ? ` · ${term}` : ''}` : '';
   if (!all.length) {
     box.append(el('p', { class: 'hint', textContent: 'No classes yet. Import from NUSMods or add them by hand.' }));
     return;
@@ -168,10 +169,11 @@ function renderUnresolved(list) {
   const box = $('#unresolved');
   box.replaceChildren();
   if (!list?.length) return;
-  box.append(el('p', { class: 'warn-text', textContent: `${list.length} class${list.length === 1 ? '' : 'es'} had a venue we couldn't place. Pick the nearest stop:` }));
+  box.append(el('p', { class: 'warn-text', textContent: `${list.length} class${list.length === 1 ? '' : 'es'} had a venue we couldn't place. Pick the nearest stop, or skip it:` }));
   const ul = el('ul', { class: 'list' });
   for (const u of list) {
-    const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}` }));
+    const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}${u.offCampus ? ' (off campus)' : ''}` }));
+    li.append(el('button', { type: 'button', class: 'link-btn', textContent: 'Skip', onclick: () => li.remove() }));
     li.append(
       stopSelect(
         '',
@@ -326,22 +328,32 @@ $('#logout').addEventListener('click', async () => {
 
 /* ---------- timetable, day, places ---------- */
 
-$('#import-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+async function runImport(share) {
   const msg = $('#import-msg');
   msg.textContent = 'Importing…';
   try {
-    const r = await api('/me/import', { method: 'POST', body: { share: $('#share').value } });
+    const r = await api('/me/import', { method: 'POST', body: { share } });
     profile = r.profile;
-    msg.textContent = `Imported ${profile.trips.length} class${profile.trips.length === 1 ? '' : 'es'}.`;
+    term = r.term;
+    const n = profile.trips.length;
+    const notes = [`Imported ${n} class${n === 1 ? '' : 'es'} for ${r.term}.`];
+    if (r.missing?.length) notes.push(`${r.missing.join(', ')} ${r.missing.length === 1 ? 'has' : 'have'} no classes that semester.`);
+    if (r.online) notes.push(`${r.online} online lesson${r.online === 1 ? '' : 's'} skipped.`);
+    msg.textContent = notes.join(' ');
     $('#reimport').hidden = true;
     renderClasses();
     renderUnresolved(r.unresolved);
     renderPreview();
   } catch (err) {
-    msg.textContent = err.message;
+    msg.textContent = err.status === 500 ? 'Something went wrong on our side. Your timetable was not changed.' : err.message;
   }
+}
+
+$('#import-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  runImport($('#share').value);
 });
+$('#reimport-now').addEventListener('click', () => runImport(profile.share));
 
 $('#manual-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -505,7 +517,12 @@ async function start() {
   }
   $('#email').textContent = me.email;
   $('#who').hidden = false;
+  term = me.term;
   $('#reimport').hidden = !me.needsReimport;
+  $('#reimport-text').textContent =
+    me.reimportReason === 'ended'
+      ? `It's for ${me.term}, which has ended. Copy this semester's link from NUSMods and import it below.`
+      : "It was imported before terminus knew about teaching weeks, so it may count classes in weeks they don't run.";
 
   const [p, campus] = await Promise.all([api('/me/profile'), api('/campus')]);
   profile = p;
@@ -518,6 +535,8 @@ async function start() {
     dl.append(el('option', { value }));
   }
   if (profile.share) $('#share').value = profile.share;
+  // Same link, fresh data: only useful when the semester hasn't changed.
+  $('#reimport-now').hidden = !(me.reimportReason === 'legacy' && profile.share);
 
   renderClasses();
   renderHome();

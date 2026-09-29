@@ -169,7 +169,12 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
  * A three-minute-old answer honestly labelled beats a spinner, and beats an
  * empty tile that reads as "no buses".
  */
-const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString();
+/**
+ * Whole-second ISO, "2026-09-28T01:14:02Z". Clients parse these, and a
+ * default Swift ISO8601DateFormatter rejects the ".000" toISOString adds.
+ */
+export const isoSeconds = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+const iso = isoSeconds;
 
 export function buildAnswer(f: FormatInput): Answer {
   const best = f.options[0];

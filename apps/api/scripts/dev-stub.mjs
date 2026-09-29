@@ -9,6 +9,8 @@
  *   - every service treated as running at any hour
  *   - an in-memory database with a test account (tester@example.test),
  *     three saved places, a class later today, and pairing codes TEST67, TEST78, TEST89
+ *   - a fake NUSMods (every module has a lab, an online tutorial and an
+ *     off-campus lecture; XX9999 is not offered; DOWN1000 fails)
  *
  * Point a debug Android build at it:
  *   ./gradlew installDebug -PapiBase=http://localhost:8787
@@ -46,6 +48,16 @@ async function feed(input, init = {}) {
       return { name: svc, arrivalTime: String(eta), nextArrivalTime: String(eta + 12), passengers: crowds[(eta + i) % 3] };
     });
     return Response.json(shuttlePayload(shuttles));
+  }
+  // Fake NUSMods: any module has a Monday lab and an online tutorial;
+  // XX9999 is not offered, DOWN1000 times out as NUSMods being down.
+  const mod = /api\.nusmods\.com\/v2\/[^/]+\/modules\/([^.]+)\.json/.exec(url);
+  if (mod) {
+    if (mod[1] === 'XX9999') return new Response('not found', { status: 404 });
+    if (mod[1] === 'DOWN1000') return new Response('bad gateway', { status: 502 });
+    const lesson = (lessonType, day, startTime, venue) => ({ lessonType, classNo: '1', day, startTime, endTime: String(Number(startTime) + 200).padStart(4, '0'), venue, weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] });
+    const timetable = [lesson('Laboratory', 'Monday', '1000', 'COM3-0120'), lesson('Tutorial', 'Tuesday', '1400', 'E-Learn_C'), lesson('Lecture', 'Wednesday', '0900', 'DUKENUS')];
+    return Response.json({ semesterData: [1, 2, 3, 4].map((semester) => ({ semester, timetable })) });
   }
   return fetch(input, init);
 }

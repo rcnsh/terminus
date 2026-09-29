@@ -19,7 +19,12 @@ const DATA = calendarJson as CalendarData;
 const DAY_MS = 86_400_000;
 const SGT_MS = 8 * 3_600_000;
 
-export type WeekKind = 'instructional' | 'recess' | 'reading' | 'exam' | 'vacation';
+/**
+ * 'unknown' means today is past the end of the calendar data. Imported
+ * classes then run every week (fail open): a guessed class beats a timetable
+ * that silently goes blank because nobody redeployed calendar.json.
+ */
+export type WeekKind = 'instructional' | 'recess' | 'reading' | 'exam' | 'vacation' | 'unknown';
 
 export interface TermDay {
   acadYear: string | null;
@@ -46,10 +51,26 @@ function sgtMidnight(date: string): number {
   return Date.parse(`${date}T00:00:00Z`) - SGT_MS;
 }
 
+/** Weeks from a semester's first day to the end of its exams. */
+const semWeeks = (semester: number) => (semester >= 3 ? 6 : 17);
+/** How long after the last known semester ends before the data counts as run out. */
+const COVERAGE_GRACE_DAYS = 21;
+
+function semEndMs(s: { semester: number; start: string }): number {
+  return sgtMidnight(s.start) + semWeeks(s.semester) * 7 * DAY_MS;
+}
+
+/** The last day the calendar data can answer for, as YYYY-MM-DD. */
+export function calendarThrough(data: CalendarData = DATA): string {
+  const last = Math.max(...data.semesters.map(semEndMs));
+  return sgtDate(last + COVERAGE_GRACE_DAYS * DAY_MS);
+}
+
 export function termDay(nowMs: number, data: CalendarData = DATA): TermDay {
   const today = sgtDate(nowMs);
   const holiday = data.holidays.find((h) => h.date === today)?.name ?? null;
   const dayStart = sgtMidnight(today);
+  if (today > calendarThrough(data)) return { acadYear: null, semester: null, kind: 'unknown', week: null, holiday };
 
   // Latest semester that has started.
   const started = data.semesters
@@ -91,6 +112,7 @@ export function importedClassRuns(
 ): boolean {
   const d = termDay(nowMs, data);
   if (d.holiday) return false;
+  if (d.kind === 'unknown') return true;
 
   // A date-range lesson runs on its own dates, whatever the teaching week.
   if (weeks && !Array.isArray(weeks)) {
@@ -105,4 +127,44 @@ export function importedClassRuns(
   if (d.kind !== 'instructional' || d.week === null) return false;
   if (term && (d.acadYear !== term.acadYear || d.semester !== term.semester)) return false;
   return weeks ? weeks.includes(d.week) : true;
+}
+
+const semesterStart = (t: Term, data: CalendarData) =>
+  data.semesters.find((s) => s.acadYear === t.acadYear && s.semester === t.semester);
+
+/**
+ * The semester a NUSMods "sem-N" link most likely means: the current one of
+ * that number, else the next one to start. A sem-1 link pasted in July is for
+ * August, not for the semester that ended in December. Candidates come back
+ * best first; the caller can fall back when NUSMods has no data yet.
+ */
+export function termsForImport(semester: number, nowMs: number, data: CalendarData = DATA): Term[] {
+  const same = data.semesters.filter((s) => s.semester === semester).sort((a, b) => a.start.localeCompare(b.start));
+  const live = same.filter((s) => semEndMs(s) >= sgtMidnight(sgtDate(nowMs)));
+  const ended = same.filter((s) => !live.includes(s)).reverse();
+  const out = [...live.slice(0, 1), ...ended.slice(0, 1)].map((s) => ({ acadYear: s.acadYear, semester: s.semester }));
+  if (out.length) return out;
+  // Not in the data at all: the academic year that starts in August.
+  const d = new Date(nowMs + SGT_MS);
+  const y = d.getUTCMonth() + 1 >= 8 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
+  return [{ acadYear: `${y}/${y + 1}`, semester }];
+}
+
+/** Whether a timetable's semester has finished (exams included). Unknown terms count as current. */
+export function termEnded(term: Term, nowMs: number, data: CalendarData = DATA): boolean {
+  const s = semesterStart(term, data);
+  return s ? semEndMs(s) < sgtMidnight(sgtDate(nowMs)) : false;
+}
+
+/** "Sem 1 2026/27", "Special Term I 2026/27". */
+export function termName(t: Term): string {
+  const ay = t.acadYear.replace(/^(\d{4})\/\d{2}(\d{2})$/, '$1/$2');
+  return t.semester <= 2 ? `Sem ${t.semester} ${ay}` : `Special Term ${t.semester === 3 ? 'I' : 'II'} ${ay}`;
+}
+
+/** Why there are no classes today, in a few words, or null on an ordinary day. */
+export function dayOffReason(nowMs: number, data: CalendarData = DATA): string | null {
+  const d = termDay(nowMs, data);
+  if (d.holiday) return d.holiday;
+  return d.kind === 'recess' ? 'Recess week' : d.kind === 'reading' ? 'Reading week' : d.kind === 'exam' ? 'Exams' : d.kind === 'vacation' ? 'Vacation' : null;
 }

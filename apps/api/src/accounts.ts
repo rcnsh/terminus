@@ -65,10 +65,29 @@ export function newPairCode(): string {
   return out.join('');
 }
 
+/**
+ * Plain addresses only. The old pattern allowed `,` `<` `>` in the local
+ * part, so "x,blocked@example.com" was a different string from the blocked
+ * address but could still be delivered to it.
+ */
 export function normalizeEmail(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const e = raw.trim().toLowerCase();
-  return /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,}$/.test(e) ? e : null;
+  if (e.length > 254) return null;
+  return /^[a-z0-9._%+-]{1,64}@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(e) ? e : null;
+}
+
+/**
+ * The inbox an address delivers to, for cooldowns and the blocklist:
+ * "a.b+x@gmail.com" and "ab@gmail.com" are one inbox. Mail still goes to
+ * the address as typed.
+ */
+export function inboxKey(email: string): string {
+  let [local, domain] = email.split('@');
+  local = local.split('+')[0];
+  if (domain === 'googlemail.com') domain = 'gmail.com';
+  if (domain === 'gmail.com') local = local.replaceAll('.', '');
+  return `${local}@${domain}`;
 }
 
 /** Normalises a user-entered pairing code; null if it cannot be one. */
@@ -90,7 +109,8 @@ export type LinkOutcome = 'sent' | 'blocked' | 'cooldown';
  * outcome, so the endpoint doesn't reveal who has an account or is blocked.
  */
 export async function requestLink(env: Env, db: D1Database, email: string, origin: string, nowMs: number): Promise<LinkOutcome> {
-  const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email = ?').bind(email).first();
+  const inbox = inboxKey(email);
+  const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
   if (blocked) return 'blocked';
 
   const recent = await db
@@ -98,25 +118,41 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
     .bind(email, nowMs - ACCOUNT_TTL.linkCooldownMs)
     .first();
   if (recent) return 'cooldown';
+  // Per inbox too, so +tags and dots cannot mail one person over and over.
+  const coolKey = `mail:${await hashToken(inbox)}`;
+  if (await env.NUSBUS_KV.get(coolKey).catch(() => null)) return 'cooldown';
 
   const token = newToken();
+  const tokenHash = await hashToken(token);
   await db.batch([
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
     db
       .prepare('INSERT INTO magic_links (token_hash, email, created, expires) VALUES (?, ?, ?, ?)')
-      .bind(await hashToken(token), email, nowMs, nowMs + ACCOUNT_TTL.linkMs),
+      .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs),
   ]);
 
   const link = `${origin}/auth/verify?t=${token}`;
-  if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');
-  await env.EMAIL.send({
-    from: { email: env.EMAIL_FROM, name: 'terminus' },
+  try {
+    if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');
+    await sendLink(env, email, link);
+  } catch (err) {
+    // Otherwise the unsent link holds the cooldown and the retry is told
+    // "check your email" for a message that never went.
+    await db.prepare('DELETE FROM magic_links WHERE token_hash = ?').bind(tokenHash).run();
+    throw err;
+  }
+  await env.NUSBUS_KV.put(coolKey, '1', { expirationTtl: Math.max(60, ACCOUNT_TTL.linkCooldownMs / 1000) }).catch(() => {});
+  return 'sent';
+}
+
+async function sendLink(env: Env, email: string, link: string): Promise<void> {
+  await env.EMAIL!.send({
+    from: { email: env.EMAIL_FROM!, name: 'terminus' },
     to: email,
     subject: 'Sign in to terminus',
     text: `Sign in to terminus:\n\n${link}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.`,
     html: `<p><a href="${link}">Sign in to terminus</a></p><p>The link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.</p>`,
   });
-  return 'sent';
 }
 
 /**

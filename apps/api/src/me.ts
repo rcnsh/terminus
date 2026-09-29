@@ -26,12 +26,13 @@ import {
   saveProfileJson,
   sessionCookie,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, type Profile, isResting, needsReimport, parseProfile, planFor, restDetail, timingFor } from './profile.ts';
-import { type ImportedTrip, acadYear, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
+import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, isResting, parseProfile, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
+import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
+import { termName } from './calendar.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
 import { shortStop } from './format.ts';
 import { WALK } from './config.ts';
-import { coordsFrom, json } from './http.ts';
+import { clientKey, coordsFrom, json } from './http.ts';
 
 export interface MeDeps {
   graph: Graph;
@@ -64,8 +65,7 @@ async function readJson(req: Request): Promise<Record<string, unknown> | null> {
 
 async function limited(env: Env, req: Request, scope: string): Promise<boolean> {
   if (!env.RL_AUTH) return false;
-  const ip = req.headers.get('cf-connecting-ip') ?? 'unknown';
-  const { success } = await env.RL_AUTH.limit({ key: `${scope}:${ip}` });
+  const { success } = await env.RL_AUTH.limit({ key: `${scope}:${clientKey(req)}` });
   return !success;
 }
 
@@ -132,10 +132,16 @@ export async function handleMe(
     if (!(await verifyTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip')))) {
       return json({ error: 'the human check failed, try again' }, 400);
     }
+    // One ceiling for everyone: a botnet past Turnstile must not be able to
+    // spend the whole email quota or the sender's reputation.
+    if (env.RL_MAIL && !(await env.RL_MAIL.limit({ key: 'mail:global' })).success) {
+      return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    }
     try {
       await requestLink(env, db, email, url.origin, nowMs);
     } catch (err) {
-      console.error('sign-in email failed', String(err));
+      // The error text can carry the recipient: log its kind only.
+      console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
     }
     // Same answer whether or not the address is blocked or already has an account.
@@ -219,7 +225,14 @@ export async function handleMe(
 
   if (path === '/me' && req.method === 'GET') {
     const profile = await getProfile(db, session.user.id, deps.graph);
-    return json({ email: session.user.email, kind: session.kind, needsReimport: needsReimport(profile) });
+    const reason = reimportReason(profile, nowMs);
+    return json({
+      email: session.user.email,
+      kind: session.kind,
+      needsReimport: reason !== null,
+      reimportReason: reason,
+      term: profile.term ? termName(profile.term) : null,
+    });
   }
 
   if (path === '/me/profile') {
@@ -237,7 +250,7 @@ export async function handleMe(
 
   if (path === '/me/import' && req.method === 'POST') {
     const body = await readJson(req);
-    const share = typeof body?.share === 'string' ? body.share : '';
+    const share = typeof body?.share === 'string' ? body.share.trim() : '';
     let parsed;
     try {
       parsed = parseShareUrl(share);
@@ -245,13 +258,28 @@ export async function handleMe(
       return json({ error: 'not a valid NUSMods share link' }, 400);
     }
     if (!parsed.selections.length) return json({ error: 'no modules found in that link' }, 400);
-    const { trips, unresolved } = await resolveTrips(parsed, nowMs);
+    let r;
+    try {
+      r = await resolveTrips(parsed, nowMs);
+    } catch (err) {
+      if (err instanceof ImportInputError) return json({ error: err.message }, 400);
+      throw err;
+    }
+    const term = termName(r.term);
+    // An incomplete import must never replace a timetable that works.
+    if (r.failed.length) {
+      return json({ error: `NUSMods didn't answer for ${r.failed.join(', ')}. Nothing was changed; try again in a minute.`, failed: r.failed }, 502);
+    }
+    if (!r.trips.length && !r.unresolved.length) {
+      const why = r.missing.length ? `${r.missing.join(', ')} ${r.missing.length === 1 ? 'has' : 'have'} no classes in ${term}` : `no classes in that link run in ${term}`;
+      return json({ error: `Nothing imported: ${why}. Your timetable was not changed.`, missing: r.missing }, 422);
+    }
     const profile = await getProfile(db, session.user.id, deps.graph);
-    profile.trips = trips;
+    profile.trips = r.trips.slice(0, PROFILE_LIMITS.trips);
     profile.share = share;
-    profile.term = { acadYear: acadYear(nowMs, parsed.semester).replace('-', '/'), semester: parsed.semester };
+    profile.term = r.term;
     await saveProfileJson(db, session.user.id, profile, nowMs);
-    return json({ profile, unresolved });
+    return json({ profile, unresolved: r.unresolved, missing: r.missing, online: r.online, term });
   }
 
   if (path === '/me/pair-code' && req.method === 'POST') {
@@ -282,6 +310,10 @@ export async function handleMe(
   return json({ error: 'not found' }, 404);
 }
 
+function setupAnswer(nowMs: number, label: string, detail: string): Answer {
+  return { label, detail, alt: null, stop: { code: '', name: '', confidence: 0 }, quality: 'unknown', asOf: new Date(nowMs).toISOString(), arrivals: [] };
+}
+
 export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
   const { lat, lon } = coordsFrom(url);
   const homeStop = profile.home?.stops[0] ?? null;
@@ -299,7 +331,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   } else if (isResting(profile, nowMs)) {
     // Outside the user's day: no bus, and the same answer for every client.
     return {
-      label: 'Done for today',
+      label: restLabel(profile, nowMs),
       detail: restDetail(profile, nowMs),
       alt: null,
       stop: { code: '', name: '', confidence: 0 },
@@ -316,6 +348,16 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   }
 
   const preferStops = profile.home?.stops ?? [];
+  // A class to go to but nowhere to start from: without this the resolver
+  // has no stop to check and says "Services ended" at 9 am.
+  if (dest && lat === null && !dest.from) {
+    return {
+      ...setupAnswer(nowMs, 'Add a home stop', 'Pick where your day starts on the account page, or turn on location'),
+      mode: 'trip',
+      dest: { to: dest.to, label: dest.label, why: dest.why },
+      places,
+    };
+  }
   if (dest) {
     const input: ResolveInput = { lat, lon, to: dest.to, originCode: lat === null ? dest.from : null, preferStops };
     const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
@@ -328,18 +370,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
 
   // Nothing planned: what's coming at the nearest stop.
   if (lat === null && !homeStop) {
-    return {
-      label: 'Set up',
-      detail: 'Add your timetable or home on the account page, or send your location',
-      alt: null,
-      stop: { code: '', name: '', confidence: 0 },
-      quality: 'unknown',
-      asOf: new Date(nowMs).toISOString(),
-      arrivals: [],
-      mode: 'nearby',
-      dest: null,
-      places,
-    };
+    return { ...setupAnswer(nowMs, 'Set up', 'Add your timetable or home on the account page, or send your location'), mode: 'nearby', dest: null, places };
   }
   const input: ResolveInput = { lat, lon, to: null, originCode: lat === null ? homeStop : null, preferStops };
   const answer = await deps.answerFor(env, ctx, input, null, nowMs);

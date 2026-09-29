@@ -20,7 +20,7 @@
 
 import type { Stop } from './types.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
-import type { LessonWeeks } from './calendar.ts';
+import { type LessonWeeks, type Term, termsForImport } from './calendar.ts';
 
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
 
@@ -63,8 +63,9 @@ export interface ShareUrl {
  * `ta` are NUSMods view state, not lessons -- skip them.
  */
 export function parseShareUrl(input: string): ShareUrl {
+  if (input.length > 2000) throw new Error('share link too long');
   const url = new URL(input);
-  const semMatch = /sem-(\d)/.exec(url.pathname);
+  const semMatch = /sem-([1-4])/.exec(url.pathname);
   const semester = semMatch ? Number(semMatch[1]) : 1;
 
   const selections: Selection[] = [];
@@ -83,14 +84,9 @@ export function parseShareUrl(input: string): ShareUrl {
   return { semester, selections };
 }
 
-/** NUS academic year for a semester, from today. Sem 1 starts in August. */
+/** NUS academic year for a semester, as NUSMods writes it ("2026-2027"). */
 export function acadYear(nowMs: number, semester: number): string {
-  const d = new Date(nowMs + 8 * 3600_000); // SGT
-  const y = d.getUTCFullYear();
-  const m = d.getUTCMonth() + 1;
-  // Aug-Dec is sem 1 of AY y..y+1; Jan-Jul belongs to the AY that began last y-1.
-  const startYear = m >= 8 ? y : y - 1;
-  return `${startYear}-${startYear + 1}`;
+  return termsForImport(semester, nowMs)[0].acadYear.replace('/', '-');
 }
 
 interface TimetableRow {
@@ -134,16 +130,63 @@ export interface ImportedTrip {
 export interface ImportResult {
   trips: ImportedTrip[];
   /** Classes whose venue matched no stop, with enough detail to place them by hand. */
-  unresolved: Array<{ module: string; venue: string; day: number; arriveByMin: number; endMin?: number }>;
+  unresolved: Array<{ module: string; venue: string; day: number; arriveByMin: number; endMin?: number; offCampus?: boolean }>;
+  /** The semester the classes were read for. */
+  term: Term;
+  /** Modules NUSMods has no timetable for in that semester (typo, not offered). */
+  missing: string[];
+  /** Modules we could not fetch at all. Any of these means the import is incomplete. */
+  failed: string[];
+  /** Online or TBA lessons, which have no stop. */
+  online: number;
 }
 
 type FetchLike = typeof fetch;
 
 const hhmm = (v: string) => Number(v.slice(0, 2)) * 60 + Number(v.slice(2));
 
+/** At most this many modules per import: a full load is 5-7. */
+export const MAX_MODULES = 15;
+/** Codes like CS2040, GEA1000, CS2103T, ACC1701X. */
+export const MODULE_CODE = /^[A-Z]{2,4}\d{4}[A-Z]{0,3}$/;
+/** A room further than this from any stop is off campus (Duke-NUS, hospital). */
+const OFF_CAMPUS_M = 1500;
+const ONLINE_VENUE = /^(E-LEARN|ONLINE|TBA|ZOOM)/;
+const FETCH_TIMEOUT_MS = 8000;
+
+/** Distinct module codes in a share link, uppercased. */
+export function shareModules(share: ShareUrl): string[] {
+  return [...new Set(share.selections.map((s) => s.module.toUpperCase()))];
+}
+
+type ModuleFetch = { status: 'ok'; timetable: TimetableRow[] } | { status: 'missing' } | { status: 'failed' };
+
+async function fetchModule(fetchImpl: FetchLike, apiBase: string, ay: string, module: string, semester: number): Promise<ModuleFetch> {
+  try {
+    // Module data changes a few times a semester: a day at the edge is plenty,
+    // and a class of students importing the same modules costs NUSMods once.
+    const res = await fetchImpl(`${apiBase}/${ay}/modules/${encodeURIComponent(module)}.json`, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      cf: { cacheTtl: 86_400, cacheEverything: true },
+    } as RequestInit);
+    if (res.status === 404) return { status: 'missing' };
+    if (!res.ok) return { status: 'failed' };
+    const mod = (await res.json()) as { semesterData?: Array<{ semester: number; timetable: TimetableRow[] }> };
+    const sem = mod.semesterData?.find((x) => x.semester === semester);
+    return sem ? { status: 'ok', timetable: sem.timetable } : { status: 'missing' };
+  } catch {
+    return { status: 'failed' };
+  }
+}
+
 /**
- * Resolve selections into trips by querying NUSMods. One fetch per distinct
- * module; a selection with no matching class (stale share link) is skipped.
+ * Resolve selections into trips by querying NUSMods, one fetch per distinct
+ * module, in parallel. A selection with no matching class (stale share link)
+ * is skipped. The caller decides what to do with `failed`: an import that
+ * could not reach NUSMods must never replace a working timetable.
+ *
+ * Throws only for input the caller should have rejected: too many modules or
+ * a malformed module code.
  */
 export async function resolveTrips(
   share: ShareUrl,
@@ -151,55 +194,69 @@ export async function resolveTrips(
   fetchImpl: FetchLike = fetch,
   apiBase = 'https://api.nusmods.com/v2',
 ): Promise<ImportResult> {
-  const ay = acadYear(nowMs, share.semester);
-  const byModule = new Map<string, Selection[]>();
-  for (const s of share.selections) {
-    const arr = byModule.get(s.module) ?? [];
-    arr.push(s);
-    byModule.set(s.module, arr);
+  const modules = shareModules(share);
+  if (modules.length > MAX_MODULES) throw new ImportInputError(`that link has ${modules.length} modules; the limit is ${MAX_MODULES}`);
+  const bad = modules.find((m) => !MODULE_CODE.test(m));
+  if (bad) throw new ImportInputError(`"${bad.slice(0, 20)}" is not a module code`);
+
+  // A sem-1 link in July means the coming August. If NUSMods has nothing for
+  // that year yet, the semester just gone is the next best reading.
+  const terms = termsForImport(share.semester, nowMs);
+  let term = terms[0];
+  let fetched = await Promise.all(modules.map((m) => fetchModule(fetchImpl, apiBase, term.acadYear.replace('/', '-'), m, share.semester)));
+  if (terms[1] && fetched.every((f) => f.status === 'missing')) {
+    term = terms[1];
+    fetched = await Promise.all(modules.map((m) => fetchModule(fetchImpl, apiBase, term.acadYear.replace('/', '-'), m, share.semester)));
   }
 
   const trips: ImportedTrip[] = [];
   const unresolved: ImportResult['unresolved'] = [];
+  const missing: string[] = [];
+  const failed: string[] = [];
+  let online = 0;
 
-  for (const [module, sels] of byModule) {
-    const res = await fetchImpl(`${apiBase}/${ay}/modules/${module}.json`);
-    if (!res.ok) continue;
-    const mod = (await res.json()) as {
-      semesterData?: Array<{ semester: number; timetable: TimetableRow[] }>;
-    };
-    const sem = mod.semesterData?.find((s) => s.semester === share.semester);
-    if (!sem) continue;
-
+  modules.forEach((module, i) => {
+    const f = fetched[i];
+    if (f.status === 'missing') return void missing.push(module);
+    if (f.status === 'failed') return void failed.push(module);
+    const sels = share.selections.filter((s) => s.module.toUpperCase() === module);
     for (const sel of sels) {
-      const rows = sem.timetable.filter(
-        (r) => r.lessonType === sel.lessonType && r.classNo === sel.classNo,
-      );
+      const rows = f.timetable.filter((r) => r.lessonType === sel.lessonType && r.classNo === sel.classNo);
       for (const r of rows) {
         const day = DAYS.indexOf(r.day);
         if (day < 0) continue;
-        const resolved = venueToStop(r.venue);
-        if (!resolved) {
-          unresolved.push({ module, venue: r.venue, day, arriveByMin: hhmm(r.startTime), ...(r.endTime ? { endMin: hhmm(r.endTime) } : {}) });
+        const venue = (r.venue ?? '').trim();
+        if (!venue || ONLINE_VENUE.test(venue.toUpperCase())) {
+          online++;
+          continue;
+        }
+        const start = hhmm(r.startTime);
+        const end = r.endTime ? { endMin: hhmm(r.endTime) } : {};
+        const resolved = venueToStop(venue);
+        if (!resolved || resolved.m > OFF_CAMPUS_M) {
+          unresolved.push({ module, venue, day, arriveByMin: start, ...end, ...(resolved ? { offCampus: true } : {}) });
           continue;
         }
         trips.push({
           day,
-          arriveByMin: hhmm(r.startTime),
-          ...(r.endTime ? { endMin: hhmm(r.endTime) } : {}),
+          arriveByMin: start,
+          ...end,
           ...(r.weeks ? { weeks: r.weeks } : {}),
           to: resolved.stop,
-          label: `${module} @ ${r.venue.split('-')[0]}`,
-          venue: r.venue,
+          label: `${module} @ ${venue.split('-')[0]}`.slice(0, 60),
+          venue,
         });
       }
     }
-  }
+  });
 
   // A stable order makes the encoded link deterministic.
   trips.sort((a, b) => a.day - b.day || a.arriveByMin - b.arriveByMin || a.to.localeCompare(b.to));
-  return { trips, unresolved };
+  return { trips, unresolved, term, missing, failed, online };
 }
+
+/** Bad input to an import, as opposed to NUSMods failing. */
+export class ImportInputError extends Error {}
 
 /* ------------------------------------------------------------------ */
 /* Stateless encoding: the personal /next link IS the timetable        */
