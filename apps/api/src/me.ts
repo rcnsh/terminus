@@ -490,14 +490,11 @@ export async function handleMe(
 }
 
 /**
- * What the account page should walk someone through first: the whole setup
- * for an account that has never saved anything, just the new walking-pace
- * screen for one set up before it existed, or nothing.
+ * Whether the account page should walk someone through setup first: an
+ * account that has never saved anything and hasn't been through it.
  */
-export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | 'pace' | null {
-  if (seen.includes('onboarding')) return null;
-  if (!hasProfile) return 'full';
-  return seen.includes('pace') ? null : 'pace';
+export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | null {
+  return !hasProfile && !seen.includes('onboarding') ? 'full' : null;
 }
 
 /** In your residence with nothing left today: no bus, and what's next. */

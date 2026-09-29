@@ -149,18 +149,10 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 /* The account page arrives after setup, and the "new" card on older accounts. */
 #app:not([hidden]) { animation: ob-appear 0.3s var(--ob-ease) both; }
 @keyframes ob-appear { from { opacity: 0; transform: translateY(6px); } }
-.col-span { grid-column: 1 / -1; }
-/* Above the preview, which moves to the top on narrow screens. */
-#pace-prompt { order: -2; }
-.ob-new { position: relative; }
-.ob-new h2 { margin-bottom: 6px; }
-.ob-badge { display: inline-block; margin-bottom: 8px; padding: 3px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 600 0.72rem/1.2 var(--font); letter-spacing: 0.06em; text-transform: uppercase; }
-#pace-prompt:not([hidden]) { animation: ob-appear 0.3s var(--ob-ease) both; }
-#pace-prompt.leaving { opacity: 0; transform: translateY(-6px); transition: opacity 0.2s ease-in, transform 0.2s ease-in; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ob-in-fwd, .ob-in-back, #app:not([hidden]), #pace-prompt:not([hidden]) { animation: none; }
-  .ob-fill, .ob-pace, .ob-app, .onboard.leaving, #pace-prompt.leaving, .ob-out-fwd, .ob-out-back { transition: none; }
+  .ob-in-fwd, .ob-in-back, #app:not([hidden]) { animation: none; }
+  .ob-fill, .ob-pace, .ob-app, .onboard.leaving, .ob-out-fwd, .ob-out-back { transition: none; }
   .ob-out-fwd, .ob-out-back { transform: none; }
 }
 

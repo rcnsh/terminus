@@ -524,7 +524,7 @@ test('an unexpected error is logged and answered with a bare 500', async () => {
   const orig = console.error;
   console.error = (...a) => errors.push(a.join(' '));
   env.DB.prepare = () => { throw new Error('D1_ERROR: secret internals'); };
-  const r = await call(env, '/me?lat=1.29&lon=103.77', { cookie: 'nb_s=whatever' });
+  const r = await call(env, '/me?lat=1.29&lon=103.77', { cookie: '__Host-nb_s=whatever' });
   console.error = orig;
   assert.equal(r.status, 500);
   assert.deepEqual(await r.json(), { error: 'internal' });
@@ -582,11 +582,11 @@ test('the sign-in page names the account and refuses a dead link up front; the c
   assert.match(res.headers.get('set-cookie'), /^__Host-nb_s=.*Secure/);
 });
 
-test('a session cookie from before the rename still works', async () => {
+test('only the __Host- session cookie is read', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const old = cookie.replace('__Host-nb_s=', 'nb_s=');
-  assert.equal((await call(env, '/me', { cookie: old })).status, 200);
+  assert.equal((await call(env, '/me', { cookie: old })).status, 401);
 });
 
 test('/me/next: a class carries a leave-by time, moved by the walk from home', async () => {
@@ -657,16 +657,13 @@ test('/me/next: a slower walking pace means leaving earlier', async () => {
   assert.ok(Date.parse(normal.leave.at) - Date.parse(slow.leave.at) >= (Math.round(m / 1.1) - Math.round(m / 1.3)) * 1000);
 });
 
-test('/me: a new account gets the full setup, an older one just the pace screen, then neither', async () => {
+test('/me: a new account gets the full setup, then never again', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const me = async () => (await (await call(env, '/me', { cookie })).json()).onboarding;
   assert.equal(await me(), 'full');
-  // Saved something before onboarding existed: only what's new.
   await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] } } });
-  assert.equal(await me(), 'pace');
-  await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, seen: ['pace'] } });
-  assert.equal(await me(), null);
+  assert.equal(await me(), null, 'an account that has saved something is set up');
   await call(env, '/me/profile', { method: 'PUT', cookie, body: { seen: ['onboarding'] } });
   assert.equal(await me(), null);
 });
@@ -716,7 +713,7 @@ test('/me/next in your residence: "You\'re home" after the last class, leave-by 
 test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
   const { env, email } = setup();
   delete env.PUBLIC_API_OPEN; // locked, as in production
-  for (const path of ['/next?lat=1.2966&lon=103.7764', '/trip?to=UTOWN&from=PGP', '/arrivals?stop=COM3', '/campus', '/stops/pairs', '/import?share=x']) {
+  for (const path of ['/next?lat=1.2966&lon=103.7764', '/trip?to=UTOWN&from=PGP', '/arrivals?stop=COM3', '/campus', '/stops/pairs']) {
     const res = await call(env, path);
     assert.equal(res.status, 401, path);
     assert.match((await res.json()).error, /API key/);

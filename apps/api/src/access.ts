@@ -1,6 +1,6 @@
 /**
- * Who may call the bus-answer routes (/next, /trip, /arrivals, /import,
- * /campus, /stops/pairs): the holder of an API key made on the account page, or anyone
+ * Who may call the bus-answer routes (/next, /trip, /arrivals, /campus,
+ * /stops/pairs): the holder of an API key made on the account page, or anyone
  * signed in (a browser session or a paired device). Nobody anonymous: the
  * answers are NUS's data, and terminus should not be a free proxy for it.
  */

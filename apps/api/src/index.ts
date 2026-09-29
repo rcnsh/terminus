@@ -10,15 +10,7 @@
 
 import type { Env, ResolveInput, StopArrivals } from './types.ts';
 import { sgt } from './config.ts';
-import {
-  decodeTimetable,
-  encodeTimetable,
-  nextTrip,
-  parseShareUrl,
-  resolveTrips,
-  venueToStop,
-  ImportInputError,
-} from './nusmods.ts';
+import { venueToStop } from './nusmods.ts';
 import { authConfigured, getSession } from './auth.ts';
 import { fmsConfigured, getArrivals } from './fms.ts';
 import { shortStop } from './format.ts';
@@ -75,30 +67,11 @@ function resolveDestination(url: URL) {
 async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
   const { lat, lon } = coordsFrom(url);
 
-  // A pasted NUSMods timetable (?tt=) takes priority over the hardcoded
-  // time-of-day prior: the destination is "your next class", the origin its
-  // home stop when no coordinates are sent.
-  const encoded = url.searchParams.get('tt');
-  if (encoded) {
-    const tt = decodeTimetable(encoded);
-    const trip = tt ? nextTrip(tt, nowMs) : null;
-    if (trip) {
-      const input: ResolveInput = {
-        lat,
-        lon,
-        to: trip.to,
-        originCode: lat === null ? tt!.home : null,
-      };
-      return json(await answerFor(env, ctx, input, trip.label, nowMs));
-    }
-    // Decoded but nothing scheduled ahead: fall through to the prior.
-  }
-
   const dest = resolveDestination(url);
   const to = dest?.to ?? null;
   const originCode = dest?.from ?? null;
 
-  // Nothing to work with: no location, no destination, no timetable. Rather
+  // Nothing to work with: no location and no destination. Rather
   // than fabricate a trip, tell the user how to get an answer.
   if (lat === null && to === null && originCode === null) {
     return json(needsSetupAnswer(nowMs));
@@ -108,58 +81,6 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   // simply reports the next buses at the nearest stop.
   const input: ResolveInput = { lat, lon, to, toAlso: dest?.also, originCode };
   return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs));
-}
-
-/**
- * GET /import?share=<nusmods url>&home=<stop code>
- *
- * Stateless: returns the user's personal /next link with the whole timetable
- * encoded into it. Nothing is stored. `home` is optional but needed for any
- * call made without coordinates.
- */
-async function handleImport(url: URL, env: Env, nowMs: number): Promise<Response> {
-  const share = url.searchParams.get('share');
-  if (!share) return json({ error: 'pass ?share=<nusmods share url>' }, 400);
-
-  let parsed;
-  try {
-    parsed = parseShareUrl(share);
-  } catch {
-    return json({ error: 'not a valid NUSMods share URL' }, 400);
-  }
-  if (!parsed.selections.length) return json({ error: 'no modules found in that URL' }, 400);
-
-  const home = url.searchParams.get('home')?.trim().toUpperCase() || null;
-  if (home && !indexGraph(GRAPH).byCode.has(home)) {
-    return json({ error: `unknown home stop ${home}` }, 400);
-  }
-
-  let r;
-  try {
-    r = await resolveTrips(parsed, nowMs);
-  } catch (err) {
-    if (err instanceof ImportInputError) return json({ error: err.message }, 400);
-    throw err;
-  }
-  if (r.failed.length) return json({ error: `NUSMods didn't answer for ${r.failed.join(', ')}; try again in a minute`, failed: r.failed }, 502);
-  const { trips, unresolved } = r;
-  if (!trips.length) {
-    return json({ error: 'could not resolve any classes to a stop', unresolved, missing: r.missing }, 422);
-  }
-
-  const encoded = encodeTimetable({ home, trips });
-  const next = new URL(url);
-  next.pathname = '/next';
-  next.search = `?tt=${encoded}`;
-
-  return json({
-    url: next.toString(),
-    path: `/next?tt=${encoded}`,
-    home,
-    classes: trips.length,
-    schedule: trips.map((t) => ({ day: t.day, at: t.arriveByMin, to: t.to, label: t.label })),
-    unresolved,
-  });
 }
 
 async function handleTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
@@ -279,32 +200,10 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
   );
 }
 
-const PRIMARY_HOST = 'terminus.rcn.sh';
-// Remove once no installed app is older than 1.0.0 (the rename); /download/latest.json
-// and the in-app update banner have been nudging users since 1.1.0.
-const OLD_HOST = 'nusbus.rcn.sh';
-/** Paths apps already installed call on the old host. These keep working there. */
-const API_PREFIXES = ['/me', '/auth/', '/pair', '/next', '/trip', '/arrivals', '/campus', '/health', '/import', '/openapi.json'];
-
-/**
- * Browsers on the old host move to the new one. API calls don't: HTTP
- * clients don't follow redirects for POSTs, and apps paired before the
- * rename still call nusbus.rcn.sh. (`/pair` the page is a GET with a
- * `code`, and is redirected too.)
- */
-export function oldHostRedirect(req: Request, url: URL): Response | null {
-  if (url.hostname !== OLD_HOST || (req.method !== 'GET' && req.method !== 'HEAD')) return null;
-  const isPairPage = url.pathname.startsWith('/pair') && url.searchParams.has('code');
-  if (!isPairPage && API_PREFIXES.some((p) => url.pathname === p || url.pathname.startsWith(p.endsWith('/') ? p : `${p}/`))) return null;
-  const to = new URL(url);
-  to.hostname = PRIMARY_HOST;
-  return new Response(null, { status: 301, headers: { location: to.toString(), 'cache-control': 'public, max-age=86400' } });
-}
-
 const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
-const KEYED = ['/next', '/trip', '/arrivals', '/import', '/campus', '/stops/pairs'];
+const KEYED = ['/next', '/trip', '/arrivals', '/campus', '/stops/pairs'];
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
@@ -323,9 +222,6 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     const nowMs = Date.now();
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-
-    const moved = oldHostRedirect(req, url);
-    if (moved) return moved;
 
     try {
       const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
@@ -376,8 +272,6 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return jsonCached(STOP_PAIRS, 3600);
         case '/arrivals':
           return await handleArrivals(url, env, ctx, nowMs);
-        case '/import':
-          return await handleImport(url, env, nowMs);
         default:
           // Everything else is the website.
           if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return env.ASSETS.fetch(req);

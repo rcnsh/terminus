@@ -94,12 +94,12 @@ test('the rest message skips recess to the first real class', () => {
   assert.equal(restDetail(p, Date.parse('2026-09-18T12:00:00Z')), 'Next: CS2030 Lab, Mon 28 Sep 10:00');
 });
 
-test('old imports without weeks ask for a re-import', () => {
-  const p = { ...structuredClone(DEFAULT_PROFILE), trips: [{ ...lab(1), weeks: undefined }] };
+test('a current timetable, or none, needs no re-import', () => {
+  const p = { ...structuredClone(DEFAULT_PROFILE), trips: [lab(1)], term: SEM1 };
   const now = at('2026-09-01');
-  assert.equal(needsReimport(p, now), true);
-  assert.equal(needsReimport({ ...p, trips: [lab(1)], term: SEM1 }, now), false);
+  assert.equal(needsReimport(p, now), false);
   assert.equal(needsReimport({ ...p, trips: [] }, now), false);
+  assert.equal(needsReimport({ ...p, term: null }, now), false, 'no term to have ended');
 });
 
 test('a timetable whose semester has ended asks for this semester, and says so', () => {

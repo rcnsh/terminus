@@ -151,12 +151,12 @@ export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: numbe
   };
 }
 
-/** Honest zero-config answer when we have no location, destination or
- *  timetable to resolve. Not an error, and not a fake bus. */
+/** Honest zero-config answer when we have no location or destination to
+ *  resolve. Not an error, and not a fake bus. */
 export function needsSetupAnswer(nowMs: number): Answer {
   return {
     label: 'Set up',
-    detail: 'Send lat/lon for nearby buses, or a timetable (?tt=) from /import',
+    detail: 'Send lat/lon for nearby buses, or ?to= a stop or venue',
     alt: null,
     stop: { code: '', name: '', confidence: 0 },
     quality: 'unknown',

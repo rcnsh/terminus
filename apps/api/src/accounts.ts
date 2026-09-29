@@ -1,5 +1,5 @@
 /**
- * Invite-only accounts: email sign-in links for the web page, pairing codes
+ * Accounts: email sign-in codes and links for the web page, pairing codes
  * for the native apps, and one profile document per user.
  *
  * Every token is 32 random bytes, handed out once and stored only as its
@@ -23,13 +23,9 @@ export const ACCOUNT_TTL = {
 
 /**
  * `__Host-` pins the cookie to this exact host over HTTPS: a sibling
- * *.rcn.sh site cannot set or shadow it. The old name is still read, so
- * sessions from before the rename keep working until they expire: the rename
- * shipped 29 Sep 2026 and web sessions last 30 days, so the fallback can go
- * after 29 Oct 2026.
+ * *.rcn.sh site cannot set or shadow it.
  */
 export const SESSION_COOKIE = '__Host-nb_s';
-const OLD_SESSION_COOKIE = 'nb_s';
 
 // No 0/O, 1/I/L, U: a code read off a screen and typed on a phone.
 const PAIR_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -294,10 +290,6 @@ export function tokenFrom(req: Request): string | null {
   for (const part of cookie.split(';')) {
     const [k, ...v] = part.trim().split('=');
     if (k === SESSION_COOKIE) return v.join('=') || null;
-  }
-  for (const part of cookie.split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === OLD_SESSION_COOKIE) return v.join('=') || null;
   }
   return null;
 }

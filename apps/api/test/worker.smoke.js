@@ -40,7 +40,7 @@ test('query parsing does not turn a missing lat into the Gulf of Guinea', () => 
 });
 
 test('/next with nothing at all prompts setup, not a fabricated destination', async () => {
-  // No coordinates, no ?to=, no ?tt=. A stranger must not be shown someone
+  // No coordinates, no ?to=. A stranger must not be shown someone
   // else's hardcoded commute -- the old single-user prior is gone.
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
   const { res } = await call('/next', { fetchImpl });
@@ -50,7 +50,7 @@ test('/next with nothing at all prompts setup, not a fabricated destination', as
   assert.equal(a.stop.code, '', 'no invented stop');
   assert.equal(a.quality, 'unknown');
   assert.match(a.label, /set up/i);
-  assert.match(a.detail, /location|timetable/i);
+  assert.match(a.detail, /lat\/lon/);
   assert.equal(fetchImpl.counts.shuttle, 0, 'and it does not even call upstream');
   assert.ok(Number.isFinite(Date.parse(a.asOf)));
   assert.ok(Array.isArray(a.arrivals));
@@ -218,7 +218,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
 
   const documented = Object.keys(spec.paths).sort();
   assert.deepEqual(documented, [
-    '/arrivals', '/auth/code', '/auth/login', '/campus', '/health', '/import',
+    '/arrivals', '/auth/code', '/auth/login', '/campus', '/health',
     '/me/import', '/me/keys', '/me/nearby', '/me/next', '/me/profile', '/next', '/pair', '/pair/check', '/stops/pairs', '/trip',
   ]);
 
@@ -231,7 +231,6 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     const q = new URLSearchParams();
     // `from` is only conditionally required (no location), so fill it too.
     for (const p of item.get.parameters ?? []) if (p.required || p.name === 'from') q.set(p.name, String(p.example));
-    if (path === '/import') continue; // needs the live NUSMods API
     const { res: r } = await call(`${path}${q.size ? '?' + q : ''}`, { fetchImpl });
     assert.equal(r.status, 200, `${path} documented but answered ${r.status}`);
   }
@@ -511,20 +510,6 @@ test('concurrent token requests share one mint instead of each minting', async (
   // a finished promise forever.
   await getSession(env, Date.now(), { force: true });
   assert.equal(fetchImpl.counts.auth, 2);
-});
-
-test('the old host redirects browsers but keeps serving the API', async () => {
-  const { oldHostRedirect } = await import('../src/index.ts');
-  const r = (path, method = 'GET') => oldHostRedirect(new Request(`https://nusbus.rcn.sh${path}`, { method }), new URL(`https://nusbus.rcn.sh${path}`));
-  assert.equal(r('/').status, 301);
-  assert.equal(r('/').headers.get('location'), 'https://terminus.rcn.sh/');
-  assert.equal(r('/account/').headers.get('location'), 'https://terminus.rcn.sh/account/');
-  assert.equal(r('/pair?code=ABC234').headers.get('location'), 'https://terminus.rcn.sh/pair?code=ABC234');
-  for (const api of ['/me', '/me/next?lat=1&lon=2', '/auth/verify?t=x', '/next', '/trip?to=UTOWN', '/campus', '/health', '/openapi.json']) {
-    assert.equal(r(api), null, api);
-  }
-  assert.equal(r('/pair', 'POST'), null, 'pairing POST from an old app');
-  assert.equal(oldHostRedirect(new Request('https://terminus.rcn.sh/'), new URL('https://terminus.rcn.sh/')), null);
 });
 
 test('downloads serve whatever latest.json points at', async () => {

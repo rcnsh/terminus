@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.Nusbus" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.Terminus" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
     </style>
     <color name="bg">#FAFAF9</color>

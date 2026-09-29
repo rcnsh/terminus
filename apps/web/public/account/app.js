@@ -1,6 +1,6 @@
 // Account page. Same origin as the API, so the session cookie just works.
 
-import { pacePrompt, runOnboarding } from './onboarding.js';
+import { runOnboarding } from './onboarding.js';
 import { attachSearch } from './search.js';
 import { $, api, el } from './dom.js';
 import { renderPreview } from './preview.js';
@@ -437,7 +437,6 @@ $('#import-form').addEventListener('submit', (e) => {
   e.preventDefault();
   runImport($('#share').value);
 });
-$('#reimport-now').addEventListener('click', () => runImport(profile.share));
 
 $('#manual-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -645,10 +644,7 @@ async function start() {
   $('#who').hidden = false;
   term = me.term;
   $('#reimport').hidden = !me.needsReimport;
-  $('#reimport-text').textContent =
-    me.reimportReason === 'ended'
-      ? `It's for ${me.term}, which has ended. Copy this semester's link from NUSMods and import it below.`
-      : "It was imported before terminus knew about teaching weeks, so it may count classes in weeks they don't run.";
+  $('#reimport-text').textContent = `It's for ${me.term}, which has ended. Copy this semester's link from NUSMods and import it below.`;
 
   const [p, campus] = await Promise.all([api('/me/profile'), api('/campus')]);
   profile = p;
@@ -661,8 +657,6 @@ async function start() {
     attachSearch($(form).where, { source: () => destinations, suggestions: mySuggestions, stopName });
   }
   if (profile.share) $('#share').value = profile.share;
-  // Same link, fresh data: only useful when the semester hasn't changed.
-  $('#reimport-now').hidden = !(me.reimportReason === 'legacy' && profile.share);
 
   // First sign-in: set up before the account page appears.
   if (me.onboarding === 'full') {
@@ -674,7 +668,6 @@ async function start() {
   renderHome();
   renderPlaces();
   $('#app').hidden = false;
-  if (me.onboarding === 'pace') pacePrompt(onboardingCtx);
   await Promise.all([renderDevices(), renderKeys(), renderPreview()]);
   setInterval(() => document.visibilityState === 'visible' && renderPreview(), 60_000);
 }

@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
         // that opened the app and yank the user back to that view.
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
-        setContent { NusbusTheme { App(vm) } }
+        setContent { TerminusTheme { App(vm) } }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun NusbusTheme(content: @Composable () -> Unit) {
+private fun TerminusTheme(content: @Composable () -> Unit) {
     // The Surface sets the default text colour to onBackground. Without it,
     // any Text with no explicit colour is black, invisible in dark mode.
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) BrandDark else BrandLight) {

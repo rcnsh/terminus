@@ -2,9 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   acadYear,
-  decodeTimetable,
-  encodeTimetable,
-  nextTrip,
   parseShareUrl,
   resolveTrips,
   venueToStop,
@@ -87,43 +84,6 @@ test('a stale share link (class no longer offered) is skipped, not fatal', async
   const share = parseShareUrl('https://nusmods.com/timetable/sem-1/share?MA1100=TUT:GONE');
   const { trips } = await resolveTrips(share, Date.UTC(2026, 7, 28), stubFetch(MODULES));
   assert.equal(trips.length, 0, 'no crash, just nothing resolved');
-});
-
-test('encode/decode is a faithful, URL-safe roundtrip', () => {
-  const tt = {
-    home: 'PGP',
-    trips: [
-      { day: 1, arriveByMin: 480, to: 'UTOWN', label: 'MA1100 @ UTOWN', venue: '' },
-      { day: 2, arriveByMin: 960, to: 'LT27', label: 'EC1101E @ LT27', venue: '' },
-    ],
-  };
-  const enc = encodeTimetable(tt);
-  assert.ok(!/[+/=]/.test(enc), 'base64url only');
-  const back = decodeTimetable(enc);
-  assert.equal(back.home, 'PGP');
-  assert.deepEqual(
-    back.trips.map((t) => [t.day, t.arriveByMin, t.to]),
-    [[1, 480, 'UTOWN'], [2, 960, 'LT27']],
-  );
-  assert.equal(decodeTimetable('!!!not base64!!!'), null);
-});
-
-test('nextTrip finds the next class ahead today, else the next scheduled day', () => {
-  const tt = {
-    home: 'PGP',
-    trips: [
-      { day: 2, arriveByMin: 600, to: 'UTOWN', label: 'a', venue: '' }, // Tue 10:00
-      { day: 2, arriveByMin: 960, to: 'LT27', label: 'b', venue: '' }, // Tue 16:00
-      { day: 4, arriveByMin: 540, to: 'BIZ2', label: 'c', venue: '' }, // Thu 09:00
-    ],
-  };
-  const tueMorning = Date.UTC(2026, 7, 25, 1, 0); // Tue 09:00 SGT
-  assert.equal(nextTrip(tt, tueMorning).to, 'UTOWN', 'the 10:00, not the 16:00');
-
-  const tueLate = Date.UTC(2026, 7, 25, 9, 0); // Tue 17:00 SGT -- both today's passed
-  assert.equal(nextTrip(tt, tueLate).to, 'BIZ2', 'rolls to Thursday');
-
-  assert.equal(nextTrip({ home: null, trips: [] }, tueMorning), null);
 });
 
 test('online and TBA lessons are counted, not sent to "pick a stop"; off-campus rooms are flagged', async () => {
