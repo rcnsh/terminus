@@ -178,6 +178,10 @@ data class Destination(
     val walkM: Int? = null,
     /** Other names people search for, lower case ("soc", "mrt"). */
     val aliases: List<String> = emptyList(),
+    /** A landmark's every stop; the router takes the quicker. */
+    val stops: List<String> = emptyList(),
+    /** What a landmark is ("Food court"). */
+    val detail: String? = null,
 )
 
 /**
@@ -190,7 +194,7 @@ fun rankDestinations(all: List<Destination>, query: String, max: Int = 8): List<
     if (q.isEmpty()) return emptyList()
     val norm = { s: String -> s.lowercase().replace(Regex("[\\s\\-_]+"), "") }
     val nq = norm(q)
-    val kinds = listOf("stop", "building", "room")
+    val kinds = listOf("stop", "landmark", "building", "room")
     fun score(d: Destination): Int {
         val names = listOf(d.code.lowercase(), d.label.lowercase()) + d.aliases
         return when {
@@ -274,6 +278,8 @@ class Api(private val token: String?, private val fast: Boolean = false) {
                 d.getString("code"), d.getString("label"), d.getString("stopCode"), d.optString("kind"),
                 walkM = if (d.has("walkM")) d.optInt("walkM") else null,
                 aliases = d.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
+                stops = d.optJSONArray("stops")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
+                detail = d.optStringOrNull("detail"),
             )
         }
     }

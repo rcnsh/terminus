@@ -139,8 +139,13 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
   // Either side of the road will do: arriving at "Opp UHC" gets you to UHC.
   // Without this, a route that only serves the far side never counts, and
   // the answer takes a longer bus to the exact stop.
-  const dest = to ? idx.byCode.get(to) : undefined;
-  const targets = to ? [to, ...(dest?.opposite && idx.byCode.has(dest.opposite) ? [dest.opposite] : [])] : [];
+  // Every stop that serves the destination, and the far side of each road.
+  const targets = to
+    ? [to, ...(input.toAlso ?? [])].flatMap((code) => {
+        const s = idx.byCode.get(code);
+        return s ? [code, ...(s.opposite && idx.byCode.has(s.opposite) ? [s.opposite] : [])] : [];
+      })
+    : [];
 
   const speed = input.walkSpeedMs ?? WALK.speedMs;
   const out: Candidate[] = base.map(({ stop, distM, footM: foot }) => {

@@ -607,3 +607,18 @@ test('/me: a new account gets the full setup, an older one just the pace screen,
   await call(env, '/me/profile', { method: 'PUT', cookie, body: { seen: ['onboarding'] } });
   assert.equal(await me(), null);
 });
+
+test('a food court works as a saved place and a destination', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const put = await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, places: [{ key: 'deck', label: 'Deck', to: 'THE-DECK' }] } });
+  assert.equal(put.status, 200);
+  const home = await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['THE-DECK'] } } });
+  assert.equal(home.status, 400, 'home is stops only');
+  const next = await (await call(env, '/me/next?place=deck', { cookie })).json();
+  assert.equal(next.dest.to, 'THE-DECK');
+  assert.equal(next.dest.label, 'Deck');
+  // Routed from home to one of its stops, not a setup or "no start" answer.
+  assert.equal(next.stop.code, 'PGP');
+  assert.doesNotMatch(next.label, /Set up|No start point/);
+});

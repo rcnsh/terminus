@@ -968,3 +968,15 @@ test('the proxy reports failure at HTTP 200, so only code "00000" counts as succ
   assert.equal(proxyOk({ result: false, error: 4 }), false, 'the old ConnectX error shape is not success either');
   assert.equal(proxyOk(null), false);
 });
+
+test('a place served by two stops: any bus to either one counts, the shorter ride wins', () => {
+  const legs = (input) => new Map(candidateStops(realGraph, input)[0].legs.map((l) => [l.svc, l.hops]));
+  const base = { lat: null, lon: null, originCode: 'KR-MRT' };
+  const a = legs({ ...base, to: 'AS5' });
+  const b = legs({ ...base, to: 'NUSS-OPP' });
+  const both = legs({ ...base, to: 'AS5', toAlso: ['NUSS-OPP'] });
+  for (const [svc, hops] of [...a, ...b]) {
+    assert.ok(both.has(svc), `${svc} reaches one of them`);
+    assert.ok(both.get(svc) <= hops);
+  }
+});

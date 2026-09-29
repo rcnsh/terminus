@@ -41,7 +41,8 @@ function el(tag, props = {}, ...children) {
 
 const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : null);
-const stopName = (code) => stops.find((s) => s.code === code)?.name ?? code;
+// A stop's name, or a food court's (saved places and classes can go to one).
+const stopName = (code) => stops.find((s) => s.code === code)?.name ?? destinations.find((d) => d.code === code)?.label ?? code;
 // Campus time, like the apps: class times from the server are Singapore time.
 const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' });
 
@@ -54,6 +55,9 @@ function haversineM(aLat, aLon, bLat, bLon) {
 function stopSelect(value, onChange, { blank } = {}) {
   const sel = el('select', { onchange: () => onChange(sel.value) });
   if (blank) sel.append(el('option', { value: '', textContent: blank }));
+  // Keep a food court the class already goes to, rather than showing blank.
+  const place = value && !stops.some((s) => s.code === value) ? destinations.find((d) => d.code === value) : null;
+  if (place) sel.append(el('option', { value: place.code, textContent: place.label }));
   for (const s of stops) sel.append(el('option', { value: s.code, textContent: s.name }));
   sel.value = value ?? '';
   return sel;

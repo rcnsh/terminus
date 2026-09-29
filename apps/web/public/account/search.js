@@ -2,8 +2,8 @@
 // Replaces the browser's own <datalist>, which listed every entry at once and
 // could not say where a room or building actually takes you.
 
-const KINDS = { place: 0, class: 1, stop: 2, building: 3, room: 4 };
-const GROUP = { place: 'Your places', class: 'Your classes', stop: 'Stops', building: 'Buildings', room: 'Rooms' };
+const KINDS = { place: 0, class: 1, stop: 2, landmark: 3, building: 4, room: 5 };
+const GROUP = { place: 'Your places', class: 'Your classes', stop: 'Stops', landmark: 'Food & places', building: 'Buildings', room: 'Rooms' };
 const MAX = 8;
 
 const norm = (s) => s.toLowerCase().replace(/[\s\-_]+/g, '');
@@ -64,6 +64,8 @@ export function attachSearch(input, { source, suggestions, stopName, onPick }) {
   const meta = (d) => {
     if (d.kind === 'stop') return 'Bus stop';
     if (d.kind === 'place' || d.kind === 'class') return `${stopName(d.stopCode)} stop`;
+    // Served by more than one stop: the quicker one is used at the time.
+    if (d.kind === 'landmark') return `${d.detail ? `${d.detail} · ` : ''}${d.stops.map(stopName).join(' or ')} stop`;
     const code = d.label !== d.code ? `${d.code} · ` : '';
     return `${code}${stopName(d.stopCode)} stop${d.walkM != null ? `, ${walkMin(d.walkM)} min walk` : ''}`;
   };
@@ -83,7 +85,8 @@ export function attachSearch(input, { source, suggestions, stopName, onPick }) {
 
   const pick = (d) => {
     input.value = d.kind === 'room' || d.label === d.code ? d.code : d.label;
-    input.dataset.stop = d.stopCode;
+    // A place with several stops is kept whole, so the router can pick.
+    input.dataset.stop = d.kind === 'landmark' ? d.code : d.stopCode;
     input.setCustomValidity('');
     close();
     onPick?.(d);

@@ -16,6 +16,7 @@
 
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import roomsJson from '../data/rooms.json' with { type: 'json' };
+import { allLandmarks } from './landmarks.ts';
 import type { Graph, Stop } from './types.ts';
 
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
@@ -216,7 +217,11 @@ export interface Destination {
   label: string;
   /** Always a real stop code -- the client never resolves a venue itself. */
   stopCode: string;
-  kind: 'stop' | 'building' | 'room';
+  kind: 'stop' | 'landmark' | 'building' | 'room';
+  /** A landmark's every stop, best first; the router takes the quicker. */
+  stops?: string[];
+  /** What a landmark is ("Food court"). */
+  detail?: string;
   /** Metres on foot from `stopCode` to here. Absent for a stop. */
   walkM?: number;
   /** Other names people search for ("soc", "mrt"). Lower case. */
@@ -270,6 +275,20 @@ export function buildDestinations(graph: Graph): Destination[] {
   const out: Destination[] = [];
   for (const s of graph.stops) {
     out.push({ code: s.code, label: s.name, stopCode: s.code, kind: 'stop', ...(aliasesFor(s.code) ? { aliases: aliasesFor(s.code) } : {}) });
+  }
+  for (const [code, lm] of allLandmarks()) {
+    const served = Object.keys(lm.stops).filter((c) => stops.has(c));
+    if (!served.length) continue;
+    out.push({
+      code,
+      label: lm.name,
+      stopCode: served[0],
+      kind: 'landmark',
+      stops: served,
+      detail: lm.kind,
+      walkM: Math.min(...served.map((c) => lm.stops[c])),
+      aliases: lm.aliases,
+    });
   }
   // Several codes can name one building (CLB, CLIB): list it once.
   const named = new Set<string>();

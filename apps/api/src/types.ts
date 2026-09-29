@@ -227,6 +227,8 @@ export interface ResolveInput {
   lon: number | null;
   /** Destination stop code, or null for "just tell me what is coming". */
   to: string | null;
+  /** More stops that serve the same destination (a food court's other stop). */
+  toAlso?: string[];
   /** Used when lat/lon are absent. */
   originCode: string | null;
   /**

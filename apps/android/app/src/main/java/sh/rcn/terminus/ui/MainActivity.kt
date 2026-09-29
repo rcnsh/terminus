@@ -574,7 +574,7 @@ private fun Search(state: UiState, vm: MainViewModel) {
     if (q.isEmpty()) return
     val matches = rankDestinations(state.destinations, q)
     val stopName = { code: String -> state.destinations.firstOrNull { it.kind == "stop" && it.code == code }?.label ?: code }
-    val groups = mapOf("stop" to "Stops", "building" to "Buildings", "room" to "Rooms")
+    val groups = mapOf("stop" to "Stops", "landmark" to "Food & places", "building" to "Buildings", "room" to "Rooms")
     Column {
         if (matches.isEmpty() && state.destinations.isNotEmpty()) {
             Text("No stop, building or room by that name", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
@@ -592,6 +592,8 @@ private fun Search(state: UiState, vm: MainViewModel) {
             }
             val meta = when (d.kind) {
                 "stop" -> "Bus stop"
+                // Served by more than one stop: the quicker one is used at the time.
+                "landmark" -> listOfNotNull(d.detail, d.stops.joinToString(" or ") { stopName(it) } + " stop").joinToString(" · ")
                 else -> buildString {
                     if (d.label != d.code) append("${d.code} · ")
                     append("${stopName(d.stopCode)} stop")
@@ -603,7 +605,7 @@ private fun Search(state: UiState, vm: MainViewModel) {
                     .fillMaxWidth()
                     .clickable(role = Role.Button) {
                         query = ""
-                        vm.select(Target.Code(d.code, if (d.kind == "stop") d.label else d.code))
+                        vm.select(Target.Code(d.code, if (d.kind == "stop" || d.kind == "landmark") d.label else d.code))
                     }
                     .padding(vertical = 10.dp),
             ) {
