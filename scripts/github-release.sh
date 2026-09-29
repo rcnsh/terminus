@@ -1,7 +1,8 @@
 #!/bin/sh
-# Publish a GitHub release for a version scripts/release.sh has built and
-# tagged, with the APK and Mac zip attached and notes from the commits since
-# the previous tag. Run it after pushing the tag.
+# Publish a GitHub release for a tagged version, with the APK and the Mac DMG
+# attached and notes from the commits since the previous tag. The release
+# workflow runs it once both files are in build/release/<version>; run again,
+# it re-uploads the files to the existing release.
 #
 #   scripts/github-release.sh 1.3.8          # publish
 #   scripts/github-release.sh 1.3.8 --notes  # print the notes only
@@ -11,15 +12,15 @@ VERSION="${1:?usage: scripts/github-release.sh <version> [--notes]}"
 TAG="v$VERSION"
 DIR="build/release/$VERSION"
 APK="$DIR/terminus-$VERSION.apk"
-ZIP="$DIR/terminus-$VERSION-mac.zip"
+MAC="$DIR/terminus-$VERSION.dmg"
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG"; exit 1; }
-[ -f "$APK" ] && [ -f "$ZIP" ] || { echo "missing $APK or $ZIP; build it with scripts/release.sh"; exit 1; }
+[ -f "$APK" ] && [ -f "$MAC" ] || { echo "missing $APK or $MAC"; exit 1; }
 
 PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
 NOTES="build/release/$VERSION/notes.md"
-python3 - "$VERSION" "$TAG" "$PREV" "$APK" "$ZIP" > "$NOTES" <<'EOF'
+python3 - "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" > "$NOTES" <<'EOF'
 import hashlib, re, subprocess, sys
-version, tag, prev, apk, zp = sys.argv[1:]
+version, tag, prev, apk, mac = sys.argv[1:]
 git = lambda *a: subprocess.run(['git', *a], capture_output=True, text=True, check=True).stdout
 date = git('log', '-1', '--format=%cd', '--date=format:%-d %b %Y', tag).strip()
 print(f'Released {date}.\n')
@@ -44,15 +45,20 @@ else:
 sha = lambda p: hashlib.sha256(open(p, 'rb').read()).hexdigest()
 print(f'''## Install
 - **Android** (12 or later): `terminus-{version}.apk`. Open it and allow your browser to install apps when asked.
-- **Mac** (macOS 14 or later, Apple silicon): `terminus-{version}-mac.zip`. Unzip, drag terminus to Applications, then right-click it and choose Open the first time.
+- **Mac** (macOS 14 or later, Apple silicon): `terminus-{version}.dmg`. Open it and drag terminus to Applications. The first time, right-click terminus and choose Open (on macOS 15 and later, allow it in System Settings → Privacy & Security): it is signed but not notarised by Apple.
 
 Then sign in at https://terminus.rcn.sh/account and pair the app with the code shown there.
 
 | File | SHA-256 |
 | --- | --- |
 | `terminus-{version}.apk` | `{sha(apk)}` |
-| `terminus-{version}-mac.zip` | `{sha(zp)}` |''')
+| `terminus-{version}.dmg` | `{sha(mac)}` |''')
 EOF
 
 if [ "${2:-}" = "--notes" ]; then cat "$NOTES"; exit 0; fi
-gh release create "$TAG" "$APK" "$ZIP" --verify-tag --title "terminus $VERSION" --notes-file "$NOTES"
+if gh release view "$TAG" >/dev/null 2>&1; then
+  gh release upload "$TAG" "$APK" "$MAC" --clobber
+  gh release edit "$TAG" --notes-file "$NOTES"
+else
+  gh release create "$TAG" "$APK" "$MAC" --verify-tag --title "terminus $VERSION" --notes-file "$NOTES"
+fi
