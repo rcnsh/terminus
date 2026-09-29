@@ -146,6 +146,8 @@ export interface MeAnswer extends Answer {
   timing?: Timing | null;
   /** Planned answers only: when the plan changes by itself. */
   refreshAt?: string;
+  /** Display-ready text and the stale time (card.ts). Added last, by the route. */
+  card?: import('./card.ts').Card;
 }
 
 export interface Leave {

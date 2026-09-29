@@ -100,5 +100,20 @@
       "label": "The Deck"
     }
   ],
-  "refreshAt": "2026-08-27T02:00:00Z"
+  "refreshAt": "2026-08-27T02:00:00Z",
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T01:06:30Z",
+    "crowd": "Filling",
+    "quality": null,
+    "leaveBy": "Leave by ~09:36",
+    "leaveVia": "catch the ~09:42 R2 at PGP",
+    "catch": "Catch the ~09:42 R2 at PGP",
+    "arrive": "Arrive ~09:51 · 9 min early",
+    "catchLine": "Catch the ~09:42 R2 at PGP · arrive ~09:51, 9 min early",
+    "late": false,
+    "goNow": "Or go now: R2 at 09:06 · arrive 09:15",
+    "note": null,
+    "estimate": "Estimated from the usual gap between buses. Live times show nearer the time."
+  }
 }

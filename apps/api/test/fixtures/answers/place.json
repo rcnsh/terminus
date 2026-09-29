@@ -94,5 +94,20 @@
       "key": "deck",
       "label": "The Deck"
     }
-  ]
+  ],
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:09:30Z",
+    "crowd": "Packed",
+    "quality": null,
+    "leaveBy": "Leave by 09:03",
+    "leaveVia": "catch the 09:09 A1 at PGP",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null
+  }
 }

@@ -100,5 +100,20 @@
       "label": "The Deck"
     }
   ],
-  "refreshAt": "2026-08-27T01:05:00Z"
+  "refreshAt": "2026-08-27T01:05:00Z",
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T01:05:00Z",
+    "crowd": "Filling",
+    "quality": null,
+    "leaveBy": "Leave by 09:00",
+    "leaveVia": "catch the 09:06 R2 at PGP",
+    "catch": "Catch the 09:06 R2 at PGP",
+    "arrive": "Arrive 09:15 · ~10 min late",
+    "catchLine": "Catch the 09:06 R2 at PGP · arrive 09:15, ~10 min late",
+    "late": true,
+    "goNow": null,
+    "note": null,
+    "estimate": null
+  }
 }

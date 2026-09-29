@@ -90,5 +90,20 @@
       "label": "The Deck"
     }
   ],
-  "refreshAt": "2026-08-27T10:00:00Z"
+  "refreshAt": "2026-08-27T10:00:00Z",
+  "card": {
+    "kind": "nearby",
+    "staleAt": "2026-08-27T01:07:30Z",
+    "crowd": "Quiet",
+    "quality": null,
+    "leaveBy": "Leave by 09:06",
+    "leaveVia": "catch the 09:07 D1 at CLB",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null
+  }
 }
