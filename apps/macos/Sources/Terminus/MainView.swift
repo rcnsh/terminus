@@ -34,8 +34,8 @@ struct Main: View {
                 }
                 .card(padding: 10)
             } else if model.locationDenied {
-                // After an update the ad-hoc signature changes and macOS may
-                // forget the permission; say so instead of quietly guessing.
+                // Updating from an ad-hoc build (1.3.7 or earlier, or a local
+                // one) can lose the permission; say so instead of quietly guessing.
                 HStack(spacing: 10) {
                     Image(systemName: "location.slash").foregroundStyle(.secondary).accessibilityHidden(true)
                     Text("Location is off, so answers follow your timetable").font(.callout)

@@ -26,10 +26,14 @@ PNGs and quits, for checking layout without clicking around.
 | `Sources/Terminus/*View*.swift`, `Header`, `Tabs`, `Search`, `Footer` | The popover |
 | `Support/` | `Info.plist` and the app icon |
 
-Local builds are ad-hoc signed. Releases are built, signed and packaged as a
-DMG by [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
-(via [`scripts/package-mac.sh`](../../scripts/package-mac.sh)) with the
-terminus self-signed certificate, so every version has the same code identity
-and macOS keeps its location permission and login item across updates. It
-isn't notarised, which needs a paid Apple Developer account, so macOS asks
-once on first open.
+Releases are built, signed and packaged as a DMG by
+[`.github/workflows/release.yml`](../../.github/workflows/release.yml) (via
+[`scripts/package-mac.sh`](../../scripts/package-mac.sh)) with the terminus
+self-signed certificate, so every version has the same code identity and macOS
+keeps its location permission, login item and the device token's Keychain
+access across updates. It isn't notarised, which needs a paid Apple Developer
+account, so macOS asks once on first open.
+
+`./build.sh` signs with that certificate too if it's in your keychain, and
+ad-hoc otherwise. An ad-hoc build is a new identity every time, so macOS asks
+before letting it read the device token.
