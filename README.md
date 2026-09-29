@@ -86,16 +86,16 @@ That's it. It updates through the day and goes quiet in the evening.
 ## How it fits together
 
 ```
-NUS shuttle feed (cached 15 s per stop) ─┐
-NUSMods timetables ──────────────────────┤
-NUS calendar, public holidays ───────────┼──▶  Cloudflare Worker (apps/api)
-OpenStreetMap campus paths ──────────────┘          │
-                                                    ├──▶  Android widget
-                                                    ├──▶  Mac menu bar
-                                                    └──▶  Website
+NUS shuttle feed ────────┐
+NUSMods timetables ──────┤
+NUS calendar, holidays ──┼──▶ Cloudflare Worker (apps/api)
+OpenStreetMap paths ─────┘          │
+                                    ├──▶ Android widget
+                                    ├──▶ Mac menu bar
+                                    └──▶ Website
 ```
 
-The Worker does all the thinking. Every client shows the same ready-made card
+The Worker does all the thinking, and caches the NUS feed for 15 seconds per stop. Every client shows the same ready-made card
 from `/me/next` (when to leave, which bus, when you arrive) and only counts
 down the clock itself, so no screen ever shows a stale "4 min".
 
