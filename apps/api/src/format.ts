@@ -5,7 +5,10 @@
  * client starts formatting for itself, four interfaces begin to drift apart
  * and there are four places to fix every bug.
  *
- * So: every user-visible string in this project is produced here.
+ * So: user-visible strings are produced on the server, never in a client.
+ * The answer's `label`, `detail` and `alt` are built here; the class card and
+ * the other per-client lines in card.ts; clock times and lateness in
+ * clock.ts; rest and timing text in profile.ts.
  */
 
 import type { Answer, Arrival, Quality, ScoredOption, Stop } from './types.ts';

@@ -22,7 +22,9 @@ export const ACCOUNT_TTL = {
 /**
  * `__Host-` pins the cookie to this exact host over HTTPS: a sibling
  * *.rcn.sh site cannot set or shadow it. The old name is still read, so
- * sessions from before the rename keep working until they expire.
+ * sessions from before the rename keep working until they expire: the rename
+ * shipped 29 Sep 2026 and web sessions last 30 days, so the fallback can go
+ * after 29 Oct 2026.
  */
 export const SESSION_COOKIE = '__Host-nb_s';
 const OLD_SESSION_COOKIE = 'nb_s';

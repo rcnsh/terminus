@@ -99,7 +99,6 @@ export async function answerFor(
   input: ResolveInput,
   destLabel: string | null,
   nowMs: number,
-  tripKey: string | null = null,
 ): Promise<Answer> {
   const idx = indexGraph(GRAPH);
   const cands = candidateStops(GRAPH, input);
@@ -174,7 +173,6 @@ export async function answerFor(
     answer,
     best: options[0] ?? null,
     dest: input.to,
-    tripKey,
     hadCoords: input.lat != null,
     walkAllS,
   });
@@ -221,7 +219,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
         to: trip.to,
         originCode: lat === null ? tt!.home : null,
       };
-      return json(await answerFor(env, ctx, input, trip.label, nowMs, null));
+      return json(await answerFor(env, ctx, input, trip.label, nowMs));
     }
     // Decoded but nothing scheduled ahead: fall through to the prior.
   }
@@ -442,6 +440,8 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
 }
 
 const PRIMARY_HOST = 'terminus.rcn.sh';
+// Remove once no installed app is older than 1.0.0 (the rename); /download/latest.json
+// and the in-app update banner have been nudging users since 1.1.0.
 const OLD_HOST = 'nusbus.rcn.sh';
 /** Paths apps already installed call on the old host. These keep working there. */
 const API_PREFIXES = ['/me', '/auth/', '/pair', '/next', '/trip', '/arrivals', '/campus', '/health', '/import', '/openapi.json'];

@@ -124,7 +124,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             {
               name: 'tt',
               in: 'query',
-              description: 'An encoded timetable, as returned in the `path` from `/import`.',
+              description: 'Deprecated: an encoded timetable from `/import`, from before accounts. Use `/me/next` with a signed-in device instead.',
+              deprecated: true,
               schema: { type: 'string' },
             },
           ],
@@ -271,6 +272,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       },
       '/import': {
         get: {
+          deprecated: true,
           tags: ['Timetable'],
           summary: 'Import a NUSMods timetable',
           description:
