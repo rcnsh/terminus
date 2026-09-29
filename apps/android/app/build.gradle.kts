@@ -11,8 +11,8 @@ android {
         applicationId = "sh.rcn.terminus"
         minSdk = 31
         targetSdk = 37
-        versionCode = 21
-        versionName = "1.3.5"
+        versionCode = 22
+        versionName = "1.3.6"
         // `./gradlew -PapiBase=http://localhost:8787 installDebug` plus
         // `adb reverse tcp:8787 tcp:8787` points a debug build at a local wrangler dev.
         val apiBase = providers.gradleProperty("apiBase").orElse("https://terminus.rcn.sh").get()
