@@ -541,3 +541,28 @@ test('/me/next: a class carries a leave-by time, moved by the walk from home', a
   assert.equal(Date.parse(a.leave.at) - Date.parse(b.leave.at), 5 * 60_000);
   assert.equal(b.leave.estimated, a.leave.estimated);
 });
+
+test('/me/next between classes counts the walk from the last room to its stop', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  // Frozen clock: Thursday 09:00. An 08:00 class in the Arts building (a 164 m
+  // walk to AS5) just ended; the next is at 10:00.
+  const put = (venue) =>
+    call(env, '/me/profile', {
+      method: 'PUT',
+      cookie,
+      body: {
+        home: { stops: ['PGP'] },
+        manual: [
+          { day: 4, arriveByMin: 480, endMin: 530, to: 'AS5', label: 'EC1101E', venue },
+          { day: 4, arriveByMin: 600, endMin: 660, to: 'COM3', label: 'CS2030' },
+        ],
+      },
+    });
+  await put('');
+  const a = await (await call(env, '/me/next', { cookie })).json();
+  await put('ARTSCTN');
+  const b = await (await call(env, '/me/next', { cookie })).json();
+  assert.equal(b.dest.label, 'CS2030');
+  assert.equal(Date.parse(a.leave.at) - Date.parse(b.leave.at), Math.round(164 / 1.3) * 1000);
+});

@@ -172,3 +172,14 @@ test('clock times go out without milliseconds', () => {
   const trip = { day: 4, arriveByMin: 600, to: 'COM3', label: 'x', venue: '' };
   assert.doesNotMatch(timingFor('2026-08-27T01:50:00Z', trip, 0, thu(9, 30)).classAt, /\.\d{3}Z$/);
 });
+
+test('between classes the plan names the room you leave from; from home it does not', () => {
+  const tt = [
+    { ...cls(10, 12, 'COM3'), venue: 'COM1-0212' },
+    { ...cls(13, 14, 'LT27'), venue: 'LT27' },
+  ];
+  assert.equal(planFor(profile(tt), thu(12, 10)).fromVenue, 'COM1-0212');
+  assert.equal(planFor(profile(tt), thu(8)).fromVenue, null);
+  // After the last class, the trip home starts from that room too.
+  assert.equal(planFor(profile(tt), thu(14, 30)).fromVenue, 'LT27');
+});
