@@ -705,3 +705,12 @@ test('API keys: a name is required, five at most, and a phone cannot make them',
   const { token } = await (await call(env, '/pair', { method: 'POST', body: { code, name: 'Phone' } })).json();
   assert.equal((await call(env, '/me/keys', { method: 'POST', token, body: { name: 'from phone' } })).status, 403);
 });
+
+test('/me without any token is a plain 401 and does not count as a guess', async () => {
+  const { env } = setup();
+  let calls = 0;
+  env.RL_AUTH = { limit: async () => { calls++; return { success: false }; } };
+  assert.equal((await call(env, '/me')).status, 401);
+  assert.equal(calls, 0);
+  assert.equal((await call(env, '/me', { token: 'nonsense' })).status, 429, 'a presented bad token still counts');
+});

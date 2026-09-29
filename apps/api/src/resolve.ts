@@ -27,6 +27,7 @@ import type {
 } from './types.ts';
 import { DEFAULT_HEADWAY_S, RIDE, WALK, isMeasured, sgt } from './config.ts';
 import { footM, stopFootM } from './walk.ts';
+import { residenceStops } from './residences.ts';
 
 const EARTH_R = 6_371_000;
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -114,7 +115,10 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
   const { to } = input;
 
   let base: Array<{ stop: Stop; distM: number; footM: number }>;
-  if (input.lat != null && input.lon != null) {
+  const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode) : null;
+  if (home) {
+    base = home;
+  } else if (input.lat != null && input.lon != null) {
     // Range is the straight line; the walk itself follows the paths.
     const all = graph.stops
       .map((stop) => ({ stop, distM: haversineM(input.lat!, input.lon!, stop.lat, stop.lon) }))
@@ -476,7 +480,16 @@ export function walkAllTheWayS(
   const dest = input.to ? idx.byCode.get(input.to) : null;
   if (!dest) return null;
   const speed = input.walkSpeedMs ?? WALK.speedMs;
-  if (input.lat != null && input.lon != null) return Math.round(footM(input.lat, input.lon, dest) / speed);
+  if (input.lat != null && input.lon != null) {
+    // In a residence, walk out by its own stops: the straight line can cross
+    // a hill the path goes round.
+    const home = residenceStops(input.lat, input.lon, idx.byCode);
+    if (home) {
+      const via = Math.min(...home.map((h) => (h.stop.code === dest.code ? h.footM : h.footM + stopFootM(h.stop, dest))));
+      return Math.round(Math.max(via, footM(input.lat, input.lon, dest)) / speed);
+    }
+    return Math.round(footM(input.lat, input.lon, dest) / speed);
+  }
   if (!fallbackFrom) return null;
   // From the origin stop, the walk to it (from home) comes first, same as for the bus.
   return Math.round(stopFootM(fallbackFrom, dest) / speed) + (input.originWalkS ?? 0);

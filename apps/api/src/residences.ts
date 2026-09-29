@@ -9,6 +9,8 @@
 
 import residencesJson from '../data/residences.json' with { type: 'json' };
 import { haversineM } from './resolve.ts';
+import { footM, stopFootM } from './walk.ts';
+import type { Stop } from './types.ts';
 
 export interface Residence {
   name: string;
@@ -67,4 +69,37 @@ export function atHome(lat: number | null, lon: number | null, homeStops: string
   if (lat == null || lon == null || !homeStops.length) return false;
   const r = residenceAt(lat, lon);
   return r !== null && Object.keys(r[1].stops).some((s) => homeStops.includes(s));
+}
+
+export interface NearStop {
+  stop: Stop;
+  /** Straight line, metres. */
+  distM: number;
+  /** On foot, metres. */
+  footM: number;
+}
+
+/**
+ * Inside a residence: its own stops, and the far side of each one's road,
+ * with the walk to each. Those stops were picked by path distance from the
+ * building, so a stop that is close as the crow flies but a hill and a
+ * link-way away (PGP to KR MRT) never shows up as a short walk. Null
+ * outside every residence: then the nearest stops by distance, as before.
+ */
+export function residenceStops(lat: number, lon: number, byCode: Map<string, Stop>): NearStop[] | null {
+  const r = residenceAt(lat, lon);
+  if (!r) return null;
+  const out: NearStop[] = [];
+  for (const [code, metres] of Object.entries(r[1].stops)) {
+    const stop = byCode.get(code);
+    if (!stop) continue;
+    // From deep inside a big hall the stop is further than from its edge.
+    const foot = Math.max(metres, footM(lat, lon, stop));
+    out.push({ stop, distM: haversineM(lat, lon, stop.lat, stop.lon), footM: foot });
+    const opp = stop.opposite ? byCode.get(stop.opposite) : undefined;
+    if (opp && !r[1].stops[opp.code]) {
+      out.push({ stop: opp, distM: haversineM(lat, lon, opp.lat, opp.lon), footM: foot + stopFootM(stop, opp) });
+    }
+  }
+  return out.length ? out.sort((a, b) => a.footM - b.footM) : null;
 }
