@@ -969,8 +969,11 @@ export const DOCS_PAGE = `<!doctype html>
          wherever the page flow put it. It goes right under our 48px bar. */
       elements-api .TopNav--mosaic { z-index: 20; top: 48px; }
       elements-api .sl-drawer-container > .sl-fixed { z-index: 30; }
-      /* Room past the last line. */
-      elements-api .sl-overflow-y-auto.sl-flex-1 { padding-bottom: 24px; }
+      /* Room past the last line, plus the height of the browser's retractable
+         bars (large minus small viewport). Chrome's bottom address bar sits
+         over the page, and since the page never scrolls it never hides, so
+         without this the end of the docs stays underneath it. */
+      elements-api .sl-overflow-y-auto.sl-flex-1 { padding-bottom: 24px; padding-bottom: calc(100lvh - 100svh + 24px); }
     }
   </style>
 </head>
