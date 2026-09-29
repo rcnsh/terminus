@@ -980,3 +980,17 @@ test('a place served by two stops: any bus to either one counts, the shorter rid
     assert.ok(both.get(svc) <= hops);
   }
 });
+
+test('inside a residence, only its own stops are offered, walked by the paths (PGP, not KR MRT over the hill)', async () => {
+  const { candidateStops, walkAllTheWayS } = await import('../src/resolve.ts');
+  const { default: g } = await import('../data/stops.json', { with: { type: 'json' } });
+  const dorm = { lat: 1.291519, lon: 103.782764, originCode: null };
+  const codes = candidateStops(g, { ...dorm, to: 'UTOWN' }).map((c) => c.stop.code);
+  assert.ok(!codes.includes('KR-MRT') && !codes.includes('KR-MRT-OPP'), codes.join());
+  assert.ok(codes.includes('PGPR'));
+  // Walking to KR MRT goes out through the hall's stops: well over the 6 min a straight line gives.
+  assert.ok(walkAllTheWayS(g, { ...dorm, to: 'KR-MRT' }, null) / 60 >= 10);
+  // Outside every residence nothing changes.
+  const out = candidateStops(g, { lat: 1.2935, lon: 103.7838, originCode: null, to: 'UTOWN' }).map((c) => c.stop.code);
+  assert.ok(out.includes('KR-MRT'));
+});

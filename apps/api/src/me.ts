@@ -19,6 +19,7 @@ import {
   loadProfileJson,
   normalizeEmail,
   normalizePairCode,
+  tokenFrom,
   linkEmail,
   pairCodeOwner,
   maskEmail,
@@ -36,7 +37,7 @@ import { boardAt, haversineM, indexGraph } from './resolve.ts';
 import { isoSeconds, shortStop } from './format.ts';
 import { WALK } from './config.ts';
 import { landmark, targetStops } from './landmarks.ts';
-import { atHome } from './residences.ts';
+import { atHome, residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
@@ -248,7 +249,8 @@ export async function handleMe(
 
   if (!session) {
     // Each bad token costs a D1 read, so guessing is capped per address.
-    if (await limited(env, req, 'badtoken')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    // No token at all is just "signed out" (the homepage asks), not a guess.
+    if (tokenFrom(req) && (await limited(env, req, 'badtoken'))) return json({ error: 'too many attempts, try again in a minute' }, 429);
     return json({ error: 'sign in first' }, 401);
   }
 
@@ -548,18 +550,19 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
 
   const idx = indexGraph(deps.graph);
   const ranked = deps.graph.stops
-    .map((stop) => ({ stop, distM: haversineM(lat!, lon!, stop.lat, stop.lon) }))
+    .map((stop) => ({ stop, distM: haversineM(lat!, lon!, stop.lat, stop.lon), footM: footM(lat!, lon!, stop) }))
     .sort((a, b) => a.distM - b.distM);
   const near = ranked.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
-  const picked = near.length ? near : ranked.slice(0, 1);
+  // In a residence: its own stops, walked by the paths, like /me/next.
+  const picked = residenceStops(lat, lon, idx.byCode)?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
 
   const byStop = await deps.collectArrivals(env, ctx, picked.map((c) => c.stop.code), nowMs);
-  const stops = picked.map(({ stop, distM }) => {
+  const stops = picked.map(({ stop, distM, footM: foot }) => {
     const sa = byStop.get(stop.code)!;
     return {
       stop: { code: stop.code, name: stop.name },
       distM: Math.round(distM),
-      walkS: Math.round(footM(lat!, lon!, stop) / paceSpeed(profile.walkPace)),
+      walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
       board: boardAt(deps.graph, idx, stop.code, sa, nowMs),
     };

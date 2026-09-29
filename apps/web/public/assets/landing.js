@@ -6,6 +6,13 @@ fetch('/download/latest.json')
   })
   .catch(() => {});
 
+// Signed in already: the header says Account, not Sign in.
+fetch('/me', { credentials: 'same-origin' })
+  .then((r) => {
+    if (r.ok) document.getElementById('account-link').textContent = 'Account';
+  })
+  .catch(() => {});
+
 // Light | dark split images: a handle on each, drag or arrow keys to move the
 // seam; on first view it sweeps in from all-light, unless motion is reduced.
 const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
