@@ -19,6 +19,10 @@ grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || {
 if [ $DRY -eq 0 ] && git rev-parse "v$VERSION" >/dev/null 2>&1; then
   echo "v$VERSION is already tagged; bump versionName first"; exit 1
 fi
+# The tag must name exactly what was built: no uncommitted changes.
+if [ $DRY -eq 0 ] && [ -n "$(git status --porcelain)" ]; then
+  echo "uncommitted changes; commit them before releasing"; exit 1
+fi
 
 mkdir -p build
 echo "== terminus $VERSION"
@@ -70,4 +74,6 @@ npx wrangler r2 object put "terminus-downloads/latest.json" --file "$OUT/latest.
 cd "$ROOT"
 
 git tag -a "v$VERSION" -m "terminus $VERSION"
-echo "== released $VERSION (tag v$VERSION created; push it with: git push origin v$VERSION)"
+echo "== released $VERSION"
+echo "   next: git push origin main v$VERSION"
+echo "   and deploy the Worker if the API changed since the last deploy: npm run deploy"

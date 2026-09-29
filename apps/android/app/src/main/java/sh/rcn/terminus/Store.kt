@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import org.json.JSONObject
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -33,9 +34,10 @@ class Store(context: Context) {
             cached
         }
         set(value) = synchronized(Store) {
-            prefs.edit().apply {
+            // commit, not apply: a process killed right after pairing must not lose it.
+            prefs.edit(commit = true) {
                 if (value == null) remove(KEY_TOKEN) else putString(KEY_TOKEN, encrypt(value))
-            }.commit()
+            }
             cached = value
             loaded = true
         }
@@ -44,7 +46,7 @@ class Store(context: Context) {
 
     /** The widget's last answer, as the raw JSON plus when it was fetched. */
     fun saveAnswer(json: JSONObject, fetchedAtMs: Long) {
-        prefs.edit().putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).apply()
+        prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs) }
     }
 
     fun lastAnswer(): Pair<NextAnswer, Long>? {
@@ -55,34 +57,34 @@ class Store(context: Context) {
 
     var lastError: String?
         get() = prefs.getString(KEY_ERROR, null)
-        set(value) = prefs.edit().putString(KEY_ERROR, value).apply()
+        set(value) = prefs.edit { putString(KEY_ERROR, value) }
 
     /** Last time the app asked for the released version, epoch ms. */
     var lastUpdateCheck: Long
         get() = prefs.getLong(KEY_UPDATE_CHECK, 0)
-        set(value) = prefs.edit().putLong(KEY_UPDATE_CHECK, value).apply()
+        set(value) = prefs.edit { putLong(KEY_UPDATE_CHECK, value) }
 
     var latestVersion: String?
         get() = prefs.getString(KEY_LATEST, null)
-        set(value) = prefs.edit().putString(KEY_LATEST, value).apply()
+        set(value) = prefs.edit { putString(KEY_LATEST, value) }
 
     /** "Notify me when to leave for class". Off until the user turns it on. */
     var leaveAlerts: Boolean
         get() = prefs.getBoolean(KEY_LEAVE_ALERTS, false)
-        set(value) = prefs.edit().putBoolean(KEY_LEAVE_ALERTS, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_LEAVE_ALERTS, value) }
 
     /** The live notification during your day (LiveService). */
     var liveUpdates: Boolean
         get() = prefs.getBoolean(KEY_LIVE, false)
-        set(value) = prefs.edit().putBoolean(KEY_LIVE, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_LIVE, value) }
 
     /** The class (its start, epoch ms) the last heads-up was for: one per class. */
     var leaveNotifiedFor: Long
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
-        set(value) = prefs.edit().putLong(KEY_LEAVE_NOTIFIED, value).apply()
+        set(value) = prefs.edit { putLong(KEY_LEAVE_NOTIFIED, value) }
 
     fun clear() = synchronized(Store) {
-        prefs.edit().clear().commit()
+        prefs.edit(commit = true) { clear() }
         cached = null
         loaded = true
     }

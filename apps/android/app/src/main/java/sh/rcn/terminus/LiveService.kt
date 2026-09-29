@@ -54,7 +54,12 @@ class LiveService : Service() {
         }
         // Must be in the foreground within seconds of starting, before any fetch.
         val cached = Store(this).lastAnswer()
-        startForeground(NOTIFICATION_ID, build(this, cached?.first), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        // The special-use type exists from Android 14; before that the plain call.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, build(this, cached?.first), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(NOTIFICATION_ID, build(this, cached?.first))
+        }
         if (loop?.isActive != true) loop = scope.launch { run() }
         return START_STICKY
     }
@@ -107,6 +112,8 @@ class LiveService : Service() {
          * Exact, so the service may start from the background: an app holding
          * USE_EXACT_ALARM is allowed to when its exact alarm fires.
          */
+        // Exact only when canScheduleExactAlarms() says so; lint can't see the check.
+        @android.annotation.SuppressLint("MissingPermission")
         private fun wakeAt(ctx: Context, at: Long) {
             val am = ctx.getSystemService(AlarmManager::class.java) ?: return
             if (am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, startIntent(ctx))
