@@ -15,6 +15,31 @@ fetch('/me', { credentials: 'same-origin' })
   })
   .catch(() => {});
 
+// The hero's text is centred beside the phone, so opening "How to install"
+// would re-centre it and shove the heading and buttons up, and the taller row
+// would then drag the phone down. While it's open, both columns are pinned
+// where they were and only the text grows, downward. Done in the click,
+// before the details opens, so no shifted frame is ever painted.
+const install = document.getElementById('install');
+const holdHeroText = (opening) => {
+  const hero = document.querySelector('.hero');
+  const cols = [...hero.children];
+  for (const c of cols) {
+    c.style.alignSelf = '';
+    c.style.marginTop = '';
+  }
+  if (!opening || !window.matchMedia('(min-width: 861px)').matches) return;
+  const start = hero.getBoundingClientRect().top + parseFloat(getComputedStyle(hero).paddingTop);
+  const tops = cols.map((c) => c.getBoundingClientRect().top - start);
+  cols.forEach((c, i) => {
+    c.style.alignSelf = 'start';
+    c.style.marginTop = `${tops[i]}px`;
+  });
+};
+install.querySelector('summary').addEventListener('click', () => holdHeroText(!install.open));
+// A held offset is meaningless once the layout changes.
+window.matchMedia('(min-width: 861px)').addEventListener('change', () => holdHeroText(false));
+
 // The header's download menu, placed under its button. It closes on scroll
 // rather than drifting away from the button it belongs to.
 {
@@ -42,9 +67,9 @@ fetch('/me', { credentials: 'same-origin' })
     document.getElementById('dl-install').addEventListener('click', (e) => {
       e.preventDefault();
       close();
-      const details = document.getElementById('install');
-      details.open = true;
-      details.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+      if (!install.open) holdHeroText(true);
+      install.open = true;
+      install.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
     });
   }
 }
