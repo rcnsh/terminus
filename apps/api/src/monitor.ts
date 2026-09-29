@@ -9,6 +9,7 @@
 
 import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
+import { KV_APP_VERSION, UpstreamRejected } from './auth.ts';
 import { calendarThrough } from './calendar.ts';
 import { pruneCrowdSeen } from './crowd.ts';
 
@@ -19,6 +20,8 @@ export interface UpstreamState {
   since: number;
   /** The latest failure, when the last check failed. */
   reason: string | null;
+  /** NUS's whole response to that failure, when it refused us outright. */
+  detail?: string | null;
   checkedAt: number;
   /** Failed checks in a row. */
   failures?: number;
@@ -28,6 +31,10 @@ export interface UpstreamState {
 
 const KEY = 'monitor:upstream';
 const CALENDAR_KEY = 'monitor:calendar-alert';
+/** The KV namespace in cloudflare.config.ts, for the fix commands in alerts
+ *  (a test keeps the two in step). */
+export const KV_NAMESPACE_ID = '1f88f570f6e04f78aa2888ee7aa78e6a';
+export const UNIVUS_PLAY_URL = 'https://play.google.com/store/apps/details?id=sg.edu.nus.univus';
 /** A stop served by several routes almost all day. */
 export const PROBE_STOP = 'COM3';
 /** Device tokens unused this long are expired by the cron. */
@@ -61,11 +68,17 @@ export async function checkUpstream(
 ): Promise<{ state: UpstreamState; changed: boolean }> {
   let ok = true;
   let reason: string | null = null;
+  let detail: string | null = null;
   try {
     await probe();
   } catch (err) {
     ok = false;
     reason = String((err as Error)?.message ?? err).slice(0, 300);
+    if (err instanceof UpstreamRejected && err.detail) {
+      detail = err.detail;
+      // Kept in the logs too: what a refusal says is the clue to what changed.
+      console.log('upstream rejected', err.code, detail);
+    }
   }
 
   const prev = await readUpstream(env);
@@ -74,7 +87,7 @@ export async function checkUpstream(
   const changed = !prev || prev.up !== up;
   let pending = prev?.pending ?? null;
   if (changed && (prev || !up)) pending = up ? 'up' : 'down';
-  const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, checkedAt: nowMs, failures, pending };
+  const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, detail, checkedAt: nowMs, failures, pending };
 
   if (pending) {
     try {
@@ -92,7 +105,12 @@ export async function checkUpstream(
 export function adviceFor(reason: string | null): string {
   if (!reason) return '';
   if (/10009/.test(reason)) {
-    return 'uNivUS has a new release and the old version string is refused. Update it:\n  pnpm exec cf workers secrets update NEXTBUS_APP_VERSION --worker terminus --type secret_text --text <new value>\n(format univus_android_<versionName>_<versionCode>, from the new APK).';
+    return [
+      'uNivUS has a new release and the old version string is refused.',
+      `Find the new versionName and versionCode (the release is at ${UNIVUS_PLAY_URL}), then from apps/api:`,
+      `  pnpm exec cf kv keys put ${KV_APP_VERSION} --namespace-id ${KV_NAMESPACE_ID} --body univus_android_<versionName>_<versionCode>`,
+      'It takes effect within a minute, with no deploy. The NEXTBUS_APP_VERSION secret is only the fallback while that key is unset.',
+    ].join('\n');
   }
   if (/10008/.test(reason)) return 'The device id no longer matches the access token. Clear auth:session in KV and let it re-mint.';
   if (/10000|Invalid API KEY/i.test(reason)) return 'The app API keys were rejected; they may have been rotated in a new uNivUS build.';
@@ -105,7 +123,7 @@ async function alert(env: Env, s: UpstreamState, kind: 'up' | 'down'): Promise<v
   const subject = kind === 'up' ? 'terminus: NUS bus feed recovered' : 'terminus: NUS bus feed is down';
   const text = kind === 'up'
     ? `The NUS bus feed is answering again as of ${when}. Live times are back.`
-    : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${adviceFor(s.reason)}\n\nUntil then every answer says "live times unavailable".`;
+    : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${adviceFor(s.reason)}\n\nUntil then every answer says "live times unavailable".${s.detail ? `\n\nNUS's full response:\n${s.detail}` : ''}`;
   await env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
 }
 

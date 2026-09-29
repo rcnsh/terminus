@@ -58,7 +58,7 @@ student's credentials.
 | `NEXTBUS_AUTH_BASE` | uNivUS auth host for the public token |
 | `NEXTBUS_PROXY_BASE` | The uNivUS bus proxy, `https://inetapps.nus.edu.sg/univus/api/bus-proxy` |
 | `NEXTBUS_PROXY_API_KEY` | Sent as `x-api-key` to the proxy |
-| `NEXTBUS_APP_VERSION` | Current uNivUS release, e.g. `univus_android_2.59.2_140`. **Must track the Play Store** (see below) |
+| `NEXTBUS_APP_VERSION` | Current uNivUS release, e.g. `univus_android_2.59.2_140`. **Must track the Play Store**; KV `config:appVersion` overrides it (see below) |
 | `NEXTBUS_HTD_API` / `NEXTBUS_APP_API` | The two auth headers for the token mint |
 | `NEXTBUS_REQUESTED_BY` / `NEXTBUS_SECURED_REQUEST` | Optional; the server does not require them |
 
@@ -223,9 +223,19 @@ as a query param) now answers `{"result":false,"error":4}` to everything.
 **The version string is a kill switch.** When NUS ships a new uNivUS, requests
 carrying the old `version` start failing with code `10009` "We have a new
 release of uNivUS", and every answer degrades to `quality: unknown`. The fix
-is updating `NEXTBUS_APP_VERSION` to `univus_android_<versionName>_<versionCode>`
-of the current Play Store build. The cron probe emails the operator when this
-happens (see `src/monitor.ts`).
+is the current Play Store build's `univus_android_<versionName>_<versionCode>`
+([uNivUS on Google Play](https://play.google.com/store/apps/details?id=sg.edu.nus.univus)),
+written to KV. No deploy is needed, and it's live within a minute:
+
+```bash
+pnpm exec cf kv keys put config:appVersion --namespace-id <KV id in cloudflare.config.ts> --body univus_android_2.60.0_141
+```
+
+`config:appVersion` overrides the `NEXTBUS_APP_VERSION` secret, which is only
+the fallback while the key is unset; a malformed value is ignored. Tokens
+remember the version they were minted with, so the next call mints a new one.
+The cron probe emails the operator when this happens, with the command and
+NUS's full response (see `src/monitor.ts`).
 
 ## Auth, confirmed
 

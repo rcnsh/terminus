@@ -18,6 +18,9 @@ export const TTL = {
   /** After the feed refuses our version or keys (10009, 10000), stop calling
    *  it for this long: a fresh token cannot fix either. */
   breakerS: 60,
+  /** How long an isolate trusts the version string it read from KV. A new
+   *  one written to config:appVersion is live everywhere within this. */
+  versionMemoMs: 60_000,
   /** Per upstream call. A hung NUS must not hang the widget. */
   upstreamTimeoutMs: 5_000,
   /** How long to wait for a fresh fetch when a stale answer is ready to serve. */

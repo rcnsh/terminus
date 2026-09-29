@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 // Installs globalThis.caches before the Worker module graph is evaluated.
-import { installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
 
@@ -449,6 +449,57 @@ test('a refused app version (10009) does not re-mint, and trips a breaker for ev
   }
   assert.equal(fetchImpl.counts.shuttle, 1, 'the breaker kept every stop off the feed');
   assert.equal(fetchImpl.counts.auth, mints, 'and minted nothing');
+});
+
+test('the version string comes from config:appVersion in KV, else the secret', async () => {
+  const NEW = 'univus_android_2.60.0_141';
+  const kv = makeKV();
+  await kv.put('config:appVersion', NEW);
+  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
+  await call('/arrivals?stop=COM3', { fetchImpl, env: makeEnv(kv) });
+  assert.equal(fetchImpl.mints[0].version, NEW, 'the token is minted with it');
+  assert.equal(fetchImpl.requests[0].body.version, NEW, 'and the proxy call carries it');
+
+  const plain = makeFetch({ byStop: { COM3: D2_IN_4 } });
+  await call('/arrivals?stop=COM3', { fetchImpl: plain });
+  assert.equal(plain.mints[0].version, '0.0.0-test', 'no key: the secret');
+
+  // A typo in KV would fail every call, so it is ignored.
+  const typo = makeKV();
+  await typo.put('config:appVersion', '2.60.0');
+  const guarded = makeFetch({ byStop: { COM3: D2_IN_4 } });
+  await call('/arrivals?stop=COM3', { fetchImpl: guarded, env: makeEnv(typo) });
+  assert.equal(guarded.mints[0].version, '0.0.0-test');
+});
+
+test('a new version written to KV is live within a minute, with a token minted for it', async () => {
+  const NEW = 'univus_android_2.60.0_141';
+  const kv = makeKV();
+  const env = makeEnv(kv);
+  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 } });
+  const { cache } = await call('/arrivals?stop=COM3', { fetchImpl, env });
+  await kv.put('config:appVersion', NEW);
+
+  Date.now = () => FROZEN_NOW + 30_000;
+  await call('/arrivals?stop=COM3', { fetchImpl, env, cache });
+  assert.equal(fetchImpl.mints.length, 1, 'inside the minute, the old version and its token carry on');
+
+  Date.now = () => FROZEN_NOW + 61_000;
+  await call('/arrivals?stop=COM3', { fetchImpl, env, cache });
+  assert.equal(fetchImpl.mints.length, 2, "the old version's token is not reused");
+  assert.equal(fetchImpl.mints[1].version, NEW);
+  assert.equal(fetchImpl.requests.at(-1).body.version, NEW);
+});
+
+test('a refused token mint (10009) trips the breaker too, instead of minting for every stop', async () => {
+  const fetchImpl = makeFetch({ mintReject: '10009' });
+  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+  for (const stop of ['COM3', 'UTOWN']) {
+    const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+    assert.equal((await res.json()).available, false);
+  }
+  assert.equal(fetchImpl.counts.auth, 1);
+  assert.equal(fetchImpl.counts.shuttle, 0);
 });
 
 test('a failed stop is not asked again straight away', async () => {

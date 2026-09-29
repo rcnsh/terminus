@@ -23,6 +23,12 @@ import { timedFetch } from './http.ts';
 
 const KV_TOKEN = 'auth:session';
 const KV_DEVICE = 'auth:deviceid';
+/** Overrides the NEXTBUS_APP_VERSION secret when set: the fix for a new
+ *  uNivUS release is one KV write, live within TTL.versionMemoMs. */
+export const KV_APP_VERSION = 'config:appVersion';
+/** What uNivUS sends, e.g. univus_android_2.59.2_140. Anything else in KV is a
+ *  typo, and sending it would fail every call, so it is ignored. */
+const VERSION_FORMAT = /^univus_android_\d+(?:\.\d+)+_\d+$/;
 
 /** Confirmed. Only used when NEXTBUS_AUTH_BASE carries no path of its own. */
 const DEFAULT_AUTH_PATH = '/get-access-token';
@@ -42,6 +48,9 @@ export interface Session {
   userid: string;
   domain: string;
   expMs: number;
+  /** The version string it was minted with. A token from another version is
+   *  not reused, so changing the version takes effect on the next call. */
+  version?: string;
 }
 
 /**
@@ -50,6 +59,22 @@ export interface Session {
  * each test's fresh KV starts with an empty memo).
  */
 const memos = new WeakMap<object, Session>();
+const versionMemos = new WeakMap<object, { value: string; atMs: number }>();
+
+/**
+ * The uNivUS version string to send: `config:appVersion` in KV when it holds a
+ * well-formed one, otherwise the NEXTBUS_APP_VERSION secret. Remembered per
+ * isolate for TTL.versionMemoMs, so it costs a KV read about once a minute.
+ */
+export async function appVersion(env: Env, nowMs: number = Date.now()): Promise<string> {
+  const memo = versionMemos.get(env.KV);
+  if (memo && nowMs - memo.atMs < TTL.versionMemoMs) return memo.value;
+  const stored = (await env.KV.get(KV_APP_VERSION).catch(() => null))?.trim();
+  if (stored && !VERSION_FORMAT.test(stored)) console.error(`ignoring ${KV_APP_VERSION}: not univus_android_<versionName>_<versionCode>`);
+  const value = stored && VERSION_FORMAT.test(stored) ? stored : (env.NEXTBUS_APP_VERSION ?? '');
+  versionMemos.set(env.KV, { value, atMs: nowMs });
+  return value;
+}
 
 export function authConfigured(env: Env): boolean {
   return Boolean(env.NEXTBUS_AUTH_BASE && env.NEXTBUS_HTD_API && env.NEXTBUS_APP_API);
@@ -147,12 +172,13 @@ export async function getSession(
   { force = false }: { force?: boolean } = {},
 ): Promise<Session> {
   if (!authConfigured(env)) throw new Error('auth not configured');
+  const version = await appVersion(env, nowMs);
   const memo = memos.get(env.KV);
-  if (!force && memo && memo.expMs > nowMs) return memo;
+  if (!force && memo && memo.expMs > nowMs && memo.version === version) return memo;
 
   if (!force) {
     const cached = (await env.KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
-    if (cached && cached.expMs > nowMs) {
+    if (cached && cached.expMs > nowMs && cached.version === version) {
       memos.set(env.KV, cached);
       return cached;
     }
@@ -163,7 +189,7 @@ export async function getSession(
   // single failed mint degraded that stop to "unknown". A forced caller that
   // joins an in-flight mint still gets a freshly minted token.
   if (!inflight) {
-    inflight = mint(env, nowMs).finally(() => {
+    inflight = mint(env, nowMs, version).finally(() => {
       inflight = null;
     });
   }
@@ -172,14 +198,14 @@ export async function getSession(
 
 let inflight: Promise<Session> | null = null;
 
-async function mint(env: Env, nowMs: number): Promise<Session> {
+async function mint(env: Env, nowMs: number, version: string): Promise<Session> {
   const res = await timedFetch('auth', authUrl(env), {
     method: 'POST',
     headers: apiKeyHeaders(env),
     body: JSON.stringify({
       deviceid: await deviceId(env),
       ipaddr: PLACEHOLDER_IP,
-      version: env.NEXTBUS_APP_VERSION ?? '',
+      version,
     }),
   });
   if (!res.ok) throw new Error(`auth HTTP ${res.status}`);
@@ -193,12 +219,13 @@ async function mint(env: Env, nowMs: number): Promise<Session> {
   } catch {
     throw new Error(`auth returned non-JSON (${res.status}, ${text.length}b): ${text.slice(0, 80)}`);
   }
-  const session = extractSession(body, nowMs);
-  if (!session) {
+  const extracted = extractSession(body, nowMs);
+  if (!extracted) {
     // "Invalid API KEY" arrives as HTTP 200 with code 10000, so the status
     // line alone will happily tell you everything is fine.
-    throw new Error(`auth rejected: code=${body?.code ?? '?'} msg=${body?.msg ?? ''}`);
+    throw new UpstreamRejected(String(body?.code ?? '?'), `auth rejected: code=${body?.code ?? '?'} msg=${body?.msg ?? ''}`, text);
   }
+  const session: Session = { ...extracted, version };
 
   memos.set(env.KV, session);
   const ttlS = Math.max(60, Math.floor((session.expMs - nowMs) / 1000));
@@ -217,8 +244,23 @@ export async function proxyEnvelope(env: Env, session: Session): Promise<Record<
     domain: session.domain,
     deviceid: await deviceId(env),
     ipaddr: PLACEHOLDER_IP,
-    version: env.NEXTBUS_APP_VERSION ?? '',
+    version: session.version ?? (await appVersion(env)),
   };
+}
+
+/**
+ * NUS said no, at HTTP 200, with a code. `detail` keeps the whole response
+ * (up to 2 KB): when a new uNivUS release refuses our version (10009), what
+ * the refusal says is the best clue to what changed.
+ */
+export class UpstreamRejected extends Error {
+  readonly code: string;
+  readonly detail: string;
+  constructor(code: string, message: string, detail = '') {
+    super(message);
+    this.code = code;
+    this.detail = detail.slice(0, 2000);
+  }
 }
 
 /**

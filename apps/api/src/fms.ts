@@ -11,7 +11,7 @@
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { TTL } from './config.ts';
 import { timedFetch } from './http.ts';
-import { getSession, proxyEnvelope, proxyHeaders } from './auth.ts';
+import { UpstreamRejected, getSession, proxyEnvelope, proxyHeaders } from './auth.ts';
 import type { Session } from './auth.ts';
 
 /** Envelope keys the FMS wraps results in. It nests one level deeper than you
@@ -276,7 +276,7 @@ export async function fetchArrivals(
   }
   if (!proxyOk(body)) {
     const b = body as ProxyBody | null;
-    throw new UpstreamRejected(String(b?.code ?? '?'), `shuttle-service rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`);
+    throw new UpstreamRejected(String(b?.code ?? '?'), `shuttle-service rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
   }
   // "00000" with no list anywhere is not "no bus": the payload changed shape,
   // and reading it as an empty board would print confident headway guesses.
@@ -284,13 +284,7 @@ export async function fetchArrivals(
   return { code, arrivals: normalize(body.data), fetchedAt: nowMs, stale: false, available: true };
 }
 
-export class UpstreamRejected extends Error {
-  readonly code: string;
-  constructor(code: string, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
+export { UpstreamRejected };
 
 /** Whether a payload carries an arrivals list at all, even an empty one. */
 export function hasList(data: unknown): boolean {
