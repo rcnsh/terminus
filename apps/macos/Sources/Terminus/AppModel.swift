@@ -146,7 +146,11 @@ final class AppModel {
             do {
                 let name = Host.current().localizedName ?? "Mac"
                 let token = try await Api(token: nil).pair(code: code, name: String(name.prefix(40)))
-                TokenStore.write(token)
+                guard TokenStore.write(token) else {
+                    pairing = false
+                    pairError = "Couldn't save the pairing to your keychain. Allow terminus access when asked, then pair again."
+                    return
+                }
                 paired = true
                 pairing = false
                 if locator.undecided { locator.ask() }
