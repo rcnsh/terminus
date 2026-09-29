@@ -11,7 +11,7 @@
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { TTL } from './config.ts';
 import { timedFetch } from './http.ts';
-import { UpstreamRejected, getSession, proxyEnvelope, proxyHeaders } from './auth.ts';
+import { UpstreamRejected, getSession, mintWith, proxyEnvelope, proxyHeaders } from './auth.ts';
 import type { Session } from './auth.ts';
 
 /** Envelope keys the FMS wraps results in. It nests one level deeper than you
@@ -285,6 +285,27 @@ export async function fetchArrivals(
 }
 
 export { UpstreamRejected };
+
+/**
+ * Whether NUS accepts a version string: a token mint plus one shuttle-service
+ * call with it, since a refusal (10009) could come from either. false means
+ * refused as out of date; any other failure throws, because it says nothing
+ * about the version.
+ */
+export async function tryVersion(env: Env, version: string, stop: string, nowMs: number = Date.now()): Promise<boolean> {
+  let session;
+  try {
+    session = await mintWith(env, version, nowMs);
+  } catch (err) {
+    if (err instanceof UpstreamRejected && err.code === '10009') return false;
+    throw err;
+  }
+  const body = await proxyCall(env, session, 'shuttle-service', { busstopname: stop });
+  if (proxyOk(body)) return true;
+  const code = String((body as ProxyBody | null)?.code ?? '?');
+  if (code === '10009') return false;
+  throw new UpstreamRejected(code, `shuttle-service rejected a candidate version: code=${code}`, JSON.stringify(body));
+}
 
 /** Whether a payload carries an arrivals list at all, even an empty one. */
 export function hasList(data: unknown): boolean {

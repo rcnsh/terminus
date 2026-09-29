@@ -161,6 +161,20 @@ export async function deviceId(env: Env): Promise<string> {
   return id;
 }
 
+/** Forget this isolate's remembered version, after writing a new one. */
+export function forgetAppVersion(env: Env): void {
+  versionMemos.delete(env.KV);
+}
+
+/**
+ * Mint a token for a given version string, bypassing the caches: how a
+ * candidate version is tried. The token is kept, marked with its version, so
+ * if the candidate becomes the version it is used straight away.
+ */
+export function mintWith(env: Env, version: string, nowMs: number = Date.now()): Promise<Session> {
+  return mint(env, nowMs, version);
+}
+
 /**
  * `force` skips BOTH caches and mints. Clearing only the in-memory memo is not
  * enough: the next call would read the same rejected token straight back out

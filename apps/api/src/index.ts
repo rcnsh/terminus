@@ -11,7 +11,8 @@
 import type { Env, ResolveInput, StopArrivals } from './types.ts';
 import { sgt } from './config.ts';
 import { venueToStop } from './nusmods.ts';
-import { authConfigured, getSession } from './auth.ts';
+import { appVersion, authConfigured, getSession } from './auth.ts';
+import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
 import { fmsConfigured, getArrivals } from './fms.ts';
 import { shortStop } from './format.ts';
 import { boardAt, indexGraph } from './resolve.ts';
@@ -170,7 +171,11 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
   // fresh deploy before the first cron run) is not that.
   const ok = u?.up !== false && cronStale !== true && daysLeft > 0;
   // The probe spends an upstream call, so only the operator gets it.
-  const probe = url.searchParams.get('probe') === '1' && env.HEALTH_TOKEN && req.headers.get('x-health-token') === env.HEALTH_TOKEN;
+  const operator = Boolean(env.HEALTH_TOKEN && req.headers.get('x-health-token') === env.HEALTH_TOKEN);
+  const probe = operator && url.searchParams.get('probe') === '1';
+  // Reads the Play and APKCombo pages (no NUS calls), to see what the
+  // automatic version update would find today.
+  const versions = operator && url.searchParams.get('versions') === '1';
   return json(
     {
       ok,
@@ -195,9 +200,23 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
       // From the cron probe: whether the NUS feed answered, and since when.
       upstream: u ? { up: u.up, since: new Date(u.since).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale } : null,
       auth: probe ? await probeAuth(env, nowMs) : undefined,
+      versions: versions ? await versionLookup(env, nowMs) : undefined,
     },
     ok ? 200 : 503,
   );
+}
+
+async function versionLookup(env: Env, nowMs: number): Promise<Record<string, unknown>> {
+  const current = await appVersion(env, nowMs);
+  const found = await lookUp();
+  const cur = parseVersion(current);
+  return {
+    current,
+    play: found.play,
+    apkcombo: found.apkcombo ? versionString(found.apkcombo) : null,
+    errors: found.errors,
+    wouldTry: cur ? candidates(cur, { refusal: [], ...found }).map(versionString) : [],
+  };
 }
 
 const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
