@@ -536,6 +536,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               format: 'date-time',
               description: 'When you reach the destination stop, by bus or on foot.',
             },
+            arrived: { type: 'boolean', description: 'Already at the destination (either side of the road). No bus, no countdown.' },
           },
         },
         Arrival: {
@@ -768,9 +769,21 @@ export const DOCS_PAGE = `<!doctype html>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script src="${ELEMENTS}/web-components.min.js" integrity="sha384-X5kH2B8aH81JEl8IfSBwwnr8FYcCqMzdxpqjmmlRbhIl7SsQ9Zn0xk+csQmU37zN" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="${ELEMENTS}/styles.min.css" integrity="sha384-NzdOiocfnINlXfuCXi4OpL/xvdbgLiKaLHQ07Z+IwhVaxHqLShn5rVD5OHt/LYgz" crossorigin="anonymous">
-  <style>html, body { margin: 0; height: 100%; } elements-api { display: block; height: 100vh; }</style>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    .bar { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; border-bottom: 1px solid #e7e5e2; font: 500 14px/1 system-ui, -apple-system, sans-serif; background: #fafaf9; }
+    .bar a { color: #1c1917; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+    .bar b { color: #c2410c; font-weight: inherit; }
+    .bar .back { color: #6b6560; padding: 12px 0; }
+    elements-api { display: block; height: calc(100vh - 49px); }
+  </style>
 </head>
 <body>
+  <div class="bar">
+    <a href="/"><img src="/assets/mark.svg" alt="" width="22" height="22"><span>termi<b>nus</b> API</span></a>
+    <a class="back" href="/">Back to terminus</a>
+  </div>
+  <noscript><p style="padding:16px">The docs need JavaScript. The raw spec is at <a href="/openapi.json">/openapi.json</a>.</p></noscript>
   <elements-api apiDescriptionUrl="/openapi.json" router="hash" layout="sidebar"></elements-api>
 </body>
 </html>`;

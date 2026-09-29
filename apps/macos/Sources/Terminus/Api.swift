@@ -23,6 +23,8 @@ struct NextAnswer: Decodable {
     let places: [Place]?
     /// When the bus leaves. Count down from this; `label` is only true when fetched.
     let departsAt: String?
+    /// Already at the destination: no bus, no countdown.
+    let arrived: Bool
     /// When the plan changes by itself (a class starts, the day ends).
     let refreshAt: String?
     let timing: Timing?
@@ -30,7 +32,7 @@ struct NextAnswer: Decodable {
 
     struct Timing: Decodable { let status: String?; let text: String? }
 
-    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals }
+    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived }
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -47,6 +49,7 @@ struct NextAnswer: Decodable {
         refreshAt = try? c.decodeIfPresent(String.self, forKey: .refreshAt)
         timing = try? c.decodeIfPresent(Timing.self, forKey: .timing)
         arrivals = try? c.decodeIfPresent([ArrivalLite].self, forKey: .arrivals)
+        arrived = (try? c.decodeIfPresent(Bool.self, forKey: .arrived)) ?? false
     }
     struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
 
@@ -77,6 +80,16 @@ private enum ISOFormats {
 /// Singapore time, so bus times must too, even on a Mac set to another zone.
 func campusTime(_ d: Date) -> String {
     d.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: TimeZone(identifier: "Asia/Singapore")!))
+}
+
+/// One vocabulary everywhere, matching the API's detail line.
+func crowdWord(_ c: String?) -> String? {
+    switch c {
+    case "low": "Quiet"
+    case "medium": "Filling"
+    case "high": "Packed"
+    default: nil
+    }
 }
 
 /// "1.0.10" is newer than "1.0.9".

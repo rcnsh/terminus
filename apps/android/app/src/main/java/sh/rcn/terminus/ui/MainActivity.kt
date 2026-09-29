@@ -45,8 +45,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,6 +61,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -127,10 +128,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun NusbusTheme(content: @Composable () -> Unit) {
-    val ctx = LocalContext.current
-    val dark = isSystemInDarkTheme()
-    val scheme = if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-    MaterialTheme(colorScheme = scheme, content = content)
+    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) BrandDark else BrandLight, content = content)
 }
 
 @Composable
@@ -160,7 +158,7 @@ private fun App(vm: MainViewModel) {
 private fun PairScreen(state: UiState, onPair: (String) -> Unit) {
     var code by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxWidth().padding(top = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("terminus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Wordmark(MaterialTheme.typography.headlineMedium)
         val ctx = LocalContext.current
         Text("Pair this phone with your account. Sign in at terminus.rcn.sh/account, choose Pair a device, then enter the 6-character code here or scan the QR code with your camera.")
         TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://terminus.rcn.sh/account"))) }) {
@@ -212,7 +210,7 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("terminus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Box(Modifier.weight(1f)) { Wordmark(MaterialTheme.typography.titleLarge) }
             var confirmUnpair by remember { mutableStateOf(false) }
             TextButton(onClick = { confirmUnpair = true }) { Text("Unpair") }
             if (confirmUnpair) {
@@ -285,7 +283,7 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
         ).joinToString(" · ")
         Row(Modifier.padding(top = 8.dp).height(20.dp), verticalAlignment = Alignment.CenterVertically) {
             if (state.loading) {
-                CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.size(12.dp).semantics { contentDescription = "Refreshing" }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
             }
             Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -321,13 +319,22 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
                 else -> answer.destLabel
             }
             heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            if (answer.arrived) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(painterResource(R.drawable.ic_check), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+                Text(answer.detail)
+                return@Column
+            }
             val ctx = LocalContext.current
             Text(answer.clockLabel { clock(ctx, it) }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Countdown(answer)
             Text(answer.detail)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
                 answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
-                answer.crowd?.let { Pill("${it.replaceFirstChar { c -> c.uppercase() }} crowd", MaterialTheme.colorScheme.onSurfaceVariant) }
+                crowdWord(answer.crowd)?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             // The alternative is already at the end of `detail`.
             qualityNote(answer.quality)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -374,12 +381,6 @@ private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) {
     )
 }
 
-private fun qualityNote(q: String) = when (q) {
-    "scheduled" -> "Estimated from the timetable, no live bus seen"
-    "stale" -> "Live data is a few minutes old"
-    "unknown" -> "Couldn't reach the NUS bus feed"
-    else -> null
-}
 
 @Composable
 private fun NearbyList(stops: List<NearbyStop>?, loading: Boolean) {
@@ -440,7 +441,7 @@ private fun Search(state: UiState, vm: MainViewModel) {
                 if (d.label == d.code) d.code else "${d.label} (${d.code})",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
+                    .clickable(role = Role.Button) {
                         query = ""
                         vm.select(Target.Code(d.code, if (d.kind == "stop") d.label else d.code))
                     }

@@ -91,6 +91,8 @@ export interface Answer {
   departsAt?: string | null;
   /** When you reach the destination stop (by bus, or on foot for a walk answer). */
   arriveAt?: string | null;
+  /** You are already at the destination: show "you're here", no bus, no countdown. */
+  arrived?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
