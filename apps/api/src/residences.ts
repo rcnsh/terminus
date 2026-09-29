@@ -8,7 +8,7 @@
  */
 
 import residencesJson from '../data/residences.json' with { type: 'json' };
-import { haversineM } from './resolve.ts';
+import { haversineM } from './geo.ts';
 import { footM, stopFootM } from './walk.ts';
 import type { Stop } from './types.ts';
 

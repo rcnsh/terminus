@@ -33,7 +33,8 @@ import {
 import { DEFAULT_PROFILE, MAX_VENUE_WALK_S, PROFILE_LIMITS, type Profile, classStartMs, isResting, nextClass, parseProfile, planChangesAt, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { termName } from './calendar.ts';
-import { boardAt, haversineM, indexGraph } from './resolve.ts';
+import { boardAt, indexGraph } from './resolve.ts';
+import { haversineM } from './geo.ts';
 import { isoSeconds, shortStop } from './format.ts';
 import { WALK } from './config.ts';
 import { landmark, targetStops } from './landmarks.ts';

@@ -12,7 +12,7 @@
 import walksJson from '../data/walks.json' with { type: 'json' };
 import type { Stop } from './types.ts';
 import { WALK } from './config.ts';
-import { haversineM } from './resolve.ts';
+import { haversineM } from './geo.ts';
 
 const WALKS = walksJson as { detour: Record<string, number>; stopPairs: Record<string, number> };
 
