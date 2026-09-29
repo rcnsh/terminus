@@ -45,7 +45,7 @@ const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : n
 // A stop's name, or a food court's (saved places and classes can go to one).
 const stopName = (code) => stops.find((s) => s.code === code)?.name ?? destinations.find((d) => d.code === code)?.label ?? code;
 // Campus time, like the apps: class times from the server are Singapore time.
-const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' });
+const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' });
 
 function haversineM(aLat, aLon, bLat, bLon) {
   const r = (d) => (d * Math.PI) / 180;

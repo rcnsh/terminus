@@ -49,6 +49,7 @@ enum Snapshots {
             ("pair", model(nearbyTab: false, paired: false)),
             ("rest", model(nearbyTab: false, resting: true)),
         ]
+        renderShowcase(to: dir)
         for (name, m) in cases {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
                 let view = Popover(model: m, startShown: true)
@@ -61,6 +62,41 @@ enum Snapshots {
                       let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
                 try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
             }
+        }
+    }
+
+    /// For the landing page: a weekday morning, a class with a leave-by time,
+    /// at 3x, light and dark from identical data so the halves line up.
+    static func renderShowcase(to dir: String) {
+        // Tuesday 29 Sep 2026, 09:24 in Singapore.
+        let now = ISO8601DateFormatter().date(from: "2026-09-29T01:24:00Z")!
+        let iso = { (s: Double) in ISO8601DateFormatter().string(from: now.addingTimeInterval(s)) }
+        let json = """
+        {"label":"D2 · 5 min","detail":"PGP · 3 min walk · CS2030 @ COM1 ~11 min · quiet · or A1 9 min","alt":"A1 · 9 min","stop":{"code":"PGP","name":"PGP"},
+         "departsAt":"\(iso(300))",
+         "timing":{"status":"on-time","text":"","classAt":"\(iso(2160))","reachAt":"\(iso(960))"},
+         "leave":{"at":"\(iso(1020))","estimated":false,"svc":"D2","stop":"PGP","board":"\(iso(1260))","arrive":"\(iso(1920))"},
+         "arrivals":[{"svc":"D2","crowd":"low"}],
+         "quality":"live","asOf":"2026-09-29T01:24:00Z","mode":"trip","dest":{"to":"COM3","label":"CS2030 @ COM1","why":"class"},
+         "places":[{"key":"mrt","label":"KR MRT"},{"key":"utown","label":"UTown"},{"key":"deck","label":"The Deck"}]}
+        """
+        let answer = try! JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
+        let m = AppModel(snapshot: true)
+        m.paired = true
+        m.answers = [.plan: answer]
+        m.places = answer.places ?? []
+        m.updated = now
+        // The popover's own surface, in the brand's warm neutrals.
+        for (scheme, bg) in [(ColorScheme.light, Color(red: 0.965, green: 0.961, blue: 0.953)), (.dark, Color(red: 0.137, green: 0.129, blue: 0.122))] {
+            let view = Popover(model: m, startShown: true)
+                .environment(\.fixedNow, now)
+                .background(bg)
+                .environment(\.colorScheme, scheme)
+            let r = ImageRenderer(content: view)
+            r.scale = 3
+            guard let img = r.nsImage, let tiff = img.tiffRepresentation,
+                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
+            try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("showcase-\(scheme == .dark ? "dark" : "light").png"))
         }
     }
 }

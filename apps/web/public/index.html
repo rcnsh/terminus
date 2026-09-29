@@ -17,14 +17,77 @@
   .hero .lede { font-size: 1.15rem; color: var(--muted); margin: 18px 0 28px; max-width: 34rem; }
   .cta { display: flex; flex-wrap: wrap; gap: 10px; }
   .cta-note { margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
-  .stack { display: grid; gap: 14px; position: relative; }
-  .stack .widget:nth-child(2) { margin-left: 44px; }
-  .menubar {
-    display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 8px 14px;
-    border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line);
-    font: 500 0.82rem/1 var(--font); color: var(--muted);
+
+  /* ---------- Light | dark split ----------
+     Two renders of the same moment, the dark one clipped along a slanted
+     seam at --x. Drag it (or use the arrow keys on the handle); on first
+     view it sweeps in once. Reduced motion: a still 50/50 split. */
+  @property --x { syntax: '<percentage>'; inherits: true; initial-value: 50%; }
+  .split { --x: 50%; --tilt: 9%; position: relative; display: grid; isolation: isolate; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+  .split > .half { grid-area: 1 / 1; min-width: 0; }
+  .split > .half.dark { clip-path: polygon(calc(var(--x) + var(--tilt)) 0, 100% 0, 100% 100%, calc(var(--x) - var(--tilt)) 100%); }
+  .split .seam {
+    grid-area: 1 / 1; pointer-events: none; z-index: 1; background: rgb(255 255 255 / 0.9);
+    clip-path: polygon(calc(var(--x) + var(--tilt) - 1px) 0, calc(var(--x) + var(--tilt) + 1px) 0, calc(var(--x) - var(--tilt) + 1px) 100%, calc(var(--x) - var(--tilt) - 1px) 100%);
+    filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.5));
   }
-  .menubar strong { color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+  .split .knob {
+    position: absolute; z-index: 2; left: var(--x); top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px;
+    display: grid; place-items: center; border-radius: 50%; cursor: ew-resize;
+    background: #fff; color: #1c1917; box-shadow: 0 2px 10px rgb(0 0 0 / 0.28), 0 0 0 1px rgb(0 0 0 / 0.06);
+    transition: transform 0.15s ease-out;
+  }
+  .split .knob:hover, .split.dragging .knob { transform: scale(1.08); }
+  .split .knob:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .split .tag {
+    position: absolute; z-index: 1; padding: 4px 9px; border-radius: 999px; pointer-events: none;
+    font: 600 0.68rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .split .tag.l { left: 12px; bottom: 12px; background: rgb(255 255 255 / 0.9); color: #44403c; }
+  /* Both at the bottom: the seam leans, so the bottom corners are always one of each. */
+  .split .tag.d { right: 12px; bottom: 12px; background: rgb(28 25 23 / 0.85); color: #e7e5e4; }
+  .split.sweep { transition: --x 1.5s cubic-bezier(0.65, 0, 0.35, 1); }
+  .split img { display: block; width: 100%; height: auto; }
+
+  /* Phone, for the hero. */
+  .hero-shot { display: grid; place-items: center; position: relative; }
+  .hero-shot::before {
+    content: ''; position: absolute; inset: 8% 4% 4%; z-index: -1; border-radius: 50%;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 22%, transparent), transparent);
+    filter: blur(24px);
+  }
+  .phone { width: min(310px, 78vw); padding: 9px; border-radius: 46px; background: #0c0a09; box-shadow: 0 30px 60px -20px rgb(28 25 23 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.06) inset, 0 0 0 1px var(--line); }
+  .phone .split { border-radius: 38px; overflow: hidden; }
+  .phone .split .tag.l { bottom: 22px; left: 18px; }
+  .phone .split .tag.d { bottom: 22px; right: 18px; }
+
+  /* Everywhere: browser, Mac, home screen. */
+  .showcase { display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; margin-top: 28px; }
+  .showcase figure { margin: 0; display: grid; gap: 14px; align-content: start; }
+  .showcase figcaption h3 { font-size: 1.1rem; margin-bottom: 4px; }
+  .showcase figcaption p { color: var(--muted); font-size: 0.95rem; max-width: 38rem; }
+  .showcase .wide { grid-column: 1 / -1; }
+  .showcase .half-col { grid-column: span 6; }
+  .window { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow), 0 24px 48px -28px rgb(28 25 23 / 0.35); background: var(--surface); }
+  .window-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+  .window-bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--line-strong); opacity: 0.45; }
+  .window-bar span { margin: 0 auto; padding: 4px 14px; border-radius: 8px; background: var(--surface); color: var(--muted); font: 500 0.78rem/1 var(--font); }
+  /* The Mac: a slice of desktop with the menu bar and the open popover. */
+  .desk { position: relative; display: grid; aspect-ratio: 900 / 563; /* same shape as the widget beside it */ border-radius: 14px; overflow: hidden; box-shadow: var(--shadow), 0 24px 48px -28px rgb(28 25 23 / 0.35); }
+  .scene { display: block; position: relative; height: 100%; }
+  .scene.l { background: radial-gradient(120% 90% at 20% 110%, #fdba74 0%, #fde2c8 38%, #f5f0ea 70%); }
+  .scene.d { background: radial-gradient(120% 90% at 20% 110%, #7c2d12 0%, #3b1d12 40%, #151210 75%); }
+  .menu {
+    display: flex; justify-content: flex-end; align-items: center; gap: 16px; height: 30px; padding: 0 14px;
+    font: 500 12.5px/1 -apple-system, system-ui, sans-serif; backdrop-filter: blur(20px);
+  }
+  .scene.l .menu { background: rgb(255 255 255 / 0.55); color: #1c1917; }
+  .scene.d .menu { background: rgb(20 18 16 / 0.55); color: #f5f5f4; }
+  .menu b { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 5px; font-weight: 600; }
+  .scene.l .menu b { background: rgb(0 0 0 / 0.08); }
+  .scene.d .menu b { background: rgb(255 255 255 / 0.14); }
+  .scene .pop { position: absolute; top: 38px; right: 6%; width: 50%; border-radius: 12px; box-shadow: 0 18px 40px -12px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(0 0 0 / 0.2); }
+  .home-screen { border-radius: 22px; overflow: hidden; box-shadow: var(--shadow), 0 24px 48px -28px rgb(28 25 23 / 0.35); }
   .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
   .features .card h3 { font-size: 1.1rem; margin: 12px 0 6px; }
   .features .card p { color: var(--muted); font-size: 0.95rem; }
@@ -34,13 +97,17 @@
   .how h3 { font-size: 1.05rem; margin-bottom: 6px; }
   .how p { color: var(--muted); font-size: 0.95rem; }
   .section-title { margin-top: 72px; font-size: 1.6rem; }
+  .lede-sm { color: var(--muted); margin-top: 6px; }
   .install { margin-top: 12px; font-size: 0.9rem; color: var(--muted); }
   .install summary { cursor: pointer; color: var(--accent); padding: 8px 0; }
   .install ol { margin: 6px 0 0; padding-left: 1.2rem; display: grid; gap: 6px; }
   @media (max-width: 860px) {
     .hero { grid-template-columns: 1fr; padding-top: 32px; gap: 36px; }
     .features, .how { grid-template-columns: 1fr; }
-    .stack .widget:nth-child(2) { margin-left: 0; }
+    .showcase .half-col { grid-column: 1 / -1; }
+    /* One column: the desktop can be taller, so the whole popover fits. */
+    .desk { aspect-ratio: 4 / 3.3; }
+    .scene .pop { width: 54%; }
   }
 </style>
 </head>
@@ -59,7 +126,7 @@
     <div>
       <p class="eyebrow">For the NUS internal shuttle <span class="beta">Public beta</span></p>
       <h1>Know when to <em>run</em>.</h1>
-      <p class="lede">terminus reads your timetable and tells you which shuttle to catch to your next class, whether you'll make it, and when walking is faster. On your home screen and in your menu bar.</p>
+      <p class="lede">terminus reads your timetable and tells you when to leave for your next class: which shuttle, from which stop, and when walking is faster. On your home screen, in your menu bar and on the web.</p>
       <div class="cta" id="download">
         <a class="btn accent" href="/download/android">Get it for Android</a>
         <a class="btn ghost" href="/download/mac">Download for Mac</a>
@@ -75,25 +142,50 @@
       </details>
     </div>
 
-    <div class="stack" aria-label="What the widget shows">
-      <div class="menubar" aria-hidden="true"><strong><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12a3 3 0 0 1 3 3v10a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V6a3 3 0 0 1 3-3zM5 7v4h14V7H5z"/></svg>D2 4m</strong><span>9:38</span></div>
-      <div class="widget">
-        <div class="where">Next class · CS2030 @ COM1</div>
-        <div class="big">D2 · 09:42</div>
-        <div class="detail">PGP · 3 min walk · COM3 ~9 min · quiet</div>
-        <span class="ontime on-time"><span class="dot"></span>Arrive 09:52 · 8 min early</span>
-        <div class="chips"><span>KR MRT</span><span>UTown</span><span>Gym</span><span>Nearby</span></div>
-      </div>
-      <div class="widget">
-        <div class="where">Heading home</div>
-        <div class="big">Walk · 7 min</div>
-        <div class="detail">Faster on foot · A1 would be 12 min</div>
-      </div>
-      <div class="widget">
-        <div class="rest"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><div class="big">Done for today</div></div>
-        <div class="detail">In the evening it goes quiet · Next: CS2030, tomorrow 10:00</div>
+    <div class="hero-shot">
+      <div class="phone">
+        <div class="split" data-split>
+          <img class="half light" src="/assets/shots/app-light.webp" width="600" height="1339" alt="The terminus Android app: CS2030 at COM1 starts 6:19 PM. Leave by 6:00 PM, in 14 minutes, and catch the 6:02 PM D2 at PGP Foyer to arrive 12 minutes early. Or go now on the 5:50 PM D2." fetchpriority="high">
+          <img class="half dark" src="/assets/shots/app-dark.webp" width="600" height="1339" alt="" aria-hidden="true">
+        </div>
       </div>
     </div>
+    </div>
+  </section>
+
+  <h2 class="section-title">Wherever you look</h2>
+  <p class="lede-sm">The same answer on your phone, your Mac and the web, in light or dark. Drag the line to compare.</p>
+  <section class="showcase">
+    <figure class="wide">
+      <div class="window">
+        <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>terminus.rcn.sh/account</span></div>
+        <div class="split" data-split>
+          <img class="half light" src="/assets/shots/web-light.webp" width="1600" height="975" loading="lazy" alt="The account page: a timetable of three classes, where you live, and a live preview of your widget saying leave by 6:05 PM and walk there." >
+          <img class="half dark" src="/assets/shots/web-dark.webp" width="1600" height="975" loading="lazy" alt="" aria-hidden="true">
+        </div>
+      </div>
+      <figcaption><h3>Set up on the web</h3><p>Import your NUSMods timetable, pick where you live and how fast you walk, and see exactly what your widget will say.</p></figcaption>
+    </figure>
+    <figure class="half-col">
+      <div class="home-screen split" data-split>
+        <img class="half light" src="/assets/shots/widget-light.webp" width="900" height="563" loading="lazy" alt="The Android home-screen widget: leave by 6:00 PM for CS2030, with buttons for saved places.">
+        <img class="half dark" src="/assets/shots/widget-dark.webp" width="900" height="563" loading="lazy" alt="" aria-hidden="true">
+      </div>
+      <figcaption><h3>On your home screen</h3><p>A widget that keeps itself up to date, with your saved places one tap away. Or a live notification, and a heads-up before you need to leave.</p></figcaption>
+    </figure>
+    <figure class="half-col">
+      <div class="desk split" data-split data-x="69">
+        <div class="half light scene l">
+          <div class="menu" aria-hidden="true"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12a3 3 0 0 1 3 3v10a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V6a3 3 0 0 1 3-3zM5 7v4h14V7H5z"/></svg>Leave 9:41</b><span>Tue 29 Sep 9:24</span></div>
+          <img class="pop" src="/assets/shots/mac-light.webp" width="720" height="769" loading="lazy" alt="The Mac menu bar app: leave by 9:41 for CS2030 at 10:00, catch the 9:45 D2 at PGP.">
+        </div>
+        <div class="half dark scene d" aria-hidden="true">
+          <div class="menu"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12a3 3 0 0 1 3 3v10a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V6a3 3 0 0 1 3-3zM5 7v4h14V7H5z"/></svg>Leave 9:41</b><span>Tue 29 Sep 9:24</span></div>
+          <img class="pop" src="/assets/shots/mac-dark.webp" width="720" height="769" loading="lazy" alt="">
+        </div>
+      </div>
+      <figcaption><h3>In your menu bar</h3><p>When to leave, one glance up. The rest, a click away.</p></figcaption>
+    </figure>
   </section>
 
   <section class="features">
@@ -104,8 +196,8 @@
     </div>
     <div class="card">
       <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-      <h3>On time, or not</h3>
-      <p>Live arrivals, the walk to your venue included. It tells you if you'll be late, and when walking beats the bus.</p>
+      <h3>Leave at the right time</h3>
+      <p>The latest bus that still gets you there, walks along real campus paths at your pace, and a bus earlier when yours is usually packed.</p>
     </div>
     <div class="card">
       <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></div>

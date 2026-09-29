@@ -94,7 +94,8 @@ struct Popover: View {
         // pinned under the menu bar.
         .background(GeometryReader { g in Color.clear.preference(key: ContentHeight.self, value: g.size.height) })
         .onPreferenceChange(ContentHeight.self) { h in fit(height: h) }
-        .background(WindowReader { if window !== $0 { window = $0 } })
+        // A snapshot has no window, and ImageRenderer can't draw an NSView.
+        .background { if !model.isSnapshot { WindowReader { if window !== $0 { window = $0 } } } }
         // Opening is a plain fade of the whole popover; nothing moves.
         .opacity(shown ? 1 : 0)
         .frame(maxHeight: .infinity, alignment: .top)
@@ -699,9 +700,14 @@ private struct Search: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.secondary)
-                TextField("Go somewhere else", text: $query)
-                    .textFieldStyle(.plain)
-                    .onChange(of: query) { _, _ in model.loadDestinations() }
+                if model.isSnapshot {
+                    Text("Go somewhere else").foregroundStyle(.tertiary)
+                    Spacer(minLength: 0)
+                } else {
+                    TextField("Go somewhere else", text: $query)
+                        .textFieldStyle(.plain)
+                        .onChange(of: query) { _, _ in model.loadDestinations() }
+                }
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
@@ -792,7 +798,9 @@ private struct Footer: View {
 
     var body: some View {
         HStack {
-            if model.paired {
+            if model.paired && model.isSnapshot {
+                Label("Settings", systemImage: "gearshape")
+            } else if model.paired {
                 Menu {
                     Toggle(model.misplaced ? "Open at login (move to Applications first)" : "Open at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
                         .disabled(model.misplaced && !model.openAtLogin)
