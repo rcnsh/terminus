@@ -590,8 +590,20 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.match(apk.headers.get('content-disposition'), /terminus-1.0.0.apk/);
   assert.equal(await apk.text(), 'APK');
   assert.equal((await get('/download/mac')).headers.get('x-sha256'), 'bb');
+  assert.equal((await get('/download/mac')).headers.get('content-type'), 'application/zip', 'releases up to 1.3.7');
   assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.0');
   assert.equal((await get('/download/ios')).status, 404);
+
+  // From 1.3.8 the Mac app is a signed DMG.
+  put('releases/1.0.1/terminus-1.0.1.dmg', 'DMG');
+  put('latest.json', JSON.stringify({
+    version: '1.0.1', released: '2026-10-01',
+    android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
+    mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
+  }));
+  const dmg = await get('/download/mac');
+  assert.equal(dmg.headers.get('content-type'), 'application/x-apple-diskimage');
+  assert.match(dmg.headers.get('content-disposition'), /terminus-1\.0\.1\.dmg/);
 });
 
 test('/health: no probe without the operator token, 503 when the feed is confirmed down', async () => {

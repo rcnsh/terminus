@@ -1,9 +1,10 @@
 /**
  * App downloads, served from R2 so the repo can stay private.
  *
- * scripts/release.sh uploads each build under its version and rewrites
- * latest.json, which names the current files. /download/android and
- * /download/mac always serve whatever latest.json points at.
+ * scripts/release.sh uploads the APK and the release workflow the Mac DMG,
+ * each under its version, and each rewrites latest.json, which names the
+ * current files. /download/android and /download/mac always serve whatever
+ * latest.json points at, zip (up to 1.3.7) or DMG.
  */
 
 import type { Env } from './types.ts';
@@ -17,6 +18,12 @@ export interface Latest {
 }
 
 const LATEST = 'latest.json';
+
+const TYPES: Record<string, string> = {
+  apk: 'application/vnd.android.package-archive',
+  dmg: 'application/x-apple-diskimage',
+  zip: 'application/zip',
+};
 
 export async function handleDownload(path: string, env: Env): Promise<Response | null> {
   if (!path.startsWith('/download/')) return null;
@@ -38,7 +45,7 @@ export async function handleDownload(path: string, env: Env): Promise<Response |
   const name = which.file.split('/').pop()!;
   return new Response(obj.body, {
     headers: {
-      'content-type': name.endsWith('.apk') ? 'application/vnd.android.package-archive' : 'application/zip',
+      'content-type': TYPES[name.split('.').pop() ?? ''] ?? 'application/octet-stream',
       'content-disposition': `attachment; filename="${name}"`,
       'content-length': String(obj.size),
       'x-sha256': which.sha256,
