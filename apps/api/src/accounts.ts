@@ -382,6 +382,10 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
     .prepare('SELECT kind, name, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created')
     .bind(user.id)
     .all();
+  const { results: apiKeys } = await db
+    .prepare('SELECT name, hint, created, last_used AS lastUsed FROM api_keys WHERE user_id = ? ORDER BY created')
+    .bind(user.id)
+    .all<{ name: string; hint: string; created: number; lastUsed: number | null }>();
   return {
     email: user.email,
     created: row ? new Date(row.created).toISOString() : null,
@@ -396,6 +400,13 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
         expires: r.expires ? new Date(r.expires).toISOString() : null,
       };
     }),
+    // Names and dates only: a key itself is never kept.
+    apiKeys: apiKeys.map((k) => ({
+      name: k.name,
+      endsWith: k.hint,
+      created: new Date(k.created).toISOString(),
+      lastUsed: k.lastUsed ? new Date(k.lastUsed).toISOString() : null,
+    })),
   };
 }
 

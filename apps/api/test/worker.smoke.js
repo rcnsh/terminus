@@ -219,14 +219,15 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   const documented = Object.keys(spec.paths).sort();
   assert.deepEqual(documented, [
     '/arrivals', '/auth/login', '/campus', '/health', '/import',
-    '/me/import', '/me/nearby', '/me/next', '/me/profile', '/next', '/pair', '/pair/check', '/trip',
+    '/me/import', '/me/keys', '/me/nearby', '/me/next', '/me/profile', '/next', '/pair', '/pair/check', '/trip',
   ]);
 
   // Every documented public GET answers with its required params filled from
   // the spec's own examples -- a renamed route or param shows up here, not in
   // prod. Account routes are exercised in accounts.test.js.
   for (const [path, item] of Object.entries(spec.paths)) {
-    if (!item.get || item.get.security) continue;
+    // Account routes have their own security; `security: []` means open (health).
+    if (!item.get || item.get.security?.length) continue;
     const q = new URLSearchParams();
     // `from` is only conditionally required (no location), so fill it too.
     for (const p of item.get.parameters ?? []) if (p.required || p.name === 'from') q.set(p.name, String(p.example));

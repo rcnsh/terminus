@@ -179,3 +179,10 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .search-meta { font-size: 0.8rem; color: var(--muted); }
 .search-empty { padding: 10px; color: var(--muted); font-size: 0.9rem; }
 @media (prefers-reduced-motion: reduce) { .search-list { animation: none; } }
+
+/* API keys: the new key, shown once. */
+.new-key { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
+.new-key .warn-text { margin: 0 0 8px; }
+.new-key code { font: 0.8rem/1.4 ui-monospace, "SF Mono", monospace; word-break: break-all; }
+.new-key .row code { flex: 1; user-select: all; }
+.new-key .hint code { display: block; margin-top: 4px; }

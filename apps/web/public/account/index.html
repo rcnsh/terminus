@@ -180,6 +180,22 @@
         </div>
         <ul id="devices" class="list"></ul>
       </section>
+
+      <section class="card">
+        <h2>API keys</h2>
+        <p class="hint">For your own scripts and projects. See the <a href="/docs">API docs</a>; send the key in the <code>x-api-key</code> header.</p>
+        <ul id="keys" class="list"></ul>
+        <form id="key-form" class="row">
+          <input name="name" maxlength="40" required placeholder="What it's for, e.g. My script" aria-label="Key name">
+          <button type="submit" class="btn">Create</button>
+        </form>
+        <div id="new-key" class="new-key" hidden>
+          <p class="warn-text">Copy this key now. It won't be shown again.</p>
+          <div class="row"><code id="new-key-value"></code><button type="button" class="btn small" id="copy-key">Copy</button></div>
+          <p class="hint">Try it: <code id="new-key-eg"></code></p>
+        </div>
+        <p id="key-msg" class="hint" role="status"></p>
+      </section>
     </aside>
   </div>
   <p id="saved" class="toast" role="status" aria-live="polite"></p>
