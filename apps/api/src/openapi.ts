@@ -946,12 +946,15 @@ export const DOCS_PAGE = `<!doctype html>
   <script src="${ELEMENTS}/web-components.min.js" integrity="sha384-X5kH2B8aH81JEl8IfSBwwnr8FYcCqMzdxpqjmmlRbhIl7SsQ9Zn0xk+csQmU37zN" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="${ELEMENTS}/styles.min.css" integrity="sha384-NzdOiocfnINlXfuCXi4OpL/xvdbgLiKaLHQ07Z+IwhVaxHqLShn5rVD5OHt/LYgz" crossorigin="anonymous">
   <style>
-    /* The page never scrolls; only the docs inside it do. Pinning the body to
-       the screen, rather than sizing with vh, means a phone's collapsing
-       address bar or rubber-band scroll can't move our bar out from above
-       Elements' fixed mobile bar, or leave uncovered page below the docs. */
+    /* The page never scrolls; only the docs inside it do, so a phone's
+       rubber-band scroll can't move our bar out from above Elements' fixed
+       mobile bar, or leave uncovered page below the docs. The height is the
+       visible one (dvh): Chrome on Android sizes a fixed inset-0 box as if
+       the address bar were hidden, which put the end of the docs off screen.
+       With nothing scrolling the page, the address bar never hides, so dvh
+       doesn't change under you. */
     html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; }
-    body { position: fixed; inset: 0; display: flex; flex-direction: column; }
+    body { position: fixed; top: 0; left: 0; right: 0; height: 100%; height: 100dvh; display: flex; flex-direction: column; }
     .bar { flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; border-bottom: 1px solid #e7e5e2; font: 500 14px/1 system-ui, -apple-system, sans-serif; background: #fafaf9; }
     .bar a { color: #1c1917; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
     .bar b { color: #c2410c; font-weight: inherit; }
@@ -966,6 +969,8 @@ export const DOCS_PAGE = `<!doctype html>
          wherever the page flow put it. It goes right under our 48px bar. */
       elements-api .TopNav--mosaic { z-index: 20; top: 48px; }
       elements-api .sl-drawer-container > .sl-fixed { z-index: 30; }
+      /* Room past the last line. */
+      elements-api .sl-overflow-y-auto.sl-flex-1 { padding-bottom: 24px; }
     }
   </style>
 </head>
