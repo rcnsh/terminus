@@ -9,6 +9,7 @@
  *   - every service treated as running at any hour
  *   - an in-memory database with a test account (tester@example.test),
  *     three saved places, a class later today, and pairing codes TEST67, TEST78, TEST89
+ *   - crowd history saying every bus at PGP is usually packed (the full-bus warning)
  *   - a fake NUSMods (every module has a lab, an online tutorial and an
  *     off-campus lecture; XX9999 is not offered; DOWN1000 fails)
  *
@@ -90,6 +91,12 @@ const profile = {
 db.exec(`INSERT INTO users VALUES ('test-user', 'tester@example.test', 0)`);
 db._db.prepare('INSERT INTO profiles VALUES (?, ?, 0)').run('test-user', JSON.stringify(profile));
 for (const code of ['TEST67', 'TEST78', 'TEST89']) db.exec(`INSERT INTO pair_codes VALUES ('${code}', 'test-user', 9999999999999)`);
+// Crowd history, so the full-bus warning shows: every bus at PGP is usually packed.
+for (const svc of servingStop.get('PGP') ?? []) {
+  for (const daytype of ['term', 'exam', 'break', 'sat', 'sun']) {
+    for (let slot = 0; slot < 48; slot++) db.exec(`INSERT INTO crowd_stats VALUES ('${svc}', 'PGP', '${daytype}', ${slot}, 20, 15)`);
+  }
+}
 
 // The website, standing in for the Workers ASSETS binding.
 const WEB = new URL('../../web/public/', import.meta.url).pathname;

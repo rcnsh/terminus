@@ -47,6 +47,8 @@ data class NextAnswer(
     val leaveArriveMs: Long? = null,
     /** When you'd reach the class on the headline bus. */
     val reachMs: Long? = null,
+    /** Why leave-by is earlier than it could be ("D2 is often packed…"). Shown verbatim. */
+    val leaveNote: String? = null,
     /** For a class, when it starts, epoch ms. */
     val classAtMs: Long? = null,
 ) {
@@ -142,6 +144,7 @@ data class NextAnswer(
                 leaveBoardMs = o.optJSONObject("leave")?.optStringOrNull("board")?.let(::parseInstant),
                 leaveArriveMs = o.optJSONObject("leave")?.optStringOrNull("arrive")?.let(::parseInstant),
                 reachMs = o.optJSONObject("timing")?.optStringOrNull("reachAt")?.let(::parseInstant),
+                leaveNote = o.optJSONObject("leave")?.optStringOrNull("note"),
                 classAtMs = o.optJSONObject("timing")?.optStringOrNull("classAt")?.let(::parseInstant),
                 timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
                 timingText = o.optJSONObject("timing")?.optStringOrNull("text"),

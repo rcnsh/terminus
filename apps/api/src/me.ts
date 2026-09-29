@@ -35,6 +35,7 @@ import { termName } from './calendar.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
 import { isoSeconds, shortStop } from './format.ts';
 import { WALK } from './config.ts';
+import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 
 export interface MeDeps {
@@ -105,6 +106,9 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
     ...structuredClone(DEFAULT_PROFILE),
     gapHours: typeof p.gapHours === 'number' ? p.gapHours : DEFAULT_PROFILE.gapHours,
     homeWalkMin: typeof p.homeWalkMin === 'number' ? p.homeWalkMin : DEFAULT_PROFILE.homeWalkMin,
+    walkPace: p.walkPace ?? DEFAULT_PROFILE.walkPace,
+    fullBusMargin: p.fullBusMargin ?? DEFAULT_PROFILE.fullBusMargin,
+    seen: Array.isArray(p.seen) ? p.seen : [],
     home: p.home?.stops?.some(ok) ? { stops: p.home.stops.filter(ok) } : null,
     trips: (p.trips ?? []).filter((t) => ok(t.to)),
     manual: (p.manual ?? []).filter((t) => ok(t.to)),
@@ -271,6 +275,7 @@ export async function handleMe(
   }
 
   if (path === '/me' && req.method === 'GET') {
+    const saved = await loadProfileJson(db, session.user.id);
     const profile = await getProfile(db, session.user.id, deps.graph);
     const reason = reimportReason(profile, nowMs);
     return json({
@@ -279,6 +284,7 @@ export async function handleMe(
       needsReimport: reason !== null,
       reimportReason: reason,
       term: profile.term ? termName(profile.term) : null,
+      onboarding: onboardingFor(saved !== null, profile.seen),
     });
   }
 
@@ -362,12 +368,24 @@ export async function handleMe(
   return json({ error: 'not found' }, 404);
 }
 
+/**
+ * What the account page should walk someone through first: the whole setup
+ * for an account that has never saved anything, just the new walking-pace
+ * screen for one set up before it existed, or nothing.
+ */
+export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | 'pace' | null {
+  if (seen.includes('onboarding')) return null;
+  if (!hasProfile) return 'full';
+  return seen.includes('pace') ? null : 'pace';
+}
+
 function setupAnswer(nowMs: number, label: string, detail: string): Answer {
   return { label, detail, alt: null, stop: { code: '', name: '', confidence: 0 }, quality: 'unknown', asOf: new Date(nowMs).toISOString(), arrivals: [] };
 }
 
 export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
   const { lat, lon } = coordsFrom(url);
+  const speed = paceSpeed(profile.walkPace);
   const homeStop = profile.home?.stops[0] ?? null;
   const places = profile.places.map(({ key, label }) => ({ key, label }));
 
@@ -412,15 +430,16 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   }
   if (dest) {
     const venueM = dest.trip?.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
-    const venueWalkS = Math.round(venueM / WALK.speedMs);
+    const venueWalkS = Math.round(venueM / speed);
     const input: ResolveInput = {
       lat,
       lon,
       to: dest.to,
       originCode: lat === null ? dest.from : null,
       preferStops,
-      originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin) : 0,
-      arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS } : null,
+      originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin, speed) : 0,
+      walkSpeedMs: speed,
+      arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS, fullBusMargin: profile.fullBusMargin } : null,
     };
     const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
     // For a class, say whether you'll make it: stop arrival plus the walk
@@ -440,6 +459,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
     originCode: lat === null ? homeStop : null,
     preferStops,
     originWalkS: lat === null ? profile.homeWalkMin * 60 : 0,
+    walkSpeedMs: speed,
   };
   const answer = await deps.answerFor(env, ctx, input, null, nowMs);
   return { ...answer, mode: 'nearby', dest: null, places };
@@ -450,10 +470,10 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
  * from the room you're in when that's the last class's stop, from home when
  * it's the home stop.
  */
-function originWalkS(dest: { from: string | null; fromVenue?: string | null }, homeStop: string | null, homeWalkMin: number): number {
+function originWalkS(dest: { from: string | null; fromVenue?: string | null }, homeStop: string | null, homeWalkMin: number, speed: number): number {
   if (dest.fromVenue) {
     const m = venueToStop(dest.fromVenue)?.m ?? 0;
-    const s = Math.round(m / WALK.speedMs);
+    const s = Math.round(m / speed);
     // Past this the room's stop is not really its stop (bad data).
     return s <= MAX_VENUE_WALK_S ? s : 0;
   }
@@ -480,7 +500,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
     return {
       stop: { code: stop.code, name: stop.name },
       distM: Math.round(distM),
-      walkS: Math.round(distM / WALK.speedMs),
+      walkS: Math.round(footM(lat!, lon!, stop) / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
       board: boardAt(deps.graph, idx, stop.code, sa, nowMs),
     };

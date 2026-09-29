@@ -578,6 +578,7 @@ private struct AnswerDetail: View {
                 if a.isClassPlan {
                     // Each arrival next to the bus it belongs to.
                     if let c = a.catchLine { Row(icon: "figure.walk", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.red : Color.good) }
+                    if let note = a.leave?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(Color.warn) }
                     if a.leave?.estimated == true {
                         Row(icon: "info.circle", text: "Estimated from the usual gap between buses. Live times show nearer the time.").foregroundStyle(.secondary)
                     }

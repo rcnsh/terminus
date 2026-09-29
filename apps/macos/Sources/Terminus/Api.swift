@@ -33,7 +33,7 @@ struct NextAnswer: Decodable {
     let leave: Leave?
 
     struct Timing: Decodable { let status: String?; let text: String?; let classAt: String?; let reachAt: String? }
-    struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String?; let board: String?; let arrive: String? }
+    struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String?; let board: String?; let arrive: String?; let note: String? }
 
     enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave }
 

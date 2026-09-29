@@ -450,6 +450,7 @@ private fun ClassPlan(answer: NextAnswer) {
     answer.catchLine(fmt)?.let {
         Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = if (late) MaterialTheme.colorScheme.error else goodColor())
     }
+    answer.leaveNote?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary) }
     if (answer.leaveEstimated) {
         Text("Estimated from the usual gap between buses. Live times show nearer the time.", style = MaterialTheme.typography.bodySmall, color = muted)
     }

@@ -1,5 +1,7 @@
 // Account page. Same origin as the API, so the session cookie just works.
 
+import { pacePrompt, runOnboarding } from './onboarding.js';
+
 const $ = (sel) => document.querySelector(sel);
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -89,6 +91,37 @@ function save() {
   }, 400);
 }
 
+/** Save straight away, for steps that must land before moving on. */
+async function saveNow() {
+  clearTimeout(saveTimer);
+  profile = await api('/me/profile', { method: 'PUT', body: profile });
+  return profile;
+}
+
+function nearestStopTo(lat, lon) {
+  return stops.map((s) => ({ s, d: haversineM(lat, lon, s.lat, s.lon) })).sort((a, b) => a.d - b.d)[0].s;
+}
+
+/** What onboarding.js gets: the page's helpers, and the live profile. */
+const onboardingCtx = {
+  el,
+  api,
+  stopSelect,
+  toast,
+  nearestStop: nearestStopTo,
+  save: saveNow,
+  get profile() {
+    return profile;
+  },
+  onImport: (r) => {
+    term = r.term;
+  },
+  onChange: () => {
+    renderHome();
+    renderPreview();
+  },
+};
+
 /* ---------- widget preview ---------- */
 
 const MOON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
@@ -139,6 +172,7 @@ function classPlan(a) {
     el('div', { class: 'where', textContent: `${a.dest.label} · starts ${clock(a.timing.classAt)}` }),
     el('div', { class: `big${late ? ' late' : ''}`, textContent: head }),
     el('div', { class: `catch${late ? ' late' : ''}`, textContent: catchLine }),
+    l.note ? el('div', { class: 'crowd-note', textContent: l.note }) : null,
     l.estimated ? el('div', { class: 'note', textContent: 'Estimated from the usual gap between buses. Live times show nearer the time.' }) : null,
     goNow ? el('div', { class: 'go-now', textContent: goNow }) : null,
     el('div', { class: 'note', textContent: a.detail }),
@@ -285,6 +319,8 @@ function renderHome() {
   $('#home-2').replaceWith(Object.assign(stopSelect(now[1], pick(1), { blank: 'Second stop (optional)' }), { id: 'home-2' }));
   $('#gap').value = profile.gapHours;
   $('#home-walk').value = profile.homeWalkMin ?? 5;
+  $('#pace').value = profile.walkPace ?? 'normal';
+  $('#full-bus').checked = profile.fullBusMargin !== false;
   $('#day-start').value = hhmm(profile.dayStartMin ?? 360);
   $('#day-end').value = hhmm(profile.dayEndMin ?? 1080);
 }
@@ -482,6 +518,15 @@ $('#gap').addEventListener('change', (e) => {
   }
 });
 
+$('#pace').addEventListener('change', (e) => {
+  profile.walkPace = e.target.value;
+  save();
+});
+$('#full-bus').addEventListener('change', (e) => {
+  profile.fullBusMargin = e.target.checked;
+  save();
+});
+
 $('#home-walk').addEventListener('change', (e) => {
   const v = Number(e.target.value);
   if (Number.isInteger(v) && v >= 0 && v <= 30) {
@@ -629,10 +674,17 @@ async function start() {
   // Same link, fresh data: only useful when the semester hasn't changed.
   $('#reimport-now').hidden = !(me.reimportReason === 'legacy' && profile.share);
 
+  // First sign-in: set up before the account page appears.
+  if (me.onboarding === 'full') {
+    await runOnboarding(onboardingCtx);
+    if (profile.share) $('#share').value = profile.share;
+  }
+
   renderClasses();
   renderHome();
   renderPlaces();
   $('#app').hidden = false;
+  if (me.onboarding === 'pace') pacePrompt(onboardingCtx);
   await Promise.all([renderDevices(), renderPreview()]);
   setInterval(() => document.visibilityState === 'visible' && renderPreview(), 60_000);
 }

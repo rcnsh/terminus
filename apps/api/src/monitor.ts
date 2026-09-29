@@ -10,6 +10,7 @@
 import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
 import { calendarThrough } from './calendar.ts';
+import { pruneCrowdSeen } from './crowd.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -151,4 +152,5 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   await step('upstream', () => checkUpstream(env, nowMs));
   await step('calendar', () => checkCalendar(env, nowMs));
   if (env.DB) await step('housekeeping', () => housekeeping(env.DB!, nowMs));
+  if (env.DB) await step('crowds', () => pruneCrowdSeen(env.DB!, nowMs));
 }

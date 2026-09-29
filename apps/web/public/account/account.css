@@ -43,6 +43,7 @@ label[for="home-walk"] { margin-top: 14px; }
 /* Preview: when to set off. A class leads with it; the next bus sits below a rule. */
 .widget .catch { margin-top: 6px; font-weight: 600; color: var(--good-ink); }
 .widget .catch.late, .widget .big.late { color: var(--bad-ink); }
+.widget .crowd-note { margin-top: 6px; font-size: 0.85rem; color: var(--warn-ink); }
 .widget .go-now { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .widget .leave { margin-top: 8px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 
@@ -89,3 +90,73 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .toast.show { opacity: 1; }
+
+/* ---------- Onboarding ----------
+   Motion is short and quiet: steps slide 16px and fade, the progress bar
+   grows, choices change colour. Reduced motion gets none of it. */
+:root { --ob-ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+.onboard { max-width: 34rem; margin: 5vh auto 0; }
+.onboard.leaving { opacity: 0; transform: translateY(-6px); transition: opacity 0.24s ease-in, transform 0.24s ease-in; }
+.ob-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.ob-count { font: 600 0.75rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ob-progress { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; margin-bottom: 18px; }
+.ob-fill { height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.32s var(--ob-ease); }
+
+.ob-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px; }
+.ob-card h1 { font-size: 1.6rem; margin-bottom: 8px; outline: none; }
+.ob-sub { color: var(--muted); line-height: 1.55; margin: 0 0 8px; }
+.ob-mark { width: 44px; height: 44px; margin-bottom: 18px; }
+.ob-list { margin: 16px 0 4px; padding-left: 1.1rem; line-height: 1.8; }
+.ob-actions { display: flex; align-items: center; gap: 12px; margin-top: 24px; }
+.ob-grow { flex: 1; }
+
+.ob-in-fwd { animation: ob-in-fwd 0.26s var(--ob-ease) both; }
+.ob-in-back { animation: ob-in-back 0.26s var(--ob-ease) both; }
+.ob-out-fwd, .ob-out-back { transition: opacity 0.16s ease-in, transform 0.16s ease-in; opacity: 0; }
+.ob-out-fwd { transform: translateX(-16px); }
+.ob-out-back { transform: translateX(16px); }
+@keyframes ob-in-fwd { from { opacity: 0; transform: translateX(16px); } }
+@keyframes ob-in-back { from { opacity: 0; transform: translateX(-16px); } }
+
+/* Walking pace: three cards, one chosen. */
+.ob-paces { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0 6px; }
+.ob-pace {
+  display: grid; align-content: start; gap: 4px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+  padding: 14px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface);
+  transition: border-color 0.15s ease-out, background-color 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.ob-pace:hover { border-color: var(--accent); }
+.ob-pace.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.ob-pace:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ob-pace-eg { font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.ob-pace .hint { font-size: 0.8rem; line-height: 1.35; }
+@media (max-width: 560px) { .ob-paces { grid-template-columns: 1fr; } }
+
+.check { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.ob-check { margin-top: 16px; }
+.ob-check span { display: grid; gap: 2px; }
+
+.ob-apps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.ob-app { display: grid; align-content: start; gap: 4px; padding: 14px; border: 1px solid var(--line-strong); border-radius: 12px; color: var(--ink); text-decoration: none; transition: border-color 0.15s ease-out; }
+.ob-app:hover { border-color: var(--accent); }
+@media (max-width: 560px) { .ob-apps { grid-template-columns: 1fr; } }
+
+/* The account page arrives after setup, and the "new" card on older accounts. */
+#app:not([hidden]) { animation: ob-appear 0.3s var(--ob-ease) both; }
+@keyframes ob-appear { from { opacity: 0; transform: translateY(6px); } }
+.col-span { grid-column: 1 / -1; }
+/* Above the preview, which moves to the top on narrow screens. */
+#pace-prompt { order: -2; }
+.ob-new { position: relative; }
+.ob-new h2 { margin-bottom: 6px; }
+.ob-badge { display: inline-block; margin-bottom: 8px; padding: 3px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 600 0.72rem/1.2 var(--font); letter-spacing: 0.06em; text-transform: uppercase; }
+#pace-prompt:not([hidden]) { animation: ob-appear 0.3s var(--ob-ease) both; }
+#pace-prompt.leaving { opacity: 0; transform: translateY(-6px); transition: opacity 0.2s ease-in, transform 0.2s ease-in; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-in-fwd, .ob-in-back, #app:not([hidden]), #pace-prompt:not([hidden]) { animation: none; }
+  .ob-fill, .ob-pace, .ob-app, .onboard.leaving, #pace-prompt.leaving, .ob-out-fwd, .ob-out-back { transition: none; }
+  .ob-out-fwd, .ob-out-back { transform: none; }
+}
