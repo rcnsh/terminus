@@ -39,6 +39,8 @@ export interface Env {
   RL_PUBLIC?: RateLimit;
   /** Per-account limit on /me. */
   RL_ME?: RateLimit;
+  /** Unlocks /health?probe=1 via the x-health-token header. Unset: no probe. */
+  HEALTH_TOKEN?: string;
   /** One global ceiling on sign-in emails. */
   RL_MAIL?: RateLimit;
 }

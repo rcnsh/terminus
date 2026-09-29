@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      # Tests and typecheck, then a dry-run bundle: catches a module workerd
+      # would refuse to load, which the Node tests cannot see.
+      - run: npm run check
+      - run: npx wrangler deploy --dry-run --outdir /tmp/dist
+        working-directory: apps/api

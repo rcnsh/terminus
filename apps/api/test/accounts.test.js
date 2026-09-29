@@ -466,3 +466,20 @@ test('an unexpected error is logged and answered with a bare 500', async () => {
   assert.deepEqual(await r.json(), { error: 'internal' });
   assert.ok(errors.some((e) => e.includes('/me') && !e.includes('103.77')));
 });
+
+test('Turnstile: a site key without its secret refuses sign-in instead of skipping the check', async () => {
+  const { env, email } = setup();
+  const orig = console.error;
+  console.error = () => {};
+  const r = await call({ ...env, TURNSTILE_SITE_KEY: 'site' }, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  console.error = orig;
+  assert.equal(r.status, 400);
+  assert.equal(email.sent.length, 0);
+});
+
+test('oversized JSON bodies are refused', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const r = await call(env, '/me/profile', { method: 'PUT', cookie, body: { places: [], junk: 'x'.repeat(70_000) } });
+  assert.equal(r.status, 400);
+});

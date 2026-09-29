@@ -21,7 +21,7 @@ import {
   venueToStop,
   ImportInputError,
 } from './nusmods.ts';
-import { authConfigured, authUrl, getSession } from './auth.ts';
+import { authConfigured, getSession } from './auth.ts';
 import { fmsConfigured, getArrivals } from './fms.ts';
 import { buildAnswer, shortStop } from './format.ts';
 import {
@@ -43,6 +43,7 @@ import { CORS, clientKey, coordsFrom, json, jsonCached, numParam } from './http.
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
 import { readUpstream, runCron } from './monitor.ts';
+import { calendarThrough } from './calendar.ts';
 import { handleDownload } from './downloads.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
@@ -317,18 +318,11 @@ async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknow
   const before = await env.NUSBUS_KV.get('auth:session').catch(() => null);
   try {
     const s = await getSession(env, nowMs);
-    return {
-      ok: true,
-      url: authUrl(env),
-      cached: Boolean(before),
-      domain: s.domain,
-      userid: s.userid ? `${s.userid.slice(0, 8)}…` : null,
-      expiresIn: `${Math.round((s.expMs - nowMs) / 3600_000)}h`,
-    };
+    return { ok: true, cached: Boolean(before), domain: s.domain, expiresIn: `${Math.round((s.expMs - nowMs) / 3600_000)}h` };
   } catch (err) {
     // getSession reports the HTTP status, the envelope code, or the first 80
     // bytes of a non-JSON body, so this message is usually the whole story.
-    return { ok: false, url: authUrl(env), cached: Boolean(before), reason: (err as Error).message };
+    return { ok: false, cached: Boolean(before), reason: (err as Error).message };
   }
 }
 
@@ -369,34 +363,48 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   });
 }
 
-async function handleHealth(url: URL, env: Env, nowMs: number): Promise<Response> {
+/** The cron runs every 15 minutes; older than this and it has stopped. */
+const CRON_STALE_MS = 40 * 60_000;
+
+async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Promise<Response> {
   const idx = indexGraph(GRAPH);
   const t = sgt(nowMs);
-  return json({
-    ok: true,
-    now: new Date(nowMs).toISOString(),
-    sgt: `${String(t.hour).padStart(2, '0')}:${String(t.minutes % 60).padStart(2, '0')} day${t.day}`,
-    graph: {
-      generated: GRAPH.generated,
-      source: (GRAPH as unknown as { source?: string }).source ?? 'unknown',
-      stops: GRAPH.stops.length,
-      services: [...idx.routes.keys()],
+  const u = await readUpstream(env);
+  const cronStale = u ? nowMs - u.checkedAt > CRON_STALE_MS : null;
+  const through = calendarThrough();
+  const daysLeft = Math.floor((Date.parse(`${through}T00:00:00Z`) - nowMs) / 86_400_000);
+  // Unhealthy means something an operator must act on. No record yet (a
+  // fresh deploy before the first cron run) is not that.
+  const ok = u?.up !== false && cronStale !== true && daysLeft > 0;
+  // The probe spends an upstream call, so only the operator gets it.
+  const probe = url.searchParams.get('probe') === '1' && env.HEALTH_TOKEN && req.headers.get('x-health-token') === env.HEALTH_TOKEN;
+  return json(
+    {
+      ok,
+      now: new Date(nowMs).toISOString(),
+      sgt: `${String(t.hour).padStart(2, '0')}:${String(t.minutes % 60).padStart(2, '0')} day${t.day}`,
+      graph: {
+        generated: GRAPH.generated,
+        source: (GRAPH as unknown as { source?: string }).source ?? 'unknown',
+        stops: GRAPH.stops.length,
+        services: [...idx.routes.keys()],
+      },
+      calendar: { through, daysLeft },
+      // Presence only. Never the values.
+      config: {
+        auth: authConfigured(env),
+        proxy: fmsConfigured(env),
+        analytics: analyticsEnabled(env),
+        accounts: accountsConfigured(env),
+        email: Boolean(env.EMAIL && env.EMAIL_FROM),
+        alerts: Boolean(env.EMAIL && env.EMAIL_FROM && env.ALERT_EMAIL),
+      },
+      // From the cron probe: whether the NUS feed answered, and since when.
+      upstream: u ? { up: u.up, since: new Date(u.since).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale } : null,
+      auth: probe ? await probeAuth(env, nowMs) : undefined,
     },
-    // Presence only. Never the values.
-    config: {
-      auth: authConfigured(env),
-      proxy: fmsConfigured(env),
-      analytics: analyticsEnabled(env),
-      accounts: accountsConfigured(env),
-      email: Boolean(env.EMAIL && env.EMAIL_FROM),
-    },
-    // From the cron probe: whether the NUS feed answered, and since when.
-    upstream: await readUpstream(env).then(
-      (u) => (u ? { up: u.up, since: new Date(u.since).toISOString(), checkedAt: new Date(u.checkedAt).toISOString() } : null),
-    ),
-    // Opt-in: this one costs an upstream round trip on a cold token.
-    auth: url.searchParams.get('probe') === '1' ? await probeAuth(env, nowMs) : undefined,
-  });
+    ok ? 200 : 503,
+  );
 }
 
 const PRIMARY_HOST = 'terminus.rcn.sh';
@@ -438,15 +446,15 @@ export default {
     try {
       const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
       if (me) return me;
-      const dl = await handleDownload(url.pathname, env);
-      if (dl) return dl;
-
-      // Public answer routes: a per-IP ceiling. The per-stop cache already
-      // protects NUS; this protects the Worker from being a free proxy.
-      if (env.RL_PUBLIC && ['/next', '/trip', '/arrivals', '/import'].includes(url.pathname)) {
+      // Public routes: a per-IP ceiling. The per-stop cache already protects
+      // NUS; this protects the Worker from being a free proxy, and D1/R2 from
+      // being a free bill.
+      if (env.RL_PUBLIC && (['/next', '/trip', '/arrivals', '/import', '/health'].includes(url.pathname) || url.pathname.startsWith('/download/'))) {
         const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
         if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
       }
+      const dl = await handleDownload(url.pathname, env);
+      if (dl) return dl;
 
       switch (url.pathname) {
         case '/docs':
@@ -463,7 +471,7 @@ export default {
         case '/trip':
           return await handleTrip(url, env, ctx, nowMs);
         case '/health':
-          return await handleHealth(url, env, nowMs);
+          return await handleHealth(req, url, env, nowMs);
         case '/campus':
           return handleCampus();
         case '/arrivals':

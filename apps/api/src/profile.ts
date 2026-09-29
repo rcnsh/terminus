@@ -173,7 +173,7 @@ function parseWeeks(v: unknown): LessonWeeks | undefined | false {
     out.weekInterval = v.weekInterval;
   }
   if (v.weeks !== undefined) {
-    if (!Array.isArray(v.weeks) || !v.weeks.every((w) => isInt(w, 1, 30))) return false;
+    if (!Array.isArray(v.weeks) || v.weeks.length > 30 || !v.weeks.every((w) => isInt(w, 1, 30))) return false;
     out.weeks = v.weeks as number[];
   }
   return out;

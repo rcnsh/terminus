@@ -1,3 +1,4 @@
+import { TTL } from './config.ts';
 /** Response helpers and query parsing shared by every route. */
 
 export const CORS = {
@@ -58,3 +59,14 @@ export function clientKey(req: Request): string {
   const groups = ip.split('::')[0].split(':');
   return `${groups.slice(0, 4).join(':')}::/64`;
 }
+
+/** fetch with a timeout whose error says what timed out. */
+export async function timedFetch(what: string, url: string, init: RequestInit, ms = TTL.upstreamTimeoutMs): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
+  } catch (err) {
+    if ((err as Error)?.name === 'TimeoutError') throw new Error(`${what} timeout after ${ms}ms`);
+    throw err;
+  }
+}
+

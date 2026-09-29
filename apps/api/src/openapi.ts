@@ -326,7 +326,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Service'],
           summary: 'Health',
           description:
-            'Returns stop graph details and which settings are configured (whether each is set, never its value). With `probe=1` it also checks that the upstream auth token works.',
+            'Returns stop graph details and which settings are configured (whether each is set, never its value). With `probe=1` and the operator token in the `x-health-token` header it also checks that the upstream auth token works. Answers 503 when the NUS feed is confirmed down, the monitor has stopped running, or the calendar data has run out.',
           operationId: 'getHealth',
           parameters: [
             {

@@ -53,10 +53,15 @@ const page = (title: string, inner: string) => `<!doctype html>
 <style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px}.box img{width:44px;height:44px;margin-bottom:20px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}</style>
 </head><body><main class="wrap"><div class="card box"><img src="/assets/mark.svg" alt="">${inner}</div></main></body></html>`;
 
+/** A whole profile is a few KB; nothing legitimate comes close to this. */
+const MAX_BODY_BYTES = 64 * 1024;
+
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   if (!(req.headers.get('content-type') ?? '').includes('application/json')) return null;
   try {
-    const body = await req.json();
+    const text = await req.text();
+    if (text.length > MAX_BODY_BYTES) return null;
+    const body = JSON.parse(text);
     return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
   } catch {
     return null;
@@ -118,6 +123,11 @@ export async function handleMe(
   if (!db) return json({ error: 'accounts are not configured' }, 503);
 
   /* ---------- sign-in ---------- */
+
+  // Pages and lookups that cost a D1 read but need no session.
+  if ((path === '/auth/verify' || path === '/auth/config') && env.RL_PUBLIC) {
+    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429);
+  }
 
   if (path === '/auth/config' && req.method === 'GET') {
     // What the sign-in form needs to render. Public by design.
@@ -193,7 +203,11 @@ export async function handleMe(
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
   }
 
-  if (!session) return json({ error: 'sign in first' }, 401);
+  if (!session) {
+    // Each bad token costs a D1 read, so guessing is capped per address.
+    if (await limited(env, req, 'badtoken')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    return json({ error: 'sign in first' }, 401);
+  }
 
   // Per account: generous for a widget, an app and a browser tab together.
   if (env.RL_ME) {
