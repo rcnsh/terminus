@@ -1,0 +1,55 @@
+{
+ "_help": "Hand-maintained. Named places that are not buildings, with every stop that serves them; positions from OpenStreetMap, stops confirmed by a student who uses them. scripts/walk_routes.py routes the walks into data/landmarks.json.",
+ "landmarks": {
+  "THE-DECK": {
+   "name": "The Deck",
+   "kind": "Food court",
+   "at": [
+    1.294671,
+    103.772492
+   ],
+   "stops": [
+    "AS5",
+    "NUSS-OPP"
+   ],
+   "aliases": [
+    "deck",
+    "the deck",
+    "fass canteen"
+   ]
+  },
+  "TECHNO-EDGE": {
+   "name": "Techno Edge",
+   "kind": "Food court",
+   "at": [
+    1.297955,
+    103.77153
+   ],
+   "stops": [
+    "IT",
+    "CLB"
+   ],
+   "aliases": [
+    "techno edge",
+    "techno",
+    "te"
+   ]
+  },
+  "FRONTIER-FOOD": {
+   "name": "Frontier",
+   "kind": "Food court",
+   "at": [
+    1.29639,
+    103.780367
+   ],
+   "stops": [
+    "S17",
+    "LT27"
+   ],
+   "aliases": [
+    "frontier",
+    "science canteen"
+   ]
+  }
+ }
+}

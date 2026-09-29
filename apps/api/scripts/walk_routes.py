@@ -4,12 +4,22 @@ Walking distances along real paths, for data/walks.json and data/venues.json.
 
     python3 scripts/walk_routes.py            # uses cached downloads in dev/
     python3 scripts/walk_routes.py --fetch    # downloads them again
+    python3 scripts/walk_routes.py --check    # writes nothing; fails if data/ is stale
+
+Run it after stops.json changes (a stop added or renamed): walks, rooms,
+landmarks and residences all refer to stop codes.
 
 Sources, fetched once and cached in the gitignored dev/ folder:
   - OpenStreetMap footpaths and roads around Kent Ridge, from the Overpass API.
     Map data (c) OpenStreetMap contributors, ODbL. Only derived distances are
     committed.
   - NUSMods' room map with coordinates (venues.json in their open-source repo).
+  - OpenStreetMap outlines of the residences listed in data/src/residences.json.
+
+Hand-maintained inputs, never written by this script (data/src/):
+  - venues-base.json: which stop each building maps to (uNivUS's table, plus
+    buildings added over time). Edit this, not data/venues.json.
+  - landmarks.json, residences.json: food courts and halls, as named by students.
 
 Writes:
   - data/walks.json: routed metres between every pair of stops, and per stop
@@ -18,6 +28,7 @@ Writes:
     stop, with the routed walk from each.
   - data/rooms.json: NUSMods' rooms with their names, stop and routed walk,
     for the destination search.
+  - data/residences.json: each residence's outline and the stops that serve it.
   - data/venues.json: each building's walk to its stop, routed. The stop a
     building maps to is kept as it was (saved timetables point at it); only
     buildings new to the file get the stop nearest by path.
@@ -48,33 +59,13 @@ NUSMODS = "https://raw.githubusercontent.com/nusmodifications/nusmods/master/web
 # Places people name that are not buildings or rooms, with every stop that
 # serves them (the router takes whichever is quicker). Positions from
 # OpenStreetMap; stops confirmed by a student who uses them.
-LANDMARKS = {
-    "THE-DECK": {"name": "The Deck", "kind": "Food court", "at": (1.294671, 103.772492), "stops": ["AS5", "NUSS-OPP"], "aliases": ["deck", "the deck", "fass canteen"]},
-    "TECHNO-EDGE": {"name": "Techno Edge", "kind": "Food court", "at": (1.297955, 103.771530), "stops": ["IT", "CLB"], "aliases": ["techno edge", "techno", "te"]},
-    # Midway between Phase 1 and Phase 2.
-    "FRONTIER-FOOD": {"name": "Frontier", "kind": "Food court", "at": (1.296390, 103.780367), "stops": ["S17", "LT27"], "aliases": ["frontier", "science canteen"]},
-}
+# Hand-maintained lists live in data/src, apart from what this script writes.
+LANDMARKS = {k: {**v, "at": tuple(v["at"])} for k, v in json.loads((ROOT / "data/src/landmarks.json").read_text())["landmarks"].items()}
 
 # On-campus residences, as OpenStreetMap outlines (way ids), grouped the way
 # students name them. Used to tell that someone is already home; the stops
 # that serve each are worked out by path distance below.
-RESIDENCES = {
-    "PGP": {"name": "Prince George's Park (PGP)", "ways": [92357575, 1166266719, 1166266720, 1168471662, 1168471663, 1168471664, 1168471665, 1166306157]},
-    "KEVII": {"name": "King Edward VII Hall", "ways": [92357569]},
-    "KRH": {"name": "Kent Ridge Hall", "ways": [142088679]},
-    "SHEARES": {"name": "Sheares Hall", "ways": [142088680]},
-    "TEMASEK": {"name": "Temasek Hall", "ways": [858570009]},
-    "EUSOFF": {"name": "Eusoff Hall", "ways": [858570008]},
-    "RAFFLES-HALL": {"name": "Raffles Hall", "ways": [742827984]},
-    "RVRC": {"name": "Ridge View Residential College", "ways": [140088746, 427077072]},
-    "VALOUR": {"name": "Valour House", "ways": [1213637682]},
-    "KENT-VALE": {"name": "Kent Vale", "ways": [713272230]},
-    "TEMBUSU": {"name": "Tembusu College", "ways": [174768749]},
-    "CAPT": {"name": "College of Alice & Peter Tan", "ways": [750774836, 124543527]},
-    "RC4": {"name": "Residential College 4", "ways": [750774837]},
-    "ACACIA": {"name": "Acacia College", "ways": [750774835]},
-    "UTR": {"name": "UTown Residence", "ways": [750775690]},
-}
+RESIDENCES = json.loads((ROOT / "data/src/residences.json").read_text())["residences"]
 RES_FILE = CACHE / "osm-residences.json"
 
 WALKABLE = "footway|path|pedestrian|steps|corridor|living_street|residential|service|unclassified|tertiary|secondary|primary|cycleway|track|crossing"
@@ -86,6 +77,22 @@ SNAP_MAX_M = 120
 # footpaths often stop short of the road or the door: with a single nearest
 # node, a stop 76 m from the library routed as 294 m.
 ENTRY_M = 40
+
+
+CHECK = "--check" in sys.argv
+_differs = []
+
+
+def emit(name, text):
+    """Write a data file, or with --check, only compare it (ignoring the date)."""
+    path = ROOT / "data" / name
+    if not CHECK:
+        path.write_text(text)
+        return
+    strip = lambda t: "\n".join(l for l in t.replace('","', '",\n"').splitlines() if '"generated"' not in l)
+    old = path.read_text() if path.exists() else ""
+    if strip(json.dumps(json.loads(old), sort_keys=True, indent=0)) != strip(json.dumps(json.loads(text), sort_keys=True, indent=0)):
+        _differs.append(name)
 
 
 def haversine(a, b):
@@ -115,6 +122,8 @@ out body;
 """
     OSM_FILE.write_bytes(fetch(OVERPASS, urllib.parse.urlencode({"data": query}).encode()))
     ROOMS_FILE.write_bytes(fetch(NUSMODS))
+    ids = ",".join(str(w) for r in RESIDENCES.values() for w in r["ways"])
+    RES_FILE.write_bytes(fetch(OVERPASS, urllib.parse.urlencode({"data": f"[out:json][timeout:60];way(id:{ids});out geom;"}).encode()))
     print(f"downloaded {OSM_FILE.stat().st_size // 1024} KB of paths, {ROOMS_FILE.stat().st_size // 1024} KB of rooms")
 
 
@@ -193,12 +202,14 @@ def buildings(rooms):
 
 
 def main():
-    if "--fetch" in sys.argv or not OSM_FILE.exists() or not ROOMS_FILE.exists():
+    if "--fetch" in sys.argv or not OSM_FILE.exists() or not ROOMS_FILE.exists() or not RES_FILE.exists():
         download()
     osm = json.loads(OSM_FILE.read_text())
     rooms = json.loads(ROOMS_FILE.read_text())
     stops = json.loads((ROOT / "data/stops.json").read_text())["stops"]
-    venues_doc = json.loads((ROOT / "data/venues.json").read_text())
+    # The building -> stop table is an input of its own (data/src), so a run
+    # never reads back what an earlier run wrote.
+    venues_doc = json.loads((ROOT / "data/src/venues-base.json").read_text())
     venues = venues_doc["venues"]
 
     nodes, adj = build_graph(osm)
@@ -282,7 +293,7 @@ def main():
     clamp = lambda r: round(min(2.0, max(1.0, r)), 3)
     detour = {code: clamp(statistics.median(ratios[code]) if len(ratios.get(code, [])) >= 3 else overall) for code in stop_pt}
 
-    (ROOT / "data/walks.json").write_text(json.dumps({
+    emit("walks.json", json.dumps({
         "generated": date.today().isoformat(),
         "source": "OpenStreetMap footpaths (Map data (c) OpenStreetMap contributors, ODbL) via Overpass; scripts/walk_routes.py",
         "detour": detour,
@@ -313,7 +324,7 @@ def main():
             m = venues[b]["m"]
         name = " ".join(str(info.get("roomName") or "").split())
         named[room] = {"name": name if name and name.upper() != room.upper() else "", "stop": stop, "m": round(m)}
-    (ROOT / "data/rooms.json").write_text(json.dumps({
+    emit("rooms.json", json.dumps({
         "generated": date.today().isoformat(),
         "source": "NUSMods room map (names, positions); stops as for imports; walks routed on OpenStreetMap paths",
         "rooms": dict(sorted(named.items())),
@@ -327,7 +338,7 @@ def main():
             m = routed(stop, lm["at"])
             walks[stop] = round(m if m is not None else haversine(lm["at"], stop_pt[stop]))
         marks[code] = {"name": lm["name"], "kind": lm["kind"], "aliases": lm["aliases"], "stops": walks}
-    (ROOT / "data/landmarks.json").write_text(json.dumps({
+    emit("landmarks.json", json.dumps({
         "generated": date.today().isoformat(),
         "source": "positions from OpenStreetMap (ODbL); walks routed on its paths; scripts/walk_routes.py",
         "landmarks": marks,
@@ -351,7 +362,7 @@ def main():
             serving = {c: round(m) for m, c in walks if m <= best + 150}
             serving = dict(list(serving.items())[:2])
             res[code] = {"name": r["name"], "stops": serving, "areas": areas}
-        (ROOT / "data/residences.json").write_text(json.dumps({
+        emit("residences.json", json.dumps({
             "generated": date.today().isoformat(),
             "source": "outlines from OpenStreetMap (ODbL); serving stops by path distance; scripts/walk_routes.py",
             "residences": res,
@@ -362,8 +373,13 @@ def main():
     venues_doc["generated"] = date.today().isoformat()
     venues_doc["source"] = "uNivUS building->stop assignments; walks routed on OpenStreetMap paths (scripts/walk_routes.py); new buildings from the NUSMods room map"
     # One line, as the file has always been: it is data, not something to read.
-    (ROOT / "data/venues.json").write_text(json.dumps(venues_doc, separators=(",", ":"), ensure_ascii=False))
+    emit("venues.json", json.dumps(venues_doc, separators=(",", ":"), ensure_ascii=False))
     print(f"{len(pairs)} stop pairs, {updated} buildings re-routed, {added} added, median detour {overall:.2f}")
+    if CHECK:
+        if _differs:
+            print("out of date:", ", ".join(_differs))
+            sys.exit(1)
+        print("data files match a fresh build")
 
 
 if __name__ == "__main__":
