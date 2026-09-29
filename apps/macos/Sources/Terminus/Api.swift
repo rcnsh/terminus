@@ -168,7 +168,10 @@ struct Api {
 
     private func coords(_ lat: Double?, _ lon: Double?) -> [URLQueryItem] {
         guard let lat, let lon else { return [] }
-        return [URLQueryItem(name: "lat", value: String(lat)), URLQueryItem(name: "lon", value: String(lon))]
+        // Four decimals is about 11 m: enough to tell PGP from PGP Foyer, and
+        // no more precise than that in URLs that pass through logs.
+        let f = { (v: Double) in String(format: "%.4f", locale: Locale(identifier: "en_US_POSIX"), v) }
+        return [URLQueryItem(name: "lat", value: f(lat)), URLQueryItem(name: "lon", value: f(lon))]
     }
 
     private func request<T: Decodable>(

@@ -573,3 +573,14 @@ test('the entry module exports no plain values (workerd rejects the module, and 
     assert.ok(typeof value === 'function' || (typeof value === 'object' && value !== null), `export ${name} is a ${typeof value}`);
   }
 });
+
+test('every response carries nosniff and HSTS; HTML gets a CSP, /docs one that allows unpkg', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
+  const api = (await call('/next?to=UTOWN&from=PGP', { fetchImpl })).res;
+  assert.equal(api.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(api.headers.get('strict-transport-security'), /max-age=/);
+  assert.equal(api.headers.get('content-security-policy'), null, 'JSON needs no CSP');
+  const docs = (await call('/docs', { fetchImpl })).res;
+  assert.match(docs.headers.get('content-security-policy'), /script-src[^;]*unpkg\.com/);
+  assert.match(await docs.text(), /integrity="sha384-/);
+});

@@ -19,7 +19,13 @@ export const ACCOUNT_TTL = {
   touchMs: 3_600_000,
 } as const;
 
-export const SESSION_COOKIE = 'nb_s';
+/**
+ * `__Host-` pins the cookie to this exact host over HTTPS: a sibling
+ * *.rcn.sh site cannot set or shadow it. The old name is still read, so
+ * sessions from before the rename keep working until they expire.
+ */
+export const SESSION_COOKIE = '__Host-nb_s';
+const OLD_SESSION_COOKIE = 'nb_s';
 
 // No 0/O, 1/I/L, U: a code read off a screen and typed on a phone.
 const PAIR_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -155,6 +161,16 @@ async function sendLink(env: Env, email: string, link: string): Promise<void> {
   });
 }
 
+/** The address a live link signs in, without spending it: shown on the
+ *  confirm page so nobody is signed in to someone else's account unawares. */
+export async function linkEmail(db: D1Database, token: string, nowMs: number): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT email FROM magic_links WHERE token_hash = ? AND expires >= ?')
+    .bind(await hashToken(token), nowMs)
+    .first<{ email: string }>();
+  return row?.email ?? null;
+}
+
 /**
  * Spends a sign-in link and opens a web session. Returns the raw session
  * token for the cookie, or null when the link is unknown, used or expired.
@@ -208,6 +224,10 @@ export function tokenFrom(req: Request): string | null {
   for (const part of cookie.split(';')) {
     const [k, ...v] = part.trim().split('=');
     if (k === SESSION_COOKIE) return v.join('=') || null;
+  }
+  for (const part of cookie.split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === OLD_SESSION_COOKIE) return v.join('=') || null;
   }
   return null;
 }

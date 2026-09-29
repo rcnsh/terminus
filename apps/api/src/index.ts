@@ -39,7 +39,7 @@ import {
 import { buildCampusMap, buildDestinations } from './campus.ts';
 import { analyticsEnabled, logAnswer } from './analytics.ts';
 import { DOCS_PAGE, openApiSpec } from './openapi.ts';
-import { CORS, clientKey, coordsFrom, json, jsonCached, numParam } from './http.ts';
+import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
 import { readUpstream, runCron } from './monitor.ts';
@@ -435,6 +435,13 @@ export default {
   },
 
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const res = await route(req, env, ctx);
+    // A redirect or a download body passes through untouched apart from headers.
+    return withSecurityHeaders(res, new URL(req.url).pathname);
+  },
+};
+
+async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     const nowMs = Date.now();
 
@@ -489,5 +496,4 @@ export default {
       console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
       return json({ error: 'internal' }, 500);
     }
-  },
-};
+}

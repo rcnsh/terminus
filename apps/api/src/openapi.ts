@@ -766,8 +766,8 @@ export const DOCS_PAGE = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>API · terminus</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <script src="${ELEMENTS}/web-components.min.js"></script>
-  <link rel="stylesheet" href="${ELEMENTS}/styles.min.css">
+  <script src="${ELEMENTS}/web-components.min.js" integrity="sha384-X5kH2B8aH81JEl8IfSBwwnr8FYcCqMzdxpqjmmlRbhIl7SsQ9Zn0xk+csQmU37zN" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="${ELEMENTS}/styles.min.css" integrity="sha384-NzdOiocfnINlXfuCXi4OpL/xvdbgLiKaLHQ07Z+IwhVaxHqLShn5rVD5OHt/LYgz" crossorigin="anonymous">
   <style>html, body { margin: 0; height: 100%; } elements-api { display: block; height: 100vh; }</style>
 </head>
 <body>
