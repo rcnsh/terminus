@@ -23,6 +23,7 @@ import {
   linkEmail,
   pairCodeOwner,
   maskEmail,
+  redeemCode,
   redeemLink,
   redeemPairCode,
   requestLink,
@@ -390,7 +391,19 @@ export async function handleMe(
       return json({ error: 'could not send the email, try again later' }, 502);
     }
     // Same answer whether or not the address is blocked or already has an account.
-    return json({ ok: true, message: 'Check your email for a sign-in link.' });
+    return json({ ok: true, message: 'Check your email for a sign-in code.' });
+  }
+
+  if (path === '/auth/code' && req.method === 'POST') {
+    // The emailed code, typed on the page that asked for it.
+    if (await limited(env, req, 'code')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    const body = await readJson(req);
+    const email = normalizeEmail(body?.email);
+    const code = normalizePairCode(body?.code);
+    if (!email || !code) return json({ error: 'enter the 6-character code from the email' }, 400);
+    const token = await redeemCode(env, db, email, code, nowMs);
+    if (!token) return json({ error: 'that code is wrong or has expired' }, 400);
+    return json({ ok: true }, 200, { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
   }
 
   if (path === '/auth/verify') {
