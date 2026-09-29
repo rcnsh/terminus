@@ -67,5 +67,10 @@ export function makeEmail() {
       const m = /\/auth\/verify\?t=([A-Za-z0-9_-]+)/.exec(sent.at(-1)?.text ?? '');
       return m ? m[1] : null;
     },
+    /** The code from the most recent sign-in email. */
+    lastCode() {
+      const m = /sign-in code is ([A-Z0-9]{6})/.exec(sent.at(-1)?.text ?? '');
+      return m ? m[1] : null;
+    },
   };
 }
