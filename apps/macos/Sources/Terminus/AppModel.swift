@@ -36,7 +36,10 @@ final class AppModel {
     var error: String?
     var updated: Date?
     var popoverOpen = false { didSet { if popoverOpen { refreshLoginItem(); kick() } } }
-    var needsLocation: Bool { locator.undecided }
+    var needsLocation: Bool { !isSnapshot && locator.undecided }
+    /// A render for screenshots: native controls (text fields, menus), which
+    /// ImageRenderer can't draw, are swapped for look-alikes.
+    let isSnapshot: Bool
     var locationDenied: Bool { locator.denied }
     /// A newer released version, when there is one.
     var update: String?
@@ -84,6 +87,7 @@ final class AppModel {
     /// `snapshot` builds an inert model for rendering previews: no refresh
     /// loop, no sleep observers.
     init(snapshot: Bool = false) {
+        isSnapshot = snapshot
         if snapshot { return }
         log.notice("start: paired=\(self.paired) base=\(Api.base, privacy: .public)")
         observeSleep()

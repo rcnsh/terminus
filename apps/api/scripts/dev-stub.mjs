@@ -7,11 +7,14 @@
  *   - a stubbed NUS feed: every service arrives every 12 minutes, offset per
  *     service, moving with the real clock (so countdowns and dimming behave)
  *   - every service treated as running at any hour
- *   - an in-memory database with a test account (tester@example.test),
+ *   - an in-memory database with a test account (you@u.nus.edu),
  *     three saved places, a class later today, and pairing codes TEST67, TEST78, TEST89
  *   - crowd history saying every bus at PGP is usually packed (the full-bus warning)
  *   - a fake NUSMods (every module has a lab, an online tutorial and an
  *     off-campus lecture; XX9999 is not offered; DOWN1000 fails)
+ *
+ * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
+ * light and dark screenshots of the same moment.
  *
  * Point a debug Android build at it:
  *   ./gradlew installDebug -PapiBase=http://localhost:8787
@@ -27,6 +30,10 @@ import { makeD1, makeEmail } from '../test/_d1.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const realNow = Date.now.bind(Date);
+// POST /__stub/freeze holds the clock (and so every bus time) still, for
+// screenshots that must match in light and dark; /__stub/thaw lets it run.
+let frozenAt = null;
+const stubNow = () => frozenAt ?? realNow();
 
 const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
 const servingStop = new Map();
@@ -42,7 +49,7 @@ async function feed(input, init = {}) {
   }
   if (url.includes('bus-proxy')) {
     const stop = JSON.parse(init.body ?? '{}').busstopname;
-    const nowMin = realNow() / 60_000;
+    const nowMin = stubNow() / 60_000;
     const shuttles = (servingStop.get(stop) ?? []).map((svc, i) => {
       const offset = (svc.charCodeAt(0) * 7 + i * 5) % 12;
       const eta = Math.max(1, Math.round(((offset - nowMin) % 12 + 12) % 12) + 1);
@@ -64,7 +71,7 @@ async function feed(input, init = {}) {
 }
 
 installGlobals(feed);
-Date.now = realNow; // installGlobals freezes the clock for tests; the dev server wants real time.
+Date.now = stubNow; // installGlobals freezes the clock for tests; the dev server wants real time.
 
 const { default: worker, GRAPH } = await import('../src/index.ts');
 GRAPH.serviceHours = {}; // every service "running", whatever the hour
@@ -88,7 +95,7 @@ const profile = {
   share: null,
   term: null,
 };
-db.exec(`INSERT INTO users VALUES ('test-user', 'tester@example.test', 0)`);
+db.exec(`INSERT INTO users VALUES ('test-user', 'you@u.nus.edu', 0)`);
 db._db.prepare('INSERT INTO profiles VALUES (?, ?, 0)').run('test-user', JSON.stringify(profile));
 for (const code of ['TEST67', 'TEST78', 'TEST89']) db.exec(`INSERT INTO pair_codes VALUES ('${code}', 'test-user', 9999999999999)`);
 // Crowd history, so the full-bus warning shows: every bus at PGP is usually packed.
@@ -128,6 +135,11 @@ http
       req.on('data', (c) => chunks.push(c));
       req.on('end', () => r(Buffer.concat(chunks)));
     });
+    if (req.method === 'POST' && (req.url === '/__stub/freeze' || req.url === '/__stub/thaw')) {
+      frozenAt = req.url.endsWith('freeze') ? realNow() : null;
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      return res.end(frozenAt ? `frozen at ${new Date(frozenAt).toISOString()}\n` : 'running\n');
+    }
     const request = new Request(`http://localhost:${PORT}${req.url}`, { method: req.method, headers: req.headers, body });
     const ctx = makeCtx();
     const out = await worker.fetch(request, env, ctx);
