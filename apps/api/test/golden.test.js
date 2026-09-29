@@ -3,7 +3,7 @@
  * fixed situations, on the frozen test clock and a fake feed. Refactors must
  * reproduce them byte for byte; a deliberate change is re-recorded with
  *
- *   UPDATE_GOLDEN=1 npm test
+ *   UPDATE_GOLDEN=1 pnpm test
  *
  * and shows up as a diff in test/fixtures/answers/. The Android and Mac unit
  * tests parse these same files, so a change in shape fails there too.
@@ -80,6 +80,6 @@ for (const [name, [profile, path]] of Object.entries(CASES)) {
       fs.writeFileSync(file, text);
       return;
     }
-    assert.equal(text, fs.readFileSync(file, 'utf8'), `${name} changed; if on purpose, UPDATE_GOLDEN=1 npm test`);
+    assert.equal(text, fs.readFileSync(file, 'utf8'), `${name} changed; if on purpose, UPDATE_GOLDEN=1 pnpm test`);
   });
 }

@@ -27,9 +27,9 @@ fi
 mkdir -p build
 echo "== terminus $VERSION"
 echo "== tests"
-# Not `npm test && echo`: under set -e a failure on the left of && does not
+# Not `pnpm test && echo`: under set -e a failure on the left of && does not
 # stop the script, so a failing suite would still build, upload and tag.
-if ! npm run check --silent >"$ROOT/build/test.log" 2>&1; then
+if ! pnpm --silent check >"$ROOT/build/test.log" 2>&1; then
   tail -40 "$ROOT/build/test.log"; echo "== tests or typecheck FAILED; nothing released"; exit 1
 fi
 echo "api tests and typecheck pass"
@@ -67,13 +67,15 @@ fi
 
 echo "== upload"
 cd apps/api
-npx wrangler r2 object put "terminus-downloads/releases/$VERSION/terminus-$VERSION.apk" --file "$APK" --content-type application/vnd.android.package-archive --remote
-npx wrangler r2 object put "terminus-downloads/releases/$VERSION/terminus-$VERSION-mac.zip" --file "$ZIP" --content-type application/zip --remote
+# Wrangler, not `cf r2 objects put`: cf 1.0.0-beta.5 percent-encodes the
+# slashes in the key, which R2 needs literal.
+pnpm exec wrangler r2 object put "terminus-downloads/releases/$VERSION/terminus-$VERSION.apk" --file "$APK" --content-type application/vnd.android.package-archive --remote
+pnpm exec wrangler r2 object put "terminus-downloads/releases/$VERSION/terminus-$VERSION-mac.zip" --file "$ZIP" --content-type application/zip --remote
 # latest.json last, so /download/* never points at a file that isn't there yet.
-npx wrangler r2 object put "terminus-downloads/latest.json" --file "$OUT/latest.json" --content-type application/json --remote
+pnpm exec wrangler r2 object put "terminus-downloads/latest.json" --file "$OUT/latest.json" --content-type application/json --remote
 cd "$ROOT"
 
 git tag -a "v$VERSION" -m "terminus $VERSION"
 echo "== released $VERSION"
 echo "   next: git push origin main v$VERSION"
-echo "   and deploy the Worker if the API changed since the last deploy: npm run deploy"
+echo "   and deploy the Worker if the API changed since the last deploy: pnpm run deploy"

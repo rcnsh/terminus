@@ -1,17 +1,10 @@
 {
   "name": "terminus",
   "private": true,
-  "workspaces": [
-    "apps/api"
-  ],
+  "packageManager": "pnpm@12.4.2",
   "scripts": {
-    "test": "npm test -w @terminus/api",
-    "check": "npm run check -w @terminus/api",
-    "deploy": "npm run deploy -w @terminus/api"
-  },
-  "allowScripts": {
-    "esbuild@0.28.1": true,
-    "workerd@1.20260926.1": true,
-    "fsevents": false
+    "test": "pnpm --filter @terminus/api test",
+    "check": "pnpm --filter @terminus/api check",
+    "deploy": "pnpm --filter @terminus/api run deploy"
   }
 }

@@ -1,6 +1,6 @@
 {
   "_help": [
-    "HAND-MAINTAINED. 'npm run scrape' never writes this file.",
+    "HAND-MAINTAINED. 'pnpm scrape' never writes this file.",
     "",
     "The FMS does not publish operating hours, so guessing them into the",
     "scraped graph would be fabricating facts. Fill them in here instead.",

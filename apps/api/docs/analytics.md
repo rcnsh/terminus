@@ -1,6 +1,6 @@
 # Reading the analytics
 
-`npx wrangler analytics-engine sql --query "..."`, or the GraphQL API.
+`pnpm exec cf analytics_engine sql query --file query.sql`, or the GraphQL API.
 
 Dataset: `terminus`. Positional schema lives in `src/analytics.ts` — it is
 the query contract, so it is append-only.

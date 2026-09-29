@@ -36,10 +36,10 @@ reports live auth state from wherever the Worker is running.
 ## Quick start
 
 ```bash
-npm install
-npm test          # zero credentials, zero network
-npm run typecheck
-npm run dev       # wrangler dev, needs .dev.vars for live data
+pnpm install
+pnpm test         # zero credentials, zero network
+pnpm typecheck
+pnpm dev          # cf dev, needs .dev.vars for live data
 ```
 
 ## Configuration
@@ -64,12 +64,16 @@ student's credentials.
 
 Names match `hewliyang/nus-nextbus-web`'s `.env.example`.
 
-Deploy:
+Deploy. The Worker's config is [cloudflare.config.ts](cloudflare.config.ts)
+(the website directory is in [wrangler.config.ts](wrangler.config.ts), which
+`cf` builds with):
 
 ```bash
-npx wrangler kv namespace create KV   # paste the id into wrangler.toml
-for k in NEXTBUS_AUTH_BASE NEXTBUS_APP_VERSION NEXTBUS_HTD_API NEXTBUS_APP_API NEXTBUS_PROXY_BASE NEXTBUS_PROXY_API_KEY; do npx wrangler secret put "$k"; done
-npx wrangler deploy
+pnpm exec cf kv namespaces create --title terminus   # put the id in cloudflare.config.ts
+for k in NEXTBUS_AUTH_BASE NEXTBUS_APP_VERSION NEXTBUS_HTD_API NEXTBUS_APP_API NEXTBUS_PROXY_BASE NEXTBUS_PROXY_API_KEY; do
+  pnpm exec cf workers secrets update "$k" --worker terminus --type secret_text --text "$(grep "^$k=" .dev.vars | cut -d= -f2-)"
+done
+pnpm run deploy
 ```
 
 ## Endpoints
@@ -120,7 +124,7 @@ from the page and get a device token (`Authorization: Bearer`).
 Setup:
 
 ```bash
-npx wrangler d1 migrations apply terminus --remote
+pnpm exec cf d1 migrations apply <database id from cloudflare.config.ts>
 ```
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
@@ -151,7 +155,7 @@ KV writes are rate-limited and propagation is eventual, which is wrong for
 15-second data.
 
 **The stop graph is static and bundled.** Stop locations, route order and
-operating hours change a few times a year. `npm run scrape` rebuilds
+operating hours change a few times a year. `pnpm scrape` rebuilds
 `data/stops.json` from the bus proxy's `bus-stops` and `pickup-point` calls.
 The proxy has no `ServiceDescription`, so the route codes to fetch come from
 the existing graph plus `KNOWN_ROUTES` in the script; a new service with an

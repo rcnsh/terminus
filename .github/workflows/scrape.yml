@@ -16,6 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -41,7 +43,7 @@ jobs:
 
       # A bad graph is worse than a stale one, so the suite gates the commit.
       - name: Test against the new graph
-        run: npm ci && npm test
+        run: pnpm install --frozen-lockfile && pnpm test
 
       - name: Commit if changed
         run: |

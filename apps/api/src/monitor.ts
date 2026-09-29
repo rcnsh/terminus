@@ -92,11 +92,11 @@ export async function checkUpstream(
 export function adviceFor(reason: string | null): string {
   if (!reason) return '';
   if (/10009/.test(reason)) {
-    return 'uNivUS has a new release and the old version string is refused. Update it:\n  npx wrangler secret put NEXTBUS_APP_VERSION\n(format univus_android_<versionName>_<versionCode>, from the new APK).';
+    return 'uNivUS has a new release and the old version string is refused. Update it:\n  pnpm exec cf workers secrets update NEXTBUS_APP_VERSION --worker terminus --type secret_text --text <new value>\n(format univus_android_<versionName>_<versionCode>, from the new APK).';
   }
   if (/10008/.test(reason)) return 'The device id no longer matches the access token. Clear auth:session in KV and let it re-mint.';
   if (/10000|Invalid API KEY/i.test(reason)) return 'The app API keys were rejected; they may have been rotated in a new uNivUS build.';
-  return 'Check `npx wrangler tail` and /health?probe=1.';
+  return 'Check `pnpm exec wrangler tail` and /health?probe=1.';
 }
 
 async function alert(env: Env, s: UpstreamState, kind: 'up' | 'down'): Promise<void> {
@@ -134,7 +134,7 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
     from: { email: env.EMAIL_FROM, name: 'terminus' },
     to: env.ALERT_EMAIL,
     subject: 'terminus: academic calendar data runs out soon',
-    text: `data/calendar.json covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nRefresh it and deploy:\n  python3 apps/api/scripts/fetch_calendar.py && npm run deploy`,
+    text: `data/calendar.json covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nRefresh it and deploy:\n  python3 apps/api/scripts/fetch_calendar.py && pnpm run deploy`,
   });
   await env.KV.put(CALENDAR_KEY, String(nowMs));
   return true;
