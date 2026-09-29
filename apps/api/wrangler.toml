@@ -10,7 +10,7 @@ routes = [
   { pattern = "nusbus.rcn.sh", custom_domain = true },
 ]
 
-workers_dev = true
+workers_dev = false
 
 # App downloads: /download/android, /download/mac, /download/latest.json.
 # Filled by scripts/release.sh.

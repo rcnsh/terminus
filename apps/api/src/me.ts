@@ -19,6 +19,7 @@ import {
   loadProfileJson,
   normalizeEmail,
   normalizePairCode,
+  linkEmail,
   pairCodeOwner,
   maskEmail,
   redeemLink,
@@ -57,6 +58,20 @@ const page = (title: string, inner: string) => `<!doctype html>
 
 /** A whole profile is a few KB; nothing legitimate comes close to this. */
 const MAX_BODY_BYTES = 64 * 1024;
+
+const EXPIRED = '<h1>That link has expired</h1><p class="hint">Sign-in links work once, for 15 minutes.</p><a class="btn accent" href="/account">Get a new link</a>';
+
+/**
+ * Where emailed links point. The request's own origin only for local
+ * development; otherwise always the real site, whatever hostname the request
+ * came in on (the old name, a workers.dev preview).
+ */
+function linkOrigin(url: URL): string {
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.endsWith('.test');
+  return local ? url.origin : 'https://terminus.rcn.sh';
+}
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   if (!(req.headers.get('content-type') ?? '').includes('application/json')) return null;
@@ -150,7 +165,7 @@ export async function handleMe(
       return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     }
     try {
-      await requestLink(env, db, email, url.origin, nowMs);
+      await requestLink(env, db, email, linkOrigin(url), nowMs);
     } catch (err) {
       // The error text can carry the recipient: log its kind only.
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
@@ -167,8 +182,12 @@ export async function handleMe(
       // only shows a button; the POST spends the token.
       const t = url.searchParams.get('t') ?? '';
       const safe = t.replace(/[^A-Za-z0-9_-]/g, '');
+      // Name the account, so a link someone else requested can't sign you in
+      // to their account without you noticing. A dead link says so now.
+      const email = safe ? await linkEmail(db, safe, nowMs) : null;
+      if (!email) return html(page('Link expired', EXPIRED), 400);
       return html(page('Sign in', `<h1>Sign in to terminus</h1>
-<p class="hint">Continue to sign in on this device.</p>
+<p class="hint">Continue as <strong>${escapeHtml(maskEmail(email))}</strong> on this device. If that isn't your address, close this page.</p>
 <form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit" class="btn accent">Sign in</button></form>`));
     }
     if (req.method === 'POST') {
@@ -176,7 +195,7 @@ export async function handleMe(
       const t = form?.get('t');
       const token = typeof t === 'string' ? await redeemLink(db, t, nowMs) : null;
       if (!token) {
-        return html(page('Link expired', '<h1>That link has expired</h1><p class="hint">Sign-in links work once, for 15 minutes.</p><a class="btn accent" href="/account">Get a new link</a>'), 400);
+        return html(page('Link expired', EXPIRED), 400);
       }
       return new Response(null, {
         status: 303,

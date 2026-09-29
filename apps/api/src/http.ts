@@ -70,3 +70,41 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
   }
 }
 
+
+/**
+ * Browser-facing hardening on every response. The CSP lists exactly what
+ * the site loads: Turnstile, the QR library from cdnjs, Google Fonts. /docs
+ * additionally loads Stoplight Elements from unpkg (pinned with SRI there).
+ */
+const CSP_BASE = [
+  "default-src 'self'",
+  "script-src 'self' https://cdnjs.cloudflare.com https://challenges.cloudflare.com",
+  'frame-src https://challenges.cloudflare.com',
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+];
+const CSP_SITE = CSP_BASE.join('; ');
+const CSP_DOCS = CSP_BASE.map((d) =>
+  d.startsWith('script-src') || d.startsWith('style-src') ? `${d} https://unpkg.com` : d.startsWith('img-src') ? `${d} https:` : d.startsWith('font-src') ? `${d} data: https://unpkg.com` : d,
+).join('; ');
+
+export function withSecurityHeaders(res: Response, path: string): Response {
+  const out = new Response(res.body, res);
+  const h = out.headers;
+  h.set('x-content-type-options', 'nosniff');
+  h.set('strict-transport-security', 'max-age=31536000; includeSubDomains');
+  // Sign-in and pairing URLs carry a token or a code: never send them on.
+  h.set('referrer-policy', path.startsWith('/auth/') || path.startsWith('/pair') ? 'no-referrer' : 'strict-origin-when-cross-origin');
+  if ((h.get('content-type') ?? '').includes('text/html')) {
+    h.set('content-security-policy', path === '/docs' ? CSP_DOCS : CSP_SITE);
+    h.set('x-frame-options', 'DENY');
+    h.set('permissions-policy', 'geolocation=(self), camera=(), microphone=()');
+  }
+  return out;
+}

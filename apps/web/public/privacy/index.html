@@ -42,13 +42,22 @@
 
     <h2>What is not stored</h2>
     <ul>
-      <li><strong>Your location.</strong> When the app sends your location to find the nearest stop, it is used for that one answer and not saved. Request logs that would contain it are switched off.</li>
-      <li>No tracking, ads, analytics cookies or third-party trackers. The only cookie is the one that keeps you signed in.</li>
+      <li><strong>Your location.</strong> When the app sends your location to find the nearest stop, it is rounded to about 11 metres, used for that one answer and not saved. It travels in the request's address, and terminus's own request logs are switched off; Cloudflare, which carries every request, processes it only to deliver it.</li>
+      <li>No tracking, ads, analytics cookies or trackers. The only cookie is the one that keeps you signed in.</li>
     </ul>
-    <p>To tune its estimates, terminus records anonymous statistics about answers (which stop, which bus, how long until it came). These carry no account, email or location.</p>
+    <p>To tune its estimates, terminus records anonymous statistics about answers: which stop, which service and bus (its plate), and how long until it came. These carry no account, email or location.</p>
+    <p>If you ask not to be emailed again, that address goes on a blocklist so sign-in links are never sent to it. The blocklist is not tied to an account and is kept after an account is deleted, because that is its purpose.</p>
 
     <h2>Who handles it</h2>
     <p>Everything runs on Cloudflare (hosting, database, email delivery) in data centres that may be outside Singapore. Bus times come from NUS's shuttle feed; NUS does not receive anything about you. Your data is never sold or shared.</p>
+    <p>Some pages load things from other services, which see your IP address like any website you visit:</p>
+    <ul>
+      <li><strong>Cloudflare Turnstile</strong> on the sign-in form, to check you're a person.</li>
+      <li><strong>Google Fonts</strong> for the typefaces on this site.</li>
+      <li><strong>cdnjs</strong> (Cloudflare) for the QR code library on the account page.</li>
+      <li><strong>unpkg</strong> for the API documentation page only.</li>
+    </ul>
+    <p>When you import a timetable, terminus asks <strong>NUSMods</strong> for the timetables of the modules in your link. It sends module codes only, nothing about you.</p>
 
     <h2>How long it is kept</h2>
     <ul>

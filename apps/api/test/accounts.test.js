@@ -504,3 +504,23 @@ test('/me/next carries refreshAt: the next class start while one is ahead', asyn
   const place = await (await call(env, '/me/next?to=UTOWN', { cookie })).json();
   assert.equal(place.refreshAt, undefined);
 });
+
+test('the sign-in page names the account and refuses a dead link up front; the cookie is __Host-', async () => {
+  const { env, email } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const page = await call(env, `/auth/verify?t=${email.lastToken()}`);
+  const html = await page.text();
+  assert.match(html, /f•••@u\.nus\.edu/);
+  assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
+  assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  assert.equal((await call(env, '/auth/verify?t=nonsense')).status, 400);
+  const res = await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } });
+  assert.match(res.headers.get('set-cookie'), /^__Host-nb_s=.*Secure/);
+});
+
+test('a session cookie from before the rename still works', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const old = cookie.replace('__Host-nb_s=', 'nb_s=');
+  assert.equal((await call(env, '/me', { cookie: old })).status, 200);
+});

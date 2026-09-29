@@ -109,8 +109,8 @@ class Api(private val token: String?, private val fast: Boolean = false) {
     suspend fun nextJson(target: Target, lat: Double?, lon: Double?): JSONObject {
         val q = buildList {
             if (lat != null && lon != null) {
-                add("lat=$lat")
-                add("lon=$lon")
+                add("lat=${coord(lat)}")
+                add("lon=${coord(lon)}")
             }
             when (target) {
                 Target.Plan -> {}
@@ -122,7 +122,7 @@ class Api(private val token: String?, private val fast: Boolean = false) {
     }
 
     suspend fun nearby(lat: Double?, lon: Double?): List<NearbyStop> {
-        val q = if (lat != null && lon != null) listOf("lat=$lat", "lon=$lon") else emptyList()
+        val q = if (lat != null && lon != null) listOf("lat=${coord(lat)}", "lon=${coord(lon)}") else emptyList()
         val stops = request("GET", "/me/nearby" + query(q)).getJSONArray("stops")
         return (0 until stops.length()).map { i ->
             val s = stops.getJSONObject(i)
@@ -188,6 +188,12 @@ class Api(private val token: String?, private val fast: Boolean = false) {
     private fun query(parts: List<String>) = if (parts.isEmpty()) "" else "?" + parts.joinToString("&")
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 }
+
+/**
+ * Four decimals is about 11 m: enough to tell PGP from PGP Foyer, and no
+ * more precise than that in URLs that pass through logs.
+ */
+private fun coord(v: Double) = "%.4f".format(java.util.Locale.ROOT, v)
 
 private fun parseInstant(s: String): Long? = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrNull()
 
