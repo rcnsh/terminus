@@ -44,8 +44,12 @@ export interface Session {
   expMs: number;
 }
 
-/** In-memory memo: the common case costs neither a KV read nor a round trip. */
-let memo: Session | null = null;
+/**
+ * In-memory memo: the common case costs neither a KV read nor a round trip.
+ * Kept per KV binding, so a token never outlives the store it came from (and
+ * each test's fresh KV starts with an empty memo).
+ */
+const memos = new WeakMap<object, Session>();
 
 export function authConfigured(env: Env): boolean {
   return Boolean(env.NEXTBUS_AUTH_BASE && env.NEXTBUS_HTD_API && env.NEXTBUS_APP_API);
@@ -143,12 +147,13 @@ export async function getSession(
   { force = false }: { force?: boolean } = {},
 ): Promise<Session> {
   if (!authConfigured(env)) throw new Error('auth not configured');
+  const memo = memos.get(env.NUSBUS_KV);
   if (!force && memo && memo.expMs > nowMs) return memo;
 
   if (!force) {
     const cached = (await env.NUSBUS_KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
     if (cached && cached.expMs > nowMs) {
-      memo = cached;
+      memos.set(env.NUSBUS_KV, cached);
       return cached;
     }
   }
@@ -195,7 +200,7 @@ async function mint(env: Env, nowMs: number): Promise<Session> {
     throw new Error(`auth rejected: code=${body?.code ?? '?'} msg=${body?.msg ?? ''}`);
   }
 
-  memo = session;
+  memos.set(env.NUSBUS_KV, session);
   const ttlS = Math.max(60, Math.floor((session.expMs - nowMs) / 1000));
   await env.NUSBUS_KV.put(KV_TOKEN, JSON.stringify(session), { expirationTtl: ttlS }).catch(() => {});
   return session;

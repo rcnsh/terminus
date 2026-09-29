@@ -422,9 +422,9 @@ test('a rejected proxy call retries once with a genuinely fresh token', async ()
   assert.equal((await res.json()).available, true, 'the retry succeeded');
 
   assert.equal(fetchImpl.counts.shuttle, 2);
-  // The first call may reuse a token cached by an earlier test; the retry must
-  // mint rather than read the rejected token back out of KV.
-  assert.ok(fetchImpl.counts.auth >= 1, 'the retry minted a token');
+  // One mint for the first call (a fresh KV has no token), one for the retry,
+  // which must mint rather than read the rejected token back out of KV.
+  assert.equal(fetchImpl.counts.auth, 2, 'the retry minted a token');
   const [first, second] = fetchImpl.requests;
   assert.notEqual(first.body.token, second.body.token, 'the retry used a different token');
 });
@@ -473,6 +473,11 @@ test('concurrent requests for a cold stop share one upstream call', async () => 
 });
 
 test('a hung feed times out; with a stale answer on hand it is served instead', async () => {
+  // Short timeouts, so the test doesn't wait out the real 5 s.
+  const { TTL } = await import('../src/config.ts');
+  const saved = { t: TTL.upstreamTimeoutMs, r: TTL.staleRaceMs };
+  TTL.upstreamTimeoutMs = 200;
+  TTL.staleRaceMs = 100;
   const hung = makeFetch({ hang: true });
   const cache = installGlobals(hung);
   cache.seed(ARRIVALS_KEY('PGP'), { code: 'PGP', arrivals: [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt: Date.now() - 60_000, stale: false });
@@ -480,7 +485,9 @@ test('a hung feed times out; with a stale answer on hand it is served instead', 
   const { res } = await call('/arrivals?stop=PGP', { fetchImpl: hung, cache });
   const ms = performance.now() - t0;
   assert.equal((await res.json()).available, true);
-  assert.ok(ms < 8_000, `took ${ms}ms`);
+  assert.ok(ms < 2_000, `took ${ms}ms`);
+  TTL.upstreamTimeoutMs = saved.t;
+  TTL.staleRaceMs = saved.r;
 });
 
 test('a feed that says OK but has no arrivals list is a failure, not "no bus"', async () => {
