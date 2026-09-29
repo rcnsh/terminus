@@ -6,6 +6,7 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { newPairCode, normalizePairCode } from '../src/accounts.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
+import residencesJson from '../data/residences.json' with { type: 'json' };
 
 const BASE = 'https://bus.example.test';
 const INVITED = 'friend@u.nus.edu';
@@ -621,4 +622,30 @@ test('a food court works as a saved place and a destination', async () => {
   // Routed from home to one of its stops, not a setup or "no start" answer.
   assert.equal(next.stop.code, 'PGP');
   assert.doesNotMatch(next.label, /Set up|No start point/);
+});
+
+test('/me/next in your residence: "You\'re home" after the last class, leave-by in a long gap', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const ring = residencesJson.residences.PGP.areas[0];
+  const [lat, lon] = [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length].map((v) => v.toFixed(4));
+  const put = (manual) => call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, manual } });
+
+  // Frozen clock: Thursday 09:00. The only class ended at 08:50.
+  await put([{ day: 4, arriveByMin: 480, endMin: 530, to: 'COM3', label: 'CS2030' }]);
+  const there = await (await call(env, `/me/next?lat=${lat}&lon=${lon}`, { cookie })).json();
+  assert.equal(there.label, "You're home");
+  assert.equal(there.arrived, true);
+  const away = await (await call(env, '/me/next?lat=1.2966&lon=103.7764', { cookie })).json();
+  assert.equal(away.dest.why, 'home', 'elsewhere on campus, still the way home');
+
+  // A long gap: 08:00 class done, the next at 14:00.
+  await put([
+    { day: 4, arriveByMin: 480, endMin: 530, to: 'COM3', label: 'CS2030' },
+    { day: 4, arriveByMin: 840, endMin: 900, to: 'LT27', label: 'MA1521' },
+  ]);
+  const gap = await (await call(env, `/me/next?lat=${lat}&lon=${lon}`, { cookie })).json();
+  assert.equal(gap.dest.why, 'class');
+  assert.equal(gap.dest.label, 'MA1521');
+  assert.ok(gap.leave, 'says when to leave home for it');
 });

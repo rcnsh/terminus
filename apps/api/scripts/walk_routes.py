@@ -55,6 +55,28 @@ LANDMARKS = {
     "FRONTIER-FOOD": {"name": "Frontier", "kind": "Food court", "at": (1.296390, 103.780367), "stops": ["S17", "LT27"], "aliases": ["frontier", "science canteen"]},
 }
 
+# On-campus residences, as OpenStreetMap outlines (way ids), grouped the way
+# students name them. Used to tell that someone is already home; the stops
+# that serve each are worked out by path distance below.
+RESIDENCES = {
+    "PGP": {"name": "Prince George's Park (PGP)", "ways": [92357575, 1166266719, 1166266720, 1168471662, 1168471663, 1168471664, 1168471665, 1166306157]},
+    "KEVII": {"name": "King Edward VII Hall", "ways": [92357569]},
+    "KRH": {"name": "Kent Ridge Hall", "ways": [142088679]},
+    "SHEARES": {"name": "Sheares Hall", "ways": [142088680]},
+    "TEMASEK": {"name": "Temasek Hall", "ways": [858570009]},
+    "EUSOFF": {"name": "Eusoff Hall", "ways": [858570008]},
+    "RAFFLES-HALL": {"name": "Raffles Hall", "ways": [742827984]},
+    "RVRC": {"name": "Ridge View Residential College", "ways": [140088746, 427077072]},
+    "VALOUR": {"name": "Valour House", "ways": [1213637682]},
+    "KENT-VALE": {"name": "Kent Vale", "ways": [713272230]},
+    "TEMBUSU": {"name": "Tembusu College", "ways": [174768749]},
+    "CAPT": {"name": "College of Alice & Peter Tan", "ways": [750774836, 124543527]},
+    "RC4": {"name": "Residential College 4", "ways": [750774837]},
+    "ACACIA": {"name": "Acacia College", "ways": [750774835]},
+    "UTR": {"name": "UTown Residence", "ways": [750775690]},
+}
+RES_FILE = CACHE / "osm-residences.json"
+
 WALKABLE = "footway|path|pedestrian|steps|corridor|living_street|residential|service|unclassified|tertiary|secondary|primary|cycleway|track|crossing"
 # Stairs take longer than their length suggests.
 STEPS_FACTOR = 1.6
@@ -311,6 +333,30 @@ def main():
         "landmarks": marks,
     }, indent=1) + "\n")
     print("landmarks:", {c: m["stops"] for c, m in marks.items()})
+
+    # Residences: outline(s), and the stops that serve each (the nearest by
+    # path, plus any other within 150 m of it, at most two).
+    if RES_FILE.exists():
+        ways = {e["id"]: e for e in json.loads(RES_FILE.read_text())["elements"] if e["type"] == "way"}
+        res = {}
+        for code, r in RESIDENCES.items():
+            areas = [[[round(p["lat"], 5), round(p["lon"], 5)] for p in ways[w]["geometry"]] for w in r["ways"] if w in ways]
+            if not areas:
+                print(f"  {code}: no outline")
+                continue
+            pts = [pt for a in areas for pt in a]
+            centre = (statistics.fmean(p[0] for p in pts), statistics.fmean(p[1] for p in pts))
+            walks = sorted((m, c) for c in stop_pt if (m := routed(c, centre)) is not None)
+            best = walks[0][0]
+            serving = {c: round(m) for m, c in walks if m <= best + 150}
+            serving = dict(list(serving.items())[:2])
+            res[code] = {"name": r["name"], "stops": serving, "areas": areas}
+        (ROOT / "data/residences.json").write_text(json.dumps({
+            "generated": date.today().isoformat(),
+            "source": "outlines from OpenStreetMap (ODbL); serving stops by path distance; scripts/walk_routes.py",
+            "residences": res,
+        }, separators=(",", ":")) + "\n")
+        print("residences:", {c: r["stops"] for c, r in res.items()})
 
     venues_doc["venues"] = dict(sorted(venues.items()))
     venues_doc["generated"] = date.today().isoformat()

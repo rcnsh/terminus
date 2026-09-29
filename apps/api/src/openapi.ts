@@ -588,7 +588,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
         Campus: {
           type: 'object',
-          required: ['viewBox', 'stops', 'routes', 'destinations'],
+          required: ['viewBox', 'stops', 'routes', 'destinations', 'residences'],
           properties: {
             viewBox: { type: 'string', description: 'SVG viewBox the x/y coordinates are projected into.' },
             stops: {
@@ -618,6 +618,14 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   loop: { type: 'boolean' },
                   color: { type: 'string' },
                 },
+              },
+            },
+            residences: {
+              type: 'array',
+              description: 'On-campus residences and the stops that serve each, for picking home stops. Outlines are not included.',
+              items: {
+                type: 'object',
+                properties: { code: { type: 'string' }, name: { type: 'string' }, stops: { type: 'array', items: { type: 'string' } }, walkM: { type: 'integer' } },
               },
             },
             destinations: {

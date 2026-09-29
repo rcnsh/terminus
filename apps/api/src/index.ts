@@ -48,6 +48,7 @@ import { handleDownload } from './downloads.ts';
 import { leaveBy } from './leave.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
+import { allResidences } from './residences.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
@@ -63,6 +64,8 @@ export const GRAPH = {
 // with a long client cache, same spirit as GRAPH itself.
 const CAMPUS_MAP = buildCampusMap(GRAPH);
 const DESTINATIONS = buildDestinations(GRAPH);
+// For "Where do you live?": names and stops only. The outlines stay here.
+const RESIDENCE_LIST = allResidences().map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0] }));
 
 export { coordsFrom, numParam };
 
@@ -362,7 +365,7 @@ async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknow
  * changes when a deploy ships a new scrape, same as the graph itself.
  */
 function handleCampus(): Response {
-  return jsonCached({ viewBox: CAMPUS_MAP.viewBox, stops: CAMPUS_MAP.stops, routes: CAMPUS_MAP.routes, destinations: DESTINATIONS }, 3600);
+  return jsonCached({ viewBox: CAMPUS_MAP.viewBox, stops: CAMPUS_MAP.stops, routes: CAMPUS_MAP.routes, destinations: DESTINATIONS, residences: RESIDENCE_LIST }, 3600);
 }
 
 /**

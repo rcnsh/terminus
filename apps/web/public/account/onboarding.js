@@ -167,6 +167,10 @@ export function runOnboarding(ctx) {
 
   function home(ctx, nav) {
     const current = ctx.profile.home?.stops ?? [];
+    let picked = null; // a residence's stops, when one is chosen
+    const residence = el('select', {}, el('option', { value: '', textContent: "Off campus, or I'll pick a stop" }));
+    for (const r of ctx.residences) residence.append(el('option', { value: r.code, textContent: r.name }));
+    residence.setAttribute('aria-label', 'Where you live');
     const first = ctx.stopSelect(current[0], () => {}, { blank: 'Choose a stop' });
     first.setAttribute('aria-label', 'Home stop');
     const walk = el('input', { type: 'number', min: 0, max: 30, step: 1, value: ctx.profile.homeWalkMin ?? 5 });
@@ -190,8 +194,17 @@ export function runOnboarding(ctx) {
         );
       },
     });
+    residence.addEventListener('change', () => {
+      picked = ctx.residences.find((r) => r.code === residence.value) ?? null;
+      if (!picked) return;
+      first.value = picked.stops[0];
+      walk.value = Math.max(1, Math.round(picked.walkM / 1.3 / 60));
+      msg.textContent = `Stops for ${picked.name} filled in. The app won't send you home when you're already there.`;
+    });
     return [
-      ...heading('Where your day starts', 'Where you catch the bus in the morning, and head back to at the end of the day. Only the stop is saved, never where you live.'),
+      ...heading('Where your day starts', 'Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved, never where you live.'),
+      el('label', { textContent: 'Where do you live?' }),
+      residence,
       el('label', { textContent: 'Home stop' }),
       first,
       locate,
@@ -202,7 +215,9 @@ export function runOnboarding(ctx) {
       actions(nav, {
         onNext: async () => {
           const v = Number(walk.value);
-          if (first.value) ctx.profile.home = { stops: [first.value, ...current.filter((c) => c !== first.value)].slice(0, 3) };
+          // A residence brings all its stops; otherwise the one chosen here first.
+          if (picked && first.value === picked.stops[0]) ctx.profile.home = { stops: [...picked.stops] };
+          else if (first.value) ctx.profile.home = { stops: [first.value, ...current.filter((c) => c !== first.value)].slice(0, 3) };
           if (Number.isInteger(v) && v >= 0 && v <= 30) ctx.profile.homeWalkMin = v;
           await ctx.save();
         },
