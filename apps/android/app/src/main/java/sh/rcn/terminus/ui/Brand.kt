@@ -16,6 +16,10 @@ import androidx.compose.ui.text.withStyle
  * The site's tokens (apps/web/public/assets/site.css), so the app, the widget
  * and the web look like one product rather than taking the wallpaper's colours.
  * `tertiary` is the warning amber: "tight" must not look like "on time".
+ *
+ * Keep surfaceVariant different from the container colours: Material picks a
+ * card's text colour by matching its background against the scheme, and a
+ * tie with surfaceVariant turns every card's text grey.
  */
 val BrandLight = lightColorScheme(
     primary = Color(0xFFC2410C), onPrimary = Color.White,
@@ -26,7 +30,7 @@ val BrandLight = lightColorScheme(
     error = Color(0xFFB91C1C), onError = Color.White,
     background = Color(0xFFFAFAF9), onBackground = Color(0xFF1C1917),
     surface = Color(0xFFFFFFFF), onSurface = Color(0xFF1C1917),
-    surfaceVariant = Color(0xFFF5F4F2), onSurfaceVariant = Color(0xFF6B6560),
+    surfaceVariant = Color(0xFFEFEDEA), onSurfaceVariant = Color(0xFF6B6560),
     surfaceContainerHighest = Color(0xFFF5F4F2), surfaceContainerHigh = Color(0xFFF5F4F2),
     surfaceContainer = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFFFFFFF),
     outline = Color(0xFF8A847E), outlineVariant = Color(0xFFE7E5E2),
@@ -41,7 +45,7 @@ val BrandDark = darkColorScheme(
     error = Color(0xFFF87171), onError = Color(0xFF1C1917),
     background = Color(0xFF0F0E0D), onBackground = Color(0xFFF2EFEB),
     surface = Color(0xFF1A1816), onSurface = Color(0xFFF2EFEB),
-    surfaceVariant = Color(0xFF211F1C), onSurfaceVariant = Color(0xFFA39D97),
+    surfaceVariant = Color(0xFF282522), onSurfaceVariant = Color(0xFFA39D97),
     surfaceContainerHighest = Color(0xFF211F1C), surfaceContainerHigh = Color(0xFF211F1C),
     surfaceContainer = Color(0xFF1A1816), surfaceContainerLow = Color(0xFF1A1816),
     outline = Color(0xFF6F6964), outlineVariant = Color(0xFF2C2926),
