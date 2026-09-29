@@ -4,6 +4,9 @@
 #   scripts/release.sh --dry-run   # build and hash, upload nothing
 #   scripts/release.sh             # build, upload, tag v<version>
 #
+# After pushing the tag, scripts/github-release.sh <version> publishes the
+# GitHub release.
+#
 # The version is the Android versionName. The Android release key must be
 # set up in ~/.gradle/gradle.properties (TERMINUS_*), or the APK would be
 # debug-signed and refuse to install over the real one.
@@ -78,4 +81,5 @@ cd "$ROOT"
 git tag -a "v$VERSION" -m "terminus $VERSION"
 echo "== released $VERSION"
 echo "   next: git push origin main v$VERSION"
+echo "   then: scripts/github-release.sh $VERSION   (the GitHub release, with both files attached)"
 echo "   and deploy the Worker if the API changed since the last deploy: pnpm run deploy"
