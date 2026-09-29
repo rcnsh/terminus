@@ -126,7 +126,8 @@ const ASSETS = {
 };
 
 // Locked like production: the bus answers need a key or a signed-in account.
-const env = { ...makeEnv(), PUBLIC_API_OPEN: undefined, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS };
+// The /admin dashboard opens with the token "dev" here.
+const env = { ...makeEnv(), PUBLIC_API_OPEN: undefined, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, HEALTH_TOKEN: 'dev' };
 
 http
   .createServer(async (req, res) => {

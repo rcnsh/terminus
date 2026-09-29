@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Dashboard · terminus</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+<header class="wrap nav">
+  <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
+  <nav class="nav-links">
+    <button type="button" class="btn small ghost" id="refresh" hidden>Refresh</button>
+    <button type="button" class="btn small ghost" id="lock" hidden>Lock</button>
+  </nav>
+</header>
+
+<main class="wrap">
+  <h1>Dashboard</h1>
+
+  <form id="unlock" class="card unlock" hidden>
+    <label for="token">Operator token</label>
+    <p class="hint">The <code>HEALTH_TOKEN</code> secret. Kept in this tab only, until you close it.</p>
+    <div class="row">
+      <input id="token" type="password" autocomplete="off" required>
+      <button type="submit" class="btn accent">Open</button>
+    </div>
+    <p id="unlock-msg" class="hint" role="status"></p>
+  </form>
+
+  <div id="dash" hidden>
+    <p class="hint" id="as-of"></p>
+
+    <section class="tiles" id="tiles"></section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Sign-ups, last 30 days</h2>
+        <div id="signups"></div>
+      </section>
+      <section class="card">
+        <h2>Devices</h2>
+        <table id="devices"><thead><tr><th>App</th><th>Paired</th><th>Used this week</th></tr></thead><tbody></tbody></table>
+        <p class="hint" id="keys"></p>
+      </section>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Answers, last 14 days</h2>
+        <div id="analytics"></div>
+      </section>
+      <section class="card">
+        <h2>NUS feed</h2>
+        <p id="feed"></p>
+        <ul class="list" id="incidents"></ul>
+        <p class="hint"><a href="/status">Public status page</a></p>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Reports <span class="hint" id="fb-count"></span></h2>
+      <ul class="list reports" id="reports"></ul>
+    </section>
+  </div>
+</main>
+<script src="/admin/admin.js" defer></script>
+</body>
+</html>

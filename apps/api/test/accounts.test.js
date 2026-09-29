@@ -752,3 +752,47 @@ test('feedback: validated, and capped at ten a day per account', async () => {
   for (let i = 0; i < 10; i++) assert.equal((await post({ note: `report ${i}`, platform: 'web' })).status, 201);
   assert.equal((await post({ note: 'one more', platform: 'web' })).status, 429);
 });
+
+test('/admin/stats: operator only; counts accounts, devices by platform and reports', async () => {
+  const { env, email } = setup();
+  env.HEALTH_TOKEN = 'operator-secret';
+  const cookie = await signIn(env, email);
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] } } });
+  // Pair a "Mac", by its User-Agent.
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const pairRes = await worker.fetch(
+    new Request(BASE + '/pair', { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Terminus/25 CFNetwork/3860 Darwin/25.0.0' }, body: JSON.stringify({ code, name: 'MacBook' }) }),
+    env,
+    makeCtx(),
+  );
+  const { token } = await pairRes.json();
+  await call(env, '/me/feedback', { method: 'POST', token, body: { note: 'wrong stop', platform: 'mac', context: { label: 'A1 · 2 min' } } });
+
+  assert.equal((await call(env, '/admin/stats')).status, 404, 'no token: looks like nothing is there');
+  const wrong = await worker.fetch(new Request(BASE + '/admin/stats', { headers: { 'x-health-token': 'nope' } }), env, makeCtx());
+  assert.equal(wrong.status, 404);
+  const res = await worker.fetch(new Request(BASE + '/admin/stats', { headers: { 'x-health-token': 'operator-secret' } }), env, makeCtx());
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  const s = await res.json();
+  assert.equal(s.accounts.total, 1);
+  assert.equal(s.accounts.new7d, 1);
+  assert.equal(s.accounts.withHome, 1);
+  assert.equal(s.accounts.active1d, 1);
+  assert.deepEqual(s.devices, [{ platform: 'mac', total: 1, active7: 1 }]);
+  assert.equal(s.feedback.last7d, 1);
+  assert.equal(s.feedback.latest[0].email, INVITED);
+  assert.equal(s.feedback.latest[0].answer, 'A1 · 2 min');
+  assert.equal(s.analytics, null, 'no Analytics Engine token: skipped');
+});
+
+test('a device paired before platforms were recorded gets one on its next request', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const { token } = await (await call(env, '/pair', { method: 'POST', body: { code, name: 'Pixel' } })).json();
+  assert.equal(db._db.prepare("SELECT platform FROM sessions WHERE kind = 'device'").get().platform, null);
+  db._db.prepare("UPDATE sessions SET last_seen = ? WHERE kind = 'device'").run(Date.now() - 86_400_000);
+  await worker.fetch(new Request(BASE + '/me/profile', { headers: { authorization: `Bearer ${token}`, 'user-agent': 'Dalvik/2.1.0 (Linux; U; Android 16; Pixel 8)' } }), env, makeCtx());
+  assert.equal(db._db.prepare("SELECT platform FROM sessions WHERE kind = 'device'").get().platform, 'android');
+});
