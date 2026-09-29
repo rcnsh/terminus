@@ -124,7 +124,7 @@ node apps/api/scripts/dev-stub.mjs    # local API with fake buses on :8787
 
 Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Email
 Sending) and the NUS feed configuration described in
-[apps/api/README.md](apps/api/README.md). Releases are built and uploaded with
+[apps/api/docs/internals.md](apps/api/docs/internals.md). Releases are built and uploaded with
 `scripts/release.sh`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <br>
