@@ -1,5 +1,5 @@
 /**
- * nusbus-edge -- answers one question: when is my bus, and should I run.
+ * terminus -- answers one question: when is my bus, and should I run.
  *
  * Fetch-on-demand with a 15-second edge cache; no poll loop. Workers has no
  * long-lived process and Cron Triggers bottom out at one-minute granularity.
@@ -108,7 +108,7 @@ async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknow
   // token on every call, which turned a debugging session into roughly a dozen
   // mints a minute and started drawing intermittent 400s from upstream. A
   // debug endpoint that can be turned into a hammer is a bad debug endpoint.
-  const before = await env.NUSBUS_KV.get('auth:session').catch(() => null);
+  const before = await env.KV.get('auth:session').catch(() => null);
   try {
     const s = await getSession(env, nowMs);
     return { ok: true, cached: Boolean(before), domain: s.domain, expiresIn: `${Math.round((s.expMs - nowMs) / 3600_000)}h` };

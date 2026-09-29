@@ -1,4 +1,4 @@
-name = "nusbus-edge"
+name = "terminus"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
@@ -19,25 +19,25 @@ bucket_name = "terminus-downloads"
 [triggers]
 crons = ["*/15 * * * *"]
 
-# The website (apps/web). The Worker runs first so it can redirect the old
-# host, then hands anything that isn't an API route to ASSETS.
+# The website (apps/web). The Worker runs first so API routes win, then
+# hands everything else to ASSETS.
 [assets]
 directory = "../web/public"
 binding = "ASSETS"
 run_worker_first = true
 
 
-# npx wrangler kv namespace create NUSBUS_KV
+# npx wrangler kv namespace create KV
 # Holds ONLY auth tokens. Never arrivals.
 [[kv_namespaces]]
-binding = "NUSBUS_KV"
+binding = "KV"
 id = "1f88f570f6e04f78aa2888ee7aa78e6a"
 preview_id = "1f88f570f6e04f78aa2888ee7aa78e6a"
 
 # Decision + segment-time logging. See the positional schema in analytics.ts.
 [[analytics_engine_datasets]]
-binding = "NUSBUS_AE"
-dataset = "nusbus_edge"
+binding = "AE"
+dataset = "terminus"
 
 [observability]
 enabled = true
@@ -54,11 +54,11 @@ EMAIL_FROM = "login@terminus.rcn.sh"
 TURNSTILE_SITE_KEY = "0x4AAAAAAFHR71tKL907Buou"
 
 # Accounts. Apply schema changes with:
-#   npx wrangler d1 migrations apply nusbus --remote
+#   npx wrangler d1 migrations apply terminus --remote
 [[d1_databases]]
 binding = "DB"
-database_name = "nusbus"
-database_id = "e0957629-00a9-4984-b6df-a7eba0da47e9"
+database_name = "terminus"
+database_id = "27067356-8691-458f-bc69-fa5ca5bbc374"
 migrations_dir = "migrations"
 
 # Sign-in links and alerts. terminus.rcn.sh is onboarded under Email Service > Email Sending.

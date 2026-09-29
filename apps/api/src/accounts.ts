@@ -25,7 +25,7 @@ export const ACCOUNT_TTL = {
  * `__Host-` pins the cookie to this exact host over HTTPS: a sibling
  * *.rcn.sh site cannot set or shadow it.
  */
-export const SESSION_COOKIE = '__Host-nb_s';
+export const SESSION_COOKIE = '__Host-tm_s';
 
 // No 0/O, 1/I/L, U: a code read off a screen and typed on a phone.
 const PAIR_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -126,7 +126,7 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   if (recent) return 'cooldown';
   // Per inbox too, so +tags and dots cannot mail one person over and over.
   const coolKey = `mail:${await hashToken(inbox)}`;
-  if (await env.NUSBUS_KV.get(coolKey).catch(() => null)) return 'cooldown';
+  if (await env.KV.get(coolKey).catch(() => null)) return 'cooldown';
 
   const token = newToken();
   const tokenHash = await hashToken(token);
@@ -148,16 +148,16 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   const link = `${origin}/auth/verify?t=${token}`;
   try {
     if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');
-    await env.NUSBUS_KV.put(codeKey, JSON.stringify(pending), { expirationTtl: ACCOUNT_TTL.linkMs / 1000 });
+    await env.KV.put(codeKey, JSON.stringify(pending), { expirationTtl: ACCOUNT_TTL.linkMs / 1000 });
     await sendLink(env, email, link, code, origin);
   } catch (err) {
     // Otherwise the unsent link holds the cooldown and the retry is told
     // "check your email" for a message that never went.
     await db.prepare('DELETE FROM magic_links WHERE token_hash = ?').bind(tokenHash).run();
-    await env.NUSBUS_KV.delete(codeKey).catch(() => {});
+    await env.KV.delete(codeKey).catch(() => {});
     throw err;
   }
-  await env.NUSBUS_KV.put(coolKey, '1', { expirationTtl: Math.max(60, ACCOUNT_TTL.linkCooldownMs / 1000) }).catch(() => {});
+  await env.KV.put(coolKey, '1', { expirationTtl: Math.max(60, ACCOUNT_TTL.linkCooldownMs / 1000) }).catch(() => {});
   return 'sent';
 }
 
@@ -240,17 +240,17 @@ async function signInCodeKey(email: string): Promise<string> {
  */
 export async function redeemCode(env: Env, db: D1Database, email: string, code: string, nowMs: number): Promise<string | null> {
   const key = await signInCodeKey(email);
-  const pending = await env.NUSBUS_KV.get<PendingCode>(key, 'json').catch(() => null);
+  const pending = await env.KV.get<PendingCode>(key, 'json').catch(() => null);
   if (!pending || pending.e < nowMs) return null;
   if ((await hashToken(code)) !== pending.c) {
     const n = pending.n + 1;
     const ttlS = Math.floor((pending.e - nowMs) / 1000);
     // KV's shortest TTL is 60 s; a code closer to expiry than that just dies.
-    if (n >= ACCOUNT_TTL.codeTries || ttlS < 60) await env.NUSBUS_KV.delete(key).catch(() => {});
-    else await env.NUSBUS_KV.put(key, JSON.stringify({ ...pending, n }), { expirationTtl: ttlS }).catch(() => {});
+    if (n >= ACCOUNT_TTL.codeTries || ttlS < 60) await env.KV.delete(key).catch(() => {});
+    else await env.KV.put(key, JSON.stringify({ ...pending, n }), { expirationTtl: ttlS }).catch(() => {});
     return null;
   }
-  await env.NUSBUS_KV.delete(key).catch(() => {});
+  await env.KV.delete(key).catch(() => {});
   return spendLink(db, pending.t, nowMs);
 }
 

@@ -32,7 +32,7 @@ HOLIDAYS = (
 
 
 def get_json(url: str):
-    req = urllib.request.Request(url, headers={"user-agent": "nusbus-calendar/1.0"})
+    req = urllib.request.Request(url, headers={"user-agent": "terminus-calendar/1.0"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)
 

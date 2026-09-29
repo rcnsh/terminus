@@ -6,7 +6,7 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import { DEVICE_IDLE_MS, adviceFor, checkCalendar, checkUpstream, housekeeping, readUpstream, runCron } from '../src/monitor.ts';
 
 function env() {
-  return { NUSBUS_KV: makeKV(), EMAIL: makeEmail(), EMAIL_FROM: 'login@example.test', ALERT_EMAIL: 'ops@example.test' };
+  return { KV: makeKV(), EMAIL: makeEmail(), EMAIL_FROM: 'login@example.test', ALERT_EMAIL: 'ops@example.test' };
 }
 const ok = async () => ({});
 const fail = (msg) => async () => {
@@ -65,7 +65,7 @@ test('cron: a KV failure in one step does not stop the others', async () => {
   let cleaned = false;
   const batch = db.batch.bind(db);
   db.batch = async (s) => { cleaned = true; return batch(s); };
-  e.NUSBUS_KV.put = async () => { throw new Error('KV write quota'); };
+  e.KV.put = async () => { throw new Error('KV write quota'); };
   const orig = console.error;
   console.error = () => {};
   await runCron({ ...e, DB: db }, 1000);
@@ -84,7 +84,7 @@ test('calendar: warns once a week inside the last 45 days, not before', async ()
 
 test('a corrupt state key reads as no state, not a crash', async () => {
   const e = env();
-  await e.NUSBUS_KV.put('monitor:upstream', '{not json');
+  await e.KV.put('monitor:upstream', '{not json');
   assert.equal(await readUpstream(e), null);
 });
 

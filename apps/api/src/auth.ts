@@ -128,11 +128,11 @@ export function extractSession(body: unknown, nowMs: number): Session | null {
  */
 export async function deviceId(env: Env): Promise<string> {
   if (env.NEXTBUS_DEVICE_ID) return env.NEXTBUS_DEVICE_ID;
-  const stored = await env.NUSBUS_KV.get(KV_DEVICE).catch(() => null);
+  const stored = await env.KV.get(KV_DEVICE).catch(() => null);
   if (stored) return stored;
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   const id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-  await env.NUSBUS_KV.put(KV_DEVICE, id).catch(() => {});
+  await env.KV.put(KV_DEVICE, id).catch(() => {});
   return id;
 }
 
@@ -147,13 +147,13 @@ export async function getSession(
   { force = false }: { force?: boolean } = {},
 ): Promise<Session> {
   if (!authConfigured(env)) throw new Error('auth not configured');
-  const memo = memos.get(env.NUSBUS_KV);
+  const memo = memos.get(env.KV);
   if (!force && memo && memo.expMs > nowMs) return memo;
 
   if (!force) {
-    const cached = (await env.NUSBUS_KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
+    const cached = (await env.KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
     if (cached && cached.expMs > nowMs) {
-      memos.set(env.NUSBUS_KV, cached);
+      memos.set(env.KV, cached);
       return cached;
     }
   }
@@ -200,9 +200,9 @@ async function mint(env: Env, nowMs: number): Promise<Session> {
     throw new Error(`auth rejected: code=${body?.code ?? '?'} msg=${body?.msg ?? ''}`);
   }
 
-  memos.set(env.NUSBUS_KV, session);
+  memos.set(env.KV, session);
   const ttlS = Math.max(60, Math.floor((session.expMs - nowMs) / 1000));
-  await env.NUSBUS_KV.put(KV_TOKEN, JSON.stringify(session), { expirationTtl: ttlS }).catch(() => {});
+  await env.KV.put(KV_TOKEN, JSON.stringify(session), { expirationTtl: ttlS }).catch(() => {});
   return session;
 }
 

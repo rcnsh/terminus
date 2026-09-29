@@ -39,7 +39,7 @@ export const FAILS_TO_ALERT = 2;
 export const CALENDAR_WARN_DAYS = 45;
 
 export async function readUpstream(env: Env): Promise<UpstreamState | null> {
-  const raw = await env.NUSBUS_KV.get(KEY).catch(() => null);
+  const raw = await env.KV.get(KEY).catch(() => null);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as UpstreamState;
@@ -84,7 +84,7 @@ export async function checkUpstream(
       console.error('alert failed', (e as Error)?.name ?? 'error');
     }
   }
-  await env.NUSBUS_KV.put(KEY, JSON.stringify(state));
+  await env.KV.put(KEY, JSON.stringify(state));
   return { state, changed };
 }
 
@@ -127,7 +127,7 @@ export async function housekeeping(db: D1Database, nowMs: number): Promise<void>
 export async function checkCalendar(env: Env, nowMs: number, through = calendarThrough()): Promise<boolean> {
   const daysLeft = Math.floor((Date.parse(`${through}T00:00:00Z`) - nowMs) / 86_400_000);
   if (daysLeft > CALENDAR_WARN_DAYS) return false;
-  const last = Number(await env.NUSBUS_KV.get(CALENDAR_KEY).catch(() => null)) || 0;
+  const last = Number(await env.KV.get(CALENDAR_KEY).catch(() => null)) || 0;
   if (nowMs - last < 7 * 86_400_000) return false;
   if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL) return false;
   await env.EMAIL.send({
@@ -136,7 +136,7 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
     subject: 'terminus: academic calendar data runs out soon',
     text: `data/calendar.json covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nRefresh it and deploy:\n  python3 apps/api/scripts/fetch_calendar.py && npm run deploy`,
   });
-  await env.NUSBUS_KV.put(CALENDAR_KEY, String(nowMs));
+  await env.KV.put(CALENDAR_KEY, String(nowMs));
   return true;
 }
 

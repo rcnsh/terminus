@@ -1,9 +1,9 @@
 /** Environment bindings. Everything optional except KV, so /health can report
  *  what is missing instead of the Worker failing to boot. */
 export interface Env {
-  NUSBUS_KV: KVNamespace;
+  KV: KVNamespace;
   /** Optional. Absent in tests and in dev without the binding; logging no-ops. */
-  NUSBUS_AE?: AnalyticsEngineDataset;
+  AE?: AnalyticsEngineDataset;
 
   NEXTBUS_AUTH_BASE?: string;
   /** e.g. https://inetapps.nus.edu.sg/univus/api/bus-proxy */
