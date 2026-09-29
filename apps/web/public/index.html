@@ -125,11 +125,22 @@
 <header class="wrap nav">
   <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
   <nav class="nav-links">
-    <a href="#download" class="hide-sm">Download</a>
+    <button type="button" class="nav-menu hide-sm" id="dl-button" popovertarget="dl-menu" aria-haspopup="true" aria-expanded="false">Download<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
     <a href="/docs" class="hide-sm">API</a>
     <a class="btn small ghost" href="/account" id="account-link">Sign in</a>
   </nav>
 </header>
+<div id="dl-menu" class="dl-menu" popover>
+  <a href="/download/android">
+    <span class="dl-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span>
+    <span><strong>Android</strong><small>Android 12 or later</small></span>
+  </a>
+  <a href="/download/mac">
+    <span class="dl-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4.5" width="16" height="11" rx="1.5"/><path d="M2 19.5h20"/></svg></span>
+    <span><strong>Mac</strong><small>macOS 14 or later, Apple silicon</small></span>
+  </a>
+  <p class="dl-foot"><span>Free.<span id="dl-version"></span></span><a href="#install" id="dl-install">How to install</a></p>
+</div>
 
 <main class="wrap">
   <section class="hero">
@@ -142,7 +153,7 @@
         <a class="btn ghost" href="/download/mac">Download for Mac</a>
       </div>
       <p class="cta-note">Free. Android 12 or later, macOS 14 or later on Apple silicon.<span id="version"></span></p>
-      <details class="install">
+      <details class="install" id="install">
         <summary>How to install</summary>
         <ol>
           <li><strong>Android:</strong> open the downloaded file and allow your browser to install apps when asked. It's installed directly, not from the Play Store, so Play Protect may ask you to confirm.</li>

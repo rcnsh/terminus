@@ -88,6 +88,38 @@ p { margin: 0; }
 .nav-links { display: flex; align-items: center; gap: 20px; font-size: 0.95rem; }
 .nav-links a { color: var(--muted); text-decoration: none; padding: 10px 2px; }
 .nav-links a:hover { color: var(--ink); }
+.nav-menu {
+  display: inline-flex; align-items: center; gap: 5px; padding: 10px 2px;
+  background: none; border: 0; font: inherit; color: var(--muted); cursor: pointer;
+}
+.nav-menu:hover, .nav-menu[aria-expanded="true"] { color: var(--ink); }
+.nav-menu svg { transition: transform 0.15s ease; }
+.nav-menu[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+/* The header's download menu. A native popover: Esc and clicking outside
+   close it. landing.js places it under its button. */
+.dl-menu {
+  position: fixed; inset: auto; margin: 0; width: 280px; padding: 6px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.dl-menu > a {
+  display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px;
+  color: inherit; text-decoration: none;
+}
+.dl-menu > a:hover, .dl-menu > a:focus-visible { background: var(--surface-2); }
+.dl-menu > a:focus-visible { outline-offset: -2px; }
+.dl-menu strong { display: block; font-weight: 600; font-size: 0.95rem; }
+.dl-menu small { display: block; color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+.dl-icon {
+  flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.dl-foot {
+  display: flex; justify-content: space-between; gap: 12px; margin: 6px 0 0; padding: 10px 10px 6px;
+  border-top: 1px solid var(--line); font-size: 0.8rem; color: var(--muted);
+}
+.dl-foot a { color: var(--accent); }
 .foot { border-top: 1px solid var(--line); margin-top: 72px; padding: 28px 0 40px; color: var(--muted); font-size: 0.875rem; }
 .foot .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; }
 .foot nav { display: flex; gap: 18px; }

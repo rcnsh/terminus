@@ -2,7 +2,9 @@
 fetch('/download/latest.json')
   .then((r) => (r.ok ? r.json() : null))
   .then((l) => {
-    if (l?.version) document.getElementById('version').textContent = ` Version ${l.version}.`;
+    if (!l?.version) return;
+    document.getElementById('version').textContent = ` Version ${l.version}.`;
+    document.getElementById('dl-version').textContent = ` Version ${l.version}.`;
   })
   .catch(() => {});
 
@@ -12,6 +14,40 @@ fetch('/me', { credentials: 'same-origin' })
     if (r.ok) document.getElementById('account-link').textContent = 'Account';
   })
   .catch(() => {});
+
+// The header's download menu, placed under its button. It closes on scroll
+// rather than drifting away from the button it belongs to.
+{
+  const button = document.getElementById('dl-button');
+  const menu = document.getElementById('dl-menu');
+  const close = () => menu.hidePopover();
+  if (typeof menu.showPopover !== 'function') {
+    // No popover support: the button goes to the download buttons instead.
+    button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  } else {
+    menu.addEventListener('beforetoggle', (e) => {
+      const open = e.newState === 'open';
+      button.setAttribute('aria-expanded', String(open));
+      if (open) {
+        const r = button.getBoundingClientRect();
+        menu.style.top = `${r.bottom + 6}px`;
+        menu.style.right = `${Math.max(16, document.documentElement.clientWidth - r.right)}px`;
+        window.addEventListener('scroll', close, { once: true, passive: true });
+        window.addEventListener('resize', close, { once: true });
+      } else {
+        window.removeEventListener('scroll', close);
+        window.removeEventListener('resize', close);
+      }
+    });
+    document.getElementById('dl-install').addEventListener('click', (e) => {
+      e.preventDefault();
+      close();
+      const details = document.getElementById('install');
+      details.open = true;
+      details.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+    });
+  }
+}
 
 // Light | dark split images: a handle on each, drag or arrow keys to move the
 // seam; on first view it sweeps in from all-light, unless motion is reduced.
