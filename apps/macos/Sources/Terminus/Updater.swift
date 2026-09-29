@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Sparkle
 import os
@@ -29,8 +30,14 @@ final class Updater: NSObject, @preconcurrency SPUUpdaterDelegate {
         controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
     }
 
-    /// From the "terminus x is out" card: check now, with Sparkle's own window.
-    func checkNow() { controller?.checkForUpdates(nil) }
+    /// From Settings or the "terminus x is out" card: check now, with
+    /// Sparkle's own window saying what it found.
+    func checkNow() {
+        // A menu bar app is never active on its own; without this Sparkle's
+        // window opens behind whatever the user was using.
+        NSApp.activate(ignoringOtherApps: true)
+        controller?.checkForUpdates(nil)
+    }
 
     /// The popover closed: a waiting update can go in now.
     func popoverClosed() {
