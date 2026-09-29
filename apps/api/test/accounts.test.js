@@ -104,67 +104,6 @@ test('an expired link is refused', async () => {
   assert.equal(res.status, 400);
 });
 
-test('the emailed code signs in once, and spends the link with it', async () => {
-  const { env, email } = setup();
-  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
-  const msg = email.sent.at(-1);
-  const code = email.lastCode();
-  assert.match(code, /^[A-Z0-9]{6}$/);
-  assert.equal(msg.subject, `Your terminus code: ${code}`);
-  assert.match(msg.text, /because someone entered this address/);
-
-  // Case, spaces and a dash are forgiven, as with pairing codes.
-  const typed = `${code.slice(0, 3).toLowerCase()} -${code.slice(3)}`;
-  const res = await call(env, '/auth/code', { method: 'POST', body: { email: ' Friend@U.NUS.edu', code: typed } });
-  assert.equal(res.status, 200);
-  const cookie = res.headers.get('set-cookie');
-  assert.match(cookie, /tm_s=.+HttpOnly; Secure; SameSite=Lax/);
-  const me = await call(env, '/me', { cookie: cookie.split(';')[0] });
-  assert.equal((await me.json()).email, INVITED);
-
-  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400, 'code is single-use');
-  assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } })).status, 400, 'its link went with it');
-});
-
-test('a spent link kills its code', async () => {
-  const { env, email } = setup();
-  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
-  const code = email.lastCode();
-  assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } })).status, 303);
-  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400);
-});
-
-test('a code only works for its own address, and dies after five wrong guesses', async () => {
-  const { env, email } = setup();
-  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
-  const code = email.lastCode();
-  const wrong = code === '222222' ? '333333' : '222222';
-
-  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: 'other@u.nus.edu', code } })).status, 400);
-  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code: 'nope' } })).status, 400);
-  for (let i = 0; i < 5; i++) {
-    assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code: wrong } })).status, 400);
-  }
-  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400, 'dead after 5 misses');
-  // The link in the same email still works.
-  assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } })).status, 303);
-});
-
-test('an expired code is refused', async () => {
-  const { env, email } = setup();
-  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
-  for (const [k, v] of env.KV._map) if (k.startsWith('code:')) env.KV._map.set(k, JSON.stringify({ ...JSON.parse(v), e: 0 }));
-  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code: email.lastCode() } })).status, 400);
-});
-
-test('the code is stored hashed, never raw', async () => {
-  const { env, email } = setup();
-  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
-  const dump = JSON.stringify([...env.KV._map]);
-  assert.ok(!dump.includes(email.lastCode()));
-  assert.ok(!dump.includes(INVITED));
-});
-
 test('a second link inside the cooldown is not sent', async () => {
   const { env, email } = setup();
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });

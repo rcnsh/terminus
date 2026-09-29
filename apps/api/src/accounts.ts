@@ -1,5 +1,5 @@
 /**
- * Accounts: email sign-in codes and links for the web page, pairing codes
+ * Accounts: email sign-in links for the web page, pairing codes
  * for the native apps, and one profile document per user.
  *
  * Every token is 32 random bytes, handed out once and stored only as its
@@ -15,8 +15,6 @@ export const ACCOUNT_TTL = {
   linkCooldownMs: 60_000,
   webSessionMs: 30 * 86_400_000,
   pairCodeMs: 10 * 60_000,
-  /** Wrong guesses before an emailed sign-in code stops working. */
-  codeTries: 5,
   /** last_seen is only rewritten this often, to keep D1 writes down. */
   touchMs: 3_600_000,
 } as const;
@@ -137,54 +135,27 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
       .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs),
   ]);
 
-  // The same sign-in, as a code typed on the page that asked. University
-  // filters (NUS's among them) hold back mail that is only a link; a code
-  // needs no click. It lives in KV and points at the link's row, so spending
-  // either one spends both.
-  const code = newPairCode();
-  const codeKey = await signInCodeKey(email);
-  const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs, n: 0 };
-
   const link = `${origin}/auth/verify?t=${token}`;
   try {
     if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');
-    await env.KV.put(codeKey, JSON.stringify(pending), { expirationTtl: ACCOUNT_TTL.linkMs / 1000 });
-    await sendLink(env, email, link, code, origin);
+    await sendLink(env, email, link);
   } catch (err) {
     // Otherwise the unsent link holds the cooldown and the retry is told
     // "check your email" for a message that never went.
     await db.prepare('DELETE FROM magic_links WHERE token_hash = ?').bind(tokenHash).run();
-    await env.KV.delete(codeKey).catch(() => {});
     throw err;
   }
   await env.KV.put(coolKey, '1', { expirationTtl: Math.max(60, ACCOUNT_TTL.linkCooldownMs / 1000) }).catch(() => {});
   return 'sent';
 }
 
-/**
- * Worded to look like what it is. A subject of "Sign in to ..." over a lone
- * link is the shape of a phishing mail, and filters treat it as one.
- */
-async function sendLink(env: Env, email: string, link: string, code: string, origin: string): Promise<void> {
-  const site = new URL(origin).host;
-  const why = `You're getting this because someone entered this address at ${site}, the NUS shuttle bus times app. If that wasn't you, ignore this email: nothing happens without the code.`;
+async function sendLink(env: Env, email: string, link: string): Promise<void> {
   await env.EMAIL!.send({
     from: { email: env.EMAIL_FROM!, name: 'terminus' },
     to: email,
-    subject: `Your terminus code: ${code}`,
-    text: `Your terminus sign-in code is ${code}
-
-Type it on the terminus page where you asked to sign in. It works once and expires in 15 minutes. Never give it to anyone.
-
-Or sign in with this link instead:
-${link}
-
-${why}`,
-    html: `<p>Your terminus sign-in code is</p>
-<p style="font-size:28px;font-weight:700;letter-spacing:4px;font-family:ui-monospace,Menlo,monospace">${code}</p>
-<p>Type it on the terminus page where you asked to sign in. It works once and expires in 15 minutes. Never give it to anyone.</p>
-<p>Or <a href="${link}">sign in with this link</a> instead.</p>
-<p style="color:#666;font-size:13px">${why}</p>`,
+    subject: 'Sign in to terminus',
+    text: `Sign in to terminus:\n\n${link}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.`,
+    html: `<p><a href="${link}">Sign in to terminus</a></p><p>The link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.</p>`,
   });
 }
 
@@ -203,10 +174,7 @@ export async function linkEmail(db: D1Database, token: string, nowMs: number): P
  * token for the cookie, or null when the link is unknown, used or expired.
  */
 export async function redeemLink(db: D1Database, token: string, nowMs: number): Promise<string | null> {
-  return spendLink(db, await hashToken(token), nowMs);
-}
-
-async function spendLink(db: D1Database, hash: string, nowMs: number): Promise<string | null> {
+  const hash = await hashToken(token);
   // DELETE ... RETURNING makes the link single-use even under two racing POSTs.
   const row = await db
     .prepare('DELETE FROM magic_links WHERE token_hash = ? RETURNING email, expires')
@@ -216,42 +184,6 @@ async function spendLink(db: D1Database, hash: string, nowMs: number): Promise<s
 
   const user = await ensureUser(db, row.email, nowMs);
   return openSession(db, user.id, 'web', null, nowMs);
-}
-
-/** A sign-in code waiting in KV: hashes of the code and of its link's token,
- *  when it expires, and how many wrong guesses it has had. */
-interface PendingCode {
-  c: string;
-  t: string;
-  e: number;
-  n: number;
-}
-
-async function signInCodeKey(email: string): Promise<string> {
-  return `code:${await hashToken(email)}`;
-}
-
-/**
- * Spends an emailed sign-in code and opens a web session, or returns null.
- * A code is tied to the address it was sent to and dies after a few wrong
- * guesses, so with about 7×10⁸ possible codes guessing is hopeless. The
- * session itself comes from spending the link's D1 row, which is atomic, so
- * a code and its link together still sign in exactly once.
- */
-export async function redeemCode(env: Env, db: D1Database, email: string, code: string, nowMs: number): Promise<string | null> {
-  const key = await signInCodeKey(email);
-  const pending = await env.KV.get<PendingCode>(key, 'json').catch(() => null);
-  if (!pending || pending.e < nowMs) return null;
-  if ((await hashToken(code)) !== pending.c) {
-    const n = pending.n + 1;
-    const ttlS = Math.floor((pending.e - nowMs) / 1000);
-    // KV's shortest TTL is 60 s; a code closer to expiry than that just dies.
-    if (n >= ACCOUNT_TTL.codeTries || ttlS < 60) await env.KV.delete(key).catch(() => {});
-    else await env.KV.put(key, JSON.stringify({ ...pending, n }), { expirationTtl: ttlS }).catch(() => {});
-    return null;
-  }
-  await env.KV.delete(key).catch(() => {});
-  return spendLink(db, pending.t, nowMs);
 }
 
 async function ensureUser(db: D1Database, email: string, nowMs: number): Promise<User> {

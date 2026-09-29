@@ -89,7 +89,7 @@ pnpm run deploy
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
-| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. |
+| `POST /auth/login`, `/pair`, `/me/*` | Accounts. See below. |
 
 `/next`, `/trip`, `/arrivals`, `/campus` and `/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`) or a signed-in session.
@@ -106,8 +106,7 @@ TTLs and tuning constants.
 ## Accounts
 
 Sign-up is open; addresses on the `blocklist` table are refused. The account
-page at `/account` signs in with an emailed code (or the link in the same
-email) and stores one profile per user in D1: timetable, home stops, gap threshold and
+page at `/account` signs in with an emailed link and stores one profile per user in D1: timetable, home stops, gap threshold and
 saved places. Native apps don't sign in; they pair with a 6-character code
 from the page and get a device token (`Authorization: Bearer`).
 
@@ -312,7 +311,7 @@ src/pairs.ts      /stops/pairs
 src/analytics.ts  Analytics Engine decision + arrival logging
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
 src/http.ts       JSON responses, query parsing
-src/accounts.ts   Sign-in codes and links, sessions, pairing codes (D1)
+src/accounts.ts   Sign-in links, sessions, pairing codes (D1)
 src/access.ts     API keys, and who may call the keyed routes
 src/profile.ts    Profile validation and the where-next planner
 src/me.ts         /auth, /pair and /me routes

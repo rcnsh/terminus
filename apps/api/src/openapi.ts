@@ -345,33 +345,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       '/auth/login': {
         post: {
           tags: ['Account'],
-          summary: 'Email a sign-in code and link',
+          summary: 'Email a sign-in link',
           description:
-            'Emails a 6-character sign-in code and a sign-in link to the address. The reply is the same whether or not the address is blocked or has an account. ' +
-            'One email per address per minute. Either the code (`/auth/code`) or the link signs in, once, within 15 minutes.',
+            'Sends a sign-in link to an invited address. The reply is the same whether or not the address is invited. ' +
+            'One link per address per minute.',
           operationId: 'login',
           requestBody: jsonBody({ type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } }, { email: 'you@u.nus.edu' }),
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, message: { type: 'string' } } }),
             '400': errorResponse('Not an email address.'),
-            '429': errorResponse('Too many attempts from this IP.'),
-          },
-        },
-      },
-      '/auth/code': {
-        post: {
-          tags: ['Account'],
-          summary: 'Sign in with an emailed code',
-          description:
-            'Spends the code from the `/auth/login` email and sets the web session cookie. A code dies after 5 wrong guesses; the link in the same email still works.',
-          operationId: 'signInCode',
-          requestBody: jsonBody(
-            { type: 'object', required: ['email', 'code'], properties: { email: { type: 'string', format: 'email' }, code: { type: 'string' } } },
-            { email: 'you@u.nus.edu', code: 'K7QX4M' },
-          ),
-          responses: {
-            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
-            '400': errorResponse('Wrong or expired code.'),
             '429': errorResponse('Too many attempts from this IP.'),
           },
         },

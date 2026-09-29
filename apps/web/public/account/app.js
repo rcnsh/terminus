@@ -361,34 +361,14 @@ $('#login-form').addEventListener('submit', async (e) => {
   try {
     await sendLink(email);
     $('#sent-to').textContent = email;
-    $('#code-input').value = '';
-    $('#code-msg').textContent = '';
     $('#login-step').hidden = true;
     $('#sent-step').hidden = false;
-    $('#code-input').focus();
   } catch (e2) {
     err.textContent = e2.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Email me a sign-in code';
+    btn.textContent = 'Email me a sign-in link';
     resetTurnstile();
-  }
-});
-
-$('#code-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const err = $('#code-msg');
-  const btn = e.target.querySelector('button');
-  err.textContent = '';
-  btn.disabled = true;
-  try {
-    await api('/auth/code', { method: 'POST', body: { email: $('#sent-to').textContent, code: $('#code-input').value } });
-    // The session cookie is set; start over as signed in.
-    location.reload();
-  } catch (e2) {
-    err.textContent = e2.message;
-    btn.disabled = false;
-    $('#code-input').select();
   }
 });
 
