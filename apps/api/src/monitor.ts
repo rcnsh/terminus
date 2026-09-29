@@ -10,6 +10,7 @@
 import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
 import { KV_APP_VERSION, UpstreamRejected } from './auth.ts';
+import { autoUpdateVersion, type AutoResult } from './appversion.ts';
 import { calendarThrough } from './calendar.ts';
 import { pruneCrowdSeen } from './crowd.ts';
 
@@ -22,6 +23,8 @@ export interface UpstreamState {
   reason: string | null;
   /** NUS's whole response to that failure, when it refused us outright. */
   detail?: string | null;
+  /** What the automatic version update tried, when it could not fix it. */
+  auto?: string | null;
   checkedAt: number;
   /** Failed checks in a row. */
   failures?: number;
@@ -65,19 +68,47 @@ export async function checkUpstream(
   env: Env,
   nowMs: number,
   probe: () => Promise<unknown> = () => fetchArrivals(env, PROBE_STOP, nowMs),
+  fixVersion: (detail: string | null) => Promise<AutoResult> = (detail) => autoUpdateVersion(env, nowMs, detail, PROBE_STOP),
 ): Promise<{ state: UpstreamState; changed: boolean }> {
   let ok = true;
   let reason: string | null = null;
   let detail: string | null = null;
-  try {
-    await probe();
-  } catch (err) {
-    ok = false;
-    reason = String((err as Error)?.message ?? err).slice(0, 300);
-    if (err instanceof UpstreamRejected && err.detail) {
-      detail = err.detail;
-      // Kept in the logs too: what a refusal says is the clue to what changed.
-      console.log('upstream rejected', err.code, detail);
+  let auto: string | null = null;
+  let refusedVersion = false;
+  const run = async () => {
+    try {
+      await probe();
+      ok = true;
+      reason = detail = null;
+    } catch (err) {
+      ok = false;
+      reason = String((err as Error)?.message ?? err).slice(0, 300);
+      refusedVersion = err instanceof UpstreamRejected && err.code === '10009';
+      if (err instanceof UpstreamRejected && err.detail) {
+        detail = err.detail;
+        // Kept in the logs too: what a refusal says is the clue to what changed.
+        console.log('upstream rejected', err.code, detail);
+      }
+    }
+  };
+  await run();
+
+  // A new uNivUS release: find its version string and switch to it, then
+  // check again. Fixed here, the outage is never confirmed, so the only
+  // email is the one saying what changed.
+  if (refusedVersion) {
+    let result: AutoResult;
+    try {
+      result = await fixVersion(detail);
+    } catch (err) {
+      result = { status: 'failed', note: `the automatic update failed: ${(err as Error)?.message ?? err}` };
+    }
+    if (result.status === 'switched') {
+      await switchedAlert(env, result).catch((e) => console.error('alert failed', (e as Error)?.name ?? 'error'));
+      await run();
+      if (!ok) auto = `switched to ${result.to} automatically, but the feed still fails`;
+    } else {
+      auto = result.note;
     }
   }
 
@@ -87,7 +118,7 @@ export async function checkUpstream(
   const changed = !prev || prev.up !== up;
   let pending = prev?.pending ?? null;
   if (changed && (prev || !up)) pending = up ? 'up' : 'down';
-  const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, detail, checkedAt: nowMs, failures, pending };
+  const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, detail, auto, checkedAt: nowMs, failures, pending };
 
   if (pending) {
     try {
@@ -123,8 +154,23 @@ async function alert(env: Env, s: UpstreamState, kind: 'up' | 'down'): Promise<v
   const subject = kind === 'up' ? 'terminus: NUS bus feed recovered' : 'terminus: NUS bus feed is down';
   const text = kind === 'up'
     ? `The NUS bus feed is answering again as of ${when}. Live times are back.`
-    : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${adviceFor(s.reason)}\n\nUntil then every answer says "live times unavailable".${s.detail ? `\n\nNUS's full response:\n${s.detail}` : ''}`;
+    : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${s.auto ? `Tried automatically: ${s.auto}.\n\n` : ''}${adviceFor(s.reason)}\n\nUntil then every answer says "live times unavailable".${s.detail ? `\n\nNUS's full response:\n${s.detail}` : ''}`;
   await env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
+}
+
+async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switched' }>): Promise<void> {
+  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL) return;
+  const name = /univus_android_(.+)_\d+$/.exec(r.to)?.[1] ?? r.to;
+  await env.EMAIL.send({
+    from: { email: env.EMAIL_FROM, name: 'terminus' },
+    to: env.ALERT_EMAIL,
+    subject: `terminus: switched to uNivUS ${name} automatically`,
+    text: [
+      `NUS started refusing ${r.from || 'the old version string'}, so a new uNivUS is out. terminus found ${r.to}, NUS accepted it, and it is now in ${KV_APP_VERSION}.`,
+      'Nothing to do. To undo it, from apps/api:',
+      `  pnpm exec cf kv keys delete ${KV_APP_VERSION} --namespace-id ${KV_NAMESPACE_ID}`,
+    ].join('\n\n'),
+  });
 }
 
 /** Delete expired sign-in links, pairing codes, web sessions and idle devices. */
