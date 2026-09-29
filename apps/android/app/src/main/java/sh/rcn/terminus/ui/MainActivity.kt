@@ -64,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -122,9 +123,9 @@ class MainActivity : ComponentActivity() {
         fun intentFor(ctx: Context, place: String? = null, nearby: Boolean = false): Intent =
             Intent(ctx, MainActivity::class.java).apply {
                 data = when {
-                    place != null -> Uri.parse("terminus://place/${Uri.encode(place)}")
-                    nearby -> Uri.parse("terminus://nearby")
-                    else -> Uri.parse("terminus://plan")
+                    place != null -> "terminus://place/${Uri.encode(place)}".toUri()
+                    nearby -> "terminus://nearby".toUri()
+                    else -> "terminus://plan".toUri()
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
@@ -170,7 +171,7 @@ private fun PairScreen(state: UiState, onPair: (String) -> Unit) {
         Wordmark(MaterialTheme.typography.headlineMedium)
         val ctx = LocalContext.current
         Text("Pair this phone with your account. Sign in at terminus.rcn.sh/account, choose Pair a device, then enter the 6-character code here or scan the QR code with your camera.")
-        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://terminus.rcn.sh/account"))) }) {
+        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "https://terminus.rcn.sh/account".toUri())) }) {
             Text("Open terminus.rcn.sh/account")
         }
         OutlinedTextField(
@@ -237,7 +238,7 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("terminus $v is out", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://terminus.rcn.sh/download/android"))) }) { Text("Update") }
+                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "https://terminus.rcn.sh/download/android".toUri())) }) { Text("Update") }
                 }
             }
         }
@@ -335,7 +336,8 @@ private fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (Bo
                     when {
                         !want -> onChange(false)
                         LeaveAlerts.canNotify(ctx) -> onChange(true)
-                        else -> ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        // Only reached on Android 13+, where the permission exists.
+                        else -> @Suppress("InlinedApi") ask.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 },
             )

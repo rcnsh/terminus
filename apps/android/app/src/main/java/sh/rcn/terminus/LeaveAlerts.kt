@@ -37,8 +37,10 @@ object LeaveAlerts {
     const val ACTION_CHECK = "sh.rcn.terminus.LEAVE_CHECK"
     const val ACTION_NOW = "sh.rcn.terminus.LEAVE_NOW"
 
+    /** Android 12 needs no permission to notify; 13 and later ask. */
     fun canNotify(ctx: Context): Boolean =
-        ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+            ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     /** Called with every planned answer, from the app and from the background refresh. */
     fun arm(ctx: Context, answer: NextAnswer, now: Long = System.currentTimeMillis()) {
@@ -108,6 +110,8 @@ object LeaveAlerts {
         nm.notify(NOTIFICATION_ID, n)
     }
 
+    // Exact only when canScheduleExactAlarms() says so; lint can't see the check.
+    @android.annotation.SuppressLint("MissingPermission")
     private fun setAlarm(ctx: Context, action: String, at: Long) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val pi = alarmIntent(ctx, action)

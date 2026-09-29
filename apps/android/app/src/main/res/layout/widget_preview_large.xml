@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- What "Next bus + places" looks like, for the widget picker. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="HardcodedText,UselessLeaf"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_preview_bg"
@@ -17,6 +19,7 @@
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="Arrive 09:52 · 8 min early" android:textSize="12sp"
         android:textColor="@color/brand_accent" />
+    <!-- Spacer: RemoteViews has no plain View. Sample text below is a picture, not UI copy. -->
     <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
     <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="KR MRT"
