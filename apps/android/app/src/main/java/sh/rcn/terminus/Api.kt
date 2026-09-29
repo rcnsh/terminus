@@ -66,14 +66,25 @@ data class NextAnswer(
         return if (now >= at) "Leave now" else "Leave by $tilde${format(at)}"
     }
 
-    /** "Catch the ~09:41 D2 at PGP · arrive ~09:55, 3 min early", or on foot. */
-    fun catchLine(format: (Long) -> String): String? {
+    /** "Catch the ~09:41 D2 at PGP", or "Walk there". */
+    fun catchHow(format: (Long) -> String): String? {
         leaveAtMs ?: return null
-        val how = when {
+        return when {
             leaveSvc == null -> "Walk there"
             leaveBoardMs != null -> "Catch the $tilde${format(leaveBoardMs)} $leaveSvc at $leaveStop"
             else -> "Catch the $leaveSvc at $leaveStop"
         }
+    }
+
+    /** "Arrive ~09:55 · 3 min early". */
+    fun catchArrive(format: (Long) -> String): String? {
+        val arrive = leaveArriveMs ?: return null
+        return "Arrive $tilde${format(arrive)}${classAtMs?.let { " · ${slack(arrive, it)}" }.orEmpty()}"
+    }
+
+    /** Both on one line, where there's room for only one: the widget and notifications. */
+    fun catchLine(format: (Long) -> String): String? {
+        val how = catchHow(format) ?: return null
         val arrive = leaveArriveMs ?: return how
         return "$how · arrive $tilde${format(arrive)}${classAtMs?.let { ", ${slack(arrive, it)}" }.orEmpty()}"
     }

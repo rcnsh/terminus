@@ -180,10 +180,10 @@ function classPlan(a) {
   const late = l.arrive && Date.parse(l.arrive) > classAt;
   const head = Date.now() >= Date.parse(l.at) ? 'Leave now' : `Leave by ${t}${clock(l.at)}`;
   const how = l.svc ? `Catch the ${l.board ? `${t}${clock(l.board)} ` : ''}${l.svc} at ${l.stop}` : 'Walk there';
-  let catchLine = how;
+  let arrive = null;
   if (l.arrive) {
     const m = Math.round((classAt - Date.parse(l.arrive)) / 60_000);
-    catchLine += ` · arrive ${t}${clock(l.arrive)}, ${m > 0 ? `${m} min early` : m === 0 ? 'just in time' : `~${-m} min late`}`;
+    arrive = `Arrive ${t}${clock(l.arrive)} · ${m > 0 ? `${m} min early` : m === 0 ? 'just in time' : `~${-m} min late`}`;
   }
   const svc = a.label.split(' · ')[0];
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
@@ -194,11 +194,12 @@ function classPlan(a) {
   return [
     el('div', { class: 'where', textContent: `${a.dest.label} · starts ${clock(a.timing.classAt)}` }),
     el('div', { class: `big${late ? ' late' : ''}`, textContent: head }),
-    el('div', { class: `catch${late ? ' late' : ''}`, textContent: catchLine }),
+    // The bus to catch names the stop, so there's no general detail line below.
+    el('div', { class: `catch${late ? ' late' : ''}`, textContent: how }),
+    arrive ? el('div', { class: `arrive${late ? ' late' : ''}`, textContent: arrive }) : null,
     l.note ? el('div', { class: 'crowd-note', textContent: l.note }) : null,
     l.estimated ? el('div', { class: 'note', textContent: 'Estimated from the usual gap between buses. Live times show nearer the time.' }) : null,
     goNow ? el('div', { class: 'go-now', textContent: goNow }) : null,
-    el('div', { class: 'note', textContent: a.detail }),
   ].filter(Boolean);
 }
 

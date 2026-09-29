@@ -454,9 +454,11 @@ private fun ClassPlan(answer: NextAnswer) {
             color = MaterialTheme.colorScheme.primary,
         )
     }
-    answer.catchLine(fmt)?.let {
-        Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = if (late) MaterialTheme.colorScheme.error else goodColor())
-    }
+    // The bus to catch, and underneath when it gets you there. The stop is
+    // named here, so no separate "board at" or general detail line below.
+    val tone = if (late) MaterialTheme.colorScheme.error else goodColor()
+    answer.catchHow(fmt)?.let { Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = tone) }
+    answer.catchArrive(fmt)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = tone) }
     answer.leaveNote?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary) }
     if (answer.leaveEstimated) {
         Text("Estimated from the usual gap between buses. Live times show nearer the time.", style = MaterialTheme.typography.bodySmall, color = muted)
@@ -466,8 +468,7 @@ private fun ClassPlan(answer: NextAnswer) {
         Text(it, style = MaterialTheme.typography.bodyMedium)
         Countdown(answer)
     }
-    Text(answer.detail, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 6.dp))
-    qualityNote(answer.quality)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+    qualityNote(answer.quality)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 6.dp)) }
 }
 
 @Composable

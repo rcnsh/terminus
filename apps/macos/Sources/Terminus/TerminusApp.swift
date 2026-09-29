@@ -578,13 +578,15 @@ private struct AnswerDetail: View {
             if let a = answer {
                 if a.isClassPlan {
                     // Each arrival next to the bus it belongs to.
-                    if let c = a.catchLine { Row(icon: "figure.walk", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.red : Color.good) }
+                    // The bus to catch (it names the stop), then when it gets you there.
+                    let tone = a.leaveLate ? Color.red : Color.good
+                    if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(tone) }
+                    if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(tone) }
                     if let note = a.leave?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(Color.warn) }
                     if a.leave?.estimated == true {
                         Row(icon: "info.circle", text: "Estimated from the usual gap between buses. Live times show nearer the time.").foregroundStyle(.secondary)
                     }
                     if let g = a.goNowLine { Row(icon: "bus", text: g) }
-                    Row(icon: "text.alignleft", text: a.detail).foregroundStyle(.secondary)
                 } else {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                 if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
@@ -595,7 +597,6 @@ private struct AnswerDetail: View {
                         if let c = crowdWord(a.crowd) { Pill(text: c, color: .secondary) }
                     }
                 }
-                if let name = a.stop?.name, !name.isEmpty { Row(icon: "mappin.circle", text: "Board at \(name)") }
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -603,6 +604,9 @@ private struct AnswerDetail: View {
                 }
             }
         }
+        // Fill the area's fixed height (120 with the card's padding), so a
+        // short answer centres in the card instead of leaving a gap under it.
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
         .card()
     }
 
