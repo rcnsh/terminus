@@ -121,6 +121,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Text("Tap to refresh", style = muted)
                     }
                     answer.arrived -> {
+                        // Short: centred in the space above the chips, not stuck to the top.
+                        if (large) Spacer(GlanceModifier.defaultWeight())
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Image(
                                 provider = ImageProvider(R.drawable.ic_check),
@@ -135,10 +137,13 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
                             Chips(ctx, answer)
+                            Spacer(GlanceModifier.height(6.dp))
                         }
+                        Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer.mode == "rest" -> {
                         // Outside the user's day: a moon and the next class, no bus.
+                        if (large) Spacer(GlanceModifier.defaultWeight())
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Image(
                                 provider = ImageProvider(R.drawable.ic_moon),
@@ -157,7 +162,9 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
                             Chips(ctx, answer)
+                            Spacer(GlanceModifier.height(6.dp))
                         }
+                        Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer.isClassPlan -> {
                         // A class: when to leave leads, the next bus is the fallback.
@@ -199,9 +206,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             Chips(ctx, answer)
                             Spacer(GlanceModifier.height(6.dp))
                         }
-                        val stamp = fetchedAt?.let { "Updated ${clock(ctx, it)}" }
-                        val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
-                        if (roomy && foot.isNotEmpty()) Text(foot, style = tiny, maxLines = 1)
+                        Footer(ctx, fetchedAt, error, roomy)
                     }
                     else -> {
                         val heading = listOfNotNull(
@@ -247,9 +252,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             Chips(ctx, answer)
                             Spacer(GlanceModifier.height(6.dp))
                         }
-                        val stamp = fetchedAt?.let { "Updated ${clock(ctx, it)}" }
-                        val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
-                        if (roomy && foot.isNotEmpty()) Text(foot, style = tiny, maxLines = 1)
+                        Footer(ctx, fetchedAt, error, roomy)
                     }
                 }
             }
@@ -275,6 +278,14 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                 modifier = GlanceModifier.size(18.dp),
             )
         }
+    }
+
+    /** "Updated 17:14", with any problem in front, where there's room. */
+    @Composable
+    private fun Footer(ctx: Context, fetchedAt: Long?, error: String?, roomy: Boolean) {
+        val stamp = fetchedAt?.let { "Updated ${clock(ctx, it)}" }
+        val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
+        if (roomy && foot.isNotEmpty()) Text(foot, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp), maxLines = 1)
     }
 
     private fun timingColor(status: String?, colors: androidx.glance.color.ColorProviders) = when (status) {

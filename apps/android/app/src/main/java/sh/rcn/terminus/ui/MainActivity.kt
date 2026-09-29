@@ -361,8 +361,14 @@ private fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (Bo
 
 @Composable
 private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // The card fills the space kept for it, so a short answer ("You're home",
+    // the rest screen) doesn't leave a gap under it; short ones sit centred.
+    val short = answer == null || answer.arrived || answer.mode == "rest"
+    Card(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(min = 180.dp).padding(16.dp),
+            verticalArrangement = if (short) Arrangement.spacedBy(4.dp, Alignment.CenterVertically) else Arrangement.spacedBy(4.dp),
+        ) {
             if (answer == null) {
                 Text(if (loading) "Checking…" else "No answer yet", style = MaterialTheme.typography.titleLarge)
                 return@Column
