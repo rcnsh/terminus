@@ -63,7 +63,6 @@ export interface LogInput {
   answer: Answer;
   best: ScoredOption | null;
   dest: string | null;
-  tripKey: string | null;
   hadCoords: boolean;
   walkAllS: number | null;
 }
@@ -83,7 +82,7 @@ export function logAnswer(env: Env, input: LogInput): void {
         answer.quality,
         '',
         best?.arrival?.crowd ?? '',
-        input.tripKey ?? '',
+        '', // was the trip key, never set; the column stays so the others don't shift
         best?.arrival?.berth ?? '',
       ],
       doubles: [
@@ -113,7 +112,7 @@ export function logAnswer(env: Env, input: LogInput): void {
           answer.quality,
           a.plate ?? '',
           a.crowd ?? '',
-          input.tripKey ?? '',
+          '', // was the trip key, never set; the column stays so the others don't shift
           a.berth ?? '',
         ],
         doubles: [a.etaS, -1, -1, -1, -1, -1, answer.stop.confidence, 0, input.hadCoords ? 1 : 0, -1],
