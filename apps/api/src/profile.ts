@@ -397,6 +397,8 @@ export interface Timing {
   text: string;
   /** Class start, ISO. */
   classAt: string;
+  /** When you reach the class on the headline bus, ISO. Clients format it. */
+  reachAt: string;
 }
 
 /** At least this much spare time counts as comfortably on time. */
@@ -434,5 +436,5 @@ export function timingFor(arriveAtIso: string | null | undefined, trip: Imported
       : status === 'tight'
         ? `Arrive ${hhmm(reachMs)} · just in time`
         : `~${Math.max(1, Math.round(-slackS / 60))} min late`;
-  return { status, text, classAt: isoSeconds(classAt) };
+  return { status, text, classAt: isoSeconds(classAt), reachAt: isoSeconds(reachMs) };
 }

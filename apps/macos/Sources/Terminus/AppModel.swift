@@ -110,6 +110,10 @@ final class AppModel {
     /// or nil for the plain icon once the bus has gone or there's no bus.
     func menuTitle(at now: Date) -> String? {
         guard let plan, plan.quality != "ended", plan.label != "Set up" else { return nil }
+        // A class: when to leave is what matters from the menu bar.
+        if plan.isClassPlan, let at = plan.leaveAt {
+            return now >= at ? "Leave now" : "Leave \(campusTime(at))"
+        }
         guard plan.hasLiveTime, let at = plan.departure else {
             let short = plan.label.replacingOccurrences(of: " · ", with: " ").replacingOccurrences(of: " min", with: "m")
             return short.count > 16 ? String(short.prefix(15)) + "…" : short

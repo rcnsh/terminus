@@ -108,6 +108,11 @@ export interface Leave {
   /** The bus this is for, and where to board it. Null when walking. */
   svc: string | null;
   stop: string | null;
+  /** When that bus leaves the stop, ISO. With no live times, when you reach
+   *  the stop (`estimated`). Null when walking. */
+  board: string | null;
+  /** When you get there that way: the venue for a class, else the stop. ISO. */
+  arrive: string | null;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */

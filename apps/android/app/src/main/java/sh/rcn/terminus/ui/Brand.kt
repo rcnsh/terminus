@@ -79,3 +79,7 @@ fun qualityNote(q: String) = when (q) {
     "unknown" -> "No live data"
     else -> null
 }
+
+/** "On time": green, not the brand orange, which reads as a warning. */
+val GoodLight = androidx.compose.ui.graphics.Color(0xFF166534)
+val GoodDark = androidx.compose.ui.graphics.Color(0xFF4ADE80)

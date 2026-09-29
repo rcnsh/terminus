@@ -41,14 +41,69 @@ data class NextAnswer(
     /** The bus the leave time is for, and its stop. Null when walking. */
     val leaveSvc: String? = null,
     val leaveStop: String? = null,
+    /** When that bus leaves the stop, epoch ms. */
+    val leaveBoardMs: Long? = null,
+    /** When you get there by leaving at leaveAtMs: the venue for a class. */
+    val leaveArriveMs: Long? = null,
+    /** When you'd reach the class on the headline bus. */
+    val reachMs: Long? = null,
     /** For a class, when it starts, epoch ms. */
     val classAtMs: Long? = null,
 ) {
-    /** "Leave by 09:38 · D2 from PGP", "Leave by ~09:38 …", or "Leave now …" once it has passed. */
-    fun leaveText(now: Long, format: (Long) -> String): String? {
+    private val tilde get() = if (leaveEstimated) "~" else ""
+
+    /**
+     * A class with a leave-by time: the card leads with when to leave, and
+     * the next bus becomes the "or go now" option.
+     */
+    val isClassPlan: Boolean get() = why == "class" && leaveAtMs != null && classAtMs != null && !arrived && mode == "trip"
+
+    /** "Leave by ~09:38", or "Leave now" once it has passed. */
+    fun leaveHeadline(now: Long, format: (Long) -> String): String? {
         val at = leaveAtMs ?: return null
-        val bus = leaveSvc?.let { " · $it from $leaveStop" }.orEmpty()
-        return if (now >= at) "Leave now$bus" else "Leave by ${if (leaveEstimated) "~" else ""}${format(at)}$bus"
+        return if (now >= at) "Leave now" else "Leave by $tilde${format(at)}"
+    }
+
+    /** "Catch the ~09:41 D2 at PGP · arrive ~09:55, 3 min early", or on foot. */
+    fun catchLine(format: (Long) -> String): String? {
+        leaveAtMs ?: return null
+        val how = when {
+            leaveSvc == null -> "Walk there"
+            leaveBoardMs != null -> "Catch the $tilde${format(leaveBoardMs)} $leaveSvc at $leaveStop"
+            else -> "Catch the $leaveSvc at $leaveStop"
+        }
+        val arrive = leaveArriveMs ?: return how
+        return "$how · arrive $tilde${format(arrive)}${classAtMs?.let { ", ${slack(arrive, it)}" }.orEmpty()}"
+    }
+
+    /** Whether the leave-by trip gets there in time. */
+    val leaveLate: Boolean get() = leaveArriveMs != null && classAtMs != null && leaveArriveMs > classAtMs
+
+    /** The headline bus, when it's not the one to wait for: "Or go now: R2 at 15:31 · arrive 15:38". */
+    fun goNowLine(format: (Long) -> String): String? {
+        val departs = departsAtMs ?: return null
+        if (quality == "unknown" || quality == "ended") return null
+        val board = leaveBoardMs
+        if (board != null && kotlin.math.abs(board - departs) < 60_000) return null
+        val svc = label.substringBefore(" · ")
+        val est = if (quality == "scheduled") "~" else ""
+        return "Or go now: $svc at $est${format(departs)}${reachMs?.let { " · arrive ${format(it)}" }.orEmpty()}"
+    }
+
+    /** For other trips and notifications: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
+    fun leaveText(now: Long, format: (Long) -> String): String? {
+        val head = leaveHeadline(now, format) ?: return null
+        val bus = leaveSvc?.let { svc -> " · catch the ${leaveBoardMs?.let { "$tilde${format(it)} " }.orEmpty()}$svc at $leaveStop" }.orEmpty()
+        return head + bus
+    }
+
+    private fun slack(arrive: Long, classAt: Long): String {
+        val min = Math.round((classAt - arrive) / 60_000.0).toInt()
+        return when {
+            min > 0 -> "$min min early"
+            min == 0 -> "just in time"
+            else -> "~${-min} min late"
+        }
     }
 
     /** "D2 · 09:42" when there's a departure time; otherwise the label as sent.
@@ -84,6 +139,9 @@ data class NextAnswer(
                 leaveEstimated = o.optJSONObject("leave")?.optBoolean("estimated", false) ?: false,
                 leaveSvc = o.optJSONObject("leave")?.optStringOrNull("svc"),
                 leaveStop = o.optJSONObject("leave")?.optStringOrNull("stop"),
+                leaveBoardMs = o.optJSONObject("leave")?.optStringOrNull("board")?.let(::parseInstant),
+                leaveArriveMs = o.optJSONObject("leave")?.optStringOrNull("arrive")?.let(::parseInstant),
+                reachMs = o.optJSONObject("timing")?.optStringOrNull("reachAt")?.let(::parseInstant),
                 classAtMs = o.optJSONObject("timing")?.optStringOrNull("classAt")?.let(::parseInstant),
                 timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
                 timingText = o.optJSONObject("timing")?.optStringOrNull("text"),

@@ -48,7 +48,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
     // On foot: only a class gives a reason to wait.
     if (!f.arriveBy) return null;
     const at = f.arriveBy.atMs - (ON_TIME_SLACK_S + f.arriveBy.venueWalkS + f.walkAllS) * 1000;
-    return { at: isoSeconds(at), estimated: false, svc: null, stop: null };
+    return { at: isoSeconds(at), estimated: false, svc: null, stop: null, board: null, arrive: isoSeconds(at + (f.walkAllS + f.arriveBy.venueWalkS) * 1000) };
   }
 
   if (!f.arriveBy) {
@@ -56,7 +56,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
     if (!b || b.quality === 'unknown') return null;
     const at = b.fetchedAt + b.boardS * 1000 - b.walkS * 1000 - BUFFER_MS;
     if (at - f.nowMs < NOW_S * 1000) return null;
-    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name) };
+    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000) };
   }
 
   const legs: Leg[] = f.options.length
@@ -66,7 +66,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
   let late: (Leave & { ms: number }) | null = null;
   for (const leg of legs) {
     const r = forLeg(leg, f.byStop.get(leg.stop.code), f.graph, f.arriveBy, f.nowMs);
-    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: leg.svc, stop: shortStop(leg.stop.name), ms: r.ms };
+    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: leg.svc, stop: shortStop(leg.stop.name), board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), ms: r.ms };
     // The latest on-time departure wins; if nothing is on time, the soonest.
     if (!r.late && (!onTime || r.ms > onTime.ms || (r.ms === onTime.ms && onTime.estimated && !r.estimated))) onTime = out;
     if (r.late && (!late || r.ms < late.ms)) late = out;
@@ -82,10 +82,11 @@ export function leaveBy(f: LeaveInput): Leave | null {
   return { ...leave, at: isoSeconds(Math.min(late.ms, f.nowMs)) };
 }
 
-function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number): { ms: number; estimated: boolean; late: boolean } {
+function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number): { ms: number; board: number; arrive: number; estimated: boolean; late: boolean } {
   const headway = Math.max(60, headwayFor(graph, leg.svc)) * 1000;
   const walk = leg.walkS * 1000 + BUFFER_MS;
   const latestBoard = arriveBy.atMs - (ON_TIME_SLACK_S + arriveBy.venueWalkS + leg.rideS) * 1000;
+  const arriveAfter = (boardMs: number) => boardMs + (leg.rideS + arriveBy.venueWalkS) * 1000;
 
   const live =
     sa && sa.available !== false
@@ -98,7 +99,8 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
   if (!live.length) {
     // No live times: arrive a whole headway early and a bus is sure to come.
     const ms = latestBoard - headway - walk;
-    return { ms, estimated: true, late: ms < nowMs };
+    // With no live times the bus is somewhere in that headway: this is when you reach the stop.
+    return { ms, board: ms + walk, arrive: arriveAfter(latestBoard), estimated: true, late: ms < nowMs };
   }
 
   const earliest = nowMs + walk;
@@ -111,10 +113,10 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
   const fits = buses.filter((b) => b.at <= latestBoard);
   if (fits.length) {
     const b = fits[fits.length - 1];
-    return { ms: b.at - walk, estimated: b.estimated, late: false };
+    return { ms: b.at - walk, board: b.at, arrive: arriveAfter(b.at), estimated: b.estimated, late: false };
   }
   // Nothing gets you there on time: the first bus you can catch.
-  return { ms: buses[0].at - walk, estimated: buses[0].estimated, late: true };
+  return { ms: buses[0].at - walk, board: buses[0].at, arrive: arriveAfter(buses[0].at), estimated: buses[0].estimated, late: true };
 }
 
 /** Every service from every candidate stop, ignoring service hours. */

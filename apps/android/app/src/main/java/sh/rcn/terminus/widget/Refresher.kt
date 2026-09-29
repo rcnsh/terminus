@@ -100,6 +100,8 @@ object Refresher {
             // A rest answer holds until the day starts; it does not age.
             if (widget && answer.mode != "rest") {
                 answer.departsAtMs?.let { add(it + DEPARTED_GRACE_MS + 1_000) }
+                // "Leave by" turns into "Leave now" at the leave time.
+                answer.leaveAtMs?.let { if (it > now) add(it) }
                 add(fetchedAt + MAX_AGE_MS)
             }
         }

@@ -159,6 +159,49 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             Chips(ctx, answer)
                         }
                     }
+                    answer.isClassPlan -> {
+                        // A class: when to leave leads, the next bus is the fallback.
+                        val now = System.currentTimeMillis()
+                        val old = isOld(answer, fetchedAt, now)
+                        val fmt = { ms: Long -> clock(ctx, ms) }
+                        Text(
+                            listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "),
+                            style = muted, maxLines = 1,
+                        )
+                        Text(
+                            answer.leaveHeadline(now, fmt).orEmpty(),
+                            style = TextStyle(
+                                color = when {
+                                    old -> colors.onSurfaceVariant
+                                    answer.leaveLate -> colors.error
+                                    else -> colors.onSurface
+                                },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = if (large) 24.sp else 20.sp,
+                            ),
+                            maxLines = 1,
+                        )
+                        val line = when {
+                            error == UPDATING -> UPDATING
+                            old -> "Old times · tap to refresh"
+                            error != null && !roomy -> "$error · ${answer.catchLine(fmt)}"
+                            else -> answer.catchLine(fmt).orEmpty()
+                        }
+                        Text(line, style = muted, maxLines = if (large) 2 else 1)
+                        if (roomy && !old) answer.goNowLine(fmt)?.let { Text(it, style = muted, maxLines = 1) }
+                        if (large && !old) {
+                            if (answer.leaveEstimated) Text("~ estimated from the usual bus gap", style = tiny, maxLines = 1)
+                            else qualityNote(answer.quality)?.let { Text(it, style = muted, maxLines = 1) }
+                        }
+                        if (large) {
+                            Spacer(GlanceModifier.defaultWeight())
+                            Chips(ctx, answer)
+                            Spacer(GlanceModifier.height(6.dp))
+                        }
+                        val stamp = fetchedAt?.let { "Updated ${clock(ctx, it)}" }
+                        val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
+                        if (roomy && foot.isNotEmpty()) Text(foot, style = tiny, maxLines = 1)
+                    }
                     else -> {
                         val heading = listOfNotNull(
                             answer.destLabel ?: if (answer.mode == "nearby") "Nearby" else null,
@@ -267,6 +310,16 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
     if (!paired) return "terminus. Not paired. Double tap to pair this phone."
     if (answer == null) return "terminus. ${error ?: "Loading"}. Double tap to refresh."
     val old = isOld(answer, fetchedAt, System.currentTimeMillis())
+    if (answer.isClassPlan && !old) {
+        val fmt = { ms: Long -> clock(ctx, ms) }
+        val now = System.currentTimeMillis()
+        return listOfNotNull(
+            answer.destLabel?.let { "$it, starts ${answer.classAtMs?.let(fmt)}" },
+            answer.leaveHeadline(now, fmt),
+            answer.catchLine(fmt)?.replace(" · ", ", "),
+            answer.goNowLine(fmt)?.replace(" · ", ", "),
+        ).joinToString(". ") + ". Double tap to refresh."
+    }
     val parts = listOfNotNull(
         answer.destLabel?.let { "To $it" },
         if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", ", leaves "),

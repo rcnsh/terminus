@@ -32,8 +32,8 @@ struct NextAnswer: Decodable {
     /// The latest time to set off; for a class, the latest that's still on time.
     let leave: Leave?
 
-    struct Timing: Decodable { let status: String?; let text: String? }
-    struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String? }
+    struct Timing: Decodable { let status: String?; let text: String?; let classAt: String?; let reachAt: String? }
+    struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String?; let board: String?; let arrive: String? }
 
     enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave }
 
@@ -62,13 +62,58 @@ struct NextAnswer: Decodable {
     var service: String { label.components(separatedBy: " · ").first ?? label }
     /// Crowd on the recommended bus, not whichever is first in the list.
     var crowd: String? { arrivals?.first { $0.svc == service }?.crowd }
-    /// "Leave by 09:38 · D2 from PGP", "~" for an estimate, "Leave now" once it has passed.
-    func leaveText(now: Date = Date()) -> String? {
-        guard let l = leave, let at = parseISODate(l.at) else { return nil }
-        let bus = l.svc.map { " · \($0) from \(l.stop ?? "")" } ?? ""
-        if now >= at { return "Leave now\(bus)" }
-        return "Leave by \(l.estimated == true ? "~" : "")\(campusTime(at))\(bus)"
+    private var tilde: String { leave?.estimated == true ? "~" : "" }
+    var leaveAt: Date? { leave.flatMap { parseISODate($0.at) } }
+    var classAt: Date? { timing?.classAt.flatMap(parseISODate) }
+
+    /// A class with a leave-by time: lead with when to leave, and offer the
+    /// next bus as "or go now". Same rule as the Android app.
+    var isClassPlan: Bool { dest?.why == "class" && leaveAt != nil && classAt != nil && !arrived && mode == "trip" }
+
+    /// "Leave by ~09:38", or "Leave now" once it has passed.
+    func leaveHeadline(now: Date = Date()) -> String? {
+        guard let at = leaveAt else { return nil }
+        return now >= at ? "Leave now" : "Leave by \(tilde)\(campusTime(at))"
     }
+
+    /// "Catch the ~09:41 D2 at PGP · arrive ~09:55, 3 min early", or on foot.
+    var catchLine: String? {
+        guard let l = leave else { return nil }
+        let how: String
+        if let svc = l.svc {
+            how = l.board.flatMap(parseISODate).map { "Catch the \(tilde)\(campusTime($0)) \(svc) at \(l.stop ?? "")" } ?? "Catch the \(svc) at \(l.stop ?? "")"
+        } else {
+            how = "Walk there"
+        }
+        guard let arrive = l.arrive.flatMap(parseISODate) else { return how }
+        let slack = classAt.map { c -> String in
+            let m = Int((c.timeIntervalSince(arrive) / 60).rounded())
+            return m > 0 ? ", \(m) min early" : m == 0 ? ", just in time" : ", ~\(-m) min late"
+        } ?? ""
+        return "\(how) · arrive \(tilde)\(campusTime(arrive))\(slack)"
+    }
+
+    var leaveLate: Bool {
+        guard let a = leave?.arrive.flatMap(parseISODate), let c = classAt else { return false }
+        return a > c
+    }
+
+    /// The headline bus when it isn't the one to wait for.
+    var goNowLine: String? {
+        guard hasLiveTime, let d = departure else { return nil }
+        if let b = leave?.board.flatMap(parseISODate), abs(b.timeIntervalSince(d)) < 60 { return nil }
+        let reach = timing?.reachAt.flatMap(parseISODate).map { " · arrive \(campusTime($0))" } ?? ""
+        return "Or go now: \(service) at \(quality == "scheduled" ? "~" : "")\(campusTime(d))\(reach)"
+    }
+
+    /// Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP".
+    func leaveText(now: Date = Date()) -> String? {
+        guard let head = leaveHeadline(now: now), let l = leave else { return nil }
+        guard let svc = l.svc else { return head }
+        let t = l.board.flatMap(parseISODate).map { "\(tilde)\(campusTime($0)) " } ?? ""
+        return "\(head) · catch the \(t)\(svc) at \(l.stop ?? "")"
+    }
+
     var hasLiveTime: Bool { departure != nil && quality != "unknown" && quality != "ended" }
 }
 

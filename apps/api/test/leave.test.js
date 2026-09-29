@@ -60,6 +60,8 @@ test('class: the latest live bus that still makes it', () => {
   // latestBoard = 09:40 - 3 min slack - ride 6m20s = 09:30:40. Buses at 5, 12, 25 min.
   const l = leaveBy({ ...base, ...one(b, arrivals(5, 12, 25)), arriveBy });
   assert.equal(ms(l), NOW + 25 * MIN - 100_000 - BUF);
+  assert.equal(Date.parse(l.board), NOW + 25 * MIN);
+  assert.equal(Date.parse(l.arrive), NOW + 25 * MIN + best().rideS * 1000);
   assert.equal(l.estimated, false);
 });
 
