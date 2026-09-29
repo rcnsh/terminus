@@ -1,7 +1,8 @@
 import { bindings, defineConfig, triggers } from "cf/config";
 
-// Secrets (NEXTBUS_*, HEALTH_TOKEN, TURNSTILE_SECRET, ALERT_EMAIL) live on the
-// Worker, set with `cf` or the dashboard; locally they come from .dev.vars.
+// Secrets are declared below with bindings.secret(); their values live on the
+// Worker (set with `cf workers secrets update`), locally in .dev.vars. Without
+// the declarations, a cf deploy uploads a version with no secrets at all.
 // D1 migrations are in ./migrations, the default for `cf d1 migrations`.
 // The website directory (../web/public) is in wrangler.config.ts.
 
@@ -82,6 +83,15 @@ export default defineConfig({
 				},
 			}),
 			ASSETS: bindings.assets(),
+			ALERT_EMAIL: bindings.secret(),
+			HEALTH_TOKEN: bindings.secret(),
+			NEXTBUS_APP_API: bindings.secret(),
+			NEXTBUS_APP_VERSION: bindings.secret(),
+			NEXTBUS_AUTH_BASE: bindings.secret(),
+			NEXTBUS_HTD_API: bindings.secret(),
+			NEXTBUS_PROXY_API_KEY: bindings.secret(),
+			NEXTBUS_PROXY_BASE: bindings.secret(),
+			TURNSTILE_SECRET: bindings.secret(),
 		},
 	},
 });
