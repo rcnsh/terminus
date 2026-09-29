@@ -28,8 +28,6 @@ data class NextAnswer(
     /** For a class: "on-time" | "tight" | "late", and its display text. */
     val timingStatus: String?,
     val timingText: String?,
-    /** Crowd on the next bus: "low" | "medium" | "high". */
-    val crowd: String?,
     /** Planned answers: when the plan changes by itself (a class starts, the day ends). */
     val refreshAtMs: Long? = null,
     /** Already at the destination: no bus, no countdown. */
@@ -38,85 +36,41 @@ data class NextAnswer(
     val leaveAtMs: Long? = null,
     /** Rests on a headway, not a live time: shown with a "~". */
     val leaveEstimated: Boolean = false,
-    /** The bus the leave time is for, and its stop. Null when walking. */
-    val leaveSvc: String? = null,
-    val leaveStop: String? = null,
-    /** When that bus leaves the stop, epoch ms. */
-    val leaveBoardMs: Long? = null,
-    /** When you get there by leaving at leaveAtMs: the venue for a class. */
-    val leaveArriveMs: Long? = null,
-    /** When you'd reach the class on the headline bus. */
-    val reachMs: Long? = null,
     /** Why leave-by is earlier than it could be ("D2 is often packed…"). Shown verbatim. */
     val leaveNote: String? = null,
     /** For a class, when it starts, epoch ms. */
     val classAtMs: Long? = null,
+    /** Display-ready text from the server; null only in an answer cached before 1.3.6. */
+    val card: Card? = null,
 ) {
-    private val tilde get() = if (leaveEstimated) "~" else ""
+    /** The server's card (card.ts): every line below is worded there, once. */
+    val isClassPlan: Boolean get() = card?.kind == "class"
 
-    /**
-     * A class with a leave-by time: the card leads with when to leave, and
-     * the next bus becomes the "or go now" option.
-     */
-    val isClassPlan: Boolean get() = why == "class" && leaveAtMs != null && classAtMs != null && !arrived && mode == "trip"
-
-    /** "Leave by ~09:38", or "Leave now" once it has passed. */
-    fun leaveHeadline(now: Long, format: (Long) -> String): String? {
+    /** "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks. */
+    fun leaveHeadline(now: Long): String? {
         val at = leaveAtMs ?: return null
-        return if (now >= at) "Leave now" else "Leave by $tilde${format(at)}"
+        return if (now >= at) "Leave now" else card?.leaveBy
     }
 
-    /** "Catch the ~09:41 D2 at PGP", or "Walk there". */
-    fun catchHow(format: (Long) -> String): String? {
-        leaveAtMs ?: return null
-        return when {
-            leaveSvc == null -> "Walk there"
-            leaveBoardMs != null -> "Catch the $tilde${format(leaveBoardMs)} $leaveSvc at $leaveStop"
-            else -> "Catch the $leaveSvc at $leaveStop"
-        }
-    }
+    /** Class: "Catch the ~09:41 D2 at PGP", or "Walk there". */
+    val catchHow: String? get() = card?.catch
+    /** Class: "Arrive ~09:55 · 3 min early". */
+    val catchArrive: String? get() = card?.arrive
+    /** Class: both on one line, for the widget and notifications. */
+    val catchLine: String? get() = card?.catchLine
+    /** Whether the leave-by trip misses the class start. */
+    val leaveLate: Boolean get() = card?.late ?: false
+    /** The headline bus, when it's not the one to wait for. */
+    val goNowLine: String? get() = card?.goNow
+    /** "Quiet" / "Filling" / "Packed". */
+    val crowdText: String? get() = card?.crowd
+    /** "Timetable estimate", "Live data a few minutes old", "No live data". */
+    val qualityText: String? get() = card?.quality
 
-    /** "Arrive ~09:55 · 3 min early". */
-    fun catchArrive(format: (Long) -> String): String? {
-        val arrive = leaveArriveMs ?: return null
-        return "Arrive $tilde${format(arrive)}${classAtMs?.let { " · ${slack(arrive, it)}" }.orEmpty()}"
-    }
-
-    /** Both on one line, where there's room for only one: the widget and notifications. */
-    fun catchLine(format: (Long) -> String): String? {
-        val how = catchHow(format) ?: return null
-        val arrive = leaveArriveMs ?: return how
-        return "$how · arrive $tilde${format(arrive)}${classAtMs?.let { ", ${slack(arrive, it)}" }.orEmpty()}"
-    }
-
-    /** Whether the leave-by trip gets there in time. */
-    val leaveLate: Boolean get() = leaveArriveMs != null && classAtMs != null && leaveArriveMs > classAtMs
-
-    /** The headline bus, when it's not the one to wait for: "Or go now: R2 at 15:31 · arrive 15:38". */
-    fun goNowLine(format: (Long) -> String): String? {
-        val departs = departsAtMs ?: return null
-        if (quality == "unknown" || quality == "ended") return null
-        val board = leaveBoardMs
-        if (board != null && kotlin.math.abs(board - departs) < 60_000) return null
-        val svc = label.substringBefore(" · ")
-        val est = if (quality == "scheduled") "~" else ""
-        return "Or go now: $svc at $est${format(departs)}${reachMs?.let { " · arrive ${format(it)}" }.orEmpty()}"
-    }
-
-    /** For other trips and notifications: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
-    fun leaveText(now: Long, format: (Long) -> String): String? {
-        val head = leaveHeadline(now, format) ?: return null
-        val bus = leaveSvc?.let { svc -> " · catch the ${leaveBoardMs?.let { "$tilde${format(it)} " }.orEmpty()}$svc at $leaveStop" }.orEmpty()
-        return head + bus
-    }
-
-    private fun slack(arrive: Long, classAt: Long): String {
-        val min = Math.round((classAt - arrive) / 60_000.0).toInt()
-        return when {
-            min > 0 -> "$min min early"
-            min == 0 -> "just in time"
-            else -> "~${-min} min late"
-        }
+    /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
+    fun leaveText(now: Long): String? {
+        val head = leaveHeadline(now) ?: return null
+        return card?.leaveVia?.let { "$head · $it" } ?: head
     }
 
     /** "D2 · 09:42" when there's a departure time; otherwise the label as sent.
@@ -128,7 +82,13 @@ data class NextAnswer(
     }
 
     companion object {
-        fun parse(o: JSONObject): NextAnswer {
+        fun parse(o: JSONObject): NextAnswer = try {
+            parseOrThrow(o)
+        } catch (e: org.json.JSONException) {
+            throw ParseError(e.message ?: "bad answer")
+        }
+
+        private fun parseOrThrow(o: JSONObject): NextAnswer {
             val dest = o.optJSONObject("dest")
             val places = o.optJSONArray("places") ?: JSONArray()
             return NextAnswer(
@@ -150,23 +110,49 @@ data class NextAnswer(
                 arrived = o.optBoolean("arrived", false),
                 leaveAtMs = o.optJSONObject("leave")?.optStringOrNull("at")?.let(::parseInstant),
                 leaveEstimated = o.optJSONObject("leave")?.optBoolean("estimated", false) ?: false,
-                leaveSvc = o.optJSONObject("leave")?.optStringOrNull("svc"),
-                leaveStop = o.optJSONObject("leave")?.optStringOrNull("stop"),
-                leaveBoardMs = o.optJSONObject("leave")?.optStringOrNull("board")?.let(::parseInstant),
-                leaveArriveMs = o.optJSONObject("leave")?.optStringOrNull("arrive")?.let(::parseInstant),
-                reachMs = o.optJSONObject("timing")?.optStringOrNull("reachAt")?.let(::parseInstant),
                 leaveNote = o.optJSONObject("leave")?.optStringOrNull("note"),
                 classAtMs = o.optJSONObject("timing")?.optStringOrNull("classAt")?.let(::parseInstant),
                 timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
                 timingText = o.optJSONObject("timing")?.optStringOrNull("text"),
-                // The recommended bus's crowd, not whichever bus is first in the list.
-                crowd = o.optJSONArray("arrivals")?.let { arr ->
-                    val svc = o.getString("label").substringBefore(" · ")
-                    (0 until arr.length()).map { arr.getJSONObject(it) }
-                        .firstOrNull { it.optString("svc") == svc }?.optStringOrNull("crowd")
-                },
+                card = o.optJSONObject("card")?.let(Card::parse),
             )
         }
+    }
+}
+
+/** `card` in /me/next (apps/api/src/card.ts). Lines are shown verbatim. */
+data class Card(
+    val kind: String,
+    /** Dim from this instant, epoch ms. */
+    val staleAtMs: Long?,
+    val crowd: String?,
+    val quality: String?,
+    val leaveBy: String?,
+    val leaveVia: String?,
+    val catch: String?,
+    val arrive: String?,
+    val catchLine: String?,
+    val late: Boolean,
+    val goNow: String?,
+    val note: String?,
+    val estimate: String?,
+) {
+    companion object {
+        fun parse(o: JSONObject) = Card(
+            kind = o.optString("kind", "trip"),
+            staleAtMs = o.optStringOrNull("staleAt")?.let(::parseInstant),
+            crowd = o.optStringOrNull("crowd"),
+            quality = o.optStringOrNull("quality"),
+            leaveBy = o.optStringOrNull("leaveBy"),
+            leaveVia = o.optStringOrNull("leaveVia"),
+            catch = o.optStringOrNull("catch"),
+            arrive = o.optStringOrNull("arrive"),
+            catchLine = o.optStringOrNull("catchLine"),
+            late = o.optBoolean("late", false),
+            goNow = o.optStringOrNull("goNow"),
+            note = o.optStringOrNull("note"),
+            estimate = o.optStringOrNull("estimate"),
+        )
     }
 }
 
@@ -235,8 +221,11 @@ sealed interface Target {
 
 class ApiError(val status: Int, message: String) : IOException(message)
 
+/** The answer arrived but isn't what this version understands. Not a network problem. */
+class ParseError(message: String) : Exception(message)
+
 /** `fast` is for the widget: a tap runs inside a broadcast, which can be killed. */
-class Api(private val token: String?, private val fast: Boolean = false) {
+class Api(private val token: String?, private val fast: Boolean = false, private val hour12: Boolean = false) {
 
     suspend fun pair(code: String, name: String): String {
         val body = JSONObject().put("code", code).put("name", name)
@@ -258,6 +247,8 @@ class Api(private val token: String?, private val fast: Boolean = false) {
                 is Target.SavedPlace -> add("place=${enc(target.key)}")
                 is Target.Code -> add("to=${enc(target.code)}")
             }
+            // The card's clock times, in this phone's 12- or 24-hour style.
+            if (hour12) add("h12=1")
         }
         return request("GET", "/me/next" + query(q))
     }
@@ -324,9 +315,10 @@ class Api(private val token: String?, private val fast: Boolean = false) {
                 val status = conn.responseCode
                 val stream = if (status in 200..299) conn.inputStream else conn.errorStream
                 val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                val json = runCatching { JSONObject(text) }.getOrElse { JSONObject() }
-                if (status !in 200..299) throw ApiError(status, json.optString("error", "HTTP $status"))
-                json
+                val json = runCatching { JSONObject(text) }.getOrNull()
+                if (status !in 200..299) throw ApiError(status, json?.optString("error", "HTTP $status") ?: "HTTP $status")
+                // A 200 that isn't JSON is not "offline": the server said something this version can't read.
+                json ?: throw ParseError("not JSON")
             } finally {
                 conn.disconnect()
             }
@@ -343,6 +335,9 @@ class Api(private val token: String?, private val fast: Boolean = false) {
 private fun coord(v: Double) = "%.4f".format(java.util.Locale.ROOT, v)
 
 private fun parseInstant(s: String): Long? = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrNull()
+
+/** The phone shows 12-hour times: ask the server for its card in that style. */
+fun hour12(ctx: android.content.Context): Boolean = !android.text.format.DateFormat.is24HourFormat(ctx)
 
 /** "1.0.10" > "1.0.9". */
 fun isNewer(latest: String, current: String): Boolean {

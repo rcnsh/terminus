@@ -64,22 +64,6 @@ fun Wordmark(style: TextStyle) {
     )
 }
 
-/** One vocabulary everywhere, matching the API's detail line. */
-fun crowdWord(c: String?) = when (c) {
-    "low" -> "Quiet"
-    "medium" -> "Filling"
-    "high" -> "Packed"
-    else -> null
-}
-
-/** The same notes the Mac and web show for each data quality. */
-fun qualityNote(q: String) = when (q) {
-    "scheduled" -> "Timetable estimate"
-    "stale" -> "Live data a few minutes old"
-    "unknown" -> "No live data"
-    else -> null
-}
-
 /** "On time": green, not the brand orange, which reads as a warning. */
 val GoodLight = androidx.compose.ui.graphics.Color(0xFF166534)
 val GoodDark = androidx.compose.ui.graphics.Color(0xFF4ADE80)

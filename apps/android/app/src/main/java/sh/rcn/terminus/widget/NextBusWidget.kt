@@ -52,7 +52,6 @@ import sh.rcn.terminus.Store
 import sh.rcn.terminus.ui.BrandDark
 import sh.rcn.terminus.ui.BrandLight
 import sh.rcn.terminus.ui.MainActivity
-import sh.rcn.terminus.ui.qualityNote
 import java.util.Date
 
 /**
@@ -178,7 +177,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             style = muted, maxLines = 1,
                         )
                         Text(
-                            answer.leaveHeadline(now, fmt).orEmpty(),
+                            answer.leaveHeadline(now).orEmpty(),
                             style = TextStyle(
                                 color = when {
                                     old -> colors.onSurfaceVariant
@@ -193,15 +192,15 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         val line = when {
                             error == UPDATING -> UPDATING
                             old -> "Old times · tap to refresh"
-                            error != null && !roomy -> "$error · ${answer.catchLine(fmt)}"
-                            else -> answer.catchLine(fmt).orEmpty()
+                            error != null && !roomy -> "$error · ${answer.catchLine}"
+                            else -> answer.catchLine.orEmpty()
                         }
                         Text(line, style = muted, maxLines = if (large) 2 else 1)
-                        if (roomy && !old) answer.goNowLine(fmt)?.let { Text(it, style = muted, maxLines = 1) }
+                        if (roomy && !old) answer.goNowLine?.let { Text(it, style = muted, maxLines = 1) }
                         if (large && !old) {
                             if (answer.leaveNote != null) Text(answer.leaveNote, style = tiny, maxLines = 2)
                             else if (answer.leaveEstimated) Text("~ estimated from the usual bus gap", style = tiny, maxLines = 1)
-                            else qualityNote(answer.quality)?.let { Text(it, style = muted, maxLines = 1) }
+                            else answer.qualityText?.let { Text(it, style = muted, maxLines = 1) }
                         }
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
@@ -240,13 +239,13 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Text(line, style = muted, maxLines = if (large) 2 else 1)
                         // When to set off, where there's room for a line of its own.
                         if (roomy && !old) {
-                            answer.leaveText(now) { clock(ctx, it) }?.let {
+                            answer.leaveText(now)?.let {
                                 Text(it, style = TextStyle(color = colors.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1)
                             }
                         }
                         if (large && !old) {
                             // Crowd is already in the detail line; only the data quality is new here.
-                            qualityNote(answer.quality)?.let { Text(it, style = muted, maxLines = 1) }
+                            answer.qualityText?.let { Text(it, style = muted, maxLines = 1) }
                             answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
                         }
                         if (large) {
@@ -329,16 +328,16 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
         val now = System.currentTimeMillis()
         return listOfNotNull(
             answer.destLabel?.let { "$it, starts ${answer.classAtMs?.let(fmt)}" },
-            answer.leaveHeadline(now, fmt),
-            answer.catchLine(fmt)?.replace(" · ", ", "),
-            answer.goNowLine(fmt)?.replace(" · ", ", "),
+            answer.leaveHeadline(now),
+            answer.catchLine?.replace(" · ", ", "),
+            answer.goNowLine?.replace(" · ", ", "),
         ).joinToString(". ") + ". Double tap to refresh."
     }
     val parts = listOfNotNull(
         answer.destLabel?.let { "To $it" },
         if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", ", leaves "),
         if (old) "These times are old" else answer.detail.replace(" · ", ", "),
-        answer.leaveText(System.currentTimeMillis()) { clock(ctx, it) }?.takeIf { !old }?.replace(" · ", ", "),
+        answer.leaveText(System.currentTimeMillis())?.takeIf { !old }?.replace(" · ", ", "),
         answer.timingText?.takeIf { !old },
         error?.takeIf { it != UPDATING },
     )
@@ -395,27 +394,6 @@ open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver(
 class NextBusWidgetReceiver : BusWidgetReceiver(NextBusWidget())
 class PlacesWidgetReceiver : BusWidgetReceiver(PlacesWidget())
 
-/**
- * Past this, an answer is refreshed, and dimmed if the refresh hasn't landed.
- * A clock time stays true until the bus leaves, so this is only the backstop
- * for relative text ("or A1 9 min") and missed refreshes.
- */
-const val MAX_AGE_MS = 15 * 60_000L
-/** A bus shown as leaving at 09:42 might still be at the stop at 09:42:20. */
-const val DEPARTED_GRACE_MS = 30_000L
-
-/**
- * The bus in the answer has left, the plan has moved on (a class started, the
- * day ended), or the answer is past MAX_AGE_MS. A rest answer only goes old
- * when the day starts.
- */
-fun isOld(answer: NextAnswer, fetchedAt: Long?, now: Long): Boolean {
-    if (answer.refreshAtMs?.let { now >= it } == true) return true
-    if (answer.mode == "rest") return false
-    val departed = answer.departsAtMs?.let { now > it + DEPARTED_GRACE_MS } ?: false
-    val aged = fetchedAt != null && now - fetchedAt > MAX_AGE_MS
-    return departed || aged
-}
 
 /**
  * Campus time, in the phone's 12/24-hour style. Class times and "Arrive

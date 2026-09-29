@@ -409,10 +409,10 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
             LeaveLine(answer)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
                 answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
-                crowdWord(answer.crowd)?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
+                answer.crowdText?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             // The alternative is already at the end of `detail`.
-            qualityNote(answer.quality)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
@@ -441,7 +441,7 @@ private fun ClassPlan(answer: NextAnswer) {
         color = muted,
     )
     Text(
-        answer.leaveHeadline(now, fmt).orEmpty(),
+        answer.leaveHeadline(now).orEmpty(),
         style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.Bold,
         color = if (late) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
@@ -457,18 +457,16 @@ private fun ClassPlan(answer: NextAnswer) {
     // The bus to catch, and underneath when it gets you there. The stop is
     // named here, so no separate "board at" or general detail line below.
     val tone = if (late) MaterialTheme.colorScheme.error else goodColor()
-    answer.catchHow(fmt)?.let { Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = tone) }
-    answer.catchArrive(fmt)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = tone) }
+    answer.catchHow?.let { Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = tone) }
+    answer.catchArrive?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = tone) }
     answer.leaveNote?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary) }
-    if (answer.leaveEstimated) {
-        Text("Estimated from the usual gap between buses. Live times show nearer the time.", style = MaterialTheme.typography.bodySmall, color = muted)
-    }
-    answer.goNowLine(fmt)?.let {
+    answer.card?.estimate?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+    answer.goNowLine?.let {
         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
         Text(it, style = MaterialTheme.typography.bodyMedium)
         Countdown(answer)
     }
-    qualityNote(answer.quality)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 6.dp)) }
+    answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 6.dp)) }
 }
 
 @Composable
@@ -485,7 +483,7 @@ private fun LeaveLine(answer: NextAnswer) {
             value = System.currentTimeMillis()
         }
     }
-    answer.leaveText(now) { clock(ctx, it) }?.let {
+    answer.leaveText(now)?.let {
         Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
     }
 }

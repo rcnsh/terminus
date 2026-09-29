@@ -24,6 +24,8 @@ import sh.rcn.terminus.Api
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.ApiError
+import sh.rcn.terminus.ParseError
+import sh.rcn.terminus.hour12
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.Store
@@ -62,7 +64,7 @@ object Refresher {
         // "Allow all the time". Without one, the API follows the timetable.
         val loc = Locator.lastKnown(ctx)
         try {
-            val json = Api(token, fast).nextJson(Target.Plan, loc?.latitude, loc?.longitude)
+            val json = Api(token, fast, hour12(ctx)).nextJson(Target.Plan, loc?.latitude, loc?.longitude)
             val now = System.currentTimeMillis()
             store.saveAnswer(json, now)
             store.lastError = null
@@ -75,6 +77,8 @@ object Refresher {
                 armFromCache(ctx, store)
             }
             store.lastError = if (e.status == 401) "Device removed. Pair again in the app." else e.message
+        } catch (e: ParseError) {
+            store.lastError = "Unexpected answer from terminus"
         } catch (e: Exception) {
             store.lastError = "Offline"
             armFromCache(ctx, store)

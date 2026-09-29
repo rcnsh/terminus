@@ -7,6 +7,8 @@ lifecycle = "2.11.0"
 glance = "1.2.0"
 work = "2.12.0"
 coreKtx = "1.19.1"
+junit = "4.13.2"
+orgJson = "20250517"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -21,6 +23,9 @@ compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+junit = { module = "junit:junit", version.ref = "junit" }
+# Android's org.json is a stub on the JVM; unit tests need the real one.
+org-json = { module = "org.json:json", version.ref = "orgJson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
