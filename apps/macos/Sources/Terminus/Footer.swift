@@ -1,0 +1,43 @@
+import SwiftUI
+import os
+import AppKit
+
+// MARK: - Footer
+
+struct Footer: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        HStack {
+            if model.paired && model.isSnapshot {
+                Label("Settings", systemImage: "gearshape")
+            } else if model.paired {
+                Menu {
+                    Toggle(model.misplaced ? "Open at login (move to Applications first)" : "Open at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
+                        .disabled(model.misplaced && !model.openAtLogin)
+                    Button("Refresh now") { Task { await model.refresh() } }
+                    Divider()
+                    Button("Unpair this Mac") { model.unpair() }
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+            Spacer()
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Label("Quit", systemImage: "power")
+            }
+            .buttonStyle(.plain)
+        }
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.primary.opacity(0.04))
+        .overlay(alignment: .top) { Divider() }
+    }
+}
