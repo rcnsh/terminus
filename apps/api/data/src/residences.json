@@ -1,0 +1,104 @@
+{
+ "_help": "Hand-maintained. On-campus residences as OpenStreetMap way ids, grouped the way students name them. scripts/walk_routes.py fetches the outlines and writes data/residences.json.",
+ "residences": {
+  "PGP": {
+   "name": "Prince George's Park (PGP)",
+   "ways": [
+    92357575,
+    1166266719,
+    1166266720,
+    1168471662,
+    1168471663,
+    1168471664,
+    1168471665,
+    1166306157
+   ]
+  },
+  "KEVII": {
+   "name": "King Edward VII Hall",
+   "ways": [
+    92357569
+   ]
+  },
+  "KRH": {
+   "name": "Kent Ridge Hall",
+   "ways": [
+    142088679
+   ]
+  },
+  "SHEARES": {
+   "name": "Sheares Hall",
+   "ways": [
+    142088680
+   ]
+  },
+  "TEMASEK": {
+   "name": "Temasek Hall",
+   "ways": [
+    858570009
+   ]
+  },
+  "EUSOFF": {
+   "name": "Eusoff Hall",
+   "ways": [
+    858570008
+   ]
+  },
+  "RAFFLES-HALL": {
+   "name": "Raffles Hall",
+   "ways": [
+    742827984
+   ]
+  },
+  "RVRC": {
+   "name": "Ridge View Residential College",
+   "ways": [
+    140088746,
+    427077072
+   ]
+  },
+  "VALOUR": {
+   "name": "Valour House",
+   "ways": [
+    1213637682
+   ]
+  },
+  "KENT-VALE": {
+   "name": "Kent Vale",
+   "ways": [
+    713272230
+   ]
+  },
+  "TEMBUSU": {
+   "name": "Tembusu College",
+   "ways": [
+    174768749
+   ]
+  },
+  "CAPT": {
+   "name": "College of Alice & Peter Tan",
+   "ways": [
+    750774836,
+    124543527
+   ]
+  },
+  "RC4": {
+   "name": "Residential College 4",
+   "ways": [
+    750774837
+   ]
+  },
+  "ACACIA": {
+   "name": "Acacia College",
+   "ways": [
+    750774835
+   ]
+  },
+  "UTR": {
+   "name": "UTown Residence",
+   "ways": [
+    750775690
+   ]
+  }
+ }
+}
