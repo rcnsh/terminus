@@ -87,7 +87,7 @@ export function runOnboarding(ctx) {
 
   function heading(text, sub) {
     const h = el('h1', { textContent: text, tabIndex: -1 });
-    return [h, sub ? el('p', { class: 'ob-sub', textContent: sub }) : null];
+    return sub ? [h, el('p', { class: 'ob-sub', textContent: sub })] : [h];
   }
 
   function actions(nav, { next = 'Continue', skip, onNext } = {}) {
