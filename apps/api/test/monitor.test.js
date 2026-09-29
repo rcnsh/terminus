@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import { makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
-import { DEVICE_IDLE_MS, adviceFor, checkCalendar, checkUpstream, housekeeping, readUpstream, runCron } from '../src/monitor.ts';
+import { readFileSync } from 'node:fs';
+import { DEVICE_IDLE_MS, KV_NAMESPACE_ID, adviceFor, checkCalendar, checkUpstream, housekeeping, readUpstream, runCron } from '../src/monitor.ts';
+import { UpstreamRejected } from '../src/auth.ts';
 
 function env() {
   return { KV: makeKV(), EMAIL: makeEmail(), EMAIL_FROM: 'login@example.test', ALERT_EMAIL: 'ops@example.test' };
@@ -119,4 +121,27 @@ test('housekeeping removes expired links, codes, sessions and idle devices only'
   assert.deepEqual(left('magic_links', 'token_hash'), ['new']);
   assert.deepEqual(left('pair_codes', 'code'), ['BBBBBB']);
   assert.deepEqual(left('sessions', 'token_hash'), ['d-used', 'w-new']);
+});
+
+test('a refused version: the alert gives the one-line KV fix and NUS\'s whole response', async () => {
+  const e = env();
+  const body = '{"code":"10009","msg":"We have a new release of uNivUS","data":{"store":"https://example.test/new"}}';
+  const refused = async () => {
+    throw new UpstreamRejected('10009', 'auth rejected: code=10009 msg=We have a new release of uNivUS', body);
+  };
+  await checkUpstream(e, 1000, refused);
+  await checkUpstream(e, 2000, refused);
+  const text = e.EMAIL.sent[0].text;
+  assert.match(text, /cf kv keys put config:appVersion --namespace-id [0-9a-f]{32} --body univus_android_<versionName>_<versionCode>/);
+  assert.match(text, /id=sg\.edu\.nus\.univus/);
+  assert.ok(text.includes(body), 'the full response is in the email');
+  assert.equal((await readUpstream(e)).detail, body);
+  await checkUpstream(e, 3000, ok);
+  assert.equal((await readUpstream(e)).detail, null, 'cleared once it recovers');
+});
+
+test('the KV namespace in the alert commands is the one in cloudflare.config.ts', () => {
+  const config = readFileSync(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
+  const id = /KV: bindings\.kv\(\{\s*id: "([0-9a-f]+)"/.exec(config)?.[1];
+  assert.equal(KV_NAMESPACE_ID, id);
 });

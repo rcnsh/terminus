@@ -152,14 +152,18 @@ export function makeAnalytics() {
  * so the forced-refresh retry can be exercised. Every proxy request is kept in
  * `requests` so tests can assert on headers and body.
  */
-export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null } = {}) {
+export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null } = {}) {
   const counts = { auth: 0, shuttle: 0 };
   const requests = [];
+  const mints = [];
   const fn = async (input, init = {}) => {
     const url = String(typeof input === 'string' ? input : input.url);
 
     if (url.includes('get-access-token')) {
       counts.auth++;
+      mints.push(JSON.parse(init.body ?? '{}'));
+      // A mint refused the way NUS refuses one: HTTP 200, a code, no token.
+      if (mintReject) return Response.json({ code: mintReject, msg: 'We have a new release of uNivUS', data: null });
       tokenSerial++;
       return Response.json({
         msg: '',
@@ -191,6 +195,7 @@ export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = 
   };
   fn.counts = counts;
   fn.requests = requests;
+  fn.mints = mints;
   return fn;
 }
 
