@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Network
 import Observation
 import os
 import ServiceManagement
@@ -36,6 +37,16 @@ final class AppModel {
     var updated: Date?
     var popoverOpen = false { didSet { if popoverOpen { refreshLoginItem(); kick() } } }
     var needsLocation: Bool { locator.undecided }
+    var locationDenied: Bool { locator.denied }
+    /// A newer released version, when there is one.
+    var update: String?
+
+    /// Login items and updates only work from Applications: a copy run from
+    /// Downloads is translocated to a random read-only path.
+    var misplaced: Bool {
+        let path = Bundle.main.bundlePath
+        return path.contains("/AppTranslocation/") || !(path.hasPrefix("/Applications/") || path.hasPrefix(NSHomeDirectory() + "/Applications/"))
+    }
 
     /// Mirrors the system's login-item status. A stored property, so the
     /// Settings toggle re-renders when it changes; refreshed on every open.
@@ -43,6 +54,10 @@ final class AppModel {
     var openAtLogin: Bool { loginItem == .enabled }
 
     func setOpenAtLogin(_ on: Bool) {
+        if on && misplaced {
+            error = "Move terminus to Applications first, then turn this on"
+            return
+        }
         do {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         } catch {
@@ -72,11 +87,18 @@ final class AppModel {
         if snapshot { return }
         log.notice("start: paired=\(self.paired) base=\(Api.base, privacy: .public)")
         observeSleep()
+        observeNetwork()
         start()
+        checkForUpdate()
         clockTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
-                self?.clock = Date()
+                try? await Task.sleep(for: .seconds(30), tolerance: .seconds(5))
+                guard let self, !self.paused else { continue }
+                // Only when the title would change: every assignment redraws the menu bar.
+                let now = Date()
+                if self.menuTitle(at: now) != self.menuTitle(at: self.clock) || self.isOld(self.plan, at: now) != self.isOld(self.plan, at: self.clock) {
+                    self.clock = now
+                }
             }
         }
     }
@@ -97,10 +119,14 @@ final class AppModel {
         return left < 45 ? "\(plan.service) now" : "\(plan.service) \(Int((left / 60).rounded()))m"
     }
 
-    /// Data this old, or a bus that has left, is shown dimmed.
+    /// Same rule as the Android widget: the bus has left, the plan has moved
+    /// on (a class started, the day ended), or the answer is 15 minutes old.
+    /// A rest answer only goes old when the day starts.
     func isOld(_ a: NextAnswer?, at now: Date) -> Bool {
+        if let at = a?.planChanges, now >= at { return true }
+        if a?.mode == "rest" { return false }
         if let at = a?.departure, now.timeIntervalSince(at) > 30 { return true }
-        if let updated, now.timeIntervalSince(updated) > 180 { return true }
+        if let updated, now.timeIntervalSince(updated) > 15 * 60 { return true }
         return false
     }
 
@@ -128,17 +154,40 @@ final class AppModel {
         }
     }
 
+    /// Local state goes first, so the popover reacts at once even offline.
     func unpair() {
         let token = TokenStore.read()
+        loop?.cancel()
+        TokenStore.write(nil)
+        clearLocal()
+        Task { try? await Api(token: token).logout() }
+    }
+
+    private func clearLocal() {
+        paired = false
+        answers = [:]
+        nearby = nil
+        places = []
+        target = .plan
+        showNearby = false
+        error = nil
+    }
+
+    func openLocationSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")!)
+    }
+
+    /// At most once a day: is there a newer release than this one?
+    private func checkForUpdate() {
+        let d = UserDefaults.standard
+        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        if let v = d.string(forKey: "latestVersion"), isNewer(v, than: current) { update = v }
+        guard Date().timeIntervalSince1970 - d.double(forKey: "updateCheckedAt") > 86_400 else { return }
         Task {
-            try? await Api(token: token).logout()
-            TokenStore.write(nil)
-            paired = false
-            answers = [:]
-            nearby = nil
-            places = []
-            target = .plan
-            showNearby = false
+            guard let v = try? await Api(token: nil).latestVersion() else { return }
+            d.set(Date().timeIntervalSince1970, forKey: "updateCheckedAt")
+            d.set(v, forKey: "latestVersion")
+            update = isNewer(v, than: current) ? v : nil
         }
     }
 
@@ -164,29 +213,55 @@ final class AppModel {
 
     // MARK: refresh loop
 
-    /// 30 s while the popover is open, 2 min otherwise; nothing while asleep
-    /// or locked. The API caches each stop for 15 s, so faster shows nothing new.
+    /// 30 s while the popover is open, 2 min otherwise, 10 min while
+    /// resting; nothing while asleep or locked. Also right after the bus
+    /// leaves or the plan changes, and soon after a failure. The API caches
+    /// each stop for 15 s, so faster shows nothing new.
     private func start() {
         loop?.cancel()
         loop = Task {
             while !Task.isCancelled {
-                if !paused && paired { await refresh() }
-                try? await Task.sleep(for: .seconds(popoverOpen ? 30 : 120))
+                var ok = true
+                if !paused && paired { ok = await refresh() }
+                try? await Task.sleep(for: .seconds(nextDelay(failed: !ok)))
             }
         }
     }
 
+    private var failures = 0
+
+    private func nextDelay(failed: Bool) -> TimeInterval {
+        failures = failed ? failures + 1 : 0
+        // Wi-Fi is often not up yet right after a wake: retry soon, then back off.
+        if failed && failures <= 3 { return [5, 15, 45][failures - 1] }
+        var d: TimeInterval = popoverOpen ? 30 : resting ? 600 : 120
+        let now = Date()
+        for mark in [plan?.departure?.addingTimeInterval(31), plan?.planChanges].compactMap({ $0 }) where mark > now {
+            d = min(d, mark.timeIntervalSince(now))
+        }
+        return max(d, 5)
+    }
+
     private func kick() { start() }
 
-    func refresh() async {
+    /// Returns false when the fetch failed, so the loop can retry sooner.
+    @discardableResult
+    func refresh() async -> Bool {
         guard let token = TokenStore.read() else {
-            log.notice("no token; showing pairing")
-            paired = false
-            return
+            // Only a missing file means unpaired; a read that failed for
+            // another reason must not strand the Mac on the pairing screen.
+            if !TokenStore.exists {
+                log.notice("no token; showing pairing")
+                paired = false
+            }
+            return true
         }
+        guard !refreshing else { return true }
+        refreshing = true
+        defer { refreshing = false }
         log.debug("refreshing against \(Api.base, privacy: .public)")
         let api = Api(token: token)
-        let loc = await locator.current()
+        let loc = await locator.current(maxAge: popoverOpen ? 120 : 600)
         let lat = loc?.coordinate.latitude, lon = loc?.coordinate.longitude
         loading = true
         defer { loading = false }
@@ -202,21 +277,32 @@ final class AppModel {
             places = p.places ?? []
             error = nil
             updated = Date()
+            clock = Date()
+            return true
         } catch let e as ApiError where e.status == 401 {
             TokenStore.write(nil)
-            paired = false
-            pairError = "This Mac was removed from your account. Pair it again."
+            clearLocal()
+            pairError = "This Mac was signed out of your account. Sign in at terminus.rcn.sh/account and pair it again."
+            return true
         } catch let e as ApiError {
             log.error("api error \(e.status): \(e.message, privacy: .public)")
             error = e.message
+            return false
+        } catch is DecodingError {
+            // Not the network: the API sent something this version can't read.
+            error = update != nil ? "Update terminus to keep going" : "Unexpected answer from terminus"
+            return false
         } catch {
             // kick() restarts the loop and cancels a refresh in flight; that
             // is not an outage.
-            if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled { return true }
             log.error("refresh failed: \(error.localizedDescription, privacy: .public)")
             self.error = "Offline"
+            return false
         }
     }
+
+    private var refreshing = false
 
     private func observeSleep() {
         let ws = NSWorkspace.shared.notificationCenter
@@ -224,14 +310,37 @@ final class AppModel {
             MainActor.assumeIsolated { self?.paused = true }
         }
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.paused = false; self?.kick() }
+            MainActor.assumeIsolated { self?.paused = false; self?.clock = Date(); self?.kick() }
+        }
+        ws.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.paused = true }
+        }
+        ws.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.paused = false; self?.clock = Date(); self?.kick() }
         }
         let dist = DistributedNotificationCenter.default()
         dist.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.paused = true }
         }
         dist.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.paused = false; self?.kick() }
+            MainActor.assumeIsolated { self?.paused = false; self?.clock = Date(); self?.kick() }
         }
+    }
+
+    private let pathMonitor = NWPathMonitor()
+    private var online = true
+
+    /// Refresh the moment the network comes back, instead of waiting out the
+    /// loop with "Offline" on screen.
+    private func observeNetwork() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let up = path.status == .satisfied
+            Task { @MainActor in
+                guard let self else { return }
+                if up && !self.online { self.kick() }
+                self.online = up
+            }
+        }
+        pathMonitor.start(queue: .global(qos: .utility))
     }
 }

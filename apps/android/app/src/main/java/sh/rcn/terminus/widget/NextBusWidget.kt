@@ -1,7 +1,5 @@
 package sh.rcn.terminus.widget
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
@@ -43,6 +41,8 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -50,7 +50,6 @@ import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.ui.MainActivity
-import java.text.DateFormat
 import java.util.Date
 
 /**
@@ -84,16 +83,19 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val ctx = LocalContext.current
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
-        val tiny = TextStyle(color = colors.onSurfaceVariant, fontSize = 10.sp)
+        val tiny = TextStyle(color = colors.onSurfaceVariant, fontSize = 11.sp)
         // Layout follows the real size: a compact widget stretched to two
         // rows gets the full layout rather than one line in a big box.
         val height = LocalSize.current.height
         val large = large || height >= 110.dp
         val roomy = large || height >= 90.dp
 
+        // TalkBack reads the widget as one sentence instead of fragments.
+        val spoken = spokenSummary(ctx, paired, answer, fetchedAt, error)
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
+                .semantics { contentDescription = spoken }
                 .background(colors.widgetBackground)
                 .cornerRadius(20.dp)
                 .padding(horizontal = 14.dp, vertical = if (large) 12.dp else 8.dp)
@@ -143,7 +145,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     val now = System.currentTimeMillis()
                     val old = isOld(answer, fetchedAt, now)
                     Text(
-                        answer.clockLabel(::clock),
+                        answer.clockLabel { clock(ctx, it) },
                         style = TextStyle(
                             color = if (old) colors.onSurfaceVariant else colors.onSurface,
                             fontWeight = FontWeight.Bold,
@@ -151,7 +153,14 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         ),
                         maxLines = 1,
                     )
-                    Text(if (old) "Old times · tap to refresh" else answer.detail, style = muted, maxLines = if (large) 2 else 1)
+                    // A compact widget has no footer, so a problem goes on this line.
+                    val line = when {
+                        error == UPDATING -> UPDATING
+                        old -> "Old times · tap to refresh"
+                        error != null && !roomy -> "$error · ${answer.detail}"
+                        else -> answer.detail
+                    }
+                    Text(line, style = muted, maxLines = if (large) 2 else 1)
                     if (large && !old) {
                         answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
                     }
@@ -160,8 +169,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Chips(ctx, answer)
                         Spacer(GlanceModifier.height(6.dp))
                     }
-                    val stamp = fetchedAt?.let { "Updated ${clock(it)}" }
-                    val foot = listOfNotNull(error, stamp).joinToString(" · ")
+                    val stamp = fetchedAt?.let { "Updated ${clock(ctx, it)}" }
+                    val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
                     if (roomy && foot.isNotEmpty()) Text(foot, style = tiny, maxLines = 1)
                 }
             }
@@ -170,6 +179,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
     private fun timingColor(status: String?, colors: androidx.glance.color.ColorProviders) = when (status) {
         "late" -> colors.error
+        "tight" -> colors.tertiary
         else -> colors.primary
     }
 
@@ -185,7 +195,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     modifier = GlanceModifier
                         .background(colors.secondaryContainer)
                         .cornerRadius(14.dp)
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .semantics { contentDescription = "$label: open the app" }
                         .clickable(actionStartActivity(intent)),
                 ) {
                     Text(label, style = TextStyle(color = colors.onSecondaryContainer, fontSize = 13.sp), maxLines = 1)
@@ -193,6 +204,21 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             }
         }
     }
+}
+
+/** What the widget says, as a sentence for screen readers. */
+fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt: Long?, error: String?): String {
+    if (!paired) return "terminus. Not paired. Double tap to pair this phone."
+    if (answer == null) return "terminus. ${error ?: "Loading"}. Double tap to refresh."
+    val old = isOld(answer, fetchedAt, System.currentTimeMillis())
+    val parts = listOfNotNull(
+        answer.destLabel?.let { "To $it" },
+        if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", ", leaves "),
+        if (old) "These times are old" else answer.detail.replace(" · ", ", "),
+        answer.timingText?.takeIf { !old },
+        error?.takeIf { it != UPDATING },
+    )
+    return parts.joinToString(". ") + ". Double tap to refresh."
 }
 
 class NextBusWidget : BaseWidget(large = false)
@@ -213,9 +239,14 @@ suspend fun redrawWidgets(ctx: Context) {
 
 class RefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        Refresher.refresh(context)
+        // Show that the tap landed before the network answers.
+        Store(context).lastError = UPDATING
+        redrawWidgets(context)
+        Refresher.refresh(context, fast = true)
     }
 }
+
+const val UPDATING = "Updating…"
 
 open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = widget
@@ -223,30 +254,48 @@ open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver(
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         Refresher.schedule(context)
+        Refresher.refreshSoon(context)
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
         // Called when the last widget of THIS kind goes. Keep refreshing
         // while a widget of the other kind is still on the home screen.
-        val mgr = AppWidgetManager.getInstance(context)
-        val left = listOf(NextBusWidgetReceiver::class.java, PlacesWidgetReceiver::class.java)
-            .sumOf { mgr.getAppWidgetIds(ComponentName(context, it)).size }
-        if (left == 0) Refresher.cancel(context)
+        if (Refresher.widgetCount(context) == 0) Refresher.cancel(context)
     }
 }
 
 class NextBusWidgetReceiver : BusWidgetReceiver(NextBusWidget())
 class PlacesWidgetReceiver : BusWidgetReceiver(PlacesWidget())
 
-/** Data this old is shown dimmed. */
-const val STALE_AFTER_MS = 3 * 60_000L
+/**
+ * Past this, an answer is refreshed, and dimmed if the refresh hasn't landed.
+ * A clock time stays true until the bus leaves, so this is only the backstop
+ * for relative text ("or A1 9 min") and missed refreshes.
+ */
+const val MAX_AGE_MS = 15 * 60_000L
+/** A bus shown as leaving at 09:42 might still be at the stop at 09:42:20. */
+const val DEPARTED_GRACE_MS = 30_000L
 
-/** The bus in the answer has left, or the answer is too old to trust. */
+/**
+ * The bus in the answer has left, the plan has moved on (a class started, the
+ * day ended), or the answer is past MAX_AGE_MS. A rest answer only goes old
+ * when the day starts.
+ */
 fun isOld(answer: NextAnswer, fetchedAt: Long?, now: Long): Boolean {
-    val departed = answer.departsAtMs?.let { now > it + 30_000 } ?: false
-    val aged = fetchedAt != null && now - fetchedAt > STALE_AFTER_MS
+    if (answer.refreshAtMs?.let { now >= it } == true) return true
+    if (answer.mode == "rest") return false
+    val departed = answer.departsAtMs?.let { now > it + DEPARTED_GRACE_MS } ?: false
+    val aged = fetchedAt != null && now - fetchedAt > MAX_AGE_MS
     return departed || aged
 }
 
-fun clock(ms: Long): String = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(ms))
+/**
+ * Campus time, in the phone's 12/24-hour style. Class times and "Arrive
+ * 09:52" come from the server in Singapore time; a phone set to another
+ * zone must not print the bus in a different one beside them.
+ */
+fun clock(ctx: Context, ms: Long): String =
+    android.text.format.DateFormat.getTimeFormat(ctx)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Singapore") }
+        .format(Date(ms))

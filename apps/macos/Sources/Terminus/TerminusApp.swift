@@ -203,7 +203,7 @@ private struct Pair: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Pair this Mac")
-                Text("On terminus.rcn.sh/account, click \u{201C}Get a pairing code\u{201D} and type it here.")
+                Text("Sign in at terminus.rcn.sh/account, choose Pair a device, then enter the 6-character code here.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -248,12 +248,32 @@ private struct Main: View {
         VStack(alignment: .leading, spacing: 12) {
             Header(model: model)
 
+            if let v = model.update {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                    Text("terminus \(v) is out").font(.callout)
+                    Spacer()
+                    Button("Download") { NSWorkspace.shared.open(URL(string: "https://terminus.rcn.sh/download/mac")!) }.controlSize(.small)
+                }
+                .card(padding: 10)
+            }
+
             if model.needsLocation {
                 HStack(spacing: 10) {
-                    Image(systemName: "location.fill").foregroundStyle(.blue)
+                    Image(systemName: "location.fill").foregroundStyle(.blue).accessibilityHidden(true)
                     Text("Start from the stop you're nearest").font(.callout)
                     Spacer()
                     Button("Allow") { model.askLocation() }.controlSize(.small)
+                }
+                .card(padding: 10)
+            } else if model.locationDenied {
+                // After an update the ad-hoc signature changes and macOS may
+                // forget the permission; say so instead of quietly guessing.
+                HStack(spacing: 10) {
+                    Image(systemName: "location.slash").foregroundStyle(.secondary).accessibilityHidden(true)
+                    Text("Location is off, so answers follow your timetable").font(.callout)
+                    Spacer()
+                    Button("Settings") { model.openLocationSettings() }.controlSize(.small)
                 }
                 .card(padding: 10)
             }
@@ -335,7 +355,7 @@ private struct Header: View {
     private func big(_ a: NextAnswer?) -> String {
         guard let a else { return "Checking…" }
         guard a.hasLiveTime, let at = a.departure else { return a.label }
-        return "\(a.service) · \(at.formatted(date: .omitted, time: .shortened))"
+        return "\(a.service) · \(campusTime(at))"
     }
 
     private func countdown(to at: Date, now: Date) -> String {
@@ -345,7 +365,7 @@ private struct Header: View {
     }
 
     private var restStatus: String {
-        let when = model.updated.map { " · \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
+        let when = model.updated.map { " · \(campusTime($0))" } ?? ""
         return "No buses until your day starts" + when
     }
 
@@ -366,7 +386,7 @@ private struct Header: View {
 
     private func status(_ a: NextAnswer?) -> String {
         if let e = model.error { return e }
-        let when = model.updated.map { " · \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
+        let when = model.updated.map { " · \(campusTime($0))" } ?? ""
         if model.showNearby { return "Updated" + when }
         switch a?.quality {
         case "live": return "Live" + when
@@ -509,13 +529,13 @@ private struct AnswerDetail: View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
-                if a.timing != nil || a.crowd != nil {
+                if a.timing?.text != nil || a.crowd != nil {
                     HStack(spacing: 6) {
-                        if let t = a.timing { Pill(text: t.text, color: t.status == "late" ? .red : t.status == "tight" ? .orange : .green) }
+                        if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .orange : .green) }
                         if let c = a.crowd { Pill(text: "\(c.capitalized) crowd", color: .secondary) }
                     }
                 }
-                if !a.stop.name.isEmpty { Row(icon: "mappin.circle", text: "Board at \(a.stop.name)") }
+                if let name = a.stop?.name, !name.isEmpty { Row(icon: "mappin.circle", text: "Board at \(name)") }
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -717,7 +737,8 @@ private struct Footer: View {
         HStack {
             if model.paired {
                 Menu {
-                    Toggle("Open at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
+                    Toggle(model.misplaced ? "Open at login (move to Applications first)" : "Open at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
+                        .disabled(model.misplaced && !model.openAtLogin)
                     Button("Refresh now") { Task { await model.refresh() } }
                     Divider()
                     Button("Unpair this Mac") { model.unpair() }

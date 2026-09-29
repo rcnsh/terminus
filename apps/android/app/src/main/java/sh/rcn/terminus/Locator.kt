@@ -17,20 +17,20 @@ import kotlin.coroutines.resume
  */
 object Locator {
     /** A last-known fix younger than this is good enough for the widget. */
-    private const val MAX_AGE_MS = 5 * 60_000L
+    private const val MAX_AGE_MS = 10 * 60_000L
 
     fun hasForeground(ctx: Context) = granted(ctx, Manifest.permission.ACCESS_COARSE_LOCATION)
     fun hasBackground(ctx: Context) = granted(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
 
     /** For the widget and worker: a cached fix only, never a new GPS request. */
-    fun lastKnown(ctx: Context): Location? {
+    fun lastKnown(ctx: Context, maxAgeMs: Long = MAX_AGE_MS): Location? {
         if (!hasForeground(ctx)) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
         return try {
             listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
                 .filter { lm.allProviders.contains(it) }
                 .mapNotNull { lm.getLastKnownLocation(it) }
-                .filter { System.currentTimeMillis() - it.time < MAX_AGE_MS }
+                .filter { System.currentTimeMillis() - it.time < maxAgeMs }
                 .minByOrNull { it.accuracy }
         } catch (_: SecurityException) {
             null

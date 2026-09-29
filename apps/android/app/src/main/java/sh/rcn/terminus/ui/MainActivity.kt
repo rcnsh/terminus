@@ -34,6 +34,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,14 +69,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.R
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.widget.clock
-import java.text.DateFormat
-import java.util.Date
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
@@ -83,7 +83,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        handle(intent)
+        // A recreation (rotation, theme change) must not re-apply the link
+        // that opened the app and yank the user back to that view.
+        if (savedInstanceState == null) handle(intent)
+        vm.checkForUpdate(BuildConfig.VERSION_NAME)
         setContent { NusbusTheme { App(vm) } }
     }
 
@@ -98,7 +101,7 @@ class MainActivity : ComponentActivity() {
         // https://terminus.rcn.sh/pair?code=… from the account page's QR code.
         if (data.scheme == "https" && data.path?.startsWith("/pair") == true) {
             val code = data.getQueryParameter("code")?.filter { it.isLetterOrDigit() }?.uppercase()
-            if (code != null && code.length == 6 && !vm.state.value.paired) vm.pair(code)
+            if (code != null && code.length == 6 && !vm.state.value.paired) vm.checkPairLink(code)
             return
         }
         if (data.scheme != "terminus") return
@@ -142,6 +145,15 @@ private fun App(vm: MainViewModel) {
     ) {
         if (!state.paired) PairScreen(state, vm::pair) else MainScreen(state, vm)
     }
+    state.pendingPair?.let { p ->
+        AlertDialog(
+            onDismissRequest = vm::dismissPairLink,
+            title = { Text("Pair this phone?") },
+            text = { Text("This link pairs this phone with ${p.account}. Only continue if that's your account.") },
+            confirmButton = { TextButton(onClick = { vm.pair(p.code) }) { Text("Pair") } },
+            dismissButton = { TextButton(onClick = vm::dismissPairLink) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
@@ -149,7 +161,11 @@ private fun PairScreen(state: UiState, onPair: (String) -> Unit) {
     var code by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxWidth().padding(top = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("terminus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("Pair this phone with your account. On terminus.rcn.sh/account, tap \"Get a pairing code\" and type it here.")
+        val ctx = LocalContext.current
+        Text("Pair this phone with your account. Sign in at terminus.rcn.sh/account, choose Pair a device, then enter the 6-character code here or scan the QR code with your camera.")
+        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://terminus.rcn.sh/account"))) }) {
+            Text("Open terminus.rcn.sh/account")
+        }
         OutlinedTextField(
             value = code,
             onValueChange = { v -> code = v.filter { it.isLetterOrDigit() }.uppercase().take(6) },
@@ -172,10 +188,16 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
+    // After two refusals Android stops showing the dialog, and the button
+    // would do nothing. Then the only way is the app's settings page.
+    var blocked by rememberSaveable { mutableStateOf(false) }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         hasLocation = Locator.hasForeground(ctx)
+        val activity = ctx as? android.app.Activity
+        blocked = !hasLocation && activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
         vm.load()
     }
+    val openSettings = { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))) }
 
     // Keep the answer fresh while the app is on screen; the API's own cache
     // is 15 s, so polling faster than that would show nothing new.
@@ -191,16 +213,39 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("terminus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            TextButton(onClick = vm::unpair) { Text("Unpair") }
+            var confirmUnpair by remember { mutableStateOf(false) }
+            TextButton(onClick = { confirmUnpair = true }) { Text("Unpair") }
+            if (confirmUnpair) {
+                AlertDialog(
+                    onDismissRequest = { confirmUnpair = false },
+                    title = { Text("Unpair this phone?") },
+                    text = { Text("The app and widget stop showing your timetable. You can pair again with a new code from the account page.") },
+                    confirmButton = { TextButton(onClick = { confirmUnpair = false; vm.unpair() }) { Text("Unpair") } },
+                    dismissButton = { TextButton(onClick = { confirmUnpair = false }) { Text("Cancel") } },
+                )
+            }
+        }
+
+        state.update?.let { v ->
+            Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("terminus $v is out", modifier = Modifier.weight(1f))
+                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://terminus.rcn.sh/download/android"))) }) { Text("Update") }
+                }
+            }
         }
 
         if (!hasLocation) {
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Column(Modifier.padding(12.dp)) {
-                    Text("Allow location so answers start from the stop you're nearest, not from your timetable's guess.")
-                    TextButton(onClick = {
-                        askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                    }) { Text("Allow location") }
+                    Text("Allow location so answers start from the stop you're nearest. Without it, terminus assumes you're where your last class was, or at home.")
+                    if (blocked) {
+                        TextButton(onClick = openSettings) { Text("Open settings to allow location") }
+                    } else {
+                        TextButton(onClick = {
+                            askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                        }) { Text("Allow location") }
+                    }
                 }
             }
         } else if (!Locator.hasBackground(ctx)) {
@@ -209,9 +254,7 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(onClick = {
-                ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
-            }) { Text("Open settings") }
+            TextButton(onClick = openSettings) { Text("Open settings") }
         }
 
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -238,7 +281,7 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
 
         val footer = listOfNotNull(
             state.error,
-            state.fetchedAt?.let { "Updated ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it))}" },
+            state.fetchedAt?.let { "Updated ${clock(ctx, it)}" },
         ).joinToString(" · ")
         Row(Modifier.padding(top = 8.dp).height(20.dp), verticalAlignment = Alignment.CenterVertically) {
             if (state.loading) {
@@ -278,11 +321,12 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
                 else -> answer.destLabel
             }
             heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Text(answer.clockLabel(::clock), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            val ctx = LocalContext.current
+            Text(answer.clockLabel { clock(ctx, it) }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Countdown(answer)
             Text(answer.detail)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-                answer.timingText?.let { Pill(it, if (answer.timingStatus == "late") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+                answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
                 answer.crowd?.let { Pill("${it.replaceFirstChar { c -> c.uppercase() }} crowd", MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             // The alternative is already at the end of `detail`.
@@ -308,6 +352,14 @@ private fun Countdown(answer: NextAnswer) {
         else -> "Left ${(-left + 59) / 60} min ago · refreshing"
     }
     Text(text, style = MaterialTheme.typography.titleSmall, color = if (left > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** Three states, three colours: "tight" is the one that must not look calm. */
+@Composable
+private fun timingColor(status: String?) = when (status) {
+    "late" -> MaterialTheme.colorScheme.error
+    "tight" -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.primary
 }
 
 @Composable

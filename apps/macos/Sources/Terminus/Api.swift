@@ -10,24 +10,48 @@ struct NextAnswer: Decodable {
     struct Stop: Decodable { let code: String; let name: String }
     struct Dest: Decodable { let to: String; let label: String; let why: String }
 
+    // Only `label` is required. Anything else missing (a newer or older API)
+    // must not turn the whole answer into "Offline".
     let label: String
     let detail: String
     let alt: String?
-    let stop: Stop
+    let stop: Stop?
     let quality: String
-    let asOf: String
+    let asOf: String?
     let mode: String?
     let dest: Dest?
     let places: [Place]?
     /// When the bus leaves. Count down from this; `label` is only true when fetched.
     let departsAt: String?
+    /// When the plan changes by itself (a class starts, the day ends).
+    let refreshAt: String?
     let timing: Timing?
     let arrivals: [ArrivalLite]?
 
-    struct Timing: Decodable { let status: String; let text: String }
+    struct Timing: Decodable { let status: String?; let text: String? }
+
+    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        label = try c.decode(String.self, forKey: .label)
+        detail = (try? c.decodeIfPresent(String.self, forKey: .detail)) ?? ""
+        alt = try? c.decodeIfPresent(String.self, forKey: .alt)
+        stop = try? c.decodeIfPresent(Stop.self, forKey: .stop)
+        quality = (try? c.decodeIfPresent(String.self, forKey: .quality)) ?? "unknown"
+        asOf = try? c.decodeIfPresent(String.self, forKey: .asOf)
+        mode = try? c.decodeIfPresent(String.self, forKey: .mode)
+        dest = try? c.decodeIfPresent(Dest.self, forKey: .dest)
+        places = try? c.decodeIfPresent([Place].self, forKey: .places)
+        departsAt = try? c.decodeIfPresent(String.self, forKey: .departsAt)
+        refreshAt = try? c.decodeIfPresent(String.self, forKey: .refreshAt)
+        timing = try? c.decodeIfPresent(Timing.self, forKey: .timing)
+        arrivals = try? c.decodeIfPresent([ArrivalLite].self, forKey: .arrivals)
+    }
     struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
 
     var departure: Date? { departsAt.flatMap(parseISODate) }
+    var planChanges: Date? { refreshAt.flatMap(parseISODate) }
     var service: String { label.components(separatedBy: " · ").first ?? label }
     /// Crowd on the recommended bus, not whichever is first in the list.
     var crowd: String? { arrivals?.first { $0.svc == service }?.crowd }
@@ -47,6 +71,17 @@ private enum ISOFormats {
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
+}
+
+/// Campus time. Class times and "Arrive 09:52" come from the server in
+/// Singapore time, so bus times must too, even on a Mac set to another zone.
+func campusTime(_ d: Date) -> String {
+    d.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: TimeZone(identifier: "Asia/Singapore")!))
+}
+
+/// "1.0.10" is newer than "1.0.9".
+func isNewer(_ latest: String, than current: String) -> Bool {
+    latest.compare(current, options: .numeric) == .orderedDescending
 }
 
 struct BoardRow: Decodable, Hashable {
@@ -116,6 +151,13 @@ struct Api {
         struct R: Decodable { let destinations: [Destination] }
         let r: R = try await request("GET", "/campus")
         return r.destinations
+    }
+
+    /// The released version, from /download/latest.json.
+    func latestVersion() async throws -> String {
+        struct R: Decodable { let version: String }
+        let r: R = try await request("GET", "/download/latest.json")
+        return r.version
     }
 
     /// Ends this device's session on the server.

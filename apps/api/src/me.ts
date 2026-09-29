@@ -19,6 +19,8 @@ import {
   loadProfileJson,
   normalizeEmail,
   normalizePairCode,
+  pairCodeOwner,
+  maskEmail,
   redeemLink,
   redeemPairCode,
   requestLink,
@@ -26,11 +28,11 @@ import {
   saveProfileJson,
   sessionCookie,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, isResting, parseProfile, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
+import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, isResting, parseProfile, planChangesAt, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
-import { shortStop } from './format.ts';
+import { isoSeconds, shortStop } from './format.ts';
 import { WALK } from './config.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 
@@ -118,7 +120,7 @@ export async function handleMe(
   deps: MeDeps,
 ): Promise<Response | null> {
   const path = url.pathname;
-  if (!(path.startsWith('/auth/') || path === '/pair' || path === '/me' || path.startsWith('/me/'))) return null;
+  if (!(path.startsWith('/auth/') || path === '/pair' || path === '/pair/check' || path === '/me' || path.startsWith('/me/'))) return null;
   const db = env.DB;
   if (!db) return json({ error: 'accounts are not configured' }, 503);
 
@@ -181,6 +183,17 @@ export async function handleMe(
         headers: { location: '/account', 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' },
       });
     }
+  }
+
+  if (path === '/pair/check' && req.method === 'POST') {
+    // Lets an app show whose account a code belongs to before spending it,
+    // so a link someone sent you cannot quietly pair your phone to theirs.
+    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    const body = await readJson(req);
+    const code = normalizePairCode(body?.code);
+    const owner = code ? await pairCodeOwner(db, code, nowMs) : null;
+    if (!owner) return json({ error: 'that code is wrong or has expired' }, 400);
+    return json({ account: maskEmail(owner) });
   }
 
   if (path === '/pair' && req.method === 'POST') {
@@ -313,7 +326,12 @@ export async function handleMe(
   }
 
   if (path === '/me/next' && req.method === 'GET') {
-    return json(await nextFor(url, env, ctx, nowMs, deps, await getProfile(db, session.user.id, deps.graph)));
+    const profile = await getProfile(db, session.user.id, deps.graph);
+    const answer = await nextFor(url, env, ctx, nowMs, deps, profile);
+    // When the plan itself moves on (class starts, day ends). Only the planned
+    // answer has one; a place or a stop never changes by itself.
+    const planned = !url.searchParams.get('place') && !url.searchParams.get('to');
+    return json(planned ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer);
   }
 
   if (path === '/me/nearby' && req.method === 'GET') {

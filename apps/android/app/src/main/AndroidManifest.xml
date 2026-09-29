@@ -7,9 +7,12 @@
     <!-- Optional. Only lets the widget use your location when it refreshes
          in the background; without it the widget follows your timetable. -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Re-arms the widget refresh after a restart. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -56,6 +59,19 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/places_widget_info" />
+        </receiver>
+        <!-- The widget's refresh alarm, and the system events after which its
+             pre-drawn text is wrong. System broadcasts reach it unexported. -->
+        <receiver
+            android:name=".widget.RefreshReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>

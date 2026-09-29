@@ -483,3 +483,24 @@ test('oversized JSON bodies are refused', async () => {
   const r = await call(env, '/me/profile', { method: 'PUT', cookie, body: { places: [], junk: 'x'.repeat(70_000) } });
   assert.equal(r.status, 400);
 });
+
+test('pair/check names the account (masked) without spending the code', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const r = await call(env, '/pair/check', { method: 'POST', body: { code } });
+  assert.deepEqual(await r.json(), { account: 'f•••@u.nus.edu' });
+  assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'p' } })).status, 200, 'still usable');
+  assert.equal((await call(env, '/pair/check', { method: 'POST', body: { code } })).status, 400, 'spent now');
+});
+
+test('/me/next carries refreshAt: the next class start while one is ahead', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, manual: [{ day: 4, arriveByMin: 600, endMin: 720, to: 'COM3', label: 'CS2030' }] } });
+  const body = await (await call(env, '/me/next', { cookie })).json();
+  // Frozen clock: Thursday 09:00 SGT. The return-at mark for this class is 09:00 itself, so 10:00 is next.
+  assert.equal(body.refreshAt, '2026-08-27T02:00:00Z');
+  const place = await (await call(env, '/me/next?to=UTOWN', { cookie })).json();
+  assert.equal(place.refreshAt, undefined);
+});

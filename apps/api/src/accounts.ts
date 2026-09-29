@@ -265,6 +265,21 @@ export async function createPairCode(db: D1Database, userId: string, nowMs: numb
   return { code, expires };
 }
 
+/** The email of the account a live pairing code belongs to, without spending it. */
+export async function pairCodeOwner(db: D1Database, code: string, nowMs: number): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT u.email FROM pair_codes p JOIN users u ON u.id = p.user_id WHERE p.code = ? AND p.expires >= ?')
+    .bind(code, nowMs)
+    .first<{ email: string }>();
+  return row?.email ?? null;
+}
+
+/** "j•••@gmail.com": enough to recognise your own account, not to harvest one. */
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  return `${local.slice(0, 1)}•••@${domain}`;
+}
+
 /** Spends a pairing code and returns a device token, or null. */
 export async function redeemPairCode(db: D1Database, code: string, name: string, nowMs: number): Promise<string | null> {
   const row = await db
