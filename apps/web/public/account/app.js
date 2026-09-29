@@ -3,7 +3,7 @@
 import { runOnboarding } from './onboarding.js';
 import { attachSearch } from './search.js';
 import { $, api, el } from './dom.js';
-import { renderPreview } from './preview.js';
+import { renderPreview, wireReport } from './preview.js';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -648,6 +648,7 @@ async function start() {
   renderHome();
   renderPlaces();
   $('#app').hidden = false;
+  wireReport();
   await Promise.all([renderDevices(), renderKeys(), renderPreview()]);
   setInterval(() => document.visibilityState === 'visible' && renderPreview(), 60_000);
 }

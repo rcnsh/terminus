@@ -4,6 +4,7 @@
  * public routes in index.ts never do.
  */
 
+import { mailFeedback, parseFeedback, saveFeedback } from './feedback.ts';
 import type { Answer, Env, Graph, MeAnswer, PlaceChip, ResolveInput, StopArrivals, Why } from './types.ts';
 import {
   ACCOUNT_TTL,
@@ -328,6 +329,22 @@ const ME_ROUTES: MeRoute[] = [
       const full: MeAnswer = planned ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
       // The display-ready card, in the client's 12- or 24-hour style.
       return json({ ...full, card: cardFor(full, hour12(url)) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/me/feedback',
+    run: async ({ req, env, ctx, nowMs, db, session }) => {
+      const parsed = parseFeedback(await readJson(req));
+      if (!parsed.ok) return json({ error: parsed.error }, 400);
+      const id = await saveFeedback(db, session.user.id, parsed.value, nowMs);
+      if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429);
+      ctx.waitUntil(
+        mailFeedback(env, id, session.user.email, parsed.value, nowMs).catch((e) =>
+          console.error('feedback email failed', e instanceof Error ? e.name : typeof e),
+        ),
+      );
+      return json({ ok: true, id }, 201);
     },
   },
   {

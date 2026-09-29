@@ -380,6 +380,10 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
     .prepare('SELECT name, hint, created, last_used AS lastUsed FROM api_keys WHERE user_id = ? ORDER BY created')
     .bind(user.id)
     .all<{ name: string; hint: string; created: number; lastUsed: number | null }>();
+  const { results: feedback } = await db
+    .prepare('SELECT created, kind, note, platform, app_version AS appVersion, context FROM feedback WHERE user_id = ? ORDER BY created')
+    .bind(user.id)
+    .all<{ created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null }>();
   return {
     email: user.email,
     created: row ? new Date(row.created).toISOString() : null,
@@ -400,6 +404,14 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
       endsWith: k.hint,
       created: new Date(k.created).toISOString(),
       lastUsed: k.lastUsed ? new Date(k.lastUsed).toISOString() : null,
+    })),
+    feedback: feedback.map((f) => ({
+      created: new Date(f.created).toISOString(),
+      kind: f.kind,
+      note: f.note,
+      platform: f.platform,
+      appVersion: f.appVersion,
+      answer: f.context ? JSON.parse(f.context) : null,
     })),
   };
 }
