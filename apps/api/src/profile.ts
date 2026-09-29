@@ -232,6 +232,9 @@ export interface Plan {
   from: string | null;
   /** The class this plan is about, when there is one. */
   trip: ImportedTrip | null;
+  /** The room you're leaving, when `from` is the last class's stop: the walk
+   *  from it to the stop counts. Null when starting from home. */
+  fromVenue: string | null;
 }
 
 /** During a long gap, switch back from "home" to "next class" this long
@@ -266,21 +269,21 @@ export function planFor(profile: Profile, nowMs: number): Plan | null {
   if (!next) {
     // After the last class of the day.
     if (!homeStop) return null;
-    return { to: homeStop, label: 'Home', why: 'home', from: prev!.to, trip: null };
+    return { to: homeStop, label: 'Home', why: 'home', from: prev!.to, trip: null, fromVenue: prev!.venue || null };
   }
   if (!prev) {
-    return { to: next.to, label: next.label, why: 'class', from: homeStop, trip: next };
+    return { to: next.to, label: next.label, why: 'class', from: homeStop, trip: next, fromVenue: null };
   }
 
   const gapMin = next.arriveByMin - endOf(prev);
   const returnAt = next.arriveByMin - GAP_RETURN_MIN;
   if (homeStop && gapMin > profile.gapHours * 60 && nowMin < returnAt && homeStop !== next.to) {
     // Still in class: nothing to catch yet, but the answer is the trip home.
-    return { to: homeStop, label: 'Home', why: 'gap-home', from: prev.to, trip: null };
+    return { to: homeStop, label: 'Home', why: 'gap-home', from: prev.to, trip: null, fromVenue: prev.venue || null };
   }
   // In a long gap after going home, the origin is home, not the last class.
   const wentHome = homeStop && gapMin > profile.gapHours * 60 && nowMin >= endOf(prev);
-  return { to: next.to, label: next.label, why: 'class', from: wentHome ? homeStop : prev.to, trip: next };
+  return { to: next.to, label: next.label, why: 'class', from: wentHome ? homeStop : prev.to, trip: next, fromVenue: wentHome ? null : prev.venue || null };
 }
 
 /* ------------------------------------------------------------------ */

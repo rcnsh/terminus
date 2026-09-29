@@ -371,7 +371,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   const homeStop = profile.home?.stops[0] ?? null;
   const places = profile.places.map(({ key, label }) => ({ key, label }));
 
-  let dest: { to: string; label: string; why: string; from: string | null; trip?: ImportedTrip | null } | null = null;
+  let dest: { to: string; label: string; why: string; from: string | null; trip?: ImportedTrip | null; fromVenue?: string | null } | null = null;
   const placeKey = url.searchParams.get('place');
   const toRaw = url.searchParams.get('to');
   if (placeKey) {
@@ -396,7 +396,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
     };
   } else {
     const plan = planFor(profile, nowMs);
-    if (plan) dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from, trip: plan.trip };
+    if (plan) dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from, trip: plan.trip, fromVenue: plan.fromVenue };
   }
 
   const preferStops = profile.home?.stops ?? [];
@@ -419,8 +419,7 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
       to: dest.to,
       originCode: lat === null ? dest.from : null,
       preferStops,
-      // Starting from home without a location: the walk to the stop counts.
-      originWalkS: lat === null && dest.from !== null && dest.from === homeStop ? profile.homeWalkMin * 60 : 0,
+      originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin) : 0,
       arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS } : null,
     };
     const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
@@ -444,6 +443,21 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   };
   const answer = await deps.answerFor(env, ctx, input, null, nowMs);
   return { ...answer, mode: 'nearby', dest: null, places };
+}
+
+/**
+ * Without a location, the walk to the stop you're assumed to start from:
+ * from the room you're in when that's the last class's stop, from home when
+ * it's the home stop.
+ */
+function originWalkS(dest: { from: string | null; fromVenue?: string | null }, homeStop: string | null, homeWalkMin: number): number {
+  if (dest.fromVenue) {
+    const m = venueToStop(dest.fromVenue)?.m ?? 0;
+    const s = Math.round(m / WALK.speedMs);
+    // Past this the room's stop is not really its stop (bad data).
+    return s <= MAX_VENUE_WALK_S ? s : 0;
+  }
+  return dest.from !== null && dest.from === homeStop ? homeWalkMin * 60 : 0;
 }
 
 async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
