@@ -131,6 +131,8 @@ final class AppModel {
     /// on (a class started, the day ended), or the answer is 15 minutes old.
     /// A rest answer only goes old when the day starts.
     func isOld(_ a: NextAnswer?, at now: Date) -> Bool {
+        // The server says when (card.staleAt); the rest is for an answer that predates it.
+        if let at = a?.staleAt { return now >= at }
         if let at = a?.planChanges, now >= at { return true }
         if a?.mode == "rest" { return false }
         if let at = a?.departure, now.timeIntervalSince(at) > 30 { return true }

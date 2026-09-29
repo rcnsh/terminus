@@ -582,19 +582,17 @@ private struct AnswerDetail: View {
                     let tone = a.leaveLate ? Color.red : Color.good
                     if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(tone) }
                     if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(tone) }
-                    if let note = a.leave?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(Color.warn) }
-                    if a.leave?.estimated == true {
-                        Row(icon: "info.circle", text: "Estimated from the usual gap between buses. Live times show nearer the time.").foregroundStyle(.secondary)
-                    }
+                    if let note = a.card?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(Color.warn) }
+                    if let e = a.card?.estimate { Row(icon: "info.circle", text: e).foregroundStyle(.secondary) }
                     if let g = a.goNowLine { Row(icon: "bus", text: g) }
                 } else {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                 if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
                 }
-                if !a.isClassPlan, a.timing?.text != nil || crowdWord(a.crowd) != nil {
+                if !a.isClassPlan, a.timing?.text != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
                         if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .good) }
-                        if let c = crowdWord(a.crowd) { Pill(text: c, color: .secondary) }
+                        if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
                 }
             } else {
