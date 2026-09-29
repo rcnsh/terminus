@@ -392,7 +392,7 @@ export async function getArrivals(
   }
 }
 
-const CACHE_BASE = 'https://nusbus-edge.internal';
+const CACHE_BASE = 'https://terminus.internal';
 const BREAKER = new Request(`${CACHE_BASE}/breaker`);
 const failKey = (code: string) => new Request(`${CACHE_BASE}/failed/${encodeURIComponent(code)}`);
 const memo = (reason: string, maxAgeS: number) =>

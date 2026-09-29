@@ -17,7 +17,7 @@ function setup() {
   const db = makeD1();
   db.exec(`INSERT INTO blocklist VALUES ('${BLOCKED}', 0)`);
   const email = makeEmail();
-  const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'nusbus@example.test' };
+  const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'terminus@example.test' };
   return { db, email, env };
 }
 
@@ -90,7 +90,7 @@ test('opening the link does not spend it; the POST does, once', async () => {
 
   const first = await call(env, '/auth/verify', { method: 'POST', form: { t } });
   assert.equal(first.status, 303);
-  assert.match(first.headers.get('set-cookie'), /nb_s=.+HttpOnly; Secure; SameSite=Lax/);
+  assert.match(first.headers.get('set-cookie'), /tm_s=.+HttpOnly; Secure; SameSite=Lax/);
 
   const again = await call(env, '/auth/verify', { method: 'POST', form: { t } });
   assert.equal(again.status, 400);
@@ -118,7 +118,7 @@ test('the emailed code signs in once, and spends the link with it', async () => 
   const res = await call(env, '/auth/code', { method: 'POST', body: { email: ' Friend@U.NUS.edu', code: typed } });
   assert.equal(res.status, 200);
   const cookie = res.headers.get('set-cookie');
-  assert.match(cookie, /nb_s=.+HttpOnly; Secure; SameSite=Lax/);
+  assert.match(cookie, /tm_s=.+HttpOnly; Secure; SameSite=Lax/);
   const me = await call(env, '/me', { cookie: cookie.split(';')[0] });
   assert.equal((await me.json()).email, INVITED);
 
@@ -153,14 +153,14 @@ test('a code only works for its own address, and dies after five wrong guesses',
 test('an expired code is refused', async () => {
   const { env, email } = setup();
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
-  for (const [k, v] of env.NUSBUS_KV._map) if (k.startsWith('code:')) env.NUSBUS_KV._map.set(k, JSON.stringify({ ...JSON.parse(v), e: 0 }));
+  for (const [k, v] of env.KV._map) if (k.startsWith('code:')) env.KV._map.set(k, JSON.stringify({ ...JSON.parse(v), e: 0 }));
   assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code: email.lastCode() } })).status, 400);
 });
 
 test('the code is stored hashed, never raw', async () => {
   const { env, email } = setup();
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
-  const dump = JSON.stringify([...env.NUSBUS_KV._map]);
+  const dump = JSON.stringify([...env.KV._map]);
   assert.ok(!dump.includes(email.lastCode()));
   assert.ok(!dump.includes(INVITED));
 });
@@ -524,7 +524,7 @@ test('an unexpected error is logged and answered with a bare 500', async () => {
   const orig = console.error;
   console.error = (...a) => errors.push(a.join(' '));
   env.DB.prepare = () => { throw new Error('D1_ERROR: secret internals'); };
-  const r = await call(env, '/me?lat=1.29&lon=103.77', { cookie: '__Host-nb_s=whatever' });
+  const r = await call(env, '/me?lat=1.29&lon=103.77', { cookie: '__Host-tm_s=whatever' });
   console.error = orig;
   assert.equal(r.status, 500);
   assert.deepEqual(await r.json(), { error: 'internal' });
@@ -579,13 +579,13 @@ test('the sign-in page names the account and refuses a dead link up front; the c
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.equal((await call(env, '/auth/verify?t=nonsense')).status, 400);
   const res = await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() } });
-  assert.match(res.headers.get('set-cookie'), /^__Host-nb_s=.*Secure/);
+  assert.match(res.headers.get('set-cookie'), /^__Host-tm_s=.*Secure/);
 });
 
 test('only the __Host- session cookie is read', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
-  const old = cookie.replace('__Host-nb_s=', 'nb_s=');
+  const old = cookie.replace('__Host-tm_s=', 'tm_s=');
   assert.equal((await call(env, '/me', { cookie: old })).status, 401);
 });
 

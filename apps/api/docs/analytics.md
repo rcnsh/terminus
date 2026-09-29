@@ -2,7 +2,7 @@
 
 `npx wrangler analytics-engine sql --query "..."`, or the GraphQL API.
 
-Dataset: `nusbus_edge`. Positional schema lives in `src/analytics.ts` — it is
+Dataset: `terminus`. Positional schema lives in `src/analytics.ts` — it is
 the query contract, so it is append-only.
 
 ## Is the direction algorithm right?
@@ -14,7 +14,7 @@ flips between a directional pair is the smell.
 ```sql
 SELECT blob4 AS dest, blob2 AS stop, blob3 AS svc,
        count() AS n, avg(double7) AS confidence
-FROM nusbus_edge
+FROM terminus
 WHERE blob1 = 'answer' AND blob4 != ''
 GROUP BY dest, stop, svc
 ORDER BY dest, n DESC
@@ -24,7 +24,7 @@ Answers where the direction could not be resolved:
 
 ```sql
 SELECT blob2 AS stop, blob3 AS svc, count() AS n
-FROM nusbus_edge WHERE blob1 = 'answer' AND double8 = 1
+FROM terminus WHERE blob1 = 'answer' AND double8 = 1
 GROUP BY stop, svc ORDER BY n DESC
 ```
 
@@ -40,7 +40,7 @@ times. `blob6` is the plate and it is the join key.
 ```sql
 SELECT blob6 AS plate, blob2 AS stop, blob3 AS svc,
        double1 AS eta_s, timestamp
-FROM nusbus_edge
+FROM terminus
 WHERE blob1 = 'arrival' AND blob6 != ''
 ORDER BY plate, timestamp
 ```
@@ -61,7 +61,7 @@ buses. At peak the question is not when the bus arrives but whether you get on.
 ```sql
 SELECT toHour(timestamp) AS hr, blob3 AS svc,
        countIf(blob7 = 'high') / count() AS pct_packed
-FROM nusbus_edge WHERE blob1 = 'arrival' AND blob7 != ''
+FROM terminus WHERE blob1 = 'arrival' AND blob7 != ''
 GROUP BY hr, svc ORDER BY hr
 ```
 
@@ -71,7 +71,7 @@ How often does the ladder actually degrade?
 
 ```sql
 SELECT blob5 AS quality, count() AS n
-FROM nusbus_edge WHERE blob1 = 'answer' GROUP BY quality ORDER BY n DESC
+FROM terminus WHERE blob1 = 'answer' GROUP BY quality ORDER BY n DESC
 ```
 
 A lot of `unknown` means upstream is flaky or auth is failing. A lot of

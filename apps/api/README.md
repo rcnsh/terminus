@@ -67,7 +67,7 @@ Names match `hewliyang/nus-nextbus-web`'s `.env.example`.
 Deploy:
 
 ```bash
-npx wrangler kv namespace create NUSBUS_KV      # paste the id into wrangler.toml
+npx wrangler kv namespace create KV   # paste the id into wrangler.toml
 for k in NEXTBUS_AUTH_BASE NEXTBUS_APP_VERSION NEXTBUS_HTD_API NEXTBUS_APP_API NEXTBUS_PROXY_BASE NEXTBUS_PROXY_API_KEY; do npx wrangler secret put "$k"; done
 npx wrangler deploy
 ```
@@ -120,7 +120,7 @@ from the page and get a device token (`Authorization: Bearer`).
 Setup:
 
 ```bash
-npx wrangler d1 migrations apply nusbus --remote
+npx wrangler d1 migrations apply terminus --remote
 ```
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That

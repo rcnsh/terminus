@@ -532,7 +532,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       securitySchemes: {
         apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key', description: 'A key from the account page (API keys). Starts with `tk_`.' },
         bearer: { type: 'http', scheme: 'bearer', description: 'An API key, or a device token from `/pair`.' },
-        cookie: { type: 'apiKey', in: 'cookie', name: '__Host-nb_s', description: 'Set by signing in on the account page.' },
+        cookie: { type: 'apiKey', in: 'cookie', name: '__Host-tm_s', description: 'Set by signing in on the account page.' },
       },
       schemas: {
         Quality: quality,

@@ -93,9 +93,9 @@ export function makeKV(seed = {}) {
 export function makeEnv(kv = makeKV(), ae = undefined) {
   // Structurally valid, entirely fake. No captured values anywhere.
   return {
-    NUSBUS_KV: kv,
+    KV: kv,
     // Absent by default: logging must be a no-op without the binding.
-    NUSBUS_AE: ae,
+    AE: ae,
     NEXTBUS_AUTH_BASE: 'https://auth.example.test',
     NEXTBUS_PROXY_BASE: 'https://proxy.example.test/univus/api/bus-proxy',
     NEXTBUS_PROXY_API_KEY: 'test-proxy-key',

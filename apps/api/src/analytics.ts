@@ -56,7 +56,7 @@ import type { Answer, Arrival, Env, ScoredOption } from './types.ts';
 const MAX_ARRIVAL_ROWS = 8;
 
 export function analyticsEnabled(env: Env): boolean {
-  return typeof env.NUSBUS_AE?.writeDataPoint === 'function';
+  return typeof env.AE?.writeDataPoint === 'function';
 }
 
 export interface LogInput {
@@ -73,7 +73,7 @@ export function logAnswer(env: Env, input: LogInput): void {
     const { answer, best } = input;
     const stop = answer.stop.code || 'none';
 
-    env.NUSBUS_AE!.writeDataPoint({
+    env.AE!.writeDataPoint({
       blobs: [
         'answer',
         stop,
@@ -103,7 +103,7 @@ export function logAnswer(env: Env, input: LogInput): void {
     // The segment-time seed. Every arrival at the chosen stop, with its plate.
     for (const a of answer.arrivals.slice(0, MAX_ARRIVAL_ROWS)) {
       if (a.etaS == null) continue; // "no bus" carries no timing information
-      env.NUSBUS_AE!.writeDataPoint({
+      env.AE!.writeDataPoint({
         blobs: [
           'arrival',
           stop,

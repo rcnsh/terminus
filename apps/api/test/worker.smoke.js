@@ -7,7 +7,7 @@ import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
 
 const BASE = 'https://bus.example.test';
-const ARRIVALS_KEY = (code) => `https://nusbus-edge.internal/arrivals/${code}`;
+const ARRIVALS_KEY = (code) => `https://terminus.internal/arrivals/${code}`;
 
 const D2_IN_4 = [
   { name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low', arrivalTime_veh_plate: 'PA1234A' },
@@ -360,7 +360,7 @@ test('an answer logs one decision row plus a row per timed arrival', async () =>
 
 test('logging is a no-op without the binding, and never breaks an answer', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
-  // makeEnv omits NUSBUS_AE by default.
+  // makeEnv omits AE by default.
   const { res } = await call('/trip?to=UTOWN&from=PGP', { fetchImpl });
   assert.equal(res.status, 200);
   assert.match((await res.json()).label, /^D2 · /);
