@@ -21,8 +21,9 @@ function setup() {
   return { db, email, env };
 }
 
-async function call(env, path, { method = 'GET', body, token, form, cookie } = {}) {
+async function call(env, path, { method = 'GET', body, token, form, cookie, key } = {}) {
   const headers = {};
+  if (key) headers['x-api-key'] = key;
   let payload;
   if (body !== undefined) {
     headers['content-type'] = 'application/json';
@@ -648,4 +649,59 @@ test('/me/next in your residence: "You\'re home" after the last class, leave-by 
   assert.equal(gap.dest.why, 'class');
   assert.equal(gap.dest.label, 'MA1521');
   assert.ok(gap.leave, 'says when to leave home for it');
+});
+
+
+test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
+  const { env, email } = setup();
+  delete env.PUBLIC_API_OPEN; // locked, as in production
+  for (const path of ['/next?lat=1.2966&lon=103.7764', '/trip?to=UTOWN&from=PGP', '/arrivals?stop=COM3', '/campus', '/import?share=x']) {
+    const res = await call(env, path);
+    assert.equal(res.status, 401, path);
+    assert.match((await res.json()).error, /API key/);
+  }
+  for (const path of ['/health', '/docs', '/openapi.json']) assert.notEqual((await call(env, path)).status, 401, path);
+
+  // A signed-in browser or a paired device gets through without a key.
+  const cookie = await signIn(env, email);
+  assert.equal((await call(env, '/campus', { cookie })).status, 200);
+  assert.equal((await call(env, '/arrivals?stop=COM3', { cookie })).status, 200);
+});
+
+test('API keys: made on the account page, shown once, work anywhere, revocable', async () => {
+  const { env, db, email } = setup();
+  delete env.PUBLIC_API_OPEN;
+  const cookie = await signIn(env, email);
+  const made = await (await call(env, '/me/keys', { method: 'POST', cookie, body: { name: 'My script' } })).json();
+  assert.match(made.key, /^tk_/);
+  assert.equal(made.hint, made.key.slice(-4));
+  // Only a hash is stored.
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM api_keys WHERE key_hash = ?').get(made.key).n, 0);
+
+  assert.equal((await call(env, '/arrivals?stop=COM3', { key: made.key })).status, 200);
+  assert.equal((await call(env, '/arrivals?stop=COM3', { token: made.key })).status, 200, 'as a bearer token too');
+  assert.equal((await call(env, '/arrivals?stop=COM3', { key: 'tk_nonsense' })).status, 401);
+  // A key is not an account: it can't read /me.
+  assert.equal((await call(env, '/me', { key: made.key })).status, 401);
+
+  const list = await (await call(env, '/me/keys', { cookie })).json();
+  assert.deepEqual(list.keys.map((k) => k.name), ['My script']);
+  assert.equal('key' in list.keys[0], false, 'never shown again');
+  assert.ok(list.keys[0].lastUsed, 'last use is recorded');
+  const exported = await (await call(env, '/me/export', { cookie })).json();
+  assert.equal(exported.apiKeys[0].name, 'My script');
+
+  assert.equal((await call(env, `/me/keys/${made.id}`, { method: 'DELETE', cookie })).status, 200);
+  assert.equal((await call(env, '/arrivals?stop=COM3', { key: made.key })).status, 401, 'revoked');
+});
+
+test('API keys: a name is required, five at most, and a phone cannot make them', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  assert.equal((await call(env, '/me/keys', { method: 'POST', cookie, body: {} })).status, 400);
+  for (let i = 0; i < 5; i++) assert.equal((await call(env, '/me/keys', { method: 'POST', cookie, body: { name: `k${i}` } })).status, 201);
+  assert.equal((await call(env, '/me/keys', { method: 'POST', cookie, body: { name: 'one too many' } })).status, 409);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const { token } = await (await call(env, '/pair', { method: 'POST', body: { code, name: 'Phone' } })).json();
+  assert.equal((await call(env, '/me/keys', { method: 'POST', token, body: { name: 'from phone' } })).status, 403);
 });

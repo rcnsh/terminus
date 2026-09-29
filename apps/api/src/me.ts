@@ -37,6 +37,7 @@ import { isoSeconds, shortStop } from './format.ts';
 import { WALK } from './config.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { atHome } from './residences.ts';
+import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 
@@ -344,6 +345,27 @@ export async function handleMe(
     const deny = webOnly(session);
     if (deny) return deny;
     return json(await createPairCode(db, session.user.id, nowMs));
+  }
+
+  if (path === '/me/keys' && req.method === 'GET') {
+    return json({ keys: await listKeys(db, session.user.id) });
+  }
+  if (path === '/me/keys' && req.method === 'POST') {
+    // Made on the account page, not from a phone that happens to be paired.
+    const deny = webOnly(session);
+    if (deny) return deny;
+    const body = await readJson(req);
+    const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) : '';
+    if (!name) return json({ error: 'give the key a name, so you know what uses it' }, 400);
+    const made = await createKey(db, session.user.id, name, nowMs);
+    if (!made) return json({ error: `you can have ${MAX_KEYS} keys; revoke one first` }, 409);
+    return json(made, 201);
+  }
+  if (path.startsWith('/me/keys/') && req.method === 'DELETE') {
+    const deny = webOnly(session);
+    if (deny) return deny;
+    const ok = await revokeKey(db, session.user.id, path.slice('/me/keys/'.length));
+    return ok ? json({ ok: true }) : json({ error: 'no such key' }, 404);
   }
 
   if (path === '/me/devices' && req.method === 'GET') {

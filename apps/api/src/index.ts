@@ -49,6 +49,7 @@ import { leaveBy } from './leave.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 import { allResidences } from './residences.ts';
+import { callerFor } from './access.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
 // can never overwrite them. Merged once, at module scope.
@@ -462,6 +463,9 @@ export function oldHostRedirect(req: Request, url: URL): Response | null {
 
 const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
+/** Routes that need an API key or a signed-in account. */
+const KEYED = ['/next', '/trip', '/arrivals', '/import', '/campus'];
+
 export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runCron(env, Date.now()));
@@ -489,9 +493,22 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       // Public routes: a per-IP ceiling. The per-stop cache already protects
       // NUS; this protects the Worker from being a free proxy, and D1/R2 from
       // being a free bill.
-      if (env.RL_PUBLIC && (['/next', '/trip', '/arrivals', '/import', '/health'].includes(url.pathname) || url.pathname.startsWith('/download/'))) {
+      if (env.RL_PUBLIC && (KEYED.includes(url.pathname) || url.pathname === '/health' || url.pathname.startsWith('/download/'))) {
         const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
         if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+      }
+      // The answers need an API key or a signed-in account.
+      if (KEYED.includes(url.pathname)) {
+        const caller = await callerFor(env, req, nowMs, ctx);
+        if (!caller) {
+          return json({ error: 'this needs an API key: create one at https://terminus.rcn.sh/account and send it as x-api-key' }, 401, {
+            'www-authenticate': 'Bearer realm="terminus"',
+          });
+        }
+        // And a ceiling per key, wherever it's used from.
+        if (caller.kind === 'key' && env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `key:${caller.keyId}` })).success) {
+          return json({ error: 'too many requests for this key, slow down' }, 429, { 'retry-after': '60' });
+        }
       }
       const dl = await handleDownload(url.pathname, env);
       if (dl) return dl;

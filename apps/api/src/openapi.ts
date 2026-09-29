@@ -84,13 +84,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         'Every answer has a `quality` field. When the upstream feed is down, the API returns the last cached ' +
           'answer with its original `asOf` time, or says that live times are unavailable. It does not make up a time.',
         '',
-        'No API key is needed. Arrivals are cached for 15 seconds per stop, so repeated requests for the same ' +
-          'stop do not reach the NUS feed. Please do not poll many stops in bulk.',
+        'The answers need an API key: sign in at /account, create one under API keys, and send it in the ' +
+          '`x-api-key` header (or as a bearer token). A signed-in session or a paired device works too. Each key ' +
+          'is limited to 60 requests a minute. Arrivals are cached for 15 seconds per stop, so repeated requests ' +
+          'for the same stop do not reach the NUS feed. Please do not poll many stops in bulk.',
       ].join('\n'),
     },
     servers: [{ url: origin }],
-    // Explicitly unauthenticated: no API key, no account.
-    security: [],
+    // An API key, or a signed-in session or device. /health and /openapi.json opt out.
+    security: [{ apiKey: [] }, { bearer: [] }, { cookie: [] }],
     tags: [
       { name: 'Answers', description: 'Next-bus answers as ready-to-display text.' },
       { name: 'Stops', description: 'Per-stop arrivals and static campus data.' },
@@ -325,6 +327,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         get: {
           tags: ['Service'],
           summary: 'Health',
+          security: [],
           description:
             'Returns stop graph details and which settings are configured (whether each is set, never its value). With `probe=1` and the operator token in the `x-health-token` header it also checks that the upstream auth token works. Answers 503 when the NUS feed is confirmed down, the monitor has stopped running, or the calendar data has run out.',
           operationId: 'getHealth',
@@ -459,6 +462,30 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/me/keys': {
+        get: {
+          tags: ['Account'],
+          summary: 'Your API keys',
+          description: 'Names, last four characters and dates. A key itself is only ever shown when it is made.',
+          operationId: 'listKeys',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: { '200': ok({ type: 'object', properties: { keys: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, hint: { type: 'string' }, created: { type: 'integer' }, lastUsed: { type: ['integer', 'null'] } } } } } }), '401': errorResponse('No valid session.') },
+        },
+        post: {
+          tags: ['Account'],
+          summary: 'Make an API key',
+          description: 'From the account page only (a signed-in browser). Up to five per account. The response is the only time the key is shown.',
+          operationId: 'createKey',
+          security: [{ cookie: [] }],
+          requestBody: jsonBody({ type: 'object', required: ['name'], properties: { name: { type: 'string', maxLength: 40 } } }, { name: 'My script' }),
+          responses: {
+            '201': ok({ type: 'object', properties: { key: { type: 'string', example: 'tk_…' }, id: { type: 'string' }, name: { type: 'string' }, hint: { type: 'string' } } }),
+            '400': errorResponse('No name.'),
+            '403': errorResponse('Not from the account page.'),
+            '409': errorResponse('Five keys already.'),
+          },
+        },
+      },
       '/me/profile': {
         get: {
           tags: ['Account'],
@@ -501,7 +528,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
     },
     components: {
       securitySchemes: {
-        bearer: { type: 'http', scheme: 'bearer', description: 'A device token from `/pair`.' },
+        apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key', description: 'A key from the account page (API keys). Starts with `tk_`.' },
+        bearer: { type: 'http', scheme: 'bearer', description: 'An API key, or a device token from `/pair`.' },
         cookie: { type: 'apiKey', in: 'cookie', name: 'nb_s', description: 'Set by signing in on the account page.' },
       },
       schemas: {

@@ -102,6 +102,8 @@ export function makeEnv(kv = makeKV(), ae = undefined) {
     NEXTBUS_APP_VERSION: '0.0.0-test',
     NEXTBUS_HTD_API: 'test-htd',
     NEXTBUS_APP_API: 'test-app',
+    // The public-route tests predate API keys; the key tests turn this off.
+    PUBLIC_API_OPEN: '1',
   };
 }
 

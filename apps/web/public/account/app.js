@@ -399,6 +399,61 @@ async function renderDevices() {
   return devices.length;
 }
 
+/* ---------- API keys ---------- */
+
+async function renderKeys() {
+  const { keys } = await api('/me/keys');
+  const ul = $('#keys');
+  ul.replaceChildren();
+  const fmt = (ms) => new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  for (const k of keys) {
+    ul.append(
+      el(
+        'li',
+        {},
+        el('span', {}, el('strong', { textContent: k.name }), el('div', { class: 'meta', textContent: `…${k.hint} · made ${fmt(k.created)} · ${k.lastUsed ? `used ${fmt(k.lastUsed)}` : 'never used'}` })),
+        el('button', {
+          type: 'button',
+          class: 'remove',
+          textContent: 'Revoke',
+          'aria-label': `Revoke ${k.name}`,
+          onclick: async () => {
+            if (!confirm(`Revoke "${k.name}"? Anything using it stops working straight away.`)) return;
+            await api(`/me/keys/${k.id}`, { method: 'DELETE' });
+            $('#new-key').hidden = true;
+            renderKeys();
+          },
+        }),
+      ),
+    );
+  }
+}
+
+$('#key-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = e.target.name.value.trim();
+  $('#key-msg').textContent = '';
+  try {
+    const made = await api('/me/keys', { method: 'POST', body: { name } });
+    e.target.reset();
+    $('#new-key-value').textContent = made.key;
+    $('#new-key-eg').textContent = `curl -H "x-api-key: ${made.key}" "${location.origin}/arrivals?stop=COM3"`;
+    $('#new-key').hidden = false;
+    renderKeys();
+  } catch (err) {
+    $('#key-msg').textContent = err.message;
+  }
+});
+
+$('#copy-key').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('#new-key-value').textContent);
+    toast('Copied');
+  } catch {
+    toast('Select the key and copy it');
+  }
+});
+
 /* ---------- sign in ---------- */
 
 let turnstileToken = null;
@@ -731,7 +786,7 @@ async function start() {
   renderPlaces();
   $('#app').hidden = false;
   if (me.onboarding === 'pace') pacePrompt(onboardingCtx);
-  await Promise.all([renderDevices(), renderPreview()]);
+  await Promise.all([renderDevices(), renderKeys(), renderPreview()]);
   setInterval(() => document.visibilityState === 'visible' && renderPreview(), 60_000);
 }
 

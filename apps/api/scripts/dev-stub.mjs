@@ -118,7 +118,8 @@ const ASSETS = {
   },
 };
 
-const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS };
+// Locked like production: the bus answers need a key or a signed-in account.
+const env = { ...makeEnv(), PUBLIC_API_OPEN: undefined, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS };
 
 http
   .createServer(async (req, res) => {
