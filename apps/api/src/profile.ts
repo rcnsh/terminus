@@ -7,6 +7,9 @@
 
 import type { ImportedTrip } from './nusmods.ts';
 import { sgt } from './config.ts';
+import type { Timing, Why } from './types.ts';
+
+export type { Timing };
 import { isoSeconds } from './format.ts';
 import { PACES, type Pace } from './walk.ts';
 import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, termEnded, termName } from './calendar.ts';
@@ -249,7 +252,7 @@ export function needsReimport(profile: Profile, nowMs: number): boolean {
 /* Planner                                                            */
 /* ------------------------------------------------------------------ */
 
-export type PlanWhy = 'class' | 'home' | 'gap-home';
+export type PlanWhy = Exclude<Why, 'place'>;
 
 export interface Plan {
   /** Destination stop code. */
@@ -422,15 +425,6 @@ export function restDetail(profile: Profile, nowMs: number): string {
 
 export type OnTime = 'on-time' | 'tight' | 'late';
 
-export interface Timing {
-  status: OnTime;
-  /** "Arrive 09:56 · 4 min early", "Arrive 09:59 · just in time", "~5 min late". */
-  text: string;
-  /** Class start, ISO. */
-  classAt: string;
-  /** When you reach the class on the headline bus, ISO. Clients format it. */
-  reachAt: string;
-}
 
 /** At least this much spare time counts as comfortably on time. */
 export const ON_TIME_SLACK_S = 180;
