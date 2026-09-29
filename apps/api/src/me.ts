@@ -136,6 +136,210 @@ function resolveTo(graph: Graph, raw: string): { to: string; label: string } | n
   return v ? { to: v.stop, label: code.split('-')[0] } : null;
 }
 
+interface MeContext {
+  req: Request;
+  url: URL;
+  env: Env;
+  ctx: ExecutionContext;
+  nowMs: number;
+  deps: MeDeps;
+  db: D1Database;
+  session: SessionInfo;
+  /** What follows a prefix path ("/me/keys/<id>"). */
+  rest: string;
+}
+
+interface MeRoute {
+  method: string;
+  /** Exact, or a prefix when it ends in '/'. */
+  path: string;
+  /** Changes the account itself: from the account page only, never a paired device. */
+  web?: boolean;
+  run: (c: MeContext) => Promise<Response>;
+}
+
+/** Everything that needs a session, by method and path. */
+const ME_ROUTES: MeRoute[] = [
+  {
+    method: 'DELETE',
+    path: '/me',
+    web: true,
+    run: async ({ db, session }) => {
+      await deleteAccount(db, session.user);
+      return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/export',
+    run: async ({ db, session }) => {
+      return json(await exportAccount(db, session.user), 200, {
+        'content-disposition': 'attachment; filename="terminus-export.json"',
+      });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/me/sessions',
+    web: true,
+    run: async ({ db, session }) => {
+      // Sign out everywhere, including this browser.
+      const ended = await endAllSessions(db, session.user.id);
+      return json({ ok: true, ended }, 200, { 'set-cookie': sessionCookie('', 0) });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me',
+    run: async ({ nowMs, deps, db, session }) => {
+      const saved = await loadProfileJson(db, session.user.id);
+      const profile = await getProfile(db, session.user.id, deps.graph);
+      const reason = reimportReason(profile, nowMs);
+      return json({
+        email: session.user.email,
+        kind: session.kind,
+        needsReimport: reason !== null,
+        reimportReason: reason,
+        term: profile.term ? termName(profile.term) : null,
+        onboarding: onboardingFor(saved !== null, profile.seen),
+      });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/profile',
+    run: async ({ deps, db, session }) => {
+      return json(await getProfile(db, session.user.id, deps.graph));
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/me/profile',
+    run: async ({ req, nowMs, deps, db, session }) => {
+      const body = await readJson(req);
+      if (!body) return json({ error: 'send the profile as JSON' }, 400);
+      const idx = indexGraph(deps.graph);
+      const r = parseProfile(body, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null);
+      if (!r.ok) return json({ error: r.error }, 400);
+      await saveProfileJson(db, session.user.id, r.profile, nowMs);
+      return json(r.profile);
+    },
+  },
+  {
+    method: 'POST',
+    path: '/me/import',
+    run: async ({ req, nowMs, deps, db, session }) => {
+      const body = await readJson(req);
+      const share = typeof body?.share === 'string' ? body.share.trim() : '';
+      let parsed;
+      try {
+        parsed = parseShareUrl(share);
+      } catch {
+        return json({ error: 'not a valid NUSMods share link' }, 400);
+      }
+      if (!parsed.selections.length) return json({ error: 'no modules found in that link' }, 400);
+      let r;
+      try {
+        r = await resolveTrips(parsed, nowMs);
+      } catch (err) {
+        if (err instanceof ImportInputError) return json({ error: err.message }, 400);
+        throw err;
+      }
+      const term = termName(r.term);
+      // An incomplete import must never replace a timetable that works.
+      if (r.failed.length) {
+        return json({ error: `NUSMods didn't answer for ${r.failed.join(', ')}. Nothing was changed; try again in a minute.`, failed: r.failed }, 502);
+      }
+      if (!r.trips.length && !r.unresolved.length) {
+        const why = r.missing.length ? `${r.missing.join(', ')} ${r.missing.length === 1 ? 'has' : 'have'} no classes in ${term}` : `no classes in that link run in ${term}`;
+        return json({ error: `Nothing imported: ${why}. Your timetable was not changed.`, missing: r.missing }, 422);
+      }
+      const profile = await getProfile(db, session.user.id, deps.graph);
+      profile.trips = r.trips.slice(0, PROFILE_LIMITS.trips);
+      profile.share = share;
+      profile.term = r.term;
+      await saveProfileJson(db, session.user.id, profile, nowMs);
+      return json({ profile, unresolved: r.unresolved, missing: r.missing, online: r.online, term });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/me/pair-code',
+    web: true,
+    run: async ({ nowMs, db, session }) => {
+      return json(await createPairCode(db, session.user.id, nowMs));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/keys',
+    run: async ({ db, session }) => {
+      return json({ keys: await listKeys(db, session.user.id) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/me/keys',
+    web: true,
+    run: async ({ req, nowMs, db, session }) => {
+      // Made on the account page, not from a phone that happens to be paired.
+      const body = await readJson(req);
+      const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) : '';
+      if (!name) return json({ error: 'give the key a name, so you know what uses it' }, 400);
+      const made = await createKey(db, session.user.id, name, nowMs);
+      if (!made) return json({ error: `you can have ${MAX_KEYS} keys; revoke one first` }, 409);
+      return json(made, 201);
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/me/keys/',
+    web: true,
+    run: async ({ db, session, rest }) => {
+      const ok = await revokeKey(db, session.user.id, rest);
+      return ok ? json({ ok: true }) : json({ error: 'no such key' }, 404);
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/devices',
+    run: async ({ db, session }) => {
+      return json({ devices: await listDevices(db, session.user.id) });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/me/devices/',
+    web: true,
+    run: async ({ db, session, rest }) => {
+      const ok = await revokeDevice(db, session.user.id, rest);
+      return ok ? json({ ok: true }) : json({ error: 'no such device' }, 404);
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/next',
+    run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
+      const profile = await getProfile(db, session.user.id, deps.graph);
+      const answer = await nextFor(url, env, ctx, nowMs, deps, profile);
+      // When the plan itself moves on (class starts, day ends). Only the planned
+      // answer has one; a place or a stop never changes by itself.
+      const planned = !url.searchParams.get('place') && !url.searchParams.get('to');
+      const full: MeAnswer = planned ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
+      // The display-ready card, in the client's 12- or 24-hour style.
+      return json({ ...full, card: cardFor(full, hour12(url)) });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/nearby',
+    run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
+      const profile = await getProfile(db, session.user.id, deps.graph);
+      return nearbyFor(url, env, ctx, nowMs, deps, profile);
+    },
+  },
+];
+
 /**
  * Routes under /auth, /pair and /me. Returns null for any other path so the
  * caller can fall through to the public routes.
@@ -261,141 +465,12 @@ export async function handleMe(
     const { success } = await env.RL_ME.limit({ key: `me:${session.user.id}` });
     if (!success) return json({ error: 'too many requests, slow down' }, 429);
   }
-  const webOnly = (s: SessionInfo) => (s.kind === 'web' ? null : json({ error: 'manage devices from the account page' }, 403));
-
-  if (path === '/me' && req.method === 'DELETE') {
-    const deny = webOnly(session);
-    if (deny) return deny;
-    await deleteAccount(db, session.user);
-    return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
-  }
-
-  if (path === '/me/export' && req.method === 'GET') {
-    return json(await exportAccount(db, session.user), 200, {
-      'content-disposition': 'attachment; filename="terminus-export.json"',
-    });
-  }
-
-  if (path === '/me/sessions' && req.method === 'DELETE') {
-    // Sign out everywhere, including this browser.
-    const deny = webOnly(session);
-    if (deny) return deny;
-    const ended = await endAllSessions(db, session.user.id);
-    return json({ ok: true, ended }, 200, { 'set-cookie': sessionCookie('', 0) });
-  }
-
-  if (path === '/me' && req.method === 'GET') {
-    const saved = await loadProfileJson(db, session.user.id);
-    const profile = await getProfile(db, session.user.id, deps.graph);
-    const reason = reimportReason(profile, nowMs);
-    return json({
-      email: session.user.email,
-      kind: session.kind,
-      needsReimport: reason !== null,
-      reimportReason: reason,
-      term: profile.term ? termName(profile.term) : null,
-      onboarding: onboardingFor(saved !== null, profile.seen),
-    });
-  }
-
-  if (path === '/me/profile') {
-    if (req.method === 'GET') return json(await getProfile(db, session.user.id, deps.graph));
-    if (req.method === 'PUT') {
-      const body = await readJson(req);
-      if (!body) return json({ error: 'send the profile as JSON' }, 400);
-      const idx = indexGraph(deps.graph);
-      const r = parseProfile(body, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null);
-      if (!r.ok) return json({ error: r.error }, 400);
-      await saveProfileJson(db, session.user.id, r.profile, nowMs);
-      return json(r.profile);
-    }
-  }
-
-  if (path === '/me/import' && req.method === 'POST') {
-    const body = await readJson(req);
-    const share = typeof body?.share === 'string' ? body.share.trim() : '';
-    let parsed;
-    try {
-      parsed = parseShareUrl(share);
-    } catch {
-      return json({ error: 'not a valid NUSMods share link' }, 400);
-    }
-    if (!parsed.selections.length) return json({ error: 'no modules found in that link' }, 400);
-    let r;
-    try {
-      r = await resolveTrips(parsed, nowMs);
-    } catch (err) {
-      if (err instanceof ImportInputError) return json({ error: err.message }, 400);
-      throw err;
-    }
-    const term = termName(r.term);
-    // An incomplete import must never replace a timetable that works.
-    if (r.failed.length) {
-      return json({ error: `NUSMods didn't answer for ${r.failed.join(', ')}. Nothing was changed; try again in a minute.`, failed: r.failed }, 502);
-    }
-    if (!r.trips.length && !r.unresolved.length) {
-      const why = r.missing.length ? `${r.missing.join(', ')} ${r.missing.length === 1 ? 'has' : 'have'} no classes in ${term}` : `no classes in that link run in ${term}`;
-      return json({ error: `Nothing imported: ${why}. Your timetable was not changed.`, missing: r.missing }, 422);
-    }
-    const profile = await getProfile(db, session.user.id, deps.graph);
-    profile.trips = r.trips.slice(0, PROFILE_LIMITS.trips);
-    profile.share = share;
-    profile.term = r.term;
-    await saveProfileJson(db, session.user.id, profile, nowMs);
-    return json({ profile, unresolved: r.unresolved, missing: r.missing, online: r.online, term });
-  }
-
-  if (path === '/me/pair-code' && req.method === 'POST') {
-    const deny = webOnly(session);
-    if (deny) return deny;
-    return json(await createPairCode(db, session.user.id, nowMs));
-  }
-
-  if (path === '/me/keys' && req.method === 'GET') {
-    return json({ keys: await listKeys(db, session.user.id) });
-  }
-  if (path === '/me/keys' && req.method === 'POST') {
-    // Made on the account page, not from a phone that happens to be paired.
-    const deny = webOnly(session);
-    if (deny) return deny;
-    const body = await readJson(req);
-    const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) : '';
-    if (!name) return json({ error: 'give the key a name, so you know what uses it' }, 400);
-    const made = await createKey(db, session.user.id, name, nowMs);
-    if (!made) return json({ error: `you can have ${MAX_KEYS} keys; revoke one first` }, 409);
-    return json(made, 201);
-  }
-  if (path.startsWith('/me/keys/') && req.method === 'DELETE') {
-    const deny = webOnly(session);
-    if (deny) return deny;
-    const ok = await revokeKey(db, session.user.id, path.slice('/me/keys/'.length));
-    return ok ? json({ ok: true }) : json({ error: 'no such key' }, 404);
-  }
-
-  if (path === '/me/devices' && req.method === 'GET') {
-    return json({ devices: await listDevices(db, session.user.id) });
-  }
-  if (path.startsWith('/me/devices/') && req.method === 'DELETE') {
-    const deny = webOnly(session);
-    if (deny) return deny;
-    const ok = await revokeDevice(db, session.user.id, path.slice('/me/devices/'.length));
-    return ok ? json({ ok: true }) : json({ error: 'no such device' }, 404);
-  }
-
-  if (path === '/me/next' && req.method === 'GET') {
-    const profile = await getProfile(db, session.user.id, deps.graph);
-    const answer = await nextFor(url, env, ctx, nowMs, deps, profile);
-    // When the plan itself moves on (class starts, day ends). Only the planned
-    // answer has one; a place or a stop never changes by itself.
-    const planned = !url.searchParams.get('place') && !url.searchParams.get('to');
-    const full: MeAnswer = planned ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
-    // The display-ready card, in the client's 12- or 24-hour style.
-    return json({ ...full, card: cardFor(full, hour12(url)) });
-  }
-
-  if (path === '/me/nearby' && req.method === 'GET') {
-    const profile = await getProfile(db, session.user.id, deps.graph);
-    return nearbyFor(url, env, ctx, nowMs, deps, profile);
+  for (const r of ME_ROUTES) {
+    if (r.method !== req.method) continue;
+    const prefix = r.path.endsWith('/');
+    if (prefix ? !path.startsWith(r.path) : path !== r.path) continue;
+    if (r.web && session.kind !== 'web') return json({ error: 'manage devices from the account page' }, 403);
+    return r.run({ req, url, env, ctx, nowMs, deps, db, session, rest: prefix ? path.slice(r.path.length) : '' });
   }
 
   return json({ error: 'not found' }, 404);
