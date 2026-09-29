@@ -96,18 +96,26 @@ for (const split of document.querySelectorAll('[data-split]')) {
   dark.textContent = 'Dark';
   split.append(seam, light, dark, knob);
 
+  // The seam leans by --tilt, so it has to pass that far beyond either edge
+  // before the image is all light or all dark. The drag stays one to one and
+  // horizontal: dragging a little past the phone's edge gets you there.
+  const tilt = () => parseFloat(getComputedStyle(split).getPropertyValue('--tilt')) || 0;
   const set = (pct) => {
-    const x = Math.max(4, Math.min(96, pct));
+    const t = tilt();
+    const x = Math.max(-t, Math.min(100 + t, pct));
     split.style.setProperty('--x', `${x}%`);
-    knob.setAttribute('aria-valuenow', String(Math.round(x)));
-    knob.setAttribute('aria-valuetext', `${Math.round(100 - x)}% dark`);
+    const full = x >= 100 + t ? 'light' : x <= -t ? 'dark' : '';
+    if (full) split.dataset.full = full;
+    else delete split.dataset.full;
+    const dark = Math.round(((100 + t - x) / (100 + 2 * t)) * 100);
+    knob.setAttribute('aria-valuenow', String(100 - dark));
+    knob.setAttribute('aria-valuetext', full ? `all ${full}` : `${dark}% dark`);
   };
   // Where the seam rests: the middle, or where the interesting part is.
   const rest = Number(split.dataset.x) || 50;
   set(rest);
 
   // The seam is slanted: put it under the pointer at the pointer's height.
-  const tilt = () => parseFloat(getComputedStyle(split).getPropertyValue('--tilt')) || 0;
   const fromPointer = (e) => {
     const r = split.getBoundingClientRect();
     const t = (e.clientY - r.top) / r.height;
@@ -123,7 +131,7 @@ for (const split of document.querySelectorAll('[data-split]')) {
   for (const end of ['pointerup', 'pointercancel']) split.addEventListener(end, () => split.classList.remove('dragging'));
   knob.addEventListener('keydown', (e) => {
     const now = parseFloat(split.style.getPropertyValue('--x')) || rest;
-    const step = { ArrowLeft: -5, ArrowRight: 5, Home: -100, End: 100 }[e.key];
+    const step = { ArrowLeft: -5, ArrowRight: 5, Home: -200, End: 200 }[e.key];
     if (step === undefined) return;
     e.preventDefault();
     split.classList.remove('sweep');
@@ -132,7 +140,7 @@ for (const split of document.querySelectorAll('[data-split]')) {
 
   // Without @property support the sweep is a jump, which is fine.
   if (!still && 'IntersectionObserver' in window) {
-    set(100);
+    set(100 + tilt());
     const io = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting) return;
       io.disconnect();
