@@ -1,0 +1,44 @@
+{
+ "generated": "2026-09-29",
+ "source": "positions from OpenStreetMap (ODbL); walks routed on its paths; scripts/walk_routes.py",
+ "landmarks": {
+  "THE-DECK": {
+   "name": "The Deck",
+   "kind": "Food court",
+   "aliases": [
+    "deck",
+    "the deck",
+    "fass canteen"
+   ],
+   "stops": {
+    "AS5": 210,
+    "NUSS-OPP": 248
+   }
+  },
+  "TECHNO-EDGE": {
+   "name": "Techno Edge",
+   "kind": "Food court",
+   "aliases": [
+    "techno edge",
+    "techno",
+    "te"
+   ],
+   "stops": {
+    "IT": 236,
+    "CLB": 245
+   }
+  },
+  "FRONTIER-FOOD": {
+   "name": "Frontier",
+   "kind": "Food court",
+   "aliases": [
+    "frontier",
+    "science canteen"
+   ],
+   "stops": {
+    "S17": 141,
+    "LT27": 144
+   }
+  }
+ }
+}

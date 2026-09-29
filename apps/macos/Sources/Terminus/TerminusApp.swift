@@ -721,14 +721,14 @@ private struct Search: View {
                     ForEach(Array(matches), id: \.self) { d in
                         Button {
                             query = ""
-                            model.select(.code(d.code, label: d.kind == "stop" ? d.label : d.code))
+                            model.select(.code(d.code, label: d.kind == "stop" || d.kind == "landmark" ? d.label : d.code))
                         } label: {
                             HStack(alignment: .firstTextBaseline) {
-                                Image(systemName: d.kind == "stop" ? "bus" : d.kind == "room" ? "door.left.hand.open" : "building.2")
+                                Image(systemName: d.kind == "stop" ? "bus" : d.kind == "room" ? "door.left.hand.open" : d.kind == "landmark" ? "fork.knife" : "building.2")
                                     .foregroundStyle(.secondary).frame(width: 16)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(d.label)
-                                    Text(d.kind == "stop" ? "Bus stop" : "\(d.label != d.code ? "\(d.code) · " : "")\(stopName(d.stopCode)) stop\(d.walkM.map { ", \(Swift.max(1, Int((Double($0) / 1.3 / 60).rounded()))) min walk" } ?? "")")
+                                    Text(d.kind == "stop" ? "Bus stop" : d.kind == "landmark" ? "\(d.detail.map { "\($0) · " } ?? "")\((d.stops ?? []).map(stopName).joined(separator: " or ")) stop" : "\(d.label != d.code ? "\(d.code) · " : "")\(stopName(d.stopCode)) stop\(d.walkM.map { ", \(Swift.max(1, Int((Double($0) / 1.3 / 60).rounded()))) min walk" } ?? "")")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()

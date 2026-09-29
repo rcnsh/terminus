@@ -46,6 +46,7 @@ import { readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
 import { handleDownload } from './downloads.ts';
 import { leaveBy } from './leave.ts';
+import { landmark, targetStops } from './landmarks.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 
 // Operating hours are hand-maintained in their own file so `npm run scrape`
@@ -104,8 +105,12 @@ export async function answerFor(
   // Already there: two classes in a row at the same stop, or standing at it.
   // Without this the degrade ladder says "Walk · now" and marks it ended.
   const dest = input.to ? idx.byCode.get(input.to) : undefined;
-  // Either side of the road counts as there, same as for routing.
-  const destSides = dest ? [dest, ...(dest.opposite && idx.byCode.get(dest.opposite) ? [idx.byCode.get(dest.opposite)!] : [])] : [];
+  // Either side of the road counts as there, same as for routing, and so does
+  // any other stop serving the same place.
+  const destSides = [input.to, ...(input.toAlso ?? [])]
+    .map((c) => (c ? idx.byCode.get(c) : undefined))
+    .filter((s): s is Stop => Boolean(s))
+    .flatMap((s) => [s, ...(s.opposite && idx.byCode.get(s.opposite) ? [idx.byCode.get(s.opposite)!] : [])]);
   const atDest = destSides.find((d) =>
     input.lat != null
       ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs < 45
@@ -183,10 +188,15 @@ function resolveDestination(url: URL) {
 
   const stop = idx.byCode.get(raw);
   // Abbreviated like every other stop name ("Information Technology" -> "IT").
-  if (stop) return { to: stop.code, from, label: shortStop(stop.name, 14) };
+  if (stop) return { to: stop.code, also: [] as string[], from, label: shortStop(stop.name, 14) };
+  const lm = landmark(raw);
+  if (lm) {
+    const t = targetStops(raw);
+    return { to: t.to, also: t.also, from, label: lm.name };
+  }
 
   const venue = venueToStop(raw);
-  if (venue) return { to: venue.stop, from, label: raw.split('-')[0] };
+  if (venue) return { to: venue.stop, also: [] as string[], from, label: raw.split('-')[0] };
   return null;
 }
 
@@ -224,7 +234,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 
   // With coordinates but no destination, `to` stays null and the resolver
   // simply reports the next buses at the nearest stop.
-  const input: ResolveInput = { lat, lon, to, originCode };
+  const input: ResolveInput = { lat, lon, to, toAlso: dest?.also, originCode };
   return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs));
 }
 
@@ -317,7 +327,7 @@ async function handleTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   if (lat === null && !dest.from) {
     return json({ error: 'pass lat and lon, or ?from= a stop code' }, 400);
   }
-  return json(await answerFor(env, ctx, { lat, lon, to: dest.to, originCode: lat === null ? dest.from : null }, dest.label, nowMs));
+  return json(await answerFor(env, ctx, { lat, lon, to: dest.to, toAlso: dest.also, originCode: lat === null ? dest.from : null }, dest.label, nowMs));
 }
 
 /**

@@ -35,6 +35,7 @@ import { termName } from './calendar.ts';
 import { boardAt, haversineM, indexGraph } from './resolve.ts';
 import { isoSeconds, shortStop } from './format.ts';
 import { WALK } from './config.ts';
+import { landmark, targetStops } from './landmarks.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 
@@ -98,10 +99,10 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
   const idx = indexGraph(graph);
   // A stop can vanish from a new scrape. Re-validating on read would reject
   // the whole profile, so drop only what no longer resolves.
-  const r = parseProfile(raw, (c) => idx.byCode.has(c));
+  const r = parseProfile(raw, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null);
   if (r.ok) return r.profile;
   const p = raw as Profile;
-  const ok = (c: string) => idx.byCode.has(c);
+  const ok = (c: string) => idx.byCode.has(c) || landmark(c) !== null;
   return {
     ...structuredClone(DEFAULT_PROFILE),
     gapHours: typeof p.gapHours === 'number' ? p.gapHours : DEFAULT_PROFILE.gapHours,
@@ -123,6 +124,9 @@ function resolveTo(graph: Graph, raw: string): { to: string; label: string } | n
   const code = raw.trim().toUpperCase();
   const stop = indexGraph(graph).byCode.get(code);
   if (stop) return { to: stop.code, label: shortStop(stop.name, 14) };
+  // A food court: kept as its own code; nextFor expands it to its stops.
+  const lm = landmark(code);
+  if (lm) return { to: code, label: lm.name };
   const v = venueToStop(code);
   return v ? { to: v.stop, label: code.split('-')[0] } : null;
 }
@@ -294,7 +298,7 @@ export async function handleMe(
       const body = await readJson(req);
       if (!body) return json({ error: 'send the profile as JSON' }, 400);
       const idx = indexGraph(deps.graph);
-      const r = parseProfile(body, (c) => idx.byCode.has(c));
+      const r = parseProfile(body, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null);
       if (!r.ok) return json({ error: r.error }, 400);
       await saveProfileJson(db, session.user.id, r.profile, nowMs);
       return json(r.profile);
@@ -430,12 +434,16 @@ export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   }
   if (dest) {
     const venueM = dest.trip?.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
-    const venueWalkS = Math.round(venueM / speed);
+    // A class has its room's walk; a food court the walk from its nearest stop.
+    const venueWalkS = Math.round((venueM || targetStops(dest.to).walkM) / speed);
+    // A place served by several stops arrives at whichever is quicker.
+    const target = targetStops(dest.to);
     const input: ResolveInput = {
       lat,
       lon,
-      to: dest.to,
-      originCode: lat === null ? dest.from : null,
+      to: target.to,
+      toAlso: target.also,
+      originCode: lat === null && dest.from ? targetStops(dest.from).to : null,
       preferStops,
       originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin, speed) : 0,
       walkSpeedMs: speed,

@@ -158,3 +158,13 @@ test('boardAt: a feed that never answered is unknown, never a fabricated time', 
   const rows = boardAt(GRAPH, idx, 'COM3', sa, nowMs);
   assert.ok(rows.every((r) => r.quality === 'unknown' && r.etaS === null));
 });
+
+test('food courts are in the search, each with both of its stops', () => {
+  const dest = buildDestinations(realGraph);
+  const deck = dest.find((d) => d.code === 'THE-DECK');
+  assert.equal(deck.kind, 'landmark');
+  assert.deepEqual(deck.stops, ['AS5', 'NUSS-OPP']);
+  assert.ok(deck.aliases.includes('deck'));
+  assert.deepEqual(dest.find((d) => d.code === 'TECHNO-EDGE').stops, ['IT', 'CLB']);
+  assert.deepEqual(dest.find((d) => d.code === 'FRONTIER-FOOD').stops, ['S17', 'LT27']);
+});

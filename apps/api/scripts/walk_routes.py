@@ -14,6 +14,8 @@ Sources, fetched once and cached in the gitignored dev/ folder:
 Writes:
   - data/walks.json: routed metres between every pair of stops, and per stop
     how much longer than the straight line a walk to it usually is.
+  - data/landmarks.json: named places (food courts) served by more than one
+    stop, with the routed walk from each.
   - data/rooms.json: NUSMods' rooms with their names, stop and routed walk,
     for the destination search.
   - data/venues.json: each building's walk to its stop, routed. The stop a
@@ -42,6 +44,16 @@ BBOX = (1.2830, 103.7630, 1.3120, 103.7900)  # south, west, north, east
 OVERPASS = "https://overpass-api.de/api/interpreter"
 # The room map NUSMods itself uses: coordinates per room, from their open-source repo.
 NUSMODS = "https://raw.githubusercontent.com/nusmodifications/nusmods/master/website/src/data/venues.json"
+
+# Places people name that are not buildings or rooms, with every stop that
+# serves them (the router takes whichever is quicker). Positions from
+# OpenStreetMap; stops confirmed by a student who uses them.
+LANDMARKS = {
+    "THE-DECK": {"name": "The Deck", "kind": "Food court", "at": (1.294671, 103.772492), "stops": ["AS5", "NUSS-OPP"], "aliases": ["deck", "the deck", "fass canteen"]},
+    "TECHNO-EDGE": {"name": "Techno Edge", "kind": "Food court", "at": (1.297955, 103.771530), "stops": ["IT", "CLB"], "aliases": ["techno edge", "techno", "te"]},
+    # Midway between Phase 1 and Phase 2.
+    "FRONTIER-FOOD": {"name": "Frontier", "kind": "Food court", "at": (1.296390, 103.780367), "stops": ["S17", "LT27"], "aliases": ["frontier", "science canteen"]},
+}
 
 WALKABLE = "footway|path|pedestrian|steps|corridor|living_street|residential|service|unclassified|tertiary|secondary|primary|cycleway|track|crossing"
 # Stairs take longer than their length suggests.
@@ -285,6 +297,20 @@ def main():
         "rooms": dict(sorted(named.items())),
     }, separators=(",", ":"), ensure_ascii=False))
     print(f"{len(named)} named rooms for search")
+
+    marks = {}
+    for code, lm in LANDMARKS.items():
+        walks = {}
+        for stop in lm["stops"]:
+            m = routed(stop, lm["at"])
+            walks[stop] = round(m if m is not None else haversine(lm["at"], stop_pt[stop]))
+        marks[code] = {"name": lm["name"], "kind": lm["kind"], "aliases": lm["aliases"], "stops": walks}
+    (ROOT / "data/landmarks.json").write_text(json.dumps({
+        "generated": date.today().isoformat(),
+        "source": "positions from OpenStreetMap (ODbL); walks routed on its paths; scripts/walk_routes.py",
+        "landmarks": marks,
+    }, indent=1) + "\n")
+    print("landmarks:", {c: m["stops"] for c, m in marks.items()})
 
     venues_doc["venues"] = dict(sorted(venues.items()))
     venues_doc["generated"] = date.today().isoformat()

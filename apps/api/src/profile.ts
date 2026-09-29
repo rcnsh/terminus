@@ -84,7 +84,7 @@ const str = (v: unknown, max: number): v is string => typeof v === 'string' && v
  * Validates a whole profile. Missing fields take their defaults, so a client
  * can send only what it knows about; anything present must be well formed.
  */
-export function parseProfile(raw: unknown, isStop: (code: string) => boolean): Result {
+export function parseProfile(raw: unknown, isStop: (code: string) => boolean, isPlace: (code: string) => boolean = isStop): Result {
   if (!isObj(raw)) return { ok: false, error: 'profile must be an object' };
   const p: Profile = structuredClone(DEFAULT_PROFILE);
 
@@ -148,7 +148,7 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean): R
       if (!isInt(t.day, 0, 6)) return bad('day must be 0 (Sun) to 6 (Sat)');
       if (!isInt(t.arriveByMin, 0, 1439)) return bad('arriveByMin must be minutes past midnight');
       if (t.endMin !== undefined && !isInt(t.endMin, t.arriveByMin + 1, 1440)) return bad('endMin must be after arriveByMin');
-      if (typeof t.to !== 'string' || !isStop(t.to)) return bad('to must be a known stop code');
+      if (typeof t.to !== 'string' || !isPlace(t.to)) return bad('to must be a known stop or place code');
       if (!str(t.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
       const venue = typeof t.venue === 'string' ? t.venue.slice(0, 40) : '';
       const weeks = parseWeeks(t.weeks);
@@ -175,7 +175,7 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean): R
       if (!isObj(pl) || typeof pl.key !== 'string' || !/^[a-z0-9-]{1,24}$/.test(pl.key)) return { ok: false, error: `places[${i}].key must be 1-24 of a-z, 0-9, -` };
       if (keys.has(pl.key)) return { ok: false, error: `places[${i}].key is a duplicate` };
       if (!str(pl.label, PROFILE_LIMITS.placeLabel)) return { ok: false, error: `places[${i}].label must be 1-${PROFILE_LIMITS.placeLabel} characters` };
-      if (typeof pl.to !== 'string' || !isStop(pl.to)) return { ok: false, error: `places[${i}].to must be a known stop code` };
+      if (typeof pl.to !== 'string' || !isPlace(pl.to)) return { ok: false, error: `places[${i}].to must be a known stop or place code` };
       keys.add(pl.key);
       p.places.push({ key: pl.key, label: pl.label.trim(), to: pl.to });
     }

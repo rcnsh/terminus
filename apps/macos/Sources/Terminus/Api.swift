@@ -177,6 +177,10 @@ struct Destination: Decodable, Hashable {
     let walkM: Int?
     /// Other names people search for, lower case ("soc", "mrt").
     let aliases: [String]?
+    /// A landmark's every stop; the router takes the quicker.
+    let stops: [String]?
+    /// What a landmark is ("Food court").
+    let detail: String?
 }
 
 /// The destination search, same rules as the account page and Android: exact,
@@ -187,7 +191,7 @@ func rankDestinations(_ all: [Destination], _ query: String, max: Int = 6) -> [D
     guard !q.isEmpty else { return [] }
     let norm = { (s: String) in s.lowercased().filter { !" -_".contains($0) } }
     let nq = norm(q)
-    let kinds = ["stop", "building", "room"]
+    let kinds = ["stop", "landmark", "building", "room"]
     func score(_ d: Destination) -> Int {
         let names = [d.code.lowercased(), d.label.lowercased()] + (d.aliases ?? [])
         if names.contains(q) || norm(d.code) == nq { return 0 }
