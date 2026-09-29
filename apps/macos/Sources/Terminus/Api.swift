@@ -33,6 +33,8 @@ struct NextAnswer: Decodable {
     let leave: Leave?
     /// Display-ready text and the stale time, worded on the server (card.ts).
     let card: Card?
+    /// The response as it came, sent with an "Is this wrong?" report. Never in the JSON.
+    var raw: Data? = nil
 
     struct Timing: Decodable { let status: String?; let text: String?; let classAt: String?; let reachAt: String? }
     struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String?; let board: String?; let arrive: String?; let note: String? }
@@ -232,7 +234,18 @@ struct Api {
         }
         // The card's clock times, in this Mac's 12- or 24-hour style.
         if usesHour12 { q.append(URLQueryItem(name: "h12", value: "1")) }
-        return try await request("GET", "/me/next", query: q)
+        let data = try await send("GET", "/me/next", query: q)
+        var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
+        answer.raw = data
+        return answer
+    }
+
+    /// "Is this wrong?": the answer as it came from the server, and a note.
+    func report(note: String, answer: Data?) async throws {
+        var body: [String: Any] = ["kind": "wrong", "note": note, "platform": "mac"]
+        if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String { body["appVersion"] = v }
+        if let answer, let obj = try? JSONSerialization.jsonObject(with: answer) { body["context"] = obj }
+        _ = try await send("POST", "/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
     }
 
     func nearby(lat: Double?, lon: Double?) async throws -> [NearbyStop] {
@@ -271,15 +284,21 @@ struct Api {
     private func request<T: Decodable>(
         _ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: String]? = nil
     ) async throws -> T {
+        let json = try body.map { try JSONSerialization.data(withJSONObject: $0) }
+        return try JSONDecoder().decode(T.self, from: try await send(method, path, query: query, json: json))
+    }
+
+    /// The response body of a 2xx; anything else throws with the server's message.
+    private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil) async throws -> Data {
         var comps = URLComponents(string: Api.base + path)!
         if !query.isEmpty { comps.queryItems = query }
         var req = URLRequest(url: comps.url!, timeoutInterval: 10)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "accept")
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
-        if let body {
+        if let json {
             req.setValue("application/json", forHTTPHeaderField: "content-type")
-            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+            req.httpBody = json
         }
         let (data, resp) = try await URLSession.shared.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -287,6 +306,6 @@ struct Api {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             throw ApiError(status: status, message: msg ?? "HTTP \(status)")
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        return data
     }
 }

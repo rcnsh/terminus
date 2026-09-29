@@ -33,6 +33,8 @@ data class UiState(
     val showNearby: Boolean = false,
     /** Last answer per view, so switching views never blanks the screen. */
     val answers: Map<Target, NextAnswer> = emptyMap(),
+    /** Each answer as the server sent it, for an "Is this wrong?" report. */
+    val rawAnswers: Map<Target, String> = emptyMap(),
     val nearby: List<NearbyStop>? = null,
     val places: List<Place> = emptyList(),
     val loading: Boolean = false,
@@ -49,6 +51,9 @@ data class UiState(
     val leaveAlerts: Boolean = false,
     /** The live notification during your day. */
     val liveUpdates: Boolean = false,
+    /** An "Is this wrong?" report on its way, and how it went. */
+    val reportSending: Boolean = false,
+    val reportResult: String? = null,
 ) {
     val answer: NextAnswer? get() = answers[target]
 }
@@ -147,6 +152,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * "Is this wrong?": sends `answer` (the raw answer that was on screen when
+     * the dialog opened; the 30 s refresh may have replaced it since) and the note.
+     */
+    fun report(note: String, answer: String?, appVersion: String) {
+        val token = store.token ?: return
+        _state.update { it.copy(reportSending = true, reportResult = null) }
+        viewModelScope.launch {
+            val result = try {
+                Api(token).report(note.trim(), answer?.let { org.json.JSONObject(it) }, appVersion)
+                "Thanks, sent. It helps make the answers better."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiError) {
+                e.message
+            } catch (e: Exception) {
+                "Couldn't send it. Check your connection and try again."
+            }
+            _state.update { it.copy(reportSending = false, reportResult = result) }
+        }
+    }
+
+    fun clearReportResult() = _state.update { it.copy(reportResult = null) }
+
     /** At most once a day: is there a newer release than this one? */
     fun checkForUpdate(current: String) {
         val now = System.currentTimeMillis()
@@ -212,7 +241,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         store.lastError = null
                         redrawWidgets(ctx)
                     }
-                    _state.update { it.copy(answers = it.answers + (s.target to answer), places = answer.places, loading = false, error = null, fetchedAt = now) }
+                    _state.update {
+                        it.copy(
+                            answers = it.answers + (s.target to answer),
+                            rawAnswers = it.rawAnswers + (s.target to json.toString()),
+                            places = answer.places, loading = false, error = null, fetchedAt = now,
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e

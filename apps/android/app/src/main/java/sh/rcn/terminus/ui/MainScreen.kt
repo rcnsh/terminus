@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -50,6 +51,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Target
@@ -163,6 +165,25 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
             Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
+        if (!state.showNearby && state.answer != null) {
+            var reporting by remember { mutableStateOf<String?>(null) }
+            var opened by remember { mutableStateOf(false) }
+            TextButton(onClick = { reporting = state.rawAnswers[state.target]; opened = true; vm.clearReportResult() }) { Text("Is this wrong?") }
+            if (opened) {
+                ReportDialog(
+                    sending = state.reportSending,
+                    onSend = { note ->
+                        vm.report(note, reporting, BuildConfig.VERSION_NAME)
+                        opened = false
+                    },
+                    onDismiss = { opened = false },
+                )
+            }
+        }
+        state.reportResult?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
         Spacer(Modifier.height(16.dp))
         NotifyToggle(
             "Notify me when to leave for class",
@@ -223,4 +244,34 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
         Text("Notifications are off for terminus.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         TextButton(onClick = openSettings) { Text("Open settings") }
     }
+}
+
+/** "Is this wrong?": an optional note, sent with the answer that was on screen. */
+@Composable
+private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: () -> Unit) {
+    var note by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("What was wrong?") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { if (it.length <= 1000) note = it },
+                    placeholder = { Text("The D2 never came, the walk is longer…") },
+                    minLines = 2,
+                    maxLines = 5,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Sends this answer and your note, with your email address so you can get a reply.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSend(note) }, enabled = !sending) { Text("Send") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

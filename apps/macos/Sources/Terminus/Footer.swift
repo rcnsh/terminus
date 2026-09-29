@@ -16,6 +16,7 @@ struct Footer: View {
                     Toggle(model.misplaced ? "Open at login (move to Applications first)" : "Open at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
                         .disabled(model.misplaced && !model.openAtLogin)
                     Button("Refresh now") { Task { await model.refresh() } }
+                    Button("Report a wrong answer…") { model.startReport() }
                     Button(Updater.shared.running ? "Check for updates…" : "Check for updates (move to Applications first)") {
                         Updater.shared.checkNow()
                     }
