@@ -34,6 +34,14 @@ final class AppModel {
 
     var error: String?
     var updated: Date?
+
+    /// "Is this wrong?": the form is open, what's typed, and how sending went.
+    var reporting = false
+    var reportNote = ""
+    var reportSending = false
+    var reportResult: String?
+    /// The answer on screen when the form opened; the refresh loop may replace it meanwhile.
+    private var reported: Data?
     var popoverOpen = false {
         didSet { if popoverOpen { refreshLoginItem(); kick() } else { Updater.shared.popoverClosed() } }
     }
@@ -209,6 +217,41 @@ final class AppModel {
     }
 
     func askLocation() { locator.ask() }
+
+    // MARK: reports
+
+    func startReport() {
+        reported = showNearby ? nil : shown?.raw
+        reportNote = ""
+        reportResult = nil
+        reporting = true
+    }
+
+    func cancelReport() {
+        reporting = false
+        reportResult = nil
+    }
+
+    func sendReport() {
+        let note = reportNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard reported != nil || !note.isEmpty else {
+            reportResult = "Say what was wrong: there's no answer on screen to send."
+            return
+        }
+        reportSending = true
+        Task {
+            defer { reportSending = false }
+            do {
+                try await Api(token: TokenStore.read()).report(note: note, answer: reported)
+                reporting = false
+                reportResult = "Thanks, sent. It helps make the answers better."
+            } catch let e as ApiError {
+                reportResult = e.message
+            } catch {
+                reportResult = "Couldn't reach terminus. Try again in a moment."
+            }
+        }
+    }
 
     // MARK: what the popover shows
 

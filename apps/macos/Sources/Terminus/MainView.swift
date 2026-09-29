@@ -65,7 +65,43 @@ struct Main: View {
             .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.showNearby)
             .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.target)
 
+            if model.reporting {
+                ReportForm(model: model)
+            } else if let result = model.reportResult {
+                Text(result).font(.callout).foregroundStyle(.secondary)
+            }
+
             Search(model: model, query: $query)
         }
+    }
+}
+
+/// "Is this wrong?": a note, sent with the answer on screen.
+struct ReportForm: View {
+    @Bindable var model: AppModel
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("What was wrong?").font(.callout.weight(.semibold))
+            TextField("The D2 never came, the walk is longer…", text: $model.reportNote, axis: .vertical)
+                .lineLimit(2...4)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onSubmit { model.sendReport() }
+            Text("Sends the answer above and your note, with your email so you can get a reply.")
+                .font(.caption).foregroundStyle(.secondary)
+            if let r = model.reportResult { Text(r).font(.caption).foregroundStyle(.red) }
+            HStack {
+                Spacer()
+                Button("Cancel") { model.cancelReport() }.controlSize(.small)
+                Button("Send") { model.sendReport() }
+                    .controlSize(.small)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(model.reportSending)
+            }
+        }
+        .card(padding: 10)
+        .onAppear { focused = true }
     }
 }
