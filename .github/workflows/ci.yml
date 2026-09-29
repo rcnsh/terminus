@@ -13,15 +13,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The version comes from packageManager in package.json.
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # Tests and typecheck, then a dry-run bundle: catches a module workerd
       # would refuse to load, which the Node tests cannot see.
-      - run: npm run check
-      - run: npx wrangler deploy --dry-run --outdir /tmp/dist
+      - run: pnpm check
+      - run: pnpm exec cf deploy --dry-run
         working-directory: apps/api
 
   web:

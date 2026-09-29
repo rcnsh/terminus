@@ -2,7 +2,7 @@
 -- hex, never raw. Times are epoch milliseconds.
 
 -- The allowlist. Add a friend with:
---   npx wrangler d1 execute terminus --remote --command "INSERT INTO invites VALUES ('a@b.com', unixepoch() * 1000)"
+--   pnpm exec cf d1 query <database id> --sql "INSERT INTO invites VALUES ('a@b.com', unixepoch() * 1000)"
 CREATE TABLE invites (
   email   TEXT PRIMARY KEY,
   created INTEGER NOT NULL

@@ -38,8 +38,8 @@ Every client shows the same `label` and `detail` strings from the API, plus a
 ## Running it
 
 ```bash
-npm install
-npm test
+pnpm install
+pnpm test
 node apps/api/scripts/dev-stub.mjs   # local API with fake buses
 ```
 

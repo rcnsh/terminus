@@ -1,6 +1,6 @@
 {
   "_help": [
-    "HAND-MAINTAINED. 'npm run scrape' never writes this file.",
+    "HAND-MAINTAINED. 'pnpm scrape' never writes this file.",
     "",
     "Stops across the road from each other that the feed doesn't link. The",
     "scrape pairs 'X' with 'X-OPP' and 'Opp X' with 'X'; a pair with unrelated",

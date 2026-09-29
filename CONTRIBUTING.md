@@ -12,8 +12,8 @@ NUS's bus feed on everyone's behalf:
 ## Working on it
 
 ```bash
-npm install
-npm test                                  # API tests: no network, no keys
+pnpm install
+pnpm test                                 # API tests: no network, no keys
 node apps/api/scripts/dev-stub.mjs        # local API with fake buses
 ```
 

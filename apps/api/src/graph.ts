@@ -1,6 +1,6 @@
 /**
  * The stop graph: scraped stops and routes, with the hand-maintained
- * operating hours merged in once, at module scope. `npm run scrape` can never
+ * operating hours merged in once, at module scope. `pnpm scrape` can never
  * overwrite the hours, which live in their own file.
  */
 
