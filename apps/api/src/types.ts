@@ -93,6 +93,29 @@ export interface Answer {
   arriveAt?: string | null;
   /** You are already at the destination: show "you're here", no bus, no countdown. */
   arrived?: boolean;
+  /**
+   * The latest time to set off. For a class, the latest that still gets you
+   * there on time; otherwise, for the bus in `departsAt`. `estimated` when
+   * it rests on a headway rather than a live time.
+   */
+  leave?: Leave | null;
+}
+
+export interface Leave {
+  /** ISO, whole seconds. */
+  at: string;
+  estimated: boolean;
+  /** The bus this is for, and where to board it. Null when walking. */
+  svc: string | null;
+  stop: string | null;
+}
+
+/** A time to be somewhere by, for the leave-by calculation. */
+export interface ArriveBy {
+  /** Epoch ms you must be at the venue by (class start). */
+  atMs: number;
+  /** Walk from the destination stop to the venue. */
+  venueWalkS: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -203,4 +226,8 @@ export interface ResolveInput {
    * stops would otherwise crowd them out. A user's usual stops near home.
    */
   preferStops?: string[];
+  /** Walk to `originCode` when there are no coordinates (home to home stop). */
+  originWalkS?: number;
+  /** Set for a class: leave-by then aims at this, not the next bus. */
+  arriveBy?: ArriveBy | null;
 }

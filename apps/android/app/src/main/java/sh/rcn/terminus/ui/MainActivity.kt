@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +45,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -72,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import sh.rcn.terminus.BuildConfig
+import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.R
 import sh.rcn.terminus.NearbyStop
@@ -294,9 +297,64 @@ private fun MainScreen(state: UiState, vm: MainViewModel) {
             Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
+        NotifyToggle(
+            "Notify me when to leave for class",
+            "A heads-up 5 minutes before you need to set off.",
+            state.leaveAlerts, vm::setLeaveAlerts, openSettings,
+        )
+        NotifyToggle(
+            "Live notification during your day",
+            "Keeps the next bus and a countdown in your notifications, and the widget up to date. Uses a lot of battery: it checks for new times every 30 seconds while your day is on.",
+            state.liveUpdates, vm::setLiveUpdates, openSettings,
+        )
+
+        Spacer(Modifier.height(16.dp))
         Search(state, vm)
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** Asks for notification permission on the way to "on", and says so when it's refused. */
+@Composable
+private fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit) {
+    val ctx = LocalContext.current
+    var refused by rememberSaveable { mutableStateOf(false) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        refused = !granted
+        if (granted) onChange(true)
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = on,
+                role = Role.Switch,
+                onValueChange = { want ->
+                    when {
+                        !want -> onChange(false)
+                        LeaveAlerts.canNotify(ctx) -> onChange(true)
+                        else -> ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
+            )
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title)
+            Text(
+                hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = on, onCheckedChange = null)
+    }
+    if (refused && !on) {
+        Text("Notifications are off for terminus.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = openSettings) { Text("Open settings") }
     }
 }
 
@@ -337,6 +395,7 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
             Text(answer.clockLabel { clock(ctx, it) }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Countdown(answer)
             Text(answer.detail)
+            LeaveLine(answer)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
                 answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
                 crowdWord(answer.crowd)?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -344,6 +403,22 @@ private fun AnswerCard(answer: NextAnswer?, loading: Boolean) {
             // The alternative is already at the end of `detail`.
             qualityNote(answer.quality)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
+    }
+}
+
+/** "Leave by 09:38 · D2 from PGP", turning into "Leave now" when the time comes. */
+@Composable
+private fun LeaveLine(answer: NextAnswer) {
+    val at = answer.leaveAtMs ?: return
+    val ctx = LocalContext.current
+    val now by produceState(System.currentTimeMillis(), at) {
+        while (value < at) {
+            delay((at - value).coerceIn(1_000, 30_000))
+            value = System.currentTimeMillis()
+        }
+    }
+    answer.leaveText(now) { clock(ctx, it) }?.let {
+        Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

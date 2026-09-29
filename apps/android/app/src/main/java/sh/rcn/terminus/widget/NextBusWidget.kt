@@ -95,107 +95,141 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
         // TalkBack reads the widget as one sentence instead of fragments.
         val spoken = spokenSummary(ctx, paired, answer, fetchedAt, error)
-        Column(
+        Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .semantics { contentDescription = spoken }
                 .background(colors.widgetBackground)
-                .cornerRadius(20.dp)
-                .padding(horizontal = 14.dp, vertical = if (large) 12.dp else 8.dp)
-                .clickable(if (paired) actionRunCallback<RefreshAction>() else actionStartActivity<MainActivity>()),
-            verticalAlignment = if (large) Alignment.Top else Alignment.CenterVertically,
+                .cornerRadius(20.dp),
+            contentAlignment = Alignment.BottomEnd,
         ) {
-            when {
-                !paired -> {
-                    Text("terminus", style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp))
-                    Text(error ?: "Tap to pair this phone", style = muted, maxLines = 2)
-                }
-                answer == null -> {
-                    Text(error ?: "Loading…", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
-                    Text("Tap to refresh", style = muted)
-                }
-                answer.arrived -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            provider = ImageProvider(R.drawable.ic_check),
-                            contentDescription = null,
-                            colorFilter = ColorFilter.tint(colors.primary),
-                            modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
-                        )
-                        Spacer(GlanceModifier.width(8.dp))
-                        Text(answer.label, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
+            Column(
+                modifier = GlanceModifier
+                    .fillMaxSize()
+                    .semantics { contentDescription = spoken }
+                    // A compact widget's text runs the full width: keep it clear of the button.
+                    .padding(start = 14.dp, end = if (paired && !large) 36.dp else 14.dp, top = if (large) 12.dp else 8.dp, bottom = if (large) 12.dp else 8.dp)
+                    .clickable(if (paired) actionRunCallback<RefreshAction>() else actionStartActivity<MainActivity>()),
+                verticalAlignment = if (large) Alignment.Top else Alignment.CenterVertically,
+            ) {
+                when {
+                    !paired -> {
+                        Text("terminus", style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp))
+                        Text(error ?: "Tap to pair this phone", style = muted, maxLines = 2)
                     }
-                    Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
-                    if (large) {
-                        Spacer(GlanceModifier.defaultWeight())
-                        Chips(ctx, answer)
+                    answer == null -> {
+                        Text(error ?: "Loading…", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
+                        Text("Tap to refresh", style = muted)
                     }
-                }
-                answer.mode == "rest" -> {
-                    // Outside the user's day: a moon and the next class, no bus.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            provider = ImageProvider(R.drawable.ic_moon),
-                            contentDescription = null,
-                            colorFilter = ColorFilter.tint(colors.primary),
-                            modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
-                        )
-                        Spacer(GlanceModifier.width(8.dp))
+                    answer.arrived -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                provider = ImageProvider(R.drawable.ic_check),
+                                contentDescription = null,
+                                colorFilter = ColorFilter.tint(colors.primary),
+                                modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
+                            )
+                            Spacer(GlanceModifier.width(8.dp))
+                            Text(answer.label, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
+                        }
+                        Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
+                        if (large) {
+                            Spacer(GlanceModifier.defaultWeight())
+                            Chips(ctx, answer)
+                        }
+                    }
+                    answer.mode == "rest" -> {
+                        // Outside the user's day: a moon and the next class, no bus.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                provider = ImageProvider(R.drawable.ic_moon),
+                                contentDescription = null,
+                                colorFilter = ColorFilter.tint(colors.primary),
+                                modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
+                            )
+                            Spacer(GlanceModifier.width(8.dp))
+                            Text(
+                                answer.label,
+                                style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp),
+                                maxLines = 1,
+                            )
+                        }
+                        Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
+                        if (large) {
+                            Spacer(GlanceModifier.defaultWeight())
+                            Chips(ctx, answer)
+                        }
+                    }
+                    else -> {
+                        val heading = listOfNotNull(
+                            answer.destLabel ?: if (answer.mode == "nearby") "Nearby" else null,
+                            if (answer.why == "gap-home") "long gap" else null,
+                        ).joinToString(" · ")
+                        if (heading.isNotEmpty()) Text(heading, style = muted, maxLines = 1)
+                        // A clock time stays true until the bus leaves; "4 min"
+                        // is wrong a minute later. Once the bus has gone, or the
+                        // data is old, dim it and ask for a tap rather than lie.
+                        val now = System.currentTimeMillis()
+                        val old = isOld(answer, fetchedAt, now)
                         Text(
-                            answer.label,
-                            style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp),
+                            answer.clockLabel { clock(ctx, it) },
+                            style = TextStyle(
+                                color = if (old) colors.onSurfaceVariant else colors.onSurface,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = if (large) 24.sp else 20.sp,
+                            ),
                             maxLines = 1,
                         )
+                        // A compact widget has no footer, so a problem goes on this line.
+                        val line = when {
+                            error == UPDATING -> UPDATING
+                            old -> "Old times · tap to refresh"
+                            error != null && !roomy -> "$error · ${answer.detail}"
+                            else -> answer.detail
+                        }
+                        Text(line, style = muted, maxLines = if (large) 2 else 1)
+                        // When to set off, where there's room for a line of its own.
+                        if (roomy && !old) {
+                            answer.leaveText(now) { clock(ctx, it) }?.let {
+                                Text(it, style = TextStyle(color = colors.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+                            }
+                        }
+                        if (large && !old) {
+                            // Crowd is already in the detail line; only the data quality is new here.
+                            qualityNote(answer.quality)?.let { Text(it, style = muted, maxLines = 1) }
+                            answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
+                        }
+                        if (large) {
+                            Spacer(GlanceModifier.defaultWeight())
+                            Chips(ctx, answer)
+                            Spacer(GlanceModifier.height(6.dp))
+                        }
+                        val stamp = fetchedAt?.let { "Updated ${clock(ctx, it)}" }
+                        val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
+                        if (roomy && foot.isNotEmpty()) Text(foot, style = tiny, maxLines = 1)
                     }
-                    Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
-                    if (large) {
-                        Spacer(GlanceModifier.defaultWeight())
-                        Chips(ctx, answer)
-                    }
-                }
-                else -> {
-                    val heading = listOfNotNull(
-                        answer.destLabel ?: if (answer.mode == "nearby") "Nearby" else null,
-                        if (answer.why == "gap-home") "long gap" else null,
-                    ).joinToString(" · ")
-                    if (heading.isNotEmpty()) Text(heading, style = muted, maxLines = 1)
-                    // A clock time stays true until the bus leaves; "4 min"
-                    // is wrong a minute later. Once the bus has gone, or the
-                    // data is old, dim it and ask for a tap rather than lie.
-                    val now = System.currentTimeMillis()
-                    val old = isOld(answer, fetchedAt, now)
-                    Text(
-                        answer.clockLabel { clock(ctx, it) },
-                        style = TextStyle(
-                            color = if (old) colors.onSurfaceVariant else colors.onSurface,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = if (large) 24.sp else 20.sp,
-                        ),
-                        maxLines = 1,
-                    )
-                    // A compact widget has no footer, so a problem goes on this line.
-                    val line = when {
-                        error == UPDATING -> UPDATING
-                        old -> "Old times · tap to refresh"
-                        error != null && !roomy -> "$error · ${answer.detail}"
-                        else -> answer.detail
-                    }
-                    Text(line, style = muted, maxLines = if (large) 2 else 1)
-                    if (large && !old) {
-                        // Crowd is already in the detail line; only the data quality is new here.
-                        qualityNote(answer.quality)?.let { Text(it, style = muted, maxLines = 1) }
-                        answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
-                    }
-                    if (large) {
-                        Spacer(GlanceModifier.defaultWeight())
-                        Chips(ctx, answer)
-                        Spacer(GlanceModifier.height(6.dp))
-                    }
-                    val stamp = fetchedAt?.let { "Updated ${clock(ctx, it)}" }
-                    val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
-                    if (roomy && foot.isNotEmpty()) Text(foot, style = tiny, maxLines = 1)
                 }
             }
+            if (paired) RefreshButton()
+        }
+    }
+
+    /** Bottom right: the whole widget refreshes on a tap too, but this says so. */
+    @Composable
+    private fun RefreshButton() {
+        Box(
+            modifier = GlanceModifier
+                .size(40.dp)
+                .cornerRadius(20.dp)
+                .semantics { contentDescription = "Refresh" }
+                .clickable(actionRunCallback<RefreshAction>()),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_refresh),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+                modifier = GlanceModifier.size(18.dp),
+            )
         }
     }
 
@@ -237,6 +271,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
         answer.destLabel?.let { "To $it" },
         if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", ", leaves "),
         if (old) "These times are old" else answer.detail.replace(" · ", ", "),
+        answer.leaveText(System.currentTimeMillis()) { clock(ctx, it) }?.takeIf { !old }?.replace(" · ", ", "),
         answer.timingText?.takeIf { !old },
         error?.takeIf { it != UPDATING },
     )
@@ -286,7 +321,7 @@ open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver(
         super.onDisabled(context)
         // Called when the last widget of THIS kind goes. Keep refreshing
         // while a widget of the other kind is still on the home screen.
-        if (Refresher.widgetCount(context) == 0) Refresher.cancel(context)
+        if (Refresher.widgetCount(context) == 0) Refresher.widgetsGone(context)
     }
 }
 

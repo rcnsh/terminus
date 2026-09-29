@@ -34,6 +34,9 @@ export interface Profile {
    *  past midnight SGT. */
   dayStartMin: number;
   dayEndMin: number;
+  /** Walk from home to the home stop. Counts when a trip starts from home
+   *  and the client sends no location. */
+  homeWalkMin: number;
   /** From the NUSMods import. Replaced wholesale on re-import. */
   trips: ImportedTrip[];
   /** Entered by hand. Survives a re-import. */
@@ -50,6 +53,7 @@ export const DEFAULT_PROFILE: Profile = {
   gapHours: 2,
   dayStartMin: 6 * 60,
   dayEndMin: 18 * 60,
+  homeWalkMin: 5,
   trips: [],
   manual: [],
   places: [],
@@ -99,6 +103,11 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean): R
     p[field] = raw[field] as number;
   }
   if (p.dayStartMin >= p.dayEndMin) return { ok: false, error: 'the day must start before it ends' };
+
+  if (raw.homeWalkMin !== undefined) {
+    if (!isInt(raw.homeWalkMin, 0, 30)) return { ok: false, error: 'homeWalkMin must be 0 to 30 minutes' };
+    p.homeWalkMin = raw.homeWalkMin;
+  }
 
   for (const field of ['trips', 'manual'] as const) {
     if (raw[field] === undefined) continue;
@@ -402,11 +411,16 @@ export const ON_TIME_SLACK_S = 180;
  *  a lateness figure would be noise. */
 export const MAX_VENUE_WALK_S = 20 * 60;
 
-export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number): Timing | null {
-  if (!arriveAtIso || walkToVenueS > MAX_VENUE_WALK_S) return null;
+/** When today's (SGT) run of this class starts, epoch ms. */
+export function classStartMs(trip: ImportedTrip, nowMs: number): number {
   const day = new Date(nowMs + 8 * 3_600_000);
   const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()) - 8 * 3_600_000;
-  const classAt = midnight + trip.arriveByMin * 60_000;
+  return midnight + trip.arriveByMin * 60_000;
+}
+
+export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number): Timing | null {
+  if (!arriveAtIso || walkToVenueS > MAX_VENUE_WALK_S) return null;
+  const classAt = classStartMs(trip, nowMs);
   const reachMs = Date.parse(arriveAtIso) + walkToVenueS * 1000;
   const slackS = Math.round((classAt - reachMs) / 1000);
   const hhmm = (ms: number) => {

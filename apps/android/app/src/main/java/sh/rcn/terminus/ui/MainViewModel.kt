@@ -13,6 +13,8 @@ import kotlinx.coroutines.launch
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Destination
+import sh.rcn.terminus.LeaveAlerts
+import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
@@ -41,6 +43,10 @@ data class UiState(
     val pendingPair: PendingPair? = null,
     /** A newer released version, when there is one. */
     val update: String? = null,
+    /** "Notify me when to leave for class". */
+    val leaveAlerts: Boolean = false,
+    /** The live notification during your day. */
+    val liveUpdates: Boolean = false,
 ) {
     val answer: NextAnswer? get() = answers[target]
 }
@@ -49,7 +55,9 @@ data class PendingPair(val code: String, val account: String)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
-    private val _state = MutableStateFlow(UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty()))
+    private val _state = MutableStateFlow(
+        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app)),
+    )
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
 
@@ -87,6 +95,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 _state.update { it.copy(pairing = false, pairError = "Couldn't reach terminus. Check your connection and try again.") }
             }
+        }
+    }
+
+    /** Turned on only after notification permission was granted. */
+    fun setLeaveAlerts(on: Boolean) {
+        val ctx = getApplication<Application>()
+        store.leaveAlerts = on
+        _state.update { it.copy(leaveAlerts = on) }
+        if (on) {
+            Refresher.schedule(ctx)
+            store.lastAnswer()?.let { (a, at) -> Refresher.scheduleNext(ctx, a, at) }
+            load(restart = true)
+        } else {
+            LeaveAlerts.cancel(ctx)
+            // Nothing else needs the chain without a widget.
+            if (!Refresher.active(ctx)) Refresher.cancel(ctx)
+        }
+    }
+
+    /** Turned on only after notification permission was granted. */
+    fun setLiveUpdates(on: Boolean) {
+        val ctx = getApplication<Application>()
+        store.liveUpdates = on
+        _state.update { it.copy(liveUpdates = on) }
+        if (on) {
+            Refresher.schedule(ctx)
+            LiveService.start(ctx)
+        } else {
+            LiveService.stop(ctx)
+            if (!Refresher.active(ctx)) Refresher.cancel(ctx)
         }
     }
 
@@ -147,7 +185,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             loadJob?.cancel()
         }
         loadJob = viewModelScope.launch {
-            _state.update { it.copy(loading = true) }
+            _state.update { it.copy(loading = true, liveUpdates = store.liveUpdates) }
             val ctx = getApplication<Application>()
             // A fix from the last minute is as good as a new one, and costs no
             // wait: polling every 30 s must not mean a GPS request every 30 s.

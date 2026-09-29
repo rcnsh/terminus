@@ -537,6 +537,19 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description: 'When you reach the destination stop, by bus or on foot.',
             },
             arrived: { type: 'boolean', description: 'Already at the destination (either side of the road). No bus, no countdown.' },
+            leave: {
+              type: ['object', 'null'],
+              description:
+                'The latest time to set off. On `/me/next` for a class, the latest that still gets you there on time; otherwise, for the bus in `departsAt`. ' +
+                'When you will be late whatever you do, `at` is now. Null or absent when you should simply go now. Once `at` has passed, show "Leave now".',
+              required: ['at', 'estimated', 'svc', 'stop'],
+              properties: {
+                at: { type: 'string', format: 'date-time' },
+                svc: { type: ['string', 'null'], description: 'The bus this time is for. For a class it can differ from the headline bus. Null when walking.' },
+                stop: { type: ['string', 'null'], description: 'Where to board it, short name.' },
+                estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
+              },
+            },
           },
         },
         Arrival: {
@@ -682,6 +695,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             gapHours: { type: 'number', minimum: 0.5, maximum: 12, default: 2, description: 'A gap between classes longer than this means going home in between.' },
             dayStartMin: { type: 'integer', default: 360, description: 'Start of your day, minutes past midnight SGT. Earlier, `/me/next` rests.' },
             dayEndMin: { type: 'integer', default: 1080, description: 'End of your day. Later, `/me/next` rests, unless a class runs late.' },
+            homeWalkMin: { type: 'integer', minimum: 0, maximum: 30, default: 5, description: 'Minutes from home to your home stop. Counts when a trip starts from home without a location.' },
             trips: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'From the NUSMods import.' },
             manual: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'Entered by hand. Kept on re-import.' },
             places: {

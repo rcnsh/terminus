@@ -524,3 +524,20 @@ test('a session cookie from before the rename still works', async () => {
   const old = cookie.replace('__Host-nb_s=', 'nb_s=');
   assert.equal((await call(env, '/me', { cookie: old })).status, 200);
 });
+
+test('/me/next: a class carries a leave-by time, moved by the walk from home', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const put = (homeWalkMin) =>
+    call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, homeWalkMin, manual: [{ day: 4, arriveByMin: 660, endMin: 720, to: 'COM3', label: 'CS2030' }] } });
+  await put(0);
+  const a = await (await call(env, '/me/next', { cookie })).json();
+  assert.equal(a.dest.why, 'class');
+  assert.ok(a.leave, 'a class has a leave-by');
+  // Before the 11:00 class, and no live times two hours out.
+  assert.ok(Date.parse(a.leave.at) < Date.parse('2026-08-27T03:00:00Z'));
+  await put(5);
+  const b = await (await call(env, '/me/next', { cookie })).json();
+  assert.equal(Date.parse(a.leave.at) - Date.parse(b.leave.at), 5 * 60_000);
+  assert.equal(b.leave.estimated, a.leave.estimated);
+});

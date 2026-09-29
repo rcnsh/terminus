@@ -129,7 +129,8 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
   } else {
     const stop = input.originCode ? idx.byCode.get(input.originCode) : undefined;
     if (!stop) return [];
-    base = [{ stop, distM: 0 }];
+    // Starting from home: the walk to the stop decides which bus is catchable.
+    base = [{ stop, distM: (input.originWalkS ?? 0) * WALK.speedMs }];
   }
 
   // Either side of the road will do: arriving at "Opp UHC" gets you to UHC.
@@ -251,7 +252,7 @@ export function resolveBerths(rows: Arrival[]): { usable: Arrival[]; ambiguousBe
   return { usable: notEnding, ambiguousBerth: distinct.size > 1 };
 }
 
-function headwayFor(graph: Graph, svc: string): number {
+export function headwayFor(graph: Graph, svc: string): number {
   return graph.headwayS?.[svc] ?? DEFAULT_HEADWAY_S;
 }
 
@@ -466,5 +467,7 @@ export function walkAllTheWayS(
   const lat = input.lat ?? fallbackFrom?.lat;
   const lon = input.lon ?? fallbackFrom?.lon;
   if (lat == null || lon == null) return null;
-  return Math.round(haversineM(lat, lon, dest.lat, dest.lon) / WALK.speedMs);
+  // From the origin stop, the walk to it (from home) comes first, same as for the bus.
+  const toOrigin = input.lat == null ? (input.originWalkS ?? 0) : 0;
+  return Math.round(haversineM(lat, lon, dest.lat, dest.lon) / WALK.speedMs) + toOrigin;
 }
