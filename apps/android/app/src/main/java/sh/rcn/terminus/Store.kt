@@ -18,12 +18,26 @@ import javax.crypto.spec.GCMParameterSpec
 class Store(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
 
+    /**
+     * Decrypted once per process: the widget reads `paired` on every draw, and
+     * a Keystore round trip each time is slow. Written with commit(), so a
+     * process killed right after pairing cannot lose the token the server
+     * already issued.
+     */
     var token: String?
-        get() = prefs.getString(KEY_TOKEN, null)?.let { runCatching { decrypt(it) }.getOrNull() }
-        set(value) {
+        get() = synchronized(Store) {
+            if (!loaded) {
+                cached = prefs.getString(KEY_TOKEN, null)?.let { runCatching { decrypt(it) }.getOrNull() }
+                loaded = true
+            }
+            cached
+        }
+        set(value) = synchronized(Store) {
             prefs.edit().apply {
                 if (value == null) remove(KEY_TOKEN) else putString(KEY_TOKEN, encrypt(value))
-            }.apply()
+            }.commit()
+            cached = value
+            loaded = true
         }
 
     val paired: Boolean get() = token != null
@@ -43,11 +57,24 @@ class Store(context: Context) {
         get() = prefs.getString(KEY_ERROR, null)
         set(value) = prefs.edit().putString(KEY_ERROR, value).apply()
 
-    fun clear() = prefs.edit().clear().apply()
+    /** Last time the app asked for the released version, epoch ms. */
+    var lastUpdateCheck: Long
+        get() = prefs.getLong(KEY_UPDATE_CHECK, 0)
+        set(value) = prefs.edit().putLong(KEY_UPDATE_CHECK, value).apply()
 
-    private fun key(): SecretKey {
+    var latestVersion: String?
+        get() = prefs.getString(KEY_LATEST, null)
+        set(value) = prefs.edit().putString(KEY_LATEST, value).apply()
+
+    fun clear() = synchronized(Store) {
+        prefs.edit().clear().commit()
+        cached = null
+        loaded = true
+    }
+
+    private fun key(): SecretKey = synchronized(Store) {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return@synchronized it.secretKey }
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gen.init(
             KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
@@ -55,7 +82,7 @@ class Store(context: Context) {
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .build(),
         )
-        return gen.generateKey()
+        gen.generateKey()
     }
 
     private fun encrypt(plain: String): String {
@@ -72,6 +99,10 @@ class Store(context: Context) {
     }
 
     private companion object {
+        @Volatile var cached: String? = null
+        @Volatile var loaded = false
+        const val KEY_UPDATE_CHECK = "update-check"
+        const val KEY_LATEST = "latest-version"
         const val ALIAS = "terminus-token"
         const val KEY_TOKEN = "token"
         const val KEY_ANSWER = "answer"

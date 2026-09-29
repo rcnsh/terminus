@@ -25,6 +25,8 @@ enum TokenStore {
         try? fm.removeItem(at: old.deletingLastPathComponent())
     }
 
+    static var exists: Bool { FileManager.default.fileExists(atPath: url.path) }
+
     static func read() -> String? {
         guard let s = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -66,13 +68,16 @@ final class Locator: NSObject, CLLocationManagerDelegate {
     }
 
     var undecided: Bool { manager.authorizationStatus == .notDetermined }
+    var denied: Bool { [.denied, .restricted].contains(manager.authorizationStatus) }
 
     func ask() { manager.requestWhenInUseAuthorization() }
 
-    /// A fix no older than two minutes, or a fresh one (up to ~5 s).
-    func current() async -> CLLocation? {
+    /// A fix no older than `maxAge`, or a fresh one (up to ~5 s). With the
+    /// popover closed a ten-minute-old fix is fine: asking CoreLocation every
+    /// two minutes all day costs battery and blinks the location arrow.
+    func current(maxAge: TimeInterval = 120) async -> CLLocation? {
         guard authorized else { return nil }
-        if let last, -last.timestamp.timeIntervalSinceNow < 120 { return last }
+        if let last, -last.timestamp.timeIntervalSinceNow < maxAge { return last }
         let fix = await withCheckedContinuation { cont in
             waiting.append(cont)
             guard waiting.count == 1 else { return }

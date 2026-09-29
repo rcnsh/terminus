@@ -390,6 +390,20 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/pair/check': {
+        post: {
+          tags: ['Account'],
+          summary: 'Whose code is this',
+          description: 'Shows which account a pairing code belongs to, masked, without spending it. Apps ask before pairing from a link.',
+          operationId: 'pairCheck',
+          requestBody: jsonBody({ type: 'object', required: ['code'], properties: { code: { type: 'string' } } }, { code: 'K7QX4M' }),
+          responses: {
+            '200': ok({ type: 'object', required: ['account'], properties: { account: { type: 'string', example: 'j•••@u.nus.edu' } } }),
+            '400': errorResponse('Wrong or expired code.'),
+            '429': errorResponse('Too many attempts from this IP.'),
+          },
+        },
+      },
       '/me/next': {
         get: {
           tags: ['Account'],
@@ -702,6 +716,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   },
                 },
                 places: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, label: { type: 'string' } } } },
+                refreshAt: {
+                  type: 'string',
+                  format: 'date-time',
+                  description: 'Planned answers only: the next moment the plan changes by itself (a class starts or ends, the day starts or ends). Refresh then, and when `departsAt` passes.',
+                },
                 timing: {
                   type: ['object', 'null'],
                   description: 'For a class: whether you will make it, counting the walk from the stop to the venue.',

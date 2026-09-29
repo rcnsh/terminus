@@ -19,6 +19,7 @@ import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.Place
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
+import sh.rcn.terminus.isNewer
 import sh.rcn.terminus.widget.redrawWidgets
 import sh.rcn.terminus.widget.Refresher
 
@@ -36,9 +37,15 @@ data class UiState(
     val pairing: Boolean = false,
     val pairError: String? = null,
     val destinations: List<Destination> = emptyList(),
+    /** A code from a pairing link, waiting for the user to confirm whose account it is. */
+    val pendingPair: PendingPair? = null,
+    /** A newer released version, when there is one. */
+    val update: String? = null,
 ) {
     val answer: NextAnswer? get() = answers[target]
 }
+
+data class PendingPair(val code: String, val account: String)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
@@ -47,7 +54,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var loadJob: Job? = null
 
     fun pair(code: String) {
-        _state.update { it.copy(pairing = true, pairError = null) }
+        _state.update { it.copy(pairing = true, pairError = null, pendingPair = null) }
         viewModelScope.launch {
             try {
                 val name = "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}".take(40)
@@ -63,14 +70,52 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * A pairing link opens the app with a code someone generated. Show whose
+     * account it is and wait for a yes: otherwise any link could quietly pair
+     * this phone to a stranger's account.
+     */
+    fun checkPairLink(code: String) {
+        if (_state.value.paired) return
+        _state.update { it.copy(pairing = true, pairError = null) }
+        viewModelScope.launch {
+            try {
+                val account = Api(null).pairCheck(code)
+                _state.update { it.copy(pairing = false, pendingPair = PendingPair(code, account)) }
+            } catch (e: ApiError) {
+                _state.update { it.copy(pairing = false, pairError = e.message) }
+            } catch (e: Exception) {
+                _state.update { it.copy(pairing = false, pairError = "Couldn't reach terminus. Check your connection and try again.") }
+            }
+        }
+    }
+
+    fun dismissPairLink() = _state.update { it.copy(pendingPair = null) }
+
+    /** Local state goes first, so the screen reacts at once even offline. */
     fun unpair() {
         val token = store.token
+        val ctx = getApplication<Application>()
+        store.clear()
+        Refresher.cancel(ctx)
+        _state.value = UiState(paired = false)
         viewModelScope.launch {
+            redrawWidgets(ctx)
             runCatching { Api(token).logout() }
-            store.clear()
-            Refresher.cancel(getApplication())
-            redrawWidgets(getApplication())
-            _state.value = UiState(paired = false)
+        }
+    }
+
+    /** At most once a day: is there a newer release than this one? */
+    fun checkForUpdate(current: String) {
+        val now = System.currentTimeMillis()
+        store.latestVersion?.let { v -> if (isNewer(v, current)) _state.update { it.copy(update = v) } }
+        if (now - store.lastUpdateCheck < 24 * 3_600_000L) return
+        viewModelScope.launch {
+            runCatching { Api(null).latestVersion() }.onSuccess { v ->
+                store.lastUpdateCheck = now
+                store.latestVersion = v
+                _state.update { it.copy(update = v.takeIf { isNewer(it, current) }) }
+            }
         }
     }
 
@@ -90,7 +135,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * rather than after the one it replaced.
      */
     fun load(restart: Boolean = false) {
-        val token = store.token ?: return
+        val token = store.token
+        if (token == null) {
+            // The background refresh saw a 401 and cleared the token while
+            // this screen was alive. Don't sit on a paired screen forever.
+            if (_state.value.paired) _state.value = UiState(paired = false, pairError = REMOVED)
+            return
+        }
         if (loadJob?.isActive == true) {
             if (!restart) return
             loadJob?.cancel()
@@ -98,7 +149,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadJob = viewModelScope.launch {
             _state.update { it.copy(loading = true) }
             val ctx = getApplication<Application>()
-            val loc = Locator.current(ctx)
+            // A fix from the last minute is as good as a new one, and costs no
+            // wait: polling every 30 s must not mean a GPS request every 30 s.
+            val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
             val api = Api(token)
             val s = _state.value
             try {
@@ -113,7 +166,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // keep the widget in step while the app is open.
                     if (s.target == Target.Plan) {
                         store.saveAnswer(json, now)
-                        Refresher.scheduleDim(ctx, answer, now)
+                        Refresher.scheduleNext(ctx, answer, now)
                         store.lastError = null
                         redrawWidgets(ctx)
                     }
@@ -124,8 +177,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: ApiError) {
                 if (e.status == 401) {
                     store.clear()
+                    Refresher.cancel(ctx)
                     redrawWidgets(ctx)
-                    _state.value = UiState(paired = false, pairError = "This phone was removed from your account. Pair it again.")
+                    _state.value = UiState(paired = false, pairError = REMOVED)
                 } else {
                     _state.update { it.copy(loading = false, error = e.message) }
                 }
@@ -135,10 +189,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private var destinationsJob: Job? = null
+
     fun loadDestinations() {
-        if (_state.value.destinations.isNotEmpty()) return
-        viewModelScope.launch {
+        if (_state.value.destinations.isNotEmpty() || destinationsJob?.isActive == true) return
+        destinationsJob = viewModelScope.launch {
             runCatching { Api(store.token).destinations() }.onSuccess { d -> _state.update { it.copy(destinations = d) } }
         }
     }
 }
+
+private const val REMOVED = "This phone was signed out of your account. Sign in at terminus.rcn.sh/account and pair it again."

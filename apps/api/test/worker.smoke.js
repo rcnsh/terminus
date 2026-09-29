@@ -219,7 +219,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   const documented = Object.keys(spec.paths).sort();
   assert.deepEqual(documented, [
     '/arrivals', '/auth/login', '/campus', '/health', '/import',
-    '/me/import', '/me/nearby', '/me/next', '/me/profile', '/next', '/pair', '/trip',
+    '/me/import', '/me/nearby', '/me/next', '/me/profile', '/next', '/pair', '/pair/check', '/trip',
   ]);
 
   // Every documented public GET answers with its required params filled from

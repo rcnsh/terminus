@@ -30,6 +30,8 @@ data class NextAnswer(
     val timingText: String?,
     /** Crowd on the next bus: "low" | "medium" | "high". */
     val crowd: String?,
+    /** Planned answers: when the plan changes by itself (a class starts, the day ends). */
+    val refreshAtMs: Long? = null,
 ) {
     /** "D2 · 09:42" when there's a departure time; otherwise the label as sent. */
     fun clockLabel(format: (Long) -> String): String {
@@ -56,7 +58,8 @@ data class NextAnswer(
                     val p = places.getJSONObject(it)
                     Place(p.getString("key"), p.getString("label"))
                 },
-                departsAtMs = o.optStringOrNull("departsAt")?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() },
+                departsAtMs = o.optStringOrNull("departsAt")?.let(::parseInstant),
+                refreshAtMs = o.optStringOrNull("refreshAt")?.let(::parseInstant),
                 timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
                 timingText = o.optJSONObject("timing")?.optStringOrNull("text"),
                 // The recommended bus's crowd, not whichever bus is first in the list.
@@ -91,7 +94,8 @@ sealed interface Target {
 
 class ApiError(val status: Int, message: String) : IOException(message)
 
-class Api(private val token: String?) {
+/** `fast` is for the widget: a tap runs inside a broadcast, which can be killed. */
+class Api(private val token: String?, private val fast: Boolean = false) {
 
     suspend fun pair(code: String, name: String): String {
         val body = JSONObject().put("code", code).put("name", name)
@@ -144,6 +148,13 @@ class Api(private val token: String?) {
         }
     }
 
+    /** Whose account a pairing code belongs to (masked), without spending it. */
+    suspend fun pairCheck(code: String): String =
+        request("POST", "/pair/check", JSONObject().put("code", code)).getString("account")
+
+    /** The released version, from /download/latest.json. */
+    suspend fun latestVersion(): String = request("GET", "/download/latest.json").getString("version")
+
     /** Ends this device's session on the server. */
     suspend fun logout() {
         request("POST", "/auth/logout", JSONObject())
@@ -154,8 +165,8 @@ class Api(private val token: String?) {
             val conn = URL(BuildConfig.API_BASE + path).openConnection() as HttpURLConnection
             try {
                 conn.requestMethod = method
-                conn.connectTimeout = 8_000
-                conn.readTimeout = 10_000
+                conn.connectTimeout = if (fast) 4_000 else 8_000
+                conn.readTimeout = if (fast) 5_000 else 10_000
                 conn.setRequestProperty("accept", "application/json")
                 token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
                 if (body != null) {
@@ -176,6 +187,19 @@ class Api(private val token: String?) {
 
     private fun query(parts: List<String>) = if (parts.isEmpty()) "" else "?" + parts.joinToString("&")
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+}
+
+private fun parseInstant(s: String): Long? = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrNull()
+
+/** "1.0.10" > "1.0.9". */
+fun isNewer(latest: String, current: String): Boolean {
+    val a = latest.split('.').map { it.toIntOrNull() ?: 0 }
+    val b = current.split('.').map { it.toIntOrNull() ?: 0 }
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val d = a.getOrElse(i) { 0 } - b.getOrElse(i) { 0 }
+        if (d != 0) return d > 0
+    }
+    return false
 }
 
 fun JSONObject.optStringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else optString(key)

@@ -303,6 +303,22 @@ export function restSide(profile: Profile, nowMs: number): { side: 'before' | 'a
   return null;
 }
 
+/**
+ * The next moment the planned answer can change by itself: a class starts,
+ * ends, or reaches its gap's return time, or the day starts or ends. Clients
+ * refresh then instead of guessing. Falls back to the next SGT midnight.
+ */
+export function planChangesAt(profile: Profile, nowMs: number): number {
+  const t = sgt(nowMs);
+  const midnight = nowMs - (t.minutes * 60_000 + (nowMs % 60_000));
+  const today = classesOn(profile, nowMs);
+  const start = Math.max(0, Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN)));
+  const end = Math.max(profile.dayEndMin, ...today.map((x) => endOf(x) + EVENING_GRACE_MIN));
+  const marks = [start, end, ...today.flatMap((x) => [x.arriveByMin, endOf(x), x.arriveByMin - GAP_RETURN_MIN])];
+  const next = marks.filter((m) => m > t.minutes && m < 1440).sort((a, b) => a - b)[0];
+  return midnight + (next ?? 1440) * 60_000;
+}
+
 const hhmmOf = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
 /**
