@@ -14,7 +14,7 @@ import os
 /// replace, and a translocated copy (opened from Downloads or the DMG) can't
 /// be written.
 @MainActor
-final class Updater: NSObject, @preconcurrency SPUUpdaterDelegate {
+final class Updater: NSObject, SPUUpdaterDelegate {
     static let shared = Updater()
 
     private let log = Logger(subsystem: "sh.rcn.terminus", category: "update")
