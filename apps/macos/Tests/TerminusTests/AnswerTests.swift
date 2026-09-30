@@ -96,3 +96,22 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect(!isNewer("2.0.0-beta", than: "2.0.0"))
     #expect(!isNewer("2.0.0-beta", than: "2.0.0-beta"))
 }
+
+@Test func todaySaysTheBusYoureOnOrWhenToLeave() throws {
+    let json = """
+    {"date":"2026-10-01","items":[
+      {"kind":"class","key":"a","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","toName":"UTown","startsAt":"2026-10-01T02:00:00Z","onBus":{"svc":"D2","off":"UTown","arrive":"2026-10-01T01:50:00Z"}},
+      {"kind":"class","key":"b","label":"CS2030 @ COM1","status":"later","fromName":"UTown","toName":"COM 3","startsAt":"2026-10-01T05:00:00Z","leave":{"at":"2026-10-01T04:40:00Z","estimated":true,"svc":"D2","stop":"UTown"},"timing":{"status":"late","text":"~3 min late"}},
+      {"kind":"class","key":"c","label":"MA1100 @ LT21","status":"skipped","toName":"LT21","startsAt":"2026-10-01T07:00:00Z"},
+      {"kind":"home","key":"h","label":"Home","status":"later","fromName":"COM 3","toName":"PGP","startsAt":"2026-10-01T09:00:00Z"}
+    ],"note":null}
+    """
+    let day = try JSONDecoder().decode(DayPlan.self, from: Data(json.utf8))
+    #expect(day.items[0].sub?.hasPrefix("On the D2 · off at UTown · arrive ") == true)
+    let later = try #require(day.items[1].sub)
+    #expect(later.hasPrefix("Leave by ~"))
+    #expect(later.hasSuffix(" · D2 from UTown · ~3 min late"))
+    #expect(day.items[2].sub == "Not going today")
+    #expect(day.items[3].title == "Home, from COM 3")
+    #expect(day.items[3].sub == nil)
+}

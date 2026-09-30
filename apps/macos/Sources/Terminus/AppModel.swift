@@ -1,4 +1,5 @@
 import AppKit
+import CoreLocation
 import Foundation
 import Network
 import Observation
@@ -22,8 +23,11 @@ final class AppModel {
     var signInWaiting: (email: String, match: Int)?
     var signingIn = false
     var signInError: String?
-    /// Signed in to an account that has no setup yet: say where to do it.
-    var needsSetup = false
+    /// Signed in to an account that has no setup yet: the popover offers it
+    /// until it's done or skipped, across launches.
+    var needsSetup = UserDefaults.standard.bool(forKey: "needsSetup") {
+        didSet { UserDefaults.standard.set(needsSetup, forKey: "needsSetup") }
+    }
     private var signInTask: Task<Void, Never>?
     private var signInRequest: SignInRequest?
 
@@ -43,6 +47,13 @@ final class AppModel {
 
     var error: String?
     var updated: Date?
+
+    /// Today, for the popover: fetched while it's open, at most every 2 minutes.
+    var day: DayPlan?
+    private var dayFetched: Date?
+
+    /// "Notify me when to leave for class" (phase 7), mirrored from LeaveNotifier.
+    private(set) var leaveAlerts = LeaveNotifier.shared.enabled
 
     /// "Is this wrong?": the form is open, what's typed, and how sending went.
     var reporting = false
@@ -94,6 +105,26 @@ final class AppModel {
 
     func refreshLoginItem() { loginItem = SMAppService.mainApp.status }
 
+    // MARK: leave notifications (phase 7)
+
+    func setLeaveAlerts(_ on: Bool) {
+        guard on else {
+            LeaveNotifier.shared.turnOff()
+            leaveAlerts = false
+            return
+        }
+        Task {
+            if await LeaveNotifier.shared.requestPermission() {
+                LeaveNotifier.shared.enabled = true
+                leaveAlerts = true
+                LeaveNotifier.shared.update(plan)
+            } else {
+                error = "Allow terminus in System Settings → Notifications"
+                LeaveNotifier.shared.openSettings()
+            }
+        }
+    }
+
     /// Ticks every 30 s for the menu bar's countdown.
     var clock = Date()
     private var clockTask: Task<Void, Never>?
@@ -111,6 +142,8 @@ final class AppModel {
         log.notice("start: paired=\(self.paired) base=\(Api.base, privacy: .public)")
         observeSleep()
         observeNetwork()
+        LeaveNotifier.shared.onAction = { [weak self] action in self?.signal(action) }
+        LeaveNotifier.shared.start()
         start()
         Updater.shared.start(misplaced: misplaced)
         checkForUpdate()
@@ -223,6 +256,8 @@ final class AppModel {
                 answers[.plan] = a
                 updated = Date()
                 error = nil
+                LeaveNotifier.shared.update(a)
+                dayFetched = nil
             } catch let e as ApiError {
                 error = e.message
             } catch {
@@ -342,7 +377,11 @@ final class AppModel {
 
     private func clearLocal() {
         paired = false
+        needsSetup = false
         answers = [:]
+        day = nil
+        dayFetched = nil
+        LeaveNotifier.shared.clearLeave()
         nearby = nil
         places = []
         target = .plan
@@ -369,6 +408,12 @@ final class AppModel {
     }
 
     func askLocation() { locator.ask() }
+
+    /// This Mac's location for setup's "Pick the stop nearest me"; nil if it isn't allowed.
+    func whereAmI() async -> CLLocation? { await locator.current(maxAge: 120) }
+
+    /// No home and no timetable yet (the server's "Set up" answer), or a new account.
+    var wantsSetup: Bool { paired && (needsSetup || plan?.label == "Set up") }
 
     // MARK: reports
 
@@ -491,6 +536,11 @@ final class AppModel {
             error = nil
             updated = Date()
             clock = Date()
+            LeaveNotifier.shared.update(p)
+            if popoverOpen, dayFetched.map({ Date().timeIntervalSince($0) > 120 }) ?? true {
+                dayFetched = Date()
+                day = try? await api.day()
+            }
             return true
         } catch let e as ApiError where e.status == 401 {
             TokenStore.write(nil)

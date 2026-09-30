@@ -162,3 +162,30 @@ struct FlowPills: View {
         return s < 45 ? "now" : "\((s + 30) / 60)m"
     }
 }
+
+/// Today, from /me/day: each class with when to leave (or the bus you're
+/// on), and the trips home. What's done is dimmed, a skipped class struck through.
+struct TodayList: View {
+    let day: DayPlan
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionLabel(text: "Today")
+            ForEach(day.items) { item in
+                let past = item.status == "done" || item.status == "skipped"
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(parseISODate(item.startsAt).map(campusTime) ?? "")
+                        .font(.callout.monospacedDigit().weight(item.status == "next" || item.status == "now" ? .semibold : .regular))
+                        .frame(width: 58, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.title).font(.callout).strikethrough(item.status == "skipped")
+                        if let sub = item.sub { Text(sub).font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+                .opacity(past ? 0.5 : 1)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

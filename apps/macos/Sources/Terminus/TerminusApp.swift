@@ -24,9 +24,31 @@ struct TerminusApp: App {
         MenuBarExtra {
             Popover(model: model)
         } label: {
-            // Recomputed from the departure time on the model's 30 s clock,
-            // so the menu bar never shows a count that was true two refreshes
-            // ago. (A TimelineView here starves app launch.)
+            MenuBarLabel(model: model)
+        }
+        .menuBarExtraStyle(.window)
+
+        // Setup and devices (phase 7): real windows, opened from the popover.
+        Window("Set up terminus", id: "setup") { SetupView(app: model) }
+            .windowResizability(.contentSize)
+            .defaultPosition(.center)
+        Window("Devices", id: "devices") { DevicesView() }
+            .windowResizability(.contentSize)
+            .defaultPosition(.center)
+    }
+}
+
+// MARK: - Shell
+
+/// The menu bar item. Recomputed from the departure time on the model's 30 s
+/// clock, so the menu bar never shows a count that was true two refreshes
+/// ago. (A TimelineView here starves app launch.)
+private struct MenuBarLabel: View {
+    let model: AppModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Group {
             if model.resting {
                 Image(systemName: "moon.zzz.fill")
             } else if let title = model.menuTitle(at: model.clock) {
@@ -35,11 +57,15 @@ struct TerminusApp: App {
                 Image(systemName: "bus.fill")
             }
         }
-        .menuBarExtraStyle(.window)
+        // TERMINUS_OPEN=setup or devices opens that window at launch, for
+        // testing when the menu bar item is hidden behind the notch.
+        .task {
+            guard let id = ProcessInfo.processInfo.environment["TERMINUS_OPEN"] else { return }
+            openWindow(id: id)
+            NSApp.activate()
+        }
     }
 }
-
-// MARK: - Shell
 
 /// A fixed "now" for snapshot renders, which can't run a TimelineView.
 struct FixedNowKey: EnvironmentKey { static let defaultValue: Date? = nil }
