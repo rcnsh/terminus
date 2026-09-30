@@ -18,7 +18,6 @@
  * from the uNivUS mapvenue coordinates.
  */
 
-import type { Stop } from './types.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import { type LessonWeeks, type Term, termsForImport } from './calendar.ts';
 

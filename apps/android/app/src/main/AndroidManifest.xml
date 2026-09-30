@@ -17,6 +17,9 @@
     <!-- The optional live notification during your day. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- "Notice when I board": the live notification's service also takes the
+         location during a trip, only when a tap started it (while-in-use). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Android 16: the live notification as a Live Update during a trip (granted at install). -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
 
@@ -109,11 +112,12 @@
             </intent-filter>
         </service>
         <!-- Live notification. specialUse: none of the typed services fit a
-             bus countdown, and dataSync is capped at 6 hours a day. -->
+             bus countdown, and dataSync is capped at 6 hours a day. location:
+             with "Notice when I board" on, during a trip it started from a tap. -->
         <service
             android:name=".LiveService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse|location">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Live campus bus countdown in an ongoing notification, on only while the user's day is on and the user has turned it on." />
@@ -121,5 +125,12 @@
         <receiver
             android:name=".LiveReceiver"
             android:exported="false" />
+        <!-- A widget button (Nearby, a place): a moment in the foreground to take
+             a location fix, started only by the tap. shortService without
+             location permission. -->
+        <service
+            android:name=".widget.WidgetModeService"
+            android:exported="false"
+            android:foregroundServiceType="location|shortService" />
     </application>
 </manifest>

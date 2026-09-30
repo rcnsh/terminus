@@ -22,6 +22,7 @@ import {
 import { logAnswer } from './analytics.ts';
 import { leaveBy } from './leave.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
+import { hopSecondsFor, loadTable } from './ridetimes.ts';
 
 import { GRAPH } from './graph.ts';
 
@@ -56,6 +57,11 @@ export async function answerFor(
   nowMs: number,
 ): Promise<Answer> {
   const idx = indexGraph(GRAPH);
+  // Measured seconds between stops, where enough rides have been seen (phase 8.2).
+  if (!input.hopS) {
+    const hopS = hopSecondsFor(await loadTable(env, nowMs), nowMs);
+    if (hopS) input = { ...input, hopS };
+  }
   const cands = candidateStops(GRAPH, input);
   const originStop = input.originCode ? (idx.byCode.get(input.originCode) ?? null) : null;
   const fallbackStop = cands[0]?.stop ?? originStop;

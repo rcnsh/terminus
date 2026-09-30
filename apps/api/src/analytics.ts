@@ -50,7 +50,7 @@
  * ---------------------------------------------------------------------------
  */
 
-import type { Answer, Arrival, Env, ScoredOption } from './types.ts';
+import type { Answer, Env, ScoredOption } from './types.ts';
 
 /** Arrival rows per request. Bounded so one tap cannot write a hundred rows. */
 const MAX_ARRIVAL_ROWS = 8;
@@ -122,11 +122,6 @@ export function logAnswer(env: Env, input: LogInput): void {
   } catch {
     // Deliberately swallowed. Losing a metric is not worth losing an answer.
   }
-}
-
-/** Convenience for the arrivals of a stop we did not end up recommending. */
-export function arrivalCount(arrivals: Arrival[]): number {
-  return arrivals.filter((a) => a.etaS != null).length;
 }
 
 /**

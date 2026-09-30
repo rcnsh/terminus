@@ -42,7 +42,10 @@ struct AnswerDetail: View {
                 if let actions = a.card?.ask?.actions ?? a.card?.actions, !actions.isEmpty {
                     Flow(spacing: 6) {
                         ForEach(Array(actions.enumerated()), id: \.element) { i, action in
-                            if i == 0 && action.id != "skipped" && action.id != "reset" {
+                            if action.id == "undetected" {
+                                // "Not right?": a quiet correction of what the phone worked out.
+                                Button(action.label) { onAction(action) }.buttonStyle(.link).controlSize(.small)
+                            } else if i == 0 && action.id != "skipped" && action.id != "reset" {
                                 Button(action.label) { onAction(action) }.buttonStyle(.borderedProminent).controlSize(.small)
                             } else {
                                 Button(action.label) { onAction(action) }.buttonStyle(.bordered).controlSize(.small)

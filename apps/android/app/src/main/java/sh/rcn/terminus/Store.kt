@@ -83,6 +83,11 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_LIVE, false)
         set(value) = prefs.edit { putBoolean(KEY_LIVE, value) }
 
+    /** "Notice when I board" (phase 8.1): during a trip the live notification sends the location. Off until turned on. */
+    var detectTrips: Boolean
+        get() = prefs.getBoolean(KEY_DETECT, false)
+        set(value) = prefs.edit { putBoolean(KEY_DETECT, value) }
+
     /** The in-app setup is still to do (a new account); cleared when it's finished or skipped. */
     var needsSetup: Boolean
         get() = prefs.getBoolean(KEY_NEEDS_SETUP, false)
@@ -107,6 +112,13 @@ class Store(context: Context) {
     var pushToken: String?
         get() = prefs.getString(KEY_PUSH, null)
         set(value) = prefs.edit { putString(KEY_PUSH, value) }
+
+    /** Where you usually go, counted on this phone for the widget's buttons (Destinations). */
+    fun destinationUses(): Map<String, Destinations.Use> = Destinations.parse(prefs.getString(KEY_DEST_USE, null))
+
+    fun noteDestination(dest: Destinations.Dest, now: Long = System.currentTimeMillis()) = synchronized(Store) {
+        prefs.edit { putString(KEY_DEST_USE, Destinations.serialise(Destinations.note(destinationUses(), dest, now))) }
+    }
 
     fun clear() = synchronized(Store) {
         prefs.edit(commit = true) { clear() }
@@ -152,6 +164,8 @@ class Store(context: Context) {
         const val KEY_ERROR = "error"
         const val KEY_LEAVE_ALERTS = "leave-alerts"
         const val KEY_LIVE = "live-updates"
+        const val KEY_DETECT = "detect-trips"
+        const val KEY_DEST_USE = "destination-uses"
         const val KEY_LEAVE_NOTIFIED = "leave-notified"
         const val KEY_NEEDS_SETUP = "needs-setup"
         const val KEY_EMAIL = "email"

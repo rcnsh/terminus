@@ -52,12 +52,18 @@ class MainActivity : ComponentActivity() {
         setContent { TerminusTheme { App(vm, account) } }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // In the front during a trip: the live notification can follow it by location from here on.
+        sh.rcn.terminus.LiveService.watch(this)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handle(intent)
     }
 
-    /** Widget chips and app shortcuts open the app on the plan, a place or nearby departures. */
+    /** App shortcuts and notifications open the app on the plan, a place or nearby departures. */
     private fun handle(intent: Intent?) {
         // Share in NUSMods, then terminus: the timetable link, to import.
         if (intent?.action == Intent.ACTION_SEND) {
@@ -72,7 +78,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (data.scheme != "terminus") return
-        // From a long-press shortcut (the widget's chips send no action): tell
+        // From a long-press shortcut (notifications send no action): tell
         // the launcher, which ranks the shortcuts people use.
         if (intent.action == Intent.ACTION_VIEW) {
             val id = when (data.host) { "place" -> "place:${data.lastPathSegment}"; "plan" -> "next"; else -> data.host }
@@ -86,7 +92,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        /** Distinct URIs, so each widget chip gets its own PendingIntent. */
+        /** Distinct URIs, so each shortcut gets its own intent. */
         fun intentFor(ctx: Context, place: String? = null, nearby: Boolean = false): Intent =
             Intent(ctx, MainActivity::class.java).apply {
                 data = when {

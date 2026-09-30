@@ -15,6 +15,7 @@ import sh.rcn.terminus.CardAction
 import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.LeaveAlerts
+import sh.rcn.terminus.Destinations
 import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NearbyStop
@@ -53,6 +54,7 @@ data class UiState(
     val leaveAlerts: Boolean = false,
     /** The live notification during your day. */
     val liveUpdates: Boolean = false,
+    val detectTrips: Boolean = false,
     /** An "Is this wrong?" report on its way, and how it went. */
     val reportSending: Boolean = false,
     val reportResult: String? = null,
@@ -69,7 +71,7 @@ data class PendingPair(val code: String, val account: String)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(
-        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app)),
+        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app)),
     )
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
@@ -140,6 +142,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // The widget's refresh button comes and goes with this setting.
         viewModelScope.launch { redrawWidgets(ctx) }
+    }
+
+    /**
+     * "Go later today" (phase 8.3): a one-off trip to the place on screen,
+     * planned like a class. The plan comes back, so show it.
+     */
+    fun goLater(atMin: Int) {
+        val token = store.token ?: return
+        val target = _state.value.target
+        if (target == Target.Plan) return
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            try {
+                val json = Api(token, hour12 = hour12(ctx)).once(target, atMin)
+                val now = System.currentTimeMillis()
+                store.saveAnswer(json, now)
+                Refresher.scheduleNext(ctx, NextAnswer.parse(json), now)
+                redrawWidgets(ctx)
+                select(Target.Plan)
+                loadDay()
+            } catch (e: ApiError) {
+                _state.update { it.copy(error = e.message) }
+            } catch (e: Exception) {
+                _state.update { it.copy(error = "Couldn't add that; check your connection") }
+            }
+        }
+    }
+
+    /** "Notice when I board". Needs the live notification, so turning it on turns that on too. */
+    fun setDetectTrips(on: Boolean) {
+        store.detectTrips = on
+        _state.update { it.copy(detectTrips = on) }
+        if (on && !store.liveUpdates) setLiveUpdates(true) else if (on) LiveService.watch(getApplication()) else LiveService.start(getApplication())
     }
 
     fun dismissPairLink() = _state.update { it.copy(pendingPair = null) }
@@ -282,6 +317,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun select(target: Target) {
+        // What the widget offers as buttons: the places you actually ask for.
+        when (target) {
+            is Target.SavedPlace -> _state.value.places.find { it.key == target.key }?.let { store.noteDestination(Destinations.Dest(Destinations.placeId(it.key), it.label)) }
+            is Target.Code -> store.noteDestination(Destinations.Dest(Destinations.stopId(target.code), target.label))
+            Target.Plan -> {}
+        }
         _state.update { it.copy(target = target, showNearby = false, error = null) }
         load(restart = true)
     }

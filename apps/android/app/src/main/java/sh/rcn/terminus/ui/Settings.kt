@@ -51,7 +51,9 @@ import com.google.zxing.qrcode.QRCodeWriter
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.Device
 import sh.rcn.terminus.ProfileDoc
+import sh.rcn.terminus.SavedPlace
 import sh.rcn.terminus.Trip
+import sh.rcn.terminus.UsualTime
 import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayName
 import sh.rcn.terminus.hhmm
@@ -113,6 +115,31 @@ internal fun SettingsScreen(
                 Places(profile, state.campus?.destinations.orEmpty(), account)
             }
             Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+/** A day and a time for a saved place: from then on it's a trip that day, like a class. */
+@Composable
+private fun UsualTimeEditor(place: SavedPlace, account: AccountViewModel, done: () -> Unit) {
+    var day by rememberSaveable { mutableIntStateOf(1) }
+    var at by rememberSaveable { mutableStateOf<Int?>(null) }
+    Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Choice("Day", WEEKDAYS, day, { day = it ?: 1 })
+            TimeButton("Be there at", at, { at = it })
+            Row {
+                TextButton(onClick = done) { Text("Cancel") }
+                Spacer(Modifier.weight(1f))
+                Button(
+                    onClick = {
+                        val m = at ?: return@Button
+                        account.edit { it.addUsual(UsualTime(place.key, day, m)) }
+                        done()
+                    },
+                    enabled = at != null,
+                ) { Text("Add") }
+            }
         }
     }
 }
@@ -363,12 +390,23 @@ private fun DayHours(profile: ProfileDoc, account: AccountViewModel) {
 
 @Composable
 private fun Places(profile: ProfileDoc, destinations: List<Destination>, account: AccountViewModel) {
-    Hint("One-tap buttons in the app, on the widget and in the Mac's menu bar.")
+    Hint("One-tap buttons in the app, on the widget and in the Mac's menu bar. Give one a usual time (gym on Tuesdays at 6 pm) and it's planned like a class that day.")
+    val ctx = LocalContext.current
+    val time = { m: Int -> if (hour12(ctx)) hhmm12(m) else hhmm(m) }
+    var timing by rememberSaveable { mutableStateOf<String?>(null) }
     for (p in profile.places) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(p.label, modifier = Modifier.weight(1f))
+            TextButton(onClick = { timing = if (timing == p.key) null else p.key }) { Text("Usual time") }
             TextButton(onClick = { account.edit { it.removePlace(p.key) } }) { Text("Remove") }
         }
+        for (u in profile.usual.filter { it.place == p.key }) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${dayName(u.day).take(3)} ${time(u.atMin)}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = { account.edit { it.removeUsual(u) } }) { Text("Remove") }
+            }
+        }
+        if (timing == p.key) UsualTimeEditor(p, account) { timing = null }
     }
     if (profile.places.size >= 12) return
     var label by rememberSaveable { mutableStateOf("") }

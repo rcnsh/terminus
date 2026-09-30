@@ -119,7 +119,6 @@ struct NextAnswer: Decodable {
     var leaveLate: Bool { card?.late ?? false }
     var goNowLine: String? { card?.goNow }
     var crowdText: String? { card?.crowd }
-    var qualityText: String? { card?.quality }
     /// Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP".
     func leaveText(now: Date = Date()) -> String? {
         guard let head = leaveHeadline(now: now) else { return nil }

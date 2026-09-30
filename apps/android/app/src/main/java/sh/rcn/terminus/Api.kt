@@ -469,23 +469,11 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return request("GET", "/me/next" + query(q))
     }
 
-    suspend fun nearby(lat: Double?, lon: Double?): List<NearbyStop> {
+    suspend fun nearby(lat: Double?, lon: Double?): List<NearbyStop> = parseNearby(nearbyJson(lat, lon))
+
+    suspend fun nearbyJson(lat: Double?, lon: Double?): JSONObject {
         val q = if (lat != null && lon != null) listOf("lat=${coord(lat)}", "lon=${coord(lon)}") else emptyList()
-        val stops = request("GET", "/me/nearby" + query(q)).getJSONArray("stops")
-        return (0 until stops.length()).map { i ->
-            val s = stops.getJSONObject(i)
-            val board = s.getJSONArray("board")
-            NearbyStop(
-                code = s.getJSONObject("stop").getString("code"),
-                name = s.getJSONObject("stop").getString("name"),
-                walkS = s.optInt("walkS"),
-                available = s.optBoolean("available", true),
-                board = (0 until board.length()).map { j ->
-                    val r = board.getJSONObject(j)
-                    BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"))
-                },
-            )
-        }
+        return request("GET", "/me/nearby" + query(q))
     }
 
     suspend fun destinations(): List<Destination> {
@@ -494,11 +482,25 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /me/next. */
-    suspend fun signal(kind: String, trip: String?, lat: Double? = null, lon: Double? = null): JSONObject {
+    suspend fun signal(kind: String, trip: String?, lat: Double? = null, lon: Double? = null, speed: Double? = null, acc: Double? = null): JSONObject {
         val body = JSONObject().put("kind", kind)
         trip?.let { body.put("trip", it) }
         if (lat != null && lon != null) body.put("lat", coord(lat).toDouble()).put("lon", coord(lon).toDouble())
+        // What the server needs to tell a bus from a walk (detect.ts), rounded.
+        speed?.let { body.put("speed", Math.round(it * 10) / 10.0) }
+        acc?.let { body.put("acc", Math.round(it).toDouble()) }
         return request("POST", "/me/signal" + if (hour12) "?h12=1" else "", body)
+    }
+
+    /** A one-off trip later today (phase 8.3): planned like a class. Answers with the new /me/next. */
+    suspend fun once(target: Target, atMin: Int): JSONObject {
+        val body = JSONObject().put("atMin", atMin)
+        when (target) {
+            is Target.SavedPlace -> body.put("place", target.key)
+            is Target.Code -> body.put("to", target.code).put("label", target.label)
+            Target.Plan -> {}
+        }
+        return request("POST", "/me/once" + if (hour12) "?h12=1" else "", body)
     }
 
     /** This phone's Firebase token, so the server can say when the card changes. */
@@ -709,3 +711,22 @@ fun isNewer(latest: String, current: String): Boolean {
 }
 
 fun JSONObject.optStringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else optString(key)
+
+/** /me/nearby's stops, nearest first. */
+fun parseNearby(json: JSONObject): List<NearbyStop> {
+    val stops = json.getJSONArray("stops")
+    return (0 until stops.length()).map { i ->
+        val s = stops.getJSONObject(i)
+        val board = s.getJSONArray("board")
+        NearbyStop(
+            code = s.getJSONObject("stop").getString("code"),
+            name = s.getJSONObject("stop").getString("name"),
+            walkS = s.optInt("walkS"),
+            available = s.optBoolean("available", true),
+            board = (0 until board.length()).map { j ->
+                val r = board.getJSONObject(j)
+                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"))
+            },
+        )
+    }
+}

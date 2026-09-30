@@ -24,7 +24,7 @@ import { shortStop } from './format.ts';
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
 
 /** What a client can send to /me/signal. */
-export const SIGNALS = ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset'] as const;
+export const SIGNALS = ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'undetected', 'away', 'back'] as const;
 export type SignalKind = (typeof SIGNALS)[number];
 
 /** The bus you said you're on, as the answer had it when you said so. */
@@ -48,6 +48,9 @@ export interface Boarded {
   plate?: string;
   /** No answer to the question was noted for this trip (outcomes.ts). */
   noted?: boolean;
+  /** ISO: when the bus left, estimated from the fix that noticed you on it
+   *  (detect.ts). Only for measuring the ride (ridetimes.ts). */
+  departed?: string;
 }
 
 /**
@@ -84,8 +87,18 @@ export function rideOf(b: Boarded): Ride | null {
 
 /** The latest signal about one trip today. */
 export interface TripRecord {
-  kind: Exclude<SignalKind, 'location' | 'reset'> | 'waiting';
+  /** 'undetected': someone said detection got this trip wrong; the clock
+   *  and the taps decide it from then on (detect.ts). */
+  kind: Exclude<SignalKind, 'location' | 'reset' | 'away' | 'back'> | 'waiting';
   at: number;
+  /** Worked out from the phone's location, not tapped (phase 8.1). */
+  detected?: boolean;
+  /** Detection leaves this trip alone: its arrival was said to be wrong. */
+  noDetect?: boolean;
+  /** A detected miss at the boarding stop, rather than at home. */
+  atStop?: boolean;
+  /** Skipped by "Not on campus today" (phase 8.3); "Back on campus" undoes all of them. */
+  away?: boolean;
   /** The trip's name, for "Undo: going to CS2030". */
   label?: string;
   boarded?: Boarded;
@@ -101,9 +114,21 @@ export interface DayRecord {
    *  and frozen once it left, so "On the 9:41 D2?" is still about that bus
    *  after the answer has moved on to the next one. */
   plans?: Record<string, Boarded>;
+  /** When the phone last sent a location during a trip (epoch ms, kept to the
+   *  minute): while it's recent, the trip is being followed and nobody is
+   *  asked what happened (card.ts). Never where. */
+  followed?: number;
   /** When the object was last asked to wake (the card's nextChangeAt, epoch
    *  ms), so the Worker only asks again when that changes. Push only. */
   watch?: number;
+}
+
+/** A trip is being followed by location while its last fix is this recent (fixes come every 20 s). */
+export const FOLLOWED_MS = 90_000;
+
+/** Whether the phone is following today's trip by location right now. */
+export function isFollowed(day: DayRecord | null, nowMs: number): boolean {
+  return day?.followed !== undefined && nowMs - day.followed < FOLLOWED_MS && nowMs >= day.followed - 60_000;
 }
 
 /** Heads-up window: the trip is "due" this long before its leave-by. */
@@ -127,15 +152,23 @@ export function endOfDayMs(nowMs: number): number {
   return nowMs - (sgt(nowMs).minutes * 60_000 + (nowMs % 60_000)) + 86_400_000;
 }
 
+/** The trip's record as the planner reads it: "detection was wrong" is no record at all. */
+export function signalOf(day: DayRecord | null, key: string): TripRecord | undefined {
+  const r = day?.trips[key];
+  return r?.kind === 'undetected' ? undefined : r;
+}
+
 /** Keys reached or skipped today, for the planner. */
-export function dayState(day: DayRecord | null): { skipped: Set<string>; done: Set<string> } {
+export function dayState(day: DayRecord | null): { skipped: Set<string>; done: Set<string>; away: boolean } {
   const skipped = new Set<string>();
   const done = new Set<string>();
+  let away = false;
   for (const [k, r] of Object.entries(day?.trips ?? {})) {
     if (r.kind === 'skipped') skipped.add(k);
     if (r.kind === 'arrived') done.add(k);
+    if (r.away) away = true;
   }
-  return { skipped, done };
+  return { skipped, done, away };
 }
 
 /**
@@ -179,7 +212,7 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
     const res = await s.fetch(`https://trip/day?date=${sgtDate(nowMs)}`);
     if (!res.ok) return null;
     const day = (await res.json()) as DayRecord | null;
-    return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || day.watch) ? day : null;
+    return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || day.watch || day.followed) ? day : null;
   } catch (err) {
     // The answer works without trip state; a failure only loses the phase.
     console.error('trip state unavailable', err instanceof Error ? err.name : typeof err);
@@ -214,6 +247,19 @@ export async function saveSignal(env: Env, userId: string, key: string, rec: Tri
     body: JSON.stringify({ date: sgtDate(nowMs), key, rec, deleteAt: endOfDayMs(nowMs) }),
   });
   if (!res.ok) throw new Error(`trip signal failed: ${res.status}`);
+  return (await res.json()) as DayRecord;
+}
+
+/** Notes that a location just came in for today's trip (see DayRecord.followed). */
+export async function markFollowed(env: Env, userId: string, nowMs: number): Promise<DayRecord | null> {
+  const s = stub(env, userId);
+  if (!s) return null;
+  const res = await s.fetch('https://trip/followed', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ date: sgtDate(nowMs), at: nowMs, deleteAt: endOfDayMs(nowMs) }),
+  });
+  if (!res.ok) throw new Error(`trip followed failed: ${res.status}`);
   return (await res.json()) as DayRecord;
 }
 

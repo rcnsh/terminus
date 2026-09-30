@@ -142,6 +142,10 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         }
         // The rest of today under the planned answer.
         if (!state.showNearby && state.target == Target.Plan) state.day?.let { DayTimeline(it) }
+        // Somewhere else: going there later today, planned like a class (phase 8.3).
+        if (!state.showNearby && state.target != Target.Plan && state.paired) {
+            TimeButton("Go later today at…", null, vm::goLater, Modifier.padding(top = 8.dp))
+        }
 
         val footer = listOfNotNull(
             state.error,
@@ -185,6 +189,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
             "During each trip, from time to go until you're there, keeps the next bus and a countdown in your notifications and the widget up to date. It checks for new times every 30 seconds then, which uses more battery.",
             state.liveUpdates, vm::setLiveUpdates, openSettings,
         )
+        DetectToggle(state.detectTrips, vm::setDetectTrips, openSettings)
         if ((state.leaveAlerts || state.liveUpdates) && !exact) {
             Text(
                 "\"Alarms & reminders\" is off for terminus, so the heads-up can come a few minutes late, and the live notification may wait for the next update to start.",
@@ -240,6 +245,60 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
     }
     if (refused && !on) {
         Text("Notifications are off for terminus.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = openSettings) { Text("Open settings") }
+    }
+}
+
+/**
+ * "Notice when I board" (phase 8.1): the live notification follows the trip by
+ * location. Needs notifications and precise location, asked for on the way to on.
+ */
+@Composable
+private fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit) {
+    val ctx = LocalContext.current
+    var refused by rememberSaveable { mutableStateOf(false) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        val ok = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true && LeaveAlerts.canNotify(ctx)
+        refused = !ok
+        if (ok) onChange(true)
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = on,
+                role = Role.Switch,
+                onValueChange = { want ->
+                    when {
+                        !want -> onChange(false)
+                        Locator.hasPrecise(ctx) && LeaveAlerts.canNotify(ctx) -> onChange(true)
+                        else -> ask.launch(
+                            listOfNotNull(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                                if (android.os.Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null,
+                            ).toTypedArray(),
+                        )
+                    }
+                },
+            )
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Notice when I board")
+            Text(
+                "During a trip, the live notification uses your location to tell when you're on the bus, missed it, or are there, so you don't have to tap. " +
+                    "It starts when you open terminus or tap its notification or widget during the trip. Only what it means is kept, never where you were.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = on, onCheckedChange = null)
+    }
+    if (refused && !on) {
+        Text("terminus needs precise location and notifications for this.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         TextButton(onClick = openSettings) { Text("Open settings") }
     }
 }

@@ -13,7 +13,7 @@ export type { Timing };
 import { isoSeconds } from './format.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { PACES, type Pace } from './walk.ts';
-import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, termEnded, termName } from './calendar.ts';
+import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, sgtDate, termEnded, termName } from './calendar.ts';
 
 export interface Place {
   key: string;
@@ -21,6 +21,23 @@ export interface Place {
   /** Destination stop code. */
   to: string;
 }
+
+export interface UsualTime {
+  /** The saved place's key. */
+  place: string;
+  day: number; // 0=Sun..6=Sat
+  atMin: number; // minutes past midnight SGT, when to be there
+}
+
+export interface OnceTrip {
+  date: string; // YYYY-MM-DD, Singapore
+  arriveByMin: number;
+  to: string;
+  label: string;
+}
+
+/** A usual time or a one-off counts as an hour there, for what comes after it. */
+export const PLACE_STAY_MIN = 60;
 
 /**
  * Home is stops only. Exact coordinates of where someone lives are more than
@@ -53,6 +70,15 @@ export interface Profile {
   /** Entered by hand. Survives a re-import. */
   manual: ImportedTrip[];
   places: Place[];
+  /** Saved places with a usual time (phase 8.3): "Gym, Tuesdays 18:00". Each
+   *  is a trip on that day like a class, arriving by `atMin`. Kept apart from
+   *  `places`, keyed by the place's key, so an older app rewriting the places
+   *  can't drop them; one whose place is gone is ignored. */
+  usual: UsualTime[];
+  /** One-off trips (phase 8.3): "Science library at 14:00 today". A trip on
+   *  its date only, like a class. Past dates are dropped when the profile is
+   *  saved. */
+  once: OnceTrip[];
   /** The NUSMods share link, kept so next semester is one click. */
   share: string | null;
   /** The semester `trips` were imported for. Null until something is imported. */
@@ -71,11 +97,13 @@ export const DEFAULT_PROFILE: Profile = {
   trips: [],
   manual: [],
   places: [],
+  usual: [],
+  once: [],
   share: null,
   term: null,
 };
 
-export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24 } as const;
+export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24, usual: 30, once: 10 } as const;
 
 type Result = { ok: true; profile: Profile } | { ok: false; error: string };
 
@@ -185,6 +213,33 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean, is
     }
   }
 
+  if (raw.usual !== undefined) {
+    const list = raw.usual;
+    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.usual) return { ok: false, error: `usual must be a list of up to ${PROFILE_LIMITS.usual}` };
+    for (const [i, u] of list.entries()) {
+      const bad = (why: string): Result => ({ ok: false, error: `usual[${i}]: ${why}` });
+      if (!isObj(u) || typeof u.place !== 'string' || !/^[a-z0-9-]{1,24}$/.test(u.place)) return bad('place must be a saved place key');
+      if (!isInt(u.day, 0, 6)) return bad('day must be 0 (Sun) to 6 (Sat)');
+      if (!isInt(u.atMin, 0, 1439)) return bad('atMin must be minutes past midnight');
+      p.usual.push({ place: u.place, day: u.day, atMin: u.atMin });
+    }
+    p.usual.sort((a, b) => a.day - b.day || a.atMin - b.atMin);
+  }
+
+  if (raw.once !== undefined) {
+    const list = raw.once;
+    if (!Array.isArray(list) || list.length > PROFILE_LIMITS.once) return { ok: false, error: `once must be a list of up to ${PROFILE_LIMITS.once}` };
+    for (const [i, o] of list.entries()) {
+      const bad = (why: string): Result => ({ ok: false, error: `once[${i}]: ${why}` });
+      if (!isObj(o) || typeof o.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.date)) return bad('date must be YYYY-MM-DD');
+      if (!isInt(o.arriveByMin, 0, 1439)) return bad('arriveByMin must be minutes past midnight');
+      if (typeof o.to !== 'string' || !isPlace(o.to)) return bad('to must be a known stop or place code');
+      if (!str(o.label, PROFILE_LIMITS.label)) return bad(`label must be 1-${PROFILE_LIMITS.label} characters`);
+      p.once.push({ date: o.date, arriveByMin: o.arriveByMin, to: o.to, label: o.label.trim() });
+    }
+    p.once.sort((a, b) => a.date.localeCompare(b.date) || a.arriveByMin - b.arriveByMin);
+  }
+
   if (raw.term !== undefined && raw.term !== null) {
     const t = raw.term;
     if (!isObj(t) || typeof t.acadYear !== 'string' || !/^\d{4}\/\d{4}$/.test(t.acadYear) || !isInt(t.semester, 1, 4)) {
@@ -226,9 +281,20 @@ function parseWeeks(v: unknown): LessonWeeks | undefined | false {
  */
 export function classesOn(profile: Profile, atMs: number): ImportedTrip[] {
   const day = sgt(atMs).day;
+  const date = sgtDate(atMs);
+  // Places at their usual time and one-off trips are trips like classes: an
+  // hour there, then whatever comes next.
+  const stay = (arriveByMin: number) => Math.min(1440, arriveByMin + PLACE_STAY_MIN);
+  const usual = (profile.usual ?? []).flatMap((u) => {
+    const pl = u.day === day ? profile.places.find((p) => p.key === u.place) : undefined;
+    return pl ? [{ day, arriveByMin: u.atMin, endMin: stay(u.atMin), to: pl.to, label: pl.label, venue: '' }] : [];
+  });
+  const once = (profile.once ?? []).filter((o) => o.date === date).map((o) => ({ day, arriveByMin: o.arriveByMin, endMin: stay(o.arriveByMin), to: o.to, label: o.label, venue: '' }));
   return [
     ...profile.trips.filter((x) => x.day === day && importedClassRuns(x.weeks, profile.term, atMs)),
     ...profile.manual.filter((x) => x.day === day),
+    ...usual,
+    ...once,
   ].sort((a, b) => a.arriveByMin - b.arriveByMin);
 }
 

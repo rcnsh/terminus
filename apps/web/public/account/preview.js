@@ -62,7 +62,8 @@ function actions(a) {
     ...list.map((x, i) =>
       el('button', {
         type: 'button',
-        class: `btn small ${i === 0 && x.id !== 'skipped' && x.id !== 'reset' ? 'accent' : 'ghost'}`,
+        // "Not right?" is a quiet correction, a link rather than a button.
+        class: x.id === 'undetected' ? 'linkish' : `btn small ${i === 0 && x.id !== 'skipped' && x.id !== 'reset' ? 'accent' : 'ghost'}`,
         textContent: x.label,
         onclick: async (e) => {
           e.target.disabled = true;

@@ -81,7 +81,7 @@ export function indexGraph(graph: Graph): GraphIndex {
  */
 /** Riding, plus the walk back across the road when the bus stops on the far side. */
 export function legRideS(leg: Leg): number {
-  return leg.hops * RIDE.secondsPerHop + (leg.crossS ?? 0);
+  return (leg.rideS ?? leg.hops * RIDE.secondsPerHop) + (leg.crossS ?? 0);
 }
 
 export function reach(idx: GraphIndex, svc: string, from: string, to: string): { hops: number } | null {
@@ -187,12 +187,14 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
       }
       // Where to get off: the stop that gets you there soonest, crossing included.
       let best: { hops: number; crossS: number; code: string } | null = null;
-      const cost = (b: { hops: number; crossS: number }) => b.hops * RIDE.secondsPerHop + b.crossS;
+      // Seconds a stop on this service: measured when there are enough rides (ridetimes.ts).
+      const perHop = input.hopS?.(svc) ?? RIDE.secondsPerHop;
+      const cost = (b: { hops: number; crossS: number }) => b.hops * perHop + b.crossS;
       for (const t of targets) {
         const r = reach(idx, svc, stop.code, t.code);
         if (r && (!best || cost({ hops: r.hops, crossS: t.crossS }) < cost(best))) best = { hops: r.hops, crossS: t.crossS, code: t.code };
       }
-      if (best) legs.push({ svc, hops: best.hops, ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}) });
+      if (best) legs.push({ svc, hops: best.hops, ...(perHop !== RIDE.secondsPerHop ? { rideS: Math.round(best.hops * perHop) } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}) });
     }
     // Starting from home or a room without coordinates: that walk comes first.
     const walkS = input.lat != null ? Math.round(foot / speed) : (input.originWalkS ?? 0);
