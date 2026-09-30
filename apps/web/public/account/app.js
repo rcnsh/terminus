@@ -679,6 +679,16 @@ $('#delete').addEventListener('click', async () => {
 
 /* ---------- start ---------- */
 
+/** Where to go after signing in: only the web app, never an arbitrary URL. */
+const NEXT = new URLSearchParams(location.search).get('next') === '/app/' ? '/app/' : null;
+
+/** A NUSMods link shared to the installed web app (manifest share_target). */
+function sharedLink() {
+  const q = new URLSearchParams(location.search);
+  const text = [q.get('url'), q.get('text'), q.get('title')].filter(Boolean).join(' ');
+  return text.match(/https:\/\/nusmods\.com\/timetable\/\S+/)?.[0] ?? null;
+}
+
 async function start() {
   let me;
   try {
@@ -715,10 +725,23 @@ async function start() {
     if (profile.share) $('#share').value = profile.share;
   }
 
+  // Signed in from the web app: back to it (after first-time setup, above).
+  if (NEXT && !sharedLink()) {
+    location.replace(NEXT);
+    return;
+  }
+
   renderClasses();
   renderHome();
   renderPlaces();
   $('#app').hidden = false;
+  const shared = sharedLink();
+  if (shared) {
+    $('#share').value = shared;
+    history.replaceState(null, '', location.pathname);
+    $('#share').scrollIntoView({ block: 'center' });
+    await runImport(shared);
+  }
   wireReport();
   await Promise.all([renderDevices(), renderKeys(), renderPreview(), renderChoices()]);
   setInterval(() => document.visibilityState === 'visible' && renderPreview(), 60_000);

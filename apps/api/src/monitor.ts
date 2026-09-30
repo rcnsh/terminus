@@ -15,6 +15,8 @@ import { autoUpdateVersion, type AutoResult } from './appversion.ts';
 import { calendarThrough } from './calendar.ts';
 import { pruneCrowdSeen } from './crowd.ts';
 import { ACCOUNT_TTL } from './accounts.ts';
+import { pushEnabled } from './push.ts';
+import { sgtDate, watchTrip } from './trip.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -257,6 +259,31 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
   return true;
 }
 
+/** From this hour (Singapore) each day, the cron starts the day's trip watching. */
+export const ARM_FROM_HOUR = 6;
+const ARMED_KEY = 'trips:armed';
+/** Users armed per day at most; more than this and push needs a queue. */
+const ARM_MAX = 2000;
+
+/**
+ * Starts every push user's Trip object watching today's trips, once a day.
+ * A Trip object only wakes (and pushes) after a request asks it to, and a
+ * web app on the Home Screen makes none unless it's opened; the Android app
+ * does from its background refresh. Asked here each morning, it works out
+ * the card, wakes at the next change (time to go, the question), and keeps
+ * going for the day; on a day without classes it just stops.
+ */
+export async function armTrips(env: Env, nowMs: number): Promise<number> {
+  if (!env.DB || !env.TRIPS || !pushEnabled(env)) return 0;
+  const today = sgtDate(nowMs);
+  const hour = new Date(nowMs + 8 * 3_600_000).getUTCHours();
+  if (hour < ARM_FROM_HOUR || (await env.KV.get(ARMED_KEY)) === today) return 0;
+  const { results } = await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL LIMIT ?').bind(ARM_MAX).all<{ user_id: string }>();
+  for (const r of results) await watchTrip(env, r.user_id, nowMs, nowMs);
+  await env.KV.put(ARMED_KEY, today, { expirationTtl: 2 * 86_400 });
+  return results.length;
+}
+
 /** Each step on its own: a KV failure must not stop D1 cleanup, and the reverse. */
 export async function runCron(env: Env, nowMs: number): Promise<void> {
   const step = async (name: string, fn: () => Promise<unknown>) => {
@@ -270,4 +297,5 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   await step('calendar', () => checkCalendar(env, nowMs));
   if (env.DB) await step('housekeeping', () => housekeeping(env.DB!, nowMs));
   if (env.DB) await step('crowds', () => pruneCrowdSeen(env.DB!, nowMs));
+  await step('trips', () => armTrips(env, nowMs));
 }

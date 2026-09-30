@@ -239,6 +239,23 @@ test('web sessions expire', async () => {
   assert.equal((await call(env, '/me', { cookie })).status, 401);
 });
 
+test('a web session in use renews itself; a fresh one is left alone', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const fresh = await call(env, '/me', { cookie });
+  assert.equal(fresh.status, 200);
+  assert.equal(fresh.headers.get('set-cookie'), null, 'nothing to renew yet');
+
+  // A week and a bit from the end: the next page load extends it to 30 days again.
+  const soon = Date.now() + 8 * 86_400_000;
+  db.exec(`UPDATE sessions SET expires = ${soon}`);
+  const res = await call(env, '/me', { cookie });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('set-cookie'), /Max-Age=2592000/);
+  const { expires } = await db.prepare('SELECT expires FROM sessions').first();
+  assert.ok(expires > Date.now() + 29 * 86_400_000);
+});
+
 test('logout ends the session', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);

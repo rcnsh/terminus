@@ -15,6 +15,9 @@ export const ACCOUNT_TTL = {
   /** One sign-in email per address per this window. */
   linkCooldownMs: 60_000,
   webSessionMs: 30 * 86_400_000,
+  /** A web session used with less than this left is renewed for another
+   *  webSessionMs, so a browser (or the installed web app) in use stays signed in. */
+  webRenewBelowMs: 23 * 86_400_000,
   pairCodeMs: 10 * 60_000,
   /** Wrong guesses before an emailed sign-in code stops working. */
   codeTries: 5,
@@ -381,6 +384,19 @@ export async function authenticate(
     else await touch;
   }
   return { user: { id: row.id, email: row.email }, kind: row.kind, tokenHash: hash };
+}
+
+/**
+ * Slides a web session's expiry forward when it has less than a few weeks
+ * left. True when it did, and the cookie should be sent again with the new
+ * lifetime. An idle session still ends 30 days after its last use.
+ */
+export async function renewWebSession(db: D1Database, tokenHash: string, nowMs: number): Promise<boolean> {
+  const r = await db
+    .prepare("UPDATE sessions SET expires = ? WHERE token_hash = ? AND kind = 'web' AND expires IS NOT NULL AND expires < ?")
+    .bind(nowMs + ACCOUNT_TTL.webSessionMs, tokenHash, nowMs + ACCOUNT_TTL.webRenewBelowMs)
+    .run();
+  return (r.meta.changes ?? 0) > 0;
 }
 
 export async function endSession(db: D1Database, tokenHash: string): Promise<void> {

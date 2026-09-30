@@ -72,7 +72,9 @@ async function feed(input, init = {}) {
   }
   // Firebase for real, with each send logged (status only; no tokens or keys).
   const res = await realFetch(input, init);
-  if (url.startsWith('https://fcm.googleapis.com/')) console.log(`push: FCM ${res.status}`, init.body ? JSON.parse(init.body).message?.data ?? '' : '');
+  // Chrome's Web Push endpoints are on fcm.googleapis.com too, with an encrypted (binary) body.
+  if (url.startsWith('https://fcm.googleapis.com/') && typeof init?.body === 'string') console.log(`push: FCM ${res.status}`, JSON.parse(init.body).message?.data ?? '');
+  else if (init?.headers && new Headers(init.headers).get('content-encoding') === 'aes128gcm') console.log(`push: web ${res.status} ${new URL(url).host}`);
   return res;
 }
 
@@ -139,7 +141,10 @@ const FCM = await readFile(new URL('../../../.private/fcm-service-account.json',
 let env;
 // The trip engine's Durable Object, in-process; its alarms fire on time below.
 const TRIPS = makeDurableObjects(Trip, () => env);
-env = { ...makeEnv(), PUBLIC_API_OPEN: undefined, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, HEALTH_TOKEN: 'dev', TRIPS, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
+// Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
+const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
+env = { ...makeEnv(), PUBLIC_API_OPEN: undefined, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, HEALTH_TOKEN: 'dev', TRIPS, VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;

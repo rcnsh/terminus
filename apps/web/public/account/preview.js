@@ -122,7 +122,8 @@ export async function renderPreview() {
   show(a);
 }
 
-function show(a) {
+/** Draws an answer (from /me/next, a signal, or the web app's cache) into #preview. */
+export function show(a) {
   const box = $('#preview');
   shown = a;
   const chips = a.places?.length ? el('div', { class: 'chips' }, ...a.places.slice(0, 3).map((p) => el('span', { textContent: p.label })), el('span', { textContent: 'Nearby' })) : null;
