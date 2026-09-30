@@ -1,8 +1,13 @@
 #!/bin/sh
 # Publish a GitHub release for a tagged version, with the APK and the Mac DMG
-# attached and notes from the commits since the previous tag. The release
-# workflow runs it once both files are in build/release/<version>; run again,
-# it re-uploads the files to the existing release.
+# attached, the hand-written highlights in release-notes/<version>.md (if
+# any), and the commits since the previous tag. The release workflow runs it
+# once both files are in build/release/<version>; run again, it re-uploads
+# the files to the existing release.
+#
+# A pre-release version ("2.0.0-beta") is titled "terminus 2.0 beta" and
+# marked a pre-release on GitHub. The site's downloads are unaffected: they
+# follow latest.json in R2.
 #
 #   scripts/github-release.sh 1.3.8          # publish
 #   scripts/github-release.sh 1.3.8 --notes  # print the notes only
@@ -18,47 +23,15 @@ git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG"; e
 
 PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
 NOTES="build/release/$VERSION/notes.md"
-python3 - "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" > "$NOTES" <<'EOF'
-import hashlib, re, subprocess, sys
-version, tag, prev, apk, mac = sys.argv[1:]
-git = lambda *a: subprocess.run(['git', *a], capture_output=True, text=True, check=True).stdout
-date = git('log', '-1', '--format=%cd', '--date=format:%-d %b %Y', tag).strip()
-print(f'Released {date}.\n')
-if not prev:
-    # Everything before the first tag was the pre-beta build-up.
-    print('''The first public beta.
-
-- An Android home-screen widget and app, and a Mac menu bar app
-- Imports your NUSMods timetable, and knows teaching weeks, recess, exams and public holidays
-- When to leave, which bus and from which side of the road, with arrival estimates and crowding
-- Sign in by email, pair devices with a QR code, and export or delete your data at any time
-''')
-else:
-    changes = []
-    for s in git('log', '--no-merges', '--reverse', '--format=%s', f'{prev}..{tag}').splitlines():
-        if re.fullmatch(r'(terminus|nusbus) \d+\.\d+\.\d+', s, re.I):
-            continue  # the version bump itself
-        # The first sentence of each commit subject.
-        changes.append('- ' + re.split(r'(?<=[a-z0-9)`"])\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.'))
-    if changes:
-        print('## Changes\n' + '\n'.join(changes) + '\n')
-sha = lambda p: hashlib.sha256(open(p, 'rb').read()).hexdigest()
-print(f'''## Install
-- **Android** (12 or later): `terminus-{version}.apk`. Open it and allow your browser to install apps when asked.
-- **Mac** (macOS 14 or later, Apple silicon): `terminus-{version}.dmg`. Open it and drag terminus to Applications.
-
-Then sign in at https://terminus.rcn.sh/account and pair the app with the code shown there.
-
-| File | SHA-256 |
-| --- | --- |
-| `terminus-{version}.apk` | `{sha(apk)}` |
-| `terminus-{version}.dmg` | `{sha(mac)}` |''')
-EOF
+python3 scripts/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" > "$NOTES"
 
 if [ "${2:-}" = "--notes" ]; then cat "$NOTES"; exit 0; fi
+TITLE="terminus $(python3 scripts/release-notes.py --title "$VERSION")"
+PRE=""
+case "$VERSION" in *-*) PRE="--prerelease" ;; esac
 if gh release view "$TAG" >/dev/null 2>&1; then
   gh release upload "$TAG" "$APK" "$MAC" --clobber
-  gh release edit "$TAG" --notes-file "$NOTES"
+  gh release edit "$TAG" --title "$TITLE" --notes-file "$NOTES" $PRE
 else
-  gh release create "$TAG" "$APK" "$MAC" --verify-tag --title "terminus $VERSION" --notes-file "$NOTES"
+  gh release create "$TAG" "$APK" "$MAC" --verify-tag --title "$TITLE" --notes-file "$NOTES" $PRE
 fi
