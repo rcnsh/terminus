@@ -360,6 +360,28 @@ test('five trips in a row without an answer and the question stops; turning it b
   assert.ok(again.card.ask, 'asked again');
 });
 
+test('clearing the trip history forgets the outcomes, unmutes the question and drops the suggestion, but keeps choices', async () => {
+  const { env, call, phone, next } = await setup();
+  for (let d = 1; d <= 5; d++) seed(env, `${d}:600:UTOWN`, d, 'none');
+  for (const d of [7, 14, 21]) seed(env, FIRST, d, 'missed');
+  await call('/me/choice', { method: 'POST', token: phone, body: { trip: 'x', pref: 'quiet', choice: 'accept' } });
+  let r = await (await call('/me/choices', { token: phone })).json();
+  assert.equal(r.history, 8);
+  assert.equal(r.askMuted, true);
+
+  const res = await call('/me/history', { method: 'DELETE', token: phone });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, cleared: 8 });
+  r = await (await call('/me/choices', { token: phone })).json();
+  assert.equal(r.history, 0);
+  assert.equal(r.askMuted, false);
+  assert.deepEqual(r.choices.map((c) => [c.trip, c.pref]), [['x', 'quiet']], 'choices stay');
+  const a = await next(phone);
+  assert.equal(a.card.askMuted, false);
+  assert.equal(a.card.suggestion, null);
+  assert.equal((await call('/me/history', { method: 'DELETE' })).status, 401);
+});
+
 test('one answer among the last five keeps the question', async () => {
   const { env, phone, next } = await setup();
   for (let d = 1; d <= 5; d++) seed(env, `${d}:600:UTOWN`, d, d === 3 ? 'boarded' : 'none');

@@ -262,8 +262,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** At most once a day: is there a newer release than this one? */
+    /**
+     * At most once a day: is there a newer release than this one? Not for an
+     * install from Google Play, which updates it itself (and gets a release
+     * only after review, so the website's version would be announced early).
+     */
     fun checkForUpdate(current: String) {
+        if (installedFromPlay(getApplication())) return
         val now = System.currentTimeMillis()
         store.latestVersion?.let { v -> if (isNewer(v, current)) _state.update { it.copy(update = v) } }
         if (now - store.lastUpdateCheck < 24 * 3_600_000L) return
@@ -369,3 +374,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 private const val REMOVED = "This phone was signed out of your account. Sign in again with your email."
+
+/** Installed by the Play Store, rather than the APK from the website. */
+internal fun installedFromPlay(ctx: android.content.Context): Boolean =
+    runCatching { ctx.packageManager.getInstallSourceInfo(ctx.packageName).installingPackageName == "com.android.vending" }.getOrDefault(false)

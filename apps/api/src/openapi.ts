@@ -703,9 +703,21 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               properties: {
                 choices: { type: 'array', items: { type: 'object', properties: { trip: { type: 'string' }, pref: { type: 'string', enum: ['earlier', 'quiet'] }, label: { type: ['string', 'null'] }, since: { type: 'string', format: 'date-time' } } } },
                 askMuted: { type: 'boolean' },
+                history: { type: 'integer', description: 'Trips in the history (the last 35 days), which DELETE /me/history clears.' },
               },
             }),
           },
+        },
+      },
+      '/me/history': {
+        delete: {
+          tags: ['Account'],
+          summary: 'Clear trip history',
+          description:
+            'Forgets what happened on each trip (caught, missed, skipped or no answer; kept 35 days otherwise). Nothing is suggested from the old trips, and a muted question is asked again. Choices already made stay; undo those with POST /me/choice.',
+          operationId: 'meClearHistory',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, cleared: { type: 'integer', description: 'Trips forgotten.' } } }) },
         },
       },
       '/me/ask': {

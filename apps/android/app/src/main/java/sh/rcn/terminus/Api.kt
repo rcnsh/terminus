@@ -470,10 +470,15 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return parseChoices(request("POST", "/me/choice", body))
     }
 
-    /** Classes with a bus earlier or no reminders, and whether the question is muted. */
-    suspend fun choices(): Pair<List<TripChoice>, Boolean> {
+    /** Classes with a bus earlier or no reminders, whether the question is muted, and how many trips are remembered. */
+    suspend fun choices(): Triple<List<TripChoice>, Boolean, Int> {
         val o = request("GET", "/me/choices")
-        return parseChoices(o) to o.optBoolean("askMuted", false)
+        return Triple(parseChoices(o), o.optBoolean("askMuted", false), o.optInt("history", 0))
+    }
+
+    /** "Clear trip history": forgets how each trip went; choices stay. */
+    suspend fun clearHistory() {
+        request("DELETE", "/me/history")
     }
 
     /** "Ask if I caught the bus" back on. */

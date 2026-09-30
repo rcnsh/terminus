@@ -116,8 +116,9 @@ class LiveService : Service() {
         }
 
         /**
-         * Exact, so the service may start from the background: an app holding
-         * USE_EXACT_ALARM is allowed to when its exact alarm fires.
+         * Exact, so the service may start from the background: an app allowed
+         * SCHEDULE_EXACT_ALARM may when its exact alarm fires. Without it the
+         * start can be refused; a push at the trip's next phase starts it then.
          */
         // Exact only when canScheduleExactAlarms() says so; lint can't see the check.
         @android.annotation.SuppressLint("MissingPermission")

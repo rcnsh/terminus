@@ -20,7 +20,6 @@ object Locator {
     private const val MAX_AGE_MS = 10 * 60_000L
 
     fun hasForeground(ctx: Context) = granted(ctx, Manifest.permission.ACCESS_COARSE_LOCATION)
-    fun hasBackground(ctx: Context) = granted(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
 
     /** For the widget and worker: a cached fix only, never a new GPS request. */
     fun lastKnown(ctx: Context, maxAgeMs: Long = MAX_AGE_MS): Location? {

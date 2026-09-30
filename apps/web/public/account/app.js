@@ -549,7 +549,16 @@ async function renderChoices() {
   );
   $('#ask-muted').hidden = !r.askMuted;
   $('#trip-choices').hidden = !r.choices.length && !r.askMuted;
+  $('#trip-history').hidden = !r.history;
+  $('#history-size').textContent = r.history === 1 ? 'terminus remembers how 1 trip went.' : `terminus remembers how ${r.history} trips went.`;
 }
+$('#clear-history').addEventListener('click', async () => {
+  if (!confirm('Forget how your trips went? Choices you made stay.')) return;
+  await api('/me/history', { method: 'DELETE' });
+  toast('Trip history cleared');
+  renderChoices();
+  renderPreview();
+});
 $('#ask-again').addEventListener('click', async () => {
   await api('/me/ask', { method: 'POST' });
   toast("It'll ask again");
