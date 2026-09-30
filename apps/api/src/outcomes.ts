@@ -179,11 +179,6 @@ export async function clearHistory(db: D1Database, userId: string): Promise<numb
   return r.meta.changes ?? 0;
 }
 
-/** Drops rows past the 35 days. */
-export async function pruneOutcomes(db: D1Database, nowMs: number): Promise<void> {
-  await db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * DAY_MS).run();
-}
-
 /** For the account export: the history and the choices, as they're kept. */
 export async function exportOutcomes(db: D1Database, userId: string): Promise<{ tripOutcomes: unknown[]; tripChoices: unknown[] }> {
   const [o, p] = await db.batch([

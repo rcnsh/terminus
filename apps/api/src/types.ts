@@ -257,6 +257,9 @@ export interface Leg {
   svc: string;
   /** Stops ridden from the boarding stop to the destination. */
   hops: number;
+  /** Seconds on the bus, when measured ride times say (ridetimes.ts); else
+   *  hops times RIDE.secondsPerHop. */
+  rideS?: number;
   /** Seconds to walk across from where the bus stops to the destination's
    *  side of the road, when it only calls at the twin. Absent when it's 0. */
   crossS?: number;
@@ -324,4 +327,7 @@ export interface ResolveInput {
   walkSpeedMs?: number;
   /** Set for a class: leave-by then aims at this, not the next bus. */
   arriveBy?: ArriveBy | null;
+  /** Seconds per stop on a service, from measured rides (ridetimes.ts).
+   *  RIDE.secondsPerHop where it has nothing. */
+  hopS?: (svc: string) => number | null;
 }

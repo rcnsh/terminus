@@ -124,6 +124,11 @@
         "id": "skipped",
         "label": "Not going",
         "trip": "4:600:COM3"
+      },
+      {
+        "id": "away",
+        "label": "Not on campus today",
+        "trip": "4:600:COM3"
       }
     ],
     "warning": null,
@@ -132,6 +137,7 @@
     "askMuted": false,
     "remind": true,
     "suggestion": null,
-    "ride": null
+    "ride": null,
+    "detected": false
   }
 }

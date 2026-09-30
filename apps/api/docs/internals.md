@@ -292,6 +292,77 @@ page. It uses the same routes as the account page, with the session cookie.
   action when the first of two was tapped (checked on the emulator). Where
   there are no buttons (iOS), a tap opens the app on the card's buttons.
 
+### Every trip, detected (phase 8)
+
+**Detection (8.1, `detect.ts`).** During a trip the Android app sends
+`POST /me/signal` `{kind: 'location', lat, lon, speed, acc}` about every
+20 seconds, from the live notification's foreground service. Each fix is
+judged and dropped; only what it means is kept on the trip record, marked
+`detected`:
+
+- **On the bus:** at least 4 m/s, within 60 m (plus the fix's accuracy, up to
+  60 m) of the straight lines between the planned service's stops from the
+  boarding stop to the one you get off at, having had a `waiting` record (a
+  fix at the boarding stop) in the last 30 minutes, from two minutes before
+  the bus's departure. The record gets `departed`, the departure estimated
+  from the fix (now, less the distance from the stop at that speed), and the
+  plate of the service's first bus due at the next stop.
+- **Missed:** three minutes after the planned departure, below 1.5 m/s, and
+  still within 80 m of the boarding stop or still in your residence. A miss
+  at the stop (`atStop`) lets the next bus from it be noticed the same way,
+  whichever service it is.
+- **There:** on the bus (tapped, detected or assumed), within 100 m of the
+  stop you get off at, either side of the road; or the answer planned from the
+  fix says you're at the destination.
+
+A tap always wins: detection only changes a trip nobody has answered, or one
+it answered itself, except that it notices the end of a ride someone said they
+were on.
+
+Nobody is asked what detection can tell. Each fix also notes the time on the
+day's record (`followed`, at most once a minute); while the last one is under
+90 seconds old the card has no "On the D2" / "Missed it" / "I'm there" and no
+question, and a silence isn't noted as "no answer". Plans ("Not going", "Not
+on campus today") stay on the app's card. Anything detected has
+`detected: true` and one quiet action, `undetected` ("Not right?", also for
+ten minutes after a detected arrival, which puts you back on the bus), shown
+as a link on the app's card and never on the widget or in a notification. The
+widget shows only status buttons, and notifications never show "Not going".
+When the fixes stop, the buttons and the question come back. A `waiting`
+record (a fix at the stop) is not an answer: after the departure only a
+location at the stop now counts as missed. The trip
+record is then `undetected` (or the ride again, with `noDetect`), which the
+planner reads as no record at all but which stops detection, and the
+"no answer means on it" assumption, for that trip. Analytics counts
+`detected:<kind>` signals separately from taps.
+
+**Measured ride times (8.2, `ridetimes.ts`).** A ride detection saw start and
+end is one row in `ride_times` (migration 0008): service, stops, hops,
+seconds, hour and kind of day, plate. No user, device or location. Rides
+under 30 s or over 300 s a stop are dropped as mistakes. Taps never count:
+they are minutes out either way. Once a day from 04:00 the cron prunes rows
+older than 120 days and writes seconds per stop to KV (`ride:hops`): per
+service with at least 10 rides, and per hour of the day with 10 of its own,
+clamped to 45 to 240 s. `answerFor` reads it (cached ten minutes per isolate)
+and passes `hopS` to the resolver, so a leg's `rideS` is measured where the
+table has the service and `RIDE.secondsPerHop` elsewhere.
+
+**More than class trips (8.3).** Today's trips are `classesOn(profile)`:
+the imported and hand-entered classes, plus two kinds that are planned the
+same way (leave-by, the question, push, detection, "Not going"):
+
+- `profile.usual`: a saved place at a usual time, `{place, day, atMin}`,
+  kept apart from `places` so an older app rewriting the places can't drop it.
+- `profile.once`: a one-off trip on a date, `{date, arriveByMin, to, label}`,
+  added with `POST /me/once` and dropped once its date has passed.
+
+Each counts as an hour there, for what the planner does next. On an idle trip
+the card also offers `away` ("Not on campus today"), which records every trip
+left today as skipped with `away: true` (not as outcomes, so a day away never
+suggests dropping a class); the free card then says so and offers `back`.
+The Android widget's buttons (Timetable, Nearby, and the places you use most,
+counted on the phone) switch the widget in place: `WidgetModes.kt`.
+
 ## How it works
 
 **Direction is resolved by route order, not by distance.** This is the most
@@ -457,7 +528,9 @@ that failed because logging failed would be an absurd way to miss a bus.
   error. It separates a 2-hop ride from a 14-hop ride, which is the case that
   matters; it does not reliably separate 4 hops from 5. `stop.confidence`
   reports which situation you are in — below ~0.6, the answer is a coin flip
-  dressed up as a number. Roadmap step 2 replaces it with measured data.
+  dressed up as a number. Measured ride times (phase 8.2) replace it per
+  service and hour once enough rides have been detected; until then, and for
+  services nobody rides with detection on, it is still the guess.
 - `quality: 'scheduled'` has no timetable behind it. It means "inside operating
   hours, feed gave nothing, here is a headway estimate". It is the weakest rung
   of the ladder and it is labelled as such.

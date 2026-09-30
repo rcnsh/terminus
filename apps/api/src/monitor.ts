@@ -17,6 +17,8 @@ import { pruneCrowdSeen } from './crowd.ts';
 import { ACCOUNT_TTL } from './accounts.ts';
 import { pushEnabled } from './push.ts';
 import { sgtDate, watchTrip } from './trip.ts';
+import { refreshTable } from './ridetimes.ts';
+import { sgt } from './config.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -298,4 +300,6 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   if (env.DB) await step('housekeeping', () => housekeeping(env.DB!, nowMs));
   if (env.DB) await step('crowds', () => pruneCrowdSeen(env.DB!, nowMs));
   await step('trips', () => armTrips(env, nowMs));
+  // Measured ride times (phase 8.2): once a day, early, before the day's trips.
+  if (env.DB && sgt(nowMs).minutes >= 4 * 60) await step('ride times', () => refreshTable(env, nowMs));
 }

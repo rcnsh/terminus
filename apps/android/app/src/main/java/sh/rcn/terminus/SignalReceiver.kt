@@ -47,6 +47,9 @@ class SignalReceiver : BroadcastReceiver() {
                     store.saveAnswer(json, now)
                     store.lastError = null
                     Refresher.scheduleNext(ctx, NextAnswer.parse(json), now)
+                    // A tap on the notification or the widget: the moment Android
+                    // lets the live notification start following the trip.
+                    LiveService.watch(ctx)
                 }
                 .onFailure { store.lastError = "Couldn't send that; try again in the app" }
             redrawWidgets(ctx)

@@ -622,7 +622,14 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             'From the planned bus\'s departure, `card.ask` puts the question ("On the 9:41 D2?") with `boarded` (On it), `missed` and `skipped`; ' +
             'no answer is taken as `boarded` a few minutes later. `boarded` records the bus\'s plate when the feed has one, and the ride then shows ' +
             'its arrival at your stop from the feed. Each answer is kept 35 days as the trip\'s outcome (in the export, deleted with the account): ' +
-            'five trips in a row without one mute the question (`card.askMuted`), and repeated misses or skips produce a `card.suggestion`.',
+            'five trips in a row without one mute the question (`card.askMuted`), and repeated misses or skips produce a `card.suggestion`. ' +
+            'During a trip an app may send a `location` every 20 seconds or so, with `speed` (m/s) and `acc` (metres) when it has them: waiting at the ' +
+            'stop and then moving at bus speed along its road is taken as `boarded`, still at the stop or at home a few minutes after the bus left as ' +
+            '`missed`, and reaching the stop you get off at as `arrived`. While fixes keep coming (the last within 90 s) the card has no buttons ' +
+            'asking what happened and no question. What was detected shows `card.detected` and one quiet action, `undetected` ("Not right?"), ' +
+            'which says detection got it wrong; the trip is then left to the clock and the taps. A tap always wins. ' +
+            'A ride seen from start to end is kept, without who or where, as a measured ride time. `away` ("Not on campus today", offered on an ' +
+            'idle trip) skips every trip left today, not counted as outcomes; `back` ("Back on campus", on the card while away) undoes it.',
           operationId: 'meSignal',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
@@ -630,10 +637,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'object',
               required: ['kind'],
               properties: {
-                kind: { type: 'string', enum: ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset'] },
+                kind: { type: 'string', enum: ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'undetected', 'away', 'back'] },
                 trip: { type: 'string' },
                 lat: { type: 'number' },
                 lon: { type: 'number' },
+                speed: { type: 'number', description: 'Metres per second, with a location.' },
+                acc: { type: 'number', description: 'Accuracy in metres, with a location.' },
               },
             },
             { kind: 'boarded', trip: '4:600:UTOWN' },
@@ -826,6 +835,23 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody({ $ref: '#/components/schemas/Profile' }),
           responses: { '200': ok({ $ref: '#/components/schemas/Profile' }), '400': errorResponse('Invalid field; the message names it.'), '401': errorResponse('No valid session.') },
+        },
+      },
+      '/me/once': {
+        post: {
+          tags: ['Account'],
+          summary: 'Add a one-off trip',
+          description:
+            '"Science library at 14:00 today": `place` (a saved place key) or `to` (a stop, place or room code), `atMin` (minutes past midnight, Singapore time), and optionally `label` ' +
+            'and `date` (today by default, up to a week ahead). Kept in the profile\'s `once` and planned like a class that day, with its leave-by, ' +
+            'question and "Not going". Answers with the new /me/next.',
+          operationId: 'meOnce',
+          security: [{ bearer: [] }, { cookie: [] }],
+          requestBody: jsonBody(
+            { type: 'object', required: ['atMin'], properties: { place: { type: 'string' }, to: { type: 'string' }, atMin: { type: 'integer' }, label: { type: 'string' }, date: { type: 'string', format: 'date' } } },
+            { to: 'CLB', atMin: 840, label: 'Science library' },
+          ),
+          responses: { '200': ok({ type: 'object', description: 'The same as GET /me/next.' }), '400': errorResponse('Unknown place, a time already past, or too many.') },
         },
       },
       '/me/import': {
@@ -1126,6 +1152,26 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 type: 'object',
                 required: ['key', 'label', 'to'],
                 properties: { key: { type: 'string', pattern: '^[a-z0-9-]{1,24}$' }, label: { type: 'string', maxLength: 24 }, to: { type: 'string' } },
+              },
+            },
+            usual: {
+              type: 'array',
+              maxItems: 30,
+              description: 'Saved places with a usual time ("Gym, Tuesdays 18:00"): each is a trip on that day like a class, arriving by `atMin`, then an hour there. One whose place is gone is ignored.',
+              items: {
+                type: 'object',
+                required: ['place', 'day', 'atMin'],
+                properties: { place: { type: 'string', description: 'A saved place key.' }, day: { type: 'integer', minimum: 0, maximum: 6 }, atMin: { type: 'integer', minimum: 0, maximum: 1439 } },
+              },
+            },
+            once: {
+              type: 'array',
+              maxItems: 10,
+              description: 'One-off trips, planned like a class on their date only. Past dates are dropped on save. POST /me/once adds one.',
+              items: {
+                type: 'object',
+                required: ['date', 'arriveByMin', 'to', 'label'],
+                properties: { date: { type: 'string', format: 'date' }, arriveByMin: { type: 'integer', minimum: 0, maximum: 1439 }, to: { type: 'string' }, label: { type: 'string', maxLength: 60 } },
               },
             },
             share: { type: ['string', 'null'], description: 'The NUSMods share link last imported.' },

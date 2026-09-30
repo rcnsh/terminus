@@ -148,7 +148,8 @@ async function notifyFromCard(urgent, fetched) {
   // for Android (149) reports the second button's action when the first of two
   // is tapped, which would record "Missed it" for "On it"; with one button
   // it's right. Everything else is a tap away, in the app.
-  const main = c.ask ? c.ask.actions.find((x) => x.id === 'missed') : (c.actions ?? []).find((x) => x.id !== 'reset' && x.id !== 'skipped');
+  // What happened only: plans ("Not going") and corrections ("Not right?") are made in the app.
+  const main = c.ask ? c.ask.actions.find((x) => x.id === 'missed') : (c.actions ?? []).find((x) => ['boarded', 'missed', 'arrived'].includes(x.id));
   const buttons = main ? [main] : [];
   return self.registration.showNotification(title, {
     body: where ? `${body}\n${where}` : body,

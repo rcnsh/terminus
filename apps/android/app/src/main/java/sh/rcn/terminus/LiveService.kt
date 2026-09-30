@@ -39,6 +39,8 @@ import sh.rcn.terminus.widget.redrawWidgets
 class LiveService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var loop: Job? = null
+    /** Following the trip by location ("Notice when I board"), when a tap started it. */
+    @Volatile private var watch: TripWatch? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -54,15 +56,49 @@ class LiveService : Service() {
             return START_NOT_STICKY
         }
         // Must be in the foreground within seconds of starting, before any fetch.
-        val cached = Store(this).lastAnswer()
-        // The special-use type exists from Android 14; before that the plain call.
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, build(this, cached?.first), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIFICATION_ID, build(this, cached?.first))
-        }
+        val store = Store(this)
+        val cached = store.lastAnswer()
+        val wantWatch = when (intent?.action) {
+            ACTION_UNWATCH -> false
+            ACTION_WATCH -> true
+            else -> watch != null
+        } && store.detectTrips && Locator.hasPrecise(this)
+        if (!wantWatch) stopWatching()
+        // The location type only when a tap started this (the app, the
+        // notification, the widget): from an alarm or a push Android refuses it.
+        val watching = wantWatch && runCatching { foreground(cached?.first, location = true) }.isSuccess
+        if (!watching) foreground(cached?.first, location = false)
+        if (watching && watch == null) watch = TripWatch(this).takeIf { it.start() }
         if (loop?.isActive != true) loop = scope.launch { run() }
         return START_STICKY
+    }
+
+    private fun foreground(answer: NextAnswer?, location: Boolean) {
+        val n = build(this, answer, watching = location)
+        var type = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+        if (location) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        // The special-use type exists from Android 14; before that the plain call.
+        if (type == 0) startForeground(NOTIFICATION_ID, n) else startForeground(NOTIFICATION_ID, n, type)
+    }
+
+    private fun stopWatching() {
+        watch?.stop()
+        watch = null
+    }
+
+    /** Sends the latest fix as a location signal (the server works out the trip from it); false when there's none. */
+    private suspend fun sendFix(store: Store): Boolean {
+        val fix = watch?.fix(System.currentTimeMillis()) ?: return false
+        val token = store.token ?: return false
+        return runCatching { Api(token, fast = true, hour12 = hour12(this)).signal("location", null, fix.lat, fix.lon, fix.speedMs, fix.accM) }
+            .onSuccess { json ->
+                val now = System.currentTimeMillis()
+                store.saveAnswer(json, now)
+                store.lastError = null
+                Refresher.scheduleNext(this, NextAnswer.parse(json), now)
+                redrawWidgets(this)
+            }
+            .isSuccess
     }
 
     private suspend fun run() {
@@ -71,7 +107,7 @@ class LiveService : Service() {
         val power = getSystemService(PowerManager::class.java)
         while (scope.isActive) {
             if (!store.liveUpdates || !store.paired) break
-            Refresher.refresh(this)
+            if (!sendFix(store)) Refresher.refresh(this)
             val answer = store.lastAnswer()?.first
             if (answer == null || answer.mode == "rest" || answer.card?.phase !in TRIP_PHASES) {
                 // Between trips: come back when the next one is due, or the plan changes.
@@ -82,14 +118,17 @@ class LiveService : Service() {
                     ?.let { wakeAt(this, it) }
                 break
             }
-            nm?.notify(NOTIFICATION_ID, build(this, answer))
-            delay(if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS)
+            nm?.notify(NOTIFICATION_ID, build(this, answer, watching = watch != null))
+            // Following by location: every fix counts, screen on or off.
+            delay(if (watch != null) WATCH_MS else if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS)
         }
+        stopWatching()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
+        stopWatching()
         scope.cancel()
         super.onDestroy()
     }
@@ -99,8 +138,12 @@ class LiveService : Service() {
         private const val NOTIFICATION_ID = 2
         private const val SCREEN_ON_MS = 30_000L
         private const val SCREEN_OFF_MS = 120_000L
+        /** A location to the server this often while following a trip. */
+        private const val WATCH_MS = 20_000L
         const val ACTION_STOP = "sh.rcn.terminus.LIVE_STOP"
         const val ACTION_START = "sh.rcn.terminus.LIVE_START"
+        const val ACTION_WATCH = "sh.rcn.terminus.LIVE_WATCH"
+        const val ACTION_UNWATCH = "sh.rcn.terminus.LIVE_UNWATCH"
         /** From "time to go" until you're there. */
         val TRIP_PHASES = setOf("due", "heading", "waiting", "riding", "missed")
 
@@ -108,6 +151,19 @@ class LiveService : Service() {
             val store = Store(ctx)
             if (!store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx)) return
             runCatching { ctx.startForegroundService(Intent(ctx, LiveService::class.java)) }
+        }
+
+        /**
+         * Starts (or upgrades) the live notification to follow the trip by
+         * location. Only from a tap: the app coming to the front, a button on
+         * the notification or the widget. Android lets a foreground service
+         * take the location then, and not from an alarm or a push.
+         */
+        fun watch(ctx: Context) {
+            val store = Store(ctx)
+            if (!store.detectTrips || !store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx) || !Locator.hasPrecise(ctx)) return
+            if (store.lastAnswer()?.first?.card?.phase !in TRIP_PHASES) return
+            runCatching { ctx.startForegroundService(Intent(ctx, LiveService::class.java).setAction(ACTION_WATCH)) }
         }
 
         fun stop(ctx: Context) {
@@ -134,7 +190,7 @@ class LiveService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-        private fun build(ctx: Context, answer: NextAnswer?): Notification {
+        private fun build(ctx: Context, answer: NextAnswer?, watching: Boolean = false): Notification {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             nm?.createNotificationChannel(
                 NotificationChannel(CHANNEL, "Live bus times", NotificationManager.IMPORTANCE_LOW).apply {
@@ -157,7 +213,16 @@ class LiveService : Service() {
                 .setOnlyAlertOnce(true)
                 .setContentIntent(open)
                 .setCategory(Notification.CATEGORY_STATUS)
-                .addAction(Notification.Action.Builder(null, "Turn off", stop).build())
+            b.addAction(Notification.Action.Builder(null, "Turn off", stop).build())
+            // "Notice when I board": on while following, offered while not (a tap is what lets it start).
+            if (Store(ctx).detectTrips && Locator.hasPrecise(ctx)) {
+                val action = if (watching) ACTION_UNWATCH else ACTION_WATCH
+                val pi = PendingIntent.getForegroundService(
+                    ctx, if (watching) 6 else 7, Intent(ctx, LiveService::class.java).setAction(action),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                b.addAction(Notification.Action.Builder(null, if (watching) "Stop following" else "Follow this trip", pi).build())
+            }
             if (answer == null) return b.setContentTitle("terminus").setContentText("Checking…").build()
             // During a trip, a Live Update (Android 16 QPR1, API 36.1): kept at
             // the top of the shade and on the lock screen, with the card's

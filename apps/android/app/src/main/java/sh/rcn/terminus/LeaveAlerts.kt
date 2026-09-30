@@ -74,7 +74,7 @@ object LeaveAlerts {
         val following = store.leaveNotifiedFor != 0L && store.leaveNotifiedFor == classAt && showing(ctx)
         if (card?.remind == false || (answer.why == "class" && card?.phase == "arrived")) {
             // Reminders off for this class, or you're there: nothing more to say.
-            if (following || card?.remind == false) cancel(ctx)
+            if (following || card.remind == false) cancel(ctx)
             return
         }
         if (!store.leaveAlerts || !canNotify(ctx) || answer.why != "class" || classAt == null || now >= classAt || (leaveAt == null && !following)) {
@@ -167,7 +167,7 @@ object LeaveAlerts {
             .setAutoCancel(true)
             .setCategory(android.app.Notification.CATEGORY_REMINDER)
             .setOnlyAlertOnce(!alert)
-            .apply { ask?.actions?.take(3)?.forEachIndexed { i, a -> addAction(signalAction(ctx, i, a)) } }
+            .apply { ask?.actions?.filter { it.id != "skipped" }?.take(2)?.forEachIndexed { i, a -> addAction(signalAction(ctx, i, a)) } }
             // Gone once the class has started: it's no longer true.
             .apply { answer.classAtMs?.let { setTimeoutAfter((it - now).coerceAtLeast(60_000)) } }
             .apply { ride?.let { RideStyle.apply(ctx, this, card, it, now) } }

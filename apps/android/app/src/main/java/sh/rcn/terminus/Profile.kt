@@ -80,8 +80,29 @@ class ProfileDoc(val json: JSONObject) {
     }
 
     fun removePlace(key: String) {
-        val kept = places.filter { it.key != key }
-        json.put("places", JSONArray(kept.map { JSONObject().put("key", it.key).put("label", it.label).put("to", it.to) }))
+        // The JSON objects themselves, so fields this version doesn't know about survive.
+        val a = json.optJSONArray("places") ?: return
+        json.put("places", JSONArray((0 until a.length()).map { a.getJSONObject(it) }.filter { it.optString("key") != key }))
+        val u = json.optJSONArray("usual") ?: return
+        json.put("usual", JSONArray((0 until u.length()).map { u.getJSONObject(it) }.filter { it.optString("place") != key }))
+    }
+
+    /** Saved places at a usual time (phase 8.3): each a trip that day, like a class. */
+    val usual: List<UsualTime>
+        get() {
+            val a = json.optJSONArray("usual") ?: return emptyList()
+            return (0 until a.length()).map { a.getJSONObject(it).let { u -> UsualTime(u.getString("place"), u.getInt("day"), u.getInt("atMin")) } }
+        }
+
+    fun addUsual(u: UsualTime) {
+        if (u in usual) return
+        val list = json.optJSONArray("usual") ?: JSONArray()
+        list.put(JSONObject().put("place", u.place).put("day", u.day).put("atMin", u.atMin))
+        json.put("usual", list)
+    }
+
+    fun removeUsual(u: UsualTime) {
+        json.put("usual", JSONArray(usual.filter { it != u }.map { JSONObject().put("place", it.place).put("day", it.day).put("atMin", it.atMin) }))
     }
 
     private fun trips(field: String): List<Trip> {
@@ -94,6 +115,9 @@ class ProfileDoc(val json: JSONObject) {
 }
 
 data class SavedPlace(val key: String, val label: String, val to: String)
+
+/** A saved place at a usual time: day 0 = Sunday, minutes past midnight, Singapore time. */
+data class UsualTime(val place: String, val day: Int, val atMin: Int)
 
 /** A class or commitment. day: 0 = Sunday. Minutes past midnight, Singapore time. */
 data class Trip(val day: Int, val arriveByMin: Int, val endMin: Int?, val to: String, val label: String, val venue: String) {

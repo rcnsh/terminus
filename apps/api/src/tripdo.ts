@@ -84,6 +84,15 @@ export class Trip {
       return Response.json({ ok: true });
     }
 
+    if (req.method === 'POST' && url.pathname === '/followed') {
+      const body = (await req.json()) as { date: string; at: number; deleteAt: number };
+      const next = today(day, body.date);
+      next.followed = body.at;
+      await this.storage.put('day', next);
+      await this.arm(body.deleteAt);
+      return Response.json(next);
+    }
+
     if (req.method === 'POST' && url.pathname === '/clear') {
       // deleteAll takes the alarm with it.
       await this.storage.deleteAll();

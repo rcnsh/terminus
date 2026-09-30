@@ -87,6 +87,8 @@ object Refresher {
             store.lastError = "Offline"
             armFromCache(ctx, store)
         }
+        // Widgets showing a place or Nearby (phase 8.3) keep counting down too.
+        runCatching { WidgetModes.refreshChosen(ctx) }
         redrawWidgets(ctx)
     }
 

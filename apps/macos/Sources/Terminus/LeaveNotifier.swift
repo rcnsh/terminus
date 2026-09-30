@@ -145,7 +145,8 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func register(_ actions: [CardAction]) {
-        let buttons = actions.prefix(3).map { UNNotificationAction(identifier: $0.id, title: $0.label) }
+        // What happened only: "Not going" is a plan, made in the popover.
+        let buttons = actions.filter { $0.id != "skipped" }.prefix(2).map { UNNotificationAction(identifier: $0.id, title: $0.label) }
         center.setNotificationCategories([UNNotificationCategory(identifier: Self.askCategory, actions: Array(buttons), intentIdentifiers: [])])
     }
 

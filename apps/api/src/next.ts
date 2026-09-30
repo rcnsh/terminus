@@ -32,7 +32,7 @@ import { paceSpeed } from './walk.ts';
 import { coordsFrom } from './http.ts';
 import type { TripView } from './card.ts';
 import { NO_PREFS, type TripPrefs } from './outcomes.ts';
-import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, offStop, phaseFor } from './trip.ts';
+import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, isFollowed, offStop, phaseFor, signalOf } from './trip.ts';
 
 /** `?h12=1`: the client shows 12-hour times. Default 24-hour, as always. */
 export const hour12 = (url: URL) => url.searchParams.get('h12') === '1';
@@ -93,10 +93,10 @@ function youreHome(profile: Profile, nowMs: number, homeStop: string | null, pla
  * headline: a bus you have no reason to take reads like advice. Departures
  * near you are on the Nearby tab.
  */
-function freeAnswer(profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>): MeAnswer {
+function freeAnswer(profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>, away = false): MeAnswer {
   const hadClasses = classesOn(profile, nowMs).length > 0;
-  const empty = !profile.trips.length && !profile.manual.length;
-  const label = empty ? 'No timetable yet' : hadClasses ? 'No more classes today' : 'No classes today';
+  const empty = !profile.trips.length && !profile.manual.length && !profile.usual.length && !profile.once.length;
+  const label = away ? 'Not on campus today' : empty ? 'No timetable yet' : hadClasses ? 'No more classes today' : 'No classes today';
   const detail = empty ? 'Add your timetable in Settings. Buses near you are under Nearby.' : restDetail(profile, nowMs, h12, skipped);
   return { ...base(nowMs, label, detail), quality: 'ended', mode: 'free', dest: null, places };
 }
@@ -182,12 +182,17 @@ function lastBusWarning(graph: Graph, a: MeAnswer, nowMs: number): string | null
   return `Last ${svc} from ${a.leave.stop} in ${Math.max(1, Math.round((ends - nowMs) / 60_000))} min`;
 }
 
-/** A trip skipped a moment ago, offered back as "Undo". */
+/**
+ * A trip skipped a moment ago, offered back as "Undo"; or one taken as
+ * reached from the phone's location, offered back as "Not there yet".
+ */
 function undoOf(day: DayRecord | null, nowMs: number): TripView['undo'] {
   const recent = Object.entries(day?.trips ?? {})
-    .filter(([, r]) => r.kind === 'skipped' && nowMs - r.at < UNDO_MS)
+    .filter(([, r]) => ((r.kind === 'skipped' && !r.away) || (r.kind === 'arrived' && r.detected)) && nowMs - r.at < UNDO_MS)
     .sort(([, a], [, b]) => b.at - a.at)[0];
-  return recent ? { key: recent[0], label: recent[1].label ?? 'it' } : null;
+  if (!recent) return null;
+  const [key, r] = recent;
+  return { key, label: r.label ?? 'it', ...(r.kind === 'arrived' ? { arrived: true } : {}) };
 }
 
 /**
@@ -257,6 +262,7 @@ export async function planned(
   // What the user chose for their trips, and what terminus has to suggest.
   const trip: TripView = {
     ...p.trip,
+    ...(p.trip.key && isFollowed(day, nowMs) ? { followed: true } : {}),
     askMuted: prefs.askMuted,
     remind: !(p.trip.key && prefs.quiet.has(p.trip.key)),
     // Never in the middle of a trip.
@@ -303,7 +309,10 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
 
   const state = dayState(day);
   const plan = planFor(profile, nowMs, state);
-  if (!plan) return idle(freeAnswer(profile, nowMs, places, h12, state.skipped));
+  if (!plan) {
+    const free = freeAnswer(profile, nowMs, places, h12, state.skipped, state.away);
+    return { answer: free, trip: { key: null, phase: 'idle', undo, ...(state.away ? { away: true } : {}) } };
+  }
 
   let dest: Dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from, trip: plan.trip, fromVenue: plan.fromVenue };
   let key = plan.trip ? classKey(plan.trip) : plan.why === 'home' ? `home:${plan.lastEndMin}` : `gap-home:${plan.from}`;
@@ -322,7 +331,7 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     }
   }
 
-  const rec = day?.trips[key];
+  const rec = signalOf(day, key);
   if (rec?.kind === 'boarded' && rec.boarded) {
     const onBus = await riding(rec.boarded);
     if (onBus) return { answer: onBus.answer, trip: { key, phase: 'riding', rec: { ...rec, boarded: onBus.b }, undo } };
@@ -333,6 +342,12 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12, prefs.earlier.has(key));
   const home = dest.why === 'home' || dest.why === 'gap-home';
   const out = withPhase(home ? { ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) } : answer, key);
+  // Still in the day's last class: the way home is the answer, but that trip
+  // hasn't started ("Time to get going" in the middle of a lecture), and
+  // nothing about its bus is assumed or followed until the class ends.
+  if (dest.why === 'home' && plan.lastEndMin !== undefined && sgt(nowMs).minutes < plan.lastEndMin && !out.trip.rec) {
+    return { answer: out.answer, trip: { ...out.trip, phase: 'idle' } };
+  }
 
   // Nobody answered "On the 9:41 D2?" and the bus left a while ago: the plan
   // worked (most people catch the bus they were told to), unless a location
@@ -354,15 +369,20 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     frozen ??
     (l?.svc && l.board ? { svc: l.svc, stop: l.stop ?? '', board: l.board, ...(l.at ? { leave: l.at } : {}), ...(located ? { located: true } : {}), arrive: l.arrive, ...(l.off ? { off: l.off } : {}), ...(l.stopCode ? { stopCode: l.stopCode } : {}), alightCode: l.offCode ?? dest.to } : null);
   if (bus && !frozen && (stored?.board !== bus.board || stored?.svc !== bus.svc) && (located || !stored?.located)) out.trip.planChanged = true;
-  if (!out.trip.rec && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
-    if (out.trip.phase === 'waiting') return { answer, trip: { ...out.trip, phase: 'missed', assumed: true, plan: bus, planChanged: false } };
+  // Someone said detection got this trip wrong: nothing is assumed either.
+  const undetected = day?.trips[key]?.kind === 'undetected';
+  // Having been at the stop is not an answer about the bus.
+  const answered = out.trip.rec !== undefined && out.trip.rec.kind !== 'waiting';
+  if (!answered && !undetected && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
+    // Still at the stop now (this request's location), not just earlier: missed.
+    if (phaseFor(answer, undefined, nowMs, at) === 'waiting') return { answer, trip: { ...out.trip, phase: 'missed', assumed: true, plan: bus, planChanged: false } };
     const onBus = await riding(bus);
     if (onBus) return { answer: onBus.answer, trip: { key, phase: 'riding', undo, assumed: true, plan: onBus.b } };
   }
   return bus ? { ...out, trip: { ...out.trip, plan: bus } } : out;
 
   function withPhase(answer: MeAnswer, tripKey: string): Planned {
-    const r = day?.trips[tripKey];
+    const r = signalOf(day, tripKey);
     return { answer, trip: { key: tripKey, phase: phaseFor(answer, r, nowMs, at), rec: r, undo } };
   }
 
@@ -374,9 +394,4 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     if (arrive !== null && nowMs >= arrive + RIDE_GRACE_MS) return null;
     return { answer: ridingAnswer(nowMs, dest, cur, live !== null, places, h12, profile), b: cur };
   }
-}
-
-/** The answer alone, for callers that don't show a phase. */
-export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile): Promise<MeAnswer> {
-  return (await planned(url, env, ctx, nowMs, deps, profile, null)).answer;
 }

@@ -14,7 +14,8 @@
  *     off-campus lecture; XX9999 is not offered; DOWN1000 fails)
  *
  * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
- * light and dark screenshots of the same moment.
+ * light and dark screenshots of the same moment. POST /__stub/skip?min=N
+ * moves it ahead, to walk through a trip (phase 8: detection on the emulator).
  *
  * Point a debug Android build at it:
  *   ./gradlew installDebug -PapiBase=http://localhost:8787
@@ -38,7 +39,10 @@ const realNow = Date.now.bind(Date);
 // POST /__stub/freeze holds the clock (and so every bus time) still, for
 // screenshots that must match in light and dark; /__stub/thaw lets it run.
 let frozenAt = null;
-const stubNow = () => frozenAt ?? realNow();
+// POST /__stub/skip?min=N moves the clock N minutes ahead (and keeps it
+// there), to walk through a trip without waiting for it.
+let skipMs = 0;
+const stubNow = () => (frozenAt ?? realNow()) + skipMs;
 
 const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
 const servingStop = new Map();
@@ -171,12 +175,23 @@ async function serve(req, res) {
     res.end(JSON.stringify(out, null, 1));
     return;
   }
+  if (req.method === 'GET' && req.url === '/__stub/rides') {
+    // Measured ride times (phase 8.2), as detection recorded them.
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(db._db.prepare('SELECT * FROM ride_times').all(), null, 1));
+    return;
+  }
   if (req.method === 'GET' && req.url === '/__stub/push') {
     // Which devices take push, token masked: for checking registration.
     const rows = db._db.prepare('SELECT name, push_token FROM sessions WHERE push_token IS NOT NULL').all();
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(rows.map((r) => ({ name: r.name, token: `${r.push_token.slice(0, 8)}…` }))));
     return;
+  }
+  if (req.method === 'POST' && req.url.startsWith('/__stub/skip')) {
+    skipMs += Number(new URL(req.url, 'http://x').searchParams.get('min') ?? 0) * 60_000;
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    return res.end(`now ${new Date(stubNow()).toISOString()}\n`);
   }
   if (req.method === 'POST' && (req.url === '/__stub/freeze' || req.url === '/__stub/thaw')) {
     frozenAt = req.url.endsWith('freeze') ? realNow() : null;

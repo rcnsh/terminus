@@ -221,22 +221,74 @@ function renderHome() {
 function renderPlaces() {
   const ul = $('#places');
   ul.replaceChildren();
+  profile.usual ??= [];
   profile.places.forEach((p, i) => {
+    // Usual times (phase 8.3): each one a trip that day, planned like a class.
+    const times = profile.usual.filter((u) => u.place === p.key);
+    const usual = el(
+      'div',
+      { class: 'usual' },
+      ...times.map((u) =>
+        el(
+          'span',
+          { class: 'usual-time' },
+          `${DAYS[u.day]} ${hhmm(u.atMin)}`,
+          el('button', {
+            type: 'button',
+            class: 'remove',
+            textContent: '×',
+            'aria-label': `Remove ${DAYS[u.day]} ${hhmm(u.atMin)}`,
+            onclick: () => {
+              profile.usual = profile.usual.filter((x) => x !== u);
+              renderPlaces();
+              save();
+            },
+          }),
+        ),
+      ),
+    );
+    const day = el('select', { 'aria-label': 'Day' }, ...DAYS.map((d, n) => el('option', { value: String(n), textContent: d, ...(n === 1 ? { selected: true } : {}) })));
+    const at = el('input', { type: 'time', 'aria-label': 'Be there at', required: true });
+    const add = el(
+      'form',
+      {
+        class: 'row usual-form',
+        onsubmit: (e) => {
+          e.preventDefault();
+          const atMin = toMin(at.value);
+          if (atMin === null) return;
+          profile.usual.push({ place: p.key, day: Number(day.value), atMin });
+          renderPlaces();
+          save();
+        },
+      },
+      day,
+      at,
+      el('button', { type: 'submit', class: 'btn small ghost', textContent: 'Add' }),
+    );
+    const more = el('details', { class: 'usual-add' }, el('summary', { textContent: 'Add a usual time' }), add);
     ul.append(
       el(
         'li',
-        {},
-        el('span', {}, el('strong', { textContent: p.label }), el('span', { class: 'meta', textContent: ` → ${stopName(p.to)}` })),
-        el('button', {
-          type: 'button',
-          class: 'remove',
-          textContent: 'Remove',
-          onclick: () => {
-            profile.places.splice(i, 1);
-            renderPlaces();
-            save();
-          },
-        }),
+        { class: 'place' },
+        el(
+          'div',
+          { class: 'place-row' },
+          el('span', {}, el('strong', { textContent: p.label }), el('span', { class: 'meta', textContent: ` → ${stopName(p.to)}` })),
+          el('button', {
+            type: 'button',
+            class: 'remove',
+            textContent: 'Remove',
+            onclick: () => {
+              profile.places.splice(i, 1);
+              profile.usual = profile.usual.filter((u) => u.place !== p.key);
+              renderPlaces();
+              save();
+            },
+          }),
+        ),
+        usual,
+        more,
       ),
     );
   });

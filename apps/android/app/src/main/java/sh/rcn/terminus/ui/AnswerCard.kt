@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -129,7 +130,10 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
     if (actions.isNotEmpty()) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
             actions.forEachIndexed { i, a ->
-                if (i == 0 && a.id != "skipped" && a.id != "reset") {
+                if (a.id == "undetected") {
+                    // "Not right?": detection's conclusions are corrected quietly, not asked about.
+                    TextButton(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
+                } else if (i == 0 && a.id != "skipped" && a.id != "reset") {
                     Button(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
                 } else {
                     OutlinedButton(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
