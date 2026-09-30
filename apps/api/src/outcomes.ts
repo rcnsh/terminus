@@ -163,6 +163,22 @@ export async function tripPrefs(db: D1Database, userId: string, nowMs: number, l
   }
 }
 
+/** How many trips are in the history, for "Clear trip history". */
+export async function historySize(db: D1Database, userId: string): Promise<number> {
+  const row = await db.prepare('SELECT COUNT(*) AS n FROM trip_outcomes WHERE user_id = ?').bind(userId).first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/**
+ * "Clear trip history": forgets every trip's outcome, so nothing is suggested
+ * from them and a muted question is asked again. Choices already made
+ * (trip_prefs) stay; each has its own Undo.
+ */
+export async function clearHistory(db: D1Database, userId: string): Promise<number> {
+  const r = await db.prepare('DELETE FROM trip_outcomes WHERE user_id = ?').bind(userId).run();
+  return r.meta.changes ?? 0;
+}
+
 /** Drops rows past the 35 days. */
 export async function pruneOutcomes(db: D1Database, nowMs: number): Promise<void> {
   await db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * DAY_MS).run();

@@ -107,6 +107,7 @@ internal fun SettingsScreen(
                 Heading("Getting around")
                 PacePicker(profile, account)
                 TripChoices(state, account)
+                TripHistory(state, account)
 
                 Heading("Saved places")
                 Places(profile, state.campus?.destinations.orEmpty(), account)
@@ -142,6 +143,28 @@ private fun TripChoices(state: AccountState, account: AccountViewModel) {
             modifier = Modifier.padding(top = 8.dp),
         )
         OutlinedButton(onClick = account::askAgain, modifier = Modifier.padding(top = 4.dp)) { Text("Ask again") }
+    }
+}
+
+/** How each trip went, kept 35 days for the suggestions; cleared here without touching the rest. */
+@Composable
+private fun TripHistory(state: AccountState, account: AccountViewModel) {
+    if (state.history == 0) return
+    var confirm by remember { mutableStateOf(false) }
+    Text("Trip history", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+    Hint(
+        "terminus remembers how ${if (state.history == 1) "1 trip" else "${state.history} trips"} went, for 35 days, " +
+            "only to notice a class you keep missing or skipping.",
+    )
+    OutlinedButton(onClick = { confirm = true }, modifier = Modifier.padding(top = 4.dp)) { Text("Clear trip history") }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Clear trip history?") },
+            text = { Text("terminus forgets how your trips went. Choices you've made for your classes stay.") },
+            confirmButton = { TextButton(onClick = { confirm = false; account.clearHistory() }) { Text("Clear") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+        )
     }
 }
 

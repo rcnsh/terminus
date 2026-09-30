@@ -42,7 +42,7 @@ import { hour12, planned } from './next.ts';
 import { dayPlan } from './day.ts';
 import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, loadDay, savePlan, saveSignal, watchTrip } from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
-import { NO_PREFS, type PrefKind, type TripPrefs, askAgain, clearOutcome, listPrefs, noteUnanswered, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
+import { NO_PREFS, type PrefKind, type TripPrefs, askAgain, clearHistory, clearOutcome, historySize, listPrefs, noteUnanswered, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, indexGraph } from './resolve.ts';
@@ -517,7 +517,16 @@ const ME_ROUTES: MeRoute[] = [
     run: async ({ nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
       const prefs = await prefsFor(db, session.user.id, profile, nowMs);
-      return json({ choices: await listPrefs(db, session.user.id), askMuted: prefs.askMuted });
+      return json({ choices: await listPrefs(db, session.user.id), askMuted: prefs.askMuted, history: await historySize(db, session.user.id) });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/me/history',
+    run: async ({ db, session }) => {
+      // "Clear trip history": the outcomes go, the choices made from them stay.
+      const cleared = await clearHistory(db, session.user.id);
+      return json({ ok: true, cleared });
     },
   },
   {

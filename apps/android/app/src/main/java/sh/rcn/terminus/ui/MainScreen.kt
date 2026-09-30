@@ -71,6 +71,11 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         blocked = !hasLocation && activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
         vm.load()
     }
+    // "Alarms & reminders" is allowed in system settings; check again on return.
+    var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
+    LaunchedEffect(Unit) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { exact = LeaveAlerts.canBeExact(ctx) }
+    }
     val openSettings = { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))) }
 
     // Keep the answer fresh while the app is on screen; the API's own cache
@@ -112,13 +117,6 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
                     }
                 }
             }
-        } else if (!Locator.hasBackground(ctx)) {
-            Text(
-                "The widget follows your timetable when it refreshes in the background. For it to use your location too, set location to \"Allow all the time\".",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = openSettings) { Text("Open settings") }
         }
 
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -187,6 +185,14 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
             "During each trip, from time to go until you're there, keeps the next bus and a countdown in your notifications and the widget up to date. It checks for new times every 30 seconds then, which uses more battery.",
             state.liveUpdates, vm::setLiveUpdates, openSettings,
         )
+        if ((state.leaveAlerts || state.liveUpdates) && !exact) {
+            Text(
+                "\"Alarms & reminders\" is off for terminus, so the heads-up can come a few minutes late, and the live notification may wait for the next update to start.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) { Text("Allow alarms & reminders") }
+        }
 
         Spacer(Modifier.height(16.dp))
         Search(state, vm)

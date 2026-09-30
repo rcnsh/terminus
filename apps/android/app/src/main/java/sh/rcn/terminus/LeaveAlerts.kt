@@ -49,6 +49,17 @@ object LeaveAlerts {
         android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
             ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
+    /**
+     * "Alarms & reminders" (SCHEDULE_EXACT_ALARM), which the user allows in
+     * system settings. Without it every alarm here is inexact, and Doze may
+     * run it a few minutes late.
+     */
+    fun canBeExact(ctx: Context): Boolean = ctx.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
+
+    /** The system page that allows it, for this app. */
+    fun exactAlarmSettings(ctx: Context): Intent =
+        Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.fromParts("package", ctx.packageName, null))
+
     /** Called with every planned answer, from the app and from the background refresh. */
     fun arm(ctx: Context, answer: NextAnswer, now: Long = System.currentTimeMillis()) {
         val store = Store(ctx)
@@ -175,8 +186,8 @@ object LeaveAlerts {
     private fun setAlarm(ctx: Context, action: String, at: Long) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val pi = alarmIntent(ctx, action)
-        // USE_EXACT_ALARM is granted at install; a phone that still refuses
-        // gets an inexact alarm, which Doze may run a few minutes late.
+        // Without "Alarms & reminders" allowed, an inexact alarm, which Doze
+        // may run a few minutes late.
         if (am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
     }

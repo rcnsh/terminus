@@ -61,8 +61,9 @@ object Refresher {
             redrawWidgets(ctx)
             return
         }
-        // In the background this is a cached fix at best, and only with
-        // "Allow all the time". Without one, the API follows the timetable.
+        // Android gives the background no location (the app doesn't ask for
+        // "Allow all the time"), so this is a fix only while the app is open.
+        // Without one, the API follows the timetable and the trip's state.
         val loc = Locator.lastKnown(ctx)
         try {
             val json = Api(token, fast, hour12(ctx)).nextJson(Target.Plan, loc?.latitude, loc?.longitude)
@@ -190,7 +191,8 @@ class RefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
 class RefreshReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            Refresher.ACTION_REFRESH, Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
+            Refresher.ACTION_REFRESH, Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
+            android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
                 // Boot or update: the live notification comes back if it was on.
                 if (intent.action != Refresher.ACTION_REFRESH) LiveService.start(context)
                 if (Refresher.active(context)) {

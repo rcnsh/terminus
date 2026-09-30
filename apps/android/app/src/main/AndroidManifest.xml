@@ -4,16 +4,16 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <!-- Optional. Only lets the widget use your location when it refreshes
-         in the background; without it the widget follows your timetable. -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- No background location: Play rejects most uses of it. In the
+         background the widget follows the timetable and the trip's state. -->
     <!-- Re-arms the widget refresh after a restart. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- "Time to leave" for class, if turned on in the app. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- The heads-up has to be on time. Granted at install; the app is
-         sideloaded, so Play's limit on this permission doesn't apply. -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- The heads-up on time. Play allows USE_EXACT_ALARM only for alarm
+         clocks and calendars, so this is the one the user allows ("Alarms &
+         reminders"); without it the alarms are inexact, a few minutes late. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- The optional live notification during your day. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -86,6 +86,8 @@
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
                 <action android:name="android.intent.action.LOCALE_CHANGED" />
+                <!-- "Alarms & reminders" allowed: re-arm the alarms as exact ones. -->
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
         <!-- Leave-alert alarms. Only this app's own PendingIntents reach it. -->
