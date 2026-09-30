@@ -147,7 +147,11 @@ object WidgetModes {
         redrawWidgets(ctx)
         if (mode is Mode.To) Store(ctx).noteDestination(mode.dest, now)
         if (mode == Mode.Timetable) {
+            // The plan's own "Updating…", as a tap on the widget shows: tapping
+            // Timetable while it's already showing must visibly do something.
             updateAppWidgetState(ctx, id) { it.remove(MODE_ERROR) }
+            Store(ctx).lastError = UPDATING
+            redrawWidgets(ctx)
             Refresher.refresh(ctx, fast = true)
             return
         }
