@@ -89,5 +89,10 @@ class AnswerTest {
         assertTrue(isNewer("1.0.10", "1.0.9"))
         assertFalse(isNewer("1.3.5", "1.3.5"))
         assertFalse(isNewer("1.2", "1.10"))
+        assertTrue(isNewer("2.0.0-beta", "1.3.10"))
+        assertTrue(isNewer("2.0.0", "2.0.0-beta"))
+        assertTrue(isNewer("2.0.0-beta.2", "2.0.0-beta"))
+        assertFalse(isNewer("2.0.0-beta", "2.0.0"))
+        assertFalse(isNewer("2.0.0-beta", "2.0.0-beta"))
     }
 }

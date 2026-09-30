@@ -379,15 +379,133 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       '/auth/login': {
         post: {
           tags: ['Account'],
-          summary: 'Email a sign-in link',
+          summary: 'Email a sign-in code and link',
           description:
-            'Sends a sign-in link to an invited address. The reply is the same whether or not the address is invited. ' +
-            'One link per address per minute.',
+            'Emails a 6-character sign-in code and a sign-in link to the address. The reply is the same whether or not the address is blocked or has an account. ' +
+            'One email per address per minute. Either the code (`/auth/code`) or the link signs in, once, within 15 minutes.',
           operationId: 'login',
           requestBody: jsonBody({ type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } }, { email: 'you@u.nus.edu' }),
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, message: { type: 'string' } } }),
             '400': errorResponse('Not an email address.'),
+            '429': errorResponse('Too many attempts from this IP.'),
+          },
+        },
+      },
+      '/auth/anon': {
+        post: {
+          tags: ['Account'],
+          summary: 'Start without an account',
+          description:
+            "An app's first launch: creates an account with no email and returns a device token for it, so every `/me` route works " +
+            'straight away. Add an email later with `/auth/app/start`. Deleted after 60 days unused.',
+          operationId: 'anon',
+          requestBody: jsonBody(
+            { type: 'object', properties: { name: { type: 'string', maxLength: 40 }, platform: { type: 'string', enum: ['android', 'mac', 'ios'] } } },
+            { name: 'Pixel 8', platform: 'android' },
+          ),
+          responses: {
+            '201': ok({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
+            '429': errorResponse('Too many new accounts, from this IP or overall.'),
+          },
+        },
+      },
+      '/auth/app/start': {
+        post: {
+          tags: ['Account'],
+          summary: 'Sign in an app, approved from the email',
+          description:
+            'Emails a code to type into the app, and a link to approve it from another device by picking the number the app shows (returned here). ' +
+            'Send the anonymous token (if the app has one) as `Authorization: Bearer` to keep its setup. Then poll `/auth/app/poll`. ' +
+            'One email per address per minute; a request lasts 15 minutes.',
+          operationId: 'appStart',
+          requestBody: jsonBody(
+            { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' }, name: { type: 'string', maxLength: 40 } } },
+            { email: 'you@u.nus.edu', name: 'MacBook Air' },
+          ),
+          responses: {
+            '201': ok({
+              type: 'object',
+              properties: { request: { type: 'string' }, poll: { type: 'string' }, match: { type: 'integer', example: 47 }, expires: { type: 'string', format: 'date-time' } },
+            }),
+            '400': errorResponse('Not an email address.'),
+            '409': errorResponse('This device is already signed in.'),
+            '429': errorResponse('An email went to this address in the last minute, or too many attempts.'),
+          },
+        },
+      },
+      '/auth/app/poll': {
+        post: {
+          tags: ['Account'],
+          summary: 'Wait for the approval',
+          description:
+            'Every 3 seconds while the app shows the number. `approved` comes once, with the token; after that the request is spent. ' +
+            '`outcome` says what happened to the accounts; `choose` means both this device and the account have a setup, and the app should ask which to keep and call `/auth/app/merge`.',
+          operationId: 'appPoll',
+          requestBody: jsonBody({ type: 'object', required: ['request', 'poll'], properties: { request: { type: 'string' }, poll: { type: 'string' } } }),
+          responses: {
+            '200': ok({
+              type: 'object',
+              required: ['status'],
+              properties: {
+                status: { type: 'string', enum: ['pending', 'approved', 'denied', 'expired'] },
+                token: { type: 'string' },
+                email: { type: 'string' },
+                outcome: { type: 'string', enum: ['created', 'added-email', 'signed-in', 'moved-setup', 'choose'] },
+              },
+            }),
+          },
+        },
+      },
+      '/auth/app/code': {
+        post: {
+          tags: ['Account'],
+          summary: 'Confirm with the code from the email',
+          description:
+            'The 6-character code from the `/auth/app/start` email, typed into the app. Right, it answers like an approved poll, with the token. ' +
+            'Five wrong codes end the request. The link in the same email (choosing the number) is the alternative.',
+          operationId: 'appCode',
+          requestBody: jsonBody(
+            { type: 'object', required: ['request', 'poll', 'code'], properties: { request: { type: 'string' }, poll: { type: 'string' }, code: { type: 'string' } } },
+          ),
+          responses: {
+            '200': ok({ type: 'object', properties: { status: { type: 'string', enum: ['approved'] }, token: { type: 'string' }, email: { type: 'string' }, outcome: { type: 'string' } } }),
+            '400': errorResponse('Wrong code (`status: pending`), too many wrong codes (`denied`), or an old request (`expired`).'),
+          },
+        },
+      },
+      '/auth/app/merge': {
+        post: {
+          tags: ['Account'],
+          summary: 'Keep one setup after signing in',
+          description:
+            "After a `choose` outcome, with the new token as the session: `keep: 'device'` replaces the account's setup with the one " +
+            "from the old anonymous account (`anon`, its token); `keep: 'account'` keeps the account's. The anonymous account is deleted either way.",
+          operationId: 'appMerge',
+          security: [{ bearer: [] }],
+          requestBody: jsonBody(
+            { type: 'object', required: ['anon', 'keep'], properties: { anon: { type: 'string' }, keep: { type: 'string', enum: ['account', 'device'] } } },
+          ),
+          responses: {
+            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, profile: { type: 'object' } } }),
+            '400': errorResponse('`anon` is not an anonymous account.'),
+          },
+        },
+      },
+      '/auth/code': {
+        post: {
+          tags: ['Account'],
+          summary: 'Sign in with an emailed code',
+          description:
+            'Spends the code from the `/auth/login` email and sets the web session cookie. A code dies after 5 wrong guesses; the link in the same email still works.',
+          operationId: 'signInCode',
+          requestBody: jsonBody(
+            { type: 'object', required: ['email', 'code'], properties: { email: { type: 'string', format: 'email' }, code: { type: 'string' } } },
+            { email: 'you@u.nus.edu', code: 'K7QX4M' },
+          ),
+          responses: {
+            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
+            '400': errorResponse('Wrong or expired code.'),
             '429': errorResponse('Too many attempts from this IP.'),
           },
         },

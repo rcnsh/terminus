@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     implementation(libs.work.runtime)
+    implementation(libs.zxing.core)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
 }

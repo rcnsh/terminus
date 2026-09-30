@@ -48,6 +48,8 @@ export interface Env {
   CF_ACCOUNT_ID?: string;
   /** One global ceiling on sign-in emails. */
   RL_MAIL?: RateLimit;
+  /** One global ceiling on new anonymous accounts (apps can't run Turnstile). */
+  RL_ANON?: RateLimit;
   /** Tests only: "1" lets anyone call the bus-answer routes without a key. */
   PUBLIC_API_OPEN?: string;
 }

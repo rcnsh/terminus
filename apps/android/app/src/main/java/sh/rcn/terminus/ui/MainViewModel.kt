@@ -1,7 +1,6 @@
 package sh.rcn.terminus.ui
 
 import android.app.Application
-import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -24,6 +23,7 @@ import sh.rcn.terminus.Target
 import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.isNewer
+import sh.rcn.terminus.deviceName
 import sh.rcn.terminus.widget.redrawWidgets
 import sh.rcn.terminus.widget.Refresher
 
@@ -72,8 +72,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(pairing = true, pairError = null, pendingPair = null) }
         viewModelScope.launch {
             try {
-                val name = "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}".take(40)
-                store.token = Api(null).pair(code.trim(), name)
+                store.token = Api(null).pair(code.trim(), deviceName())
                 _state.update { it.copy(paired = true, pairing = false) }
                 Refresher.schedule(getApplication())
                 load()
@@ -138,6 +137,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissPairLink() = _state.update { it.copy(pendingPair = null) }
+
+    /** A token was just stored (a new account, or a sign-in): start showing answers. */
+    fun signedIn() {
+        _state.update { it.copy(paired = true, pairError = null, answers = emptyMap(), rawAnswers = emptyMap()) }
+        Refresher.schedule(getApplication())
+        load(restart = true)
+    }
+
+    /** The account was deleted on the server: only local state is left to clear. */
+    fun signedOut() {
+        val ctx = getApplication<Application>()
+        store.clear()
+        Refresher.cancel(ctx)
+        _state.value = UiState(paired = false)
+        viewModelScope.launch { redrawWidgets(ctx) }
+    }
 
     /** Local state goes first, so the screen reacts at once even offline. */
     fun unpair() {
@@ -279,4 +294,4 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-private const val REMOVED = "This phone was signed out of your account. Sign in at terminus.rcn.sh/account and pair it again."
+private const val REMOVED = "This phone was signed out of your account. Sign in again with your email."

@@ -58,7 +58,7 @@ import sh.rcn.terminus.Target
 import sh.rcn.terminus.widget.clock
 
 @Composable
-internal fun MainScreen(state: UiState, vm: MainViewModel) {
+internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
@@ -87,17 +87,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { Wordmark(MaterialTheme.typography.titleLarge) }
-            var confirmUnpair by remember { mutableStateOf(false) }
-            TextButton(onClick = { confirmUnpair = true }) { Text("Unpair") }
-            if (confirmUnpair) {
-                AlertDialog(
-                    onDismissRequest = { confirmUnpair = false },
-                    title = { Text("Unpair this phone?") },
-                    text = { Text("The app and widget stop showing your timetable. You can pair again with a new code from the account page.") },
-                    confirmButton = { TextButton(onClick = { confirmUnpair = false; vm.unpair() }) { Text("Unpair") } },
-                    dismissButton = { TextButton(onClick = { confirmUnpair = false }) { Text("Cancel") } },
-                )
-            }
+            TextButton(onClick = onSettings) { Text("Settings") }
         }
 
         state.update?.let { v ->
@@ -265,7 +255,7 @@ private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: 
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Sends this answer and your note, with your email address so you can get a reply.",
+                    "Sends this answer and your note, with your email address (if you've added one) so you can get a reply.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -147,6 +147,6 @@ http
     await ctx.settle();
     res.writeHead(out.status, Object.fromEntries(out.headers));
     res.end(Buffer.from(await out.arrayBuffer()));
-    if (email.sent.length) console.log('sign-in link:', email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`), (email.sent.length = 0);
+    if (email.sent.length) console.log('sign-in code:', email.lastCode(), ' link:', email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`), (email.sent.length = 0);
   })
   .listen(PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT} (pairing codes TEST67, TEST78, TEST89)`));

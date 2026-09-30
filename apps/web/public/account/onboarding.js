@@ -246,7 +246,7 @@ export function runOnboarding(ctx) {
     const link = (href, title, text) =>
       el('a', { class: 'ob-app', href }, el('strong', { textContent: title }), el('span', { class: 'hint', textContent: text }));
     return [
-      ...heading("You're set", 'Your widget preview is on the next page. For times on your phone or Mac, get the app, then pair it from the Devices card with a code.'),
+      ...heading("You're set", 'Your widget preview is on the next page. For times on your phone or Mac, get the app and sign in with this email, or pair it from the Devices card with a code.'),
       el(
         'div',
         { class: 'ob-apps' },

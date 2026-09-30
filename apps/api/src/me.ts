@@ -5,12 +5,16 @@
  */
 
 import { mailFeedback, parseFeedback, saveFeedback } from './feedback.ts';
+import { approvable, decide, enterCode, mergeAnonymous, pollAppLogin, startAppLogin } from './applogin.ts';
 import type { Answer, Env, Graph, MeAnswer, PlaceChip, ResolveInput, StopArrivals, Why } from './types.ts';
 import {
   ACCOUNT_TTL,
   type SessionInfo,
   authenticate,
+  clientFrom,
+  createAnonymous,
   createPairCode,
+  mailDeviceChange,
   deleteAccount,
   endAllSessions,
   exportAccount,
@@ -24,13 +28,14 @@ import {
   linkEmail,
   pairCodeOwner,
   maskEmail,
+  redeemCode,
   redeemLink,
-  platformFromAgent,
   redeemPairCode,
   requestLink,
   revokeDevice,
   saveProfileJson,
   sessionCookie,
+  PLATFORMS,
 } from './accounts.ts';
 import { DEFAULT_PROFILE, MAX_VENUE_WALK_S, PROFILE_LIMITS, type Profile, classStartMs, isResting, nextClass, parseProfile, planChangesAt, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
@@ -62,7 +67,7 @@ const page = (title: string, inner: string) => `<!doctype html>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="/assets/site.css">
-<style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px}.box img{width:44px;height:44px;margin-bottom:20px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}</style>
+<style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px}.box img{width:44px;height:44px;margin-bottom:20px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}.choices{display:flex;gap:10px;margin-top:20px}.box .choices .btn{flex:1;margin:0;font-size:1.5rem;font-variant-numeric:tabular-nums}.linkbtn{display:block;margin:18px auto 0;background:none;border:0;color:inherit;opacity:.7;text-decoration:underline;font:inherit;cursor:pointer}</style>
 </head><body><main class="wrap"><div class="card box"><img src="/assets/mark.svg" alt="">${inner}</div></main></body></html>`;
 
 /** A whole profile is a few KB; nothing legitimate comes close to this. */
@@ -81,6 +86,30 @@ function linkOrigin(url: URL): string {
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+const APPROVE_EXPIRED = '<h1>This request has expired</h1><p class="hint">Sign-in requests work once, for 15 minutes. Start again on your device.</p>';
+
+const mailFailed = (e: unknown) => console.error('device email failed', e instanceof Error ? e.name : typeof e);
+
+/** "Pixel 8": what the app calls itself, shown in emails and the device list. */
+function deviceName(body: Record<string, unknown> | null): string {
+  return typeof body?.name === 'string' ? body.name.trim().slice(0, 40) || 'Device' : 'Device';
+}
+
+/** The client header, or the platform an app names in its body when it has no header. */
+function clientWith(req: Request, body: Record<string, unknown> | null) {
+  const c = clientFrom(req);
+  if (c.client) return c;
+  const named = PLATFORMS.find((p) => p === body?.platform);
+  return named ? { ...c, platform: named } : c;
+}
+
+/** "14:05, 30 Sep" in Singapore time. */
+function sgtTime(ms: number): string {
+  const d = new Date(ms + 8 * 3_600_000);
+  const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}, ${d.getUTCDate()} ${month}`;
+}
 
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   if (!(req.headers.get('content-type') ?? '').includes('application/json')) return null;
@@ -155,8 +184,12 @@ interface MeRoute {
   method: string;
   /** Exact, or a prefix when it ends in '/'. */
   path: string;
-  /** Changes the account itself: from the account page only, never a paired device. */
-  web?: boolean;
+  /**
+   * 'web': changes the account itself, from the account page only, never a
+   * device (API keys, sign out everywhere). 'email': any session, but the
+   * account needs an email, because each use emails its owner (devices).
+   */
+  access?: 'web' | 'email';
   run: (c: MeContext) => Promise<Response>;
 }
 
@@ -165,8 +198,9 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
     path: '/me',
-    web: true,
+    // From the account page; an anonymous account has no page, so its app can.
     run: async ({ db, session }) => {
+      if (session.kind !== 'web' && session.user.email !== null) return json({ error: 'delete the account from the account page' }, 403);
       await deleteAccount(db, session.user);
       return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
     },
@@ -183,7 +217,7 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
     path: '/me/sessions',
-    web: true,
+    access: 'web',
     run: async ({ db, session }) => {
       // Sign out everywhere, including this browser.
       const ended = await endAllSessions(db, session.user.id);
@@ -199,6 +233,7 @@ const ME_ROUTES: MeRoute[] = [
       const reason = reimportReason(profile, nowMs);
       return json({
         email: session.user.email,
+        anonymous: session.user.email === null,
         kind: session.kind,
         needsReimport: reason !== null,
         reimportReason: reason,
@@ -267,7 +302,7 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/me/pair-code',
-    web: true,
+    access: 'email',
     run: async ({ nowMs, db, session }) => {
       return json(await createPairCode(db, session.user.id, nowMs));
     },
@@ -282,7 +317,7 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/me/keys',
-    web: true,
+    access: 'web',
     run: async ({ req, nowMs, db, session }) => {
       // Made on the account page, not from a phone that happens to be paired.
       const body = await readJson(req);
@@ -296,7 +331,7 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
     path: '/me/keys/',
-    web: true,
+    access: 'web',
     run: async ({ db, session, rest }) => {
       const ok = await revokeKey(db, session.user.id, rest);
       return ok ? json({ ok: true }) : json({ error: 'no such key' }, 404);
@@ -306,16 +341,18 @@ const ME_ROUTES: MeRoute[] = [
     method: 'GET',
     path: '/me/devices',
     run: async ({ db, session }) => {
-      return json({ devices: await listDevices(db, session.user.id) });
+      return json({ devices: await listDevices(db, session.user.id, session.tokenHash) });
     },
   },
   {
     method: 'DELETE',
     path: '/me/devices/',
-    web: true,
-    run: async ({ db, session, rest }) => {
-      const ok = await revokeDevice(db, session.user.id, rest);
-      return ok ? json({ ok: true }) : json({ error: 'no such device' }, 404);
+    access: 'email',
+    run: async ({ env, ctx, nowMs, db, session, rest }) => {
+      const name = await revokeDevice(db, session.user.id, rest);
+      if (name === null) return json({ error: 'no such device' }, 404);
+      ctx.waitUntil(mailDeviceChange(env, session.user.email, 'removed', name, nowMs).catch(mailFailed));
+      return json({ ok: true });
     },
   },
   {
@@ -341,7 +378,7 @@ const ME_ROUTES: MeRoute[] = [
       const id = await saveFeedback(db, session.user.id, parsed.value, nowMs);
       if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429);
       ctx.waitUntil(
-        mailFeedback(env, id, session.user.email, parsed.value, nowMs).catch((e) =>
+        mailFeedback(env, id, session.user.email ?? 'an anonymous account', parsed.value, nowMs).catch((e) =>
           console.error('feedback email failed', e instanceof Error ? e.name : typeof e),
         ),
       );
@@ -408,7 +445,19 @@ export async function handleMe(
       return json({ error: 'could not send the email, try again later' }, 502);
     }
     // Same answer whether or not the address is blocked or already has an account.
-    return json({ ok: true, message: 'Check your email for a sign-in link.' });
+    return json({ ok: true, message: 'Check your email for a sign-in code.' });
+  }
+
+  if (path === '/auth/code' && req.method === 'POST') {
+    // The emailed code, typed on the page that asked for it.
+    if (await limited(env, req, 'code')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    const body = await readJson(req);
+    const email = normalizeEmail(body?.email);
+    const code = normalizePairCode(body?.code);
+    if (!email || !code) return json({ error: 'enter the 6-character code from the email' }, 400);
+    const token = await redeemCode(env, db, email, code, nowMs);
+    if (!token) return json({ error: 'that code is wrong or has expired' }, 400);
+    return json({ ok: true }, 200, { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
   }
 
   if (path === '/auth/verify') {
@@ -440,6 +489,101 @@ export async function handleMe(
     }
   }
 
+  if (path === '/auth/anon' && req.method === 'POST') {
+    // An app's first launch: an account with no email, so it's useful
+    // before any sign-in. Apps can't run Turnstile, so: per IP, one global
+    // ceiling, and the cron deletes the ones left unused.
+    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
+      return json({ error: 'terminus is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    }
+    const body = await readJson(req);
+    const token = await createAnonymous(db, deviceName(body), clientWith(req, body), nowMs);
+    return json({ token }, 201);
+  }
+
+  if (path === '/auth/app/start' && req.method === 'POST') {
+    if (await limited(env, req, 'appstart')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    const body = await readJson(req);
+    const email = normalizeEmail(body?.email);
+    if (!email) return json({ error: 'enter a valid email address' }, 400);
+    // The app's anonymous account, if it sends its token: it's either kept
+    // (with the email added) or folded into the account the email has.
+    const current = tokenFrom(req) ? await authenticate(db, req, nowMs) : null;
+    if (current?.user.email) return json({ error: 'this device is already signed in' }, 409);
+    if (env.RL_MAIL && !(await env.RL_MAIL.limit({ key: 'mail:global' })).success) {
+      return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    }
+    let started;
+    try {
+      started = await startAppLogin(env, db, { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null }, linkOrigin(url), nowMs);
+    } catch (err) {
+      console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
+      return json({ error: 'could not send the email, try again later' }, 502);
+    }
+    if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, { 'retry-after': '60' });
+    return json({ ...started, expires: new Date(started.expires).toISOString() }, 201);
+  }
+
+  if ((path === '/auth/app/poll' || path === '/auth/app/code') && req.method === 'POST') {
+    // Every 3 seconds while the app is waiting: a per-IP ceiling of its own.
+    // A typed code is a guess, so it counts against the sign-in limit too.
+    if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `poll:${clientKey(req)}` })).success) {
+      return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '10' });
+    }
+    if (path === '/auth/app/code' && (await limited(env, req, 'appcode'))) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    const body = await readJson(req);
+    if (typeof body?.request !== 'string' || typeof body?.poll !== 'string') return json({ error: 'send request and poll' }, 400);
+    if (path === '/auth/app/code') {
+      const code = normalizePairCode(body.code);
+      const entered = code ? await enterCode(db, body.request, body.poll, code, nowMs) : 'wrong';
+      if (entered === 'wrong') return json({ status: 'pending', error: "that code isn't right; check the email and try again" }, 400);
+      if (entered !== 'approved') return json({ status: entered, error: entered === 'denied' ? 'too many wrong codes; start again' : 'that request expired; start again' }, 400);
+    }
+    const r = await pollAppLogin(db, body.request, body.poll, clientWith(req, body), nowMs);
+    if (r.status !== 'approved') return json({ status: r.status });
+    // A device added to an account that already had an email: tell its owner.
+    if (r.outcome !== 'created' && r.outcome !== 'added-email') {
+      ctx.waitUntil(mailDeviceChange(env, r.email, 'added', r.device, nowMs).catch(mailFailed));
+    }
+    return json({ status: 'approved', token: r.token, email: r.email, outcome: r.outcome });
+  }
+
+  if (path === '/auth/approve') {
+    if (req.method === 'GET') {
+      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429);
+      // Like /auth/verify: GET only shows the page (mail scanners open every
+      // link); the POST decides.
+      const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
+      const a = link ? await approvable(db, link, nowMs) : null;
+      if (!a) return html(page('Request expired', APPROVE_EXPIRED), 400);
+      const device = escapeHtml(a.device);
+      const buttons = a.choices
+        .map((n) => `<button type="submit" name="n" value="${n}" class="btn">${n}</button>`)
+        .join('');
+      return html(page('Approve sign-in', `<h1>Sign in terminus on ${device}?</h1>
+<p class="hint">Requested ${escapeHtml(sgtTime(a.created))}. Choose the number ${device} is showing.</p>
+<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><div class="choices">${buttons}</div></form>
+<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><button type="submit" name="n" value="none" class="linkbtn">This wasn't me</button></form>`));
+    }
+    if (req.method === 'POST') {
+      if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+      const form = await req.formData().catch(() => null);
+      const r = form?.get('r');
+      const n = Number(form?.get('n'));
+      const out = typeof r === 'string' ? await decide(db, r, Number.isInteger(n) ? n : null, nowMs) : 'expired';
+      if (out === 'approved') return html(page('Approved', '<h1>Approved</h1><p class="hint">Go back to your device: it will be signed in in a few seconds. You can close this page.</p>'));
+      if (out === 'denied') {
+        const picked = form?.get('n') !== 'none';
+        return html(
+          page('Cancelled', `<h1>Cancelled</h1><p class="hint">${picked ? "That wasn't the number on the device, so" : 'Nothing was signed in:'} the request is cancelled. If you were signing in, start again on your device.</p>`),
+          picked ? 400 : 200,
+        );
+      }
+      return html(page('Request expired', APPROVE_EXPIRED), 400);
+    }
+  }
+
   if (path === '/pair/check' && req.method === 'POST') {
     // Lets an app show whose account a code belongs to before spending it,
     // so a link someone sent you cannot quietly pair your phone to theirs.
@@ -457,9 +601,10 @@ export async function handleMe(
     const code = normalizePairCode(body?.code);
     const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) || 'Device' : 'Device';
     if (!code) return json({ error: 'enter the 6-character code from the account page' }, 400);
-    const token = await redeemPairCode(db, code, name, nowMs, platformFromAgent(req.headers.get('user-agent')));
-    if (!token) return json({ error: 'that code is wrong or has expired' }, 400);
-    return json({ token });
+    const paired = await redeemPairCode(db, code, name, nowMs, clientFrom(req));
+    if (!paired) return json({ error: 'that code is wrong or has expired' }, 400);
+    ctx.waitUntil(mailDeviceChange(env, paired.email, 'added', name, nowMs).catch(mailFailed));
+    return json({ token: paired.token });
   }
 
   /* ---------- everything below needs a session ---------- */
@@ -469,6 +614,16 @@ export async function handleMe(
   if (path === '/auth/logout' && req.method === 'POST') {
     if (session) await endSession(db, session.tokenHash);
     return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
+  }
+
+  if (path === '/auth/app/merge' && req.method === 'POST' && session) {
+    // After a sign-in where both the device and the account had a setup.
+    const body = await readJson(req);
+    const keep = body?.keep === 'device' ? 'device' : body?.keep === 'account' ? 'account' : null;
+    if (!keep || typeof body?.anon !== 'string') return json({ error: "send anon (the device's old token) and keep: 'account' or 'device'" }, 400);
+    const r = await mergeAnonymous(db, session.user.id, body.anon, keep, nowMs);
+    if (r !== 'ok') return json({ error: 'that token is not an anonymous account' }, 400);
+    return json({ ok: true, profile: await getProfile(db, session.user.id, deps.graph) });
   }
 
   if (!session) {
@@ -487,7 +642,8 @@ export async function handleMe(
     if (r.method !== req.method) continue;
     const prefix = r.path.endsWith('/');
     if (prefix ? !path.startsWith(r.path) : path !== r.path) continue;
-    if (r.web && session.kind !== 'web') return json({ error: 'manage devices from the account page' }, 403);
+    if (r.access === 'web' && session.kind !== 'web') return json({ error: 'do this from the account page' }, 403);
+    if (r.access === 'email' && !session.user.email) return json({ error: 'add an email to this account first' }, 403);
     return r.run({ req, url, env, ctx, nowMs, deps, db, session, rest: prefix ? path.slice(r.path.length) : '' });
   }
 

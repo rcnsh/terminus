@@ -232,6 +232,68 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return request("POST", "/pair", body).getString("token")
     }
 
+    /** First launch: an account with no email, so the app works before any sign-in. */
+    suspend fun anon(name: String): String =
+        request("POST", "/auth/anon", JSONObject().put("name", name).put("platform", "android")).getString("token")
+
+    suspend fun me(): Me = Me.parse(request("GET", "/me"))
+
+    /** The whole profile as the server keeps it; edited and sent back whole. */
+    suspend fun profile(): JSONObject = request("GET", "/me/profile")
+
+    suspend fun saveProfile(profile: JSONObject): JSONObject = request("PUT", "/me/profile", profile)
+
+    /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. */
+    suspend fun import(share: String): ImportResult = ImportResult.parse(request("POST", "/me/import", JSONObject().put("share", share)))
+
+    /** Stops and residences, for the home and place pickers. */
+    suspend fun campus(): Campus = Campus.parse(request("GET", "/campus"))
+
+    /** Starts a sign-in approved from the email; send it with this device's anonymous token to keep its setup. */
+    suspend fun signInStart(email: String, name: String): SignInRequest {
+        val o = request("POST", "/auth/app/start", JSONObject().put("email", email).put("name", name))
+        return SignInRequest(o.getString("request"), o.getString("poll"), o.getInt("match"))
+    }
+
+    suspend fun signInPoll(r: SignInRequest): SignInPoll {
+        val o = request("POST", "/auth/app/poll", JSONObject().put("request", r.request).put("poll", r.poll))
+        return SignInPoll(o.getString("status"), o.optStringOrNull("token"), o.optStringOrNull("email"), o.optStringOrNull("outcome"))
+    }
+
+    /** The code from the email, typed here. A wrong one throws with the server's message. */
+    suspend fun signInCode(r: SignInRequest, code: String): SignInPoll {
+        val o = request("POST", "/auth/app/code", JSONObject().put("request", r.request).put("poll", r.poll).put("code", code))
+        return SignInPoll(o.getString("status"), o.optStringOrNull("token"), o.optStringOrNull("email"), o.optStringOrNull("outcome"))
+    }
+
+    /** After a "choose" outcome: which setup to keep. `anon` is the device's old token. */
+    suspend fun merge(anon: String, keepDevice: Boolean) {
+        request("POST", "/auth/app/merge", JSONObject().put("anon", anon).put("keep", if (keepDevice) "device" else "account"))
+    }
+
+    /** A code another device can pair with (accounts with an email only). */
+    suspend fun pairCode(): String = request("POST", "/me/pair-code", JSONObject()).getString("code")
+
+    suspend fun devices(): List<Device> {
+        val list = request("GET", "/me/devices").getJSONArray("devices")
+        return (0 until list.length()).map {
+            val d = list.getJSONObject(it)
+            Device(
+                d.getString("id"), d.optStringOrNull("name") ?: "Device", d.optStringOrNull("platform"),
+                d.optLong("created"), d.optLong("lastSeen"), d.optBoolean("current", false),
+            )
+        }
+    }
+
+    suspend fun removeDevice(id: String) {
+        request("DELETE", "/me/devices/${enc(id)}")
+    }
+
+    /** Only for an account with no email: one with an email is deleted from the account page. */
+    suspend fun deleteAccount() {
+        request("DELETE", "/me")
+    }
+
     suspend fun next(target: Target, lat: Double?, lon: Double?): NextAnswer =
         NextAnswer.parse(nextJson(target, lat, lon))
 
@@ -274,16 +336,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     suspend fun destinations(): List<Destination> {
         val list = request("GET", "/campus").getJSONArray("destinations")
-        return (0 until list.length()).map {
-            val d = list.getJSONObject(it)
-            Destination(
-                d.getString("code"), d.getString("label"), d.getString("stopCode"), d.optString("kind"),
-                walkM = if (d.has("walkM")) d.optInt("walkM") else null,
-                aliases = d.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
-                stops = d.optJSONArray("stops")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
-                detail = d.optStringOrNull("detail"),
-            )
-        }
+        return (0 until list.length()).map { parseDestination(list.getJSONObject(it)) }
     }
 
     /** Whose account a pairing code belongs to (masked), without spending it. */
@@ -313,6 +366,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                 conn.connectTimeout = if (fast) 4_000 else 8_000
                 conn.readTimeout = if (fast) 5_000 else 10_000
                 conn.setRequestProperty("accept", "application/json")
+                // So the server can tell apps and versions apart (the User-Agent only says Dalvik).
+                conn.setRequestProperty("x-terminus-client", CLIENT)
                 token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
                 if (body != null) {
                     conn.doOutput = true
@@ -335,26 +390,122 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 }
 
+/** `x-terminus-client`: platform and version. */
+val CLIENT = "android/${BuildConfig.VERSION_NAME}"
+
+/** `/me`: who this device is signed in as. */
+data class Me(val email: String?, val anonymous: Boolean, val needsSetup: Boolean) {
+    companion object {
+        fun parse(o: JSONObject) = Me(
+            email = o.optStringOrNull("email"),
+            anonymous = o.optBoolean("anonymous", false),
+            needsSetup = o.optStringOrNull("onboarding") != null,
+        )
+    }
+}
+
+data class SignInRequest(val request: String, val poll: String, val match: Int)
+
+/** status: pending | approved | denied | expired. outcome as in applogin.ts. */
+data class SignInPoll(val status: String, val token: String?, val email: String?, val outcome: String?)
+
+data class Device(val id: String, val name: String, val platform: String?, val createdMs: Long, val lastSeenMs: Long, val current: Boolean)
+
+data class Stop(val code: String, val name: String, val lat: Double, val lon: Double)
+
+data class Residence(val code: String, val name: String, val stops: List<String>, val walkM: Int)
+
+data class Campus(val stops: List<Stop>, val residences: List<Residence>, val destinations: List<Destination>) {
+    fun stopName(code: String) = stops.firstOrNull { it.code == code }?.name ?: code
+
+    companion object {
+        fun parse(o: JSONObject): Campus {
+            val s = o.getJSONArray("stops")
+            val r = o.optJSONArray("residences") ?: JSONArray()
+            val d = o.optJSONArray("destinations") ?: JSONArray()
+            return Campus(
+                stops = (0 until s.length()).map {
+                    val x = s.getJSONObject(it)
+                    Stop(x.getString("code"), x.optString("name", x.getString("code")), x.optDouble("lat"), x.optDouble("lon"))
+                }.sortedBy { it.name },
+                residences = (0 until r.length()).map {
+                    val x = r.getJSONObject(it)
+                    val st = x.getJSONArray("stops")
+                    Residence(x.getString("code"), x.getString("name"), (0 until st.length()).map { i -> st.getString(i) }, x.optInt("walkM"))
+                }.sortedBy { it.name },
+                destinations = (0 until d.length()).map { parseDestination(d.getJSONObject(it)) },
+            )
+        }
+    }
+}
+
+/** `/me/import`: what was found, what couldn't be placed, and for which semester. */
+data class ImportResult(val profile: JSONObject, val classes: Int, val unresolved: List<String>, val missing: List<String>, val term: String) {
+    companion object {
+        fun parse(o: JSONObject): ImportResult {
+            val profile = o.getJSONObject("profile")
+            val un = o.optJSONArray("unresolved") ?: JSONArray()
+            val miss = o.optJSONArray("missing") ?: JSONArray()
+            return ImportResult(
+                profile = profile,
+                classes = profile.optJSONArray("trips")?.length() ?: 0,
+                unresolved = (0 until un.length()).map { un.getJSONObject(it).let { u -> "${u.optString("module")} at ${u.optString("venue")}" } },
+                missing = (0 until miss.length()).map { miss.getString(it) },
+                term = o.optString("term"),
+            )
+        }
+    }
+}
+
+/** The phone's name, as Settings and the account page show it: "Google Pixel 8". */
+fun deviceName(): String =
+    "${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL}".take(40)
+
 /**
  * Four decimals is about 11 m: enough to tell PGP from PGP Foyer, and no
  * more precise than that in URLs that pass through logs.
  */
 private fun coord(v: Double) = "%.4f".format(java.util.Locale.ROOT, v)
 
+private fun parseDestination(d: JSONObject) = Destination(
+    d.getString("code"), d.getString("label"), d.getString("stopCode"), d.optString("kind"),
+    walkM = if (d.has("walkM")) d.optInt("walkM") else null,
+    aliases = d.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
+    stops = d.optJSONArray("stops")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
+    detail = d.optStringOrNull("detail"),
+)
+
 private fun parseInstant(s: String): Long? = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrNull()
 
 /** The phone shows 12-hour times: ask the server for its card in that style. */
 fun hour12(ctx: android.content.Context): Boolean = !android.text.format.DateFormat.is24HourFormat(ctx)
 
-/** "1.0.10" > "1.0.9". */
+/**
+ * "1.0.10" > "1.0.9", and a release is newer than its own pre-release:
+ * "2.0.0" > "2.0.0-beta.2" > "2.0.0-beta" > "1.3.10".
+ */
 fun isNewer(latest: String, current: String): Boolean {
-    val a = latest.split('.').map { it.toIntOrNull() ?: 0 }
-    val b = current.split('.').map { it.toIntOrNull() ?: 0 }
-    for (i in 0 until maxOf(a.size, b.size)) {
-        val d = a.getOrElse(i) { 0 } - b.getOrElse(i) { 0 }
-        if (d != 0) return d > 0
+    fun parts(v: String): Pair<List<Int>, List<Int>?> {
+        val (num, pre) = v.split('-', limit = 2).let { it[0] to it.getOrNull(1) }
+        // "beta.2" -> [2]; "beta" -> [0]. No tag at all ranks above any tag.
+        return num.split('.').map { it.toIntOrNull() ?: 0 } to pre?.let { p -> listOf(p.substringAfter('.', "0").toIntOrNull() ?: 0) }
     }
-    return false
+    fun cmp(a: List<Int>, b: List<Int>): Int {
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val d = a.getOrElse(i) { 0 } - b.getOrElse(i) { 0 }
+            if (d != 0) return d
+        }
+        return 0
+    }
+    val (an, ap) = parts(latest)
+    val (bn, bp) = parts(current)
+    val d = cmp(an, bn)
+    if (d != 0) return d > 0
+    return when {
+        ap == null -> bp != null
+        bp == null -> false
+        else -> cmp(ap, bp) > 0
+    }
 }
 
 fun JSONObject.optStringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else optString(key)

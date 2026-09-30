@@ -18,6 +18,15 @@ final class AppModel {
     var pairing = false
     var pairError: String?
 
+    /// An email sign-in waiting for its approval: the number to show.
+    var signInWaiting: (email: String, match: Int)?
+    var signingIn = false
+    var signInError: String?
+    /// Signed in to an account that has no setup yet: say where to do it.
+    var needsSetup = false
+    private var signInTask: Task<Void, Never>?
+    private var signInRequest: SignInRequest?
+
     /// Always the planned trip: this is what the menu bar shows.
     var plan: NextAnswer? { answers[.plan] }
     var target: Target = .plan
@@ -177,6 +186,106 @@ final class AppModel {
                 pairError = "Couldn't reach terminus. Check your connection and try again."
             }
         }
+    }
+
+    // MARK: signing in by email
+
+    /// Emails a link that approves this Mac from any device (the phone's mail
+    /// app, say): the page asks for the number shown here. Universal links
+    /// would need a paid Apple team; this needs nothing.
+    func signIn(email: String) {
+        signingIn = true
+        signInError = nil
+        signInTask?.cancel()
+        signInTask = Task {
+            do {
+                let name = String((Host.current().localizedName ?? "Mac").prefix(40))
+                let r = try await Api(token: nil).signInStart(email: email, name: name)
+                signingIn = false
+                signInRequest = r
+                signInWaiting = (email, r.match)
+                await pollSignIn(r)
+            } catch let e as ApiError {
+                signingIn = false
+                signInError = e.message
+            } catch {
+                signingIn = false
+                signInError = "Couldn't reach terminus. Check your connection and try again."
+            }
+        }
+    }
+
+    /// The code from the email, typed in: signs in straight away when it's right.
+    func enterCode(_ code: String) {
+        guard let r = signInRequest else { return }
+        signingIn = true
+        signInError = nil
+        Task {
+            do {
+                let p = try await Api(token: nil).signInCode(r, code: code)
+                signingIn = false
+                if p.status == "approved" {
+                    signInTask?.cancel()
+                    signedIn(p)
+                }
+            } catch let e as ApiError {
+                signingIn = false
+                signInError = e.message
+            } catch {
+                signingIn = false
+                signInError = "Couldn't reach terminus. Check your connection and try again."
+            }
+        }
+    }
+
+    private func signedIn(_ p: SignInPoll) {
+        signInRequest = nil
+        guard let token = p.token, TokenStore.write(token) else {
+            signInWaiting = nil
+            signInError = "Couldn't save the sign-in to your keychain. Allow terminus access when asked, then try again."
+            return
+        }
+        signInWaiting = nil
+        // A brand-new account has nothing to show yet.
+        needsSetup = p.outcome == "created"
+        paired = true
+        if locator.undecided { locator.ask() }
+        kick()
+    }
+
+    func cancelSignIn() {
+        signInRequest = nil
+        signInTask?.cancel()
+        signInWaiting = nil
+        signingIn = false
+    }
+
+    /// Every 3 seconds, for the request's 15 minutes.
+    private func pollSignIn(_ r: SignInRequest) async {
+        let until = Date().addingTimeInterval(15 * 60)
+        while Date() < until {
+            try? await Task.sleep(for: .seconds(3))
+            if Task.isCancelled { return }
+            guard let p = try? await Api(token: nil).signInPoll(r) else { continue }
+            switch p.status {
+            case "pending":
+                continue
+            case "approved":
+                signedIn(p)
+                return
+            case "denied":
+                signInWaiting = nil
+                signInError = "The sign-in was cancelled from the email. If that was you, send a new one."
+                return
+            default:
+                // Expired, or already used.
+                signInWaiting = nil
+                signInError = "That request expired. Send a new one."
+                return
+            }
+        }
+        signInWaiting = nil
+        signInError = "That request expired. Send a new one."
     }
 
     /// Local state goes first, so the popover reacts at once even offline.

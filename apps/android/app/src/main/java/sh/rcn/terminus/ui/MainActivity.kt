@@ -21,7 +21,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import sh.rcn.terminus.Store
+import sh.rcn.terminus.nusmodsLink
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -31,6 +39,7 @@ import sh.rcn.terminus.Target
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
+    private val account: AccountViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,7 +48,7 @@ class MainActivity : ComponentActivity() {
         // that opened the app and yank the user back to that view.
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
-        setContent { TerminusTheme { App(vm) } }
+        setContent { TerminusTheme { App(vm, account) } }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -49,6 +58,11 @@ class MainActivity : ComponentActivity() {
 
     /** Widget chips open the app on a place or on nearby departures. */
     private fun handle(intent: Intent?) {
+        // Share in NUSMods, then terminus: the timetable link, to import.
+        if (intent?.action == Intent.ACTION_SEND) {
+            nusmodsLink(intent.getStringExtra(Intent.EXTRA_TEXT))?.let(account::shared)
+            return
+        }
         val data = intent?.data ?: return
         // https://terminus.rcn.sh/pair?code=… from the account page's QR code.
         if (data.scheme == "https" && data.path?.startsWith("/pair") == true) {
@@ -86,9 +100,27 @@ private fun TerminusTheme(content: @Composable () -> Unit) {
     }
 }
 
+/** Which screen is up, apart from the answer. */
+private enum class Screen { Main, Settings, SignIn, Pair }
+
 @Composable
-private fun App(vm: MainViewModel) {
+private fun App(vm: MainViewModel, account: AccountViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val acct by account.state.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
+    val store = remember { Store(ctx) }
+    var screen by rememberSaveable { mutableStateOf(Screen.Main) }
+    var setup by rememberSaveable { mutableStateOf(store.needsSetup) }
+    val signedIn = {
+        setup = store.needsSetup
+        screen = Screen.Main
+        vm.signedIn()
+    }
+    val signedOut = {
+        account.reset()
+        setup = false
+        screen = Screen.Main
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -96,7 +128,50 @@ private fun App(vm: MainViewModel) {
             .imePadding()
             .padding(horizontal = 16.dp),
     ) {
-        if (!state.paired) PairScreen(state, vm::pair) else MainScreen(state, vm)
+        when {
+            screen == Screen.SignIn -> {
+                BackHandler { account.cancelSignIn(); screen = if (state.paired) Screen.Settings else Screen.Main }
+                SignInScreen(
+                    acct,
+                    adding = state.paired,
+                    onSend = { account.sendSignIn(it, signedIn) },
+                    onCode = { account.enterCode(it, signedIn) },
+                    onChoose = { keepPhone -> account.choose(keepPhone, signedIn) },
+                    onCancel = { account.cancelSignIn(); screen = if (state.paired) Screen.Settings else Screen.Main },
+                )
+            }
+            !state.paired && screen == Screen.Pair -> {
+                BackHandler { screen = Screen.Main }
+                PairScreen(state, vm::pair)
+            }
+            !state.paired -> WelcomeScreen(
+                busy = acct.busy,
+                message = acct.message ?: state.pairError,
+                onStart = { account.start { store.needsSetup = true; signedIn() } },
+                onSignIn = { account.beginSignIn(); screen = Screen.SignIn },
+                onPair = { screen = Screen.Pair },
+            )
+            setup -> OnboardingScreen(acct, account, vm) { setup = false; vm.load(restart = true) }
+            screen == Screen.Settings -> SettingsScreen(
+                acct, account, vm,
+                onAddEmail = { account.beginSignIn(); screen = Screen.SignIn },
+                onSignedOut = signedOut,
+                onClose = { screen = Screen.Main; vm.load(restart = true) },
+            )
+            else -> MainScreen(state, vm, onSettings = { screen = Screen.Settings })
+        }
+    }
+    // A timetable shared from NUSMods once set up: import it after a yes.
+    acct.sharedLink?.let { link ->
+        if (state.paired && !setup) {
+            AlertDialog(
+                onDismissRequest = account::dismissShared,
+                title = { Text("Import this timetable?") },
+                text = { Text("It replaces the classes imported before. Classes you added by hand stay.") },
+                confirmButton = { TextButton(onClick = { account.import(link); screen = Screen.Settings }) { Text("Import") } },
+                dismissButton = { TextButton(onClick = account::dismissShared) { Text("Cancel") } },
+            )
+        }
     }
     state.pendingPair?.let { p ->
         AlertDialog(

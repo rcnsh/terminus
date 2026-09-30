@@ -68,9 +68,13 @@ The same answer on your phone, your Mac and the web, in light or dark.
 
 ## Set up in two minutes
 
-1. **Sign in** at [terminus.rcn.sh/account](https://terminus.rcn.sh/account) with a link sent to your email. No password.
+**On Android:** install the app and tap **Get started**. It asks where you live, for your NUSMods timetable (paste the share link, or tap Share in NUSMods and pick terminus) and how fast you walk. No account or email needed; add an email later in Settings to keep your setup and use it on other devices.
+
+**On the web or a Mac:**
+
+1. **Sign in** at [terminus.rcn.sh/account](https://terminus.rcn.sh/account) with a code sent to your email. No password.
 2. **Import** your NUSMods share link and pick your home stop.
-3. **Install** the Android widget or the Mac menu bar app, and pair it by scanning the QR code or typing the code.
+3. **Install** the Mac menu bar app and sign in with the same email: approve it from the link we email you, on any device, by choosing the number the Mac shows. Or pair it with a code from the account page or the Android app's Settings.
 
 That's it. It updates through the day and goes quiet in the evening.
 

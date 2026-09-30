@@ -105,12 +105,26 @@ function render(s) {
     tile(fmt(a.new7d), `new this week · ${fmt(a.new30d)} this month`),
     tile(fmt(a.withTimetable), `with a timetable${pct(a.withTimetable)}`),
     tile(fmt(a.withHome), `with home stops${pct(a.withHome)}`),
+    tile(fmt(a.anonymous), `without an email${pct(a.anonymous)}`),
   );
+
+  // Accounts in the apps: installs, how many finished setup, how many added an email.
+  const ap = s.apps ?? {};
+  const of = (n, d) => (d ? ` (${Math.round((n / d) * 100)}%)` : '');
+  $('apps').replaceChildren(
+    tile(fmt(ap.installs30d), 'app installs this month'),
+    tile(fmt(ap.onboarded30d), `finished setup${of(ap.onboarded30d, ap.installs30d)}`),
+    tile(fmt(ap.addedEmail30d), `added an email this month · ${fmt(ap.addedEmail)} ever`),
+  );
+  $('clients').replaceChildren(
+    ...(s.clients ?? []).map((c) => el('li', {}, el('code', { textContent: c.client }), ` · ${fmt(c.n)}`)),
+  );
+  if (!s.clients?.length) $('clients').append(el('li', { class: 'hint', textContent: 'No app has sent its version yet.' }));
 
   const byDay = new Map((s.signups ?? []).map((r) => [r.day, r.n]));
   $('signups').replaceChildren(...bars(lastDays(30).map((d) => ({ label: d.slice(5), n: byDay.get(d) ?? 0 }))));
 
-  const names = { android: 'Android', mac: 'Mac', unknown: 'Not seen since pairing' };
+  const names = { android: 'Android', mac: 'Mac', ios: 'iPhone', unknown: 'Not seen since pairing' };
   $('devices').tBodies[0].replaceChildren(
     ...(s.devices ?? []).map((d) => el('tr', {}, el('td', { textContent: names[d.platform] ?? d.platform }), el('td', { textContent: fmt(d.total) }), el('td', { textContent: fmt(d.active7) }))),
   );
@@ -140,7 +154,7 @@ function render(s) {
       el(
         'li',
         {},
-        el('div', { class: 'meta', textContent: `${when(f.created)} · ${f.email} · ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}` }),
+        el('div', { class: 'meta', textContent: `${when(f.created)} · ${f.email ?? 'no email'} · ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}` }),
         el('div', { class: 'note', textContent: f.note || '(no note)' }),
         el('div', { class: 'meta', textContent: `Answer: ${f.answer}` }),
         f.context ? el('details', {}, el('summary', { textContent: 'The answer they saw' }), el('pre', { textContent: JSON.stringify(f.context, null, 2) })) : null,
