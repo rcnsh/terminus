@@ -107,6 +107,10 @@
     "line": "R2 · 6 min · PGP",
     "actions": [],
     "warning": null,
-    "nextChangeAt": "2026-08-27T01:06:30Z"
+    "nextChangeAt": "2026-08-27T01:06:30Z",
+    "ask": null,
+    "askMuted": false,
+    "remind": true,
+    "suggestion": null
   }
 }

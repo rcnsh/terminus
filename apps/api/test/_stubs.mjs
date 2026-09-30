@@ -152,7 +152,7 @@ export function makeAnalytics() {
  * so the forced-refresh retry can be exercised. Every proxy request is kept in
  * `requests` so tests can assert on headers and body.
  */
-export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null } = {}) {
+export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null, fcm = null } = {}) {
   const counts = { auth: 0, shuttle: 0 };
   const requests = [];
   const mints = [];
@@ -191,6 +191,18 @@ export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = 
       return Response.json(shuttlePayload(byStop[body.busstopname] ?? []));
     }
 
+    // Firebase: an OAuth token, then messages (recorded in `fcm.sent`).
+    if (fcm && url === 'https://oauth2.googleapis.com/token') {
+      fcm.oauth = (fcm.oauth ?? 0) + 1;
+      return Response.json({ access_token: 'ya29.test', expires_in: 3599 });
+    }
+    if (fcm && url.startsWith('https://fcm.googleapis.com/v1/projects/')) {
+      const msg = JSON.parse(init.body).message;
+      if (fcm.dead?.has(msg.token)) return Response.json({ error: { status: 'NOT_FOUND' } }, { status: 404 });
+      (fcm.sent ??= []).push(msg);
+      return Response.json({ name: 'projects/x/messages/1' });
+    }
+
     return new Response('unexpected upstream ' + url, { status: 599 });
   };
   fn.counts = counts;
@@ -224,7 +236,8 @@ export function installGlobals(fetchImpl, nowMs = FROZEN_NOW) {
  * instance per name, on in-memory storage with a settable alarm. `alarms`
  * lists each instance's pending alarm; fireAlarms() runs them.
  */
-export function makeDurableObjects(Class) {
+export function makeDurableObjects(Class, env = {}) {
+  const pending = [];
   const instances = new Map();
   const alarms = new Map();
   const storageFor = (name) => {
@@ -253,7 +266,7 @@ export function makeDurableObjects(Class) {
     };
   };
   const instance = (name) => {
-    if (!instances.has(name)) instances.set(name, new Class({ storage: storageFor(name) }, {}));
+    if (!instances.has(name)) instances.set(name, new Class({ storage: storageFor(name), waitUntil: (p) => pending.push(p) }, typeof env === 'function' ? env() : env));
     return instances.get(name);
   };
   return {
@@ -263,11 +276,21 @@ export function makeDurableObjects(Class) {
     get: (id) => ({
       fetch: (input, init) => instance(id).fetch(input instanceof Request ? input : new Request(input, init)),
     }),
+    /** Runs only the alarms that are due by `nowMs` (the dev stub's clock). */
+    async fireDue(nowMs) {
+      for (const [name, at] of [...alarms.entries()]) {
+        if (at > nowMs) continue;
+        alarms.delete(name);
+        await instance(name).alarm();
+      }
+      await Promise.all(pending.splice(0));
+    },
     async fireAlarms() {
       for (const name of [...alarms.keys()]) {
         alarms.delete(name);
         await instance(name).alarm();
       }
+      await Promise.all(pending.splice(0));
     },
   };
 }

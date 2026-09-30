@@ -40,13 +40,15 @@ import {
 import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
 import { hour12, planned } from './next.ts';
 import { dayPlan } from './day.ts';
-import { type DayRecord, SIGNALS, type TripRecord, loadDay, saveSignal } from './trip.ts';
+import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, loadDay, savePlan, saveSignal, watchTrip } from './trip.ts';
+import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
+import { NO_PREFS, type PrefKind, type TripPrefs, askAgain, clearOutcome, listPrefs, noteUnanswered, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, indexGraph } from './resolve.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds, shortStop } from './format.ts';
-import { cardFor } from './card.ts';
+import { cardFor, nextPhaseAt } from './card.ts';
 import { WALK } from './config.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { atHome, residenceStops } from './residences.ts';
@@ -184,15 +186,35 @@ interface MeRoute {
   run: (c: MeContext) => Promise<Response>;
 }
 
+/**
+ * The plate of the `svc` bus at `stopCode` right now: the one due soonest,
+ * within a few minutes (at the tap it's pulling in or just leaving). Empty
+ * when the feed has no plates or no such bus is near, so the ride falls back
+ * to the estimate.
+ */
+async function plateAt(env: Env, ctx: ExecutionContext, deps: MeDeps, stopCode: string | undefined, svc: string, nowMs: number): Promise<{ plate?: string }> {
+  if (!stopCode) return {};
+  try {
+    const sa = (await deps.collectArrivals(env, ctx, [stopCode], nowMs)).get(stopCode);
+    const near = (sa?.arrivals ?? [])
+      .filter((x) => x.svc === svc && x.plate && x.etaS !== null && x.etaS <= PLATE_WINDOW_S)
+      .sort((x, y) => x.etaS! - y.etaS!)[0];
+    return near?.plate ? { plate: near.plate } : {};
+  } catch {
+    return {};
+  }
+}
+
 /** Everything that needs a session, by method and path. */
 const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
     path: '/me',
     // From the account page; an anonymous account has no page, so its app can.
-    run: async ({ db, session }) => {
+    run: async ({ env, db, session }) => {
       if (session.kind !== 'web' && session.user.email !== null) return json({ error: 'delete the account from the account page' }, 403);
       await deleteAccount(db, session.user);
+      await clearTrip(env, session.user.id);
       return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
     },
   },
@@ -351,8 +373,8 @@ const ME_ROUTES: MeRoute[] = [
     path: '/me/next',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
-      const day = await tripDay(env, session.user.id, profile, nowMs);
-      return json(await nextBody(url, env, ctx, nowMs, deps, profile, day));
+      const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
+      return json(await nextBody(url, env, ctx, nowMs, deps, profile, day, session.user.id, prefs));
     },
   },
   {
@@ -360,8 +382,8 @@ const ME_ROUTES: MeRoute[] = [
     path: '/me/day',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
-      const day = await tripDay(env, session.user.id, profile, nowMs);
-      return json(await dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url)));
+      const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
+      return json(await dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url), prefs.earlier));
     },
   },
   {
@@ -386,7 +408,15 @@ const ME_ROUTES: MeRoute[] = [
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
       const current = key === now.trip.key;
-      const l = current ? now.answer.leave : null;
+      // After the planned bus has left, "On it" and "Missed it" are about that
+      // bus (the plan), not the next one the answer has moved on to.
+      const p = current ? now.trip.plan : null;
+      const gone = p?.board ? Date.parse(p.board) <= nowMs + 60_000 : false;
+      const l = current
+        ? gone && p
+          ? { ...(now.answer.leave ?? {}), svc: p.svc, stop: p.stop, board: p.board, arrive: p.arrive, off: p.off, stopCode: p.stopCode, offCode: p.alightCode }
+          : now.answer.leave
+        : null;
       const label = current ? (now.answer.dest?.label ?? undefined) : classesOn(profile, nowMs).find((c) => classKey(c) === key)?.label;
       let rec: TripRecord | null | undefined;
       switch (kind) {
@@ -407,7 +437,16 @@ const ME_ROUTES: MeRoute[] = [
             kind,
             at: nowMs,
             label,
-            boarded: { svc: l.svc, stop: l.stop ?? '', board: l.board, arrive: l.arrive, ...(l.off ? { off: l.off } : {}) },
+            boarded: {
+              svc: l.svc,
+              stop: l.stop ?? '',
+              board: l.board,
+              arrive: l.arrive,
+              ...(l.off ? { off: l.off } : {}),
+              ...(l.stopCode ? { stopCode: l.stopCode } : {}),
+              ...(now.answer.dest?.to ? { alightCode: l.offCode ?? now.answer.dest.to } : {}),
+              ...(await plateAt(env, ctx, deps, l.stopCode, l.svc, nowMs)),
+            },
           };
           break;
         case 'missed':
@@ -418,7 +457,76 @@ const ME_ROUTES: MeRoute[] = [
       }
       const next = rec === undefined ? day : await saveSignal(env, session.user.id, key, rec, nowMs);
       logSignal(env, kind);
-      return json(await nextBody(url, env, ctx, nowMs, deps, profile, next));
+      // What happened to the trip, for what terminus learns (outcomes.ts).
+      const outcome = rec ? OUTCOME_OF[rec.kind] : undefined;
+      if (rec === null) await clearOutcome(db, session.user.id, key, nowMs);
+      else if (outcome) await recordOutcome(db, session.user.id, key, outcome, nowMs);
+      const prefs = await prefsFor(db, session.user.id, profile, nowMs);
+      const out = await nextBody(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
+      // A tap here changes the other phones' cards now, not at their next refresh.
+      if (rec !== undefined) {
+        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, ask: out.card.ask !== null, urgent: false }, nowMs, session.tokenHash));
+      }
+      return json(out);
+    },
+  },
+  {
+    method: 'POST',
+    path: '/me/push',
+    run: async ({ req, db, session }) => {
+      // This device's Firebase token: the Trip object nudges it when the card changes.
+      const body = await readJson(req);
+      const token = typeof body?.token === 'string' ? body.token.trim() : '';
+      if (!token || token.length > 4096) return json({ error: 'send token (the FCM registration token)' }, 400);
+      await setPushToken(db, session.tokenHash, token);
+      return json({ ok: true });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/me/push',
+    run: async ({ db, session }) => {
+      await setPushToken(db, session.tokenHash, null);
+      return json({ ok: true });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/me/choice',
+    run: async ({ req, nowMs, deps, db, session }) => {
+      // A suggestion accepted or turned down ({id, choice}), or an accepted
+      // one undone from settings ({trip, pref, choice: 'undo'}).
+      const body = await readJson(req);
+      const choice = CHOICES.find((c) => c === body?.choice);
+      const [pref, trip] =
+        typeof body?.id === 'string' && body.id.includes(':')
+          ? [body.id.slice(0, body.id.indexOf(':')), body.id.slice(body.id.indexOf(':') + 1)]
+          : [body?.pref, body?.trip];
+      if (!choice || (pref !== 'earlier' && pref !== 'quiet') || typeof trip !== 'string' || !trip || trip.length > 80) {
+        return json({ error: "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo" }, 400);
+      }
+      const profile = await getProfile(db, session.user.id, deps.graph);
+      const label = [...profile.trips, ...profile.manual].find((t) => classKey(t) === trip)?.label ?? null;
+      await setPref(db, session.user.id, trip, pref as PrefKind, choice, label, nowMs);
+      return json({ ok: true, choices: await listPrefs(db, session.user.id) });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/choices',
+    run: async ({ nowMs, deps, db, session }) => {
+      const profile = await getProfile(db, session.user.id, deps.graph);
+      const prefs = await prefsFor(db, session.user.id, profile, nowMs);
+      return json({ choices: await listPrefs(db, session.user.id), askMuted: prefs.askMuted });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/me/ask',
+    run: async ({ nowMs, db, session }) => {
+      // "Ask if I caught the bus" back on: earlier silence no longer counts.
+      await askAgain(db, session.user.id, nowMs);
+      return json({ ok: true, askMuted: false });
     },
   },
   {
@@ -594,6 +702,7 @@ export async function handleMe(
     }
     const r = await pollAppLogin(db, body.request, body.poll, clientWith(req, body), nowMs);
     if (r.status !== 'approved') return json({ status: r.status });
+    if (r.removed) await clearTrip(env, r.removed);
     // A device added to an account that already had an email: tell its owner.
     if (r.outcome !== 'created' && r.outcome !== 'added-email') {
       ctx.waitUntil(mailDeviceChange(env, r.email, 'added', r.device, nowMs).catch(mailFailed));
@@ -674,7 +783,8 @@ export async function handleMe(
     const keep = body?.keep === 'device' ? 'device' : body?.keep === 'account' ? 'account' : null;
     if (!keep || typeof body?.anon !== 'string') return json({ error: "send anon (the device's old token) and keep: 'account' or 'device'" }, 400);
     const r = await mergeAnonymous(db, session.user.id, body.anon, keep, nowMs);
-    if (r !== 'ok') return json({ error: 'that token is not an anonymous account' }, 400);
+    if (r === 'not-anonymous') return json({ error: 'that token is not an anonymous account' }, 400);
+    await clearTrip(env, r.removed);
     return json({ ok: true, profile: await getProfile(db, session.user.id, deps.graph) });
   }
 
@@ -709,14 +819,94 @@ async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number
 }
 
 /** /me/next's body: the answer, when it changes by itself, and the card. */
-async function nextBody(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile, day: DayRecord | null) {
-  const { answer, trip } = await planned(url, env, ctx, nowMs, deps, profile, day);
+async function nextBody(...args: Parameters<typeof nextWithTrip>) {
+  return (await nextWithTrip(...args)).body;
+}
+
+async function nextWithTrip(
+  url: URL,
+  env: Env,
+  ctx: ExecutionContext,
+  nowMs: number,
+  deps: MeDeps,
+  profile: Profile,
+  day: DayRecord | null,
+  userId: string,
+  prefs: TripPrefs = NO_PREFS,
+  /** Inside the Trip object itself: write plans there, and don't ask it to watch. */
+  local?: { savePlan: (key: string, plan: Boarded) => Promise<void> },
+) {
+  const { answer, trip } = await planned(url, env, ctx, nowMs, deps, profile, day, prefs);
+  const keepPlan = local ? local.savePlan : (key: string, plan: Boarded) => savePlan(env, userId, key, plan, nowMs);
+  // Nobody answered the question and the plan was taken as what happened:
+  // noted once as "no answer", which is what mutes the question in the end.
+  if (trip.assumed && trip.key && trip.plan && !trip.plan.noted && env.DB) {
+    const key = trip.key;
+    const plan = { ...trip.plan, noted: true };
+    ctx.waitUntil(Promise.all([noteUnanswered(env.DB, userId, key, nowMs), keepPlan(key, plan)]).catch(outcomeFailed));
+  }
+  // From when the trip is due, remember which bus it's for, so the question at
+  // its departure is about that bus. Written only when the plan changes.
+  if (trip.planChanged && trip.key && trip.plan && trip.phase !== 'idle') ctx.waitUntil(keepPlan(trip.key, trip.plan));
   // When the plan itself moves on (class starts, day ends). Only the planned
   // answer has one; a place or a stop never changes by itself.
   const isPlan = !url.searchParams.get('place') && !url.searchParams.get('to');
   const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
   // The display-ready card, in the client's 12- or 24-hour style.
-  return { ...full, card: cardFor(full, hour12(url), trip) };
+  const card = cardFor(full, hour12(url), trip);
+  // Push: have the Trip object wake when this card next changes, to tell the phones.
+  const at = nextPhaseAt(full, trip, nowMs);
+  if (!local && at !== null && pushEnabled(env) && day?.watch !== at && classesOn(profile, nowMs).length) {
+    ctx.waitUntil(watchTrip(env, userId, at, nowMs));
+  }
+  return { body: { ...full, card }, trip };
+}
+
+/**
+ * The card as a request would get it, for the Trip object when it wakes:
+ * which trip, its phase, whether there's a question, when it next changes.
+ */
+export async function tripCardFor(
+  env: Env,
+  ctx: ExecutionContext,
+  deps: MeDeps,
+  userId: string,
+  day: DayRecord | null,
+  nowMs: number,
+  savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
+): Promise<{ key: string | null; phase: string; ask: boolean; wakeAt: number | null } | null> {
+  if (!env.DB) return null;
+  const profile = await getProfile(env.DB, userId, deps.graph);
+  if (!classesOn(profile, nowMs).length) return null;
+  const prefs = await prefsFor(env.DB, userId, profile, nowMs);
+  const url = new URL('https://terminus.internal/me/next');
+  const { body, trip } = await nextWithTrip(url, env, ctx, nowMs, deps, profile, day, userId, prefs, { savePlan: savePlanLocal });
+  return { key: trip.key, phase: body.card.phase, ask: body.card.ask !== null, wakeAt: nextPhaseAt(body, trip, nowMs) };
+}
+
+const CHOICES = ['accept', 'dismiss', 'undo'] as const;
+
+/** The outcome a signal records; the others (a location, "waiting") say nothing about it. */
+const OUTCOME_OF: Partial<Record<TripRecord['kind'], 'boarded' | 'missed' | 'skipped' | 'arrived'>> = {
+  boarded: 'boarded',
+  left: 'boarded',
+  missed: 'missed',
+  skipped: 'skipped',
+  arrived: 'arrived',
+};
+
+const outcomeFailed = (e: unknown) => console.error('trip outcome not saved', e instanceof Error ? e.message : typeof e);
+
+/** The user's trip choices and what terminus has learned, or none if D1 can't say. */
+async function prefsFor(db: D1Database, userId: string, profile: Profile, nowMs: number): Promise<TripPrefs> {
+  const all = [...profile.trips, ...profile.manual];
+  if (!all.length) return NO_PREFS;
+  try {
+    return await tripPrefs(db, userId, nowMs, (key) => all.find((t) => classKey(t) === key)?.label ?? null);
+  } catch (err) {
+    outcomeFailed(err);
+    return NO_PREFS;
+  }
 }
 
 /** Counts only: which signals people send, never who or where. */

@@ -516,6 +516,48 @@ $('#full-bus').addEventListener('change', (e) => {
   save();
 });
 
+/* ---------- trip choices (phase 3) ---------- */
+
+const PREF_TEXT = { earlier: 'One bus earlier', quiet: 'No reminders' };
+
+/** Classes you leave a bus earlier for or get no reminders for, and the muted question. */
+async function renderChoices() {
+  let r;
+  try {
+    r = await api('/me/choices');
+  } catch {
+    return;
+  }
+  $('#choice-list').replaceChildren(
+    ...r.choices.map((c) =>
+      el(
+        'li',
+        {},
+        el('span', {}, el('span', { textContent: c.label ?? 'A class no longer in your timetable' }), el('div', { class: 'meta', textContent: PREF_TEXT[c.pref] })),
+        el('button', {
+          type: 'button',
+          class: 'btn small ghost',
+          textContent: 'Undo',
+          onclick: async () => {
+            await api('/me/choice', { method: 'POST', body: { trip: c.trip, pref: c.pref, choice: 'undo' } });
+            renderChoices();
+            renderPreview();
+          },
+        }),
+      ),
+    ),
+  );
+  $('#ask-muted').hidden = !r.askMuted;
+  $('#trip-choices').hidden = !r.choices.length && !r.askMuted;
+}
+$('#ask-again').addEventListener('click', async () => {
+  await api('/me/ask', { method: 'POST' });
+  toast("It'll ask again");
+  renderChoices();
+  renderPreview();
+});
+document.addEventListener('trip-choices', renderChoices);
+
 $('#home-walk').addEventListener('change', (e) => {
   const v = Number(e.target.value);
   if (Number.isInteger(v) && v >= 0 && v <= 30) {
@@ -669,7 +711,7 @@ async function start() {
   renderPlaces();
   $('#app').hidden = false;
   wireReport();
-  await Promise.all([renderDevices(), renderKeys(), renderPreview()]);
+  await Promise.all([renderDevices(), renderKeys(), renderPreview(), renderChoices()]);
   setInterval(() => document.visibilityState === 'visible' && renderPreview(), 60_000);
 }
 

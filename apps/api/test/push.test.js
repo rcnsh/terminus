@@ -1,0 +1,193 @@
+/**
+ * Push (phase 3): devices register a Firebase token, the Trip object wakes
+ * when the card is due to change, and nudges the phones when the phase or
+ * the question changed. On the frozen clock and a fake feed and Firebase.
+ */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
+import { makeD1, makeEmail } from './_d1.mjs';
+import worker from '../src/index.ts';
+import { Trip } from '../src/tripdo.ts';
+
+const BASE = 'https://bus.example.test';
+const THU = 4;
+/**
+ * Buses that leave at fixed times (D2 every 10 min from 09:04, R2 every 12
+ * from 09:06, at every stop), so the answers settle as the clock moves the
+ * way real ones do, instead of every bus staying 4 minutes away.
+ */
+const at = (h, m) => FROZEN_NOW + ((h - 9) * 60 + m) * 60_000;
+const times = (first, every) => Array.from({ length: 30 }, (_, i) => first + i * every * 60_000);
+const RUNS = { D2: times(at(9, 4), 10), R2: times(at(9, 6), 12) };
+const upcoming = (svc) => RUNS[svc].filter((t) => t >= Date.now()).map((t) => String(Math.round((t - Date.now()) / 60_000)));
+const FEED = new Proxy(
+  {},
+  {
+    get: () =>
+      Object.keys(RUNS).map((svc) => {
+        const [first, second] = upcoming(svc);
+        return { name: svc, arrivalTime: first ?? '-', nextArrivalTime: second ?? '-', passengers: 'low' };
+      }),
+  },
+);
+const PROFILE = { home: { stops: ['PGP'] }, manual: [{ day: THU, arriveByMin: 600, endMin: 660, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }] };
+
+/** A throwaway service account with a real RSA key, so the JWT really gets signed. */
+async function serviceAccount() {
+  const { privateKey } = await crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true,
+    ['sign', 'verify'],
+  );
+  const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', privateKey)).toString('base64');
+  const pem = `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g).join('\n')}\n-----END PRIVATE KEY-----\n`;
+  return JSON.stringify({ project_id: 'terminus-test', client_email: 'push@terminus-test.iam.gserviceaccount.com', private_key: pem });
+}
+
+async function setup({ push = true } = {}) {
+  const fcm = { sent: [], dead: new Set() };
+  const fetchImpl = makeFetch({ byStop: FEED, fcm });
+  installGlobals(fetchImpl);
+  const clock = (ms) => installGlobals(fetchImpl, ms);
+  let env;
+  const TRIPS = makeDurableObjects(Trip, () => env);
+  env = { ...makeEnv(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', TRIPS, ...(push ? { FCM_SERVICE_ACCOUNT: await serviceAccount() } : {}) };
+  const call = async (path, { method = 'GET', token, cookie, body } = {}) => {
+    const headers = {};
+    if (token) headers.authorization = `Bearer ${token}`;
+    if (cookie) headers.cookie = cookie;
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    const ctx = makeCtx();
+    const res = await worker.fetch(new Request(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }), env, ctx);
+    await ctx.settle();
+    return res;
+  };
+  await call('/auth/login', { method: 'POST', body: { email: 'you@u.nus.edu' } });
+  const verify = await worker.fetch(
+    new Request(`${BASE}/auth/verify`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `t=${env.EMAIL.lastToken()}` }),
+    env,
+    makeCtx(),
+  );
+  const cookie = verify.headers.get('set-cookie').split(';')[0];
+  await call('/me/profile', { method: 'PUT', cookie, body: PROFILE });
+  const pair = async (name) => {
+    const { code } = await (await call('/me/pair-code', { method: 'POST', cookie })).json();
+    return (await (await call('/pair', { method: 'POST', body: { code, name } })).json()).token;
+  };
+  const phone = await pair('Pixel');
+  const mac = await pair('MacBook');
+  const tablet = await pair('Galaxy Tab');
+  const next = async (token) => (await call('/me/next', { token })).json();
+  const pushTokens = () => env.DB._db.prepare('SELECT name, push_token FROM sessions WHERE push_token IS NOT NULL ORDER BY name').all().map((r) => ({ ...r }));
+  const alarm = () => [...TRIPS.alarms.values()][0];
+  /** Lets the Trip object wake at each alarm until `done`; how many wakes it took. */
+  const wakeUntil = async (done, max = 5) => {
+    let n = 0;
+    while (!done() && n < max && alarm() !== undefined) {
+      clock(alarm());
+      await TRIPS.fireAlarms();
+      n++;
+    }
+    assert.ok(done(), `not done after ${n} wakes`);
+    return n;
+  };
+  return { env, call, phone, mac, tablet, next, fcm, TRIPS, clock, pushTokens, alarm, wakeUntil };
+}
+
+test('a device registers its push token; the same token moves with the device', async () => {
+  const { call, phone, mac, pushTokens } = await setup();
+  assert.equal((await call('/me/push', { method: 'POST', token: phone, body: {} })).status, 400);
+  assert.equal((await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-1' } })).status, 200);
+  assert.deepEqual(pushTokens(), [{ name: 'Pixel', push_token: 'fcm-1' }]);
+  // A reinstall signed in as another device reports the same token: one session only.
+  await call('/me/push', { method: 'POST', token: mac, body: { token: 'fcm-1' } });
+  assert.deepEqual(pushTokens(), [{ name: 'MacBook', push_token: 'fcm-1' }]);
+  await call('/me/push', { method: 'DELETE', token: mac });
+  assert.deepEqual(pushTokens(), []);
+});
+
+test('the Trip object wakes when the phase changes and nudges the phone, once per change', async () => {
+  const { call, phone, next, fcm, TRIPS, clock, alarm, wakeUntil } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const first = await next(phone);
+  assert.equal(first.card.phase, 'idle');
+  // Asked to wake when the phase next changes: five minutes before the
+  // leave-by (not when the card merely goes stale).
+  assert.equal(alarm(), Date.parse(first.leave.at) - 5 * 60_000);
+
+  // The phone already shows "idle": that is never pushed. (The 9:00 leave-by
+  // was a timetable estimate; live times firm it up, so it may take a wake or two.)
+  const woke = await wakeUntil(() => fcm.sent.length > 0);
+  assert.ok(woke <= 3);
+  assert.equal(fcm.sent.length, 1);
+  assert.deepEqual(fcm.sent[0].data, { kind: 'card', phase: 'due', ask: '0' });
+  assert.equal(fcm.sent[0].android.priority, 'HIGH', 'time to go is worth waking the phone for');
+  assert.equal(fcm.sent[0].token, 'fcm-phone');
+  assert.equal(fcm.oauth, 1);
+
+  // Still due at the next wake: nothing to say.
+  const before = fcm.sent.length;
+  const [wake] = [...TRIPS.alarms.values()];
+  assert.ok(wake > Date.now(), 'it keeps waking');
+  assert.equal(fcm.sent.length, before);
+  assert.equal(fcm.oauth, 1, 'the access token is reused');
+});
+
+test('the question at the departure is pushed, urgently', async () => {
+  const { call, phone, tablet, next, fcm, TRIPS, clock, wakeUntil } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  // Due: the object remembers which bus the trip is for.
+  await wakeUntil(() => fcm.sent.some((m) => m.data.phase === 'due'));
+  const plan = Object.values([...TRIPS.instances.values()][0].storage._map.get('day').plans)[0];
+  clock(Date.parse(plan.board) + 30_000);
+  await TRIPS.fireAlarms();
+  const asked = fcm.sent.at(-1);
+  assert.deepEqual(asked.data, { kind: 'card', phase: 'heading', ask: '1' });
+  assert.equal(asked.android.priority, 'HIGH');
+  // Answered on the phone: the user's other phones hear straight away (quietly); this one doesn't need telling.
+  await call('/me/push', { method: 'POST', token: tablet, body: { token: 'fcm-tablet' } });
+  const before = fcm.sent.length;
+  await call('/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
+  const told = fcm.sent.slice(before);
+  assert.deepEqual(told.map((m) => [m.token, m.data.phase, m.data.ask, m.android.priority]), [['fcm-tablet', 'riding', '0', 'NORMAL']]);
+});
+
+test('a token Firebase no longer knows is dropped', async () => {
+  const { phone, call, next, fcm, pushTokens, wakeUntil } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-gone' } });
+  fcm.dead.add('fcm-gone');
+  await next(phone);
+  await wakeUntil(() => pushTokens().length === 0);
+  assert.deepEqual(pushTokens(), []);
+});
+
+test('without push set up, or with no device registered, the object only wakes at midnight', async () => {
+  for (const push of [false, true]) {
+    const { phone, next, alarm } = await setup({ push });
+    await next(phone);
+    if (!push) assert.equal(alarm(), undefined, 'not even created for nothing');
+  }
+  // Registered nobody: it wakes once, finds no one to tell, and stops.
+  const { phone, next, TRIPS, clock, alarm, fcm } = await setup();
+  await next(phone);
+  clock(alarm());
+  await TRIPS.fireAlarms();
+  assert.equal(fcm.sent.length, 0);
+  assert.equal(new Date(alarm() + 8 * 3_600_000).toISOString().slice(11, 16), '00:00', 'only midnight is left');
+});
+
+test("another device fetching the card doesn't stop the phone being told", async () => {
+  const { call, phone, mac, next, fcm, TRIPS, clock, alarm } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  // The trip becomes due; the Mac (no push) happens to refresh first.
+  for (let i = 0; i < 5 && !fcm.sent.length; i++) {
+    clock(alarm());
+    await next(mac);
+    await TRIPS.fireAlarms();
+  }
+  assert.equal(fcm.sent[0]?.data.phase, 'due', 'the phone still hears it');
+});

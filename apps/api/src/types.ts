@@ -50,6 +50,8 @@ export interface Env {
   RL_MAIL?: RateLimit;
   /** The trip engine: one Durable Object per user holding today's trip signals (trip.ts). */
   TRIPS?: DurableObjectNamespace;
+  /** Firebase service account JSON, for push (push.ts). Unset: no push. */
+  FCM_SERVICE_ACCOUNT?: string;
   /** One global ceiling on new anonymous accounts (apps can't run Turnstile). */
   RL_ANON?: RateLimit;
   /** Tests only: "1" lets anyone call the bus-answer routes without a key. */
@@ -179,6 +181,10 @@ export interface Leave {
   /** Where to get off, when the bus only stops across the road from the
    *  destination. Absent otherwise. Short stop name. */
   off?: string;
+  /** Stop codes: where to board, and where to get off when that's across the
+   *  road (otherwise the destination's own stop). For matching a bus in the feed. */
+  stopCode?: string;
+  offCode?: string;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -189,6 +195,8 @@ export interface ArriveBy {
   venueWalkS: number;
   /** Aim one bus earlier when the one to wait for is often packed. */
   fullBusMargin?: boolean;
+  /** Leave one bus earlier for this class: a suggestion the user accepted (outcomes.ts). */
+  oneEarlier?: boolean;
 }
 
 /* ------------------------------------------------------------------ */

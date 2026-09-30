@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 
-import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
+import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { clientFrom } from '../src/accounts.ts';
 import { choicesFor, hasSetup } from '../src/applogin.ts';
 import { housekeeping } from '../src/monitor.ts';
+import { endOfDayMs, sgtDate } from '../src/trip.ts';
+import { Trip } from '../src/tripdo.ts';
 
 const BASE = 'https://bus.example.test';
 const ME = 'student@u.nus.edu';
@@ -18,7 +20,7 @@ function setup() {
   installGlobals(makeFetch());
   const db = makeD1();
   const email = makeEmail();
-  const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'terminus@example.test' };
+  const env = { ...makeEnv(), DB: db, EMAIL: email, EMAIL_FROM: 'terminus@example.test', TRIPS: makeDurableObjects(Trip) };
   return { db, email, env };
 }
 
@@ -45,6 +47,27 @@ async function anon(env, name = 'Pixel 8') {
   const res = await call(env, '/auth/anon', { method: 'POST', body: { name, platform: 'android' }, headers: { 'x-terminus-client': 'android/1.4.0' } });
   assert.equal(res.status, 201);
   return (await res.json()).token;
+}
+
+/** The anonymous account's id (there is at most one in these tests). */
+function anonId(db) {
+  return db._db.prepare('SELECT id FROM users WHERE email IS NULL').get()?.id;
+}
+
+/** Gives a user some trip state today, as a "Not going" would. */
+async function seedTrip(env, userId) {
+  const now = Date.now();
+  const res = await env.TRIPS.get(userId).fetch('https://trip/signal', {
+    method: 'POST',
+    body: JSON.stringify({ date: sgtDate(now), key: '4:600:UTOWN', rec: { kind: 'skipped', at: now }, deleteAt: endOfDayMs(now) }),
+  });
+  assert.equal(res.status, 200);
+}
+
+/** Whether a user still has trip state today (signals or a pending alarm). */
+async function hasTrip(env, userId) {
+  const day = await (await env.TRIPS.get(userId).fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
+  return day !== null || env.TRIPS.alarms.has(userId);
 }
 
 /** The approval link's secret from the latest email. */
@@ -98,8 +121,12 @@ test('an anonymous account cannot add devices, but its app can delete it', async
   const token = await anon(env);
   assert.equal((await call(env, '/me/pair-code', { method: 'POST', token })).status, 403);
   assert.equal((await call(env, '/me/keys', { method: 'POST', token, body: { name: 'x' } })).status, 403);
+  const id = anonId(db);
+  await seedTrip(env, id);
   assert.equal((await call(env, '/me', { method: 'DELETE', token })).status, 200);
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 0);
+  // Today's trip signals go with the account, not at midnight.
+  assert.equal(await hasTrip(env, id), false);
 });
 
 test('a signed-in device still cannot delete the account; the account page can', async () => {
@@ -207,12 +234,15 @@ test('signing in to an existing account from a fresh install drops the empty ano
   const cookie = await signInWeb(env, email);
   await call(env, '/me/profile', { method: 'PUT', cookie, body: HOME });
   const old = await anon(env);
+  const id = anonId(db);
+  await seedTrip(env, id);
   // Wait out the cooldown the web sign-in started.
   await env.KV.delete([...env.KV._map.keys()].find((k) => k.startsWith('mail:')));
   db.exec('UPDATE magic_links SET created = 0');
   const r = await signInApp(env, email, { token: old });
   assert.equal(r.outcome, 'signed-in');
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
+  assert.equal(await hasTrip(env, id), false);
   assert.equal(email.sent.at(-1).subject, 'terminus was added to Pixel 8');
   assert.deepEqual((await (await call(env, '/me/profile', { token: r.token })).json()).home, HOME.home);
 });
@@ -238,8 +268,12 @@ test('both have a setup: the app chooses, and merge applies it', async () => {
   db.exec('UPDATE magic_links SET created = 0');
   const old = await anon(env);
   await call(env, '/me/profile', { method: 'PUT', token: old, body: HOME });
+  const id = anonId(db);
+  await seedTrip(env, id);
   const r = await signInApp(env, email, { token: old });
   assert.equal(r.outcome, 'choose');
+  // Still an account until the app chooses, so its trip state stays too.
+  assert.equal(await hasTrip(env, id), true);
   // The account's own setup until the app says otherwise.
   assert.deepEqual((await (await call(env, '/me/profile', { token: r.token })).json()).home.stops, ['UTOWN']);
 
@@ -249,6 +283,7 @@ test('both have a setup: the app chooses, and merge applies it', async () => {
   assert.deepEqual((await merged.json()).profile.home.stops, ['PGP']);
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
   assert.equal((await call(env, '/me', { token: old })).status, 401);
+  assert.equal(await hasTrip(env, id), false);
 });
 
 test('a signed-in device can start another sign-in only for a different device', async () => {

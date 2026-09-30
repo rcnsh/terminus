@@ -7,6 +7,7 @@
  * each change of state: once when it breaks, once when it recovers.
  */
 
+import { KEEP_DAYS } from './outcomes.ts';
 import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
 import { KV_APP_VERSION, UpstreamRejected } from './auth.ts';
@@ -230,6 +231,8 @@ export async function housekeeping(db: D1Database, nowMs: number): Promise<void>
     db.prepare('DELETE FROM pair_codes WHERE expires < ?').bind(nowMs),
     db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
     db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
+    // Trip outcomes (phase 3) are kept 35 days.
+    db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
   ]);
 }
 

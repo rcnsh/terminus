@@ -10,6 +10,7 @@ coreKtx = "1.19.1"
 junit = "4.13.2"
 orgJson = "20260814"
 zxing = "3.5.3"
+firebaseBom = "34.19.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -26,6 +27,9 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+# Push (phase 3). Firebase is set up in code from google-services.json, without its Gradle plugin.
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 junit = { module = "junit:junit", version.ref = "junit" }
 # Android's org.json is a stub on the JVM; unit tests need the real one.
 org-json = { module = "org.json:json", version.ref = "orgJson" }

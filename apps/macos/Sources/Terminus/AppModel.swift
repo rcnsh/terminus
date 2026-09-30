@@ -196,6 +196,23 @@ final class AppModel {
 
     /// A card button: "On the D2", "Missed it", "Not going". Recorded for every
     /// device; the answer that comes back replaces the planned one.
+    /// "Leave earlier" or "No thanks" on a suggestion; the card comes back without it.
+    func choose(_ s: Suggestion, accept: Bool) {
+        guard !signalling, let token = TokenStore.read() else { return }
+        signalling = true
+        Task {
+            defer { signalling = false }
+            do {
+                try await Api(token: token).choice(id: s.id, accept: accept)
+                _ = await refresh()
+            } catch let e as ApiError {
+                error = e.message
+            } catch {
+                self.error = "Couldn't save that"
+            }
+        }
+    }
+
     func signal(_ action: CardAction) {
         guard !signalling, let token = TokenStore.read() else { return }
         signalling = true

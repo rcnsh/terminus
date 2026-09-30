@@ -37,6 +37,8 @@ class Store(context: Context) {
             // commit, not apply: a process killed right after pairing must not lose it.
             prefs.edit(commit = true) {
                 if (value == null) remove(KEY_TOKEN) else putString(KEY_TOKEN, encrypt(value))
+                // A new session has no push address on the server yet.
+                if (value != cached) remove(KEY_PUSH)
             }
             cached = value
             loaded = true
@@ -93,6 +95,16 @@ class Store(context: Context) {
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
         set(value) = prefs.edit { putLong(KEY_LEAVE_NOTIFIED, value) }
 
+    /** The last moment the trip notification made a sound for ("leave:<class>", "ask:<trip>"). */
+    var leaveAlertedMoment: String?
+        get() = prefs.getString(KEY_ALERTED, null)
+        set(value) = prefs.edit { putString(KEY_ALERTED, value) }
+
+    /** The Firebase token last sent to /me/push, so it's only sent when it changes. */
+    var pushToken: String?
+        get() = prefs.getString(KEY_PUSH, null)
+        set(value) = prefs.edit { putString(KEY_PUSH, value) }
+
     fun clear() = synchronized(Store) {
         prefs.edit(commit = true) { clear() }
         cached = null
@@ -140,5 +152,7 @@ class Store(context: Context) {
         const val KEY_LEAVE_NOTIFIED = "leave-notified"
         const val KEY_NEEDS_SETUP = "needs-setup"
         const val KEY_EMAIL = "email"
+        const val KEY_PUSH = "push-token"
+        const val KEY_ALERTED = "leave-alerted"
     }
 }

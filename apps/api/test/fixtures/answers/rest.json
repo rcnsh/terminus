@@ -43,6 +43,10 @@
     "line": "Day starts 10:00 · Next: CS2030 @ COM1, today 13:00",
     "actions": [],
     "warning": null,
-    "nextChangeAt": "2026-08-27T02:00:00Z"
+    "nextChangeAt": "2026-08-27T02:00:00Z",
+    "ask": null,
+    "askMuted": false,
+    "remind": true,
+    "suggestion": null
   }
 }

@@ -6,6 +6,7 @@
  * SHA-256. A leaked database row cannot be replayed as a session.
  */
 
+import { exportOutcomes } from './outcomes.ts';
 import type { Env } from './types.ts';
 import { DEVICE_IDLE_MS } from './monitor.ts';
 
@@ -544,10 +545,12 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
     .prepare('SELECT created, kind, note, platform, app_version AS appVersion, context FROM feedback WHERE user_id = ? ORDER BY created')
     .bind(user.id)
     .all<{ created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null }>();
+  const trips = await exportOutcomes(db, user.id);
   return {
     email: user.email,
     created: row ? new Date(row.created).toISOString() : null,
     profile,
+    ...trips,
     sessions: sessions.map((x) => {
       const r = x as { kind: string; name: string | null; created: number; lastSeen: number; expires: number | null };
       return {

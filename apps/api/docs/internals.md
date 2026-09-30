@@ -170,7 +170,41 @@ The signals live in a Durable Object per user (`Trip` in
 [src/trip.ts](../src/trip.ts), bound as `TRIPS`, keyed by user id). It's
 only touched on a day with classes, keeps that day's signals and nothing
 else (a location is reduced to what it means: at the stop, or arrived), and
-an alarm deletes everything at the next Singapore midnight.
+an alarm deletes everything at the next Singapore midnight. Deleting an
+account empties it at once (`clearTrip`), and so does signing an anonymous
+account into another one.
+
+### Tap to confirm, and push (phase 3)
+
+- **The planned bus is remembered.** From the moment a trip is due, the Worker
+  saves the bus it's for in the day's record (`DayRecord.plans`, only when it
+  changes). Once that bus has left, the plan is frozen: the answer moves on to
+  the next bus, but the question and the ride stay about this one.
+- **The question** (`card.ask`: "On the 9:41 D2?" with On it · Missed it ·
+  Not going) is on the card from the bus's departure until the class starts,
+  while nobody has answered. Three minutes after the departure with no answer
+  the phase is taken as `riding` (`TripView.assumed`); a location still at the
+  boarding stop makes it `missed` instead. Nothing is recorded for an assumption.
+- **The ride from the feed.** "On it" records the plate of the bus due at the
+  boarding stop within five minutes; while riding, the same plate in the
+  alighting stop's arrivals gives the arrival (quality `live`). Without a
+  plate, the estimate from the tap, marked `~`.
+- **Outcomes** ([src/outcomes.ts](../src/outcomes.ts), `trip_outcomes`, 35
+  days): each answer, and `none` once for a question left unanswered. Five
+  `none` in a row mute the question (`users.ask_from` turns it back on);
+  three misses of one class in 30 days suggest a bus earlier (`ArriveBy.oneEarlier`);
+  three skips in a row offer to stop reminders (`card.remind: false`). Choices
+  are `trip_prefs`; a turned-down suggestion waits 30 days.
+- **Push** ([src/push.ts](../src/push.ts), [src/tripdo.ts](../src/tripdo.ts)).
+  When `FCM_SERVICE_ACCOUNT` is set, a card served on a class day asks the
+  Trip object to wake at `nextPhaseAt` (due, leave-by, departure, +3 min,
+  class start, ride end; not at `staleAt`). At each wake it works out the card
+  again, nudges the user's devices (`sessions.push_token`) if the phase or
+  the question changed, and schedules the next wake; with no device taking
+  push it stops. A nudge is a data message, `{kind: 'card', phase, ask}`, high
+  priority for due, missed and a new question; the app fetches /me/next
+  itself. A tap nudges the user's other devices at once. The object's single
+  alarm is the sooner of the next wake and midnight (`deleteAt`).
 
 The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 

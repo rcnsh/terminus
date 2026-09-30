@@ -52,9 +52,11 @@ function phaseParts(a) {
 }
 
 function actions(a) {
-  const list = a.card?.actions ?? [];
-  if (!list.length) return null;
-  return el(
+  // From the bus's departure: the question, in place of the usual buttons.
+  const ask = a.card?.ask ?? null;
+  const list = ask ? ask.actions : (a.card?.actions ?? []);
+  if (!list.length) return suggestion(a);
+  const buttons = el(
     'div',
     { class: 'actions' },
     ...list.map((x, i) =>
@@ -71,6 +73,34 @@ function actions(a) {
           }
         },
       }),
+    ),
+  );
+  return el('div', {}, ask ? el('div', { class: 'ask', textContent: ask.question }) : '', buttons, suggestion(a) ?? '');
+}
+
+/** "Leave one bus earlier for CS2030?": what terminus has learned, offered, never applied by itself. */
+function suggestion(a) {
+  const s = a.card?.suggestion ?? null;
+  if (!s) return null;
+  const choose = (choice) => async (e) => {
+    e.target.disabled = true;
+    try {
+      await api('/me/choice', { method: 'POST', body: { id: s.id, choice } });
+      document.dispatchEvent(new CustomEvent('trip-choices'));
+      renderPreview();
+    } catch {
+      e.target.disabled = false;
+    }
+  };
+  return el(
+    'div',
+    { class: 'suggestion' },
+    el('div', { textContent: s.text }),
+    el(
+      'div',
+      { class: 'actions' },
+      el('button', { type: 'button', class: 'btn small accent', textContent: s.accept, onclick: choose('accept') }),
+      el('button', { type: 'button', class: 'btn small ghost', textContent: s.dismiss, onclick: choose('dismiss') }),
     ),
   );
 }

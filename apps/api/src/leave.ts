@@ -44,11 +44,11 @@ interface Leg {
   stop: { code: string; name: string };
   walkS: number;
   rideS: number;
-  off?: { name: string };
+  off?: { code: string; name: string };
 }
 
 /** `off` only when there is one, so answers without a crossing are unchanged. */
-const offOf = (leg: { off?: { name: string } }) => (leg.off ? { off: shortStop(leg.off.name) } : {});
+const offOf = (leg: { off?: { code: string; name: string } }) => (leg.off ? { off: shortStop(leg.off.name), offCode: leg.off.code } : {});
 
 export function leaveBy(f: LeaveInput): Leave | null {
   if (f.walkAllS != null) {
@@ -63,7 +63,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
     if (!b || b.quality === 'unknown') return null;
     const at = b.fetchedAt + b.boardS * 1000 - b.walkS * 1000 - BUFFER_MS;
     if (at - f.nowMs < NOW_S * 1000) return null;
-    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000), note: null, ...offOf(b) };
+    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), stopCode: b.stop.code, board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000), note: null, ...offOf(b) };
   }
 
   const legs: Leg[] = f.options.length
@@ -73,7 +73,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
   let late: (Leave & { ms: number }) | null = null;
   for (const leg of legs) {
     const r = forLeg(leg, f.byStop.get(leg.stop.code), f.graph, f.arriveBy, f.nowMs, f.crowdRisk);
-    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: leg.svc, stop: shortStop(leg.stop.name), board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, ...offOf(leg), ms: r.ms };
+    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: leg.svc, stop: shortStop(leg.stop.name), stopCode: leg.stop.code, board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, ...offOf(leg), ms: r.ms };
     // The latest on-time departure wins; if nothing is on time, the soonest.
     if (!r.late && (!onTime || r.ms > onTime.ms || (r.ms === onTime.ms && onTime.estimated && !r.estimated))) onTime = out;
     if (r.late && (!late || r.ms < late.ms)) late = out;
@@ -117,8 +117,9 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
     // With no live times the bus is somewhere in that headway: `board` is
     // when you reach the stop. Often packed then: one more headway early.
     const crowd = crowdCheck(leg, latestBoard, arriveBy, risk);
-    const ms = latestBoard - headway * (crowd.earlier ? 2 : 1) - walk;
-    return { ms, board: ms + walk, arrive: arriveAfter(latestBoard - (crowd.earlier ? headway : 0)), estimated: true, late: ms < nowMs, note: crowd.note };
+    const back = crowd.earlier ? 2 : arriveBy.oneEarlier ? 2 : 1;
+    const ms = latestBoard - headway * back - walk;
+    return { ms, board: ms + walk, arrive: arriveAfter(latestBoard - (back - 1) * headway), estimated: true, late: ms < nowMs, note: crowd.note ?? (arriveBy.oneEarlier ? ONE_EARLIER_NOTE : null) };
   }
 
   const earliest = nowMs + walk;
@@ -132,14 +133,18 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
   if (fits.length) {
     let b = fits[fits.length - 1];
     const crowd = crowdCheck(leg, b.at, arriveBy, risk);
-    // Often packed: take the one before, when there is one.
-    if (crowd.earlier && fits.length > 1) b = fits[fits.length - 2];
-    const note = crowd.earlier && fits.length === 1 ? crowd.warnOnly : crowd.note;
+    // Often packed, or you asked for a bus earlier: take the one before, when there is one.
+    const earlier = (crowd.earlier || arriveBy.oneEarlier === true) && fits.length > 1;
+    if (earlier) b = fits[fits.length - 2];
+    const note = crowd.earlier && fits.length === 1 ? crowd.warnOnly : (crowd.note ?? (earlier ? ONE_EARLIER_NOTE : null));
     return { ms: b.at - walk, board: b.at, arrive: arriveAfter(b.at), estimated: b.estimated, late: false, note };
   }
   // Nothing gets you there on time: the first bus you can catch.
   return { ms: buses[0].at - walk, board: buses[0].at, arrive: arriveAfter(buses[0].at), estimated: buses[0].estimated, late: true, note: null };
 }
+
+/** Said when the leave-by is a bus earlier because the user chose that for the class. */
+export const ONE_EARLIER_NOTE = 'One bus earlier, as you chose for this class';
 
 /** Whether the bus you'd wait for is often packed, and what to say. */
 function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk): { earlier: boolean; note: string | null; warnOnly: string | null } {

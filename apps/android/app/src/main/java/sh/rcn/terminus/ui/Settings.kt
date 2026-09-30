@@ -74,6 +74,7 @@ internal fun SettingsScreen(
     BackHandler(onBack = onClose)
     LaunchedEffect(Unit) { account.refresh() }
     LaunchedEffect(state.email) { if (state.email != null) account.loadDevices() }
+    LaunchedEffect(Unit) { account.loadChoices() }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -105,12 +106,42 @@ internal fun SettingsScreen(
 
                 Heading("Getting around")
                 PacePicker(profile, account)
+                TripChoices(state, account)
 
                 Heading("Saved places")
                 Places(profile, state.campus?.destinations.orEmpty(), account)
             }
             Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+/** What you chose for particular classes, and the muted question, each undoable. */
+@Composable
+private fun TripChoices(state: AccountState, account: AccountViewModel) {
+    if (state.choices.isEmpty() && !state.askMuted) return
+    Text("Your classes", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+    state.choices.forEach { c ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(c.label ?: "A class no longer in your timetable")
+                Text(
+                    if (c.pref == "earlier") "One bus earlier" else "No reminders",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = { account.undoChoice(c) }) { Text("Undo") }
+        }
+    }
+    if (state.askMuted) {
+        Text(
+            "terminus stopped asking whether you caught the bus, because it went unanswered five trips in a row. No answer already counts as yes.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        OutlinedButton(onClick = account::askAgain, modifier = Modifier.padding(top = 4.dp)) { Text("Ask again") }
     }
 }
 

@@ -28,6 +28,7 @@ import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NextAnswer
+import sh.rcn.terminus.Push
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import java.util.concurrent.TimeUnit
@@ -69,6 +70,8 @@ object Refresher {
             store.saveAnswer(json, now)
             store.lastError = null
             scheduleNext(ctx, NextAnswer.parse(json), now)
+            // Signed in with no push address sent yet (a new session, or a new Firebase token).
+            if (store.pushToken == null) Push.register(ctx)
         } catch (e: ApiError) {
             if (e.status == 401) {
                 store.token = null

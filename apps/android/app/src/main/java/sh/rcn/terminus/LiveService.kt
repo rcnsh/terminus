@@ -27,13 +27,14 @@ import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.widget.redrawWidgets
 
 /**
- * The live notification: while your day is on, a silent ongoing notification
- * with the next bus and a ticking countdown, refreshed every 30 s (2 min
- * with the screen off), and the widgets redrawn with it.
+ * The live notification: during a trip, from "time to go" until you're there
+ * (phase 3), a silent ongoing notification with the next bus and a ticking
+ * countdown, refreshed every 30 s (2 min with the screen off), and the
+ * widgets redrawn with it.
  *
- * Outside your day (a `rest` answer) it stops itself and an exact alarm
- * starts it again when the day begins. The API's 15 s per-stop cache means
- * this costs NUS nothing more than having the app open.
+ * Between trips it stops itself, and starts again when the next trip is due:
+ * from a push, or an exact alarm on a phone without one. The API's 15 s
+ * per-stop cache means this costs NUS nothing more than having the app open.
  */
 class LiveService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -72,9 +73,13 @@ class LiveService : Service() {
             if (!store.liveUpdates || !store.paired) break
             Refresher.refresh(this)
             val answer = store.lastAnswer()?.first
-            if (answer?.mode == "rest") {
-                // Day's over (or not begun): come back when the plan changes.
-                answer.refreshAtMs?.let { wakeAt(this, it) }
+            if (answer == null || answer.mode == "rest" || answer.card?.phase !in TRIP_PHASES) {
+                // Between trips: come back when the next one is due, or the plan changes.
+                val now = System.currentTimeMillis()
+                listOfNotNull(answer?.leaveAtMs?.minus(LeaveAlerts.LEAD_MS), answer?.refreshAtMs)
+                    .filter { it > now }
+                    .minOrNull()
+                    ?.let { wakeAt(this, it) }
                 break
             }
             nm?.notify(NOTIFICATION_ID, build(this, answer))
@@ -96,6 +101,8 @@ class LiveService : Service() {
         private const val SCREEN_OFF_MS = 120_000L
         const val ACTION_STOP = "sh.rcn.terminus.LIVE_STOP"
         const val ACTION_START = "sh.rcn.terminus.LIVE_START"
+        /** From "time to go" until you're there. */
+        val TRIP_PHASES = setOf("due", "heading", "waiting", "riding", "missed")
 
         fun start(ctx: Context) {
             val store = Store(ctx)

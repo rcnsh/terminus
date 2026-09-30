@@ -59,7 +59,7 @@ export interface DayPlan {
   note: string | null;
 }
 
-export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile, day: DayRecord | null, h12: boolean): Promise<DayPlan> {
+export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile, day: DayRecord | null, h12: boolean, earlier: Set<string> = new Set()): Promise<DayPlan> {
   const idx = indexGraph(deps.graph);
   const name = (code: string | null) => (code ? (idx.byCode.get(code)?.name ?? code) : null);
   const t = sgt(nowMs);
@@ -104,7 +104,7 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
     // Upcoming classes get a leave-by, from where you'll be then.
     if ((status === 'next' || status === 'later') && from) {
       pending.push(
-        tripAnswer(env, ctx, nowMs, deps, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, { lat: null, lon: null }, places, h12)
+        tripAnswer(env, ctx, nowMs, deps, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, { lat: null, lon: null }, places, h12, earlier.has(classKey(c)))
           .then((a) => {
             item.leave = a.leave ?? null;
             item.timing = a.timing ?? null;

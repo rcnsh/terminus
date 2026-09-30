@@ -224,7 +224,16 @@ export type Outcome =
 
 export type PollResult =
   | { status: 'pending' | 'denied' | 'expired' }
-  | { status: 'approved'; token: string; email: string; outcome: Outcome; userId: string; device: string };
+  | {
+      status: 'approved';
+      token: string;
+      email: string;
+      outcome: Outcome;
+      userId: string;
+      device: string;
+      /** The anonymous account this sign-in deleted, if any. */
+      removed?: string;
+    };
 
 /** A profile worth keeping: somewhere to go or somewhere to start. */
 export function hasSetup(json: unknown): boolean {
@@ -290,7 +299,8 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
     }
   }
   const token = await openSession(db, userId, 'device', req.device_name, nowMs, client);
-  return { status: 'approved', token, email: req.email, outcome, userId, device: req.device_name };
+  const removed = anon && (outcome === 'signed-in' || outcome === 'moved-setup') ? anon.id : undefined;
+  return { status: 'approved', token, email: req.email, outcome, userId, device: req.device_name, removed };
 }
 
 /** Deletes an anonymous account once it's been signed in elsewhere; its reports move with it. */
@@ -312,7 +322,7 @@ export async function mergeAnonymous(
   anonToken: string,
   keep: 'account' | 'device',
   nowMs: number,
-): Promise<'ok' | 'not-anonymous'> {
+): Promise<{ removed: string } | 'not-anonymous'> {
   const anon = await db
     .prepare('SELECT u.id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.email IS NULL')
     .bind(await hashToken(anonToken))
@@ -323,5 +333,5 @@ export async function mergeAnonymous(
     if (mine) await saveProfileJson(db, userId, mine, nowMs);
   }
   await removeAnonymous(db, anon.id, userId);
-  return 'ok';
+  return { removed: anon.id };
 }

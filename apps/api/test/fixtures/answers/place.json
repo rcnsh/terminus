@@ -74,6 +74,7 @@
     "estimated": false,
     "svc": "A1",
     "stop": "PGP",
+    "stopCode": "PGP",
     "board": "2026-08-27T01:09:00Z",
     "arrive": "2026-08-27T01:10:35Z",
     "note": null
@@ -115,6 +116,10 @@
     "line": "A1 · 9 min · PGP",
     "actions": [],
     "warning": null,
-    "nextChangeAt": "2026-08-27T01:09:30Z"
+    "nextChangeAt": "2026-08-27T01:09:30Z",
+    "ask": null,
+    "askMuted": false,
+    "remind": true,
+    "suggestion": null
   }
 }

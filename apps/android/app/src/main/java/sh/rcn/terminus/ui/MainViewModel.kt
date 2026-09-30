@@ -236,6 +236,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var dayJob: Job? = null
 
     /** Today's timeline; kept as it was when offline. */
+    /** "Leave earlier" or "No thanks" on a suggestion; the card then comes back without it. */
+    fun choose(s: sh.rcn.terminus.Suggestion, accept: Boolean) {
+        val token = store.token ?: return
+        if (_state.value.signalling) return
+        _state.update { it.copy(signalling = true, error = null) }
+        viewModelScope.launch {
+            try {
+                Api(token).choice(if (accept) "accept" else "dismiss", id = s.id)
+                _state.update { it.copy(signalling = false) }
+                load()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(signalling = false, error = e.message ?: "Couldn't save that") }
+            }
+        }
+    }
+
     fun loadDay() {
         val token = store.token ?: return
         if (dayJob?.isActive == true) return

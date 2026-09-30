@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         // that opened the app and yank the user back to that view.
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
+        sh.rcn.terminus.Push.register(this)
         setContent { TerminusTheme { App(vm, account) } }
     }
 

@@ -46,6 +46,10 @@ data class AccountState(
     val imported: ImportResult? = null,
     /** A NUSMods link shared into the app, waiting to be imported. */
     val sharedLink: String? = null,
+    /** Classes with a bus earlier or no reminders (phase 3). */
+    val choices: List<sh.rcn.terminus.TripChoice> = emptyList(),
+    /** "On the 9:41 D2?" is no longer asked: ignored five trips running. */
+    val askMuted: Boolean = false,
 )
 
 /**
@@ -282,6 +286,31 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             store.needsSetup = me?.needsSetup == true
             refresh()
             onSignedIn()
+        }
+    }
+
+    /* ---------- trip choices (phase 3) ---------- */
+
+    fun loadChoices() {
+        viewModelScope.launch {
+            runCatching { api().choices() }
+                .onSuccess { (c, muted) -> _state.update { it.copy(choices = c, askMuted = muted) } }
+        }
+    }
+
+    fun undoChoice(c: sh.rcn.terminus.TripChoice) {
+        viewModelScope.launch {
+            runCatching { api().choice("undo", trip = c.trip, pref = c.pref) }
+                .onSuccess { list -> _state.update { it.copy(choices = list) } }
+                .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
+        }
+    }
+
+    fun askAgain() {
+        viewModelScope.launch {
+            runCatching { api().askAgain() }
+                .onSuccess { _state.update { it.copy(askMuted = false, message = "It'll ask again") } }
+                .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
         }
     }
 
