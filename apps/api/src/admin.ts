@@ -43,7 +43,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const d1 = nowMs - DAY;
   const d7 = nowMs - 7 * DAY;
   const d30 = nowMs - 30 * DAY;
-  const [users, new7, new30, withTimetable, withHome, active1, active7, web7, keys, keysUsed7, fb7] = await Promise.all([
+  const [users, new7, new30, withTimetable, withHome, active1, active7, web7, keys, keysUsed7, fb7, anonymous, upgraded, upgraded30, installs30, onboarded30] = await Promise.all([
     count(db, 'SELECT COUNT(*) AS n FROM users'),
     count(db, 'SELECT COUNT(*) AS n FROM users WHERE created > ?', d7),
     count(db, 'SELECT COUNT(*) AS n FROM users WHERE created > ?', d30),
@@ -56,6 +56,19 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
     count(db, 'SELECT COUNT(*) AS n FROM api_keys'),
     count(db, 'SELECT COUNT(*) AS n FROM api_keys WHERE last_used > ?', d7),
     count(db, 'SELECT COUNT(*) AS n FROM feedback WHERE created > ?', d7),
+    // Accounts in the apps: started without an email, and how many added one.
+    count(db, 'SELECT COUNT(*) AS n FROM users WHERE email IS NULL'),
+    count(db, 'SELECT COUNT(*) AS n FROM users WHERE email_added IS NOT NULL'),
+    count(db, 'SELECT COUNT(*) AS n FROM users WHERE email_added > ?', d30),
+    // New installs (an app's first launch makes an account) and how many
+    // finished the in-app setup.
+    count(db, "SELECT COUNT(*) AS n FROM users WHERE via = 'app' AND created > ?", d30),
+    count(
+      db,
+      `SELECT COUNT(*) AS n FROM users u JOIN profiles p ON p.user_id = u.id
+        WHERE u.via = 'app' AND u.created > ? AND EXISTS (SELECT 1 FROM json_each(p.json, '$.seen') WHERE value = 'onboarding')`,
+      d30,
+    ),
   ]);
   const { results: devices } = await db
     .prepare(
@@ -65,6 +78,14 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
     )
     .bind(d7)
     .all<{ platform: string; total: number; active7: number }>();
+  const { results: clients } = await db
+    .prepare(
+      // App versions in use: the x-terminus-client header of devices seen this week.
+      `SELECT client, COUNT(*) AS n FROM sessions
+        WHERE kind = 'device' AND client IS NOT NULL AND last_seen > ? GROUP BY 1 ORDER BY n DESC LIMIT 20`,
+    )
+    .bind(d7)
+    .all<{ client: string; n: number }>();
   const { results: signups } = await db
     .prepare(
       // Per Singapore day, the last 30.
@@ -78,12 +99,14 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
       `SELECT f.id, f.created, f.kind, f.note, f.platform, f.app_version AS appVersion, f.context, u.email
          FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.created DESC LIMIT 25`,
     )
-    .all<{ id: string; created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null; email: string }>();
+    .all<{ id: string; created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null; email: string | null }>();
 
   return {
     ...out,
-    accounts: { total: users, new7d: new7, new30d: new30, withTimetable, withHome, active1d: active1, active7d: active7, webSessions7d: web7 },
+    accounts: { total: users, new7d: new7, new30d: new30, withTimetable, withHome, active1d: active1, active7d: active7, webSessions7d: web7, anonymous },
+    apps: { installs30d: installs30, onboarded30d: onboarded30, addedEmail: upgraded, addedEmail30d: upgraded30 },
     devices,
+    clients,
     signups,
     apiKeys: { total: keys, used7d: keysUsed7 },
     feedback: {

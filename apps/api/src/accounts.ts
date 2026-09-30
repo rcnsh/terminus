@@ -1,5 +1,5 @@
 /**
- * Accounts: email sign-in links for the web page, pairing codes
+ * Accounts: email sign-in codes and links for the web page, pairing codes
  * for the native apps, and one profile document per user.
  *
  * Every token is 32 random bytes, handed out once and stored only as its
@@ -15,8 +15,12 @@ export const ACCOUNT_TTL = {
   linkCooldownMs: 60_000,
   webSessionMs: 30 * 86_400_000,
   pairCodeMs: 10 * 60_000,
+  /** Wrong guesses before an emailed sign-in code stops working. */
+  codeTries: 5,
   /** last_seen is only rewritten this often, to keep D1 writes down. */
   touchMs: 3_600_000,
+  /** An anonymous account (an app that never added an email) unused this long is deleted. */
+  anonIdleMs: 60 * 86_400_000,
 } as const;
 
 /**
@@ -30,7 +34,8 @@ const PAIR_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 export interface User {
   id: string;
-  email: string;
+  /** Null for an anonymous account: an app that hasn't added an email. */
+  email: string | null;
 }
 
 export interface SessionInfo {
@@ -135,27 +140,54 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
       .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs),
   ]);
 
+  // The same sign-in, as a code typed on the page that asked. University
+  // filters (NUS's among them) hold back mail that is only a link; a code
+  // needs no click. It lives in KV and points at the link's row, so spending
+  // either one spends both.
+  const code = newPairCode();
+  const codeKey = await signInCodeKey(email);
+  const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs, n: 0 };
+
   const link = `${origin}/auth/verify?t=${token}`;
   try {
     if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');
-    await sendLink(env, email, link);
+    await env.KV.put(codeKey, JSON.stringify(pending), { expirationTtl: ACCOUNT_TTL.linkMs / 1000 });
+    await sendLink(env, email, link, code, origin);
   } catch (err) {
     // Otherwise the unsent link holds the cooldown and the retry is told
     // "check your email" for a message that never went.
     await db.prepare('DELETE FROM magic_links WHERE token_hash = ?').bind(tokenHash).run();
+    await env.KV.delete(codeKey).catch(() => {});
     throw err;
   }
   await env.KV.put(coolKey, '1', { expirationTtl: Math.max(60, ACCOUNT_TTL.linkCooldownMs / 1000) }).catch(() => {});
   return 'sent';
 }
 
-async function sendLink(env: Env, email: string, link: string): Promise<void> {
+/**
+ * Worded to look like what it is. A subject of "Sign in to ..." over a lone
+ * link is the shape of a phishing mail, and filters treat it as one.
+ */
+async function sendLink(env: Env, email: string, link: string, code: string, origin: string): Promise<void> {
+  const site = new URL(origin).host;
+  const why = `You're getting this because someone entered this address at ${site}, the NUS shuttle bus times app. If that wasn't you, ignore this email: nothing happens without the code.`;
   await env.EMAIL!.send({
     from: { email: env.EMAIL_FROM!, name: 'terminus' },
     to: email,
-    subject: 'Sign in to terminus',
-    text: `Sign in to terminus:\n\n${link}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.`,
-    html: `<p><a href="${link}">Sign in to terminus</a></p><p>The link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.</p>`,
+    subject: `Your terminus code: ${code}`,
+    text: `Your terminus sign-in code is ${code}
+
+Type it on the terminus page where you asked to sign in. It works once and expires in 15 minutes. Never give it to anyone.
+
+Or sign in with this link instead:
+${link}
+
+${why}`,
+    html: `<p>Your terminus sign-in code is</p>
+<p style="font-size:28px;font-weight:700;letter-spacing:4px;font-family:ui-monospace,Menlo,monospace">${code}</p>
+<p>Type it on the terminus page where you asked to sign in. It works once and expires in 15 minutes. Never give it to anyone.</p>
+<p>Or <a href="${link}">sign in with this link</a> instead.</p>
+<p style="color:#666;font-size:13px">${why}</p>`,
   });
 }
 
@@ -174,7 +206,10 @@ export async function linkEmail(db: D1Database, token: string, nowMs: number): P
  * token for the cookie, or null when the link is unknown, used or expired.
  */
 export async function redeemLink(db: D1Database, token: string, nowMs: number): Promise<string | null> {
-  const hash = await hashToken(token);
+  return spendLink(db, await hashToken(token), nowMs);
+}
+
+async function spendLink(db: D1Database, hash: string, nowMs: number): Promise<string | null> {
   // DELETE ... RETURNING makes the link single-use even under two racing POSTs.
   const row = await db
     .prepare('DELETE FROM magic_links WHERE token_hash = ? RETURNING email, expires')
@@ -186,28 +221,64 @@ export async function redeemLink(db: D1Database, token: string, nowMs: number): 
   return openSession(db, user.id, 'web', null, nowMs);
 }
 
-async function ensureUser(db: D1Database, email: string, nowMs: number): Promise<User> {
+/** A sign-in code waiting in KV: hashes of the code and of its link's token,
+ *  when it expires, and how many wrong guesses it has had. */
+interface PendingCode {
+  c: string;
+  t: string;
+  e: number;
+  n: number;
+}
+
+async function signInCodeKey(email: string): Promise<string> {
+  return `code:${await hashToken(email)}`;
+}
+
+/**
+ * Spends an emailed sign-in code and opens a web session, or returns null.
+ * A code is tied to the address it was sent to and dies after a few wrong
+ * guesses, so with about 7×10⁸ possible codes guessing is hopeless. The
+ * session itself comes from spending the link's D1 row, which is atomic, so
+ * a code and its link together still sign in exactly once.
+ */
+export async function redeemCode(env: Env, db: D1Database, email: string, code: string, nowMs: number): Promise<string | null> {
+  const key = await signInCodeKey(email);
+  const pending = await env.KV.get<PendingCode>(key, 'json').catch(() => null);
+  if (!pending || pending.e < nowMs) return null;
+  if ((await hashToken(code)) !== pending.c) {
+    const n = pending.n + 1;
+    const ttlS = Math.floor((pending.e - nowMs) / 1000);
+    // KV's shortest TTL is 60 s; a code closer to expiry than that just dies.
+    if (n >= ACCOUNT_TTL.codeTries || ttlS < 60) await env.KV.delete(key).catch(() => {});
+    else await env.KV.put(key, JSON.stringify({ ...pending, n }), { expirationTtl: ttlS }).catch(() => {});
+    return null;
+  }
+  await env.KV.delete(key).catch(() => {});
+  return spendLink(db, pending.t, nowMs);
+}
+
+export async function ensureUser(db: D1Database, email: string, nowMs: number, via: 'web' | 'app' = 'web'): Promise<User> {
   await db
-    .prepare('INSERT INTO users (id, email, created) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING')
-    .bind(crypto.randomUUID(), email, nowMs)
+    .prepare('INSERT INTO users (id, email, created, last_seen, via) VALUES (?, ?, ?, ?, ?) ON CONFLICT(email) DO NOTHING')
+    .bind(crypto.randomUUID(), email, nowMs, nowMs, via)
     .run();
   return (await db.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first<User>())!;
 }
 
-async function openSession(
+export async function openSession(
   db: D1Database,
   userId: string,
   kind: 'web' | 'device',
   name: string | null,
   nowMs: number,
-  platform: string | null = null,
+  client: Client = NO_CLIENT,
 ): Promise<string> {
   const token = newToken();
   await db
     .prepare(
-      'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(await hashToken(token), userId, kind, name, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null, platform)
+    .bind(await hashToken(token), userId, kind, name, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null, client.platform, client.client)
     .run();
   return token;
 }
@@ -215,13 +286,44 @@ async function openSession(
 /**
  * Which app is calling, from its User-Agent: Android's HTTP stack says
  * Dalvik, the Mac app's says CFNetwork. Null for anything else (a browser
- * session doesn't need one).
+ * session doesn't need one). Only a fallback for apps that don't send
+ * x-terminus-client: any CFNetwork client looks like the Mac here.
  */
 export function platformFromAgent(ua: string | null): 'android' | 'mac' | null {
   if (!ua) return null;
   if (/Dalvik|Android/i.test(ua)) return 'android';
   if (/CFNetwork|Darwin/i.test(ua)) return 'mac';
   return null;
+}
+
+export const PLATFORMS = ['android', 'mac', 'ios'] as const;
+export type Platform = (typeof PLATFORMS)[number];
+
+/** The app on the other end: its platform, and the header as sent, for the dashboard. */
+export interface Client {
+  platform: Platform | null;
+  /** "android/1.4.0", "android-play/1.5.0": platform, optional flavour, version. */
+  client: string | null;
+}
+const NO_CLIENT: Client = { platform: null, client: null };
+
+/**
+ * From `x-terminus-client: <platform>[-<flavour>]/<version>`, which the apps
+ * send on every request; the User-Agent guess when it's absent (older apps).
+ */
+export function clientFrom(req: Request): Client {
+  const raw = req.headers.get('x-terminus-client')?.trim().toLowerCase() ?? '';
+  const m = /^([a-z]+)(?:-([a-z]{1,12}))?\/([0-9a-z][0-9a-z.+-]{0,19})$/.exec(raw);
+  const platform = m ? PLATFORMS.find((p) => p === m[1]) : undefined;
+  if (m && platform) return { platform, client: raw };
+  return { platform: platformFromAgent(req.headers.get('user-agent')), client: null };
+}
+
+/** Starts an account with no email for an app's first launch; returns its device token. */
+export async function createAnonymous(db: D1Database, name: string, client: Client, nowMs: number): Promise<string> {
+  const id = crypto.randomUUID();
+  await db.prepare("INSERT INTO users (id, email, created, last_seen, via) VALUES (?, NULL, ?, ?, 'app')").bind(id, nowMs, nowMs).run();
+  return openSession(db, id, 'device', name, nowMs, client);
 }
 
 /* ------------------------------------------------------------------ */
@@ -250,24 +352,30 @@ export async function authenticate(
   const hash = await hashToken(token);
   const row = await db
     .prepare(
-      `SELECT s.kind, s.last_seen, s.expires, u.id, u.email
+      `SELECT s.kind, s.last_seen, s.expires, s.client, u.id, u.email
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ?`,
     )
     .bind(hash)
-    .first<{ kind: 'web' | 'device'; last_seen: number; expires: number | null; id: string; email: string }>();
+    .first<{ kind: 'web' | 'device'; last_seen: number; expires: number | null; client: string | null; id: string; email: string | null }>();
   if (!row) return null;
   if (row.expires !== null && row.expires < nowMs) return null;
   // Paired devices lapse after 90 idle days (the cron deletes them too).
   if (row.kind === 'device' && nowMs - row.last_seen > DEVICE_IDLE_MS) return null;
 
-  if (nowMs - row.last_seen > ACCOUNT_TTL.touchMs) {
-    // Devices paired before sessions had a platform get one here.
-    const platform = row.kind === 'device' ? platformFromAgent(req.headers.get('user-agent')) : null;
-    const touch = db
-      .prepare('UPDATE sessions SET last_seen = ?, platform = COALESCE(platform, ?) WHERE token_hash = ?')
-      .bind(nowMs, platform, hash)
-      .run();
+  const client = row.kind === 'device' ? clientFrom(req) : NO_CLIENT;
+  // Also straight away when the app has updated, so the dashboard's versions are current.
+  if (nowMs - row.last_seen > ACCOUNT_TTL.touchMs || (client.client !== null && client.client !== row.client)) {
+    // Devices paired before sessions had a platform get one here. An explicit
+    // header replaces a User-Agent guess.
+    const touch = db.batch([
+      db
+        .prepare(
+          'UPDATE sessions SET last_seen = ?, platform = CASE WHEN ? IS NOT NULL THEN ? ELSE COALESCE(platform, ?) END, client = COALESCE(?, client) WHERE token_hash = ?',
+        )
+        .bind(nowMs, client.client, client.platform, client.platform, client.client, hash),
+      db.prepare('UPDATE users SET last_seen = ? WHERE id = ?').bind(nowMs, row.id),
+    ]);
     if (ctx) ctx.waitUntil(touch.catch(() => {}));
     else await touch;
   }
@@ -302,7 +410,7 @@ export async function pairCodeOwner(db: D1Database, code: string, nowMs: number)
   const row = await db
     .prepare('SELECT u.email FROM pair_codes p JOIN users u ON u.id = p.user_id WHERE p.code = ? AND p.expires >= ?')
     .bind(code, nowMs)
-    .first<{ email: string }>();
+    .first<{ email: string | null }>();
   return row?.email ?? null;
 }
 
@@ -312,48 +420,75 @@ export function maskEmail(email: string): string {
   return `${local.slice(0, 1)}•••@${domain}`;
 }
 
-/** Spends a pairing code and returns a device token, or null. */
+/** Spends a pairing code and returns a device token and the account's email, or null. */
 export async function redeemPairCode(
   db: D1Database,
   code: string,
   name: string,
   nowMs: number,
-  platform: string | null = null,
-): Promise<string | null> {
+  client: Client = NO_CLIENT,
+): Promise<{ token: string; email: string | null } | null> {
   const row = await db
     .prepare('DELETE FROM pair_codes WHERE code = ? RETURNING user_id, expires')
     .bind(code)
     .first<{ user_id: string; expires: number }>();
   if (!row || row.expires < nowMs) return null;
-  return openSession(db, row.user_id, 'device', name, nowMs, platform);
+  const token = await openSession(db, row.user_id, 'device', name, nowMs, client);
+  const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(row.user_id).first<{ email: string | null }>();
+  return { token, email: user?.email ?? null };
 }
 
 export interface DeviceRow {
   id: string;
   name: string | null;
+  platform: string | null;
   created: number;
   lastSeen: number;
+  /** The device asking. */
+  current: boolean;
 }
 
 /** Devices are identified to the page by a prefix of the token hash, which is
  *  enough to revoke one and useless for signing in. */
-export async function listDevices(db: D1Database, userId: string): Promise<DeviceRow[]> {
+export async function listDevices(db: D1Database, userId: string, currentHash: string | null = null): Promise<DeviceRow[]> {
   const { results } = await db
     .prepare(
-      "SELECT substr(token_hash, 1, 16) AS id, name, created, last_seen AS lastSeen FROM sessions WHERE user_id = ? AND kind = 'device' ORDER BY created",
+      "SELECT substr(token_hash, 1, 16) AS id, name, platform, created, last_seen AS lastSeen FROM sessions WHERE user_id = ? AND kind = 'device' ORDER BY created",
     )
     .bind(userId)
-    .all<DeviceRow>();
-  return results;
+    .all<Omit<DeviceRow, 'current'>>();
+  return results.map((d) => ({ ...d, current: currentHash !== null && currentHash.startsWith(d.id) }));
 }
 
-export async function revokeDevice(db: D1Database, userId: string, id: string): Promise<boolean> {
-  if (!/^[0-9a-f]{16}$/.test(id)) return false;
-  const r = await db
-    .prepare("DELETE FROM sessions WHERE user_id = ? AND kind = 'device' AND substr(token_hash, 1, 16) = ?")
+/** Revokes one device; returns its name ('' when it had none), or null if there was no such device. */
+export async function revokeDevice(db: D1Database, userId: string, id: string): Promise<string | null> {
+  if (!/^[0-9a-f]{16}$/.test(id)) return null;
+  const row = await db
+    .prepare("DELETE FROM sessions WHERE user_id = ? AND kind = 'device' AND substr(token_hash, 1, 16) = ? RETURNING name")
     .bind(userId, id)
-    .run();
-  return (r.meta?.changes ?? 0) > 0;
+    .first<{ name: string | null }>();
+  return row ? (row.name ?? '') : null;
+}
+
+/**
+ * "terminus was added to MacBook Air": sent for every device added to or
+ * removed from an account with an email. It's what makes managing devices
+ * from a phone safe: a lost phone can't add one without the owner hearing.
+ */
+export async function mailDeviceChange(env: Env, email: string | null, change: 'added' | 'removed', name: string, nowMs: number): Promise<void> {
+  if (!email || !env.EMAIL || !env.EMAIL_FROM) return;
+  const device = name.trim() || 'a device';
+  const when = new Date(nowMs + 8 * 3_600_000).toISOString().replace('T', ' ').slice(0, 16) + ' Singapore time';
+  const text =
+    change === 'added'
+      ? `terminus was added to ${device} on your account, ${when}.\n\nIf that wasn't you, remove it on the account page (https://terminus.rcn.sh/account) or from any of your devices, and sign out everywhere.`
+      : `${device} was removed from your terminus account, ${when}. It is signed out.\n\nIf that wasn't you, sign in at https://terminus.rcn.sh/account and sign out everywhere.`;
+  await env.EMAIL.send({
+    from: { email: env.EMAIL_FROM, name: 'terminus' },
+    to: email,
+    subject: change === 'added' ? `terminus was added to ${device}` : `${device} was removed from terminus`,
+    text,
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -388,6 +523,7 @@ export async function endAllSessions(db: D1Database, userId: string): Promise<nu
 export async function deleteAccount(db: D1Database, user: User): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM magic_links WHERE email = ?').bind(user.email),
+    db.prepare('DELETE FROM login_requests WHERE email = ? OR anon_user_id = ?').bind(user.email, user.id),
     db.prepare('DELETE FROM users WHERE id = ?').bind(user.id),
   ]);
 }

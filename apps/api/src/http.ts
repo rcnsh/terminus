@@ -3,7 +3,7 @@ import { TTL } from './config.ts';
 
 export const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'content-type, authorization',
+  'access-control-allow-headers': 'content-type, authorization, x-terminus-client',
   'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
 };
 

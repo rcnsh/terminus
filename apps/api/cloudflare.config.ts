@@ -77,6 +77,14 @@ export default defineConfig({
 					period: 60,
 				},
 			}),
+			// New anonymous accounts from apps, across everyone.
+			RL_ANON: bindings.rateLimit({
+				namespace: "1005",
+				simple: {
+					limit: 30,
+					period: 60,
+				},
+			}),
 			RL_ME: bindings.rateLimit({
 				namespace: "1003",
 				simple: {

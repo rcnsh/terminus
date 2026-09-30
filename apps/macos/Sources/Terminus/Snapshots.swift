@@ -50,6 +50,11 @@ enum Snapshots {
             ("next", model(nearbyTab: false)),
             ("nearby", model(nearbyTab: true)),
             ("pair", model(nearbyTab: false, paired: false)),
+            ("signin", {
+                let m = model(nearbyTab: false, paired: false)
+                m.signInWaiting = ("you@u.nus.edu", 47)
+                return m
+            }()),
             ("rest", model(nearbyTab: false, resting: true)),
         ]
         renderShowcase(to: dir)

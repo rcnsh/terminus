@@ -78,6 +78,16 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_LIVE, false)
         set(value) = prefs.edit { putBoolean(KEY_LIVE, value) }
 
+    /** The in-app setup is still to do (a new account); cleared when it's finished or skipped. */
+    var needsSetup: Boolean
+        get() = prefs.getBoolean(KEY_NEEDS_SETUP, false)
+        set(value) = prefs.edit { putBoolean(KEY_NEEDS_SETUP, value) }
+
+    /** The account's email as last seen, or null for an account without one. */
+    var email: String?
+        get() = prefs.getString(KEY_EMAIL, null)
+        set(value) = prefs.edit { putString(KEY_EMAIL, value) }
+
     /** The class (its start, epoch ms) the last heads-up was for: one per class. */
     var leaveNotifiedFor: Long
         get() = prefs.getLong(KEY_LEAVE_NOTIFIED, 0)
@@ -128,5 +138,7 @@ class Store(context: Context) {
         const val KEY_LEAVE_ALERTS = "leave-alerts"
         const val KEY_LIVE = "live-updates"
         const val KEY_LEAVE_NOTIFIED = "leave-notified"
+        const val KEY_NEEDS_SETUP = "needs-setup"
+        const val KEY_EMAIL = "email"
     }
 }

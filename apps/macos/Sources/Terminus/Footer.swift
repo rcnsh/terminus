@@ -22,7 +22,7 @@ struct Footer: View {
                     }
                     .disabled(!Updater.shared.running)
                     Divider()
-                    Button("Unpair this Mac") { model.unpair() }
+                    Button("Sign out of this Mac") { model.unpair() }
                 } label: {
                     Label("Settings", systemImage: "gearshape")
                 }

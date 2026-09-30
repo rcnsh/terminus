@@ -34,13 +34,18 @@
 
     <h2>What is stored</h2>
     <ul>
-      <li><strong>Your email address</strong>, to send sign-in links. No password is ever stored.</li>
+      <li><strong>Your email address</strong>, if you give one, to send sign-in codes and links and to tell you when a device is added to or removed from your account. No password is ever stored.</li>
       <li><strong>Your timetable</strong>: each class's day, time, venue and nearest bus stop, and the NUSMods share link you imported.</li>
       <li><strong>Your settings</strong>: home stops (stop names only, never your address or coordinates), the minutes it takes you to walk to them, your walking pace, saved places, your gap and day-hours preferences, and which one-time setup screens you have seen.</li>
       <li><strong>How full buses are, in total</strong>: when a bus is about to reach a stop someone asked about, terminus adds one to a count of how often that service is packed at that stop, by kind of day and half hour. The count has no link to you or your request; the bus's plate number is kept for two days only so the same bus is not counted twice.</li>
       <li><strong>Reports you send</strong>: when you tell terminus an answer was wrong, your note and the answer you were looking at are kept with your account, to check against what the buses did. The report is also emailed to the person who runs terminus, with your email address so they can reply.</li>
-      <li><strong>Your devices</strong>: the name each paired device reported (for example "Google Pixel 8"), when it was added and when it was last used. Sign-in and device tokens are stored only as one-way hashes.</li>
+      <li><strong>Your devices</strong>: the name each paired device reported (for example "Google Pixel 8"), which app and app version it runs, when it was added and when it was last used. Sign-in and device tokens are stored only as one-way hashes.</li>
     </ul>
+
+    <h2>Using the apps without an email</h2>
+    <p>The Android and Mac apps work without an email address. On first launch the app creates an account with no email, known only to that device, and stores the same things as above for it: your timetable, settings, device name, and when it was last used. Nothing identifies you unless you add an email later, which keeps your setup and lets you sign in on other devices.</p>
+    <p>An account without an email is deleted, with everything in it, 60 days after the app last used it. You can also delete it straight away from the app's settings. Uninstalling the app doesn't delete it; it just stops being used.</p>
+    <p>When you sign in from an app, terminus keeps a short-lived request (your email address, the device's name and when it was made) until you approve it from the email, or for 15 minutes.</p>
 
     <h2>What is not stored</h2>
     <ul>
@@ -48,7 +53,7 @@
       <li>No tracking, ads, analytics cookies or trackers. The only cookie is the one that keeps you signed in.</li>
     </ul>
     <p>To tune its estimates, terminus records anonymous statistics about answers: which stop, which service and bus (its plate), and how long until it came. These carry no account, email or location.</p>
-    <p>If you ask not to be emailed again, that address goes on a blocklist so sign-in links are never sent to it. The blocklist is not tied to an account and is kept after an account is deleted, because that is its purpose.</p>
+    <p>If you ask not to be emailed again, that address goes on a blocklist so sign-in emails are never sent to it. The blocklist is not tied to an account and is kept after an account is deleted, because that is its purpose.</p>
 
     <h2>Who handles it</h2>
     <p>Everything runs on Cloudflare (hosting, database, email delivery) in data centres that may be outside Singapore. Bus times come from NUS's shuttle feed; NUS does not receive anything about you. Your data is never sold or shared.</p>
@@ -65,11 +70,12 @@
     <h2>How long it is kept</h2>
     <ul>
       <li>Until you delete your account, which removes everything immediately.</li>
-      <li>Sign-in links expire after 15 minutes, browser sessions after 30 days, and paired devices after 90 days without use.</li>
+      <li>Sign-in links and requests expire after 15 minutes, browser sessions after 30 days, and paired devices after 90 days without use.</li>
+      <li>Accounts without an email are deleted 60 days after they were last used.</li>
     </ul>
 
     <h2>Your controls</h2>
-    <p>On the <a href="/account">account page</a> you can see and edit everything above, download it all as a file, sign out every device, or delete your account.</p>
+    <p>On the <a href="/account">account page</a> you can see and edit everything above, download it all as a file, sign out every device, or delete your account. The apps can see and remove your devices too. An account without an email is managed from its app, which can export or delete it.</p>
 
     <h2>Contact</h2>
     <p>Questions or requests about your data under Singapore's Personal Data Protection Act: <a href="mailto:privacy@rcn.sh">privacy@rcn.sh</a>.</p>

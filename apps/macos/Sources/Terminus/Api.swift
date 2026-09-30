@@ -134,8 +134,22 @@ var usesHour12: Bool {
 }
 
 /// "1.0.10" is newer than "1.0.9".
+/// "1.0.10" > "1.0.9", and a release is newer than its own pre-release:
+/// "2.0.0" > "2.0.0-beta.2" > "2.0.0-beta" > "1.3.10".
 func isNewer(_ latest: String, than current: String) -> Bool {
-    latest.compare(current, options: .numeric) == .orderedDescending
+    func split(_ v: String) -> (String, String?) {
+        let p = v.split(separator: "-", maxSplits: 1).map(String.init)
+        return (p[0], p.count > 1 ? p[1] : nil)
+    }
+    let (an, ap) = split(latest), (bn, bp) = split(current)
+    switch an.compare(bn, options: .numeric) {
+    case .orderedDescending: return true
+    case .orderedAscending: return false
+    case .orderedSame:
+        guard let bp else { return false }
+        guard let ap else { return true }
+        return ap.compare(bp, options: .numeric) == .orderedDescending
+    }
 }
 
 struct BoardRow: Decodable, Hashable {
@@ -207,6 +221,19 @@ enum Target: Hashable {
     case code(String, label: String)
 }
 
+struct SignInRequest: Decodable, Equatable {
+    let request: String
+    let poll: String
+    let match: Int
+}
+
+struct SignInPoll: Decodable {
+    let status: String
+    let token: String?
+    let email: String?
+    let outcome: String?
+}
+
 struct ApiError: LocalizedError {
     let status: Int
     let message: String
@@ -219,10 +246,28 @@ struct Api {
 
     let token: String?
 
+    /// `x-terminus-client`: platform and version.
+    static let client = "mac/\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")"
+
     func pair(code: String, name: String) async throws -> String {
         struct R: Decodable { let token: String }
         let r: R = try await request("POST", "/pair", body: ["code": code, "name": name])
         return r.token
+    }
+
+    /// Starts a sign-in approved from the email, on any device. The Mac shows `match`.
+    func signInStart(email: String, name: String) async throws -> SignInRequest {
+        try await request("POST", "/auth/app/start", body: ["email": email, "name": name])
+    }
+
+    /// pending, approved (with a token, once), denied or expired.
+    func signInPoll(_ r: SignInRequest) async throws -> SignInPoll {
+        try await request("POST", "/auth/app/poll", body: ["request": r.request, "poll": r.poll])
+    }
+
+    /// The code from the email, typed here. A wrong one throws with the server's message.
+    func signInCode(_ r: SignInRequest, code: String) async throws -> SignInPoll {
+        try await request("POST", "/auth/app/code", body: ["request": r.request, "poll": r.poll, "code": code])
     }
 
     func next(_ target: Target, lat: Double?, lon: Double?) async throws -> NextAnswer {
@@ -295,6 +340,8 @@ struct Api {
         var req = URLRequest(url: comps.url!, timeoutInterval: 10)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "accept")
+        // So the server can tell the Mac from other CFNetwork clients, and versions apart.
+        req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
         if let json {
             req.setValue("application/json", forHTTPHeaderField: "content-type")

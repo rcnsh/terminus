@@ -91,7 +91,7 @@ pnpm run deploy
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
 | `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set). Needs `x-health-token`; anything else gets a 404. |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
-| `POST /auth/login`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. |
+| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. |
 
 `/next`, `/trip`, `/arrivals`, `/campus` and `/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`) or a signed-in session.
@@ -108,16 +108,52 @@ TTLs and tuning constants.
 ## Accounts
 
 Sign-up is open; addresses on the `blocklist` table are refused. The account
-page at `/account` signs in with an emailed link and stores one profile per user in D1: timetable, home stops, gap threshold and
-saved places. Native apps don't sign in; they pair with a 6-character code
-from the page and get a device token (`Authorization: Bearer`).
+page at `/account` signs in with an emailed code (or the link in the same
+email) and stores one profile per user in D1: timetable, home stops, gap threshold and
+saved places. Apps hold a device token (`Authorization: Bearer`), which they
+get one of three ways:
+
+- **`POST /auth/anon`** on first launch: an account with no email
+  (`users.email` is NULL), so the app is useful before any sign-in. Limited
+  per IP (`RL_AUTH`) and globally (`RL_ANON`); the cron deletes anonymous
+  accounts unused for 60 days (`users.last_seen`).
+- **Sign-in approved from the email** ([src/applogin.ts](../src/applogin.ts),
+  modelled on RFC 8628). `POST /auth/app/start {email, name}` returns
+  `{request, poll, match}` and emails a 6-character code (in the subject
+  too: filters hold back link-only mail) and a link. Typed into the app,
+  `POST /auth/app/code {request, poll, code}` answers with the token; five
+  wrong codes kill the request. Reading mail on another device, the link's
+  page (`GET /auth/approve?r=`) offers three numbers; picking the one the
+  app shows (`match`) approves, a wrong one or "This wasn't me" kills it.
+  The app polls `POST /auth/app/poll {request, poll}` every 3 s and gets
+  `{status: 'approved', token, outcome}` once. The poll secret, the link
+  and the code are all different, so the app that starts a request can't confirm it. Sent
+  with the anonymous token, the device's account is kept (`added-email`) or
+  folded into the email's account: dropped if it had no setup (`signed-in`),
+  moved if the account had none (`moved-setup`), otherwise the app asks and
+  calls `POST /auth/app/merge {anon, keep: 'account'|'device'}` (`choose`).
+  Works on every client, including the Mac, which can't take universal
+  links without a paid Apple team.
+- **A pairing code** from `/me/pair-code`, made on the account page or in a
+  signed-in app, redeemed with `POST /pair`.
+
+Every device added to or removed from an account with an email emails its
+owner. That's what lets a signed-in app add (`/me/pair-code`) and remove
+(`DELETE /me/devices/<id>`) devices. API keys and signing out everywhere
+stay on the account page; so does deleting an account, except an anonymous
+one, which has no page and is deleted from its app.
+
+Apps send `x-terminus-client: <platform>[-<flavour>]/<version>` (for example
+`android/1.4.0`), stored per session for the dashboard. Without it the
+platform is guessed from the User-Agent, which counts any CFNetwork client as
+the Mac.
 
 - `GET /me/next` is the widget's one call. It picks the destination from the
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
 - `GET /me/nearby` lists departures at up to three stops near you.
 - Tokens are stored as SHA-256 hashes. Web sessions last 30 days; device
-  tokens last until revoked on the page.
+  tokens last until revoked, or 90 days unused.
 - The link in the email opens a page with a button, and only the button's
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.
@@ -332,7 +368,8 @@ src/pairs.ts      /stops/pairs
 src/analytics.ts  Analytics Engine decision + arrival logging
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
 src/http.ts       JSON responses, query parsing
-src/accounts.ts   Sign-in links, sessions, pairing codes (D1)
+src/accounts.ts   Sign-in codes and links, sessions, anonymous accounts, pairing codes (D1)
+src/applogin.ts   App sign-in approved from the email
 src/access.ts     API keys, and who may call the keyed routes
 src/profile.ts    Profile validation and the where-next planner
 src/me.ts         /auth, /pair and /me routes

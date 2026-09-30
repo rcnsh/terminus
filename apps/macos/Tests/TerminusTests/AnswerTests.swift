@@ -50,4 +50,9 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
 @Test func versionsCompareNumerically() {
     #expect(isNewer("1.0.10", than: "1.0.9"))
     #expect(!isNewer("1.3.5", than: "1.3.5"))
+    #expect(isNewer("2.0.0-beta", than: "1.3.10"))
+    #expect(isNewer("2.0.0", than: "2.0.0-beta"))
+    #expect(isNewer("2.0.0-beta.2", than: "2.0.0-beta"))
+    #expect(!isNewer("2.0.0-beta", than: "2.0.0"))
+    #expect(!isNewer("2.0.0-beta", than: "2.0.0-beta"))
 }

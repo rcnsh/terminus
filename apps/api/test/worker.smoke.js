@@ -218,7 +218,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
 
   const documented = Object.keys(spec.paths).sort();
   assert.deepEqual(documented, [
-    '/arrivals', '/auth/login', '/campus', '/health',
+    '/arrivals', '/auth/anon', '/auth/app/code', '/auth/app/merge', '/auth/app/poll', '/auth/app/start', '/auth/code', '/auth/login', '/campus', '/health',
     '/me/feedback', '/me/import', '/me/keys', '/me/nearby', '/me/next', '/me/profile', '/next', '/pair', '/pair/check', '/status.json', '/stops/pairs', '/trip',
   ]);
 
@@ -617,6 +617,10 @@ test('downloads serve whatever latest.json points at', async () => {
   assert.equal(await byPath.text(), 'DMG');
   assert.equal((await get('/download/releases/9.9.9/terminus-9.9.9.dmg')).status, 404);
   assert.equal((await get('/download/releases/1.0.1/other.dmg')).status, 404, 'only release files');
+  // A pre-release version is a release file like any other.
+  put('releases/2.0.0-beta/terminus-2.0.0-beta.apk', 'BETA');
+  assert.equal(await (await get('/download/releases/2.0.0-beta/terminus-2.0.0-beta.apk')).text(), 'BETA');
+  assert.equal((await get('/download/releases/2.0.0-Beta/terminus-2.0.0-Beta.apk')).status, 404);
 });
 
 test('/status.json: the feed state and outages, public and cached', async () => {

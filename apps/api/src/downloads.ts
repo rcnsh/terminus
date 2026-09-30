@@ -23,8 +23,10 @@ export interface Latest {
 
 const LATEST = 'latest.json';
 const APPCAST = 'appcast.xml';
-/** A versioned release file, as /download/releases/<version>/<file>. */
-const RELEASE_FILE = /^\/download\/(releases\/\d+\.\d+\.\d+\/terminus-\d+\.\d+\.\d+\.(?:apk|dmg|zip))$/;
+/** A versioned release file, as /download/releases/<version>/<file>. A
+ *  version may carry a pre-release tag: 2.0.0-beta, 2.0.0-beta.2. */
+const VERSION = String.raw`\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?`;
+const RELEASE_FILE = new RegExp(String.raw`^\/download\/(releases\/${VERSION}\/terminus-${VERSION}\.(?:apk|dmg|zip))$`);
 
 const TYPES: Record<string, string> = {
   apk: 'application/vnd.android.package-archive',

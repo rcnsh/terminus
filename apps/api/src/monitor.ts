@@ -13,6 +13,7 @@ import { KV_APP_VERSION, UpstreamRejected } from './auth.ts';
 import { autoUpdateVersion, type AutoResult } from './appversion.ts';
 import { calendarThrough } from './calendar.ts';
 import { pruneCrowdSeen } from './crowd.ts';
+import { ACCOUNT_TTL } from './accounts.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -217,10 +218,15 @@ async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switche
   });
 }
 
-/** Delete expired sign-in links, pairing codes, web sessions and idle devices. */
+/**
+ * Delete expired sign-in links and requests, pairing codes, web sessions,
+ * idle devices, and anonymous accounts nobody has used for 60 days.
+ */
 export async function housekeeping(db: D1Database, nowMs: number): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
+    db.prepare('DELETE FROM login_requests WHERE expires < ?').bind(nowMs),
+    db.prepare('DELETE FROM users WHERE email IS NULL AND last_seen < ?').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
     db.prepare('DELETE FROM pair_codes WHERE expires < ?').bind(nowMs),
     db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
     db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),

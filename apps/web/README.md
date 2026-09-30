@@ -22,4 +22,4 @@ node apps/api/scripts/dev-stub.mjs   # from the repo root, then open http://loca
 ```
 
 The stub serves these files straight from disk, so a reload shows your change.
-Sign in as `you@u.nus.edu` with the link the stub prints.
+Sign in as `you@u.nus.edu` with the code the stub prints.
