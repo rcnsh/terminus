@@ -7,7 +7,7 @@
 # holding it); without it, with the terminus self-signed certificate if it's in
 # your keychain, else ad-hoc. Releases are signed with that certificate by
 # scripts/package-mac.sh, so every version has the same code identity and
-# macOS keeps its permissions and the device token's Keychain access.
+# macOS keeps its permissions across updates.
 set -eu
 cd "$(dirname "$0")"
 swift build -c release --arch arm64

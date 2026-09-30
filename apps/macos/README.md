@@ -30,9 +30,12 @@ Releases are built, signed and packaged as a DMG by
 [`.github/workflows/release.yml`](../../.github/workflows/release.yml) (via
 [`scripts/package-mac.sh`](../../scripts/package-mac.sh)) with the terminus
 self-signed certificate, so every version has the same code identity and macOS
-keeps its location permission, login item and the device token's Keychain
-access across updates. It isn't notarised, which needs a paid Apple Developer
-account, so macOS asks once on first open.
+keeps its location permission and login item across updates. It isn't
+notarised, which needs a paid Apple Developer account, so macOS asks once on
+first open. Without an Apple Team ID the keychain would still ask for the
+device token after every update, since it knows each version only by its code
+hash, so the token is kept in a file only you can read instead
+(`~/Library/Application Support/terminus/device-token`; see `TokenStore`).
 
 Installed copies update themselves with [Sparkle](https://sparkle-project.org)
 (`Sources/Terminus/Updater.swift`): every 6 hours they check
