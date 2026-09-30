@@ -13,6 +13,7 @@ import {
   classKey,
   classStartMs,
   classesOn,
+  endOf,
   isResting,
   nextClass,
   planFor,
@@ -236,9 +237,10 @@ function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, plac
 /** Reached by now, by the bus you were on: the next thing, and where you are. */
 function thereAnswer(profile: Profile, nowMs: number, dest: Dest, places: PlaceChip[], h12: boolean): MeAnswer {
   const next = nextClass(profile, nowMs);
-  const end = dest.trip?.endMin;
+  // When it really ends: about half an hour early for a NUSMods class (endOf).
+  const end = dest.trip?.endMin !== undefined ? endOf(dest.trip) : undefined;
   const label = dest.trip ? `In ${dest.trip.label}` : `At ${dest.label}`;
-  const detail = [end ? `till ${clockMin(end, h12)}` : null, next ? restDetail(profile, nowMs, h12) : null]
+  const detail = [end ? `till ${dest.trip?.nusmods ? '~' : ''}${clockMin(end, h12)}` : null, next ? restDetail(profile, nowMs, h12) : null]
     .filter(Boolean)
     .join(' · ');
   return { ...base(nowMs, label, detail || "You're there"), quality: 'live', arrived: true, leave: null, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, places };
