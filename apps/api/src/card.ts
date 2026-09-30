@@ -11,7 +11,7 @@
 
 import type { Crowd, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
-import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type TripRecord } from './trip.ts';
+import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type TripRecord, offStop } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
 import type { Suggestion } from './outcomes.ts';
 
@@ -279,7 +279,7 @@ function v2(
   const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);
   if (phase === 'riding' && onBus) {
     const b = onBus;
-    line = `On the ${b.svc}${b.arrive ? ` · off at ${b.off ?? a.dest?.label ?? 'your stop'} ${at(b.arrive)}` : ''}`;
+    line = `On the ${b.svc}${b.arrive ? ` · off at ${offStop(b) ?? a.dest?.label ?? 'your stop'} ${at(b.arrive)}` : ''}`;
     glance = b.arrive ? `Off ${short(b.arrive)}` : `On the ${b.svc}`;
   }
   glance = glance.slice(0, 12);

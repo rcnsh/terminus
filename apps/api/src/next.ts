@@ -32,7 +32,7 @@ import { paceSpeed } from './walk.ts';
 import { coordsFrom } from './http.ts';
 import type { TripView } from './card.ts';
 import { NO_PREFS, type TripPrefs } from './outcomes.ts';
-import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, phaseFor } from './trip.ts';
+import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, offStop, phaseFor } from './trip.ts';
 
 /** `?h12=1`: the client shows 12-hour times. Default 24-hour, as always. */
 export const hour12 = (url: URL) => url.searchParams.get('h12') === '1';
@@ -208,7 +208,7 @@ export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
 
 /** On the bus you said you'd caught: where it gets you, not the next bus. */
 function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
-  const off = b.off ?? dest.label;
+  const off = offStop(b) ?? dest.label;
   const arrive = b.arrive ? Date.parse(b.arrive) : null;
   let detail = arrive !== null ? `Off at ${off} · arrive ${live ? '' : '~'}${clockAt(arrive, h12)}` : `Off at ${off}`;
   let timing = null;
@@ -339,12 +339,21 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   // still has you at the stop. Assumed, never recorded as a signal.
   const l = answer.leave;
   const stored = day?.plans?.[key];
-  // Once the planned bus has left, the plan is that bus, whatever the answer says now.
-  const frozen = stored?.board && nowMs >= Date.parse(stored.board) ? stored : null;
+  // From the leave time you were given, the plan is that bus until it has
+  // left and been asked about, whatever the answer says now. Past the leave
+  // time the answer moves on to a later bus (you may not have gone), and
+  // devices with and without a location plan from different stops; letting
+  // either replace the plan would mean the bus you were told to catch never
+  // leaves as the plan, and the question is never asked. Before then, a
+  // device without a location (the widget, the background refresh) plans from
+  // where the timetable puts you, and doesn't replace a plan made from where
+  // the phone actually is.
+  const located = lat !== null && lon !== null;
+  const frozen = stored?.board && nowMs >= Math.min(Date.parse(stored.board), stored.leave ? Date.parse(stored.leave) : Infinity) ? stored : null;
   const bus: Boarded | null =
     frozen ??
-    (l?.svc && l.board ? { svc: l.svc, stop: l.stop ?? '', board: l.board, arrive: l.arrive, ...(l.off ? { off: l.off } : {}), ...(l.stopCode ? { stopCode: l.stopCode } : {}), alightCode: l.offCode ?? dest.to } : null);
-  if (bus && !frozen && (stored?.board !== bus.board || stored?.svc !== bus.svc)) out.trip.planChanged = true;
+    (l?.svc && l.board ? { svc: l.svc, stop: l.stop ?? '', board: l.board, ...(l.at ? { leave: l.at } : {}), ...(located ? { located: true } : {}), arrive: l.arrive, ...(l.off ? { off: l.off } : {}), ...(l.stopCode ? { stopCode: l.stopCode } : {}), alightCode: l.offCode ?? dest.to } : null);
+  if (bus && !frozen && (stored?.board !== bus.board || stored?.svc !== bus.svc) && (located || !stored?.located)) out.trip.planChanged = true;
   if (!out.trip.rec && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
     if (out.trip.phase === 'waiting') return { answer, trip: { ...out.trip, phase: 'missed', assumed: true, plan: bus, planChanged: false } };
     const onBus = await riding(bus);
