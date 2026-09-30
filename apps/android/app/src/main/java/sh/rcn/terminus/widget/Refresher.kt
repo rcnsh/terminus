@@ -110,6 +110,8 @@ object Refresher {
                 answer.departsAtMs?.let { add(it + DEPARTED_GRACE_MS + 1_000) }
                 // "Leave by" turns into "Leave now" at the leave time.
                 answer.leaveAtMs?.let { if (it > now) add(it) }
+                // On the bus: at each stop, so the progress bar and the arrival move on.
+                answer.card?.ride?.takeIf { answer.card.phase == "riding" }?.let { r -> sh.rcn.terminus.RideStyle.nextRedrawAt(r, now)?.let(::add) }
                 add(fetchedAt + MAX_AGE_MS)
             }
         }

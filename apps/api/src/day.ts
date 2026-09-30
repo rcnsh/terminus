@@ -24,7 +24,7 @@ import { sgt } from './config.ts';
 import { isoSeconds } from './format.ts';
 import { indexGraph } from './resolve.ts';
 import { tripAnswer } from './next.ts';
-import { type DayRecord, dayState, sgtDate } from './trip.ts';
+import { type DayRecord, dayState, offStop, sgtDate } from './trip.ts';
 
 export type DayStatus = 'done' | 'now' | 'next' | 'later' | 'skipped';
 
@@ -46,6 +46,9 @@ export interface DayItem {
   venue?: string;
   /** Upcoming classes: when to leave and how. Estimated hours ahead. */
   leave?: Leave | null;
+  /** On the bus to it (a "boarded" signal): the bus, where to get off and
+   *  when it gets there (ISO), in place of a leave-by. */
+  onBus?: { svc: string; off: string | null; arrive: string | null } | null;
   timing?: Timing | null;
 }
 
@@ -88,6 +91,8 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
     const done = state.done.has(key) || c.arriveByMin + LATE_GRACE_MIN <= t.minutes;
     const status: DayStatus = skipped ? 'skipped' : done ? 'done' : nextTaken ? 'later' : 'next';
     if (status === 'next') nextTaken = true;
+    const rec = day?.trips[key];
+    const boarded = !done && rec?.kind === 'boarded' ? rec.boarded : undefined;
     const item: DayItem = {
       kind: 'class',
       key,
@@ -101,8 +106,9 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
       endsAt: at(endOf(c)),
       venue: c.venue || undefined,
     };
+    if (boarded) item.onBus = { svc: boarded.svc, off: offStop(boarded), arrive: boarded.arrive };
     // Upcoming classes get a leave-by, from where you'll be then.
-    if ((status === 'next' || status === 'later') && from) {
+    else if ((status === 'next' || status === 'later') && from) {
       pending.push(
         tripAnswer(env, ctx, nowMs, deps, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, { lat: null, lon: null }, places, h12, earlier.has(classKey(c)))
           .then((a) => {

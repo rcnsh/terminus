@@ -111,6 +111,7 @@
     "ask": null,
     "askMuted": false,
     "remind": true,
-    "suggestion": null
+    "suggestion": null,
+    "ride": null
   }
 }

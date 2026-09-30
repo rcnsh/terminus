@@ -68,6 +68,8 @@ function actions(a) {
           e.target.disabled = true;
           try {
             show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: x.id, trip: x.trip } }));
+            // The web app fetches again, so today's list and its offline copy follow.
+            document.dispatchEvent(new CustomEvent('trip-signal'));
           } catch {
             e.target.disabled = false;
           }
@@ -163,7 +165,8 @@ export function show(a) {
       el('div', { class: 'big', textContent: big }),
       el('div', { class: 'detail', textContent: old ? 'Old times · refreshing' : a.detail }),
       a.leave && a.card && !old ? el('div', { class: 'leave', textContent: leaveText(a) }) : null,
-      a.timing && !old ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
+      // On the bus the detail already ends with it ("arrive ~9:52 · ~4 min late").
+      a.timing && !old && !a.detail?.includes(a.timing.text) ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
       notes ? el('div', { class: 'note', textContent: notes }) : null,
       actions(a),
       chips,

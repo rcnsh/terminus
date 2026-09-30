@@ -18,6 +18,7 @@ import {
   inService,
   pickAlt,
   reach,
+  rideStops,
   resolveBerths,
   scoreOptions,
   nearestStop,
@@ -172,6 +173,21 @@ test('reach(): linear routes are strict, loop routes wrap', () => {
   assert.deepEqual(reach(loop, 'D2', 'KR-MRT-OPP', 'UTOWN'), { hops: 11 }, 'wraps the long way');
   assert.deepEqual(reach(loop, 'D2', 'KR-MRT', 'KR-MRT'), { hops: 0 });
   assert.equal(reach(loop, 'A1', 'KR-MRT', 'UTOWN'), null, 'A1 serves KR MRT but not UTown');
+});
+
+test('rideStops(): the stops ridden, the same way round as reach()', () => {
+  const linear = indexGraph(PAIR_GRAPH);
+  const ride = rideStops(linear, 'NORTH', 'KRMRT', 'UTOWN');
+  assert.equal(ride.length, 3, 'two hops, three stops');
+  assert.equal(ride[0], 'KRMRT');
+  assert.equal(ride[2], 'UTOWN');
+  assert.equal(rideStops(linear, 'NORTH', 'UTOWN', 'KRMRT'), null);
+
+  const loop = indexGraph(GRAPH);
+  assert.equal(rideStops(loop, 'D2', 'KR-MRT', 'UTOWN').length, reach(loop, 'D2', 'KR-MRT', 'UTOWN').hops + 1);
+  const wrapped = rideStops(loop, 'D2', 'KR-MRT-OPP', 'UTOWN');
+  assert.equal(wrapped.length, 12, 'the long way round, past the end of the sequence');
+  assert.deepEqual([wrapped[0], wrapped.at(-1)], ['KR-MRT-OPP', 'UTOWN']);
 });
 
 test('a bus that arrives before you can walk there is not offered', () => {

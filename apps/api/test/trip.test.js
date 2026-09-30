@@ -84,6 +84,13 @@ test('"On the R2" on the phone puts the Mac on the bus too', async () => {
   assert.equal(onPhone.label, `On the ${before.leave.svc}`);
   assert.match(onPhone.card.line, /^On the R2 · off at UTown /, 'the stop, not the class');
   assert.match(onPhone.detail, /^Off at UTown · /);
+  // The stops ridden, for a progress bar: from where the bus was boarded to where you get off.
+  const ride = onPhone.card.ride;
+  assert.equal(ride.svc, 'R2');
+  assert.equal(ride.stops[0].code, before.leave.stopCode);
+  assert.equal(ride.stops.at(-1).code, 'UTOWN');
+  assert.ok(ride.stops.length >= 2 && ride.stops.every((x) => x.name));
+  assert.ok(Date.parse(ride.board) < Date.parse(ride.arrive));
   assert.deepEqual(onPhone.card.actions.map((x) => x.id), ['arrived']);
 
   const onMac = await next(mac);
@@ -176,9 +183,18 @@ test('/me/day: each class with where you set off, the leave-by, and the trip hom
   // By bus, hours ahead is an estimate; on foot it's exact.
   assert.equal(second.leave.estimated, second.leave.svc !== null);
 
+  // On the bus: the bus and where to get off, not a leave-by that has passed.
+  await signal(phone, { kind: 'boarded', trip: FIRST });
+  day = await (await call('/me/day', { token: phone })).json();
+  assert.equal(day.items[0].leave, undefined);
+  assert.equal(day.items[0].onBus.svc, first.leave.svc);
+  assert.ok(day.items[0].onBus.off, 'where to get off');
+  assert.equal(day.items[2].onBus, undefined, 'only the trip you are on');
+
   await signal(phone, { kind: 'skipped', trip: FIRST });
   day = await (await call('/me/day', { token: phone })).json();
   assert.equal(day.items[0].status, 'skipped');
+  assert.equal(day.items[0].onBus, undefined);
 });
 
 test('/me/day on a free day says what is next', async () => {

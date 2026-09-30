@@ -159,6 +159,20 @@ class LiveService : Service() {
                 .setCategory(Notification.CATEGORY_STATUS)
                 .addAction(Notification.Action.Builder(null, "Turn off", stop).build())
             if (answer == null) return b.setContentTitle("terminus").setContentText("Checking…").build()
+            // During a trip, a Live Update (Android 16 QPR1, API 36.1): kept at
+            // the top of the shade and on the lock screen, with the card's
+            // glance ("Off 9:52") as the chip in the status bar.
+            val card = answer.card
+            if (android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1 && card?.phase in TRIP_PHASES) {
+                b.setRequestPromotedOngoing(true)
+                card?.glance?.let { b.setShortCriticalText(it) }
+            }
+            // On the bus: the ride, stop by stop (RideStyle).
+            val ride = card?.ride
+            if (card != null && card.phase == "riding" && ride != null) {
+                b.setSubText(answer.destLabel)
+                return RideStyle.apply(ctx, b, card, ride, now).build()
+            }
 
             // Collapsed, one line each: the bus, then when to leave. Where to
             // goes in the header, next to the ticking countdown.

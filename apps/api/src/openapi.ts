@@ -604,7 +604,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: "Today's timeline",
           description:
             'Each of today\'s classes with where you set off from and its leave-by (an estimate hours ahead), the trips home in long gaps and after the ' +
-            'last class, and where each stands: `done`, `now`, `next`, `later` or `skipped`. Clients cache it for the day. `note` says why a day has no classes.',
+            'last class, and where each stands: `done`, `now`, `next`, `later` or `skipped`. A class you are on the bus to has `onBus` (`svc`, `off`, `arrive`) ' +
+            'in place of a leave-by. Clients cache it for the day. `note` says why a day has no classes.',
           operationId: 'meDay',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ type: 'object', properties: { date: { type: 'string' }, dayStart: { type: 'string' }, dayEnd: { type: 'string' }, items: { type: 'array', items: { type: 'object' } }, note: { type: ['string', 'null'] } } }) },

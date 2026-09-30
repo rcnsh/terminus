@@ -17,6 +17,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Keystore, plus the last answer the widget shows.
  */
 class Store(context: Context) {
+    private val app = context.applicationContext
     private val prefs = context.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
 
     /**
@@ -49,6 +50,8 @@ class Store(context: Context) {
     /** The widget's last answer, as the raw JSON plus when it was fetched. */
     fun saveAnswer(json: JSONObject, fetchedAtMs: Long) {
         prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs) }
+        // The app shortcuts follow the saved places (a no-op when they haven't changed).
+        runCatching { Shortcuts.update(app, NextAnswer.parse(json).places) }
     }
 
     fun lastAnswer(): Pair<NextAnswer, Long>? {

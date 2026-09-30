@@ -164,6 +164,8 @@ data class Card(
     val remind: Boolean = true,
     /** "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice. */
     val suggestion: Suggestion? = null,
+    /** On the bus: the stops from boarding to getting off, for a progress bar. */
+    val ride: Ride? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) = Card(
@@ -197,10 +199,47 @@ data class Card(
             suggestion = o.optJSONObject("suggestion")?.let { s ->
                 Suggestion(s.getString("id"), s.getString("text"), s.getString("accept"), s.getString("dismiss"))
             },
+            ride = o.optJSONObject("ride")?.let { r ->
+                val stops = r.optJSONArray("stops") ?: return@let null
+                val board = r.optStringOrNull("board")?.let(::parseInstant) ?: return@let null
+                val arrive = r.optStringOrNull("arrive")?.let(::parseInstant) ?: return@let null
+                Ride(r.getString("svc"), (0 until stops.length()).map { stops.getJSONObject(it).getString("name") }, board, arrive)
+                    .takeIf { it.stops.size >= 2 && arrive > board }
+            },
         )
 
         private fun parseActions(a: JSONArray?): List<CardAction> =
             a?.let { (0 until it.length()).map { i -> it.getJSONObject(i).let { x -> CardAction(x.getString("id"), x.getString("label"), x.getString("trip")) } } }.orEmpty()
+    }
+}
+
+/**
+ * The ride, from boarding to getting off. Where the bus is comes from the
+ * clock: stops are taken as evenly spaced between the board and arrival times
+ * (the arrival is live when the server knows the bus's plate).
+ */
+data class Ride(val svc: String, val stops: List<String>, val boardMs: Long, val arriveMs: Long) {
+    /** 0 to 1 along the ride. */
+    fun progress(now: Long): Float = ((now - boardMs).toFloat() / (arriveMs - boardMs)).coerceIn(0f, 1f)
+
+    /** How many stops have been passed; the last is where you get off. */
+    fun passed(now: Long): Int = (progress(now) * (stops.size - 1)).toInt()
+
+    /** The stop the bus is heading for next, or null once it's there. */
+    fun nextStop(now: Long): String? = stops.getOrNull(passed(now) + 1)
+
+    /** Stops left before getting off, the next one included. */
+    fun stopsLeft(now: Long): Int = (stops.size - 1 - passed(now)).coerceAtLeast(0)
+
+    /** "Next: Opp NUSS · 3 stops to go", the same in the notification and the widget. */
+    fun nextText(now: Long): String {
+        val next = nextStop(now)
+        val left = stopsLeft(now)
+        return when {
+            next == null || left == 0 -> "Getting off at ${stops.last()}"
+            left == 1 -> "Next: ${stops.last()}, where you get off"
+            else -> "Next: $next · $left stops to go"
+        }
     }
 }
 
@@ -232,7 +271,11 @@ data class DayItem(
     val svc: String?,
     val timingText: String?,
     val timingStatus: String?,
+    /** On the bus to it: "On the D2 · off at UTown · arrive 9:52", worded by [DayTimeline]. */
+    val onBus: OnBus? = null,
 )
+
+data class OnBus(val svc: String, val off: String?, val arriveMs: Long?)
 
 data class DayPlan(val items: List<DayItem>, val note: String?) {
     companion object {
@@ -243,6 +286,7 @@ data class DayPlan(val items: List<DayItem>, val note: String?) {
                     val x = a.getJSONObject(it)
                     val leave = x.optJSONObject("leave")
                     val timing = x.optJSONObject("timing")
+                    val bus = x.optJSONObject("onBus")
                     DayItem(
                         kind = x.optString("kind"),
                         key = x.optString("key"),
@@ -257,6 +301,7 @@ data class DayPlan(val items: List<DayItem>, val note: String?) {
                         svc = leave?.optStringOrNull("svc"),
                         timingText = timing?.optStringOrNull("text"),
                         timingStatus = timing?.optStringOrNull("status"),
+                        onBus = bus?.let { OnBus(it.optString("svc"), it.optStringOrNull("off"), it.optStringOrNull("arrive")?.let(::parseInstant)) },
                     )
                 },
                 note = o.optStringOrNull("note"),

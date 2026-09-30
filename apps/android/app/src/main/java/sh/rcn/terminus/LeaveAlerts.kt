@@ -43,6 +43,8 @@ object LeaveAlerts {
 
     const val ACTION_CHECK = "sh.rcn.terminus.LEAVE_CHECK"
     const val ACTION_NOW = "sh.rcn.terminus.LEAVE_NOW"
+    /** On the bus: redraw the ride at the next stop, from the saved answer. */
+    const val ACTION_RIDE = "sh.rcn.terminus.LEAVE_RIDE"
 
     /** Android 12 needs no permission to notify; 13 and later ask. */
     fun canNotify(ctx: Context): Boolean =
@@ -102,6 +104,7 @@ object LeaveAlerts {
     fun cancel(ctx: Context) {
         cancelAlarm(ctx, ACTION_CHECK)
         cancelAlarm(ctx, ACTION_NOW)
+        cancelAlarm(ctx, ACTION_RIDE)
         ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
     }
 
@@ -139,6 +142,7 @@ object LeaveAlerts {
         val ask = card?.ask
         // The words follow the trip: the question at the departure, then the
         // ride or the next way there; before that, when to leave.
+        val ride = card?.ride?.takeIf { card.phase == "riding" && ask == null }
         val (title, body) = when {
             ask != null -> ask.question to (card.line ?: answer.catchLine.orEmpty())
             card?.phase == "riding" || card?.phase == "missed" -> (card.line ?: answer.label) to answer.detail
@@ -166,8 +170,19 @@ object LeaveAlerts {
             .apply { ask?.actions?.take(3)?.forEachIndexed { i, a -> addAction(signalAction(ctx, i, a)) } }
             // Gone once the class has started: it's no longer true.
             .apply { answer.classAtMs?.let { setTimeoutAfter((it - now).coerceAtLeast(60_000)) } }
+            .apply { ride?.let { RideStyle.apply(ctx, this, card, it, now) } }
             .build()
         nm.notify(NOTIFICATION_ID, n)
+        // The bus's place on the bar is the clock's estimate: move it on at each stop.
+        val redraw = ride?.let { RideStyle.nextRedrawAt(it, now) }
+        if (redraw != null) setAlarm(ctx, ACTION_RIDE, redraw) else cancelAlarm(ctx, ACTION_RIDE)
+    }
+
+    /** At the next stop on the ride: redraw from the saved answer, if still showing. */
+    fun redrawRide(ctx: Context) {
+        if (!showing(ctx)) return
+        val answer = Store(ctx).lastAnswer()?.first ?: return
+        if (answer.card?.phase == "riding") post(ctx, answer, System.currentTimeMillis())
     }
 
     /** A button that answers the question from the notification (SignalReceiver). */
@@ -198,7 +213,7 @@ object LeaveAlerts {
 
     private fun alarmIntent(ctx: Context, action: String): PendingIntent =
         PendingIntent.getBroadcast(
-            ctx, if (action == ACTION_CHECK) 1 else 2,
+            ctx, when (action) { ACTION_CHECK -> 1; ACTION_NOW -> 2; else -> 5 },
             Intent(ctx, LeaveReceiver::class.java).setAction(action),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -221,6 +236,7 @@ class LeaveReceiver : BroadcastReceiver() {
                 }
             }
             LeaveAlerts.ACTION_NOW -> LeaveAlerts.leaveNow(context)
+            LeaveAlerts.ACTION_RIDE -> LeaveAlerts.redrawRide(context)
         }
     }
 }
