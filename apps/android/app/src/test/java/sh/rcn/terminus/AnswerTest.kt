@@ -88,6 +88,28 @@ class AnswerTest {
         assertTrue(isOld(old, ms("2026-08-27T01:00:00Z"), ms("2026-08-27T01:04:31Z")))
     }
 
+    @Test fun theQuestionAndASuggestionParse() {
+        val a = NextAnswer.parse(
+            JSONObject(
+                """{"label":"On the R2","detail":"Off at UTown · arrive ~9:52","mode":"trip","card":{"kind":"trip","phase":"riding",
+                "ask":{"trip":"4:600:UTOWN","question":"On the 9:41 R2?","actions":[{"id":"boarded","label":"On it","trip":"4:600:UTOWN"},
+                {"id":"missed","label":"Missed it","trip":"4:600:UTOWN"},{"id":"skipped","label":"Not going","trip":"4:600:UTOWN"}]},
+                "askMuted":false,"remind":false,
+                "suggestion":{"id":"earlier:4:600:UTOWN","text":"Leave one bus earlier?","accept":"Leave earlier","dismiss":"No thanks"}}}""",
+            ),
+        )
+        val card = a.card!!
+        assertEquals("On the 9:41 R2?", card.ask!!.question)
+        assertEquals(listOf("boarded", "missed", "skipped"), card.ask!!.actions.map { it.id })
+        assertFalse(card.remind)
+        assertEquals("earlier:4:600:UTOWN", card.suggestion!!.id)
+        // Older cards have none of it, and still remind.
+        val golden = golden("class-bus").card!!
+        assertNull(golden.ask)
+        assertNull(golden.suggestion)
+        assertTrue(golden.remind)
+    }
+
     @Test fun notJsonIsAParseErrorNotOffline() {
         try {
             NextAnswer.parse(JSONObject("""{"detail":"no label"}"""))

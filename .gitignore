@@ -24,3 +24,6 @@ dev/
 .private/
 /audit/
 .cloudflare/
+
+# Firebase app config for push; kept out of git (see apps/android/README.md).
+apps/android/app/google-services.json

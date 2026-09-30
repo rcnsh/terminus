@@ -110,6 +110,7 @@ export default defineConfig({
 			NEXTBUS_PROXY_API_KEY: bindings.secret(),
 			NEXTBUS_PROXY_BASE: bindings.secret(),
 			TURNSTILE_SECRET: bindings.secret(),
+			FCM_SERVICE_ACCOUNT: bindings.secret(),
 		},
 	},
 });

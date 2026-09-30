@@ -156,6 +156,14 @@ data class Card(
     val warning: String? = null,
     /** When this card changes by itself: refresh then. */
     val nextChangeAtMs: Long? = null,
+    /** "On the 9:41 D2?": from the bus's departure until the class starts, unanswered. */
+    val ask: CardAsk? = null,
+    /** The question was ignored five trips running; Settings can turn it back on. */
+    val askMuted: Boolean = false,
+    /** False when the user turned reminders off for this class: no leave notification. */
+    val remind: Boolean = true,
+    /** "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice. */
+    val suggestion: Suggestion? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) = Card(
@@ -181,9 +189,29 @@ data class Card(
             }.orEmpty(),
             warning = o.optStringOrNull("warning"),
             nextChangeAtMs = o.optStringOrNull("nextChangeAt")?.let(::parseInstant),
+            ask = o.optJSONObject("ask")?.let { a ->
+                CardAsk(a.getString("trip"), a.getString("question"), parseActions(a.optJSONArray("actions")))
+            },
+            askMuted = o.optBoolean("askMuted", false),
+            remind = o.optBoolean("remind", true),
+            suggestion = o.optJSONObject("suggestion")?.let { s ->
+                Suggestion(s.getString("id"), s.getString("text"), s.getString("accept"), s.getString("dismiss"))
+            },
         )
+
+        private fun parseActions(a: JSONArray?): List<CardAction> =
+            a?.let { (0 until it.length()).map { i -> it.getJSONObject(i).let { x -> CardAction(x.getString("id"), x.getString("label"), x.getString("trip")) } } }.orEmpty()
     }
 }
+
+/** The question at the bus's departure, with its buttons (On it · Missed it · Not going). */
+data class CardAsk(val trip: String, val question: String, val actions: List<CardAction>)
+
+/** Something terminus learned and offers to change; `id` goes back to /me/choice. */
+data class Suggestion(val id: String, val text: String, val accept: String, val dismiss: String)
+
+/** A class you chose to leave a bus earlier for (`earlier`) or get no reminders for (`quiet`). */
+data class TripChoice(val trip: String, val pref: String, val label: String?)
 
 /** A button on the card: `id` is the signal to send, `trip` which trip it's about. */
 data class CardAction(val id: String, val label: String, val trip: String)
@@ -426,6 +454,36 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         trip?.let { body.put("trip", it) }
         if (lat != null && lon != null) body.put("lat", coord(lat).toDouble()).put("lon", coord(lon).toDouble())
         return request("POST", "/me/signal" + if (hour12) "?h12=1" else "", body)
+    }
+
+    /** This phone's Firebase token, so the server can say when the card changes. */
+    suspend fun registerPush(token: String) {
+        request("POST", "/me/push", JSONObject().put("token", token))
+    }
+
+    /** A suggestion accepted or turned down (`id`), or a choice undone (`trip` and `pref`). */
+    suspend fun choice(choice: String, id: String? = null, trip: String? = null, pref: String? = null): List<TripChoice> {
+        val body = JSONObject().put("choice", choice)
+        id?.let { body.put("id", it) }
+        trip?.let { body.put("trip", it) }
+        pref?.let { body.put("pref", it) }
+        return parseChoices(request("POST", "/me/choice", body))
+    }
+
+    /** Classes with a bus earlier or no reminders, and whether the question is muted. */
+    suspend fun choices(): Pair<List<TripChoice>, Boolean> {
+        val o = request("GET", "/me/choices")
+        return parseChoices(o) to o.optBoolean("askMuted", false)
+    }
+
+    /** "Ask if I caught the bus" back on. */
+    suspend fun askAgain() {
+        request("POST", "/me/ask")
+    }
+
+    private fun parseChoices(o: JSONObject): List<TripChoice> {
+        val a = o.optJSONArray("choices") ?: return emptyList()
+        return (0 until a.length()).map { a.getJSONObject(it).let { c -> TripChoice(c.getString("trip"), c.getString("pref"), c.optStringOrNull("label")) } }
     }
 
     /** Today's timeline. */

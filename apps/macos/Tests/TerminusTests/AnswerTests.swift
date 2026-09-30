@@ -48,6 +48,24 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect((a.card?.glance?.count ?? 99) <= 12)
 }
 
+@Test func theQuestionAndASuggestionDecode() throws {
+    let json = """
+    {"label":"On the R2","detail":"Off at UTown","mode":"trip","card":{"kind":"trip","phase":"riding",
+    "ask":{"trip":"4:600:UTOWN","question":"On the 9:41 R2?","actions":[{"id":"boarded","label":"On it","trip":"4:600:UTOWN"},
+    {"id":"missed","label":"Missed it","trip":"4:600:UTOWN"}]},"remind":false,
+    "suggestion":{"id":"quiet:4:600:UTOWN","text":"Stop reminders?","accept":"Stop reminders","dismiss":"Keep them"}}}
+    """
+    let a = try JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
+    #expect(a.card?.ask?.question == "On the 9:41 R2?")
+    #expect(a.card?.ask?.actions.map(\.id) == ["boarded", "missed"])
+    #expect(a.card?.remind == false)
+    #expect(a.card?.suggestion?.accept == "Stop reminders")
+    // The golden cards carry them empty.
+    let g = try golden("class-bus")
+    #expect(g.card?.ask == nil)
+    #expect(g.card?.remind == true)
+}
+
 @MainActor @Test func theMenuBarShowsTheTripPhase() throws {
     let m = AppModel(snapshot: true)
     m.answers[.plan] = try golden("class-late")

@@ -17,6 +17,11 @@ android {
         // `adb reverse tcp:8787 tcp:8787` points a debug build at a local wrangler dev.
         val apiBase = providers.gradleProperty("apiBase").orElse("https://terminus.rcn.sh").get()
         buildConfigField("String", "API_BASE", "\"$apiBase\"")
+        // Push: the Firebase app from google-services.json (not in git; see
+        // apps/android/README.md). Without it the fields are empty and the app
+        // keeps its own alarms and refresh, as on a phone without Play services.
+        val firebase = firebaseConfig(file("google-services.json"))
+        for ((name, value) in firebase) buildConfigField("String", name, "\"$value\"")
     }
 
     // The release key lives outside the repo: its path and passwords come
@@ -52,6 +57,24 @@ android {
     }
 }
 
+/** FIREBASE_* values for BuildConfig, empty strings when there's no config file. */
+fun firebaseConfig(json: File): Map<String, String> {
+    val empty = mapOf("FIREBASE_APP_ID" to "", "FIREBASE_API_KEY" to "", "FIREBASE_PROJECT_ID" to "", "FIREBASE_SENDER_ID" to "")
+    if (!json.exists()) return empty
+    @Suppress("UNCHECKED_CAST")
+    val root = groovy.json.JsonSlurper().parse(json) as Map<String, Any?>
+    val project = root["project_info"] as Map<String, Any?>
+    val client = (root["client"] as List<Map<String, Any?>>).first {
+        ((it["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == "sh.rcn.terminus"
+    }
+    return mapOf(
+        "FIREBASE_APP_ID" to (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"].toString(),
+        "FIREBASE_API_KEY" to ((client["api_key"] as List<Map<String, Any?>>).first())["current_key"].toString(),
+        "FIREBASE_PROJECT_ID" to project["project_id"].toString(),
+        "FIREBASE_SENDER_ID" to project["project_number"].toString(),
+    )
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -66,6 +89,8 @@ dependencies {
     implementation(libs.glance.material3)
     implementation(libs.work.runtime)
     implementation(libs.zxing.core)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
 }

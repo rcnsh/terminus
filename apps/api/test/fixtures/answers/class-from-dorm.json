@@ -74,6 +74,7 @@
     "estimated": true,
     "svc": "R2",
     "stop": "PGP",
+    "stopCode": "PGP",
     "board": "2026-08-27T01:42:00Z",
     "arrive": "2026-08-27T01:51:30Z",
     "note": null
@@ -127,6 +128,10 @@
       }
     ],
     "warning": null,
-    "nextChangeAt": "2026-08-27T01:06:30Z"
+    "nextChangeAt": "2026-08-27T01:06:30Z",
+    "ask": null,
+    "askMuted": false,
+    "remind": true,
+    "suggestion": null
   }
 }

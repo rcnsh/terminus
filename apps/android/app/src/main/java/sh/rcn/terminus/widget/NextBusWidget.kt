@@ -137,7 +137,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
-                            Chips(ctx, answer)
+                            AskOrChips(ctx, answer)
                             Spacer(GlanceModifier.height(6.dp))
                         }
                         Footer(ctx, fetchedAt, error, roomy)
@@ -165,7 +165,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
-                            Chips(ctx, answer)
+                            AskOrChips(ctx, answer)
                             Spacer(GlanceModifier.height(6.dp))
                         }
                         Footer(ctx, fetchedAt, error, roomy)
@@ -208,7 +208,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         }
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
-                            Chips(ctx, answer)
+                            AskOrChips(ctx, answer)
                             Spacer(GlanceModifier.height(6.dp))
                         }
                         Footer(ctx, fetchedAt, error, roomy)
@@ -255,7 +255,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         }
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
-                            Chips(ctx, answer)
+                            AskOrChips(ctx, answer)
                             Spacer(GlanceModifier.height(6.dp))
                         }
                         Footer(ctx, fetchedAt, error, roomy)
@@ -298,6 +298,44 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         "late" -> colors.error
         "tight" -> colors.tertiary
         else -> colors.primary
+    }
+
+    /**
+     * From the bus's departure, the question's buttons ("On it", "Missed it",
+     * "Not going") where the chips go; they answer from the widget, like the
+     * notification's. Otherwise the saved places.
+     */
+    @Composable
+    private fun AskOrChips(ctx: Context, answer: NextAnswer) {
+        val ask = answer.card?.ask ?: return Chips(ctx, answer)
+        val colors = GlanceTheme.colors
+        Column {
+            Text(ask.question, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Medium, fontSize = 13.sp), maxLines = 1)
+            Spacer(GlanceModifier.height(6.dp))
+            Row(modifier = GlanceModifier.fillMaxWidth()) {
+                ask.actions.take(3).forEachIndexed { i, a ->
+                    if (i > 0) Spacer(GlanceModifier.width(6.dp))
+                    val intent = android.content.Intent(ctx, sh.rcn.terminus.SignalReceiver::class.java)
+                        .setAction(sh.rcn.terminus.SignalReceiver.ACTION)
+                        .putExtra(sh.rcn.terminus.SignalReceiver.EXTRA_KIND, a.id)
+                        .putExtra(sh.rcn.terminus.SignalReceiver.EXTRA_TRIP, a.trip)
+                    Box(
+                        modifier = GlanceModifier
+                            .background(if (i == 0) colors.primaryContainer else colors.secondaryContainer)
+                            .cornerRadius(14.dp)
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .semantics { contentDescription = "${ask.question} ${a.label}" }
+                            .clickable(androidx.glance.appwidget.action.actionSendBroadcast(intent)),
+                    ) {
+                        Text(
+                            a.label,
+                            style = TextStyle(color = if (i == 0) colors.onPrimaryContainer else colors.onSecondaryContainer, fontSize = 13.sp),
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
     }
 
     @Composable

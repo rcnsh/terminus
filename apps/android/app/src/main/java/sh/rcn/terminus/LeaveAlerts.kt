@@ -18,17 +18,24 @@ import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.clock
 
 /**
- * "Time to leave" for the next class, entirely on the phone.
+ * "Time to leave" for the next class, and then the trip, in one notification.
  *
  * Every planned answer carries a leave-by time. A few minutes before the
  * heads-up is due, an exact alarm fetches a fresh answer (live times by
  * then, not the headway guess from hours ago) and that answer decides: post
  * now, or check again later. A second alarm at the leave time turns the
  * notification into "Leave now", unless it was dismissed.
+ *
+ * From then on (phase 3) the same notification follows the trip, updated in
+ * place and never posted again once dismissed: at the bus's departure it
+ * asks "On the 9:41 D2?" with On it · Missed it · Not going (the server's
+ * `card.ask`), then shows the ride or the next way there. A push brings each
+ * change; without one, an alarm at the card's next change does. A class with
+ * reminders turned off (`card.remind`) gets none of it.
  */
 object LeaveAlerts {
     private const val CHANNEL = "leave"
-    private const val NOTIFICATION_ID = 1
+    const val NOTIFICATION_ID = 1
     /** Heads-up this long before the leave time. */
     const val LEAD_MS = 5 * 60_000L
     /** Fetch fresh times this long before the heads-up is due. */
@@ -47,12 +54,28 @@ object LeaveAlerts {
         val store = Store(ctx)
         val leaveAt = answer.leaveAtMs
         val classAt = answer.classAtMs
-        if (!store.leaveAlerts || !canNotify(ctx) || answer.why != "class" || leaveAt == null || classAt == null || now >= classAt) {
+        val card = answer.card
+        // "On it", "Missed it" or "Not going" was just answered for the trip on
+        // screen: its notification follows, even though the plan (and its
+        // leave time) has moved on.
+        val following = store.leaveNotifiedFor != 0L && store.leaveNotifiedFor == classAt && showing(ctx)
+        if (card?.remind == false || (answer.why == "class" && card?.phase == "arrived")) {
+            // Reminders off for this class, or you're there: nothing more to say.
+            if (following || card?.remind == false) cancel(ctx)
+            return
+        }
+        if (!store.leaveAlerts || !canNotify(ctx) || answer.why != "class" || classAt == null || now >= classAt || (leaveAt == null && !following)) {
             cancelAlarm(ctx, ACTION_CHECK)
             return
         }
         // One heads-up per class. A new plan (the next class) has a new classAt.
-        if (store.leaveNotifiedFor == classAt) return
+        // After it, the same notification follows the trip, but only while it's showing.
+        if (store.leaveNotifiedFor == classAt) {
+            if (showing(ctx)) post(ctx, answer, now)
+            followUp(ctx, answer, now)
+            return
+        }
+        if (leaveAt == null) return
         val notifyAt = leaveAt - LEAD_MS
         if (notifyAt <= now + CHECK_AHEAD_MS) {
             post(ctx, answer, now)
@@ -73,10 +96,24 @@ object LeaveAlerts {
 
     /** At the leave time: the heads-up, if still showing, becomes "Leave now". */
     fun leaveNow(ctx: Context) {
-        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        if (nm.activeNotifications.none { it.id == NOTIFICATION_ID }) return
+        if (!showing(ctx)) return
         val answer = Store(ctx).lastAnswer()?.first ?: return
         post(ctx, answer, System.currentTimeMillis())
+    }
+
+    private fun showing(ctx: Context): Boolean =
+        ctx.getSystemService(NotificationManager::class.java)?.activeNotifications?.any { it.id == NOTIFICATION_ID } == true
+
+    /**
+     * Without push, a check at the card's next change (the bus leaving, then
+     * "no answer means on it") keeps the notification in step. With push the
+     * server says when, so no alarm is needed.
+     */
+    private fun followUp(ctx: Context, answer: NextAnswer, now: Long) {
+        val next = answer.card?.nextChangeAtMs
+        val until = answer.classAtMs ?: return
+        if (Push.active(ctx) || next == null || next <= now || next >= until) cancelAlarm(ctx, ACTION_CHECK)
+        else setAlarm(ctx, ACTION_CHECK, next + 2_000)
     }
 
     private fun post(ctx: Context, answer: NextAnswer, now: Long) {
@@ -87,14 +124,25 @@ object LeaveAlerts {
             },
         )
         val fmt = { ms: Long -> clock(ctx, ms) }
-        val title = answer.leaveHeadline(now) ?: return
-        // Not `timingText`: that is for the headline bus, which may not be the one to wait for.
-        val body = answer.catchLine ?: answer.destLabel.orEmpty()
+        val card = answer.card
+        val ask = card?.ask
+        // The words follow the trip: the question at the departure, then the
+        // ride or the next way there; before that, when to leave.
+        val (title, body) = when {
+            ask != null -> ask.question to (card.line ?: answer.catchLine.orEmpty())
+            card?.phase == "riding" || card?.phase == "missed" -> (card.line ?: answer.label) to answer.detail
+            else -> (answer.leaveHeadline(now) ?: return) to (answer.catchLine ?: answer.destLabel.orEmpty())
+        }
         val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · ")
         val open = PendingIntent.getActivity(
             ctx, 0, MainActivity.intentFor(ctx),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        // Sound for the heads-up and for the question, once each; quiet for the rest.
+        val store = Store(ctx)
+        val moment = if (ask != null) "ask:${ask.trip}" else if (card?.phase == "riding" || card?.phase == "missed") store.leaveAlertedMoment else "leave:${answer.classAtMs}"
+        val alert = moment != store.leaveAlertedMoment
+        store.leaveAlertedMoment = moment
         val n = android.app.Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(Icon.createWithResource(ctx, R.drawable.ic_bus))
             .setContentTitle(title)
@@ -103,11 +151,23 @@ object LeaveAlerts {
             .setContentIntent(open)
             .setAutoCancel(true)
             .setCategory(android.app.Notification.CATEGORY_REMINDER)
-            .setOnlyAlertOnce(false)
+            .setOnlyAlertOnce(!alert)
+            .apply { ask?.actions?.take(3)?.forEachIndexed { i, a -> addAction(signalAction(ctx, i, a)) } }
             // Gone once the class has started: it's no longer true.
             .apply { answer.classAtMs?.let { setTimeoutAfter((it - now).coerceAtLeast(60_000)) } }
             .build()
         nm.notify(NOTIFICATION_ID, n)
+    }
+
+    /** A button that answers the question from the notification (SignalReceiver). */
+    private fun signalAction(ctx: Context, i: Int, a: CardAction): android.app.Notification.Action {
+        val pi = PendingIntent.getBroadcast(
+            ctx, 10 + i,
+            Intent(ctx, SignalReceiver::class.java).setAction(SignalReceiver.ACTION)
+                .putExtra(SignalReceiver.EXTRA_KIND, a.id).putExtra(SignalReceiver.EXTRA_TRIP, a.trip),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return android.app.Notification.Action.Builder(Icon.createWithResource(ctx, R.drawable.ic_bus), a.label, pi).build()
     }
 
     // Exact only when canScheduleExactAlarms() says so; lint can't see the check.

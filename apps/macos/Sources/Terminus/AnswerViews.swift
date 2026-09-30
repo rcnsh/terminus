@@ -7,6 +7,7 @@ struct AnswerDetail: View {
     let answer: NextAnswer?
     var busy = false
     var onAction: (CardAction) -> Void = { _ in }
+    var onChoice: (Suggestion, Bool) -> Void = { _, _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -35,8 +36,10 @@ struct AnswerDetail: View {
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
                 }
+                // From the bus's departure, the question and its answers in place of the buttons.
+                if let ask = a.card?.ask { Text(ask.question).font(.subheadline.weight(.semibold)).padding(.top, 2) }
                 // The server's buttons, in its order: the first one prominent.
-                if let actions = a.card?.actions, !actions.isEmpty {
+                if let actions = a.card?.ask?.actions ?? a.card?.actions, !actions.isEmpty {
                     Flow(spacing: 6) {
                         ForEach(Array(actions.enumerated()), id: \.element) { i, action in
                             if i == 0 && action.id != "skipped" && action.id != "reset" {
@@ -48,6 +51,18 @@ struct AnswerDetail: View {
                     }
                     .disabled(busy)
                     .padding(.top, 2)
+                }
+                if let s = a.card?.suggestion {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(s.text).font(.callout).fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 6) {
+                            Button(s.accept) { onChoice(s, true) }.buttonStyle(.borderedProminent).controlSize(.small)
+                            Button(s.dismiss) { onChoice(s, false) }.buttonStyle(.bordered).controlSize(.small)
+                        }
+                    }
+                    .disabled(busy)
+                    .padding(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
                 }
             } else {
                 HStack(spacing: 8) {

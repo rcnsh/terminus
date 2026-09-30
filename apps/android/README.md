@@ -22,6 +22,15 @@ adb reverse tcp:8787 tcp:8787                                 # so the phone can
 The unit tests read the same answer fixtures as the API's tests
 (`apps/api/test/fixtures/answers`).
 
+Push (Firebase Cloud Messaging) needs the Firebase app's config at
+`app/google-services.json`, downloaded from the terminus Firebase project.
+It's kept out of git; the build reads it into `BuildConfig.FIREBASE_*` and the
+app sets Firebase up in code (no Google Services Gradle plugin). Without it the
+app builds and works as on a phone without Play services: its own alarms and
+refresh, no push. The dev stub pushes for real when
+`.private/fcm-service-account.json` is present, and `GET /__stub/push` lists
+the devices that registered.
+
 ## Where things are
 
 | | |

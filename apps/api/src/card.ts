@@ -11,8 +11,9 @@
 
 import type { Crowd, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
-import { DUE_MS, type Phase, RIDE_GRACE_MS, type TripRecord } from './trip.ts';
+import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type TripRecord } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
+import type { Suggestion } from './outcomes.ts';
 
 export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup' | 'free';
 
@@ -31,6 +32,26 @@ export interface TripView {
   rec?: TripRecord;
   /** A trip skipped a moment ago, so it can be undone. */
   undo?: { key: string; label: string } | null;
+  /** The bus the plan says to catch, kept once the answer has moved on to riding. */
+  plan?: Boarded | null;
+  /** The phase is the plan's, not something anyone said (no answer to the question). */
+  assumed?: boolean;
+  /** The plan's bus differs from the one remembered for this trip (the caller saves it). */
+  planChanged?: boolean;
+  /** The question isn't asked: its buttons were ignored too often (phase 3). */
+  askMuted?: boolean;
+  /** False when the user turned reminders off for this trip. */
+  remind?: boolean;
+  /** Something terminus has learned and offers to change (outcomes.ts). */
+  suggestion?: Suggestion | null;
+}
+
+/** "On the 9:41 D2?", asked once, at the bus's departure, in the notification
+ *  that's already showing. No answer means yes. */
+export interface CardAsk {
+  trip: string;
+  question: string;
+  actions: CardAction[];
 }
 
 export interface Card {
@@ -76,6 +97,18 @@ export interface Card {
   warning: string | null;
   /** When this card should be expected to change by itself; refetch then. */
   nextChangeAt: string | null;
+  /** The question to put in the trip's notification, from the bus's departure
+   *  until the class starts, while nobody has answered it. Null otherwise. */
+  ask: CardAsk | null;
+  /** True when the question is no longer asked because it was ignored five
+   *  trips running; a settings switch turns it back on. */
+  askMuted: boolean;
+  /** False when the user asked for no reminders for this trip: no leave
+   *  notification. The card itself is unchanged. */
+  remind: boolean;
+  /** "Leave one bus earlier for CS2030?", with its two buttons: send the id
+   *  to /me/suggestion. Never during a trip. */
+  suggestion: Suggestion | null;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -114,7 +147,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 
 const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
-type V1 = Omit<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt'>;
+type V1 = Omit<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion'>;
 
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }): Card {
   const card = v1(a, h12);
@@ -182,13 +215,37 @@ const PHASE_TEXT: Record<Phase, string | null> = {
   arrived: null,
 };
 
+/**
+ * When the trip's phase or its question next changes by itself: due, the
+ * leave-by, the bus leaving (the question), "no answer means on it", the
+ * class starting, the ride ending. Null outside a trip. The Trip object
+ * wakes at this to push; the card's nextChangeAt also counts going stale.
+ */
+export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number): number | null {
+  if (!trip.key) return null;
+  const marks: number[] = [];
+  const l = a.leave ?? null;
+  const plan = trip.plan ?? null;
+  if (plan?.board && !trip.rec) marks.push(Date.parse(plan.board), Date.parse(plan.board) + ASSUME_MS);
+  if (l?.at) marks.push(Date.parse(l.at) - DUE_MS, Date.parse(l.at));
+  if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
+  const onBus = trip.rec?.boarded ?? (trip.assumed ? plan : null);
+  if (trip.phase === 'riding' && onBus?.arrive) marks.push(Date.parse(onBus.arrive) + RIDE_GRACE_MS);
+  return marks.filter((m) => m > nowMs).sort((x, y) => x - y)[0] ?? null;
+}
+
 /** "9:38" or "9:38p": clocks short enough for a glance. */
 function shortClock(ms: number, h12: boolean): string {
   const c = clockAt(ms, h12);
   return h12 ? c.replace(/ ([AaPp])[Mm]$/, (_m, x: string) => x.toLowerCase()) : c;
 }
 
-function v2(a: MeAnswer, card: V1, h12: boolean, trip: TripView): Pick<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt'> {
+function v2(
+  a: MeAnswer,
+  card: V1,
+  h12: boolean,
+  trip: TripView,
+): Pick<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion'> {
   const nowMs = Date.parse(a.asOf);
   const at = (t: string) => clockAt(Date.parse(t), h12);
   const short = (t: string) => shortClock(Date.parse(t), h12);
@@ -219,8 +276,9 @@ function v2(a: MeAnswer, card: V1, h12: boolean, trip: TripView): Pick<Card, 'ph
       glance = svc ? `${svc} ${l.board ? short(l.board) : 'now'}` : 'Walk now';
     }
   }
-  if (phase === 'riding' && trip.rec?.boarded) {
-    const b = trip.rec.boarded;
+  const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);
+  if (phase === 'riding' && onBus) {
+    const b = onBus;
     line = `On the ${b.svc}${b.arrive ? ` · off at ${b.off ?? a.dest?.label ?? 'your stop'} ${at(b.arrive)}` : ''}`;
     glance = b.arrive ? `Off ${short(b.arrive)}` : `On the ${b.svc}`;
   }
@@ -243,13 +301,34 @@ function v2(a: MeAnswer, card: V1, h12: boolean, trip: TripView): Pick<Card, 'ph
   }
   if (trip.undo) actions.push({ id: 'reset', label: `Undo: going to ${trip.undo.label}`, trip: trip.undo.key });
 
-  // The next moment this card changes by itself.
-  const marks: number[] = [];
-  if (card.staleAt) marks.push(Date.parse(card.staleAt));
-  if (l?.at && key) marks.push(Date.parse(l.at) - DUE_MS, Date.parse(l.at));
-  if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
-  if (phase === 'riding' && trip.rec?.boarded?.arrive) marks.push(Date.parse(trip.rec.boarded.arrive) + RIDE_GRACE_MS);
-  const next = marks.filter((m) => m > nowMs).sort((x, y) => x - y)[0];
+  // "On the 9:41 D2?": from the departure until the class starts (or the bus
+  // should have got you there), unless someone already said.
+  const plan = trip.plan ?? null;
+  let ask: CardAsk | null = null;
+  if (key && plan?.board && !trip.rec && !trip.askMuted) {
+    const board = Date.parse(plan.board);
+    const until = a.timing?.classAt
+      ? Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000
+      : plan.arrive
+        ? Date.parse(plan.arrive) + RIDE_GRACE_MS
+        : board + 30 * 60_000;
+    if (nowMs >= board && nowMs < until) {
+      ask = {
+        trip: key,
+        question: `On the ${at(plan.board)} ${plan.svc}?`,
+        actions: [
+          { id: 'boarded', label: 'On it', trip: key },
+          { id: 'missed', label: 'Missed it', trip: key },
+          ...(a.dest?.why === 'class' ? [{ id: 'skipped' as const, label: 'Not going', trip: key }] : []),
+        ],
+      };
+    }
+  }
+
+  // The next moment this card changes by itself: the trip's next phase, or
+  // the answer going stale, whichever is sooner.
+  const phaseAt = nextPhaseAt(a, trip, nowMs);
+  const next = [phaseAt, card.staleAt ? Date.parse(card.staleAt) : null].filter((m): m is number => m !== null && m > nowMs).sort((x, y) => x - y)[0];
 
   return {
     phase,
@@ -259,5 +338,9 @@ function v2(a: MeAnswer, card: V1, h12: boolean, trip: TripView): Pick<Card, 'ph
     actions,
     warning: a.warning ?? null,
     nextChangeAt: next === undefined ? null : iso(next),
+    ask,
+    askMuted: Boolean(trip.askMuted),
+    remind: trip.remind !== false,
+    suggestion: trip.suggestion ?? null,
   };
 }

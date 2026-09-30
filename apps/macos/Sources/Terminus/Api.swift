@@ -63,6 +63,12 @@ struct NextAnswer: Decodable {
         /// "Last D2 from UTown in 18 min".
         let warning: String?
         let nextChangeAt: String?
+        /// "On the 9:41 D2?": from the bus's departure until the class starts, unanswered.
+        let ask: CardAsk?
+        /// False when reminders are off for this class.
+        let remind: Bool?
+        /// "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice.
+        let suggestion: Suggestion?
     }
 
     enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card }
@@ -245,6 +251,21 @@ struct CardAction: Decodable, Hashable {
     let trip: String
 }
 
+/// The question at the bus's departure, with its answers (On it · Missed it · Not going).
+struct CardAsk: Decodable, Hashable {
+    let trip: String
+    let question: String
+    let actions: [CardAction]
+}
+
+/// Something terminus learned and offers to change; `id` goes back to /me/choice.
+struct Suggestion: Decodable, Hashable {
+    let id: String
+    let text: String
+    let accept: String
+    let dismiss: String
+}
+
 struct SignInRequest: Decodable, Equatable {
     let request: String
     let poll: String
@@ -317,6 +338,12 @@ struct Api {
         var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
         answer.raw = data
         return answer
+    }
+
+    /// A suggestion accepted or turned down.
+    func choice(id: String, accept: Bool) async throws {
+        let body: [String: Any] = ["id": id, "choice": accept ? "accept" : "dismiss"]
+        _ = try await send("POST", "/me/choice", json: try JSONSerialization.data(withJSONObject: body))
     }
 
     /// "Is this wrong?": the answer as it came from the server, and a note.

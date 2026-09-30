@@ -28,7 +28,10 @@ export function makeD1() {
       return { results: db.prepare(sql).all(...params).map((r) => ({ ...r })), success: true };
     },
     async run() {
-      const r = db.prepare(sql).run(...params);
+      // Like D1: a statement that returns rows gives them back, in batch() too.
+      const st = db.prepare(sql);
+      if (st.columns().length) return { results: st.all(...params).map((r) => ({ ...r })), success: true, meta: { changes: 0 } };
+      const r = st.run(...params);
       return { success: true, meta: { changes: Number(r.changes) } };
     },
   });

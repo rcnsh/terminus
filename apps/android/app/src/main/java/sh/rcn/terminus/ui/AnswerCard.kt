@@ -1,5 +1,6 @@
 package sh.rcn.terminus.ui
 
+import sh.rcn.terminus.Suggestion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +38,13 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.widget.clock
 
 @Composable
-internal fun AnswerCard(answer: NextAnswer?, loading: Boolean, onAction: (CardAction) -> Unit = {}, busy: Boolean = false) {
+internal fun AnswerCard(
+    answer: NextAnswer?,
+    loading: Boolean,
+    onAction: (CardAction) -> Unit = {},
+    busy: Boolean = false,
+    onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> },
+) {
     // The card fills the space kept for it, so a short answer ("You're home",
     // the rest screen) doesn't leave a gap under it; short ones sit centred.
     val short = answer == null || answer.arrived || answer.mode == "rest" || answer.isFree
@@ -65,7 +72,7 @@ internal fun AnswerCard(answer: NextAnswer?, loading: Boolean, onAction: (CardAc
                 Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(answer.detail)
                 Text("Tap a place above, or Nearby for buses around you.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Actions(answer, onAction, busy)
+                Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
             // Where the trip is, when one is under way: the same on every device.
@@ -84,12 +91,12 @@ internal fun AnswerCard(answer: NextAnswer?, loading: Boolean, onAction: (CardAc
                     Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
                 Text(answer.detail)
-                Actions(answer, onAction, busy)
+                Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
             if (answer.isClassPlan) {
                 ClassPlan(answer)
-                Actions(answer, onAction, busy)
+                Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
             val ctx = LocalContext.current
@@ -103,23 +110,41 @@ internal fun AnswerCard(answer: NextAnswer?, loading: Boolean, onAction: (CardAc
             }
             // The alternative is already at the end of `detail`.
             answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Actions(answer, onAction, busy)
+            Actions(answer, onAction, busy, onSuggestion)
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
-/** The server's buttons, in its order: the first one filled, the rest outlined. */
+/**
+ * The server's buttons, in its order: the first one filled, the rest outlined.
+ * From the bus's departure, the question ("On the 9:41 D2?") and its answers
+ * instead. Then anything terminus has to suggest.
+ */
 @Composable
-internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: Boolean) {
-    val actions = answer.card?.actions.orEmpty()
-    if (actions.isEmpty()) return
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
-        actions.forEachIndexed { i, a ->
-            if (i == 0 && a.id != "skipped" && a.id != "reset") {
-                Button(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
-            } else {
-                OutlinedButton(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
+internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: Boolean, onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> }) {
+    val ask = answer.card?.ask
+    val actions = ask?.actions ?: answer.card?.actions.orEmpty()
+    if (ask != null) Text(ask.question, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+    if (actions.isNotEmpty()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
+            actions.forEachIndexed { i, a ->
+                if (i == 0 && a.id != "skipped" && a.id != "reset") {
+                    Button(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
+                } else {
+                    OutlinedButton(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
+                }
+            }
+        }
+    }
+    answer.card?.suggestion?.let { s ->
+        androidx.compose.material3.OutlinedCard(Modifier.padding(top = 14.dp)) {
+            Column(Modifier.padding(12.dp)) {
+                Text(s.text, style = MaterialTheme.typography.bodyMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                    Button(onClick = { onSuggestion(s, true) }, enabled = !busy) { Text(s.accept) }
+                    OutlinedButton(onClick = { onSuggestion(s, false) }, enabled = !busy) { Text(s.dismiss) }
+                }
             }
         }
     }

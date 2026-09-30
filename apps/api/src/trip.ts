@@ -34,6 +34,13 @@ export interface Boarded {
   board: string | null;
   arrive: string | null;
   off?: string;
+  /** Stop codes, and the bus's plate when the feed had one at the tap: its
+   *  arrival at `alightCode` is then read from the feed while you ride. */
+  stopCode?: string;
+  alightCode?: string;
+  plate?: string;
+  /** No answer to the question was noted for this trip (outcomes.ts). */
+  noted?: boolean;
 }
 
 /** The latest signal about one trip today. */
@@ -51,6 +58,13 @@ export interface TripRecord {
 export interface DayRecord {
   date: string;
   trips: Record<string, TripRecord>;
+  /** The bus each trip's plan said to catch, kept from when the trip was due
+   *  and frozen once it left, so "On the 9:41 D2?" is still about that bus
+   *  after the answer has moved on to the next one. */
+  plans?: Record<string, Boarded>;
+  /** When the object was last asked to wake (the card's nextChangeAt, epoch
+   *  ms), so the Worker only asks again when that changes. Push only. */
+  watch?: number;
 }
 
 /** Heads-up window: the trip is "due" this long before its leave-by. */
@@ -59,6 +73,10 @@ export const DUE_MS = 5 * 60_000;
 export const AT_STOP_M = 80;
 /** After the bus you're on should have got you there, you're taken to be there. */
 export const RIDE_GRACE_MS = 10 * 60_000;
+/** Nobody said otherwise this long after the bus left: you're taken to be on it. */
+export const ASSUME_MS = 3 * 60_000;
+/** A plate is picked at the tap only from a bus due at the stop within this. */
+export const PLATE_WINDOW_S = 5 * 60;
 
 /** "2026-09-30", the Singapore day a signal belongs to. */
 export function sgtDate(nowMs: number): string {
@@ -122,11 +140,28 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
     const res = await s.fetch(`https://trip/day?date=${sgtDate(nowMs)}`);
     if (!res.ok) return null;
     const day = (await res.json()) as DayRecord | null;
-    return day && Object.keys(day.trips).length ? day : null;
+    return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || day.watch) ? day : null;
   } catch (err) {
     // The answer works without trip state; a failure only loses the phase.
     console.error('trip state unavailable', err instanceof Error ? err.name : typeof err);
     return null;
+  }
+}
+
+/** Remembers the bus a trip's plan says to catch (see DayRecord.plans). */
+export async function savePlan(env: Env, userId: string, key: string, plan: Boarded, nowMs: number): Promise<void> {
+  const s = stub(env, userId);
+  if (!s) return;
+  try {
+    const res = await s.fetch('https://trip/plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ date: sgtDate(nowMs), key, plan, deleteAt: endOfDayMs(nowMs) }),
+    });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+  } catch (err) {
+    // Only the question at departure depends on it.
+    console.error('trip plan not saved', err instanceof Error ? err.message : typeof err);
   }
 }
 
@@ -144,41 +179,35 @@ export async function saveSignal(env: Env, userId: string, key: string, rec: Tri
 }
 
 /**
- * One per user, holding today's trip signals. Uses the plain fetch/alarm
- * interface, so the class needs nothing from the runtime to be tested.
+ * Empties a user's trip state at once, for an account that's being deleted
+ * (it would otherwise go at midnight). A failure is logged, not thrown: the
+ * account still goes, and the state still expires with the day.
  */
-export class Trip {
-  private readonly storage: DurableObjectStorage;
-
-  constructor(state: DurableObjectState, _env: unknown) {
-    this.storage = state.storage;
+export async function clearTrip(env: Env, userId: string): Promise<void> {
+  const s = stub(env, userId);
+  if (!s) return;
+  try {
+    const res = await s.fetch('https://trip/clear', { method: 'POST' });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+  } catch (err) {
+    console.error('trip state not cleared', err instanceof Error ? err.message : typeof err);
   }
+}
 
-  async fetch(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const day = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
-
-    if (req.method === 'GET' && url.pathname === '/day') {
-      const date = url.searchParams.get('date') ?? '';
-      // Yesterday's signals are never today's, even before the alarm has run.
-      return Response.json(day && day.date === date ? day : null);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/signal') {
-      const body = (await req.json()) as { date: string; key: string; rec: TripRecord | null; deleteAt: number };
-      const next: DayRecord = day && day.date === body.date ? day : { date: body.date, trips: {} };
-      if (body.rec) next.trips[body.key] = body.rec;
-      else delete next.trips[body.key];
-      await this.storage.put('day', next);
-      // Everything goes at the end of the day.
-      if ((await this.storage.getAlarm()) === null) await this.storage.setAlarm(body.deleteAt);
-      return Response.json(next);
-    }
-
-    return new Response('not found', { status: 404 });
-  }
-
-  async alarm(): Promise<void> {
-    await this.storage.deleteAll();
+/**
+ * Asks the user's Trip object to wake at `atMs` (the card's nextChangeAt),
+ * work out the card again and push it if it changed. Push only.
+ */
+export async function watchTrip(env: Env, userId: string, atMs: number, nowMs: number): Promise<void> {
+  const s = stub(env, userId);
+  if (!s) return;
+  try {
+    await s.fetch('https://trip/watch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId, date: sgtDate(nowMs), at: atMs, deleteAt: endOfDayMs(nowMs) }),
+    });
+  } catch (err) {
+    console.error('trip watch failed', err instanceof Error ? err.message : typeof err);
   }
 }

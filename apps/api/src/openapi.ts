@@ -617,7 +617,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             '`boarded`, `missed`, `skipped` (not going today), `left`, `arrived`, `location` (with `lat` and `lon`; only what it means is kept) or `reset` ' +
             '(undo). `trip` is the key from a card action or /me/day; without it, the trip in progress. Recorded for the day on every device, and ' +
-            'answered with the new `/me/next`, whose `card.phase` and `card.actions` follow. Deleted at the end of the day.',
+            'answered with the new `/me/next`, whose `card.phase` and `card.actions` follow. Deleted at the end of the day. ' +
+            'From the planned bus\'s departure, `card.ask` puts the question ("On the 9:41 D2?") with `boarded` (On it), `missed` and `skipped`; ' +
+            'no answer is taken as `boarded` a few minutes later. `boarded` records the bus\'s plate when the feed has one, and the ride then shows ' +
+            'its arrival at your stop from the feed. Each answer is kept 35 days as the trip\'s outcome (in the export, deleted with the account): ' +
+            'five trips in a row without one mute the question (`card.askMuted`), and repeated misses or skips produce a `card.suggestion`.',
           operationId: 'meSignal',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
@@ -639,6 +643,79 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '409': errorResponse('No trip in progress to say that about.'),
             '503': errorResponse('Trip tracking is not available.'),
           },
+        },
+      },
+      '/me/push': {
+        post: {
+          tags: ['Account'],
+          summary: 'Register this device for push',
+          description:
+            "This device's Firebase Cloud Messaging token. When the trip's phase or question changes, the device gets a data message " +
+            "`{kind: 'card', phase, ask: '0'|'1'}` and should fetch `/me/next`. A token lives on one device session; one Firebase no longer knows is dropped.",
+          operationId: 'mePushRegister',
+          security: [{ bearer: [] }],
+          requestBody: jsonBody({ type: 'object', required: ['token'], properties: { token: { type: 'string', maxLength: 4096 } } }, { token: 'fcm-registration-token' }),
+          responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }), '400': errorResponse('No token.') },
+        },
+        delete: {
+          tags: ['Account'],
+          summary: 'Stop push to this device',
+          operationId: 'mePushForget',
+          security: [{ bearer: [] }],
+          responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }) },
+        },
+      },
+      '/me/choice': {
+        post: {
+          tags: ['Account'],
+          summary: 'Accept or turn down a suggestion',
+          description:
+            "`id` from `card.suggestion` with `choice: accept` or `dismiss`; or `trip` and `pref` (`earlier`: leave one bus earlier for that class; " +
+            '`quiet`: no reminders for it) with `choice: undo`. A suggestion turned down is not offered again for 30 days.',
+          operationId: 'meChoice',
+          security: [{ bearer: [] }, { cookie: [] }],
+          requestBody: jsonBody(
+            {
+              type: 'object',
+              required: ['choice'],
+              properties: {
+                id: { type: 'string' },
+                trip: { type: 'string' },
+                pref: { type: 'string', enum: ['earlier', 'quiet'] },
+                choice: { type: 'string', enum: ['accept', 'dismiss', 'undo'] },
+              },
+            },
+            { id: 'earlier:4:600:UTOWN', choice: 'accept' },
+          ),
+          responses: { '200': ok({ type: 'object', description: 'ok, and `choices` as in GET /me/choices.' }), '400': errorResponse('No such suggestion or choice.') },
+        },
+      },
+      '/me/choices': {
+        get: {
+          tags: ['Account'],
+          summary: 'Trip choices',
+          description: 'Classes you leave one bus earlier for, or get no reminders for, and whether the question is muted.',
+          operationId: 'meChoices',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: {
+            '200': ok({
+              type: 'object',
+              properties: {
+                choices: { type: 'array', items: { type: 'object', properties: { trip: { type: 'string' }, pref: { type: 'string', enum: ['earlier', 'quiet'] }, label: { type: ['string', 'null'] }, since: { type: 'string', format: 'date-time' } } } },
+                askMuted: { type: 'boolean' },
+              },
+            }),
+          },
+        },
+      },
+      '/me/ask': {
+        post: {
+          tags: ['Account'],
+          summary: 'Ask if I caught the bus again',
+          description: 'Turns the question back on after it was muted; only answers from now on count toward muting it again.',
+          operationId: 'meAskAgain',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, askMuted: { type: 'boolean' } } }) },
         },
       },
       '/me/feedback': {
@@ -788,6 +865,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 arrive: { type: ['string', 'null'], format: 'date-time', description: 'When you get there by leaving at `at`: the venue for a class, otherwise the stop.' },
                 note: { type: ['string', 'null'], description: 'Why the time is earlier than it could be, e.g. the bus is often packed then. Display verbatim.' },
                 off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination (e.g. `Opp NUSS` for AS 5). `arrive` includes the walk back across. Absent otherwise.' },
+                stopCode: { type: 'string', description: 'Stop code of `stop`. Absent when walking.' },
+                offCode: { type: 'string', description: 'Stop code of `off`. Absent without a crossing.' },
                 estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
               },
             },

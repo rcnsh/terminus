@@ -140,7 +140,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         // A minimum height keeps the chips and search from jumping as views
         // switch or data arrives.
         Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
-            if (state.showNearby) NearbyList(state.nearby, state.loading) else AnswerCard(state.answer, state.loading, vm::signal, state.signalling)
+            if (state.showNearby) NearbyList(state.nearby, state.loading) else AnswerCard(state.answer, state.loading, vm::signal, state.signalling, vm::choose)
         }
         // The rest of today under the planned answer.
         if (!state.showNearby && state.target == Target.Plan) state.day?.let { DayTimeline(it) }
@@ -179,12 +179,12 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         Spacer(Modifier.height(16.dp))
         NotifyToggle(
             "Notify me when to leave for class",
-            "A heads-up 5 minutes before you need to set off.",
+            "A heads-up 5 minutes before you need to set off. When the bus leaves, it asks whether you caught it, so your other devices follow; no answer counts as yes.",
             state.leaveAlerts, vm::setLeaveAlerts, openSettings,
         )
         NotifyToggle(
-            "Live notification during your day",
-            "Keeps the next bus and a countdown in your notifications, and the widget up to date. Uses a lot of battery: it checks for new times every 30 seconds while your day is on.",
+            "Live notification during trips",
+            "During each trip, from time to go until you're there, keeps the next bus and a countdown in your notifications and the widget up to date. It checks for new times every 30 seconds then, which uses more battery.",
             state.liveUpdates, vm::setLiveUpdates, openSettings,
         )
 
