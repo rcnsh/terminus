@@ -56,8 +56,22 @@ enum Snapshots {
                 return m
             }()),
             ("rest", model(nearbyTab: false, resting: true)),
+            ("today", {
+                let m = model(nearbyTab: false)
+                let dayJSON = """
+                {"date":"2026-10-01","items":[
+                  {"kind":"class","key":"a","label":"MA1100 @ LT21","status":"done","fromName":"PGP","startsAt":"\(iso(-7200))"},
+                  {"kind":"class","key":"b","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","startsAt":"\(classAt)","leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"}},
+                  {"kind":"class","key":"c","label":"CS2030 @ COM1","status":"skipped","fromName":"UTown","startsAt":"\(iso(9000))"},
+                  {"kind":"home","key":"h","label":"Home","status":"later","fromName":"UTown","startsAt":"\(iso(12600))"}
+                ],"note":null}
+                """
+                m.day = try! JSONDecoder().decode(DayPlan.self, from: Data(dayJSON.utf8))
+                return m
+            }()),
         ]
         renderShowcase(to: dir)
+        renderSetup(to: dir)
         for (name, m) in cases {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
                 let view = Popover(model: m, startShown: true)
@@ -65,6 +79,32 @@ enum Snapshots {
                     .background(bg)
                     .environment(\.colorScheme, scheme)
                 let r = ImageRenderer(content: view)
+                r.scale = 2
+                guard let img = r.nsImage, let tiff = img.tiffRepresentation,
+                      let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
+                try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
+            }
+        }
+    }
+
+    /// The setup steps and the devices window, from sample data.
+    static func renderSetup(to dir: String) {
+        let campusJSON = """
+        {"stops":[{"code":"PGP","name":"Prince George's Park","lat":1.2917,"lon":103.7803},{"code":"COM3","name":"COM 3","lat":1.2948,"lon":103.7747},{"code":"UTOWN","name":"University Town","lat":1.3036,"lon":103.7747}],
+         "residences":[{"code":"PGPR","name":"Prince George's Park Residences","stops":["PGP"],"walkM":300},{"code":"RVRC","name":"Ridge View Residential College","stops":["COM3"],"walkM":420}]}
+        """
+        let campus = try! JSONDecoder().decode(Campus.self, from: Data(campusJSON.utf8))
+        let profile: [String: Any] = ["home": ["stops": ["PGP"]], "homeWalkMin": 4, "walkPace": "normal", "fullBusMargin": true, "trips": [[:], [:], [:]], "share": "https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1"]
+        let devices = [
+            Device(id: "a", name: "MacBook Air", platform: "mac", lastSeen: Date().timeIntervalSince1970 * 1000, current: true),
+            Device(id: "b", name: "Google Pixel 8", platform: "android", lastSeen: (Date().timeIntervalSince1970 - 7200) * 1000, current: false),
+        ]
+        let app = AppModel(snapshot: true)
+        var views: [(String, AnyView)] = (0..<4).map { ("setup-\($0 + 1)", AnyView(SetupView(app: app, setup: SetupModel(profile: profile, campus: campus), step: $0))) }
+        views.append(("devices", AnyView(DevicesView(setup: SetupModel(profile: profile, campus: campus, devices: devices, pairCode: "K7QX4M")))))
+        for (name, view) in views {
+            for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
+                let r = ImageRenderer(content: view.background(bg).environment(\.colorScheme, scheme))
                 r.scale = 2
                 guard let img = r.nsImage, let tiff = img.tiffRepresentation,
                       let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }

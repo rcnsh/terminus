@@ -30,8 +30,12 @@ enum TokenStore {
     /// Tests point this at a temporary folder; the app never sets it.
     nonisolated(unsafe) static var folder: URL?
 
+    /// A build pointed at a local API (TERMINUS_API_BASE) keeps its own
+    /// token, so pairing it to the dev stub never signs this Mac out of the real one.
+    private static var folderName: String { Api.base == "https://terminus.rcn.sh" ? "terminus" : "terminus-dev" }
+
     static var fileURL: URL {
-        (folder ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("terminus", isDirectory: true))
+        (folder ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(folderName, isDirectory: true))
             .appendingPathComponent("device-token")
     }
 
@@ -40,7 +44,8 @@ enum TokenStore {
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
             return t.isEmpty ? .missing : .found(t)
         }
-        return migrateKeychain()
+        // The keychain item belongs to the real API's sign-in: a dev build leaves it alone.
+        return folderName == "terminus" ? migrateKeychain() : .missing
     }
 
     static var exists: Bool {

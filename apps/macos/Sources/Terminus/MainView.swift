@@ -6,6 +6,7 @@ import AppKit
 
 struct Main: View {
     @Bindable var model: AppModel
+    @Environment(\.openWindow) private var openWindow
     @State private var query = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -27,6 +28,20 @@ struct Main: View {
                     } else {
                         Button("Download") { NSWorkspace.shared.open(URL(string: "https://terminus.rcn.sh/download/mac")!) }.controlSize(.small)
                     }
+                }
+                .card(padding: 10)
+            }
+
+            if model.wantsSetup {
+                HStack(spacing: 10) {
+                    Image(systemName: "house.fill").foregroundStyle(Color.brand).accessibilityHidden(true)
+                    Text("Add where you live and your timetable").font(.callout)
+                    Spacer()
+                    Button("Set up") {
+                        openWindow(id: "setup")
+                        NSApp.activate()
+                    }
+                    .controlSize(.small)
                 }
                 .card(padding: 10)
             }
@@ -64,6 +79,11 @@ struct Main: View {
             .frame(maxWidth: .infinity, minHeight: 120, alignment: .top)
             .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.showNearby)
             .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.target)
+
+            // Today, on the plan's tab: the rest of the day under the next trip.
+            if !model.showNearby, model.target == .plan, let day = model.day, !day.items.isEmpty {
+                TodayList(day: day).padding(.horizontal, 4)
+            }
 
             if model.reporting {
                 ReportForm(model: model)

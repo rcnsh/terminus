@@ -89,14 +89,14 @@ GRAPH.serviceHours = {}; // every service "running", whatever the hour
 const db = makeD1();
 const email = makeEmail();
 const today = new Date(realNow() + 8 * 3_600_000).getUTCDay();
-const inAnHour = Math.min(1380, Math.floor(((realNow() + 8 * 3_600_000) % 86_400_000) / 60_000) + Number(process.env.CLASS_IN_MIN ?? 50));
+const inAnHour = Math.min(1425, Math.floor(((realNow() + 8 * 3_600_000) % 86_400_000) / 60_000) + Number(process.env.CLASS_IN_MIN ?? 50));
 const profile = {
   home: { stops: ['PGP'] },
   gapHours: 2,
   dayStartMin: 0,
   dayEndMin: 1439,
   trips: [],
-  manual: [{ day: today, arriveByMin: inAnHour, endMin: inAnHour + 60, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }],
+  manual: [{ day: today, arriveByMin: inAnHour, endMin: Math.min(1439, inAnHour + 60), to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }],
   places: [
     { key: 'mrt', label: 'KR MRT', to: 'KR-MRT' },
     { key: 'utown', label: 'UTown', to: 'UTOWN' },

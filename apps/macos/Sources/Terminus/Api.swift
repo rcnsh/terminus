@@ -244,6 +244,95 @@ enum Target: Hashable {
     case code(String, label: String)
 }
 
+/// `/campus`: every stop, and the residences with the stops that serve them.
+struct Campus: Decodable {
+    struct Stop: Decodable, Hashable { let code: String; let name: String; let lat: Double?; let lon: Double? }
+    struct Residence: Decodable, Hashable { let code: String; let name: String; let stops: [String]; let walkM: Double? }
+    let stops: [Stop]
+    let residences: [Residence]
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        stops = try c.decode([Stop].self, forKey: .stops).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        residences = ((try? c.decodeIfPresent([Residence].self, forKey: .residences)) ?? []).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+    enum CodingKeys: String, CodingKey { case stops, residences }
+
+    func stopName(_ code: String) -> String { stops.first { $0.code == code }?.name ?? code }
+
+    /// The stop nearest a point, for "Pick the stop nearest me".
+    func nearest(lat: Double, lon: Double) -> Stop? {
+        stops.filter { $0.lat != nil && $0.lon != nil }.min { a, b in
+            func d(_ s: Stop) -> Double {
+                let dLat = s.lat! - lat, dLon = (s.lon! - lon) * cos(lat * .pi / 180)
+                return dLat * dLat + dLon * dLon
+            }
+            return d(a) < d(b)
+        }
+    }
+}
+
+/// `/me/import`: what was found, what couldn't be placed, and for which semester.
+struct ImportResult {
+    let profile: [String: Any]
+    let classes: Int
+    let unresolved: [String]
+    let missing: [String]
+    let term: String
+
+    init(_ o: [String: Any]) {
+        profile = o["profile"] as? [String: Any] ?? [:]
+        classes = (profile["trips"] as? [Any])?.count ?? 0
+        unresolved = (o["unresolved"] as? [[String: Any]] ?? []).map { "\($0["module"] as? String ?? "") at \($0["venue"] as? String ?? "")" }
+        missing = o["missing"] as? [String] ?? []
+        term = o["term"] as? String ?? ""
+    }
+}
+
+/// A device signed in to the account, as Settings lists it.
+struct Device: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String?
+    let platform: String?
+    let lastSeen: Double?
+    let current: Bool?
+}
+
+/// `/me/day`: today's classes and the trips home, and where each stands.
+struct DayPlan: Decodable {
+    struct Item: Decodable, Identifiable {
+        struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String? }
+        struct Timing: Decodable { let status: String?; let text: String? }
+        struct OnBus: Decodable { let svc: String; let off: String?; let arrive: String? }
+        let kind: String
+        let key: String
+        let label: String
+        /// done | now | next | later | skipped
+        let status: String
+        let fromName: String?
+        let startsAt: String
+        let leave: Leave?
+        let timing: Timing?
+        let onBus: OnBus?
+        var id: String { key }
+
+        /// "Leave by 09:38 · D2 from PGP", "On the D2 · off at UTown · arrive 09:52", or nil.
+        var sub: String? {
+            if status == "skipped" { return "Not going today" }
+            if status == "done" { return nil }
+            if let b = onBus {
+                return (["On the \(b.svc)", b.off.map { "off at \($0)" }, b.arrive.flatMap(parseISODate).map { "arrive \(campusTime($0))" }] as [String?]).compactMap { $0 }.joined(separator: " · ")
+            }
+            guard let l = leave, let at = parseISODate(l.at) else { return nil }
+            let how = l.svc.map { "\($0) from \(l.stop ?? fromName ?? "")" } ?? "walk"
+            return (["Leave by \(l.estimated == true ? "~" : "")\(campusTime(at))", how, timing?.status == "late" ? timing?.text : nil] as [String?]).compactMap { $0 }.joined(separator: " · ")
+        }
+        var title: String { kind == "home" ? "Home, from \(fromName ?? "your last class")" : label }
+    }
+    let items: [Item]
+    let note: String?
+}
+
 /// A button on the card: `id` is the signal to send, `trip` which trip it's about.
 struct CardAction: Decodable, Hashable {
     let id: String
@@ -352,6 +441,53 @@ struct Api {
         if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String { body["appVersion"] = v }
         if let answer, let obj = try? JSONSerialization.jsonObject(with: answer) { body["context"] = obj }
         _ = try await send("POST", "/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
+    }
+
+    // MARK: setup and devices (phase 7): the account page's routes, from the app
+
+    /// The profile as the server keeps it, kept as JSON so fields this version
+    /// doesn't know about survive a save.
+    func profile() async throws -> Data {
+        try await send("GET", "/me/profile")
+    }
+
+    /// Saves the whole profile; answers with it as saved.
+    func saveProfile(_ profile: Data) async throws -> Data {
+        try await send("PUT", "/me/profile", json: profile)
+    }
+
+    /// Imports a NUSMods share link; the server replaces the imported classes only if it all worked.
+    /// The import's answer as JSON (see ImportResult).
+    func importTimetable(_ share: String) async throws -> Data {
+        try await send("POST", "/me/import", json: JSONSerialization.data(withJSONObject: ["share": share]))
+    }
+
+    /// Stops and residences, for the home picker.
+    func campus() async throws -> Campus {
+        try JSONDecoder().decode(Campus.self, from: await send("GET", "/campus"))
+    }
+
+    /// A pairing code for another device (accounts with an email only).
+    func pairCode() async throws -> String {
+        struct R: Decodable { let code: String }
+        return try JSONDecoder().decode(R.self, from: await send("POST", "/me/pair-code", json: Data("{}".utf8))).code
+    }
+
+    func devices() async throws -> [Device] {
+        struct R: Decodable { let devices: [Device] }
+        return try JSONDecoder().decode(R.self, from: await send("GET", "/me/devices")).devices
+    }
+
+    /// The owner is emailed about every removal.
+    func removeDevice(_ id: String) async throws {
+        let safe = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        _ = try await send("DELETE", "/me/devices/\(safe)")
+    }
+
+    /// Today at a glance: each class with its leave-by, and the trips home.
+    func day() async throws -> DayPlan {
+        let q = usesHour12 ? [URLQueryItem(name: "h12", value: "1")] : []
+        return try JSONDecoder().decode(DayPlan.self, from: try await send("GET", "/me/day", query: q))
     }
 
     func nearby(lat: Double?, lon: Double?) async throws -> [NearbyStop] {
