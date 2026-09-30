@@ -12,7 +12,7 @@ private let log = Logger(subsystem: "sh.rcn.terminus", category: "refresh")
 final class AppModel {
     static let shared = AppModel()
 
-    /// Set from the Keychain at launch; snapshots and tests set it themselves
+    /// Set from the token file at launch; snapshots and tests set it themselves
     /// and never touch the real token.
     var paired = false
     var pairing = false
@@ -173,7 +173,7 @@ final class AppModel {
                 let token = try await Api(token: nil).pair(code: code, name: String(name.prefix(40)))
                 guard TokenStore.write(token) else {
                     pairing = false
-                    pairError = "Couldn't save the pairing to your keychain. Allow terminus access when asked, then pair again."
+                    pairError = "Couldn't save the pairing on this Mac. Check there's disk space, then pair again."
                     return
                 }
                 paired = true
@@ -285,7 +285,7 @@ final class AppModel {
         signInRequest = nil
         guard let token = p.token, TokenStore.write(token) else {
             signInWaiting = nil
-            signInError = "Couldn't save the sign-in to your keychain. Allow terminus access when asked, then try again."
+            signInError = "Couldn't save the sign-in on this Mac. Check there's disk space, then try again."
             return
         }
         signInWaiting = nil

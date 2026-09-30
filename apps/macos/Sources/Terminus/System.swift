@@ -2,45 +2,45 @@ import CoreLocation
 import Foundation
 import Security
 
-/// The device token, in the login keychain.
+/// The device token, in a file only this user can read:
+/// ~/Library/Application Support/terminus/device-token (0600, folder 0700).
 ///
-/// Releases are signed with the terminus certificate, so every version has the
-/// same code identity and keeps access to the item without asking. Ad-hoc
-/// builds (swift run, ./build.sh without the certificate) get a new identity
-/// each time, and macOS asks once per build before handing the token over.
+/// Not the keychain: terminus is signed with a self-signed certificate, with
+/// no Apple Team ID, so macOS knows each version only by its code hash and
+/// asked for the keychain password after every update. A file has the same
+/// protection as an SSH key. The token only reads your bus answers, and
+/// Settings on the web can revoke it.
+///
+/// Versions 1.3.8 to 2.0.0-beta.4 kept it in the keychain. It's moved to the
+/// file once, the first time the file isn't there (that read may be the last
+/// keychain prompt), and the keychain item is then deleted.
 enum TokenStore {
-    private static let service = "sh.rcn.terminus"
+    /// Tests use their own keychain name; the app never changes it.
+    nonisolated(unsafe) static var service = "sh.rcn.terminus"
     private static let account = "device-token"
 
     private enum Lookup {
         case found(String)
         case missing
-        /// Locked keychain, access refused: the token may well be there.
+        /// The keychain refused (locked, or the prompt was denied): the token
+        /// may well be there, so this is not "signed out".
         case failed(OSStatus)
     }
 
-    private static var base: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: account]
+    /// Tests point this at a temporary folder; the app never sets it.
+    nonisolated(unsafe) static var folder: URL?
+
+    static var fileURL: URL {
+        (folder ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("terminus", isDirectory: true))
+            .appendingPathComponent("device-token")
     }
 
     private static func lookup() -> Lookup {
-        var query = base
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var out: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &out)
-        switch status {
-        case errSecSuccess:
-            guard let data = out as? Data, let s = String(data: data, encoding: .utf8) else { return .missing }
+        if let s = try? String(contentsOf: fileURL, encoding: .utf8) {
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
             return t.isEmpty ? .missing : .found(t)
-        case errSecItemNotFound:
-            return migrateFile()
-        default:
-            return .failed(status)
         }
+        return migrateKeychain()
     }
 
     static var exists: Bool {
@@ -56,33 +56,65 @@ enum TokenStore {
     @discardableResult
     static func write(_ token: String?) -> Bool {
         guard let token else {
-            let status = SecItemDelete(base as CFDictionary)
-            try? FileManager.default.removeItem(at: legacyURL)
-            return status == errSecSuccess || status == errSecItemNotFound
+            try? FileManager.default.removeItem(at: fileURL)
+            deleteKeychainItem()
+            return !FileManager.default.fileExists(atPath: fileURL.path)
         }
-        let data = Data(token.utf8)
-        let status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        guard status == errSecItemNotFound else { return status == errSecSuccess }
-        var add = base
-        add[kSecValueData as String] = data
-        add[kSecAttrLabel as String] = "terminus device token"
-        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        return writeFile(token)
     }
 
-    /// Versions up to 1.3.7 kept the token in Application Support, because
-    /// ad-hoc builds couldn't keep Keychain access. Move it over once.
-    private static var legacyURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("terminus", isDirectory: true).appendingPathComponent("device-token")
+    /// Written to a private temporary file, then moved over the old one, so
+    /// the token is never readable by others and never half-written.
+    private static func writeFile(_ token: String) -> Bool {
+        let fm = FileManager.default
+        let dir = fileURL.deletingLastPathComponent()
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+            let tmp = dir.appendingPathComponent(".device-token-\(UUID().uuidString)")
+            guard fm.createFile(atPath: tmp.path, contents: Data(token.utf8), attributes: [.posixPermissions: 0o600]) else { return false }
+            if fm.fileExists(atPath: fileURL.path) {
+                _ = try fm.replaceItemAt(fileURL, withItemAt: tmp)
+            } else {
+                try fm.moveItem(at: tmp, to: fileURL)
+            }
+            return true
+        } catch {
+            return false
+        }
     }
 
-    private static func migrateFile() -> Lookup {
-        guard let s = try? String(contentsOf: legacyURL, encoding: .utf8) else { return .missing }
-        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return .missing }
-        // The file goes only once the Keychain has the token.
-        if write(t) { try? FileManager.default.removeItem(at: legacyURL) }
-        return .found(t)
+    /* ---------- moving out of the keychain, once ---------- */
+
+    private static var keychainQuery: [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: service,
+         kSecAttrAccount as String: account]
+    }
+
+    private static func migrateKeychain() -> Lookup {
+        var query = keychainQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &out)
+        switch status {
+        case errSecSuccess:
+            guard let data = out as? Data, let s = String(data: data, encoding: .utf8) else { return .missing }
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !t.isEmpty else { return .missing }
+            // The keychain item goes only once the file has the token.
+            if writeFile(t) { deleteKeychainItem() }
+            return .found(t)
+        case errSecItemNotFound:
+            return .missing
+        default:
+            return .failed(status)
+        }
+    }
+
+    private static func deleteKeychainItem() {
+        SecItemDelete(keychainQuery as CFDictionary)
     }
 }
 
