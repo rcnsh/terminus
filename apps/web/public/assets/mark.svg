@@ -1,7 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="terminus">
-  <rect width="64" height="64" rx="15" fill="#1c1917"/>
-  <!-- A terminus sign: a flag on a pole. -->
-  <rect x="14" y="14" width="36" height="9" rx="4.5" fill="#fb923c"/>
-  <rect x="27.5" y="14" width="9" height="36" rx="4.5" fill="#fb923c"/>
-  <circle cx="44" cy="37" r="4.5" fill="#fafaf9"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" aria-label="terminus" role="img" viewBox="0 0 64 64"><rect width="64" height="64" fill="#1c1917" rx="15"/><rect width="36" height="9" x="14" y="14" fill="#fb923c" rx="4.5"/><rect width="9" height="36" x="27.5" y="14" fill="#fb923c" rx="4.5"/><circle cx="44" cy="37" r="4.5" fill="#fafaf9"/></svg>
