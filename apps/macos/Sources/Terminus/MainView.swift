@@ -58,7 +58,7 @@ struct Main: View {
                 if model.showNearby {
                     NearbyList(stops: model.nearby).transition(.opacity.combined(with: .offset(y: 6)))
                 } else {
-                    AnswerDetail(answer: answer).transition(.opacity.combined(with: .offset(y: 6)))
+                    AnswerDetail(answer: answer, busy: model.signalling, onAction: model.signal).transition(.opacity.combined(with: .offset(y: 6)))
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 120, alignment: .top)

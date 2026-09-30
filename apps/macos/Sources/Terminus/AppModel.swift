@@ -133,7 +133,9 @@ final class AppModel {
     /// The menu bar text at `now`: "D2 4m" counted from the departure time,
     /// or nil for the plain icon once the bus has gone or there's no bus.
     func menuTitle(at now: Date) -> String? {
-        guard let plan, plan.quality != "ended", plan.label != "Set up" else { return nil }
+        // A trip under way: its phase, as the phone and the widget say it.
+        if let plan, plan.tripUnderWay, let g = plan.card?.glance { return g }
+        guard let plan, plan.quality != "ended", plan.label != "Set up", !plan.isFree else { return nil }
         // A class: when to leave is what matters from the menu bar.
         if plan.isClassPlan, let at = plan.leaveAt {
             return now >= at ? "Leave now" : "Leave \(campusTime(at))"
@@ -184,6 +186,30 @@ final class AppModel {
             } catch {
                 pairing = false
                 pairError = "Couldn't reach terminus. Check your connection and try again."
+            }
+        }
+    }
+
+    // MARK: trip signals
+
+    var signalling = false
+
+    /// A card button: "On the D2", "Missed it", "Not going". Recorded for every
+    /// device; the answer that comes back replaces the planned one.
+    func signal(_ action: CardAction) {
+        guard !signalling, let token = TokenStore.read() else { return }
+        signalling = true
+        Task {
+            defer { signalling = false }
+            do {
+                let a = try await Api(token: token).signal(action)
+                answers[.plan] = a
+                updated = Date()
+                error = nil
+            } catch let e as ApiError {
+                error = e.message
+            } catch {
+                self.error = "Offline"
             }
         }
     }
@@ -405,7 +431,8 @@ final class AppModel {
         if failed && failures <= 3 { return [5, 15, 45][failures - 1] }
         var d: TimeInterval = popoverOpen ? 30 : resting ? 600 : 120
         let now = Date()
-        for mark in [plan?.departure?.addingTimeInterval(31), plan?.planChanges].compactMap({ $0 }) where mark > now {
+        // nextChange: when the card's phase moves on by itself (the leave-by, a class start).
+        for mark in [plan?.departure?.addingTimeInterval(31), plan?.planChanges, plan?.nextChange].compactMap({ $0 }) where mark > now {
             d = min(d, mark.timeIntervalSince(now))
         }
         return max(d, 5)

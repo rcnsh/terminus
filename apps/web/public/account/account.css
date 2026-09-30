@@ -47,6 +47,10 @@ label[for="home-walk"] { margin-top: 14px; }
 .widget .crowd-note { margin-top: 6px; font-size: 0.85rem; color: var(--warn-ink); }
 .widget .go-now { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .widget .leave { margin-top: 8px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+/* The trip's phase, the same on every device, and the server's buttons. */
+.widget .phase { display: inline-block; margin-bottom: 8px; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; color: var(--accent); background: var(--accent-soft); }
+.widget .warning { margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; color: var(--warn-ink); }
+.widget .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
 .banner {
   border-radius: var(--radius); padding: 14px 16px; font-size: 0.95rem;

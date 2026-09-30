@@ -108,6 +108,13 @@
     "late": false,
     "goNow": null,
     "note": null,
-    "estimate": null
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "A1 9 min",
+    "line": "A1 · 9 min · PGP",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:09:30Z"
   }
 }

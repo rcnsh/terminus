@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
+import sh.rcn.terminus.CardAction
+import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
@@ -54,6 +56,10 @@ data class UiState(
     /** An "Is this wrong?" report on its way, and how it went. */
     val reportSending: Boolean = false,
     val reportResult: String? = null,
+    /** Today's timeline (/me/day), for under the planned answer. */
+    val day: DayPlan? = null,
+    /** A card button's signal on its way. */
+    val signalling: Boolean = false,
 ) {
     val answer: NextAnswer? get() = answers[target]
 }
@@ -191,6 +197,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearReportResult() = _state.update { it.copy(reportResult = null) }
 
+    /**
+     * A card button: "On the D2", "Missed it", "Not going". The server records
+     * it for every device and answers with the new planned answer.
+     */
+    fun signal(action: CardAction) {
+        val token = store.token ?: return
+        if (_state.value.signalling) return
+        _state.update { it.copy(signalling = true, error = null) }
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            try {
+                val json = Api(token, hour12 = hour12(ctx)).signal(action.id, action.trip)
+                val answer = NextAnswer.parse(json)
+                val now = System.currentTimeMillis()
+                store.saveAnswer(json, now)
+                Refresher.scheduleNext(ctx, answer, now)
+                redrawWidgets(ctx)
+                _state.update {
+                    it.copy(
+                        signalling = false,
+                        answers = it.answers + (Target.Plan to answer),
+                        rawAnswers = it.rawAnswers + (Target.Plan to json.toString()),
+                        fetchedAt = now,
+                    )
+                }
+                loadDay()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiError) {
+                _state.update { it.copy(signalling = false, error = e.message) }
+            } catch (e: Exception) {
+                _state.update { it.copy(signalling = false, error = "Offline") }
+            }
+        }
+    }
+
+    private var dayJob: Job? = null
+
+    /** Today's timeline; kept as it was when offline. */
+    fun loadDay() {
+        val token = store.token ?: return
+        if (dayJob?.isActive == true) return
+        dayJob = viewModelScope.launch {
+            runCatching { Api(token, hour12 = hour12(getApplication())).day() }.onSuccess { d -> _state.update { it.copy(day = d) } }
+        }
+    }
+
     /** At most once a day: is there a newer release than this one? */
     fun checkForUpdate(current: String) {
         val now = System.currentTimeMillis()
@@ -251,6 +304,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // The planned answer is exactly what the widget shows, so
                     // keep the widget in step while the app is open.
                     if (s.target == Target.Plan) {
+                        // The timeline moves when the answer's trip does.
+                        val before = _state.value.answers[Target.Plan]
+                        if (_state.value.day == null || before?.destLabel != answer.destLabel || before?.card?.phase != answer.card?.phase) loadDay()
                         store.saveAnswer(json, now)
                         Refresher.scheduleNext(ctx, answer, now)
                         store.lastError = null

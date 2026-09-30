@@ -36,7 +36,7 @@ struct Header: View {
                         } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
                             StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
                         } else {
-                            StatusLine(color: resting ? .brand : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : a?.arrived == true ? "You're at the stop" : status(a))
+                            StatusLine(color: resting ? .brand : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : a?.isFree == true ? "Nothing to catch" : a?.arrived == true ? "You're at the stop" : status(a))
                         }
                     }
                 }
@@ -85,6 +85,9 @@ struct Header: View {
         if model.showNearby { return "Nearby" }
         guard let a else { return "Next bus" }
         if a.mode == "rest" { return "Off hours" }
+        if a.isFree { return "Today" }
+        // Under way: the phase leads ("On the bus · CS2030").
+        if let p = a.card?.phaseText, let d = a.dest { return "\(p.components(separatedBy: ":").first ?? p) · \(d.label)" }
         if a.mode == "nearby" { return "Nearby" }
         guard let d = a.dest else { return "Next bus" }
         if a.isClassPlan, let c = a.classAt { return "\(d.label) · starts \(campusTime(c))" }

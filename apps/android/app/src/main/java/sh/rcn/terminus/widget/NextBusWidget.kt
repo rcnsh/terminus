@@ -142,17 +142,20 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         }
                         Footer(ctx, fetchedAt, error, roomy)
                     }
-                    answer.mode == "rest" -> {
+                    answer.mode == "rest" || answer.isFree -> {
                         // Outside the user's day: a moon and the next class, no bus.
+                        // A day with no classes: the same, without the moon.
                         if (large) Spacer(GlanceModifier.defaultWeight())
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                provider = ImageProvider(R.drawable.ic_moon),
-                                contentDescription = null,
-                                colorFilter = ColorFilter.tint(colors.primary),
-                                modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
-                            )
-                            Spacer(GlanceModifier.width(8.dp))
+                            if (answer.mode == "rest") {
+                                Image(
+                                    provider = ImageProvider(R.drawable.ic_moon),
+                                    contentDescription = null,
+                                    colorFilter = ColorFilter.tint(colors.primary),
+                                    modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
+                                )
+                                Spacer(GlanceModifier.width(8.dp))
+                            }
                             Text(
                                 answer.label,
                                 style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp),
@@ -173,7 +176,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         val old = isOld(answer, fetchedAt, now)
                         val fmt = { ms: Long -> clock(ctx, ms) }
                         Text(
-                            listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "),
+                            listOfNotNull(answer.phaseText?.substringBefore(':'), answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "),
                             style = muted, maxLines = 1,
                         )
                         Text(
@@ -212,6 +215,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     }
                     else -> {
                         val heading = listOfNotNull(
+                            answer.phaseText?.substringBefore(':'),
                             answer.destLabel ?: if (answer.mode == "nearby") "Nearby" else null,
                             if (answer.why == "gap-home") "long gap" else null,
                         ).joinToString(" · ")

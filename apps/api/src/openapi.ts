@@ -598,6 +598,49 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/me/day': {
+        get: {
+          tags: ['Account'],
+          summary: "Today's timeline",
+          description:
+            'Each of today\'s classes with where you set off from and its leave-by (an estimate hours ahead), the trips home in long gaps and after the ' +
+            'last class, and where each stands: `done`, `now`, `next`, `later` or `skipped`. Clients cache it for the day. `note` says why a day has no classes.',
+          operationId: 'meDay',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: { '200': ok({ type: 'object', properties: { date: { type: 'string' }, dayStart: { type: 'string' }, dayEnd: { type: 'string' }, items: { type: 'array', items: { type: 'object' } }, note: { type: ['string', 'null'] } } }) },
+        },
+      },
+      '/me/signal': {
+        post: {
+          tags: ['Account'],
+          summary: 'Say what happened on the trip',
+          description:
+            '`boarded`, `missed`, `skipped` (not going today), `left`, `arrived`, `location` (with `lat` and `lon`; only what it means is kept) or `reset` ' +
+            '(undo). `trip` is the key from a card action or /me/day; without it, the trip in progress. Recorded for the day on every device, and ' +
+            'answered with the new `/me/next`, whose `card.phase` and `card.actions` follow. Deleted at the end of the day.',
+          operationId: 'meSignal',
+          security: [{ bearer: [] }, { cookie: [] }],
+          requestBody: jsonBody(
+            {
+              type: 'object',
+              required: ['kind'],
+              properties: {
+                kind: { type: 'string', enum: ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset'] },
+                trip: { type: 'string' },
+                lat: { type: 'number' },
+                lon: { type: 'number' },
+              },
+            },
+            { kind: 'boarded', trip: '4:600:UTOWN' },
+          ),
+          responses: {
+            '200': ok({ type: 'object', description: 'The same as GET /me/next.' }),
+            '400': errorResponse('Unknown kind.'),
+            '409': errorResponse('No trip in progress to say that about.'),
+            '503': errorResponse('Trip tracking is not available.'),
+          },
+        },
+      },
       '/me/feedback': {
         post: {
           tags: ['Account'],

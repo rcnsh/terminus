@@ -11,8 +11,27 @@
 
 import type { Crowd, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
+import { DUE_MS, type Phase, RIDE_GRACE_MS, type TripRecord } from './trip.ts';
+import { LATE_GRACE_MIN } from './profile.ts';
 
-export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup';
+export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup' | 'free';
+
+/** A button the server decided to show. Clients render it and send `id`
+ *  and `trip` back to /me/signal; they never decide which to show. */
+export interface CardAction {
+  id: 'boarded' | 'missed' | 'skipped' | 'arrived' | 'reset';
+  label: string;
+  trip: string;
+}
+
+/** Where the day's trip is, for the card (trip.ts). */
+export interface TripView {
+  key: string | null;
+  phase: Phase;
+  rec?: TripRecord;
+  /** A trip skipped a moment ago, so it can be undone. */
+  undo?: { key: string; label: string } | null;
+}
 
 export interface Card {
   kind: CardKind;
@@ -41,6 +60,22 @@ export interface Card {
   note: string | null;
   /** Class only, when the leave-by rests on a headway guess. */
   estimate: string | null;
+
+  /* v2: every surface picks what fits. */
+  /** Where the trip is. 'idle' when there is no trip in progress. */
+  phase: Phase;
+  /** A few words on the phase, above the answer: "On your way". Null when idle. */
+  phaseText: string | null;
+  /** 12 characters at most: a watch face, the menu bar, a tile. "D2 9:41". */
+  glance: string;
+  /** One line: a collapsed notification, a compact widget. */
+  line: string;
+  /** Buttons to show, in order. */
+  actions: CardAction[];
+  /** "Last D2 from UTown in 18 min". */
+  warning: string | null;
+  /** When this card should be expected to change by itself; refetch then. */
+  nextChangeAt: string | null;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -58,6 +93,7 @@ export const ESTIMATE_NOTE = 'Estimated from the usual gap between buses. Live t
 
 function kindOf(a: MeAnswer): CardKind {
   if (a.mode === 'rest') return 'rest';
+  if (a.mode === 'free') return 'free';
   if (a.arrived) return 'arrived';
   if (a.quality === 'unknown' && !a.arrivals.length && !a.stop.code && !a.leave) return 'setup';
   if (a.mode === 'nearby') return 'nearby';
@@ -68,14 +104,24 @@ function kindOf(a: MeAnswer): CardKind {
 function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
   const marks: number[] = [];
   if (a.refreshAt) marks.push(Date.parse(a.refreshAt));
-  if (kind !== 'rest' && kind !== 'setup') {
+  // Nothing on a rest or free card depends on live times.
+  if (kind !== 'rest' && kind !== 'setup' && kind !== 'free') {
     if (a.departsAt) marks.push(Date.parse(a.departsAt) + DEPARTED_GRACE_MS);
     marks.push(Date.parse(a.asOf) + MAX_AGE_MS);
   }
   return marks.length ? Math.min(...marks) : null;
 }
 
-export function cardFor(a: MeAnswer, h12 = false): Card {
+const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+
+type V1 = Omit<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt'>;
+
+export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }): Card {
+  const card = v1(a, h12);
+  return { ...card, ...v2(a, card, h12, trip) };
+}
+
+function v1(a: MeAnswer, h12: boolean): V1 {
   const kind = kindOf(a);
   const at = (iso: string) => clockAt(Date.parse(iso), h12);
   const staleAt = staleAtOf(a, kind);
@@ -84,9 +130,9 @@ export function cardFor(a: MeAnswer, h12 = false): Card {
   const l = a.leave ?? null;
   const t = l?.estimated ? '~' : '';
 
-  const card: Card = {
+  const card: V1 = {
     kind,
-    staleAt: staleAt == null ? null : new Date(Math.round(staleAt / 1000) * 1000).toISOString().replace('.000Z', 'Z'),
+    staleAt: staleAt == null ? null : iso(staleAt),
     crowd: crowd ? CROWD[crowd] : null,
     quality: QUALITY[a.quality] ?? null,
     leaveBy: l ? `Leave by ${t}${at(l.at)}` : null,
@@ -124,4 +170,94 @@ export function cardFor(a: MeAnswer, h12 = false): Card {
   card.note = l.note ?? null;
   card.estimate = l.estimated ? ESTIMATE_NOTE : null;
   return card;
+}
+
+const PHASE_TEXT: Record<Phase, string | null> = {
+  idle: null,
+  due: 'Time to get going',
+  heading: 'On your way',
+  waiting: 'At the stop',
+  riding: 'On the bus',
+  missed: 'Missed it: here is the next way there',
+  arrived: null,
+};
+
+/** "9:38" or "9:38p": clocks short enough for a glance. */
+function shortClock(ms: number, h12: boolean): string {
+  const c = clockAt(ms, h12);
+  return h12 ? c.replace(/ ([AaPp])[Mm]$/, (_m, x: string) => x.toLowerCase()) : c;
+}
+
+function v2(a: MeAnswer, card: V1, h12: boolean, trip: TripView): Pick<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt'> {
+  const nowMs = Date.parse(a.asOf);
+  const at = (t: string) => clockAt(Date.parse(t), h12);
+  const short = (t: string) => shortClock(Date.parse(t), h12);
+  const l = a.leave ?? null;
+  const est = l?.estimated ? '~' : '';
+  const svc = l?.svc ?? null;
+  const phase = trip.phase;
+
+  // One line and a glance per phase; outside a trip, the answer's own words.
+  let line = a.detail ? `${a.label} · ${a.detail.split(' · ')[0]}` : a.label;
+  let glance = a.label.replace(' · ', ' ');
+  if (card.kind === 'rest') glance = a.label.startsWith('Day starts ') ? a.label.replace('Day starts ', 'From ') : 'Done today';
+  if (card.kind === 'free') glance = a.label === 'No timetable yet' ? 'Set up' : 'No classes';
+  if (card.kind === 'setup') glance = 'Set up';
+  if (card.kind === 'arrived' || phase === 'arrived') glance = a.dest?.why === 'home' ? 'Home' : "You're there";
+  if (trip.key && l) {
+    if (phase === 'idle' || phase === 'due') {
+      line = `${card.leaveBy ?? 'Leave now'} · ${svc ? `${svc} from ${l.stop}` : 'walk'}`;
+      glance = `Leave ${shortClock(Date.parse(l.at), h12)}`;
+    } else if (phase === 'heading' || phase === 'waiting') {
+      line = svc ? `${svc} ${l.board ? `${est}${at(l.board)} ` : ''}at ${l.stop}` : 'Walk there now';
+      if (card.arrive) line += ` · ${card.arrive.replace(/^Arrive /, 'arrive ')}`;
+      glance = svc ? `${svc} ${l.board ? short(l.board) : 'now'}` : 'Walk now';
+    } else if (phase === 'missed') {
+      const missed = trip.rec?.missed ? `Missed the ${at(trip.rec.missed)}` : 'Missed it';
+      const next = svc ? `${svc}${l.board ? ` ${est}${at(l.board)}` : ''}` : 'walk';
+      line = `${missed} · next ${next}${a.timing?.status === 'late' ? `, ${a.timing.text}` : ''}`;
+      glance = svc ? `${svc} ${l.board ? short(l.board) : 'now'}` : 'Walk now';
+    }
+  }
+  if (phase === 'riding' && trip.rec?.boarded) {
+    const b = trip.rec.boarded;
+    line = `On the ${b.svc}${b.arrive ? ` · off at ${b.off ?? a.dest?.label ?? 'your stop'} ${at(b.arrive)}` : ''}`;
+    glance = b.arrive ? `Off ${short(b.arrive)}` : `On the ${b.svc}`;
+  }
+  glance = glance.slice(0, 12);
+
+  // Buttons: only for a planned trip, and only those that change what's shown.
+  const actions: CardAction[] = [];
+  const key = trip.key;
+  if (key) {
+    const onIt: CardAction | null = svc ? { id: 'boarded', label: `On the ${svc}`, trip: key } : null;
+    if (phase === 'due' || phase === 'heading' || phase === 'waiting') {
+      if (onIt) actions.push(onIt, { id: 'missed', label: 'Missed it', trip: key });
+      else actions.push({ id: 'arrived', label: "I'm there", trip: key });
+    } else if (phase === 'missed') {
+      if (onIt) actions.push(onIt);
+    } else if (phase === 'riding') {
+      actions.push({ id: 'arrived', label: "I'm there", trip: key });
+    }
+    if (a.dest?.why === 'class' && phase !== 'arrived' && phase !== 'riding') actions.push({ id: 'skipped', label: 'Not going', trip: key });
+  }
+  if (trip.undo) actions.push({ id: 'reset', label: `Undo: going to ${trip.undo.label}`, trip: trip.undo.key });
+
+  // The next moment this card changes by itself.
+  const marks: number[] = [];
+  if (card.staleAt) marks.push(Date.parse(card.staleAt));
+  if (l?.at && key) marks.push(Date.parse(l.at) - DUE_MS, Date.parse(l.at));
+  if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
+  if (phase === 'riding' && trip.rec?.boarded?.arrive) marks.push(Date.parse(trip.rec.boarded.arrive) + RIDE_GRACE_MS);
+  const next = marks.filter((m) => m > nowMs).sort((x, y) => x - y)[0];
+
+  return {
+    phase,
+    phaseText: PHASE_TEXT[phase],
+    glance,
+    line,
+    actions,
+    warning: a.warning ?? null,
+    nextChangeAt: next === undefined ? null : iso(next),
+  };
 }

@@ -5,11 +5,18 @@ import os
 
 struct AnswerDetail: View {
     let answer: NextAnswer?
+    var busy = false
+    var onAction: (CardAction) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
-                if a.isClassPlan {
+                if let w = a.card?.warning { Row(icon: "exclamationmark.triangle.fill", text: w).fontWeight(.semibold).foregroundStyle(Color.warn) }
+                if a.isFree {
+                    // Nothing to catch: no bus to mistake for advice.
+                    Row(icon: "calendar", text: a.detail)
+                    Row(icon: "location", text: "Buses near you are under Nearby.").foregroundStyle(.secondary)
+                } else if a.isClassPlan {
                     // Each arrival next to the bus it belongs to.
                     // The bus to catch (it names the stop), then when it gets you there.
                     let tone = a.leaveLate ? Color.red : Color.good
@@ -22,11 +29,25 @@ struct AnswerDetail: View {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                 if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
                 }
-                if !a.isClassPlan, a.timing?.text != nil || a.crowdText != nil {
+                if !a.isClassPlan, !a.isFree, a.timing?.text != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
                         if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .good) }
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
+                }
+                // The server's buttons, in its order: the first one prominent.
+                if let actions = a.card?.actions, !actions.isEmpty {
+                    Flow(spacing: 6) {
+                        ForEach(Array(actions.enumerated()), id: \.element) { i, action in
+                            if i == 0 && action.id != "skipped" && action.id != "reset" {
+                                Button(action.label) { onAction(action) }.buttonStyle(.borderedProminent).controlSize(.small)
+                            } else {
+                                Button(action.label) { onAction(action) }.buttonStyle(.bordered).controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(busy)
+                    .padding(.top, 2)
                 }
             } else {
                 HStack(spacing: 8) {

@@ -46,6 +46,12 @@ data class NextAnswer(
     /** The server's card (card.ts): every line below is worded there, once. */
     val isClassPlan: Boolean get() = card?.kind == "class"
 
+    /** No classes today (or none left): nothing to catch, said plainly. */
+    val isFree: Boolean get() = mode == "free"
+
+    /** The trip's phase, when one is in progress ("On your way"). */
+    val phaseText: String? get() = card?.phaseText
+
     /** "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks. */
     fun leaveHeadline(now: Long): String? {
         val at = leaveAtMs ?: return null
@@ -136,6 +142,20 @@ data class Card(
     val goNow: String?,
     val note: String?,
     val estimate: String?,
+    /** v2: where the trip is: idle, due, heading, waiting, riding, missed, arrived. */
+    val phase: String = "idle",
+    /** "On your way", above the answer. Null when idle. */
+    val phaseText: String? = null,
+    /** 12 characters: a tile or a glance. */
+    val glance: String? = null,
+    /** One line: a collapsed notification, a compact widget. */
+    val line: String? = null,
+    /** Buttons the server decided to show; tapping one sends it to /me/signal. */
+    val actions: List<CardAction> = emptyList(),
+    /** "Last D2 from UTown in 18 min". */
+    val warning: String? = null,
+    /** When this card changes by itself: refresh then. */
+    val nextChangeAtMs: Long? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) = Card(
@@ -152,7 +172,68 @@ data class Card(
             goNow = o.optStringOrNull("goNow"),
             note = o.optStringOrNull("note"),
             estimate = o.optStringOrNull("estimate"),
+            phase = o.optString("phase", "idle"),
+            phaseText = o.optStringOrNull("phaseText"),
+            glance = o.optStringOrNull("glance"),
+            line = o.optStringOrNull("line"),
+            actions = o.optJSONArray("actions")?.let { a ->
+                (0 until a.length()).map { a.getJSONObject(it).let { x -> CardAction(x.getString("id"), x.getString("label"), x.getString("trip")) } }
+            }.orEmpty(),
+            warning = o.optStringOrNull("warning"),
+            nextChangeAtMs = o.optStringOrNull("nextChangeAt")?.let(::parseInstant),
         )
+    }
+}
+
+/** A button on the card: `id` is the signal to send, `trip` which trip it's about. */
+data class CardAction(val id: String, val label: String, val trip: String)
+
+/** `/me/day`: today's timeline. */
+data class DayItem(
+    val kind: String,
+    val key: String,
+    val label: String,
+    /** done | now | next | later | skipped */
+    val status: String,
+    val fromName: String?,
+    val toName: String,
+    val startsAtMs: Long,
+    val endsAtMs: Long?,
+    val leaveAtMs: Long?,
+    val leaveEstimated: Boolean,
+    val svc: String?,
+    val timingText: String?,
+    val timingStatus: String?,
+)
+
+data class DayPlan(val items: List<DayItem>, val note: String?) {
+    companion object {
+        fun parse(o: JSONObject): DayPlan {
+            val a = o.optJSONArray("items") ?: JSONArray()
+            return DayPlan(
+                items = (0 until a.length()).map {
+                    val x = a.getJSONObject(it)
+                    val leave = x.optJSONObject("leave")
+                    val timing = x.optJSONObject("timing")
+                    DayItem(
+                        kind = x.optString("kind"),
+                        key = x.optString("key"),
+                        label = x.optString("label"),
+                        status = x.optString("status"),
+                        fromName = x.optStringOrNull("fromName"),
+                        toName = x.optString("toName"),
+                        startsAtMs = parseInstant(x.optString("startsAt")) ?: 0,
+                        endsAtMs = x.optStringOrNull("endsAt")?.let(::parseInstant),
+                        leaveAtMs = leave?.optStringOrNull("at")?.let(::parseInstant),
+                        leaveEstimated = leave?.optBoolean("estimated", false) ?: false,
+                        svc = leave?.optStringOrNull("svc"),
+                        timingText = timing?.optStringOrNull("text"),
+                        timingStatus = timing?.optStringOrNull("status"),
+                    )
+                },
+                note = o.optStringOrNull("note"),
+            )
+        }
     }
 }
 
@@ -338,6 +419,17 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         val list = request("GET", "/campus").getJSONArray("destinations")
         return (0 until list.length()).map { parseDestination(list.getJSONObject(it)) }
     }
+
+    /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /me/next. */
+    suspend fun signal(kind: String, trip: String?, lat: Double? = null, lon: Double? = null): JSONObject {
+        val body = JSONObject().put("kind", kind)
+        trip?.let { body.put("trip", it) }
+        if (lat != null && lon != null) body.put("lat", coord(lat).toDouble()).put("lon", coord(lon).toDouble())
+        return request("POST", "/me/signal" + if (hour12) "?h12=1" else "", body)
+    }
+
+    /** Today's timeline. */
+    suspend fun day(): DayPlan = DayPlan.parse(request("GET", "/me/day" + if (hour12) "?h12=1" else ""))
 
     /** Whose account a pairing code belongs to (masked), without spending it. */
     suspend fun pairCheck(code: String): String =

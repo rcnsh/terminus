@@ -152,6 +152,40 @@ the Mac.
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
 - `GET /me/nearby` lists departures at up to three stops near you.
+- On a day with no classes (or none left), `/me/next` says so (`mode: free`)
+  with the next class, and no bus: a bus you have no reason to take reads
+  like advice. Departures near you are `/me/nearby`.
+
+### The trip engine
+
+`/me/next` also says where today's trip is, the same on every device:
+`card.phase` is `idle`, `due` (5 min before the leave-by), `heading`,
+`waiting` (at the boarding stop), `riding`, `missed` or `arrived`. The
+phase comes from the answer and the day's signals: `POST /me/signal` with
+`boarded`, `missed`, `skipped`, `left`, `arrived`, `location` or `reset`,
+for the trip in progress or the `trip` key a card action or `/me/day`
+names. Clients show `card.actions` as buttons and never decide them.
+
+The signals live in a Durable Object per user (`Trip` in
+[src/trip.ts](../src/trip.ts), bound as `TRIPS`, keyed by user id). It's
+only touched on a day with classes, keeps that day's signals and nothing
+else (a location is reduced to what it means: at the stop, or arrived), and
+an alarm deletes everything at the next Singapore midnight.
+
+The planner ([src/profile.ts](../src/profile.ts), `planFor`):
+
+- A class stays the target until 15 minutes after it starts (you may still
+  be on the bus), unless you've reached it. A skipped class is left out.
+- An hour after the last class, with no location, you're taken to be home.
+- Outside your day, a location on campus but not at home gets the trip home.
+- On the trip home, `card.warning` says "Last D2 from UTown in 18 min" from
+  45 minutes before the service's published end (`data/service-hours.json`).
+
+`GET /me/day` is today's timeline, worked out with the same planner.
+
+Card v2 adds `phase`, `phaseText`, `glance` (12 characters, for a menu bar
+or a tile), `line` (one line, for a notification), `actions`, `warning` and
+`nextChangeAt` (when the card changes by itself). v1 fields are unchanged.
 - Tokens are stored as SHA-256 hashes. Web sessions last 30 days; device
   tokens last until revoked, or 90 days unused.
 - The link in the email opens a page with a button, and only the button's
@@ -373,6 +407,9 @@ src/applogin.ts   App sign-in approved from the email
 src/access.ts     API keys, and who may call the keyed routes
 src/profile.ts    Profile validation and the where-next planner
 src/me.ts         /auth, /pair and /me routes
+src/next.ts       /me/next's answer: the plan, free days, riding, the trip's phase
+src/day.ts        /me/day, today's timeline
+src/trip.ts       Trip phases, and the per-user Durable Object with today's signals
 migrations/       D1 schema
 ```
 

@@ -12,7 +12,7 @@ private func golden(_ name: String) throws -> NextAnswer {
     return try JSONDecoder().decode(NextAnswer.self, from: data)
 }
 
-@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "place", "landmark", "arrived", "nearby", "rest", "home", "setup"])
+@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "place", "landmark", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup"])
 func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect(try golden(name).card != nil)
 }
@@ -30,8 +30,30 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
 }
 
 @Test func otherKindsAreNotClassCards() throws {
-    for name in ["place", "nearby", "rest", "arrived", "home", "setup"] { #expect(try !golden(name).isClassPlan, "\(name)") }
+    for name in ["place", "free", "rest", "arrived", "home", "setup"] { #expect(try !golden(name).isClassPlan, "\(name)") }
     #expect(try golden("class-late").leaveLate)
+}
+
+@Test func aDayWithoutClassesIsFree() throws {
+    let a = try golden("free")
+    #expect(a.isFree)
+    #expect(a.departure == nil)
+}
+
+@Test func cardV2CarriesThePhaseAndButtons() throws {
+    let a = try golden("class-late")
+    #expect(a.card?.phase == "heading")
+    #expect(a.tripUnderWay)
+    #expect(a.card?.actions?.map(\.id) == ["boarded", "missed", "skipped"])
+    #expect((a.card?.glance?.count ?? 99) <= 12)
+}
+
+@MainActor @Test func theMenuBarShowsTheTripPhase() throws {
+    let m = AppModel(snapshot: true)
+    m.answers[.plan] = try golden("class-late")
+    #expect(m.menuTitle(at: Date()) == m.plan?.card?.glance)
+    m.answers[.plan] = try golden("free")
+    #expect(m.menuTitle(at: Date()) == nil, "no bus title on a free day")
 }
 
 @MainActor @Test func staleFollowsTheServer() throws {

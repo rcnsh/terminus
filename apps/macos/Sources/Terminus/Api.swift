@@ -51,6 +51,18 @@ struct NextAnswer: Decodable {
         let goNow: String?
         let note: String?
         let estimate: String?
+        /// v2: where the trip is (idle, due, heading, waiting, riding, missed, arrived).
+        let phase: String?
+        /// "On your way", above the answer. Nil when idle.
+        let phaseText: String?
+        /// 12 characters, for the menu bar.
+        let glance: String?
+        let line: String?
+        /// Buttons the server decided to show; a click sends one to /me/signal.
+        let actions: [CardAction]?
+        /// "Last D2 from UTown in 18 min".
+        let warning: String?
+        let nextChangeAt: String?
     }
 
     enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card }
@@ -86,6 +98,11 @@ struct NextAnswer: Decodable {
 
     // Every line below is worded on the server (card.ts), once for all clients.
     var isClassPlan: Bool { card?.kind == "class" }
+    /// No classes today (or none left): nothing to catch.
+    var isFree: Bool { mode == "free" }
+    /// A trip under way: its phase is what the menu bar says.
+    var tripUnderWay: Bool { ["heading", "waiting", "riding", "missed"].contains(card?.phase ?? "idle") }
+    var nextChange: Date? { card?.nextChangeAt.flatMap(parseISODate) }
     /// "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks.
     func leaveHeadline(now: Date = Date()) -> String? {
         guard let at = leaveAt else { return nil }
@@ -221,6 +238,13 @@ enum Target: Hashable {
     case code(String, label: String)
 }
 
+/// A button on the card: `id` is the signal to send, `trip` which trip it's about.
+struct CardAction: Decodable, Hashable {
+    let id: String
+    let label: String
+    let trip: String
+}
+
 struct SignInRequest: Decodable, Equatable {
     let request: String
     let poll: String
@@ -280,6 +304,16 @@ struct Api {
         // The card's clock times, in this Mac's 12- or 24-hour style.
         if usesHour12 { q.append(URLQueryItem(name: "h12", value: "1")) }
         let data = try await send("GET", "/me/next", query: q)
+        var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
+        answer.raw = data
+        return answer
+    }
+
+    /// Something that happened on the trip; answers with the new planned answer.
+    func signal(_ action: CardAction) async throws -> NextAnswer {
+        let body: [String: Any] = ["kind": action.id, "trip": action.trip]
+        let q = usesHour12 ? [URLQueryItem(name: "h12", value: "1")] : []
+        let data = try await send("POST", "/me/signal", query: q, json: try JSONSerialization.data(withJSONObject: body))
         var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
         answer.raw = data
         return answer

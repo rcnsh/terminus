@@ -114,6 +114,19 @@
     "late": false,
     "goNow": "Or go now: R2 at 09:06 · arrive 09:15",
     "note": null,
-    "estimate": "Estimated from the usual gap between buses. Live times show nearer the time."
+    "estimate": "Estimated from the usual gap between buses. Live times show nearer the time.",
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "Leave 09:37",
+    "line": "Leave by ~09:37 · R2 from PGP",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "Not going",
+        "trip": "4:600:UTOWN"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:06:30Z"
   }
 }

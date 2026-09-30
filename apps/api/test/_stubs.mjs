@@ -218,3 +218,56 @@ export function installGlobals(fetchImpl, nowMs = FROZEN_NOW) {
   Date.now = () => nowMs;
   return cache;
 }
+
+/**
+ * A Durable Object namespace that runs the real class in-process, one
+ * instance per name, on in-memory storage with a settable alarm. `alarms`
+ * lists each instance's pending alarm; fireAlarms() runs them.
+ */
+export function makeDurableObjects(Class) {
+  const instances = new Map();
+  const alarms = new Map();
+  const storageFor = (name) => {
+    const m = new Map();
+    return {
+      _map: m,
+      async get(k) {
+        return m.has(k) ? structuredClone(m.get(k)) : undefined;
+      },
+      async put(k, v) {
+        m.set(k, structuredClone(v));
+      },
+      async delete(k) {
+        return m.delete(k);
+      },
+      async deleteAll() {
+        m.clear();
+        alarms.delete(name);
+      },
+      async getAlarm() {
+        return alarms.get(name) ?? null;
+      },
+      async setAlarm(at) {
+        alarms.set(name, at);
+      },
+    };
+  };
+  const instance = (name) => {
+    if (!instances.has(name)) instances.set(name, new Class({ storage: storageFor(name) }, {}));
+    return instances.get(name);
+  };
+  return {
+    alarms,
+    instances,
+    idFromName: (name) => name,
+    get: (id) => ({
+      fetch: (input, init) => instance(id).fetch(input instanceof Request ? input : new Request(input, init)),
+    }),
+    async fireAlarms() {
+      for (const name of [...alarms.keys()]) {
+        alarms.delete(name);
+        await instance(name).alarm();
+      }
+    },
+  };
+}

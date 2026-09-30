@@ -100,6 +100,13 @@
     "late": false,
     "goNow": null,
     "note": null,
-    "estimate": null
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "R2 6 min",
+    "line": "R2 · 6 min · PGP",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:06:30Z"
   }
 }

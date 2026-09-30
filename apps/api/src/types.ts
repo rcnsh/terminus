@@ -48,6 +48,8 @@ export interface Env {
   CF_ACCOUNT_ID?: string;
   /** One global ceiling on sign-in emails. */
   RL_MAIL?: RateLimit;
+  /** The trip engine: one Durable Object per user holding today's trip signals (trip.ts). */
+  TRIPS?: DurableObjectNamespace;
   /** One global ceiling on new anonymous accounts (apps can't run Turnstile). */
   RL_ANON?: RateLimit;
   /** Tests only: "1" lets anyone call the bus-answer routes without a key. */
@@ -115,7 +117,8 @@ export interface Answer {
 /* ------------------------------------------------------------------ */
 
 /** What kind of answer: a trip somewhere, what's near you, or resting. */
-export type Mode = 'trip' | 'nearby' | 'rest';
+/** 'free': a day with no classes (or none left to plan): nothing to catch. */
+export type Mode = 'trip' | 'nearby' | 'rest' | 'free';
 /** Why you're going there. */
 export type Why = 'class' | 'home' | 'gap-home' | 'place';
 
@@ -153,6 +156,8 @@ export interface MeAnswer extends Answer {
   timing?: Timing | null;
   /** Planned answers only: when the plan changes by itself. */
   refreshAt?: string;
+  /** "Last D2 from UTown in 18 min", on the way home near the end of service. */
+  warning?: string | null;
   /** Display-ready text and the stale time (card.ts). Added last, by the route. */
   card?: import('./card.ts').Card;
 }
