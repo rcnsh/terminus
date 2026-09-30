@@ -10,6 +10,7 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
+import { armTrips } from '../src/monitor.ts';
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
@@ -153,6 +154,17 @@ test('the question at the departure is pushed, urgently', async () => {
   await call('/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
   const told = fcm.sent.slice(before);
   assert.deepEqual(told.map((m) => [m.token, m.data.phase, m.data.ask, m.android.priority]), [['fcm-tablet', 'riding', '0', 'NORMAL']]);
+});
+
+test('the morning cron starts the day for push users, so the push comes without any app asking', async () => {
+  const { call, phone, fcm, env, alarm, wakeUntil } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  assert.equal(alarm(), undefined, 'registering asks for nothing by itself');
+  assert.equal(await armTrips(env, Date.now()), 1);
+  assert.ok(alarm() !== undefined, 'the Trip object is watching');
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.deepEqual(fcm.sent[0].data, { kind: 'card', phase: 'due', ask: '0' });
+  assert.equal(await armTrips(env, Date.now()), 0, 'once a day');
 });
 
 test('a token Firebase no longer knows is dropped', async () => {

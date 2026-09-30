@@ -1,7 +1,7 @@
 // Draws the Play Store icon (512×512) and feature graphic (1024×500) from the
 // launcher icon's shapes (res/drawable/ic_launcher_foreground.xml).
 //
-//   swift apps/android/store/render.swift apps/android/store
+//   swift apps/android/store/render.swift apps/android/store apps/web/public/assets/icons
 import AppKit
 
 let bg = NSColor(srgbRed: 0x1C / 255, green: 0x19 / 255, blue: 0x17 / 255, alpha: 1)
@@ -39,12 +39,26 @@ func render(_ w: Int, _ h: Int, to path: String, draw: () -> Void) {
 let out = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "."
 
 // Icon: full square (Play rounds the corners and adds no safe-zone mask),
-// so the mark is larger than on the launcher, just over half the width.
-render(512, 512, to: "\(out)/icon-512.png") {
-    bg.setFill()
-    NSRect(x: 0, y: 0, width: 512, height: 512).fill()
-    let u: CGFloat = 4.2
-    drawMark(at: CGPoint(x: (512 - 64 * u) / 2, y: (512 - 64 * u) / 2), unit: u, height: 512)
+// so the mark is larger than on the launcher, just over half the width. The
+// mark's corners stay inside the central 80% circle, so the same drawing is
+// the web app's maskable icon too.
+func icon(_ size: Int, to path: String) {
+    render(size, size, to: path) {
+        let s = CGFloat(size)
+        bg.setFill()
+        NSRect(x: 0, y: 0, width: s, height: s).fill()
+        let u = 4.2 * s / 512
+        drawMark(at: CGPoint(x: (s - 64 * u) / 2, y: (s - 64 * u) / 2), unit: u, height: s)
+    }
+}
+icon(512, to: "\(out)/icon-512.png")
+
+// The web app's icons (apps/web/public/assets/icons), with a second argument.
+if CommandLine.arguments.count > 2 {
+    let web = CommandLine.arguments[2]
+    icon(192, to: "\(web)/icon-192.png")
+    icon(512, to: "\(web)/icon-512.png")
+    icon(180, to: "\(web)/apple-touch-icon.png")
 }
 
 // Feature graphic: the mark, the wordmark and the promise.

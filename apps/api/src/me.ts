@@ -31,6 +31,7 @@ import {
   redeemCode,
   redeemLink,
   redeemPairCode,
+  renewWebSession,
   requestLink,
   revokeDevice,
   saveProfileJson,
@@ -42,6 +43,7 @@ import { hour12, planned } from './next.ts';
 import { dayPlan } from './day.ts';
 import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, loadDay, savePlan, saveSignal, watchTrip } from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
+import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import { NO_PREFS, type PrefKind, type TripPrefs, askAgain, clearHistory, clearOutcome, historySize, listPrefs, noteUnanswered, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { termName } from './calendar.ts';
@@ -240,7 +242,10 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'GET',
     path: '/me',
-    run: async ({ nowMs, deps, db, session }) => {
+    run: async ({ req, nowMs, deps, db, session }) => {
+      // Every page load asks /me first: a web session in use keeps going.
+      const token = session.kind === 'web' ? tokenFrom(req) : null;
+      const renewed = token !== null && (await renewWebSession(db, session.tokenHash, nowMs));
       const saved = await loadProfileJson(db, session.user.id);
       const profile = await getProfile(db, session.user.id, deps.graph);
       const reason = reimportReason(profile, nowMs);
@@ -252,7 +257,7 @@ const ME_ROUTES: MeRoute[] = [
         reimportReason: reason,
         term: profile.term ? termName(profile.term) : null,
         onboarding: onboardingFor(saved !== null, profile.seen),
-      });
+      }, 200, renewed && token ? { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000) } : {});
     },
   },
   {
@@ -465,7 +470,7 @@ const ME_ROUTES: MeRoute[] = [
       const out = await nextBody(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
       // A tap here changes the other phones' cards now, not at their next refresh.
       if (rec !== undefined) {
-        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, ask: out.card.ask !== null, urgent: false }, nowMs, session.tokenHash));
+        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, ask: out.card.ask !== null, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
       }
       return json(out);
     },
@@ -473,13 +478,31 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/me/push',
-    run: async ({ req, db, session }) => {
-      // This device's Firebase token: the Trip object nudges it when the card changes.
+    run: async ({ req, env, db, session }) => {
+      // This device's push address: the Trip object nudges it when the card
+      // changes. An app sends its Firebase token; the web app its Web Push
+      // subscription (PushSubscription.toJSON()).
       const body = await readJson(req);
+      if (body?.subscription !== undefined) {
+        if (!webPushEnabled(env)) return json({ error: 'web push is not set up on this server' }, 503);
+        const sub = parseSubscription(body.subscription);
+        if (!sub) return json({ error: 'send subscription: an https endpoint with keys.p256dh and keys.auth' }, 400);
+        await setPushToken(db, session.tokenHash, WEB_PREFIX + JSON.stringify(sub));
+        return json({ ok: true });
+      }
       const token = typeof body?.token === 'string' ? body.token.trim() : '';
-      if (!token || token.length > 4096) return json({ error: 'send token (the FCM registration token)' }, 400);
+      if (!token || token.length > 4096 || token.startsWith(WEB_PREFIX)) return json({ error: 'send token (the FCM registration token) or subscription' }, 400);
       await setPushToken(db, session.tokenHash, token);
       return json({ ok: true });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/push/key',
+    run: async ({ env }) => {
+      // What the web app subscribes with (applicationServerKey).
+      const key = vapidPublicKey(env);
+      return key ? json({ key }) : json({ error: 'web push is not set up on this server' }, 503);
     },
   },
   {
@@ -883,14 +906,14 @@ export async function tripCardFor(
   day: DayRecord | null,
   nowMs: number,
   savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
-): Promise<{ key: string | null; phase: string; ask: boolean; wakeAt: number | null } | null> {
+): Promise<{ key: string | null; phase: string; ask: boolean; remind: boolean; wakeAt: number | null } | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, deps.graph);
   if (!classesOn(profile, nowMs).length) return null;
   const prefs = await prefsFor(env.DB, userId, profile, nowMs);
   const url = new URL('https://terminus.internal/me/next');
   const { body, trip } = await nextWithTrip(url, env, ctx, nowMs, deps, profile, day, userId, prefs, { savePlan: savePlanLocal });
-  return { key: trip.key, phase: body.card.phase, ask: body.card.ask !== null, wakeAt: nextPhaseAt(body, trip, nowMs) };
+  return { key: trip.key, phase: body.card.phase, ask: body.card.ask !== null, remind: body.card.remind !== false, wakeAt: nextPhaseAt(body, trip, nowMs) };
 }
 
 const CHOICES = ['accept', 'dismiss', 'undo'] as const;

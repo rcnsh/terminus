@@ -650,12 +650,27 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Register this device for push',
           description:
-            "This device's Firebase Cloud Messaging token. When the trip's phase or question changes, the device gets a data message " +
-            "`{kind: 'card', phase, ask: '0'|'1'}` and should fetch `/me/next`. A token lives on one device session; one Firebase no longer knows is dropped.",
+            "An app sends its Firebase Cloud Messaging token; the web app its Web Push subscription (`PushSubscription.toJSON()`, subscribed with the key from GET /me/push/key). " +
+            "When the trip's phase or question changes, an app gets a data message `{kind: 'card', phase, ask: '0'|'1'}` and should fetch `/me/next`. " +
+            'The web app gets the same as an encrypted payload `{kind, phase, ask, urgent}`, only when there is something to show. ' +
+            'A push address lives on one session; one the push service no longer knows is dropped.',
           operationId: 'mePushRegister',
-          security: [{ bearer: [] }],
-          requestBody: jsonBody({ type: 'object', required: ['token'], properties: { token: { type: 'string', maxLength: 4096 } } }, { token: 'fcm-registration-token' }),
-          responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }), '400': errorResponse('No token.') },
+          security: [{ bearer: [] }, { cookie: [] }],
+          requestBody: jsonBody(
+            {
+              type: 'object',
+              properties: {
+                token: { type: 'string', maxLength: 4096 },
+                subscription: { type: 'object', required: ['endpoint', 'keys'], properties: { endpoint: { type: 'string', format: 'uri' }, keys: { type: 'object', properties: { p256dh: { type: 'string' }, auth: { type: 'string' } } } } },
+              },
+            },
+            { token: 'fcm-registration-token' },
+          ),
+          responses: {
+            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
+            '400': errorResponse('No token, or a subscription that is not an https endpoint with keys.'),
+            '503': errorResponse('A subscription, but web push is not set up on this server.'),
+          },
         },
         delete: {
           tags: ['Account'],
@@ -663,6 +678,16 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           operationId: 'mePushForget',
           security: [{ bearer: [] }],
           responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }) },
+        },
+      },
+      '/me/push/key': {
+        get: {
+          tags: ['Account'],
+          summary: 'Web Push public key',
+          description: "The server's VAPID public key (uncompressed P-256, base64url): the web app's `applicationServerKey`.",
+          operationId: 'mePushKey',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: { '200': ok({ type: 'object', properties: { key: { type: 'string' } } }), '503': errorResponse('Web push is not set up on this server.') },
         },
       },
       '/me/choice': {

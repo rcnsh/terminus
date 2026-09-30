@@ -225,8 +225,10 @@ The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 Card v2 adds `phase`, `phaseText`, `glance` (12 characters, for a menu bar
 or a tile), `line` (one line, for a notification), `actions`, `warning` and
 `nextChangeAt` (when the card changes by itself). v1 fields are unchanged.
-- Tokens are stored as SHA-256 hashes. Web sessions last 30 days; device
-  tokens last until revoked, or 90 days unused.
+- Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
+  last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
+  again, once fewer than 23 days are left. Device tokens last until revoked,
+  or 90 days unused.
 - The link in the email opens a page with a button, and only the button's
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.
@@ -240,6 +242,50 @@ pnpm exec cf d1 migrations apply <database id from cloudflare.config.ts>
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and terminus.rcn.sh onboarded under Email Service >
 Email Sending in the dashboard.
+
+### The web app (phase 5)
+
+`/app/` is terminus as an installable web app, meant for iPhones: the answer
+card, chips for saved places and Nearby, and Today. Settings are the account
+page. It uses the same routes as the account page, with the session cookie.
+
+- **Install.** `/manifest.webmanifest` has `start_url` `/app/`, the icons in
+  `assets/icons` (drawn by `apps/android/store/render.swift`), and a share
+  target that sends a shared NUSMods link to the account page's import. On an
+  iPhone in Safari, the page explains Add to Home Screen, since iOS never
+  offers it. A web app on the Home Screen has its own cookies, so it signs in
+  once by itself. The sign-in code is typed there; the emailed link would open
+  in Safari. `/account/?next=/app/` comes back to the app after sign-in.
+- **Offline.** `/sw.js` fetches the app's files network-first and keeps a
+  copy for offline. `/me`, `/me/next` and `/me/day` are also network-first,
+  and the last good reply is kept (one per route and place). When the network
+  is down, the kept reply comes back with `x-terminus-cached` (when it was
+  fetched), and the page dims the card and says so. Signing out, deleting the
+  account or a 401 empties the kept replies.
+- **Push.** `POST /me/push` with `{subscription}` keeps the browser's Web Push
+  subscription on the session as `web:` plus its JSON, next to where an
+  Android session keeps its FCM token. So the Trip object's nudges reach both,
+  through `push.ts` and `webpush.ts`. Each push is VAPID-signed with
+  `VAPID_PRIVATE_KEY` (a P-256 JWK; `scripts/vapid-key.mjs` makes one) and
+  its payload encrypted with aes128gcm, using WebCrypto only.
+- **Every day, not just when the app is open.** A Trip object only watches
+  once a request asks it to. The Android app asks from its background
+  refresh, but a Home Screen web app makes no requests unless it's opened. So
+  from 06:00 Singapore time the cron (`armTrips` in monitor.ts) asks the Trip
+  object of every user with a push address to watch the day. It works out the
+  card, wakes at each change and pushes, and on a day without classes it
+  stops. Saving a subscription also refreshes the card, so a Trip object that
+  woke before the subscription existed is asked again.
+- **What a push shows.** A web push must show a notification (iOS insists).
+  So the web app isn't pushed an idle card, or a trip with reminders off. The
+  service worker fetches `/me/next` and words the notification as the Android
+  app does: the question at the departure; the ride, or the next way there
+  after a missed bus; otherwise when to leave. Where the browser has
+  notification buttons (Android Chrome), there is one: "Missed it" at the
+  question (silence already means on it), otherwise the card's main action.
+  Only one, because Chrome for Android 149 reported the second button's
+  action when the first of two was tapped (checked on the emulator). Where
+  there are no buttons (iOS), a tap opens the app on the card's buttons.
 
 ## How it works
 

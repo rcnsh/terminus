@@ -129,7 +129,7 @@ export class Trip {
     if (changed) {
       // Wake the phone for what the user should see: time to go, the question, a missed bus.
       const urgent = now.phase === 'due' || now.phase === 'missed' || (now.ask && !last?.ask);
-      await nudgeUser(env, userId, { phase: now.phase, ask: now.ask, urgent }, nowMs);
+      await nudgeUser(env, userId, { phase: now.phase, ask: now.ask, urgent, remind: card.remind }, nowMs);
       await this.storage.put('pushed', now);
     }
     // Keep waking while there's a trip and someone to tell.

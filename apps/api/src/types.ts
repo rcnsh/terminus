@@ -52,6 +52,8 @@ export interface Env {
   TRIPS?: DurableObjectNamespace;
   /** Firebase service account JSON, for push (push.ts). Unset: no push. */
   FCM_SERVICE_ACCOUNT?: string;
+  /** Web Push's VAPID key, a P-256 private JWK (webpush.ts). */
+  VAPID_PRIVATE_KEY?: string;
   /** One global ceiling on new anonymous accounts (apps can't run Turnstile). */
   RL_ANON?: RateLimit;
   /** Tests only: "1" lets anyone call the bus-answer routes without a key. */

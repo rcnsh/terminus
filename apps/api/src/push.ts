@@ -1,5 +1,7 @@
 /**
- * Push, phase 3: Firebase Cloud Messaging (HTTP v1) to Android devices.
+ * Push, phase 3: Firebase Cloud Messaging (HTTP v1) to Android devices, and
+ * (phase 5) Web Push to the installed web app (webpush.ts), both kept as the
+ * session's push_token: an FCM token, or `web:` and a subscription.
  *
  * A push is only a nudge. It says the card has changed (`kind: 'card'`, the
  * phase, and whether there's a question), and the app fetches /me/next
@@ -13,6 +15,7 @@
  */
 
 import type { Env } from './types.ts';
+import { WEB_PREFIX, parseSubscription, sendWebPush, webPushEnabled } from './webpush.ts';
 
 const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const TOKEN_KV = 'fcm:access';
@@ -32,6 +35,9 @@ export interface Nudge {
   ask: boolean;
   /** Worth waking the phone for. */
   urgent: boolean;
+  /** False when reminders are off for this trip: the web app then isn't
+   *  pushed, since a web push must show a notification. */
+  remind?: boolean;
 }
 
 function account(env: Env): ServiceAccount | null {
@@ -45,7 +51,7 @@ function account(env: Env): ServiceAccount | null {
 }
 
 /** Whether push is set up at all. */
-export const pushEnabled = (env: Env) => account(env) !== null;
+export const pushEnabled = (env: Env) => account(env) !== null || webPushEnabled(env);
 
 const b64url = (bytes: ArrayBuffer | Uint8Array) =>
   btoa(String.fromCharCode(...new Uint8Array(bytes)))
@@ -87,15 +93,32 @@ async function accessToken(env: Env, a: ServiceAccount, nowMs: number): Promise<
  */
 export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: number, exceptTokenHash?: string): Promise<number> {
   const a = account(env);
-  if (!a || !env.DB) return 0;
+  if (!pushEnabled(env) || !env.DB) return 0;
   try {
     const { results } = await env.DB.prepare('SELECT token_hash, push_token FROM sessions WHERE user_id = ? AND push_token IS NOT NULL AND token_hash != ?')
       .bind(userId, exceptTokenHash ?? '')
       .all<{ token_hash: string; push_token: string }>();
     if (!results.length) return 0;
-    const bearer = await accessToken(env, a, nowMs);
+    let bearer: string | null = null;
     let sent = 0;
     for (const r of results) {
+      if (r.push_token.startsWith(WEB_PREFIX)) {
+        // Every web push shows a notification (iOS insists), so nothing to
+        // show means nothing sent: an idle card, or reminders off for the trip.
+        if ((nudge.phase === 'idle' && !nudge.ask) || nudge.remind === false) continue;
+        let sub = null;
+        try {
+          sub = parseSubscription(JSON.parse(r.push_token.slice(WEB_PREFIX.length)));
+        } catch {
+          sub = null;
+        }
+        const out = sub ? await sendWebPush(env, sub, { kind: 'card', phase: nudge.phase, ask: nudge.ask, urgent: nudge.urgent }, { urgent: nudge.urgent, nowMs }) : 'gone';
+        if (out === 'sent') sent++;
+        else if (out === 'gone') await env.DB.prepare('UPDATE sessions SET push_token = NULL WHERE token_hash = ?').bind(r.token_hash).run();
+        continue;
+      }
+      if (!a) continue;
+      bearer ??= await accessToken(env, a, nowMs);
       const res = await fetch(`https://fcm.googleapis.com/v1/projects/${a.project_id}/messages:send`, {
         method: 'POST',
         headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
