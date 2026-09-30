@@ -178,8 +178,13 @@ account into another one.
 
 - **The planned bus is remembered.** From the moment a trip is due, the Worker
   saves the bus it's for in the day's record (`DayRecord.plans`, only when it
-  changes). Once that bus has left, the plan is frozen: the answer moves on to
-  the next bus, but the question and the ride stay about this one.
+  changes). The plan freezes at its leave-by time, or when its bus leaves if
+  that comes first. After that the answer moves on to later buses, but the
+  question and the ride stay about this one. It freezes at the leave-by time,
+  not at departure, because devices keep polling in between, and past the
+  leave time every answer names a later bus. Before it freezes, a plan made
+  without a location (the widget, the background refresh) doesn't replace one
+  made with one (`Boarded.located`), since they plan from different places.
 - **The question** (`card.ask`: "On the 9:41 D2?" with On it · Missed it ·
   Not going) is on the card from the bus's departure until the class starts,
   while nobody has answered. Three minutes after the departure with no answer

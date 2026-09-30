@@ -19,6 +19,7 @@ import { haversineM } from './geo.ts';
 import { sgt } from './config.ts';
 import { GRAPH } from './graph.ts';
 import { indexGraph } from './resolve.ts';
+import { shortStop } from './format.ts';
 
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
 
@@ -32,6 +33,12 @@ export interface Boarded {
   stop: string;
   /** ISO: when it left, and when it gets you there. */
   board: string | null;
+  /** ISO: the leave-by time that went with it. From then on the trip is
+   *  about this bus, whatever later answers suggest (see next.ts). */
+  leave?: string;
+  /** Planned from the device's location, not from where the timetable puts
+   *  you. A plan without one never replaces a plan with one. */
+  located?: boolean;
   arrive: string | null;
   off?: string;
   /** Stop codes, and the bus's plate when the feed had one at the tap: its
@@ -41,6 +48,16 @@ export interface Boarded {
   plate?: string;
   /** No answer to the question was noted for this trip (outcomes.ts). */
   noted?: boolean;
+}
+
+/**
+ * Where you get off the bus you're on: across the road when the plan said so,
+ * else the stop it drops you at ("UTown"), never the class ("GEA1000 @ UTown").
+ */
+export function offStop(b: Boarded): string | null {
+  if (b.off) return b.off;
+  const s = b.alightCode ? indexGraph(GRAPH).byCode.get(b.alightCode) : undefined;
+  return s ? shortStop(s.name) : null;
 }
 
 /** The latest signal about one trip today. */

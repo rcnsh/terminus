@@ -82,7 +82,8 @@ test('"On the R2" on the phone puts the Mac on the bus too', async () => {
   const onPhone = await res.json();
   assert.equal(onPhone.card.phase, 'riding');
   assert.equal(onPhone.label, `On the ${before.leave.svc}`);
-  assert.match(onPhone.card.line, /^On the R2 · off at/);
+  assert.match(onPhone.card.line, /^On the R2 · off at UTown /, 'the stop, not the class');
+  assert.match(onPhone.detail, /^Off at UTown · /);
   assert.deepEqual(onPhone.card.actions.map((x) => x.id), ['arrived']);
 
   const onMac = await next(mac);
@@ -253,6 +254,46 @@ test('"On the 9:41 R2?" is asked at the departure, about the planned bus, and go
   assert.equal(answered.card.ask, null, 'asked once');
   assert.equal(answered.label, `On the ${svc}`);
   assert.equal((await next(mac)).card.ask, null);
+});
+
+test('polls between the leave time and the departure keep the question about the bus you were told to catch', async () => {
+  const { phone, mac, next, clock } = await setup();
+  const first = await next(phone);
+  const leaveAt = Date.parse(first.leave.at);
+  clock(leaveAt - 60_000);
+  const due = await next(phone);
+  const board = Date.parse(due.leave.board);
+  const svc = due.leave.svc;
+
+  // Past the leave time, the answer moves on to a later bus (you might not
+  // have left), and the phones and the widget keep polling, with and without
+  // a location. None of that changes which bus the trip was for.
+  clock(leaveAt + 60_000);
+  const later = await next(phone);
+  assert.notEqual(later.leave.board, due.leave.board, 'the answer has moved on to a later bus');
+  await next(mac, '?lat=1.3048&lon=103.7735');
+  clock(board - 10_000);
+  await next(phone);
+
+  clock(board + 30_000);
+  const asked = await next(mac);
+  assert.equal(asked.card.ask?.question, `On the ${clockAt(board)} ${svc}?`);
+});
+
+test('the widget, planning without a location, does not replace the bus the phone planned from where you are', async () => {
+  const { phone, next, clock } = await setup();
+  const AT_STOP = '?lat=1.2966&lon=103.7764'; // next to the stop the plan boards at
+  const first = await next(phone, AT_STOP);
+  clock(Date.parse(first.leave.at) - 60_000);
+  const due = await next(phone, AT_STOP);
+  const board = Date.parse(due.leave.board);
+  const svc = due.leave.svc;
+  const blind = await next(phone);
+  assert.notEqual(blind.leave.board, due.leave.board, 'without a location it plans another bus');
+
+  clock(board + 30_000);
+  const asked = await next(phone);
+  assert.equal(asked.card.ask?.question, `On the ${clockAt(board)} ${svc}?`);
 });
 
 test('no answer means "on it": the planned bus, a few minutes after it left', async () => {
