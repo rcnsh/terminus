@@ -120,6 +120,9 @@ export interface ImportedTrip {
   endMin?: number; // minutes past midnight SGT, class end, when known
   /** NUSMods teaching weeks (or date range). Absent on manual entries, which run every week. */
   weeks?: LessonWeeks;
+  /** From NUSMods, as today's classes have it (classesOn); never stored. Its
+   *  end is taken as ENDS_EARLY_MIN before the timetable says (endOf). */
+  nusmods?: true;
   to: string; // destination stop code
   label: string; // e.g. "CS1010S @ COM1"
   venue: string;

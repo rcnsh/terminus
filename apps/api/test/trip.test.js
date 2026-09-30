@@ -768,3 +768,23 @@ test('having been at the stop is not an answer: after the bus leaves, the phone 
   assert.equal(later.card.phase, 'riding');
   assert.ok(later.card.ask, 'and asked, since nothing followed it');
 });
+
+test('a NUSMods class ends half an hour before its timetable end: the day, "till", and the trip home go by that', async () => {
+  // 10:00-12:00 from NUSMods: really out by about 11:30.
+  const t = await setup({ home: { stops: ['PGP'] }, trips: [{ day: THU, arriveByMin: 600, endMin: 720, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }] });
+  const day = await (await t.call('/me/day', { token: t.phone })).json();
+  const cls = day.items.find((i) => i.kind === 'class');
+  assert.equal(Date.parse(cls.endsAt), FROZEN_NOW + 150 * 60_000, 'ends 11:30');
+  await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
+  t.clock(FROZEN_NOW + 140 * 60_000); // 11:20
+  const inClass = await t.next(t.phone);
+  assert.equal(inClass.card.phase, 'idle', 'the way home, but not yet time to go');
+  t.clock(FROZEN_NOW + 151 * 60_000); // 11:31
+  assert.notEqual((await t.next(t.phone)).card.phase, 'idle', 'out of class: the trip home is on');
+});
+
+test('a class entered by hand ends when it says', async () => {
+  const t = await setup({ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'UTOWN', 'GEA1000 @ UTown'), endMin: 720 }] });
+  const day = await (await t.call('/me/day', { token: t.phone })).json();
+  assert.equal(Date.parse(day.items.find((i) => i.kind === 'class').endsAt), FROZEN_NOW + 180 * 60_000, 'ends 12:00');
+});

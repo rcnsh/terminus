@@ -347,6 +347,14 @@ clamped to 45 to 240 s. `answerFor` reads it (cached ten minutes per isolate)
 and passes `hopS` to the resolver, so a leg's `rideS` is measured where the
 table has the service and `RIDE.secondsPerHop` elsewhere.
 
+**When a class really ends.** NUS classes end about half an hour before the
+timetable's end time, to leave time to get to the next one. `endOf` takes
+NUSMods classes (tagged `nusmods` by `classesOn`, never stored) as ending
+`ENDS_EARLY_MIN` (30) minutes early, never less than 15 minutes after they
+start: the trip home, gaps long enough to go home in, `/me/day`'s `endsAt`
+and "In CS2030 till ~11:30" all follow. Classes entered by hand, usual times
+and one-off trips end when they say.
+
 **More than class trips (8.3).** Today's trips are `classesOn(profile)`:
 the imported and hand-entered classes, plus two kinds that are planned the
 same way (leave-by, the question, push, detection, "Not going"):

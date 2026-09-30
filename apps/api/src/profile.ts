@@ -291,7 +291,7 @@ export function classesOn(profile: Profile, atMs: number): ImportedTrip[] {
   });
   const once = (profile.once ?? []).filter((o) => o.date === date).map((o) => ({ day, arriveByMin: o.arriveByMin, endMin: stay(o.arriveByMin), to: o.to, label: o.label, venue: '' }));
   return [
-    ...profile.trips.filter((x) => x.day === day && importedClassRuns(x.weeks, profile.term, atMs)),
+    ...profile.trips.filter((x) => x.day === day && importedClassRuns(x.weeks, profile.term, atMs)).map((x) => ({ ...x, nusmods: true as const })),
     ...profile.manual.filter((x) => x.day === day),
     ...usual,
     ...once,
@@ -363,8 +363,19 @@ export const NO_DAY_STATE: DayState = { skipped: new Set(), done: new Set() };
 export const GAP_RETURN_MIN = 60;
 /** Classes with no known end are assumed to last this long. */
 const DEFAULT_CLASS_MIN = 60;
+/**
+ * NUS classes end about half an hour before the timetable's end time, to
+ * leave time to get to the next one. What comes after a class (the trip home,
+ * a gap long enough to go home in, "In CS2030 till") goes by when it really
+ * ends: too early is better than too late. Only for NUSMods classes; times
+ * entered by hand are taken as given.
+ */
+export const ENDS_EARLY_MIN = 30;
 
-export const endOf = (t: ImportedTrip) => t.endMin ?? t.arriveByMin + DEFAULT_CLASS_MIN;
+export const endOf = (t: ImportedTrip) => {
+  const end = t.endMin ?? t.arriveByMin + DEFAULT_CLASS_MIN;
+  return t.nusmods ? Math.max(t.arriveByMin + 15, end - ENDS_EARLY_MIN) : end;
+};
 
 /**
  * Where you should be heading now, from today's classes only:
