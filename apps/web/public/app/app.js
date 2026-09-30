@@ -100,6 +100,7 @@ function renderChips() {
         target = t;
         renderChips();
         $('#preview').replaceChildren(el('div', { class: 'detail', textContent: 'Checking…' }));
+        $('#updated').textContent = '';
         refresh();
       },
     });
@@ -155,6 +156,7 @@ function renderDay(day) {
       const title = it.kind === 'home' ? `Home, from ${it.fromName ?? 'your last class'}` : it.label;
       let sub = null;
       if (it.status === 'skipped') sub = 'Not going today';
+      else if (it.onBus) sub = [`On the ${it.onBus.svc}`, it.onBus.off ? `off at ${it.onBus.off}` : null, it.onBus.arrive ? `arrive ${clock(it.onBus.arrive)}` : null].filter(Boolean).join(' · ');
       else if (it.status !== 'done' && it.leave?.at) {
         const how = it.leave.svc ? `${it.leave.svc} from ${it.leave.stop ?? it.fromName}` : 'walk';
         sub = [`Leave by ${it.leave.estimated ? '~' : ''}${clock(it.leave.at)}`, how, it.timing?.status === 'late' ? it.timing.text : null].filter(Boolean).join(' · ');
@@ -298,6 +300,7 @@ async function start() {
   setInterval(() => document.visibilityState === 'visible' && refresh(), REFRESH_MS);
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refresh());
   window.addEventListener('online', refresh);
+  document.addEventListener('trip-signal', refresh);
 }
 
 start();

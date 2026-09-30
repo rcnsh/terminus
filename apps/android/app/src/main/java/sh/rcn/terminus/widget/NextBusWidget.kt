@@ -17,6 +17,7 @@ import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
@@ -170,13 +171,44 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         }
                         Footer(ctx, fetchedAt, error, roomy)
                     }
+                    answer.card?.phase == "riding" && answer.card.ride != null -> {
+                        // On the bus (phase 6): where you get off and when, the
+                        // next stop, and how far along the ride the bus is.
+                        val ride = answer.card.ride
+                        val now = System.currentTimeMillis()
+                        Text(listOfNotNull(answer.phaseText, answer.destLabel).joinToString(" · "), style = muted, maxLines = 1)
+                        Text(
+                            "Off at ${ride.stops.last()} ${clock(ctx, ride.arriveMs)}",
+                            style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
+                            maxLines = 1,
+                        )
+                        Text(if (error == UPDATING) UPDATING else ride.nextText(now), style = muted, maxLines = 1)
+                        if (roomy) {
+                            Spacer(GlanceModifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = ride.progress(now),
+                                modifier = GlanceModifier.fillMaxWidth().height(6.dp).cornerRadius(3.dp),
+                                color = colors.primary,
+                                backgroundColor = colors.secondaryContainer,
+                            )
+                        }
+                        if (large) {
+                            answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
+                            Spacer(GlanceModifier.defaultWeight())
+                            AskOrChips(ctx, answer)
+                            Spacer(GlanceModifier.height(6.dp))
+                        }
+                        Footer(ctx, fetchedAt, error, roomy)
+                    }
                     answer.isClassPlan -> {
                         // A class: when to leave leads, the next bus is the fallback.
+                        // After a missed bus the same, headed by what was missed.
                         val now = System.currentTimeMillis()
                         val old = isOld(answer, fetchedAt, now)
                         val fmt = { ms: Long -> clock(ctx, ms) }
+                        val missed = answer.card?.takeIf { it.phase == "missed" }?.line?.substringBefore(" · ")
                         Text(
-                            listOfNotNull(answer.phaseText?.substringBefore(':'), answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "),
+                            listOfNotNull(missed ?: answer.phaseText?.substringBefore(':'), answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "),
                             style = muted, maxLines = 1,
                         )
                         Text(
@@ -307,13 +339,29 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
      */
     @Composable
     private fun AskOrChips(ctx: Context, answer: NextAnswer) {
-        val ask = answer.card?.ask ?: return Chips(ctx, answer)
+        val card = answer.card
+        val ask = card?.ask
+        when {
+            ask != null -> Buttons(ctx, ask.question, ask.actions)
+            // During a trip (phase 6): the card's own buttons, so the trip can be
+            // followed and answered from the home screen ("On the D2", "I'm there").
+            card != null && card.phase in sh.rcn.terminus.LiveService.TRIP_PHASES && card.actions.any { it.id != "reset" } ->
+                Buttons(ctx, null, card.actions.filter { it.id != "reset" })
+            else -> Chips(ctx, answer)
+        }
+    }
+
+    /** Up to three buttons that send a signal from the widget, like the notification's. */
+    @Composable
+    private fun Buttons(ctx: Context, question: String?, actions: List<sh.rcn.terminus.CardAction>) {
         val colors = GlanceTheme.colors
         Column {
-            Text(ask.question, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Medium, fontSize = 13.sp), maxLines = 1)
-            Spacer(GlanceModifier.height(6.dp))
+            if (question != null) {
+                Text(question, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Medium, fontSize = 13.sp), maxLines = 1)
+                Spacer(GlanceModifier.height(6.dp))
+            }
             Row(modifier = GlanceModifier.fillMaxWidth()) {
-                ask.actions.take(3).forEachIndexed { i, a ->
+                actions.take(3).forEachIndexed { i, a ->
                     if (i > 0) Spacer(GlanceModifier.width(6.dp))
                     val intent = android.content.Intent(ctx, sh.rcn.terminus.SignalReceiver::class.java)
                         .setAction(sh.rcn.terminus.SignalReceiver.ACTION)
@@ -324,7 +372,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             .background(if (i == 0) colors.primaryContainer else colors.secondaryContainer)
                             .cornerRadius(14.dp)
                             .padding(horizontal = 14.dp, vertical = 10.dp)
-                            .semantics { contentDescription = "${ask.question} ${a.label}" }
+                            .semantics { contentDescription = listOfNotNull(question, a.label).joinToString(" ") }
                             .clickable(androidx.glance.appwidget.action.actionSendBroadcast(intent)),
                     ) {
                         Text(
@@ -366,6 +414,15 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
     if (!paired) return "terminus. Not paired. Double tap to pair this phone."
     if (answer == null) return "terminus. ${error ?: "Loading"}. Double tap to refresh."
     val old = isOld(answer, fetchedAt, System.currentTimeMillis())
+    val ride = answer.card?.ride?.takeIf { answer.card.phase == "riding" }
+    if (ride != null) {
+        val now = System.currentTimeMillis()
+        return listOfNotNull(
+            "On the ${ride.svc}" + (answer.destLabel?.let { ", to $it" } ?: ""),
+            "Off at ${ride.stops.last()} at ${clock(ctx, ride.arriveMs)}",
+            ride.nextText(now).replace(" · ", ", "),
+        ).joinToString(". ") + ". Double tap to refresh."
+    }
     if (answer.isClassPlan && !old) {
         val fmt = { ms: Long -> clock(ctx, ms) }
         val now = System.currentTimeMillis()

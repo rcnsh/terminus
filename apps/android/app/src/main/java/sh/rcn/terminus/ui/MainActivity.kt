@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
         handle(intent)
     }
 
-    /** Widget chips open the app on a place or on nearby departures. */
+    /** Widget chips and app shortcuts open the app on the plan, a place or nearby departures. */
     private fun handle(intent: Intent?) {
         // Share in NUSMods, then terminus: the timetable link, to import.
         if (intent?.action == Intent.ACTION_SEND) {
@@ -72,7 +72,14 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (data.scheme != "terminus") return
+        // From a long-press shortcut (the widget's chips send no action): tell
+        // the launcher, which ranks the shortcuts people use.
+        if (intent.action == Intent.ACTION_VIEW) {
+            val id = when (data.host) { "place" -> "place:${data.lastPathSegment}"; "plan" -> "next"; else -> data.host }
+            id?.let { androidx.core.content.pm.ShortcutManagerCompat.reportShortcutUsed(this, it) }
+        }
         when (data.host) {
+            "plan" -> vm.select(Target.Plan)
             "place" -> data.lastPathSegment?.let { vm.select(Target.SavedPlace(it)) }
             "nearby" -> vm.showNearby()
         }

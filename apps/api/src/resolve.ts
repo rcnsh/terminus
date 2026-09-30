@@ -104,6 +104,28 @@ export function reach(idx: GraphIndex, svc: string, from: string, to: string): {
 }
 
 /**
+ * The stops ridden on `svc` from `from` to `to`, both included, the same way
+ * round as `reach` counts them (the fewest hops, wrapping on a loop). Null
+ * when `to` isn't downstream.
+ */
+export function rideStops(idx: GraphIndex, svc: string, from: string, to: string): string[] | null {
+  const r = idx.routes.get(svc);
+  const fromAt = r?.pos.get(from);
+  const toAt = r?.pos.get(to);
+  if (!r || !fromAt || !toAt) return from === to ? [from] : null;
+  const n = r.seq.length;
+  let best: { i: number; hops: number } | null = null;
+  for (const i of fromAt) {
+    for (const j of toAt) {
+      const hops = j >= i ? j - i : r.loop ? j - i + n : Infinity;
+      if (hops !== Infinity && (!best || hops < best.hops)) best = { i, hops };
+    }
+  }
+  if (!best) return null;
+  return Array.from({ length: best.hops + 1 }, (_, k) => r.seq[(best.i + k) % n]);
+}
+
+/**
  * Stops worth fetching arrivals for. Bounded by WALK.maxCandidates so one
  * request never fans out into a dozen upstream calls.
  */

@@ -18,7 +18,7 @@ import type { Env, MeAnswer } from './types.ts';
 import { haversineM } from './geo.ts';
 import { sgt } from './config.ts';
 import { GRAPH } from './graph.ts';
-import { indexGraph } from './resolve.ts';
+import { indexGraph, rideStops } from './resolve.ts';
 import { shortStop } from './format.ts';
 
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
@@ -58,6 +58,28 @@ export function offStop(b: Boarded): string | null {
   if (b.off) return b.off;
   const s = b.alightCode ? indexGraph(GRAPH).byCode.get(b.alightCode) : undefined;
   return s ? shortStop(s.name) : null;
+}
+
+/** The ride for a progress bar: the stops from boarding to getting off, and the times. */
+export interface Ride {
+  svc: string;
+  stops: Array<{ code: string; name: string }>;
+  board: string;
+  arrive: string;
+}
+
+/** The ride on the bus you're on, when its stops are known. */
+export function rideOf(b: Boarded): Ride | null {
+  if (!b.stopCode || !b.alightCode || !b.board || !b.arrive) return null;
+  const idx = indexGraph(GRAPH);
+  const codes = rideStops(idx, b.svc, b.stopCode, b.alightCode);
+  if (!codes || codes.length < 2) return null;
+  return {
+    svc: b.svc,
+    stops: codes.map((code) => ({ code, name: shortStop(idx.byCode.get(code)?.name ?? code) })),
+    board: b.board,
+    arrive: b.arrive,
+  };
 }
 
 /** The latest signal about one trip today. */

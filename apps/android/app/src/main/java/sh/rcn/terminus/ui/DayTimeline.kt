@@ -57,7 +57,9 @@ private fun Row(item: DayItem, fmt: (Long) -> String) {
             val sub = when (item.status) {
                 "skipped" -> "Not going today"
                 "done" -> null
-                else -> item.leaveAtMs?.let { at ->
+                else -> item.onBus?.let { b ->
+                    listOfNotNull("On the ${b.svc}", b.off?.let { "off at $it" }, b.arriveMs?.let { "arrive ${fmt(it)}" }).joinToString(" · ")
+                } ?: item.leaveAtMs?.let { at ->
                     val by = "Leave by ${if (item.leaveEstimated) "~" else ""}${fmt(at)}"
                     listOfNotNull(by, item.svc?.let { "$it from ${item.fromName}" } ?: "walk", item.timingText.takeIf { item.timingStatus == "late" }).joinToString(" · ")
                 }

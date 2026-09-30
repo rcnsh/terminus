@@ -23,10 +23,12 @@
  */
 
 import http from 'node:http';
+import https from 'node:https';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { installGlobals, makeDurableObjects, makeEnv, makeCtx, shuttlePayload } from '../test/_stubs.mjs';
 import { Trip } from '../src/tripdo.ts';
+import { SESSION_COOKIE as DEV_COOKIE } from '../src/accounts.ts';
 import { makeD1, makeEmail } from '../test/_d1.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -152,42 +154,58 @@ setInterval(() => {
   TRIPS.fireDue(stubNow()).catch((e) => console.error('trip alarm', e));
 }, 5_000);
 
-http
-  .createServer(async (req, res) => {
-    const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await new Promise((r) => {
-      const chunks = [];
-      req.on('data', (c) => chunks.push(c));
-      req.on('end', () => r(Buffer.concat(chunks)));
-    });
-    if (req.method === 'GET' && req.url === '/__stub/trips') {
-      // Each Trip object's alarm and what it holds, for checking push.
-      const out = [...TRIPS.instances.entries()].map(([id, o]) => ({
-        id,
-        alarm: TRIPS.alarms.has(id) ? new Date(TRIPS.alarms.get(id)).toISOString() : null,
-        storage: Object.fromEntries([...o.storage._map.entries()]),
-      }));
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(out, null, 1));
-      return;
-    }
-    if (req.method === 'GET' && req.url === '/__stub/push') {
-      // Which devices take push, token masked: for checking registration.
-      const rows = db._db.prepare('SELECT name, push_token FROM sessions WHERE push_token IS NOT NULL').all();
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(rows.map((r) => ({ name: r.name, token: `${r.push_token.slice(0, 8)}…` }))));
-      return;
-    }
-    if (req.method === 'POST' && (req.url === '/__stub/freeze' || req.url === '/__stub/thaw')) {
-      frozenAt = req.url.endsWith('freeze') ? realNow() : null;
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      return res.end(frozenAt ? `frozen at ${new Date(frozenAt).toISOString()}\n` : 'running\n');
-    }
-    const request = new Request(`http://localhost:${PORT}${req.url}`, { method: req.method, headers: req.headers, body });
-    const ctx = makeCtx();
-    const out = await worker.fetch(request, env, ctx);
-    await ctx.settle();
-    res.writeHead(out.status, Object.fromEntries(out.headers));
-    res.end(Buffer.from(await out.arrayBuffer()));
-    if (email.sent.length) console.log('sign-in code:', email.lastCode(), ' link:', email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`), (email.sent.length = 0);
-  })
-  .listen(PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT} (pairing codes TEST67, TEST78, TEST89)`));
+async function serve(req, res) {
+  const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await new Promise((r) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => r(Buffer.concat(chunks)));
+  });
+  if (req.method === 'GET' && req.url === '/__stub/trips') {
+    // Each Trip object's alarm and what it holds, for checking push.
+    const out = [...TRIPS.instances.entries()].map(([id, o]) => ({
+      id,
+      alarm: TRIPS.alarms.has(id) ? new Date(TRIPS.alarms.get(id)).toISOString() : null,
+      storage: Object.fromEntries([...o.storage._map.entries()]),
+    }));
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(out, null, 1));
+    return;
+  }
+  if (req.method === 'GET' && req.url === '/__stub/push') {
+    // Which devices take push, token masked: for checking registration.
+    const rows = db._db.prepare('SELECT name, push_token FROM sessions WHERE push_token IS NOT NULL').all();
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(rows.map((r) => ({ name: r.name, token: `${r.push_token.slice(0, 8)}…` }))));
+    return;
+  }
+  if (req.method === 'POST' && (req.url === '/__stub/freeze' || req.url === '/__stub/thaw')) {
+    frozenAt = req.url.endsWith('freeze') ? realNow() : null;
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    return res.end(frozenAt ? `frozen at ${new Date(frozenAt).toISOString()}\n` : 'running\n');
+  }
+  // WebKit (iOS Safari, the installed web app) won't keep a Secure or
+  // __Host- cookie over plain http, even on localhost, so over the wire the
+  // session cookie is a plain one here and is renamed back for the Worker.
+  const headers = { ...req.headers };
+  if (headers.cookie) headers.cookie = headers.cookie.replace(/(^|;\s*)tm_dev=/, `$1${DEV_COOKIE}=`);
+  const request = new Request(`http://localhost:${PORT}${req.url}`, { method: req.method, headers, body });
+  const ctx = makeCtx();
+  const out = await worker.fetch(request, env, ctx);
+  await ctx.settle();
+  const outHeaders = Object.fromEntries(out.headers);
+  const cookies = out.headers.getSetCookie();
+  if (cookies.length) outHeaders['set-cookie'] = cookies.map((c) => c.replace(`${DEV_COOKIE}=`, 'tm_dev=').replace(/; Secure/i, ''));
+  res.writeHead(out.status, outHeaders);
+  res.end(Buffer.from(await out.arrayBuffer()));
+  if (email.sent.length) console.log('sign-in code:', email.lastCode(), ' link:', email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`), (email.sent.length = 0);
+}
+
+http.createServer(serve).listen(PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT} (pairing codes TEST67, TEST78, TEST89)`));
+// STUB_TLS=<dir with localhost.key and localhost.pem>: the same stub over
+// HTTPS on PORT + 1, for browsers that need a real secure origin (Web Push on
+// iOS). Trust the certificate's CA in the device first.
+if (process.env.STUB_TLS) {
+  const tls = process.env.STUB_TLS;
+  const [key, cert] = await Promise.all([readFile(path.join(tls, 'localhost.key')), readFile(path.join(tls, 'localhost.pem'))]);
+  https.createServer({ key, cert }, serve).listen(PORT + 1, () => console.log(`and over HTTPS on https://localhost:${PORT + 1}`));
+}

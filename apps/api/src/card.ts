@@ -11,7 +11,7 @@
 
 import type { Crowd, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
-import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type TripRecord, offStop } from './trip.ts';
+import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, offStop, rideOf } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
 import type { Suggestion } from './outcomes.ts';
 
@@ -109,6 +109,10 @@ export interface Card {
   /** "Leave one bus earlier for CS2030?", with its two buttons: send the id
    *  to /me/suggestion. Never during a trip. */
   suggestion: Suggestion | null;
+  /** On the bus: the stops from boarding to getting off and the board and
+   *  arrival times (the arrival live when the bus's plate is known), for a
+   *  progress bar. Null otherwise. */
+  ride: Ride | null;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -147,7 +151,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 
 const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
-type V1 = Omit<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion'>;
+type V1 = Omit<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion' | 'ride'>;
 
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }): Card {
   const card = v1(a, h12);
@@ -245,7 +249,7 @@ function v2(
   card: V1,
   h12: boolean,
   trip: TripView,
-): Pick<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion'> {
+): Pick<Card, 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion' | 'ride'> {
   const nowMs = Date.parse(a.asOf);
   const at = (t: string) => clockAt(Date.parse(t), h12);
   const short = (t: string) => shortClock(Date.parse(t), h12);
@@ -342,5 +346,6 @@ function v2(
     askMuted: Boolean(trip.askMuted),
     remind: trip.remind !== false,
     suggestion: trip.suggestion ?? null,
+    ride: phase === 'riding' && onBus ? rideOf(onBus) : null,
   };
 }

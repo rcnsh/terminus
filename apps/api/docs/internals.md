@@ -220,11 +220,16 @@ The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 - On the trip home, `card.warning` says "Last D2 from UTown in 18 min" from
   45 minutes before the service's published end (`data/service-hours.json`).
 
-`GET /me/day` is today's timeline, worked out with the same planner.
+`GET /me/day` is today's timeline, worked out with the same planner. A
+class you're on the bus to carries `onBus` (the bus, where to get off, the
+arrival) instead of a leave-by that has passed.
 
 Card v2 adds `phase`, `phaseText`, `glance` (12 characters, for a menu bar
 or a tile), `line` (one line, for a notification), `actions`, `warning` and
-`nextChangeAt` (when the card changes by itself). v1 fields are unchanged.
+`nextChangeAt` (when the card changes by itself). While riding, `ride` lists
+the stops from boarding to getting off, with the board and arrival times (the
+arrival live when the bus's plate is known), for a progress bar (phase 6). v1
+fields are unchanged.
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
   last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
   again, once fewer than 23 days are left. Device tokens last until revoked,
