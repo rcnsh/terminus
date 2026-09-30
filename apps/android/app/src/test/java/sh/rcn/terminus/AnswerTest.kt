@@ -26,7 +26,7 @@ class AnswerTest {
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
     @Test fun everyGoldenAnswerParses() {
-        for (name in listOf("class-bus", "class-walk", "class-late", "class-from-dorm", "place", "landmark", "arrived", "nearby", "rest", "home", "setup")) {
+        for (name in listOf("class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "place", "landmark", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup")) {
             val a = golden(name)
             assertNotNull("$name has a card", a.card)
         }
@@ -52,8 +52,26 @@ class AnswerTest {
     }
 
     @Test fun otherKindsAreNotClassCards() {
-        for (name in listOf("place", "nearby", "rest", "arrived", "home", "setup")) assertFalse(name, golden(name).isClassPlan)
+        for (name in listOf("place", "free", "rest", "arrived", "home", "setup")) assertFalse(name, golden(name).isClassPlan)
         assertEquals("Leave by 09:03", golden("place").leaveHeadline(0))
+    }
+
+    @Test fun aDayWithoutClassesIsFreeWithNoBus() {
+        val a = golden("free")
+        assertTrue(a.isFree)
+        assertEquals("No classes today", a.label)
+        assertNull(a.departsAtMs)
+        assertEquals("No classes", a.card!!.glance)
+    }
+
+    @Test fun cardV2CarriesThePhaseAndItsButtons() {
+        val a = golden("class-late")
+        assertEquals("heading", a.card!!.phase)
+        assertEquals("On your way", a.phaseText)
+        assertEquals(listOf("boarded", "missed", "skipped"), a.card!!.actions.map { it.id })
+        assertTrue(a.card!!.actions.all { it.trip == "4:545:UTOWN" })
+        assertTrue(a.card!!.glance!!.length <= 12)
+        assertNotNull(a.card!!.nextChangeAtMs)
     }
 
     @Test fun staleFollowsTheServer() {

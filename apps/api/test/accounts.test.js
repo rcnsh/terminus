@@ -281,8 +281,10 @@ test('/me/next with nothing set up asks for setup instead of inventing a trip', 
   const { env, email } = setup();
   const cookie = await signIn(env, email);
   const body = await (await call(env, '/me/next', { cookie })).json();
-  assert.equal(body.mode, 'nearby');
-  assert.equal(body.label, 'Set up');
+  assert.equal(body.mode, 'free');
+  assert.equal(body.label, 'No timetable yet');
+  assert.equal(body.card.glance, 'Set up');
+  assert.deepEqual(body.arrivals, [], 'no bus it has no reason to suggest');
 });
 
 test('/me/next goes to a saved place by key and returns the chips', async () => {

@@ -63,7 +63,14 @@ const CASES = {
   'place': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=mrt'],
   'landmark': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=deck'],
   'arrived': [{ home: { stops: ['PGP'] }, places }, `/me/next?to=COM3&${AT_COM3}`],
-  'nearby': [{ places }, `/me/next?${CLB}`],
+  // A day with no classes: said plainly, with the next one; no bus headline.
+  'free': [{ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'COM3', 'CS2030 @ COM1'), day: 5 }], places }, `/me/next?${CLB}`],
+  // 2.1: a class that started 10 minutes ago is still where you're going.
+  'class-started': [{ home: { stops: ['PGP'] }, manual: [cls(530, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next'],
+  // 2.1: an hour after the last class, with no location, you're home.
+  'home-reached': [{ home: { stops: ['PGP'] }, manual: [cls(390, 'COM3', 'CS2030 @ COM1')], places }, '/me/next'],
+  // 2.1: outside your day, on campus and not at home: the way home, not a moon.
+  'evening-home': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, places }, `/me/next?${CLB}`],
   'rest': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, manual: [cls(780, 'COM3', 'CS2030 @ COM1')], places }, '/me/next'],
   'home': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(420, 'COM3', 'CS2030 @ COM1')], places }, `/me/next?${DORM}`],
   'setup': [{}, '/me/next'],

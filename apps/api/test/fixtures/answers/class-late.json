@@ -114,6 +114,29 @@
     "late": true,
     "goNow": null,
     "note": null,
-    "estimate": null
+    "estimate": null,
+    "phase": "heading",
+    "phaseText": "On your way",
+    "glance": "R2 09:06",
+    "line": "R2 09:06 at PGP · arrive 09:15 · ~10 min late",
+    "actions": [
+      {
+        "id": "boarded",
+        "label": "On the R2",
+        "trip": "4:545:UTOWN"
+      },
+      {
+        "id": "missed",
+        "label": "Missed it",
+        "trip": "4:545:UTOWN"
+      },
+      {
+        "id": "skipped",
+        "label": "Not going",
+        "trip": "4:545:UTOWN"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:05:00Z"
   }
 }

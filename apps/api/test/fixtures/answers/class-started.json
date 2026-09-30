@@ -1,8 +1,8 @@
 {
   "stop": {
-    "code": "CLB",
-    "name": "CLB",
-    "confidence": 0.97
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.75
   },
   "quality": "live",
   "asOf": "2026-08-27T01:00:00.000Z",
@@ -64,31 +64,31 @@
       "berth": null
     }
   ],
-  "label": "Walk · 5 min",
-  "detail": "On foot to CS2030 @ COM1 · D1 would be 13 min · from CLB",
-  "alt": "D1 · 7 min · CLB",
-  "departsAt": null,
-  "arriveAt": "2026-08-27T01:05:18Z",
+  "label": "R2 · 6 min",
+  "detail": "PGP · 5 min walk · GEA1000 @ UTown ~16 min · filling · or D2 14 min",
+  "alt": "D2 · 14 min · PGP",
+  "departsAt": "2026-08-27T01:06:00Z",
+  "arriveAt": "2026-08-27T01:15:30Z",
   "leave": {
-    "at": "2026-08-27T01:48:50Z",
+    "at": "2026-08-27T01:00:00Z",
     "estimated": false,
-    "svc": null,
-    "stop": null,
-    "board": null,
-    "arrive": "2026-08-27T01:57:00Z",
+    "svc": "R2",
+    "stop": "PGP",
+    "board": "2026-08-27T01:06:00Z",
+    "arrive": "2026-08-27T01:15:30Z",
     "note": null
   },
   "mode": "trip",
   "dest": {
-    "to": "COM3",
-    "label": "CS2030 @ COM1",
+    "to": "UTOWN",
+    "label": "GEA1000 @ UTown",
     "why": "class"
   },
   "timing": {
-    "status": "on-time",
-    "text": "Arrive 09:08 · 52 min early",
-    "classAt": "2026-08-27T02:00:00Z",
-    "reachAt": "2026-08-27T01:08:10Z"
+    "status": "late",
+    "text": "~26 min late",
+    "classAt": "2026-08-27T00:50:00Z",
+    "reachAt": "2026-08-27T01:15:30Z"
   },
   "places": [
     {
@@ -100,33 +100,43 @@
       "label": "The Deck"
     }
   ],
-  "refreshAt": "2026-08-27T02:00:00Z",
+  "refreshAt": "2026-08-27T01:05:00Z",
   "card": {
     "kind": "class",
-    "staleAt": "2026-08-27T01:15:00Z",
-    "crowd": null,
+    "staleAt": "2026-08-27T01:05:00Z",
+    "crowd": "Filling",
     "quality": null,
-    "leaveBy": "Leave by 09:48",
-    "leaveVia": null,
-    "catch": "Walk there",
-    "arrive": "Arrive 09:57 · 3 min early",
-    "catchLine": "Walk there · arrive 09:57, 3 min early",
-    "late": false,
+    "leaveBy": "Leave by 09:00",
+    "leaveVia": "catch the 09:06 R2 at PGP",
+    "catch": "Catch the 09:06 R2 at PGP",
+    "arrive": "Arrive 09:15 · ~25 min late",
+    "catchLine": "Catch the 09:06 R2 at PGP · arrive 09:15, ~25 min late",
+    "late": true,
     "goNow": null,
     "note": null,
     "estimate": null,
-    "phase": "idle",
-    "phaseText": null,
-    "glance": "Leave 09:48",
-    "line": "Leave by 09:48 · walk",
+    "phase": "heading",
+    "phaseText": "On your way",
+    "glance": "R2 09:06",
+    "line": "R2 09:06 at PGP · arrive 09:15 · ~25 min late",
     "actions": [
+      {
+        "id": "boarded",
+        "label": "On the R2",
+        "trip": "4:530:UTOWN"
+      },
+      {
+        "id": "missed",
+        "label": "Missed it",
+        "trip": "4:530:UTOWN"
+      },
       {
         "id": "skipped",
         "label": "Not going",
-        "trip": "4:600:COM3"
+        "trip": "4:530:UTOWN"
       }
     ],
     "warning": null,
-    "nextChangeAt": "2026-08-27T01:15:00Z"
+    "nextChangeAt": "2026-08-27T01:05:00Z"
   }
 }

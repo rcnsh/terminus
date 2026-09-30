@@ -266,7 +266,31 @@ export interface Plan {
   /** The room you're leaving, when `from` is the last class's stop: the walk
    *  from it to the stop counts. Null when starting from home. */
   fromVenue: string | null;
+  /** Home after the last class: when that class ends, minutes past midnight. */
+  lastEndMin?: number;
 }
+
+/** A class stays the target this long after it starts: you may still be on
+ *  the way, and "next: the 14:00" would be wrong while you're on the bus. */
+export const LATE_GRACE_MIN = 15;
+/** With no location, you're taken to be home this long after the last class
+ *  ends; until then the answer is the trip home. */
+export const HOME_BY_MIN = 60;
+
+/** Which of today's classes a trip signal is about. Stable for the day. */
+export function classKey(t: ImportedTrip): string {
+  return `${t.day}:${t.arriveByMin}:${t.to}`;
+}
+
+/** What the day's trip signals say about today's classes. */
+export interface DayState {
+  /** "Not going": dropped for today. */
+  skipped: ReadonlySet<string>;
+  /** Reached (you said so, or were seen there): no longer the target. */
+  done: ReadonlySet<string>;
+}
+
+export const NO_DAY_STATE: DayState = { skipped: new Set(), done: new Set() };
 
 /** During a long gap, switch back from "home" to "next class" this long
  *  before the class starts. */
@@ -274,7 +298,7 @@ export const GAP_RETURN_MIN = 60;
 /** Classes with no known end are assumed to last this long. */
 const DEFAULT_CLASS_MIN = 60;
 
-const endOf = (t: ImportedTrip) => t.endMin ?? t.arriveByMin + DEFAULT_CLASS_MIN;
+export const endOf = (t: ImportedTrip) => t.endMin ?? t.arriveByMin + DEFAULT_CLASS_MIN;
 
 /**
  * Where you should be heading now, from today's classes only:
@@ -285,22 +309,24 @@ const endOf = (t: ImportedTrip) => t.endMin ?? t.arriveByMin + DEFAULT_CLASS_MIN
  * - after the last class: home
  * - no classes today: null, and the client shows nearby departures
  *
- * A class counts as "next" until it starts.
+ * A class counts as "next" until LATE_GRACE_MIN after it starts, or until
+ * it's reached. A skipped class is left out; a reached one still counts as
+ * where you're coming from.
  */
-export function planFor(profile: Profile, nowMs: number): Plan | null {
+export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DAY_STATE): Plan | null {
   const t = sgt(nowMs);
   const nowMin = t.minutes;
-  const today = classesOn(profile, nowMs);
+  const today = classesOn(profile, nowMs).filter((x) => !state.skipped.has(classKey(x)));
   if (!today.length) return null;
 
   const homeStop = profile.home?.stops[0] ?? null;
-  const next = today.find((x) => x.arriveByMin > nowMin) ?? null;
-  const prev = [...today].reverse().find((x) => x.arriveByMin <= nowMin) ?? null;
+  const next = today.find((x) => !state.done.has(classKey(x)) && x.arriveByMin + LATE_GRACE_MIN > nowMin) ?? null;
+  const prev = [...today].reverse().find((x) => x !== next && (x.arriveByMin <= nowMin || state.done.has(classKey(x)))) ?? null;
 
   if (!next) {
     // After the last class of the day.
-    if (!homeStop) return null;
-    return { to: homeStop, label: 'Home', why: 'home', from: prev!.to, trip: null, fromVenue: prev!.venue || null };
+    if (!homeStop || !prev) return null;
+    return { to: homeStop, label: 'Home', why: 'home', from: prev.to, trip: null, fromVenue: prev.venue || null, lastEndMin: endOf(prev) };
   }
   if (!prev) {
     return { to: next.to, label: next.label, why: 'class', from: homeStop, trip: next, fromVenue: null };
@@ -357,7 +383,7 @@ export function planChangesAt(profile: Profile, nowMs: number): number {
   const today = classesOn(profile, nowMs);
   const start = Math.max(0, Math.min(profile.dayStartMin, ...today.map((x) => x.arriveByMin - MORNING_LEAD_MIN)));
   const end = Math.max(profile.dayEndMin, ...today.map((x) => endOf(x) + EVENING_GRACE_MIN));
-  const marks = [start, end, ...today.flatMap((x) => [x.arriveByMin, endOf(x), x.arriveByMin - GAP_RETURN_MIN])];
+  const marks = [start, end, ...today.flatMap((x) => [x.arriveByMin, x.arriveByMin + LATE_GRACE_MIN, endOf(x), endOf(x) + HOME_BY_MIN, x.arriveByMin - GAP_RETURN_MIN])];
   const next = marks.filter((m) => m > t.minutes && m < 1440).sort((a, b) => a - b)[0];
   return midnight + (next ?? 1440) * 60_000;
 }
@@ -376,11 +402,11 @@ export function restLabel(profile: Profile, nowMs: number, h12 = false): string 
 /** How far ahead to look for the next class: a whole semester break. */
 const LOOKAHEAD_DAYS = 120;
 
-/** The first class after now, and how many days ahead it is. */
-export function nextClass(profile: Profile, nowMs: number): { trip: ImportedTrip; daysAhead: number } | null {
+/** The first class after now, and how many days ahead it is. Today's skipped classes don't count. */
+export function nextClass(profile: Profile, nowMs: number, skipped: ReadonlySet<string> = NO_DAY_STATE.skipped): { trip: ImportedTrip; daysAhead: number } | null {
   const t = sgt(nowMs);
   for (let ahead = 0; ahead <= LOOKAHEAD_DAYS; ahead++) {
-    const found = classesOn(profile, nowMs + ahead * 86_400_000).find((x) => ahead > 0 || x.arriveByMin > t.minutes);
+    const found = classesOn(profile, nowMs + ahead * 86_400_000).find((x) => ahead > 0 || (x.arriveByMin > t.minutes && !skipped.has(classKey(x))));
     if (found) return { trip: found, daysAhead: ahead };
   }
   return null;
@@ -397,11 +423,11 @@ function shortDate(atMs: number): string {
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /** "Next: CS2030 @ COM1, tomorrow 10:00", or a plain line when nothing is scheduled. */
-export function restDetail(profile: Profile, nowMs: number, h12 = false): string {
+export function restDetail(profile: Profile, nowMs: number, h12 = false, skipped: ReadonlySet<string> = NO_DAY_STATE.skipped): string {
   if (reimportReason(profile, nowMs) === 'ended' && profile.term) {
     return `Your timetable is for ${termName(profile.term)} · import this semester's on the account page`;
   }
-  const n = nextClass(profile, nowMs);
+  const n = nextClass(profile, nowMs, skipped);
   if (!n) return profile.trips.length || profile.manual.length ? 'No classes coming up' : 'Nothing on your timetable';
   // Recess, exams, a public holiday: say why today is empty.
   const off = classesOn(profile, nowMs).length ? null : dayOffReason(nowMs);

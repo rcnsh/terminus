@@ -43,6 +43,8 @@ const STOP_PAIRS = stopPairs(GRAPH);
 const RESIDENCE_LIST = allResidences().map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0] }));
 
 export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam };
+// The trip engine's Durable Object (one per user), bound as TRIPS.
+export { Trip } from './trip.ts';
 
 /** `?to=` as a stop code or a NUSMods venue code; `?from=` as an origin stop. */
 function resolveDestination(url: URL) {

@@ -1,0 +1,309 @@
+/**
+ * /me/next's answer: where you're going now and how, from the timetable (or
+ * a place you asked for), and which of today's trips it is about, so the
+ * card can say what phase it's in (trip.ts).
+ */
+
+import type { Answer, Env, Graph, MeAnswer, PlaceChip, ResolveInput, Why } from './types.ts';
+import type { MeDeps } from './me.ts';
+import {
+  HOME_BY_MIN,
+  MAX_VENUE_WALK_S,
+  type Profile,
+  classKey,
+  classStartMs,
+  classesOn,
+  isResting,
+  nextClass,
+  planFor,
+  restDetail,
+  restLabel,
+  timingFor,
+} from './profile.ts';
+import { type ImportedTrip, venueToStop } from './nusmods.ts';
+import { indexGraph, serviceEndsAt } from './resolve.ts';
+import { haversineM } from './geo.ts';
+import { clockAt, clockMin } from './clock.ts';
+import { sgt } from './config.ts';
+import { shortStop } from './format.ts';
+import { landmark, targetStops } from './landmarks.ts';
+import { atHome } from './residences.ts';
+import { paceSpeed } from './walk.ts';
+import { coordsFrom } from './http.ts';
+import type { TripView } from './card.ts';
+import { type DayRecord, RIDE_GRACE_MS, dayState, phaseFor } from './trip.ts';
+
+/** `?h12=1`: the client shows 12-hour times. Default 24-hour, as always. */
+export const hour12 = (url: URL) => url.searchParams.get('h12') === '1';
+
+/** In the evening, a location this close to a stop is on campus. */
+export const ON_CAMPUS_M = 500;
+/** "Last D2 from UTown in 18 min" shows from this long before the last one. */
+export const LAST_BUS_WARN_MS = 45 * 60_000;
+/** "Undo: going to CS2030" stays offered this long after "Not going". */
+export const UNDO_MS = 10 * 60_000;
+
+interface Dest {
+  to: string;
+  label: string;
+  why: Why;
+  from: string | null;
+  trip?: ImportedTrip | null;
+  fromVenue?: string | null;
+}
+
+export interface Planned {
+  answer: MeAnswer;
+  trip: TripView;
+}
+
+/** Stop code, or a NUSMods venue code resolved to its nearest stop. */
+export function resolveTo(graph: Graph, raw: string): { to: string; label: string } | null {
+  const code = raw.trim().toUpperCase();
+  const stop = indexGraph(graph).byCode.get(code);
+  if (stop) return { to: stop.code, label: shortStop(stop.name, 14) };
+  // A food court: kept as its own code; tripAnswer expands it to its stops.
+  const lm = landmark(code);
+  if (lm) return { to: code, label: lm.name };
+  const v = venueToStop(code);
+  return v ? { to: v.stop, label: code.split('-')[0] } : null;
+}
+
+function base(nowMs: number, label: string, detail: string): Answer {
+  return { label, detail, alt: null, stop: { code: '', name: '', confidence: 0 }, quality: 'unknown', asOf: new Date(nowMs).toISOString(), arrivals: [] };
+}
+
+/** In your residence with nothing left today: no bus, and what's next. */
+function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: PlaceChip[], h12: boolean): MeAnswer {
+  return {
+    ...base(nowMs, "You're home", restDetail(profile, nowMs, h12)),
+    stop: { code: homeStop ?? '', name: '', confidence: 1 },
+    quality: 'live',
+    arrived: true,
+    leave: null,
+    mode: 'trip',
+    dest: { to: homeStop ?? '', label: 'Home', why: 'home' },
+    places,
+  };
+}
+
+/**
+ * Nothing to catch today: said plainly, with what's next. No bus in the
+ * headline: a bus you have no reason to take reads like advice. Departures
+ * near you are on the Nearby tab.
+ */
+function freeAnswer(profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>): MeAnswer {
+  const hadClasses = classesOn(profile, nowMs).length > 0;
+  const empty = !profile.trips.length && !profile.manual.length;
+  const label = empty ? 'No timetable yet' : hadClasses ? 'No more classes today' : 'No classes today';
+  const detail = empty ? 'Add your timetable in Settings. Buses near you are under Nearby.' : restDetail(profile, nowMs, h12, skipped);
+  return { ...base(nowMs, label, detail), quality: 'ended', mode: 'free', dest: null, places };
+}
+
+function restAnswer(profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean): MeAnswer {
+  return { ...base(nowMs, restLabel(profile, nowMs, h12), restDetail(profile, nowMs, h12)), quality: 'ended', mode: 'rest', dest: null, places };
+}
+
+/**
+ * Without a location, the walk to the stop you're assumed to start from:
+ * from the room you're in when that's the last class's stop, from home when
+ * it's the home stop.
+ */
+function originWalkS(dest: { from: string | null; fromVenue?: string | null }, homeStop: string | null, homeWalkMin: number, speed: number): number {
+  if (dest.fromVenue) {
+    const m = venueToStop(dest.fromVenue)?.m ?? 0;
+    const s = Math.round(m / speed);
+    // Past this the room's stop is not really its stop (bad data).
+    return s <= MAX_VENUE_WALK_S ? s : 0;
+  }
+  return dest.from !== null && dest.from === homeStop ? homeWalkMin * 60 : 0;
+}
+
+/** How to get to `dest` now: the bus, the leave-by and, for a class, whether you'll make it. */
+export async function tripAnswer(
+  env: Env,
+  ctx: ExecutionContext,
+  nowMs: number,
+  deps: MeDeps,
+  profile: Profile,
+  dest: Dest,
+  at: { lat: number | null; lon: number | null },
+  places: PlaceChip[],
+  h12: boolean,
+): Promise<MeAnswer> {
+  const { lat, lon } = at;
+  const speed = paceSpeed(profile.walkPace);
+  const homeStop = profile.home?.stops[0] ?? null;
+  // A class to go to but nowhere to start from: without this the resolver
+  // has no stop to check and says "Services ended" at 9 am.
+  if (lat === null && !dest.from) {
+    return {
+      ...base(nowMs, 'Add a home stop', 'Pick where your day starts in Settings, or turn on location'),
+      mode: 'trip',
+      dest: { to: dest.to, label: dest.label, why: dest.why },
+      places,
+    };
+  }
+  const venueM = dest.trip?.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
+  // A class has its room's walk; a food court the walk from its nearest stop.
+  const venueWalkS = Math.round((venueM || targetStops(dest.to).walkM) / speed);
+  // A place served by several stops arrives at whichever is quicker.
+  const target = targetStops(dest.to);
+  const input: ResolveInput = {
+    lat,
+    lon,
+    to: target.to,
+    toAlso: target.also,
+    originCode: lat === null && dest.from ? targetStops(dest.from).to : null,
+    preferStops: profile.home?.stops ?? [],
+    originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin, speed) : 0,
+    walkSpeedMs: speed,
+    arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS, fullBusMargin: profile.fullBusMargin } : null,
+  };
+  const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
+  // For a class, say whether you'll make it: stop arrival plus the walk
+  // from the stop to the venue, against the start time.
+  const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs, h12) : null;
+  return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, timing, places };
+}
+
+function onCampus(graph: Graph, lat: number, lon: number): boolean {
+  return graph.stops.some((s) => haversineM(lat, lon, s.lat, s.lon) <= ON_CAMPUS_M);
+}
+
+/** "Last D2 from UTown in 18 min", when the bus home is about to stop running. */
+function lastBusWarning(graph: Graph, a: MeAnswer, nowMs: number): string | null {
+  const svc = a.leave?.svc;
+  if (!svc || !a.leave?.stop) return null;
+  const ends = serviceEndsAt(graph, svc, nowMs);
+  if (ends === null || ends <= nowMs || ends - nowMs > LAST_BUS_WARN_MS) return null;
+  return `Last ${svc} from ${a.leave.stop} in ${Math.max(1, Math.round((ends - nowMs) / 60_000))} min`;
+}
+
+/** A trip skipped a moment ago, offered back as "Undo". */
+function undoOf(day: DayRecord | null, nowMs: number): TripView['undo'] {
+  const recent = Object.entries(day?.trips ?? {})
+    .filter(([, r]) => r.kind === 'skipped' && nowMs - r.at < UNDO_MS)
+    .sort(([, a], [, b]) => b.at - a.at)[0];
+  return recent ? { key: recent[0], label: recent[1].label ?? 'it' } : null;
+}
+
+/** On the bus you said you'd caught: where it gets you, not the next bus. */
+function ridingAnswer(nowMs: number, dest: Dest, rec: NonNullable<DayRecord['trips'][string]>, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
+  const b = rec.boarded!;
+  const off = b.off ?? dest.label;
+  const arrive = b.arrive ? Date.parse(b.arrive) : null;
+  let detail = arrive !== null ? `Off at ${off} · arrive ~${clockAt(arrive, h12)}` : `Off at ${off}`;
+  let timing = null;
+  if (dest.trip && b.arrive) {
+    const venueM = dest.trip.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
+    timing = timingFor(b.arrive, dest.trip, Math.round(venueM / paceSpeed(profile.walkPace)), nowMs, h12);
+    if (timing) detail += ` · ${timing.status === 'late' ? timing.text : timing.text.split(' · ')[1] ?? ''}`.replace(/ · $/, '');
+  }
+  return {
+    ...base(nowMs, `On the ${b.svc}`, detail),
+    quality: 'scheduled',
+    arriveAt: b.arrive ?? undefined,
+    mode: 'trip',
+    dest: { to: dest.to, label: dest.label, why: dest.why },
+    timing,
+    places,
+  };
+}
+
+/** Reached by now, by the bus you were on: the next thing, and where you are. */
+function thereAnswer(profile: Profile, nowMs: number, dest: Dest, places: PlaceChip[], h12: boolean): MeAnswer {
+  const next = nextClass(profile, nowMs);
+  const end = dest.trip?.endMin;
+  const label = dest.trip ? `In ${dest.trip.label}` : `At ${dest.label}`;
+  const detail = [end ? `till ${clockMin(end, h12)}` : null, next ? restDetail(profile, nowMs, h12) : null]
+    .filter(Boolean)
+    .join(' · ');
+  return { ...base(nowMs, label, detail || "You're there"), quality: 'live', arrived: true, leave: null, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, places };
+}
+
+/**
+ * The planned (or asked-for) answer and the trip it's about. `day` is
+ * today's trip signals, or null when there are none.
+ */
+export async function planned(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile, day: DayRecord | null): Promise<Planned> {
+  const at = coordsFrom(url);
+  const { lat, lon } = at;
+  const h12 = hour12(url);
+  const homeStop = profile.home?.stops[0] ?? null;
+  const places: PlaceChip[] = profile.places.map(({ key, label }) => ({ key, label }));
+  const undo = undoOf(day, nowMs);
+  const idle = (answer: MeAnswer): Planned => ({ answer, trip: { key: null, phase: 'idle', undo } });
+
+  // A place or stop you asked for: an ad-hoc trip, not tracked.
+  const placeKey = url.searchParams.get('place');
+  const toRaw = url.searchParams.get('to');
+  if (placeKey || toRaw) {
+    let dest: Dest | null = null;
+    if (placeKey) {
+      const pl = profile.places.find((p) => p.key === placeKey);
+      if (pl) dest = { to: pl.to, label: pl.label, why: 'place', from: homeStop };
+    } else {
+      const r = resolveTo(deps.graph, toRaw!);
+      if (r) dest = { ...r, why: 'place', from: homeStop };
+    }
+    if (dest) return idle(await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12));
+    return idle(freeAnswer(profile, nowMs, places, h12));
+  }
+
+  const homeHere = atHome(lat, lon, profile.home?.stops ?? []);
+  if (isResting(profile, nowMs)) {
+    // Evenings: on campus and not at home, the way home rather than a moon.
+    if (homeStop && lat !== null && lon !== null && !homeHere && onCampus(deps.graph, lat, lon)) {
+      const dest: Dest = { to: homeStop, label: 'Home', why: 'home', from: null };
+      const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12);
+      return withPhase({ ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) }, 'home:evening');
+    }
+    return idle(restAnswer(profile, nowMs, places, h12));
+  }
+
+  const state = dayState(day);
+  const plan = planFor(profile, nowMs, state);
+  if (!plan) return idle(freeAnswer(profile, nowMs, places, h12, state.skipped));
+
+  let dest: Dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from, trip: plan.trip, fromVenue: plan.fromVenue };
+  let key = plan.trip ? classKey(plan.trip) : plan.why === 'home' ? `home:${plan.lastEndMin}` : `gap-home:${plan.from}`;
+
+  if (plan.why === 'home' || plan.why === 'gap-home') {
+    // Already in your residence: "Home" is not somewhere to go.
+    if (homeHere || state.done.has(key)) {
+      const next = nextClass(profile, nowMs);
+      if (plan.why !== 'gap-home' || next?.daysAhead !== 0) return idle(youreHome(profile, nowMs, homeStop, places, h12));
+      // Between classes: when to leave home for the next one.
+      dest = { to: next.trip.to, label: next.trip.label, why: 'class', from: homeStop, trip: next.trip, fromVenue: null };
+      key = classKey(next.trip);
+    } else if (plan.why === 'home' && lat === null && plan.lastEndMin !== undefined && sgt(nowMs).minutes >= plan.lastEndMin + HOME_BY_MIN) {
+      // No location, and long enough since the last class to be home by now.
+      return idle(youreHome(profile, nowMs, homeStop, places, h12));
+    }
+  }
+
+  const rec = day?.trips[key];
+  if (rec?.kind === 'boarded' && rec.boarded) {
+    const arrive = rec.boarded.arrive ? Date.parse(rec.boarded.arrive) : null;
+    if (arrive === null || nowMs < arrive + RIDE_GRACE_MS) {
+      return { answer: ridingAnswer(nowMs, dest, rec, places, h12, profile), trip: { key, phase: 'riding', rec, undo } };
+    }
+    // The bus you were on should have got you there by now.
+    return { answer: thereAnswer(profile, nowMs, dest, places, h12), trip: { key, phase: 'arrived', rec, undo } };
+  }
+
+  const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12);
+  const home = dest.why === 'home' || dest.why === 'gap-home';
+  return withPhase(home ? { ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) } : answer, key);
+
+  function withPhase(answer: MeAnswer, tripKey: string): Planned {
+    const r = day?.trips[tripKey];
+    return { answer, trip: { key: tripKey, phase: phaseFor(answer, r, nowMs, at), rec: r, undo } };
+  }
+}
+
+/** The answer alone, for callers that don't show a phase. */
+export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile): Promise<MeAnswer> {
+  return (await planned(url, env, ctx, nowMs, deps, profile, null)).answer;
+}

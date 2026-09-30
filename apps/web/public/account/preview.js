@@ -38,13 +38,49 @@ function classPlan(a) {
 /** The answer on screen, sent with an "Is this wrong?" report. */
 let shown = null;
 
+/**
+ * Where the trip is (the same phase the phone and the Mac show), a last-bus
+ * warning, and the server's buttons. A click sends the signal and redraws
+ * with the answer that comes back.
+ */
+function phaseParts(a) {
+  const c = a.card ?? {};
+  const parts = [];
+  if (c.phaseText) parts.push(el('div', { class: 'phase', textContent: c.phaseText }));
+  if (c.warning) parts.push(el('div', { class: 'warning', textContent: c.warning }));
+  return parts;
+}
+
+function actions(a) {
+  const list = a.card?.actions ?? [];
+  if (!list.length) return null;
+  return el(
+    'div',
+    { class: 'actions' },
+    ...list.map((x, i) =>
+      el('button', {
+        type: 'button',
+        class: `btn small ${i === 0 && x.id !== 'skipped' && x.id !== 'reset' ? 'accent' : 'ghost'}`,
+        textContent: x.label,
+        onclick: async (e) => {
+          e.target.disabled = true;
+          try {
+            show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: x.id, trip: x.trip } }));
+          } catch {
+            e.target.disabled = false;
+          }
+        },
+      }),
+    ),
+  );
+}
+
 /** Renders /me/next the way the widget does, so settings changes show up. */
 export async function renderPreview() {
   const box = $('#preview');
   let a;
   try {
     a = await api(`/me/next${HOUR12 ? '?h12=1' : ''}`);
-    shown = a;
   } catch {
     shown = null;
     box.replaceChildren(
@@ -53,6 +89,12 @@ export async function renderPreview() {
     );
     return;
   }
+  show(a);
+}
+
+function show(a) {
+  const box = $('#preview');
+  shown = a;
   const chips = a.places?.length ? el('div', { class: 'chips' }, ...a.places.slice(0, 3).map((p) => el('span', { textContent: p.label })), el('span', { textContent: 'Nearby' })) : null;
   if (a.mode === 'rest') {
     const head = el('div', { class: 'rest' });
@@ -63,9 +105,15 @@ export async function renderPreview() {
     box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), chips ?? '');
     return;
   }
+  if (a.mode === 'free') {
+    // No classes today: said plainly, with no bus to mistake for advice.
+    box.className = 'widget';
+    box.replaceChildren(el('div', { class: 'big', textContent: a.label }), el('div', { class: 'detail', textContent: a.detail }), chips ?? '');
+    return;
+  }
   if (a.card?.kind === 'class' && !isOld(a)) {
     box.className = 'widget';
-    box.replaceChildren(...classPlan(a), chips ?? '');
+    box.replaceChildren(...phaseParts(a), ...classPlan(a), actions(a) ?? '', chips ?? '');
     return;
   }
   const where =
@@ -79,12 +127,14 @@ export async function renderPreview() {
   box.className = old ? 'widget old' : 'widget';
   box.replaceChildren(
     ...[
+      ...phaseParts(a),
       el('div', { class: 'where', textContent: where }),
       el('div', { class: 'big', textContent: big }),
       el('div', { class: 'detail', textContent: old ? 'Old times · refreshing' : a.detail }),
       a.leave && a.card && !old ? el('div', { class: 'leave', textContent: leaveText(a) }) : null,
       a.timing && !old ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
       notes ? el('div', { class: 'note', textContent: notes }) : null,
+      actions(a),
       chips,
     ].filter(Boolean),
   );

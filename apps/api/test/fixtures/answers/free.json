@@ -1,6 +1,6 @@
 {
-  "label": "No timetable yet",
-  "detail": "Add your timetable in Settings. Buses near you are under Nearby.",
+  "label": "No classes today",
+  "detail": "Next: CS2030 @ COM1, tomorrow 10:00",
   "alt": null,
   "stop": {
     "code": "",
@@ -12,7 +12,16 @@
   "arrivals": [],
   "mode": "free",
   "dest": null,
-  "places": [],
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
   "refreshAt": "2026-08-27T10:00:00Z",
   "card": {
     "kind": "free",
@@ -30,8 +39,8 @@
     "estimate": null,
     "phase": "idle",
     "phaseText": null,
-    "glance": "Set up",
-    "line": "No timetable yet · Add your timetable in Settings. Buses near you are under Nearby.",
+    "glance": "No classes",
+    "line": "No classes today · Next: CS2030 @ COM1, tomorrow 10:00",
     "actions": [],
     "warning": null,
     "nextChangeAt": "2026-08-27T10:00:00Z"

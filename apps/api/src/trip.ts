@@ -1,0 +1,184 @@
+/**
+ * The trip engine: what state today's trip is in, the same on every device.
+ *
+ *   idle → due → heading → waiting → riding → arrived
+ *                 └──────────┴──→ missed → (replanned) → due
+ *            └──→ skipped
+ *
+ * The phase is worked out on each request from the answer (its leave-by
+ * time, whether you're at the stop or already there) and what the day's
+ * signals say: "On the D2", "Missed it", "Not going", "I'm there", a
+ * location. The signals live in a Durable Object per user (`Trip`, keyed by
+ * user id), so a tap on the phone changes the Mac's menu bar too. It holds
+ * only today's signals, never a location, and deletes them at the end of the
+ * day with an alarm. An idle object costs nothing.
+ */
+
+import type { Env, MeAnswer } from './types.ts';
+import { haversineM } from './geo.ts';
+import { sgt } from './config.ts';
+import { GRAPH } from './graph.ts';
+import { indexGraph } from './resolve.ts';
+
+export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
+
+/** What a client can send to /me/signal. */
+export const SIGNALS = ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset'] as const;
+export type SignalKind = (typeof SIGNALS)[number];
+
+/** The bus you said you're on, as the answer had it when you said so. */
+export interface Boarded {
+  svc: string;
+  stop: string;
+  /** ISO: when it left, and when it gets you there. */
+  board: string | null;
+  arrive: string | null;
+  off?: string;
+}
+
+/** The latest signal about one trip today. */
+export interface TripRecord {
+  kind: Exclude<SignalKind, 'location' | 'reset'> | 'waiting';
+  at: number;
+  /** The trip's name, for "Undo: going to CS2030". */
+  label?: string;
+  boarded?: Boarded;
+  /** The departure you missed, ISO. */
+  missed?: string | null;
+}
+
+/** Today's signals, by trip key (classKey, or home:<minutes>). */
+export interface DayRecord {
+  date: string;
+  trips: Record<string, TripRecord>;
+}
+
+/** Heads-up window: the trip is "due" this long before its leave-by. */
+export const DUE_MS = 5 * 60_000;
+/** Close enough to the boarding stop to be waiting at it. */
+export const AT_STOP_M = 80;
+/** After the bus you're on should have got you there, you're taken to be there. */
+export const RIDE_GRACE_MS = 10 * 60_000;
+
+/** "2026-09-30", the Singapore day a signal belongs to. */
+export function sgtDate(nowMs: number): string {
+  return new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10);
+}
+
+/** Next Singapore midnight, epoch ms: when the day's signals are deleted. */
+export function endOfDayMs(nowMs: number): number {
+  return nowMs - (sgt(nowMs).minutes * 60_000 + (nowMs % 60_000)) + 86_400_000;
+}
+
+/** Keys reached or skipped today, for the planner. */
+export function dayState(day: DayRecord | null): { skipped: Set<string>; done: Set<string> } {
+  const skipped = new Set<string>();
+  const done = new Set<string>();
+  for (const [k, r] of Object.entries(day?.trips ?? {})) {
+    if (r.kind === 'skipped') skipped.add(k);
+    if (r.kind === 'arrived') done.add(k);
+  }
+  return { skipped, done };
+}
+
+/**
+ * The phase of a planned trip, from its answer and the latest signal. A
+ * signal wins over the clock: once you say you're on the bus, it doesn't
+ * matter that the leave-by passed.
+ */
+export function phaseFor(a: MeAnswer, rec: TripRecord | undefined, nowMs: number, at: { lat: number | null; lon: number | null }): Phase {
+  if (a.arrived) return 'arrived';
+  if (rec?.kind === 'boarded') return 'riding';
+  if (rec?.kind === 'missed') return 'missed';
+  if (rec?.kind === 'arrived') return 'arrived';
+  const leaveAt = a.leave?.at ? Date.parse(a.leave.at) : null;
+  // At the boarding stop: waiting, whatever the clock says.
+  if (at.lat !== null && at.lon !== null && a.stop.code && a.leave?.svc) {
+    const s = indexGraph(GRAPH).byCode.get(a.stop.code);
+    if (s && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M) return 'waiting';
+  }
+  if (rec?.kind === 'waiting') return 'waiting';
+  if (rec?.kind === 'left') return 'heading';
+  if (leaveAt === null) return 'idle';
+  if (nowMs >= leaveAt) return 'heading';
+  if (nowMs >= leaveAt - DUE_MS) return 'due';
+  return 'idle';
+}
+
+/* ------------------------------------------------------------------ */
+/* Talking to the Durable Object                                      */
+/* ------------------------------------------------------------------ */
+
+function stub(env: Env, userId: string): DurableObjectStub | null {
+  if (!env.TRIPS) return null;
+  return env.TRIPS.get(env.TRIPS.idFromName(userId));
+}
+
+/** Today's signals, or null when there are none (or no Durable Object binding). */
+export async function loadDay(env: Env, userId: string, nowMs: number): Promise<DayRecord | null> {
+  const s = stub(env, userId);
+  if (!s) return null;
+  try {
+    const res = await s.fetch(`https://trip/day?date=${sgtDate(nowMs)}`);
+    if (!res.ok) return null;
+    const day = (await res.json()) as DayRecord | null;
+    return day && Object.keys(day.trips).length ? day : null;
+  } catch (err) {
+    // The answer works without trip state; a failure only loses the phase.
+    console.error('trip state unavailable', err instanceof Error ? err.name : typeof err);
+    return null;
+  }
+}
+
+/** Records a signal for one trip today; `null` clears that trip ("reset"). */
+export async function saveSignal(env: Env, userId: string, key: string, rec: TripRecord | null, nowMs: number): Promise<DayRecord | null> {
+  const s = stub(env, userId);
+  if (!s) return null;
+  const res = await s.fetch('https://trip/signal', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ date: sgtDate(nowMs), key, rec, deleteAt: endOfDayMs(nowMs) }),
+  });
+  if (!res.ok) throw new Error(`trip signal failed: ${res.status}`);
+  return (await res.json()) as DayRecord;
+}
+
+/**
+ * One per user, holding today's trip signals. Uses the plain fetch/alarm
+ * interface, so the class needs nothing from the runtime to be tested.
+ */
+export class Trip {
+  private readonly storage: DurableObjectStorage;
+
+  constructor(state: DurableObjectState, _env: unknown) {
+    this.storage = state.storage;
+  }
+
+  async fetch(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const day = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
+
+    if (req.method === 'GET' && url.pathname === '/day') {
+      const date = url.searchParams.get('date') ?? '';
+      // Yesterday's signals are never today's, even before the alarm has run.
+      return Response.json(day && day.date === date ? day : null);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/signal') {
+      const body = (await req.json()) as { date: string; key: string; rec: TripRecord | null; deleteAt: number };
+      const next: DayRecord = day && day.date === body.date ? day : { date: body.date, trips: {} };
+      if (body.rec) next.trips[body.key] = body.rec;
+      else delete next.trips[body.key];
+      await this.storage.put('day', next);
+      // Everything goes at the end of the day.
+      if ((await this.storage.getAlarm()) === null) await this.storage.setAlarm(body.deleteAt);
+      return Response.json(next);
+    }
+
+    return new Response('not found', { status: 404 });
+  }
+
+  async alarm(): Promise<void> {
+    await this.storage.deleteAll();
+  }
+}

@@ -250,6 +250,28 @@ export function inService(graph: Graph, svc: string, nowMs: number): boolean {
 }
 
 /**
+ * When `svc` stops running today (SGT), epoch ms: the close of its published
+ * window. Null when the hours are unknown or it isn't running now. A window
+ * that crosses midnight closes tomorrow.
+ */
+export function serviceEndsAt(graph: Graph, svc: string, nowMs: number): number | null {
+  if (!inService(graph, svc, nowMs)) return null;
+  const hours: ServiceHours | undefined = graph.serviceHours?.[svc];
+  if (!hours) return null;
+  const { day, minutes } = sgt(nowMs);
+  const sunday = day === 0 || termDay(nowMs).holiday !== null;
+  const win = sunday ? hours.sunday : day === 6 ? hours.saturday : hours.weekday;
+  if (!win) return null;
+  const open = hhmmToMin(win[0]);
+  const close = hhmmToMin(win[1]);
+  if (open === null || close === null) return null;
+  const midnight = nowMs - (minutes * 60_000 + (nowMs % 60_000));
+  // Past midnight in a window that crosses it: it closes later today.
+  const closeDay = close >= open || minutes >= open ? (close >= open ? 0 : 1) : 0;
+  return midnight + (closeDay * 1440 + close) * 60_000;
+}
+
+/**
  * Pick the boardable rows when one service reports under several berths.
  *
  * Returns everything unchanged for the ordinary single-berth stop. When the

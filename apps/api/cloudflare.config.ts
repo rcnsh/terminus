@@ -1,4 +1,4 @@
-import { bindings, defineConfig, triggers } from "cf/config";
+import { bindings, defineConfig, exports, triggers } from "cf/config";
 
 // Secrets are declared below with bindings.secret(); their values live on the
 // Worker (set with `cf workers secrets update`), locally in .dev.vars. Without
@@ -28,6 +28,10 @@ export default defineConfig({
 		domains: [
 			"terminus.rcn.sh",
 		],
+		// The trip engine: one Durable Object per user with today's trip signals.
+		exports: {
+			Trip: exports.durableObject({ storage: "sqlite" }),
+		},
 		triggers: [
 			triggers.scheduled({
 				schedule: "*/15 * * * *",
@@ -38,6 +42,10 @@ export default defineConfig({
 			TURNSTILE_SITE_KEY: bindings.text("0x4AAAAAAFHR71tKL907Buou"),
 			// For the dashboard's Analytics Engine queries (with the optional ANALYTICS_TOKEN secret).
 			CF_ACCOUNT_ID: bindings.text("31e51704ff7169c03d7014c3a1e5f110"),
+			TRIPS: bindings.durableObject({
+				worker: "terminus",
+				exportName: "Trip",
+			}),
 			AE: bindings.analyticsEngineDataset({
 				name: "terminus",
 			}),

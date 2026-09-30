@@ -37,7 +37,10 @@ import {
   sessionCookie,
   PLATFORMS,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, MAX_VENUE_WALK_S, PROFILE_LIMITS, type Profile, classStartMs, isResting, nextClass, parseProfile, planChangesAt, planFor, reimportReason, restDetail, restLabel, timingFor } from './profile.ts';
+import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
+import { hour12, planned } from './next.ts';
+import { dayPlan } from './day.ts';
+import { type DayRecord, SIGNALS, type TripRecord, loadDay, saveSignal } from './trip.ts';
 import { type ImportedTrip, ImportInputError, parseShareUrl, resolveTrips, venueToStop } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, indexGraph } from './resolve.ts';
@@ -153,18 +156,6 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
     share: p.share ?? null,
     term: p.term ?? null,
   };
-}
-
-/** Stop code, or a NUSMods venue code resolved to its nearest stop. */
-function resolveTo(graph: Graph, raw: string): { to: string; label: string } | null {
-  const code = raw.trim().toUpperCase();
-  const stop = indexGraph(graph).byCode.get(code);
-  if (stop) return { to: stop.code, label: shortStop(stop.name, 14) };
-  // A food court: kept as its own code; nextFor expands it to its stops.
-  const lm = landmark(code);
-  if (lm) return { to: code, label: lm.name };
-  const v = venueToStop(code);
-  return v ? { to: v.stop, label: code.split('-')[0] } : null;
 }
 
 interface MeContext {
@@ -360,13 +351,74 @@ const ME_ROUTES: MeRoute[] = [
     path: '/me/next',
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
-      const answer = await nextFor(url, env, ctx, nowMs, deps, profile);
-      // When the plan itself moves on (class starts, day ends). Only the planned
-      // answer has one; a place or a stop never changes by itself.
-      const planned = !url.searchParams.get('place') && !url.searchParams.get('to');
-      const full: MeAnswer = planned ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
-      // The display-ready card, in the client's 12- or 24-hour style.
-      return json({ ...full, card: cardFor(full, hour12(url)) });
+      const day = await tripDay(env, session.user.id, profile, nowMs);
+      return json(await nextBody(url, env, ctx, nowMs, deps, profile, day));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/day',
+    run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
+      const profile = await getProfile(db, session.user.id, deps.graph);
+      const day = await tripDay(env, session.user.id, profile, nowMs);
+      return json(await dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url)));
+    },
+  },
+  {
+    method: 'POST',
+    path: '/me/signal',
+    run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
+      // "On the D2", "Missed it", "Not going", "I'm there", a location: what
+      // actually happened, for every device. Answers with the new /me/next.
+      if (!env.TRIPS) return json({ error: 'trip tracking is not available' }, 503);
+      const body = await readJson(req);
+      const kind = SIGNALS.find((k) => k === body?.kind);
+      if (!kind) return json({ error: `kind is one of ${SIGNALS.join(', ')}` }, 400);
+      const profile = await getProfile(db, session.user.id, deps.graph);
+      // A location travels in the body; it's used for this answer and not kept.
+      const here = new URL(url);
+      if (typeof body?.lat === 'number' && typeof body?.lon === 'number') {
+        here.searchParams.set('lat', String(body.lat));
+        here.searchParams.set('lon', String(body.lon));
+      }
+      const day = await loadDay(env, session.user.id, nowMs);
+      const now = await planned(here, env, ctx, nowMs, deps, profile, day);
+      const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
+      if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
+      const current = key === now.trip.key;
+      const l = current ? now.answer.leave : null;
+      const label = current ? (now.answer.dest?.label ?? undefined) : classesOn(profile, nowMs).find((c) => classKey(c) === key)?.label;
+      let rec: TripRecord | null | undefined;
+      switch (kind) {
+        case 'reset':
+          rec = null;
+          break;
+        case 'location':
+          // Only what the location means is kept, never the location.
+          rec = current && now.answer.arrived ? { kind: 'arrived', at: nowMs, label } : current && now.trip.phase === 'waiting' ? { kind: 'waiting', at: nowMs, label } : undefined;
+          break;
+        case 'boarded':
+          // No bus to be on (a walk, or an old card): you've set off.
+          if (!l?.svc) {
+            rec = { kind: 'left', at: nowMs, label };
+            break;
+          }
+          rec = {
+            kind,
+            at: nowMs,
+            label,
+            boarded: { svc: l.svc, stop: l.stop ?? '', board: l.board, arrive: l.arrive, ...(l.off ? { off: l.off } : {}) },
+          };
+          break;
+        case 'missed':
+          rec = { kind, at: nowMs, label, missed: l?.board ?? null };
+          break;
+        default:
+          rec = { kind, at: nowMs, label };
+      }
+      const next = rec === undefined ? day : await saveSignal(env, session.user.id, key, rec, nowMs);
+      logSignal(env, kind);
+      return json(await nextBody(url, env, ctx, nowMs, deps, profile, next));
     },
   },
   {
@@ -650,149 +702,38 @@ export async function handleMe(
   return json({ error: 'not found' }, 404);
 }
 
+/** Today's trip signals, looked up only when there's a trip to track today. */
+async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number): Promise<DayRecord | null> {
+  if (!env.TRIPS || !classesOn(profile, nowMs).length) return null;
+  return loadDay(env, userId, nowMs);
+}
+
+/** /me/next's body: the answer, when it changes by itself, and the card. */
+async function nextBody(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile, day: DayRecord | null) {
+  const { answer, trip } = await planned(url, env, ctx, nowMs, deps, profile, day);
+  // When the plan itself moves on (class starts, day ends). Only the planned
+  // answer has one; a place or a stop never changes by itself.
+  const isPlan = !url.searchParams.get('place') && !url.searchParams.get('to');
+  const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
+  // The display-ready card, in the client's 12- or 24-hour style.
+  return { ...full, card: cardFor(full, hour12(url), trip) };
+}
+
+/** Counts only: which signals people send, never who or where. */
+function logSignal(env: Env, kind: string): void {
+  try {
+    env.AE?.writeDataPoint({ blobs: ['signal', kind], doubles: [1], indexes: ['signal'] });
+  } catch {
+    // Analytics must never break an answer.
+  }
+}
+
 /**
  * Whether the account page should walk someone through setup first: an
  * account that has never saved anything and hasn't been through it.
  */
 export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | null {
   return !hasProfile && !seen.includes('onboarding') ? 'full' : null;
-}
-
-/** In your residence with nothing left today: no bus, and what's next. */
-function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: PlaceChip[], h12: boolean): MeAnswer {
-  return {
-    label: "You're home",
-    detail: restDetail(profile, nowMs, h12),
-    alt: null,
-    stop: { code: homeStop ?? '', name: '', confidence: 1 },
-    quality: 'live' as const,
-    asOf: new Date(nowMs).toISOString(),
-    arrivals: [],
-    arrived: true,
-    leave: null,
-    mode: 'trip',
-    dest: { to: homeStop ?? '', label: 'Home', why: 'home' },
-    places,
-  };
-}
-
-/** `?h12=1`: the client shows 12-hour times. Default 24-hour, as always. */
-const hour12 = (url: URL) => url.searchParams.get('h12') === '1';
-
-function setupAnswer(nowMs: number, label: string, detail: string): Answer {
-  return { label, detail, alt: null, stop: { code: '', name: '', confidence: 0 }, quality: 'unknown', asOf: new Date(nowMs).toISOString(), arrivals: [] };
-}
-
-export async function nextFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile): Promise<MeAnswer> {
-  const { lat, lon } = coordsFrom(url);
-  const h12 = hour12(url);
-  const speed = paceSpeed(profile.walkPace);
-  const homeStop = profile.home?.stops[0] ?? null;
-  const places: PlaceChip[] = profile.places.map(({ key, label }) => ({ key, label }));
-
-  let dest: { to: string; label: string; why: Why; from: string | null; trip?: ImportedTrip | null; fromVenue?: string | null } | null = null;
-  const placeKey = url.searchParams.get('place');
-  const toRaw = url.searchParams.get('to');
-  if (placeKey) {
-    const pl = profile.places.find((p) => p.key === placeKey);
-    if (pl) dest = { to: pl.to, label: pl.label, why: 'place', from: homeStop };
-  } else if (toRaw) {
-    const r = resolveTo(deps.graph, toRaw);
-    if (r) dest = { ...r, why: 'place', from: homeStop };
-  } else if (isResting(profile, nowMs)) {
-    // Outside the user's day: no bus, and the same answer for every client.
-    return {
-      label: restLabel(profile, nowMs, h12),
-      detail: restDetail(profile, nowMs, h12),
-      alt: null,
-      stop: { code: '', name: '', confidence: 0 },
-      quality: 'ended',
-      asOf: new Date(nowMs).toISOString(),
-      arrivals: [],
-      mode: 'rest',
-      dest: null,
-      places,
-    };
-  } else {
-    const plan = planFor(profile, nowMs);
-    if (plan) dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from, trip: plan.trip, fromVenue: plan.fromVenue };
-    // Already in your residence: "Home" is not somewhere to go.
-    if (plan && (plan.why === 'home' || plan.why === 'gap-home') && atHome(lat, lon, profile.home?.stops ?? [])) {
-      const next = nextClass(profile, nowMs);
-      if (plan.why === 'gap-home' && next?.daysAhead === 0) {
-        // Between classes: when to leave home for the next one.
-        dest = { to: next.trip.to, label: next.trip.label, why: 'class', from: homeStop, trip: next.trip, fromVenue: null };
-      } else {
-        return youreHome(profile, nowMs, homeStop, places, h12);
-      }
-    }
-  }
-
-  const preferStops = profile.home?.stops ?? [];
-  // A class to go to but nowhere to start from: without this the resolver
-  // has no stop to check and says "Services ended" at 9 am.
-  if (dest && lat === null && !dest.from) {
-    return {
-      ...setupAnswer(nowMs, 'Add a home stop', 'Pick where your day starts on the account page, or turn on location'),
-      mode: 'trip',
-      dest: { to: dest.to, label: dest.label, why: dest.why },
-      places,
-    };
-  }
-  if (dest) {
-    const venueM = dest.trip?.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
-    // A class has its room's walk; a food court the walk from its nearest stop.
-    const venueWalkS = Math.round((venueM || targetStops(dest.to).walkM) / speed);
-    // A place served by several stops arrives at whichever is quicker.
-    const target = targetStops(dest.to);
-    const input: ResolveInput = {
-      lat,
-      lon,
-      to: target.to,
-      toAlso: target.also,
-      originCode: lat === null && dest.from ? targetStops(dest.from).to : null,
-      preferStops,
-      originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin, speed) : 0,
-      walkSpeedMs: speed,
-      arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS, fullBusMargin: profile.fullBusMargin } : null,
-    };
-    const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
-    // For a class, say whether you'll make it: stop arrival plus the walk
-    // from the stop to the venue, against the start time.
-    const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs, h12) : null;
-    return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, timing, places };
-  }
-
-  // Nothing planned: what's coming at the nearest stop.
-  if (lat === null && !homeStop) {
-    return { ...setupAnswer(nowMs, 'Set up', 'Add your timetable or home on the account page, or send your location'), mode: 'nearby', dest: null, places };
-  }
-  const input: ResolveInput = {
-    lat,
-    lon,
-    to: null,
-    originCode: lat === null ? homeStop : null,
-    preferStops,
-    originWalkS: lat === null ? profile.homeWalkMin * 60 : 0,
-    walkSpeedMs: speed,
-  };
-  const answer = await deps.answerFor(env, ctx, input, null, nowMs);
-  return { ...answer, mode: 'nearby', dest: null, places };
-}
-
-/**
- * Without a location, the walk to the stop you're assumed to start from:
- * from the room you're in when that's the last class's stop, from home when
- * it's the home stop.
- */
-function originWalkS(dest: { from: string | null; fromVenue?: string | null }, homeStop: string | null, homeWalkMin: number, speed: number): number {
-  if (dest.fromVenue) {
-    const m = venueToStop(dest.fromVenue)?.m ?? 0;
-    const s = Math.round(m / speed);
-    // Past this the room's stop is not really its stop (bad data).
-    return s <= MAX_VENUE_WALK_S ? s : 0;
-  }
-  return dest.from !== null && dest.from === homeStop ? homeWalkMin * 60 : 0;
 }
 
 async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
