@@ -139,13 +139,14 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     parts.push(
       best.quality === 'unknown'
         ? `${f.destLabel}, ${best.hops} stop${best.hops === 1 ? '' : 's'}`
-        : `${f.destLabel} ~${mins(best.totalS)}`,
+        : `${f.destLabel} in ~${mins(best.totalS)}`,
     );
   } else if (f.destLabel) {
     parts.push(`at ${f.destLabel}`);
   }
 
-  if (verdict === 'close' && f.walkAllS != null) parts.push(`walk ${mins(f.walkAllS)}`);
+  // The whole way on foot, for comparison: "walking 18 min", not "walk", which reads as a walk to the bus.
+  if (verdict === 'close' && f.walkAllS != null) parts.push(`walking ${mins(f.walkAllS)}`);
 
   const crowd = crowdWord(best.arrival?.crowd ?? null);
   if (crowd) parts.push(crowd);
@@ -161,7 +162,9 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   if (f.alt) {
     // Same service off a different stop: naming the service alone reads as
     // "another D2 is coming here", which is not what it means.
-    const eta = etaPhrase(f.alt);
+    // "or A1 in 14 min": when it comes, not how long it takes.
+    const raw = etaPhrase(f.alt);
+    const eta = raw === 'now' || raw === 'no times' ? raw : `in ${raw}`;
     parts.push(
       f.alt.svc === best.svc ? `or ${shortStop(f.alt.stop.name)} ${eta}` : `or ${f.alt.svc} ${eta}`,
     );

@@ -146,7 +146,10 @@ export async function answerFor(
 export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: number): Answer {
   return {
     label: "You're here",
-    detail: destLabel && destLabel !== stop.name && destLabel !== shortStop(stop.name, 14) ? `${destLabel} is at ${stop.name}` : `You're at ${stop.name}`,
+    // A place's stop is worth naming ("The Deck is at UTown"); a class's label
+    // already says where it is ("GEA1000 @ UTown is at UTown" said it twice).
+    detail:
+      destLabel && !destLabel.includes(' @ ') && destLabel !== stop.name && destLabel !== shortStop(stop.name, 14) ? `${destLabel} is at ${stop.name}` : `You're at ${stop.name}`,
     alt: null,
     stop: { code: stop.code, name: stop.name, confidence: 1 },
     quality: 'live',
