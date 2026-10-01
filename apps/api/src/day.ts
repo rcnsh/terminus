@@ -24,7 +24,7 @@ import { sgt } from './config.ts';
 import { isoSeconds } from './format.ts';
 import { indexGraph } from './resolve.ts';
 import { tripAnswer } from './next.ts';
-import { type DayRecord, dayState, offStop, sgtDate } from './trip.ts';
+import { type DayRecord, dayState, leaveOf, offStop, sgtDate } from './trip.ts';
 
 export type DayStatus = 'done' | 'now' | 'next' | 'later' | 'skipped';
 
@@ -83,6 +83,9 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
 
   for (const c of classes) {
     const key = classKey(c);
+    // Taken off today (from here or "Not going"): not listed, and no gap
+    // around it either; the next class's gap is measured from the one before.
+    if (state.skipped.has(key)) continue;
     // A long gap: home in between, back an hour before the next class.
     // Unless that trip home was taken off today: then you stay, and go from there.
     const longGap = prev && homeStop && homeStop !== c.to && c.arriveByMin - endOf(prev) > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
@@ -91,9 +94,8 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
     }
     const from = longGap || !prev ? homeStop : prev.to;
     const fromVenue = longGap || !prev ? null : prev.venue || null;
-    const skipped = state.skipped.has(key);
     const done = state.done.has(key) || c.arriveByMin + LATE_GRACE_MIN <= t.minutes;
-    const status: DayStatus = skipped ? 'skipped' : done ? 'done' : nextTaken ? 'later' : 'next';
+    const status: DayStatus = done ? 'done' : nextTaken ? 'later' : 'next';
     if (status === 'next') nextTaken = true;
     const rec = day?.trips[key];
     const boarded = !done && rec?.kind === 'boarded' ? rec.boarded : undefined;
@@ -111,7 +113,11 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
       venue: c.venue || undefined,
       removable: status === 'next' || status === 'later',
     };
+    // The next class's bus, once a device has planned it from where the
+    // phone is (or it's due): the same bus the card and the notifications say.
+    const plan = status === 'next' && rec?.kind !== 'missed' ? day?.plans?.[key] : undefined;
     if (boarded) item.onBus = { svc: boarded.svc, off: offStop(boarded), arrive: boarded.arrive };
+    else if (plan?.board && Date.parse(plan.board) > nowMs) item.leave = leaveOf(plan);
     // Upcoming classes get a leave-by, from where you'll be then.
     else if ((status === 'next' || status === 'later') && from) {
       pending.push(
@@ -123,11 +129,10 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
           .catch(() => {}),
       );
     }
-    // Taken off today (from here or "Not going"): not listed.
-    if (!skipped) {
-      items.push(item);
-      prev = c;
-    }
+    items.push(item);
+    // A class whose bus was missed (and that nothing since says you reached)
+    // is not where you go on from (see planFor).
+    if (!state.missed.has(key)) prev = c;
   }
   if (prev && homeStop && !state.skipped.has(`home:${endOf(prev)}`)) items.push(homeItem(`home:${endOf(prev)}`, prev, null));
   await Promise.all(pending);

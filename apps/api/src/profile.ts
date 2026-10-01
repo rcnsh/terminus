@@ -354,6 +354,8 @@ export interface DayState {
   skipped: ReadonlySet<string>;
   /** Reached (you said so, or were seen there): no longer the target. */
   done: ReadonlySet<string>;
+  /** Its bus was missed and nothing since says you got there: not where you're coming from. */
+  missed?: ReadonlySet<string>;
 }
 
 export const NO_DAY_STATE: DayState = { skipped: new Set(), done: new Set() };
@@ -388,7 +390,7 @@ export const endOf = (t: ImportedTrip) => {
  *
  * A class counts as "next" until LATE_GRACE_MIN after it starts, or until
  * it's reached. A skipped class is left out; a reached one still counts as
- * where you're coming from.
+ * where you're coming from, and one whose bus was missed doesn't.
  */
 export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DAY_STATE): Plan | null {
   const t = sgt(nowMs);
@@ -398,7 +400,10 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
 
   const homeStop = profile.home?.stops[0] ?? null;
   const next = today.find((x) => !state.done.has(classKey(x)) && x.arriveByMin + LATE_GRACE_MIN > nowMin) ?? null;
-  const prev = [...today].reverse().find((x) => x !== next && (x.arriveByMin <= nowMin || state.done.has(classKey(x)))) ?? null;
+  // Where you're coming from: the last class you went to. One whose bus you
+  // missed (and that nothing since says you reached) is not it: without a
+  // location you'd be planned from a room you never got to.
+  const prev = [...today].reverse().find((x) => x !== next && !state.missed?.has(classKey(x)) && (x.arriveByMin <= nowMin || state.done.has(classKey(x)))) ?? null;
 
   if (!next) {
     // After the last class of the day. Its trip home taken off today: staying.
@@ -420,6 +425,16 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
   // In a long gap after going home, the origin is home, not the last class.
   const wentHome = goesHome && nowMin >= endOf(prev);
   return { to: next.to, label: next.label, why: 'class', from: wentHome ? homeStop : prev.to, trip: next, fromVenue: wentHome ? null : prev.venue || null };
+}
+
+/**
+ * A class reached before it starts (seen there, or said so): that's where
+ * you are, rather than the next class or the trip home after it. The latest
+ * one, if a few are.
+ */
+export function reachedEarly(profile: Profile, nowMs: number, done: ReadonlySet<string>): ImportedTrip | null {
+  const nowMin = sgt(nowMs).minutes;
+  return classesOn(profile, nowMs).filter((c) => done.has(classKey(c)) && nowMin < c.arriveByMin).at(-1) ?? null;
 }
 
 /* ------------------------------------------------------------------ */

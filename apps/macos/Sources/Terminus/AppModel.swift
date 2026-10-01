@@ -145,7 +145,6 @@ final class AppModel {
         log.notice("start: paired=\(self.paired) base=\(Api.base, privacy: .public)")
         observeSleep()
         observeNetwork()
-        LeaveNotifier.shared.onAction = { [weak self] action in self?.signal(action) }
         LeaveNotifier.shared.start()
         start()
         Updater.shared.start(misplaced: misplaced)

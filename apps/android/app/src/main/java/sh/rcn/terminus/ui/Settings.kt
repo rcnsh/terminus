@@ -144,10 +144,10 @@ private fun UsualTimeEditor(place: SavedPlace, account: AccountViewModel, done: 
     }
 }
 
-/** What you chose for particular classes, and the muted question, each undoable. */
+/** What you chose for particular classes, each undoable. */
 @Composable
 private fun TripChoices(state: AccountState, account: AccountViewModel) {
-    if (state.choices.isEmpty() && !state.askMuted) return
+    if (state.choices.isEmpty()) return
     Text("Your classes", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
     state.choices.forEach { c ->
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -161,15 +161,6 @@ private fun TripChoices(state: AccountState, account: AccountViewModel) {
             }
             TextButton(onClick = { account.undoChoice(c) }) { Text("Undo") }
         }
-    }
-    if (state.askMuted) {
-        Text(
-            "terminus stopped asking whether you caught the bus, because it went unanswered five trips in a row. No answer already counts as yes.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        OutlinedButton(onClick = account::askAgain, modifier = Modifier.padding(top = 4.dp)) { Text("Ask again") }
     }
 }
 

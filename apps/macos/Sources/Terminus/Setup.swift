@@ -420,7 +420,7 @@ private struct PermissionsStep: View {
     var body: some View {
         StepTitle(title: "Two last things", sub: "Both are optional. You can change them later in Settings.")
         Text("Notifications").font(.headline)
-        Text("A heads-up 5 minutes before you need to leave for class, and \"On the 9:41 D2?\" when your bus leaves.")
+        Text("A heads-up 5 minutes before you need to leave for class, and when it's time to go.")
             .fixedSize(horizontal: false, vertical: true)
         if app.leaveAlerts { Hint("On.") } else { Button("Turn on leave-by alerts") { app.setLeaveAlerts(true) } }
         Text("Location").font(.headline).padding(.top, 10)

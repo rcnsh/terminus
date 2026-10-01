@@ -13,10 +13,11 @@
  *   or still at home, and not moving.
  * - **There:** at the stop you get off at, on the bus; or at the destination.
  *
- * A tap always wins: detection never changes a trip someone answered, except
- * to notice the arrival of a bus they said they were on. Everything detected
- * is marked as such on the card, with a button to say it's wrong
- * (`undetected`), after which detection leaves that trip alone.
+ * Nothing asks what happened, so a wrong guess has to put itself right: taken
+ * to be on a bus (detected, or nobody said) but standing still off its road
+ * is a miss, and the plan moves on to the next way there. A tap from an older
+ * app always wins, and `undetected` (which older apps can still send) makes
+ * detection leave that trip alone.
  */
 
 import type { Graph, Stop } from './types.ts';
@@ -96,7 +97,13 @@ export function detect(x: DetectInput): Detected | null {
   // On the bus: there once it reaches the stop you get off at.
   if (x.phase === 'riding' || rec?.kind === 'boarded') {
     const b = rec?.boarded ?? bus;
-    return b?.alightCode && near(b.alightCode, OFF_M) ? 'arrived' : null;
+    if (b?.alightCode && near(b.alightCode, OFF_M)) return 'arrived';
+    // Taken to be on it (detected, or nobody said), but standing still away
+    // from its road: you didn't take it. Nothing asks, so this is how a wrong
+    // guess puts itself right; a tapped "On it" is left alone.
+    const guessed = !rec || rec.detected === true;
+    if (guessed && b?.svc && (fix.speedMs ?? 0) < STILL_MS && !onRoute(x.graph, b, fix, 2 * CORRIDOR_M + slack)) return 'missed';
+    return null;
   }
   // At the destination, whatever anyone said about the bus.
   if (x.arrivedHere) return 'arrived';

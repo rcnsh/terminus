@@ -118,9 +118,9 @@ internal fun AnswerCard(
 
 @OptIn(ExperimentalLayoutApi::class)
 /**
- * The server's buttons, in its order: the first one filled, the rest outlined.
- * From the bus's departure, the question ("On the 9:41 D2?") and its answers
- * instead. Then anything terminus has to suggest.
+ * The server's buttons (plans only: "Not going", "Not on campus today",
+ * undo), in its order: the first one filled, the rest outlined. Then
+ * anything terminus has to suggest.
  */
 @Composable
 internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: Boolean, onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> }) {
@@ -132,16 +132,11 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 4.dp),
         ) { Text("Directions to ${w.name}") }
     }
-    val ask = answer.card?.ask
-    val actions = ask?.actions ?: answer.card?.actions.orEmpty()
-    if (ask != null) Text(ask.question, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+    val actions = answer.card?.actions.orEmpty()
     if (actions.isNotEmpty()) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
             actions.forEachIndexed { i, a ->
-                if (a.id == "undetected") {
-                    // "Not right?": detection's conclusions are corrected quietly, not asked about.
-                    TextButton(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
-                } else if (i == 0 && a.id != "skipped" && a.id != "reset") {
+                if (i == 0 && a.id != "skipped" && a.id != "reset") {
                     Button(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
                 } else {
                     OutlinedButton(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
@@ -191,7 +186,8 @@ internal fun ClassPlan(answer: NextAnswer) {
         fontWeight = FontWeight.Bold,
         color = if (late) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
     )
-    val left = (at - now) / 1000
+    // Counting down to leaving; at the stop the headline is the bus and its time.
+    val left = if (answer.card?.phase == "waiting") 0 else (at - now) / 1000
     if (left > 0) {
         Text(
             if (left >= 120) "in ${(left + 30) / 60} min" else "in ${left / 60} min ${left % 60} s",

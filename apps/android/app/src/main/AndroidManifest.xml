@@ -99,10 +99,6 @@
         <receiver
             android:name=".LeaveReceiver"
             android:exported="false" />
-        <!-- The trip notification's and the widget's buttons ("On it", "Missed it", "Not going"). -->
-        <receiver
-            android:name=".SignalReceiver"
-            android:exported="false" />
         <!-- Push (phase 3): the server says the card changed. Only with Play services. -->
         <service
             android:name=".PushService"

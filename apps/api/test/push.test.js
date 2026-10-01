@@ -136,7 +136,7 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   assert.equal(fcm.oauth, 1, 'the access token is reused');
 });
 
-test('the question at the departure is pushed, urgently', async () => {
+test('nothing is pushed to ask about the bus: after the departure the trip moves on by itself, quietly', async () => {
   const { call, phone, tablet, next, fcm, TRIPS, clock, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
@@ -145,10 +145,12 @@ test('the question at the departure is pushed, urgently', async () => {
   const plan = Object.values([...TRIPS.instances.values()][0].storage._map.get('day').plans)[0];
   clock(Date.parse(plan.board) + 30_000);
   await TRIPS.fireAlarms();
-  const asked = fcm.sent.at(-1);
-  assert.deepEqual(asked.data, { kind: 'card', phase: 'heading', ask: '1' });
-  assert.equal(asked.android.priority, 'HIGH');
-  // Answered on the phone: the user's other phones hear straight away (quietly); this one doesn't need telling.
+  assert.ok(fcm.sent.every((m) => m.data.ask === '0'), 'never a question');
+  // No answer means on it: the ride, pushed without waking anyone.
+  clock(Date.parse(plan.board) + 4 * 60_000);
+  await wakeUntil(() => fcm.sent.at(-1).data.phase === 'riding');
+  assert.equal(fcm.sent.at(-1).android.priority, 'NORMAL');
+  // An older app's tap still reaches the user's other phones (quietly); this one doesn't need telling.
   await call('/me/push', { method: 'POST', token: tablet, body: { token: 'fcm-tablet' } });
   const before = fcm.sent.length;
   await call('/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });

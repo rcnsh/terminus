@@ -132,59 +132,33 @@ async function notifyFromCard(urgent, fetched) {
   const c = a.card;
   let title;
   let body;
-  if (c.ask) {
-    title = c.ask.question;
-    body = c.line ?? c.catch ?? '';
-  } else if (c.phase === 'riding' || c.phase === 'missed') {
+  if (c.phase === 'riding' || c.phase === 'missed') {
     title = c.line ?? a.label;
     body = a.detail ?? '';
   } else {
-    title = a.leave?.at && Date.now() >= Date.parse(a.leave.at) ? 'Leave now' : (c.leaveBy ?? a.label);
+    title = c.phase !== 'waiting' && a.leave?.at && Date.now() >= Date.parse(a.leave.at) ? 'Leave now' : (c.leaveBy ?? a.label);
     body = c.catch ?? a.dest?.label ?? '';
   }
   const where = [a.dest?.label, a.timing?.classAt ? `starts ${hhmm(a.timing.classAt)}` : null].filter(Boolean).join(' · ');
-  // One button, the answer that changes something: at the question "Missed
-  // it" (silence already means "on it"), otherwise the card's main action. Chrome
-  // for Android (149) reports the second button's action when the first of two
-  // is tapped, which would record "Missed it" for "On it"; with one button
-  // it's right. Everything else is a tap away, in the app.
-  // What happened only: plans ("Not going") and corrections ("Not right?") are made in the app.
-  const main = c.ask ? c.ask.actions.find((x) => x.id === 'missed') : (c.actions ?? []).find((x) => ['boarded', 'missed', 'arrived'].includes(x.id));
-  const buttons = main ? [main] : [];
+  // No buttons: nothing asks what happened, and plans ("Not going") are made
+  // in the app. A tap opens it.
   return self.registration.showNotification(title, {
     body: where ? `${body}\n${where}` : body,
     tag: 'trip',
     renotify: urgent,
     silent: !urgent,
     icon: '/assets/icons/icon-192.png',
-    actions: buttons.map((x) => ({ action: `${x.id}|${x.trip}`, title: x.label })),
     data: { url: '/app/' },
   });
 }
 
 self.addEventListener('notificationclick', (event) => {
+  // No buttons any more: a tap opens the app.
   event.notification.close();
-  const [kind, trip] = (event.action || '').split('|');
-  if (kind) {
-    // A button: tell every device, then show where the trip is now.
-    event.waitUntil(
-      fetch(`/me/signal${HOUR12 ? '?h12=1' : ''}`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind, trip }),
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        // On the bus, or the next way there after a missed one, stays in view; "Not going" just goes.
-        .then((a) => (!a ? openApp() : a.card?.phase === 'riding' || a.card?.phase === 'missed' ? notifyFromCard(false, a) : null))
-        .catch(openApp),
-    );
-    return;
-  }
   event.waitUntil(openApp());
 });
 
-/** The app, focused if it's open, opened if not: the card has the buttons. */
+/** The app, focused if it's open, opened if not. */
 async function openApp() {
   const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   const app = open.find((w) => new URL(w.url).pathname.startsWith('/app'));

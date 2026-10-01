@@ -63,8 +63,6 @@ struct NextAnswer: Decodable {
         /// "Last D2 from UTown in 18 min".
         let warning: String?
         let nextChangeAt: String?
-        /// "On the 9:41 D2?": from the bus's departure until the class starts, unanswered.
-        let ask: CardAsk?
         /// False when reminders are off for this class.
         let remind: Bool?
         /// "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice.
@@ -110,8 +108,10 @@ struct NextAnswer: Decodable {
     var tripUnderWay: Bool { ["heading", "waiting", "riding", "missed"].contains(card?.phase ?? "idle") }
     var nextChange: Date? { card?.nextChangeAt.flatMap(parseISODate) }
     /// "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks.
+    /// At the stop it's the bus to wait for ("D2 at 09:41"), as the server says it.
     func leaveHeadline(now: Date = Date()) -> String? {
         guard let at = leaveAt else { return nil }
+        if card?.phase == "waiting" { return card?.leaveBy }
         return now >= at ? "Leave now" : card?.leaveBy
     }
     var catchHow: String? { card?.catch }
@@ -339,13 +339,6 @@ struct CardAction: Decodable, Hashable {
     let id: String
     let label: String
     let trip: String
-}
-
-/// The question at the bus's departure, with its answers (On it · Missed it · Not going).
-struct CardAsk: Decodable, Hashable {
-    let trip: String
-    let question: String
-    let actions: [CardAction]
 }
 
 /// Something terminus learned and offers to change; `id` goes back to /me/choice.

@@ -14,7 +14,7 @@
  * day with an alarm. An idle object costs nothing.
  */
 
-import type { Env, MeAnswer } from './types.ts';
+import type { Env, Leave, MeAnswer } from './types.ts';
 import { haversineM } from './geo.ts';
 import { sgt } from './config.ts';
 import { GRAPH } from './graph.ts';
@@ -40,17 +40,43 @@ export interface Boarded {
    *  you. A plan without one never replaces a plan with one. */
   located?: boolean;
   arrive: string | null;
+  /** The leave-by's own reason and whether it's a timetable estimate, so a
+   *  plan shown again (see `leaveOf`) reads as it did when it was made. */
+  note?: string;
+  estimated?: boolean;
   off?: string;
   /** Stop codes, and the bus's plate when the feed had one at the tap: its
    *  arrival at `alightCode` is then read from the feed while you ride. */
   stopCode?: string;
   alightCode?: string;
   plate?: string;
-  /** No answer to the question was noted for this trip (outcomes.ts). */
-  noted?: boolean;
   /** ISO: when the bus left, estimated from the fix that noticed you on it
    *  (detect.ts). Only for measuring the ride (ridetimes.ts). */
   departed?: string;
+}
+
+/** A trip home (after the last class, or in a long gap), by its key: it has no name of its own. */
+export function isHomeKey(key: string): boolean {
+  return key.startsWith('home:') || key.startsWith('gap-home:');
+}
+
+/**
+ * A plan as a leave-by again: what every device shows once one device's plan
+ * is the trip's (see next.ts), instead of each working out its own bus.
+ */
+export function leaveOf(b: Boarded): Leave {
+  return {
+    at: b.leave ?? b.board ?? new Date(0).toISOString(),
+    estimated: b.estimated === true,
+    svc: b.svc,
+    stop: b.stop,
+    board: b.board,
+    arrive: b.arrive,
+    note: b.note ?? null,
+    ...(b.off ? { off: b.off } : {}),
+    ...(b.stopCode ? { stopCode: b.stopCode } : {}),
+    ...(b.alightCode ? { offCode: b.alightCode } : {}),
+  };
 }
 
 /**
@@ -133,6 +159,8 @@ export function isFollowed(day: DayRecord | null, nowMs: number): boolean {
 
 /** Heads-up window: the trip is "due" this long before its leave-by. */
 export const DUE_MS = 5 * 60_000;
+/** At the stop this long before the leave-by counts as waiting for the bus. */
+export const WAIT_EARLY_MS = 15 * 60_000;
 /** Close enough to the boarding stop to be waiting at it. */
 export const AT_STOP_M = 80;
 /** After the bus you're on should have got you there, you're taken to be there. */
@@ -159,16 +187,18 @@ export function signalOf(day: DayRecord | null, key: string): TripRecord | undef
 }
 
 /** Keys reached or skipped today, for the planner. */
-export function dayState(day: DayRecord | null): { skipped: Set<string>; done: Set<string>; away: boolean } {
+export function dayState(day: DayRecord | null): { skipped: Set<string>; done: Set<string>; missed: Set<string>; away: boolean } {
   const skipped = new Set<string>();
   const done = new Set<string>();
+  const missed = new Set<string>();
   let away = false;
   for (const [k, r] of Object.entries(day?.trips ?? {})) {
     if (r.kind === 'skipped') skipped.add(k);
     if (r.kind === 'arrived') done.add(k);
+    if (r.kind === 'missed') missed.add(k);
     if (r.away) away = true;
   }
-  return { skipped, done, away };
+  return { skipped, done, missed, away };
 }
 
 /**
@@ -182,9 +212,12 @@ export function phaseFor(a: MeAnswer, rec: TripRecord | undefined, nowMs: number
   if (rec?.kind === 'missed') return 'missed';
   if (rec?.kind === 'arrived') return 'arrived';
   const leaveAt = a.leave?.at ? Date.parse(a.leave.at) : null;
-  // At the boarding stop: waiting, whatever the clock says.
-  if (at.lat !== null && at.lon !== null && a.stop.code && a.leave?.svc) {
-    const s = indexGraph(GRAPH).byCode.get(a.stop.code);
+  // At the plan's boarding stop from a little before the leave-by: waiting,
+  // whatever the clock says. Not hours before it (you may live by that
+  // stop), and not at any other stop (riding past one is not waiting at it).
+  const code = a.leave?.stopCode ?? a.stop.code;
+  if (at.lat !== null && at.lon !== null && code && a.leave?.svc && (leaveAt === null || nowMs >= leaveAt - WAIT_EARLY_MS)) {
+    const s = indexGraph(GRAPH).byCode.get(code);
     if (s && haversineM(at.lat, at.lon, s.lat, s.lon) <= AT_STOP_M) return 'waiting';
   }
   if (rec?.kind === 'waiting') return 'waiting';

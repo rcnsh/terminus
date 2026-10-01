@@ -27,9 +27,9 @@ import sh.rcn.terminus.widget.clock
  * notification into "Leave now", unless it was dismissed.
  *
  * From then on (phase 3) the same notification follows the trip, updated in
- * place and never posted again once dismissed: at the bus's departure it
- * asks "On the 9:41 D2?" with On it · Missed it · Not going (the server's
- * `card.ask`), then shows the ride or the next way there. A push brings each
+ * place and never posted again once dismissed: the ride, or the next way
+ * there after a missed bus. It never asks anything or offers buttons: what
+ * happened comes from the plan and the phone's location. A push brings each
  * change; without one, an alarm at the card's next change does. A class with
  * reminders turned off (`card.remind`) gets none of it.
  */
@@ -139,12 +139,10 @@ object LeaveAlerts {
         )
         val fmt = { ms: Long -> clock(ctx, ms) }
         val card = answer.card
-        val ask = card?.ask
-        // The words follow the trip: the question at the departure, then the
-        // ride or the next way there; before that, when to leave.
-        val ride = card?.ride?.takeIf { card.phase == "riding" && ask == null }
+        // The words follow the trip: the ride or the next way there; before
+        // that, when to leave.
+        val ride = card?.ride?.takeIf { card.phase == "riding" }
         val (title, body) = when {
-            ask != null -> ask.question to (card.line ?: answer.catchLine.orEmpty())
             card?.phase == "riding" || card?.phase == "missed" -> (card.line ?: answer.label) to answer.detail
             else -> (answer.leaveHeadline(now) ?: return) to (answer.catchLine ?: answer.destLabel.orEmpty())
         }
@@ -153,9 +151,9 @@ object LeaveAlerts {
             ctx, 0, MainActivity.intentFor(ctx),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        // Sound for the heads-up and for the question, once each; quiet for the rest.
+        // Sound for the heads-up, once; quiet for the rest.
         val store = Store(ctx)
-        val moment = if (ask != null) "ask:${ask.trip}" else if (card?.phase == "riding" || card?.phase == "missed") store.leaveAlertedMoment else "leave:${answer.classAtMs}"
+        val moment = if (card?.phase == "riding" || card?.phase == "missed") store.leaveAlertedMoment else "leave:${answer.classAtMs}"
         val alert = moment != store.leaveAlertedMoment
         store.leaveAlertedMoment = moment
         val n = android.app.Notification.Builder(ctx, CHANNEL)
@@ -167,7 +165,6 @@ object LeaveAlerts {
             .setAutoCancel(true)
             .setCategory(android.app.Notification.CATEGORY_REMINDER)
             .setOnlyAlertOnce(!alert)
-            .apply { ask?.actions?.filter { it.id != "skipped" }?.take(2)?.forEachIndexed { i, a -> addAction(signalAction(ctx, i, a)) } }
             // Gone once the class has started: it's no longer true.
             .apply { answer.classAtMs?.let { setTimeoutAfter((it - now).coerceAtLeast(60_000)) } }
             .apply { ride?.let { RideStyle.apply(ctx, this, card, it, now) } }
@@ -183,17 +180,6 @@ object LeaveAlerts {
         if (!showing(ctx)) return
         val answer = Store(ctx).lastAnswer()?.first ?: return
         if (answer.card?.phase == "riding") post(ctx, answer, System.currentTimeMillis())
-    }
-
-    /** A button that answers the question from the notification (SignalReceiver). */
-    private fun signalAction(ctx: Context, i: Int, a: CardAction): android.app.Notification.Action {
-        val pi = PendingIntent.getBroadcast(
-            ctx, 10 + i,
-            Intent(ctx, SignalReceiver::class.java).setAction(SignalReceiver.ACTION)
-                .putExtra(SignalReceiver.EXTRA_KIND, a.id).putExtra(SignalReceiver.EXTRA_TRIP, a.trip),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        return android.app.Notification.Action.Builder(Icon.createWithResource(ctx, R.drawable.ic_bus), a.label, pi).build()
     }
 
     // Exact only when canScheduleExactAlarms() says so; lint can't see the check.

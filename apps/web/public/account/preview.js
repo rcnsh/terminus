@@ -10,8 +10,9 @@ const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions(
 /** Dim once the server's staleAt passes: the bus has left, the plan moved on, or it's 15 minutes old. */
 const isOld = (a) => Boolean(a.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
 
-/** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts). */
-const leaveHead = (a) => (Date.now() >= Date.parse(a.leave.at) ? 'Leave now' : a.card.leaveBy);
+/** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts);
+ *  at the stop, the bus to wait for ("D2 at 9:41"), as it is. */
+const leaveHead = (a) => (a.card.phase !== 'waiting' && Date.now() >= Date.parse(a.leave.at) ? 'Leave now' : a.card.leaveBy);
 
 /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
 const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
@@ -52,9 +53,8 @@ function phaseParts(a) {
 }
 
 function actions(a) {
-  // From the bus's departure: the question, in place of the usual buttons.
-  const ask = a.card?.ask ?? null;
-  const list = ask ? ask.actions : (a.card?.actions ?? []);
+  // Plans only (Not going, Not on campus today, undo): nothing asks what happened.
+  const list = a.card?.actions ?? [];
   if (!list.length) return suggestion(a);
   const buttons = el(
     'div',
@@ -62,8 +62,7 @@ function actions(a) {
     ...list.map((x, i) =>
       el('button', {
         type: 'button',
-        // "Not right?" is a quiet correction, a link rather than a button.
-        class: x.id === 'undetected' ? 'linkish' : `btn small ${i === 0 && x.id !== 'skipped' && x.id !== 'reset' ? 'accent' : 'ghost'}`,
+        class: `btn small ${i === 0 && x.id !== 'skipped' && x.id !== 'reset' ? 'accent' : 'ghost'}`,
         textContent: x.label,
         onclick: async (e) => {
           e.target.disabled = true;
@@ -78,7 +77,7 @@ function actions(a) {
       }),
     ),
   );
-  return el('div', {}, ask ? el('div', { class: 'ask', textContent: ask.question }) : '', buttons, suggestion(a) ?? '');
+  return el('div', {}, buttons, suggestion(a) ?? '');
 }
 
 /** "Leave one bus earlier for CS2030?": what terminus has learned, offered, never applied by itself. */
@@ -136,13 +135,14 @@ export function show(a) {
     head.append(el('div', { class: 'big', textContent: a.label }));
     box.className = 'widget';
     // replaceChildren prints a null as the text "null": no places, no chips.
-    box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), chips ?? '');
+    box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), actions(a) ?? '', chips ?? '');
     return;
   }
   if (a.mode === 'free') {
     // No classes today: said plainly, with no bus to mistake for advice.
     box.className = 'widget';
-    box.replaceChildren(el('div', { class: 'big', textContent: a.label }), el('div', { class: 'detail', textContent: a.detail }), chips ?? '');
+    // "Undo" when the class just taken off was the day's last, and "Back on campus".
+    box.replaceChildren(el('div', { class: 'big', textContent: a.label }), el('div', { class: 'detail', textContent: a.detail }), actions(a) ?? '', chips ?? '');
     return;
   }
   if (a.card?.kind === 'class' && !isOld(a)) {

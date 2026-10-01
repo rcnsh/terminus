@@ -181,7 +181,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         Spacer(Modifier.height(16.dp))
         NotifyToggle(
             "Notify me when to leave for class",
-            "A heads-up 5 minutes before you need to set off. When the bus leaves, it asks whether you caught it, so your other devices follow; no answer counts as yes.",
+            "A heads-up 5 minutes before you need to set off, then the ride or the next way there, without asking you anything.",
             state.leaveAlerts, vm::setLeaveAlerts, openSettings,
         )
         NotifyToggle(
@@ -288,7 +288,7 @@ private fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings:
         Column(Modifier.weight(1f)) {
             Text("Notice when I board")
             Text(
-                "During a trip, the live notification uses your location to tell when you're on the bus, missed it, or are there, so you don't have to tap. " +
+                "During a trip, the live notification uses your location to tell when you're on the bus, missed it, or are there, and keeps your plan right on every device. " +
                     "It starts when you open terminus or tap its notification or widget during the trip. Only what it means is kept, never where you were.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

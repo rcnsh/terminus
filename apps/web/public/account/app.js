@@ -124,12 +124,21 @@ function mySuggestions() {
 
 /* ---------- rendering ---------- */
 
+/**
+ * Where a class shown on the page is in the profile now. Every save replaces
+ * the profile with the server's copy, sorted its own way, so a row finds its
+ * class again by what it is, never by where it was.
+ */
+function findClass(list, t) {
+  return profile[list].findIndex((x) => x.day === t.day && x.arriveByMin === t.arriveByMin && x.label === t.label && x.to === t.to);
+}
+
 function renderClasses() {
   const box = $('#classes');
   box.replaceChildren();
   const all = [
-    ...profile.trips.map((t, i) => ({ t, list: 'trips', i })),
-    ...profile.manual.map((t, i) => ({ t, list: 'manual', i })),
+    ...profile.trips.map((t) => ({ t: { ...t }, list: 'trips' })),
+    ...profile.manual.map((t) => ({ t: { ...t }, list: 'manual' })),
   ];
   $('#class-count').textContent = all.length ? `${all.length} class${all.length === 1 ? '' : 'es'}${term && profile.trips.length ? ` · ${term}` : ''}` : '';
   if (!all.length) {
@@ -140,7 +149,7 @@ function renderClasses() {
     const rows = all.filter((r) => r.t.day === day).sort((a, b) => a.t.arriveByMin - b.t.arriveByMin);
     if (!rows.length) continue;
     box.append(el('div', { class: 'day', textContent: DAYS[day] }));
-    for (const { t, list, i } of rows) {
+    for (const { t, list } of rows) {
       const time = t.endMin ? `${hhmm(t.arriveByMin)}–${hhmm(t.endMin)}` : hhmm(t.arriveByMin);
       const weeks = Array.isArray(t.weeks) && t.weeks.length < 13 ? ` · wk ${t.weeks[0]}–${t.weeks.at(-1)}` : '';
       box.append(
@@ -150,7 +159,10 @@ function renderClasses() {
           el('span', { class: 'time', textContent: time }),
           el('span', { class: 'name', textContent: t.label + weeks, title: t.label }),
           stopSelect(t.to, (v) => {
-            profile[list][i].to = v;
+            const at = findClass(list, t);
+            if (at < 0) return;
+            profile[list][at].to = v;
+            t.to = v;
             save();
           }),
           el('button', {
@@ -159,7 +171,8 @@ function renderClasses() {
             textContent: 'Remove',
             'aria-label': `Remove ${t.label}`,
             onclick: () => {
-              profile[list].splice(i, 1);
+              const at = findClass(list, t);
+              if (at >= 0) profile[list].splice(at, 1);
               renderClasses();
               save();
             },
@@ -178,14 +191,19 @@ function renderUnresolved(list) {
   const ul = el('ul', { class: 'list' });
   for (const u of list) {
     const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}${u.offCampus ? ' (off campus)' : ''}` }));
-    li.append(el('button', { type: 'button', class: 'link-btn', textContent: 'Skip', onclick: () => li.remove() }));
+    // The heading goes with the last one placed or skipped.
+    const done = () => {
+      li.remove();
+      if (!ul.children.length) box.replaceChildren();
+    };
+    li.append(el('button', { type: 'button', class: 'link-btn', textContent: 'Skip', onclick: done }));
     li.append(
       stopSelect(
         '',
         (v) => {
           if (!v) return;
           profile.manual.push({ day: u.day, arriveByMin: u.arriveByMin, ...(u.endMin ? { endMin: u.endMin } : {}), to: v, label: `${u.module} @ ${u.venue.split('-')[0]}`, venue: u.venue });
-          li.remove();
+          done();
           renderClasses();
           save();
         },
@@ -222,7 +240,7 @@ function renderPlaces() {
   const ul = $('#places');
   ul.replaceChildren();
   profile.usual ??= [];
-  profile.places.forEach((p, i) => {
+  profile.places.forEach((p) => {
     // Usual times (phase 8.3): each one a trip that day, planned like a class.
     const times = profile.usual.filter((u) => u.place === p.key);
     const usual = el(
@@ -239,7 +257,7 @@ function renderPlaces() {
             textContent: '×',
             'aria-label': `Remove ${DAYS[u.day]} ${hhmm(u.atMin)}`,
             onclick: () => {
-              profile.usual = profile.usual.filter((x) => x !== u);
+              profile.usual = profile.usual.filter((x) => !(x.place === u.place && x.day === u.day && x.atMin === u.atMin));
               renderPlaces();
               save();
             },
@@ -280,7 +298,7 @@ function renderPlaces() {
             class: 'remove',
             textContent: 'Remove',
             onclick: () => {
-              profile.places.splice(i, 1);
+              profile.places = profile.places.filter((x) => x.key !== p.key);
               profile.usual = profile.usual.filter((u) => u.place !== p.key);
               renderPlaces();
               save();
@@ -599,8 +617,7 @@ async function renderChoices() {
       ),
     ),
   );
-  $('#ask-muted').hidden = !r.askMuted;
-  $('#trip-choices').hidden = !r.choices.length && !r.askMuted;
+  $('#trip-choices').hidden = !r.choices.length;
   $('#trip-history').hidden = !r.history;
   $('#history-size').textContent = r.history === 1 ? 'terminus remembers how 1 trip went.' : `terminus remembers how ${r.history} trips went.`;
 }
@@ -608,12 +625,6 @@ $('#clear-history').addEventListener('click', async () => {
   if (!confirm('Forget how your trips went? Choices you made stay.')) return;
   await api('/me/history', { method: 'DELETE' });
   toast('Trip history cleared');
-  renderChoices();
-  renderPreview();
-});
-$('#ask-again').addEventListener('click', async () => {
-  await api('/me/ask', { method: 'POST' });
-  toast("It'll ask again");
   renderChoices();
   renderPreview();
 });
