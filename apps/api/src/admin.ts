@@ -138,15 +138,16 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
     if (!res.ok) throw new Error(`Analytics Engine answered ${res.status}`);
     return ((await res.json()) as { data: Record<string, unknown>[] }).data;
   };
+  const dataset = env.AE_DATASET || 'terminus';
   try {
     const [daily, quality, errors] = await Promise.all([
       // _sample_interval: each row may stand for several, at high volume.
-      sql(`SELECT toDate(timestamp) AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM terminus
+      sql(`SELECT toDate(timestamp) AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 IN ('answer', 'error')
            GROUP BY day, kind ORDER BY day`),
-      sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM terminus
+      sql(`SELECT blob5 AS quality, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'answer' GROUP BY quality ORDER BY n DESC`),
-      sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM terminus
+      sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'error' GROUP BY route ORDER BY n DESC LIMIT 10`),
     ]);
     return { daily, quality, errors };

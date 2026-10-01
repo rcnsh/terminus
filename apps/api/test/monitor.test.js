@@ -128,6 +128,13 @@ test('no alert address configured: records state, sends nothing', async () => {
   assert.equal((await readUpstream(e)).up, false);
 });
 
+test('the beta records state but leaves the alerts to the stable site', async () => {
+  const e = { ...env(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' };
+  for (let t = 1000; t <= 10_000; t += 1000) await checkUpstream(e, t, fail('network'));
+  assert.equal(e.EMAIL.sent.length, 0);
+  assert.equal((await readUpstream(e)).up, false);
+});
+
 test('advice names the likely fix per upstream code', () => {
   assert.match(adviceFor('code=10009'), /NEXTBUS_APP_VERSION/);
   assert.match(adviceFor('code=10008'), /device id/);
@@ -170,8 +177,8 @@ test('a refused version: the alert gives the one-line KV fix and NUS\'s whole re
   assert.equal((await readUpstream(e)).detail, null, 'cleared once it recovers');
 });
 
-test('the KV namespace in the alert commands is the one in cloudflare.config.ts', () => {
+test('the KV namespace in the alert commands is the stable one in cloudflare.config.ts', () => {
   const config = readFileSync(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
-  const id = /KV: bindings\.kv\(\{\s*id: "([0-9a-f]+)"/.exec(config)?.[1];
+  const id = /name: "terminus",[\s\S]*?\bkv: "([0-9a-f]+)"/.exec(config)?.[1];
   assert.equal(KV_NAMESPACE_ID, id);
 });

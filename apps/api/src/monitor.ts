@@ -19,6 +19,7 @@ import { pushEnabled } from './push.ts';
 import { sgtDate, watchTrip } from './trip.ts';
 import { refreshTable } from './ridetimes.ts';
 import { sgt } from './config.ts';
+import { isBeta } from './site.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -198,8 +199,10 @@ export function adviceFor(reason: string | null): string {
   return 'Check `pnpm exec wrangler tail` and /health?probe=1.';
 }
 
+// Operator alerts about the NUS feed and the calendar come from the stable
+// Worker only: the beta shares both, and one email is enough.
 async function alert(env: Env, s: UpstreamState, kind: 'up' | 'down'): Promise<void> {
-  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL) return;
+  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return;
   const when = new Date(s.since).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
   const subject = kind === 'up' ? 'terminus: NUS bus feed recovered' : 'terminus: NUS bus feed is down';
   const text = kind === 'up'
@@ -209,7 +212,7 @@ async function alert(env: Env, s: UpstreamState, kind: 'up' | 'down'): Promise<v
 }
 
 async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switched' }>): Promise<void> {
-  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL) return;
+  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return;
   const name = /univus_android_(.+)_\d+$/.exec(r.to)?.[1] ?? r.to;
   await env.EMAIL.send({
     from: { email: env.EMAIL_FROM, name: 'terminus' },
@@ -250,7 +253,7 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
   if (daysLeft > CALENDAR_WARN_DAYS) return false;
   const last = Number(await env.KV.get(CALENDAR_KEY).catch(() => null)) || 0;
   if (nowMs - last < 7 * 86_400_000) return false;
-  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL) return false;
+  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return false;
   await env.EMAIL.send({
     from: { email: env.EMAIL_FROM, name: 'terminus' },
     to: env.ALERT_EMAIL,

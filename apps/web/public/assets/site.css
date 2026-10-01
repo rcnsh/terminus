@@ -85,6 +85,8 @@ p { margin: 0; }
 }
 .wordmark { font: 600 1.25rem/1 var(--display); letter-spacing: -0.03em; }
 .wordmark b { font-weight: inherit; color: var(--accent); }
+/* Only on beta.terminus.rcn.sh, added by the Worker (apps/api/src/site.ts). */
+.beta-tag { margin-left: 6px; padding: 2px 6px; border-radius: 999px; background: var(--accent); color: var(--bg); font: 600 0.7rem/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.04em; vertical-align: middle; }
 .nav-links { display: flex; align-items: center; gap: 20px; font-size: 0.95rem; }
 .nav-links a { color: var(--muted); text-decoration: none; padding: 10px 2px; }
 .nav-links a:hover { color: var(--ink); }

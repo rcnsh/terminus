@@ -9,6 +9,7 @@
 import { exportOutcomes } from './outcomes.ts';
 import type { Env } from './types.ts';
 import { DEVICE_IDLE_MS } from './monitor.ts';
+import { mailName, siteOrigin } from './site.ts';
 
 export const ACCOUNT_TTL = {
   linkMs: 15 * 60_000,
@@ -176,7 +177,7 @@ async function sendLink(env: Env, email: string, link: string, code: string, ori
   const site = new URL(origin).host;
   const why = `You're getting this because someone entered this address at ${site}, the NUS shuttle bus times app. If that wasn't you, ignore this email: nothing happens without the code.`;
   await env.EMAIL!.send({
-    from: { email: env.EMAIL_FROM!, name: 'terminus' },
+    from: { email: env.EMAIL_FROM!, name: mailName(env) },
     to: email,
     subject: `Your terminus code: ${code}`,
     text: `Your terminus sign-in code is ${code}
@@ -496,12 +497,13 @@ export async function mailDeviceChange(env: Env, email: string | null, change: '
   if (!email || !env.EMAIL || !env.EMAIL_FROM) return;
   const device = name.trim() || 'a device';
   const when = new Date(nowMs + 8 * 3_600_000).toISOString().replace('T', ' ').slice(0, 16) + ' Singapore time';
+  const site = siteOrigin(env);
   const text =
     change === 'added'
-      ? `terminus was added to ${device} on your account, ${when}.\n\nIf that wasn't you, remove it on the account page (https://terminus.rcn.sh/account) or from any of your devices, and sign out everywhere.`
-      : `${device} was removed from your terminus account, ${when}. It is signed out.\n\nIf that wasn't you, sign in at https://terminus.rcn.sh/account and sign out everywhere.`;
+      ? `terminus was added to ${device} on your account, ${when}.\n\nIf that wasn't you, remove it on the account page (${site}/account) or from any of your devices, and sign out everywhere.`
+      : `${device} was removed from your terminus account, ${when}. It is signed out.\n\nIf that wasn't you, sign in at ${site}/account and sign out everywhere.`;
   await env.EMAIL.send({
-    from: { email: env.EMAIL_FROM, name: 'terminus' },
+    from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: email,
     subject: change === 'added' ? `terminus was added to ${device}` : `${device} was removed from terminus`,
     text,

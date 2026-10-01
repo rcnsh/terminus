@@ -6,6 +6,7 @@
  */
 
 import type { Env } from './types.ts';
+import { mailName, siteOrigin } from './site.ts';
 
 export const FEEDBACK_LIMITS = {
   note: 1000,
@@ -87,10 +88,10 @@ export async function mailFeedback(env: Env, id: string, email: string, f: Feedb
     '',
     f.context ? JSON.stringify(JSON.parse(f.context), null, 2) : '',
     '',
-    `Report ${id}; all reports are on the dashboard at https://terminus.rcn.sh/admin.`,
+    `Report ${id}; all reports are on the dashboard at ${siteOrigin(env)}/admin.`,
   ].join('\n');
   await env.EMAIL.send({
-    from: { email: env.EMAIL_FROM, name: 'terminus' },
+    from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: env.ALERT_EMAIL,
     subject: `terminus feedback: ${f.kind === 'wrong' ? summarize(f.context) : f.note.slice(0, 60)}`,
     text,

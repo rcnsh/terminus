@@ -32,6 +32,7 @@ import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
 
 import { GRAPH } from './graph.ts';
+import { markBeta, siteOrigin } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 
 // Pure functions of the static GRAPH -- computed once per isolate, served
@@ -280,7 +281,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       if (KEYED.includes(url.pathname)) {
         const caller = await callerFor(env, req, nowMs, ctx);
         if (!caller) {
-          return json({ error: 'this needs an API key: create one at https://terminus.rcn.sh/account and send it as x-api-key' }, 401, {
+          return json({ error: `this needs an API key: create one at ${siteOrigin(env)}/account and send it as x-api-key` }, 401, {
             'www-authenticate': 'Bearer realm="terminus"',
           });
         }
@@ -323,7 +324,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return await handleArrivals(url, env, ctx, nowMs);
         default:
           // Everything else is the website.
-          if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return env.ASSETS.fetch(req);
+          if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return markBeta(await env.ASSETS.fetch(req), env);
           return json({ error: 'not found' }, 404);
       }
     } catch (err) {
