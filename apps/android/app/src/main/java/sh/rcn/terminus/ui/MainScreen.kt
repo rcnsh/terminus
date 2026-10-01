@@ -109,7 +109,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("terminus $v is out", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "https://terminus.rcn.sh/download/android".toUri())) }) { Text("Update") }
+                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/download/android".toUri())) }) { Text("Update") }
                 }
             }
         }

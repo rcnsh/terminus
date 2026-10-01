@@ -24,6 +24,10 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
+import sh.rcn.terminus.BuildConfig
+
+/** The site as people type it: terminus.rcn.sh, or the beta's. */
+private val SITE_HOST = BuildConfig.SITE.removePrefix("https://")
 
 @Composable
 internal fun PairScreen(state: UiState, onPair: (String) -> Unit) {
@@ -31,9 +35,9 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Wordmark(MaterialTheme.typography.headlineMedium)
         val ctx = LocalContext.current
-        Text("Pair this phone with your account. On a phone that's signed in, go to Settings, then Add a device; or on terminus.rcn.sh/account, choose Pair a device. Then enter the 6-character code here, or scan the QR code with your camera.")
-        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "https://terminus.rcn.sh/account".toUri())) }) {
-            Text("Open terminus.rcn.sh/account")
+        Text("Pair this phone with your account. On a phone that's signed in, go to Settings, then Add a device; or on ${SITE_HOST}/account, choose Pair a device. Then enter the 6-character code here, or scan the QR code with your camera.")
+        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }) {
+            Text("Open ${SITE_HOST}/account")
         }
         OutlinedTextField(
             value = code,

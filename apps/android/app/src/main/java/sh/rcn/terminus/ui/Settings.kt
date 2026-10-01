@@ -48,6 +48,7 @@ import androidx.core.net.toUri
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.Campus
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.Device
@@ -202,7 +203,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
         Devices(state, account, onSignedOut)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
             TextButton(onClick = { confirm = "signout" }) { Text("Sign out of this phone") }
-            TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "https://terminus.rcn.sh/account".toUri())) }) { Text("Account page") }
+            TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }) { Text("Account page") }
         }
         Hint("API keys, signing out everywhere and deleting your account are on the account page.")
     }
@@ -272,7 +273,7 @@ private fun platformName(p: String?) = when (p) {
 @Composable
 private fun PairCodeDialog(code: String, onClose: () -> Unit) {
     val ctx = LocalContext.current
-    val link = "https://terminus.rcn.sh/pair?code=$code"
+    val link = "${BuildConfig.SITE}/pair?code=$code"
     val qr = remember(link) { qrBitmap(link, 480) }
     AlertDialog(
         onDismissRequest = onClose,

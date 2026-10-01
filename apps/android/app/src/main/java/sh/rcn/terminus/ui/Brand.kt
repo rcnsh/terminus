@@ -11,6 +11,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import sh.rcn.terminus.BuildConfig
 
 /**
  * The site's tokens (apps/web/public/assets/site.css), so the app, the widget
@@ -59,6 +60,8 @@ fun Wordmark(style: TextStyle) {
         buildAnnotatedString {
             append("termi")
             withStyle(SpanStyle(color = accent)) { append("nus") }
+            // The beta app says so wherever the name is, like the beta site.
+            if (BuildConfig.FLAVOR == "beta") withStyle(SpanStyle(color = accent, fontSize = style.fontSize * 0.45f, fontWeight = FontWeight.SemiBold)) { append(" BETA") }
         },
         style = style.copy(fontWeight = FontWeight.Bold),
     )
