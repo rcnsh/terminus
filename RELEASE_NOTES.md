@@ -1,6 +1,8 @@
-<!-- 2.0.2 -->
-### terminus 2.0.2
+<!-- 2.0.3 -->
+### terminus 2.0.3
 
-**The other side of the road, one tap away.** Stops across a road from each other are only metres apart, so your location can put you at the wrong one. On the widget's **Nearby**, a swap button beside the stop shows the one across the road instead, with the first one moved down. It stays that way while you're there. PGP and PGP Foyer count as a pair too.
+**Places you look up stay.** Pick somewhere in **Go somewhere else** and it keeps its own tab next to your favourites, even after you go back to Next. Tap the **×** on a tab to remove it. terminus keeps your last five, on this phone only.
 
-**Fixed.** The light and dark slider on terminus.rcn.sh, and the buttons in the web app on iPhone, work again.
+**On the widget too.** The places you add get buttons after your favourites, and the newest one always has a button, even when your favourites fill the row.
+
+**Fixed.** The widget could stop updating when it was wide enough for six buttons.
