@@ -86,7 +86,8 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .suggestion { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 0.93rem; line-height: 1.4; }
-#trip-choices h3 { margin: 18px 0 4px; font-size: 1rem; }
+#trip-choices h3, #trip-history h3 { margin: 18px 0 4px; font-size: 1rem; }
+#trip-history .btn { margin-top: 8px; }
 
 /* Devices */
 .side .btn.wide { margin-top: 12px; }
@@ -97,7 +98,8 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .code-input::placeholder { color: var(--muted); opacity: 0.45; }
 .code { font: 700 1.7rem/1 ui-monospace, "SF Mono", monospace; letter-spacing: 0.16em; margin: 14px 0 4px; }
 
-.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+/* Bottom right, clear of the buttons in the content column. */
+.toast { position: fixed; bottom: 18px; right: 18px; margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 
 /* ---------- Onboarding ----------

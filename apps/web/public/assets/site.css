@@ -142,6 +142,8 @@ p { margin: 0; }
 .btn.danger { background: transparent; color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
 .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
 .link-btn { background: none; border: 0; padding: 8px 2px; color: var(--accent); font: inherit; cursor: pointer; }
+/* Inside a sentence it's a word like any other: no gap before the full stop. */
+p .link-btn { padding: 0; }
 
 input, select, textarea {
   font: inherit; width: 100%; min-width: 0; padding: 10px 12px; border-radius: 10px;
