@@ -1,4 +1,6 @@
-<!-- 2.0.1 -->
-### terminus 2.0.1
+<!-- 2.0.2 -->
+### terminus 2.0.2
 
-**terminus speaks Chinese.** Answers, notifications, Today, emails and every screen are in Simplified Chinese (简体中文) when your phone or Mac is set to Chinese. Choose English or 中文 yourself on the welcome screen or under **Settings → Language** on Android, at the foot of the page on the web, and in the footer on the Mac. Your choice follows your account, so your other devices and your emails switch with it. Stop and bus names stay as they appear on campus.
+**The other side of the road, one tap away.** Stops across a road from each other are only metres apart, so your location can put you at the wrong one. On the widget's **Nearby**, a swap button beside the stop shows the one across the road instead, with the first one moved down. It stays that way while you're there. PGP and PGP Foyer count as a pair too.
+
+**Fixed.** The light and dark slider on terminus.rcn.sh, and the buttons in the web app on iPhone, work again.
