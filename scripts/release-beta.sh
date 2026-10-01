@@ -10,7 +10,8 @@
 #
 # A beta version is the next stable version's pre-release (after 2.0.0:
 # 2.0.1-beta.1, 2.0.1-beta.2, ...). The build number is the commit count, so
-# it only goes up. Nothing touches the stable site, its data or its downloads,
+# it only goes up. A release's own version (2.0.0) can go out on the beta
+# too, so the beta apps move onto it from their betas. Nothing touches the stable site, its data or its downloads,
 # and there's no tag, GitHub release or CI: it runs on this Mac and signs with
 # the same keys as stable (the Android release key in ~/.gradle, and the Mac
 # certificate and the Sparkle key in ~/.terminus).
@@ -23,7 +24,7 @@ DRY=0
 SITE=https://beta.terminus.rcn.sh
 BUCKET=terminus-beta-downloads
 
-echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' || { echo "a beta version looks like 2.0.1-beta.1"; exit 1; }
+echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' || { echo "a beta version looks like 2.0.1-beta.1 (or a release's, 2.0.1)"; exit 1; }
 BUILD=$(git rev-list --count HEAD)
 BETA_D1=$(sed -n '/^const BETA = {/,/^};/s/.*d1: "\(.*\)".*/\1/p' apps/api/cloudflare.config.ts)
 [ -n "$BETA_D1" ] || [ $DRY -eq 1 ] || { echo "the beta's D1 id isn't in apps/api/cloudflare.config.ts yet"; exit 1; }
