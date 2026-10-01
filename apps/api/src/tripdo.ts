@@ -44,6 +44,14 @@ export class Trip {
   }
 
   async fetch(req: Request): Promise<Response> {
+    // A change reads the day, waits for its body, then writes the day back.
+    // One /me/next sends a plan and a watch at once: without holding the
+    // object, the second would put back a copy from before the first.
+    if (req.method === 'POST') return this.state.blockConcurrencyWhile(() => this.handle(req));
+    return this.handle(req);
+  }
+
+  private async handle(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const day = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
 
