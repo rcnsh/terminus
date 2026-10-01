@@ -314,7 +314,7 @@
     <string name="walk">walk</string>
     <string name="wednesday">Wednesday</string>
     <string name="wednesday_short">Wed</string>
-    <string name="welcome_text">Setting up takes about a minute: where you live, your NUSMods timetable, and how fast you walk. No account or email needed.</string>
+    <string name="welcome_text">Setting up takes about a minute: where you live, your NUSMods timetable, and how fast you walk. No email or sign-in needed.</string>
     <string name="where">Where</string>
     <string name="where_live">Where do you live?</string>
     <string name="where_live_sub">Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live.</string>
