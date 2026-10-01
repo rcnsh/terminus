@@ -124,6 +124,14 @@ internal fun AnswerCard(
  */
 @Composable
 internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: Boolean, onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> }) {
+    // "Catch the D2 at Museum", and you don't know where Museum is: walking directions there.
+    answer.card?.walkTo?.let { w ->
+        val ctx = LocalContext.current
+        TextButton(
+            onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, w.mapsUri())) } },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+        ) { Text("Directions to ${w.name}") }
+    }
     val ask = answer.card?.ask
     val actions = ask?.actions ?: answer.card?.actions.orEmpty()
     if (ask != null) Text(ask.question, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))

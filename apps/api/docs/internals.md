@@ -355,6 +355,16 @@ start: the trip home, gaps long enough to go home in, `/me/day`'s `endsAt`
 and "In CS2030 till ~11:30" all follow. Classes entered by hand, usual times
 and one-off trips end when they say.
 
+**Taking something off today.** Every `/me/day` entry not done yet is
+`removable`. The apps take it off with `skipped` and its key (swipe on
+Android, × in the web app and on the Mac), then show Undo for six seconds,
+which sends `reset`. It's the same whatever the entry is: a timetabled class,
+one entered by hand, a usual time or a one-off trip is skipped for today only
+(deleting a weekly one is in Settings), and a trip home skipped means staying:
+`planFor` plans no trip home after the last class, and in a long gap plans the
+next class from where you are. Skipped entries aren't listed; a skipped trip
+home isn't an outcome.
+
 **More than class trips (8.3).** Today's trips are `classesOn(profile)`:
 the imported and hand-entered classes, plus two kinds that are planned the
 same way (leave-by, the question, push, detection, "Not going"):

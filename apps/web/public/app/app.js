@@ -147,10 +147,51 @@ async function refreshNearby() {
   }
 }
 
+/**
+ * Taking an entry off today (× on the row): a timetabled class, one you
+ * added, or the trip home. Gone at once, with Undo for a few seconds.
+ */
+let undoTimer = null;
+async function removeFromToday(it, li) {
+  li.remove();
+  const name = it.kind === 'home' ? 'The trip home' : it.label.split(' @ ')[0];
+  const bar = $('#today-undo');
+  const hide = () => {
+    bar.hidden = true;
+    clearTimeout(undoTimer);
+  };
+  bar.replaceChildren(
+    el('span', { textContent: `${name} taken off today` }),
+    el('button', {
+      type: 'button',
+      class: 'linkish',
+      textContent: 'Undo',
+      onclick: async () => {
+        hide();
+        try {
+          show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: 'reset', trip: it.key } }));
+        } finally {
+          refresh();
+        }
+      },
+    }),
+  );
+  bar.hidden = false;
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(hide, 6_000);
+  try {
+    show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: 'skipped', trip: it.key } }));
+  } catch {
+    hide();
+    $('#offline').textContent = "Couldn't remove that. Check your connection.";
+  }
+  refresh();
+}
+
 /** Today, from /me/day: each class with when to leave and how, and the trips home. */
 function renderDay(day) {
   const items = day.items ?? [];
-  $('#today').hidden = items.length === 0;
+  $('#today').hidden = items.length === 0 && $('#today-undo').hidden;
   $('#today-list').replaceChildren(
     ...items.map((it) => {
       const title = it.kind === 'home' ? `Home, from ${it.fromName ?? 'your last class'}` : it.label;
@@ -161,12 +202,16 @@ function renderDay(day) {
         const how = it.leave.svc ? `${it.leave.svc} from ${it.leave.stop ?? it.fromName}` : 'walk';
         sub = [`Leave by ${it.leave.estimated ? '~' : ''}${clock(it.leave.at)}`, how, it.timing?.status === 'late' ? it.timing.text : null].filter(Boolean).join(' · ');
       }
-      return el(
+      const li = el(
         'li',
         { class: `today-item ${it.status}` },
         el('span', { class: 'at', textContent: clock(it.startsAt) }),
         el('span', { class: 'what' }, el('span', { class: 'title', textContent: title }), sub ? el('span', { class: 'sub', textContent: sub }) : ''),
       );
+      if (it.removable) {
+        li.append(el('button', { type: 'button', class: 'remove-today', textContent: '×', 'aria-label': `Remove ${title} from today`, onclick: () => removeFromToday(it, li) }));
+      }
+      return li;
     }),
   );
 }

@@ -50,6 +50,9 @@ export interface DayItem {
    *  when it gets there (ISO), in place of a leave-by. */
   onBus?: { svc: string; off: string | null; arrive: string | null } | null;
   timing?: Timing | null;
+  /** Can be taken off today (send `skipped` with `key`; `reset` puts it
+   *  back): anything not done yet. Removed entries aren't listed. */
+  removable: boolean;
 }
 
 export interface DayPlan {
@@ -81,7 +84,8 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
   for (const c of classes) {
     const key = classKey(c);
     // A long gap: home in between, back an hour before the next class.
-    const longGap = prev && homeStop && homeStop !== c.to && c.arriveByMin - endOf(prev) > profile.gapHours * 60;
+    // Unless that trip home was taken off today: then you stay, and go from there.
+    const longGap = prev && homeStop && homeStop !== c.to && c.arriveByMin - endOf(prev) > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
     if (prev && longGap) {
       items.push(homeItem(`gap-home:${prev.to}`, prev, c.arriveByMin - GAP_RETURN_MIN));
     }
@@ -105,6 +109,7 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
       startsAt: at(c.arriveByMin),
       endsAt: at(endOf(c)),
       venue: c.venue || undefined,
+      removable: status === 'next' || status === 'later',
     };
     if (boarded) item.onBus = { svc: boarded.svc, off: offStop(boarded), arrive: boarded.arrive };
     // Upcoming classes get a leave-by, from where you'll be then.
@@ -118,10 +123,13 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
           .catch(() => {}),
       );
     }
-    items.push(item);
-    if (!skipped) prev = c;
+    // Taken off today (from here or "Not going"): not listed.
+    if (!skipped) {
+      items.push(item);
+      prev = c;
+    }
   }
-  if (prev && homeStop) items.push(homeItem(`home:${endOf(prev)}`, prev, null));
+  if (prev && homeStop && !state.skipped.has(`home:${endOf(prev)}`)) items.push(homeItem(`home:${endOf(prev)}`, prev, null));
   await Promise.all(pending);
 
   // The day's hours, stretched for early and late classes (as /me/next rests).
@@ -154,6 +162,7 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
       toName: name(homeStop) ?? homeStop!,
       startsAt: at(leaveMin),
       endsAt: until === null ? null : at(until),
+      removable: status !== 'done',
     };
   }
 }

@@ -49,6 +49,7 @@
     "remind": true,
     "suggestion": null,
     "ride": null,
-    "detected": false
+    "detected": false,
+    "walkTo": null
   }
 }

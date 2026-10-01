@@ -141,7 +141,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
             if (state.showNearby) NearbyList(state.nearby, state.loading) else AnswerCard(state.answer, state.loading, vm::signal, state.signalling, vm::choose)
         }
         // The rest of today under the planned answer.
-        if (!state.showNearby && state.target == Target.Plan) state.day?.let { DayTimeline(it) }
+        if (!state.showNearby && state.target == Target.Plan) state.day?.let { DayTimeline(it, state.removed, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved) }
         // Somewhere else: going there later today, planned like a class (phase 8.3).
         if (!state.showNearby && state.target != Target.Plan && state.paired) {
             TimeButton("Go later today at…", null, vm::goLater, Modifier.padding(top = 8.dp))

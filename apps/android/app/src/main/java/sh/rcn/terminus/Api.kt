@@ -2,6 +2,7 @@ package sh.rcn.terminus
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.core.net.toUri
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -166,6 +167,8 @@ data class Card(
     val suggestion: Suggestion? = null,
     /** On the bus: the stops from boarding to getting off, for a progress bar. */
     val ride: Ride? = null,
+    /** Where to walk to now (the bus's stop, or the destination on foot), for walking directions. */
+    val walkTo: WalkTo? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) = Card(
@@ -206,6 +209,7 @@ data class Card(
                 Ride(r.getString("svc"), (0 until stops.length()).map { stops.getJSONObject(it).getString("name") }, board, arrive)
                     .takeIf { it.stops.size >= 2 && arrive > board }
             },
+            walkTo = o.optJSONObject("walkTo")?.let { w -> WalkTo(w.getString("name"), w.getDouble("lat"), w.getDouble("lon")) },
         )
 
         private fun parseActions(a: JSONArray?): List<CardAction> =
@@ -244,6 +248,13 @@ data class Ride(val svc: String, val stops: List<String>, val boardMs: Long, val
 }
 
 /** The question at the bus's departure, with its buttons (On it · Missed it · Not going). */
+/** A stop to walk to, and where it is. */
+data class WalkTo(val name: String, val lat: Double, val lon: Double) {
+    /** Walking directions there in the phone's maps app (Google Maps opens it; a browser otherwise). */
+    fun mapsUri(): android.net.Uri =
+        "https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=walking".toUri()
+}
+
 data class CardAsk(val trip: String, val question: String, val actions: List<CardAction>)
 
 /** Something terminus learned and offers to change; `id` goes back to /me/choice. */
@@ -273,6 +284,8 @@ data class DayItem(
     val timingStatus: String?,
     /** On the bus to it: "On the D2 · off at UTown · arrive 9:52", worded by [DayTimeline]. */
     val onBus: OnBus? = null,
+    /** Can be taken off today (swiped away): anything not done yet. */
+    val removable: Boolean = false,
 )
 
 data class OnBus(val svc: String, val off: String?, val arriveMs: Long?)
@@ -302,6 +315,7 @@ data class DayPlan(val items: List<DayItem>, val note: String?) {
                         timingText = timing?.optStringOrNull("text"),
                         timingStatus = timing?.optStringOrNull("status"),
                         onBus = bus?.let { OnBus(it.optString("svc"), it.optStringOrNull("off"), it.optStringOrNull("arrive")?.let(::parseInstant)) },
+                        removable = x.optBoolean("removable", false),
                     )
                 },
                 note = o.optStringOrNull("note"),

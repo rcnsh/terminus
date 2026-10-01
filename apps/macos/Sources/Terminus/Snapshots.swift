@@ -61,12 +61,13 @@ enum Snapshots {
                 let dayJSON = """
                 {"date":"2026-10-01","items":[
                   {"kind":"class","key":"a","label":"MA1100 @ LT21","status":"done","fromName":"PGP","startsAt":"\(iso(-7200))"},
-                  {"kind":"class","key":"b","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","startsAt":"\(classAt)","leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"}},
-                  {"kind":"class","key":"c","label":"CS2030 @ COM1","status":"skipped","fromName":"UTown","startsAt":"\(iso(9000))"},
-                  {"kind":"home","key":"h","label":"Home","status":"later","fromName":"UTown","startsAt":"\(iso(12600))"}
+                  {"kind":"class","key":"b","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","startsAt":"\(classAt)","leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"},"removable":true},
+                  {"kind":"home","key":"h","label":"Home","status":"later","fromName":"UTown","startsAt":"\(iso(12600))","removable":true}
                 ],"note":null}
                 """
                 m.day = try! JSONDecoder().decode(DayPlan.self, from: Data(dayJSON.utf8))
+                // Just taken off today: the Undo bar.
+                m.removed = try! JSONDecoder().decode(DayPlan.Item.self, from: Data(#"{"kind":"class","key":"c","label":"CS2030 @ COM1","status":"later","startsAt":"2026-10-01T05:00:00Z","removable":true}"#.utf8))
                 return m
             }()),
         ]
