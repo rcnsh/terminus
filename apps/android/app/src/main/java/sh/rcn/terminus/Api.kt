@@ -58,7 +58,7 @@ data class NextAnswer(
     fun leaveHeadline(now: Long): String? {
         val at = leaveAtMs ?: return null
         if (card?.phase == "waiting") return card.leaveBy
-        return if (now >= at) "Leave now" else card?.leaveBy
+        return if (now >= at) L.s(R.string.leave_now) else card?.leaveBy
     }
 
     /** Class: "Catch the ~09:41 D2 at PGP", or "Walk there". */
@@ -87,7 +87,7 @@ data class NextAnswer(
     fun clockLabel(format: (Long) -> String): String {
         val at = departsAtMs ?: return label
         if (quality == "unknown" || quality == "ended") return label
-        return "${label.substringBefore(" · ")} · ${if (quality == "scheduled") "~" else ""}${format(at)}"
+        return "${label.substringBefore(" · ")} · ${if (quality == "scheduled") L.s(R.string.approx, format(at)) else format(at)}"
     }
 
     companion object {
@@ -234,9 +234,9 @@ data class Ride(val svc: String, val stops: List<String>, val boardMs: Long, val
         val next = nextStop(now)
         val left = stopsLeft(now)
         return when {
-            next == null || left == 0 -> "Getting off at ${stops.last()}"
-            left == 1 -> "Next: ${stops.last()}, where you get off"
-            else -> "Next: $next · $left stops to go"
+            next == null || left == 0 -> L.s(R.string.getting_off_at, stops.last())
+            left == 1 -> L.s(R.string.next_where_off, stops.last())
+            else -> L.s(R.string.next_stops_to_go, next, left)
         }
     }
 }
@@ -390,7 +390,9 @@ class ApiError(val status: Int, message: String) : IOException(sentence(message)
 internal fun sentence(text: String): String {
     if (text.isEmpty()) return text
     val s = text.replaceFirstChar { it.uppercaseChar() }
-    return if (s.last() in ".!?") s else "$s."
+    // Chinese (phase 10) ends with a full-width stop.
+    val cjk = s.any { it in '\u4e00'..'\u9fff' }
+    return if (s.last() in ".!?。！？") s else if (cjk) "$s。" else "$s."
 }
 
 /** The answer arrived but isn't what this version understands. Not a network problem. */
@@ -583,6 +585,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                 conn.setRequestProperty("accept", "application/json")
                 // So the server can tell apps and versions apart (the User-Agent only says Dalvik).
                 conn.setRequestProperty("x-terminus-client", CLIENT)
+                // The server writes answers, cards and errors in the app's language.
+                conn.setRequestProperty("accept-language", L.header())
                 token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
                 if (body != null) {
                     conn.doOutput = true
@@ -664,7 +668,7 @@ data class ImportResult(val profile: JSONObject, val classes: Int, val unresolve
             return ImportResult(
                 profile = profile,
                 classes = profile.optJSONArray("trips")?.length() ?: 0,
-                unresolved = (0 until un.length()).map { un.getJSONObject(it).let { u -> "${u.optString("module")} at ${u.optString("venue")}" } },
+                unresolved = (0 until un.length()).map { un.getJSONObject(it).let { u -> L.s(R.string.module_at_venue, u.optString("module"), u.optString("venue")) } },
                 missing = (0 until miss.length()).map { miss.getString(it) },
                 term = o.optString("term"),
             )

@@ -28,6 +28,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.rankDestinations
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
+import sh.rcn.terminus.L
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -56,18 +59,18 @@ private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: Str
             setQuery(it)
             vm.loadDestinations()
         },
-        label = { Text("Go somewhere else") },
-        placeholder = { Text("Stop, building or room") },
+        label = { Text(stringResource(R.string.go_somewhere_else)) },
+        placeholder = { Text(stringResource(R.string.search_placeholder)) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
     if (q.isEmpty()) return
     val matches = rankDestinations(state.destinations, q)
     val stopName = { code: String -> state.destinations.firstOrNull { it.kind == "stop" && it.code == code }?.label ?: code }
-    val groups = mapOf("stop" to "Stops", "landmark" to "Food & places", "building" to "Buildings", "room" to "Rooms")
+    val groups = mapOf("stop" to stringResource(R.string.group_stops), "landmark" to stringResource(R.string.group_places), "building" to stringResource(R.string.group_buildings), "room" to stringResource(R.string.group_rooms))
     Column {
         if (matches.isEmpty() && state.destinations.isNotEmpty()) {
-            Text("No stop, building or room by that name", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
+            Text(stringResource(R.string.search_none), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
         }
         var group: String? = null
         for (d in matches) {
@@ -81,13 +84,13 @@ private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: Str
                 )
             }
             val meta = when (d.kind) {
-                "stop" -> "Bus stop"
+                "stop" -> L.s(R.string.bus_stop)
                 // Served by more than one stop: the quicker one is used at the time.
-                "landmark" -> listOfNotNull(d.detail, d.stops.joinToString(" or ") { stopName(it) } + " stop").joinToString(" · ")
+                "landmark" -> listOfNotNull(d.detail, L.s(R.string.stop_suffix, d.stops.joinToString(L.s(R.string.or_list)) { stopName(it) })).joinToString(" · ")
                 else -> buildString {
                     if (d.label != d.code) append("${d.code} · ")
-                    append("${stopName(d.stopCode)} stop")
-                    d.walkM?.let { append(", ${maxOf(1, Math.round(it / 1.3 / 60).toInt())} min walk") }
+                    append(L.s(R.string.stop_suffix, stopName(d.stopCode)))
+                    d.walkM?.let { append(L.s(R.string.min_walk_comma, maxOf(1, Math.round(it / 1.3 / 60).toInt()))) }
                 }
             }
             Column(

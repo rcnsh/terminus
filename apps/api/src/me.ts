@@ -60,6 +60,7 @@ import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 import { siteOrigin } from './site.ts';
+import { LANG_PREFS, lang, m, useProfileLang } from './i18n.ts';
 
 export interface MeDeps {
   graph: Graph;
@@ -72,7 +73,7 @@ const html = (body: string, status = 200, extra: Record<string, string> = {}) =>
 
 /** Minimal pages served by the Worker itself, in the site's style. */
 const page = (title: string, inner: string) => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="${lang() === 'zh' ? 'zh-Hans' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>${title} · terminus</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
@@ -83,7 +84,6 @@ const page = (title: string, inner: string) => `<!doctype html>
 /** A whole profile is a few KB; nothing legitimate comes close to this. */
 const MAX_BODY_BYTES = 64 * 1024;
 
-const EXPIRED = '<h1>That link has expired</h1><p class="hint">Sign-in links work once, for 15 minutes.</p><a class="btn accent" href="/account">Get a new link</a>';
 
 /**
  * Where emailed links point. The request's own origin only for local
@@ -97,7 +97,6 @@ function linkOrigin(url: URL, env: Env): string {
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-const APPROVE_EXPIRED = '<h1>This request has expired</h1><p class="hint">Sign-in requests work once, for 15 minutes. Start again on your device.</p>';
 
 const mailFailed = (e: unknown) => console.error('device email failed', e instanceof Error ? e.name : typeof e);
 
@@ -117,8 +116,10 @@ function clientWith(req: Request, body: Record<string, unknown> | null) {
 /** "14:05, 30 Sep" in Singapore time. */
 function sgtTime(ms: number): string {
   const d = new Date(ms + 8 * 3_600_000);
+  const hm = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  if (lang() === 'zh') return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${hm}`;
   const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
-  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}, ${d.getUTCDate()} ${month}`;
+  return `${hm}, ${d.getUTCDate()} ${month}`;
 }
 
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
@@ -146,8 +147,13 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
   // A stop can vanish from a new scrape. Re-validating on read would reject
   // the whole profile, so drop only what no longer resolves.
   const r = parseProfile(raw, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null);
-  if (r.ok) return r.profile;
+  // The language the account chose wins over the device's, for the rest of this request.
+  if (r.ok) {
+    useProfileLang(r.profile.lang);
+    return r.profile;
+  }
   const p = raw as Profile;
+  useProfileLang(LANG_PREFS.includes(p.lang) ? p.lang : 'auto');
   const ok = (c: string) => idx.byCode.has(c) || landmark(c) !== null;
   return {
     ...structuredClone(DEFAULT_PROFILE),
@@ -162,6 +168,7 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
     places: (p.places ?? []).filter((x) => ok(x.to)),
     share: p.share ?? null,
     term: p.term ?? null,
+    lang: LANG_PREFS.includes(p.lang) ? p.lang : 'auto',
   };
 }
 
@@ -335,7 +342,7 @@ const ME_ROUTES: MeRoute[] = [
       if (date === today && atMin <= sgt(nowMs).minutes) return json({ error: 'that time has passed today' }, 400);
       const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, PROFILE_LIMITS.label) : dest.label;
       const once = profile.once.filter((o) => o.date >= today && !(o.date === date && o.arriveByMin === atMin && o.to === dest.to));
-      if (once.length >= PROFILE_LIMITS.once) return json({ error: `up to ${PROFILE_LIMITS.once} one-off trips at a time` }, 400);
+      if (once.length >= PROFILE_LIMITS.once) return json({ error: m().tooManyOnce(PROFILE_LIMITS.once) }, 400);
       once.push({ date, arriveByMin: atMin, to: dest.to, label });
       once.sort((a, b) => a.date.localeCompare(b.date) || a.arriveByMin - b.arriveByMin);
       const next = { ...profile, once };
@@ -367,11 +374,11 @@ const ME_ROUTES: MeRoute[] = [
       const term = termName(r.term);
       // An incomplete import must never replace a timetable that works.
       if (r.failed.length) {
-        return json({ error: `NUSMods didn't answer for ${r.failed.join(', ')}. Nothing was changed; try again in a minute.`, failed: r.failed }, 502);
+        return json({ error: m().nusmodsNoAnswer(r.failed.join(', ')), failed: r.failed }, 502);
       }
       if (!r.trips.length && !r.unresolved.length) {
-        const why = r.missing.length ? `${r.missing.join(', ')} ${r.missing.length === 1 ? 'has' : 'have'} no classes in ${term}` : `no classes in that link run in ${term}`;
-        return json({ error: `Nothing imported: ${why}. Your timetable was not changed.`, missing: r.missing }, 422);
+        const why = r.missing.length ? m().modsNoClasses(r.missing.join(', '), r.missing.length !== 1, term) : m().linkNoClasses(term);
+        return json({ error: m().nothingImported(why), missing: r.missing }, 422);
       }
       const profile = await getProfile(db, session.user.id, deps.graph);
       profile.trips = r.trips.slice(0, PROFILE_LIMITS.trips);
@@ -406,7 +413,7 @@ const ME_ROUTES: MeRoute[] = [
       const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) : '';
       if (!name) return json({ error: 'give the key a name, so you know what uses it' }, 400);
       const made = await createKey(db, session.user.id, name, nowMs);
-      if (!made) return json({ error: `you can have ${MAX_KEYS} keys; revoke one first` }, 409);
+      if (!made) return json({ error: m().tooManyKeys(MAX_KEYS) }, 409);
       return json(made, 201);
     },
   },
@@ -464,7 +471,7 @@ const ME_ROUTES: MeRoute[] = [
       if (!env.TRIPS) return json({ error: 'trip tracking is not available' }, 503);
       const body = await readJson(req);
       const kind = SIGNALS.find((k) => k === body?.kind);
-      if (!kind) return json({ error: `kind is one of ${SIGNALS.join(', ')}` }, 400);
+      if (!kind) return json({ error: m().signalKinds(SIGNALS.join(', ')) }, 400);
       const profile = await getProfile(db, session.user.id, deps.graph);
       // A location travels in the body; it's used for this answer and not kept.
       const here = new URL(url);
@@ -778,7 +785,7 @@ export async function handleMe(
       return json({ error: 'could not send the email, try again later' }, 502);
     }
     // Same answer whether or not the address is blocked or already has an account.
-    return json({ ok: true, message: 'Check your email for a sign-in code.' });
+    return json({ ok: true, message: m().checkEmail });
   }
 
   if (path === '/auth/code' && req.method === 'POST') {
@@ -803,17 +810,17 @@ export async function handleMe(
       // Name the account, so a link someone else requested can't sign you in
       // to their account without you noticing. A dead link says so now.
       const email = safe ? await linkEmail(db, safe, nowMs) : null;
-      if (!email) return html(page('Link expired', EXPIRED), 400);
-      return html(page('Sign in', `<h1>Sign in to terminus</h1>
-<p class="hint">Continue as <strong>${escapeHtml(maskEmail(email))}</strong> on this device. If that isn't your address, close this page.</p>
-<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit" class="btn accent">Sign in</button></form>`));
+      if (!email) return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
+      return html(page(m().pageSignIn, `<h1>${m().signInTitle}</h1>
+<p class="hint">${m().continueAs(escapeHtml(maskEmail(email)))}</p>
+<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit" class="btn accent">${m().signInButton}</button></form>`));
     }
     if (req.method === 'POST') {
       const form = await req.formData().catch(() => null);
       const t = form?.get('t');
       const token = typeof t === 'string' ? await redeemLink(db, t, nowMs) : null;
       if (!token) {
-        return html(page('Link expired', EXPIRED), 400);
+        return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
       }
       return new Response(null, {
         status: 303,
@@ -890,15 +897,15 @@ export async function handleMe(
       // link); the POST decides.
       const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
       const a = link ? await approvable(db, link, nowMs) : null;
-      if (!a) return html(page('Request expired', APPROVE_EXPIRED), 400);
+      if (!a) return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);
       const device = escapeHtml(a.device);
       const buttons = a.choices
         .map((n) => `<button type="submit" name="n" value="${n}" class="btn">${n}</button>`)
         .join('');
-      return html(page('Approve sign-in', `<h1>Sign in terminus on ${device}?</h1>
-<p class="hint">Requested ${escapeHtml(sgtTime(a.created))}. Choose the number ${device} is showing.</p>
+      return html(page(m().pageApprove, `<h1>${m().approveTitle(device)}</h1>
+<p class="hint">${m().approveHint(escapeHtml(sgtTime(a.created)), device)}</p>
 <form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><div class="choices">${buttons}</div></form>
-<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><button type="submit" name="n" value="none" class="linkbtn">This wasn't me</button></form>`));
+<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><button type="submit" name="n" value="none" class="linkbtn">${m().notMe}</button></form>`));
     }
     if (req.method === 'POST') {
       if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429);
@@ -906,15 +913,15 @@ export async function handleMe(
       const r = form?.get('r');
       const n = Number(form?.get('n'));
       const out = typeof r === 'string' ? await decide(db, r, Number.isInteger(n) ? n : null, nowMs) : 'expired';
-      if (out === 'approved') return html(page('Approved', '<h1>Approved</h1><p class="hint">Go back to your device: it will be signed in in a few seconds. You can close this page.</p>'));
+      if (out === 'approved') return html(page(m().pageApproved, m().approvedHtml));
       if (out === 'denied') {
         const picked = form?.get('n') !== 'none';
         return html(
-          page('Cancelled', `<h1>Cancelled</h1><p class="hint">${picked ? "That wasn't the number on the device, so" : 'Nothing was signed in:'} the request is cancelled. If you were signing in, start again on your device.</p>`),
+          page(m().pageCancelled, m().cancelledHtml(picked)),
           picked ? 400 : 200,
         );
       }
-      return html(page('Request expired', APPROVE_EXPIRED), 400);
+      return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);
     }
   }
 

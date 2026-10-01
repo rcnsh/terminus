@@ -36,10 +36,17 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.Target
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
+import sh.rcn.terminus.Lang
+import androidx.compose.runtime.LaunchedEffect
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
     private val account: AccountViewModel by viewModels()
+
+    // Android 12 has no per-app language: the chosen one is applied here (Lang).
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(Lang.wrap(base))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -167,6 +174,7 @@ private fun App(vm: MainViewModel, account: AccountViewModel) {
                 onStart = { account.start { store.needsSetup = true; signedIn() } },
                 onSignIn = { account.beginSignIn(); screen = Screen.SignIn },
                 onPair = { screen = Screen.Pair },
+                onLang = { pref -> Lang.set(ctx, pref); recreateOn12(ctx) },
             )
             setup -> OnboardingScreen(acct, account, vm) { setup = false; vm.load(restart = true) }
             screen == Screen.Settings -> SettingsScreen(
@@ -178,25 +186,37 @@ private fun App(vm: MainViewModel, account: AccountViewModel) {
             else -> MainScreen(state, vm, onSettings = { screen = Screen.Settings })
         }
     }
+    // A language chosen here or on another device: Android 13+ redraws in it by itself.
+    LaunchedEffect(acct.langChanged) {
+        if (acct.langChanged) {
+            account.langShown()
+            recreateOn12(ctx)
+        }
+    }
     // A timetable shared from NUSMods once set up: import it after a yes.
     acct.sharedLink?.let { link ->
         if (state.paired && !setup) {
             AlertDialog(
                 onDismissRequest = account::dismissShared,
-                title = { Text("Import this timetable?") },
-                text = { Text("It replaces the classes imported before. Classes you added by hand stay.") },
-                confirmButton = { TextButton(onClick = { account.import(link); screen = Screen.Settings }) { Text("Import") } },
-                dismissButton = { TextButton(onClick = account::dismissShared) { Text("Cancel") } },
+                title = { Text(stringResource(R.string.import_timetable_title)) },
+                text = { Text(stringResource(R.string.import_timetable_text)) },
+                confirmButton = { TextButton(onClick = { account.import(link); screen = Screen.Settings }) { Text(stringResource(R.string.import_action)) } },
+                dismissButton = { TextButton(onClick = account::dismissShared) { Text(stringResource(R.string.cancel)) } },
             )
         }
     }
     state.pendingPair?.let { p ->
         AlertDialog(
             onDismissRequest = vm::dismissPairLink,
-            title = { Text("Pair this phone?") },
-            text = { Text("This link pairs this phone with ${p.account}. Only continue if that's your account.") },
-            confirmButton = { TextButton(onClick = { vm.pair(p.code) }) { Text("Pair") } },
-            dismissButton = { TextButton(onClick = vm::dismissPairLink) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.pair_phone_title)) },
+            text = { Text(stringResource(R.string.pair_phone_text, p.account)) },
+            confirmButton = { TextButton(onClick = { vm.pair(p.code) }) { Text(stringResource(R.string.pair)) } },
+            dismissButton = { TextButton(onClick = vm::dismissPairLink) { Text(stringResource(R.string.cancel)) } },
         )
     }
+}
+
+/** Android 12 has no per-app language: the activity starts again in the chosen one (Lang.wrap). */
+private fun recreateOn12(ctx: Context) {
+    if (android.os.Build.VERSION.SDK_INT < 33) (ctx as? android.app.Activity)?.recreate()
 }

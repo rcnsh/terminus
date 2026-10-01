@@ -26,7 +26,7 @@ object RideStyle {
     }
 
     fun apply(ctx: Context, b: Notification.Builder, card: Card, ride: Ride, now: Long): Notification.Builder {
-        b.setContentTitle(card.line ?: "On the ${ride.svc}").setContentText(ride.nextText(now))
+        b.setContentTitle(card.line ?: L.s(R.string.on_the, ride.svc)).setContentText(ride.nextText(now))
         if (ride.arriveMs > now) b.setWhen(ride.arriveMs).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
         else b.setShowWhen(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) b.setStyle(progress(ctx, ride, now))

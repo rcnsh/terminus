@@ -14,6 +14,7 @@ import { isoSeconds } from './format.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { PACES, type Pace } from './walk.ts';
 import { type LessonWeeks, type Term, dayOffReason, importedClassRuns, sgtDate, termEnded, termName } from './calendar.ts';
+import { LANG_PREFS, type LangPref, m } from './i18n.ts';
 
 export interface Place {
   key: string;
@@ -83,6 +84,8 @@ export interface Profile {
   share: string | null;
   /** The semester `trips` were imported for. Null until something is imported. */
   term: Term | null;
+  /** The language terminus speaks (phase 10): 'auto' follows each device. */
+  lang: LangPref;
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -101,6 +104,7 @@ export const DEFAULT_PROFILE: Profile = {
   once: [],
   share: null,
   term: null,
+  lang: 'auto',
 };
 
 export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24, usual: 30, once: 10 } as const;
@@ -162,6 +166,11 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean, is
       return { ok: false, error: 'seen must be a short list of names' };
     }
     p.seen = [...new Set(v as string[])];
+  }
+
+  if (raw.lang !== undefined) {
+    if (typeof raw.lang !== 'string' || !LANG_PREFS.includes(raw.lang as LangPref)) return { ok: false, error: 'lang must be auto, en or zh' };
+    p.lang = raw.lang as LangPref;
   }
 
   if (raw.homeWalkMin !== undefined) {
@@ -408,7 +417,7 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
   if (!next) {
     // After the last class of the day. Its trip home taken off today: staying.
     if (!homeStop || !prev || state.skipped.has(`home:${endOf(prev)}`)) return null;
-    return { to: homeStop, label: 'Home', why: 'home', from: prev.to, trip: null, fromVenue: prev.venue || null, lastEndMin: endOf(prev) };
+    return { to: homeStop, label: m().home, why: 'home', from: prev.to, trip: null, fromVenue: prev.venue || null, lastEndMin: endOf(prev) };
   }
   if (!prev) {
     return { to: next.to, label: next.label, why: 'class', from: homeStop, trip: next, fromVenue: null };
@@ -420,7 +429,7 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
   const goesHome = homeStop && gapMin > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
   if (goesHome && nowMin < returnAt && homeStop !== next.to) {
     // Still in class: nothing to catch yet, but the answer is the trip home.
-    return { to: homeStop, label: 'Home', why: 'gap-home', from: prev.to, trip: null, fromVenue: prev.venue || null };
+    return { to: homeStop, label: m().home, why: 'gap-home', from: prev.to, trip: null, fromVenue: prev.venue || null };
   }
   // In a long gap after going home, the origin is home, not the last class.
   const wentHome = goesHome && nowMin >= endOf(prev);
@@ -489,8 +498,8 @@ export function planChangesAt(profile: Profile, nowMs: number): number {
  */
 export function restLabel(profile: Profile, nowMs: number, h12 = false): string {
   const r = restSide(profile, nowMs);
-  if (r?.side === 'before' && classesOn(profile, nowMs).length) return `Day starts ${clockMin(r.startMin, h12)}`;
-  return 'Done for today';
+  if (r?.side === 'before' && classesOn(profile, nowMs).length) return m().dayStarts(clockMin(r.startMin, h12));
+  return m().doneForToday;
 }
 
 /** How far ahead to look for the next class: a whole semester break. */
@@ -506,34 +515,30 @@ export function nextClass(profile: Profile, nowMs: number, skipped: ReadonlySet<
   return null;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /** "Mon 28 Sep" in SGT. Built by hand: Intl output varies by runtime. */
 function shortDate(atMs: number): string {
   const d = new Date(atMs + 8 * 3_600_000);
-  return `${DAY_NAMES[d.getUTCDay()].slice(0, 3)} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return m().shortDate(d.getUTCDay(), d.getUTCDate(), d.getUTCMonth());
 }
-
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /** "Next: CS2030 @ COM1, tomorrow 10:00", or a plain line when nothing is scheduled. */
 export function restDetail(profile: Profile, nowMs: number, h12 = false, skipped: ReadonlySet<string> = NO_DAY_STATE.skipped): string {
   if (reimportReason(profile, nowMs) === 'ended' && profile.term) {
-    return `Your timetable is for ${termName(profile.term)} · import this semester's on the account page`;
+    return m().timetableFor(termName(profile.term));
   }
   const n = nextClass(profile, nowMs, skipped);
-  if (!n) return profile.trips.length || profile.manual.length ? 'No classes coming up' : 'Nothing on your timetable';
+  if (!n) return profile.trips.length || profile.manual.length ? m().noClassesComing : m().nothingOnTimetable;
   // Recess, exams, a public holiday: say why today is empty.
   const off = classesOn(profile, nowMs).length ? null : dayOffReason(nowMs);
   const when =
     n.daysAhead === 0
-      ? 'today'
+      ? m().today
       : n.daysAhead === 1
-        ? 'tomorrow'
+        ? m().tomorrow
         : n.daysAhead < 7
-          ? DAY_NAMES[n.trip.day]
+          ? m().dayNames[n.trip.day]
           : shortDate(nowMs + n.daysAhead * 86_400_000);
-  return `${off ? `${off} · ` : ''}Next: ${n.trip.label}, ${when} ${clockMin(n.trip.arriveByMin, h12)}`;
+  return m().nextClass(off, n.trip.label, when, clockMin(n.trip.arriveByMin, h12));
 }
 
 /* ------------------------------------------------------------------ */
@@ -569,6 +574,6 @@ export function timingFor(arriveAtIso: string | null | undefined, trip: Imported
   const slackS = Math.round((classAt - reachMs) / 1000);
   const status: OnTime = slackS >= ON_TIME_SLACK_S ? 'on-time' : slackS >= 0 ? 'tight' : 'late';
   // Same words as the class card (clock.ts): the colour carries "tight".
-  const text = status === 'late' ? `~${Math.max(1, Math.round(-slackS / 60))} min late` : `Arrive ${clockAt(reachMs, h12)} · ${slackText(slackS)}`;
+  const text = status === 'late' ? m().lateBy(Math.max(1, Math.round(-slackS / 60))) : m().arrive(clockAt(reachMs, h12), slackText(slackS));
   return { status, text, classAt: isoSeconds(classAt), reachAt: isoSeconds(reachMs) };
 }

@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.DayItem
 import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.widget.clock
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
+import sh.rcn.terminus.L
 
 /**
  * Today at a glance, from /me/day: each class with its leave-by, and the
@@ -37,7 +40,7 @@ internal fun DayTimeline(day: DayPlan, removed: DayItem?, onRemove: (DayItem) ->
     val ctx = LocalContext.current
     val fmt = { ms: Long -> clock(ctx, ms) }
     Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
-        Text("TODAY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+        Text(stringResource(R.string.today_heading), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
         if (removed != null) UndoBar(removed, onUndo, onDismissUndo)
         for (item in day.items) {
             // Keyed, so a swiped row's state doesn't pass to the one moving up.
@@ -52,6 +55,7 @@ internal fun DayTimeline(day: DayPlan, removed: DayItem?, onRemove: (DayItem) ->
 @Composable
 private fun Swipeable(item: DayItem, onRemove: (DayItem) -> Unit, content: @Composable () -> Unit) {
     val state = androidx.compose.material3.rememberSwipeToDismissBoxState()
+    val remove = stringResource(R.string.remove_from_today)
     androidx.compose.runtime.LaunchedEffect(state.currentValue) {
         if (state.currentValue != androidx.compose.material3.SwipeToDismissBoxValue.Settled) onRemove(item)
     }
@@ -65,11 +69,11 @@ private fun Swipeable(item: DayItem, onRemove: (DayItem) -> Unit, content: @Comp
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp)).padding(horizontal = 16.dp),
                 contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
-                Text("Remove from today", color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.remove_from_today), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.labelLarge)
             }
         },
         modifier = Modifier.semantics {
-            customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction("Remove from today") { onRemove(item); true })
+            customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction(remove) { onRemove(item); true })
         },
     ) {
         Box(Modifier.background(MaterialTheme.colorScheme.background)) { content() }
@@ -83,13 +87,13 @@ private fun UndoBar(item: DayItem, onUndo: () -> Unit, onDismiss: () -> Unit) {
         kotlinx.coroutines.delay(6_000)
         onDismiss()
     }
-    val name = if (item.kind == "home") "The trip home" else item.label.substringBefore(" @ ")
+    val name = if (item.kind == "home") stringResource(R.string.trip_home) else item.label.substringBefore(" @ ")
     Row(
         Modifier.fillMaxWidth().padding(bottom = 6.dp).background(MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(10.dp)).padding(start = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$name taken off today", color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        TextButton(onClick = onUndo) { Text("Undo", color = MaterialTheme.colorScheme.inversePrimary) }
+        Text(stringResource(R.string.taken_off_today, name), color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        TextButton(onClick = onUndo) { Text(stringResource(R.string.undo), color = MaterialTheme.colorScheme.inversePrimary) }
     }
 }
 
@@ -107,7 +111,7 @@ private fun Row(item: DayItem, fmt: (Long) -> String) {
             modifier = Modifier.width(72.dp),
         )
         Column(Modifier.weight(1f)) {
-            val title = if (item.kind == "home") "Home, from ${item.fromName ?: "your last class"}" else item.label
+            val title = if (item.kind == "home") stringResource(R.string.home_from, item.fromName ?: stringResource(R.string.your_last_class)) else item.label
             Text(
                 title,
                 fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
@@ -115,13 +119,14 @@ private fun Row(item: DayItem, fmt: (Long) -> String) {
                 textDecoration = if (item.status == "skipped") TextDecoration.LineThrough else null,
             )
             val sub = when (item.status) {
-                "skipped" -> "Not going today"
+                "skipped" -> stringResource(R.string.not_going_today)
                 "done" -> null
                 else -> item.onBus?.let { b ->
-                    listOfNotNull("On the ${b.svc}", b.off?.let { "off at $it" }, b.arriveMs?.let { "arrive ${fmt(it)}" }).joinToString(" · ")
+                    listOfNotNull(L.s(R.string.on_the, b.svc), b.off?.let { L.s(R.string.off_at, it) }, b.arriveMs?.let { L.s(R.string.arrive_at, fmt(it)) }).joinToString(" · ")
                 } ?: item.leaveAtMs?.let { at ->
-                    val by = "Leave by ${if (item.leaveEstimated) "~" else ""}${fmt(at)}"
-                    listOfNotNull(by, item.svc?.let { "$it from ${item.leaveStop ?: item.fromName}" } ?: "walk", item.timingText.takeIf { item.timingStatus == "late" }).joinToString(" · ")
+                    val time = if (item.leaveEstimated) L.s(R.string.approx, fmt(at)) else fmt(at)
+                    val by = L.s(R.string.leave_by, time)
+                    listOfNotNull(by, item.svc?.let { L.s(R.string.svc_from, it, item.leaveStop ?: item.fromName.orEmpty()) } ?: L.s(R.string.walk), item.timingText.takeIf { item.timingStatus == "late" }).joinToString(" · ")
                 }
             }
             sub?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }

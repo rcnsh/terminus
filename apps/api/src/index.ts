@@ -34,6 +34,7 @@ import { callerFor } from './access.ts';
 import { GRAPH } from './graph.ts';
 import { markBeta, siteOrigin } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
+import { langOfRequest, m, withLang } from './i18n.ts';
 
 // Pure functions of the static GRAPH -- computed once per isolate, served
 // with a long client cache, same spirit as GRAPH itself.
@@ -255,7 +256,8 @@ export default {
   },
 
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const res = await route(req, env, ctx);
+    // Every word the server writes is in this request's language (i18n.ts).
+    const res = await withLang(langOfRequest(req), () => route(req, env, ctx));
     // A redirect or a download body passes through untouched apart from headers.
     return withSecurityHeaders(res, new URL(req.url).pathname);
   },
@@ -281,7 +283,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       if (KEYED.includes(url.pathname)) {
         const caller = await callerFor(env, req, nowMs, ctx);
         if (!caller) {
-          return json({ error: `this needs an API key: create one at ${siteOrigin(env)}/account and send it as x-api-key` }, 401, {
+          return json({ error: m().needsKey(siteOrigin(env)) }, 401, {
             'www-authenticate': 'Bearer realm="terminus"',
           });
         }

@@ -77,11 +77,18 @@ const CASES = {
   'nearby-list': [{ home: { stops: ['PGP'] } }, `/me/nearby?${DORM}`],
 };
 
-for (const [name, [profile, path]] of Object.entries(CASES)) {
-  test(`golden: ${name}`, async () => {
-    const get = await account(profile);
+// Each case again with the account set to Chinese (phase 10), in zh/: the
+// same answers, every word the server writes in Chinese.
+const RUNS = [
+  ['', {}, DIR],
+  ['zh ', { lang: 'zh' }, new URL('./zh/', DIR)],
+];
+
+for (const [name, [profile, path]] of Object.entries(CASES)) for (const [tag, extra, dir] of RUNS) {
+  test(`golden: ${tag}${name}`, async () => {
+    const get = await account({ ...profile, ...extra });
     const body = await get(path);
-    const file = new URL(`${name}.json`, DIR);
+    const file = new URL(`${name}.json`, dir);
     const text = JSON.stringify(body, null, 2) + '\n';
     if (UPDATE || !fs.existsSync(file)) {
       fs.writeFileSync(file, text);

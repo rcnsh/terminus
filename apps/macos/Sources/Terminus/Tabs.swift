@@ -11,10 +11,10 @@ struct Tabs: View {
     private enum Tab: Hashable { case plan, place(String), code(String, String), nearby }
 
     private var tabs: [(Tab, String, String)] {
-        var out: [(Tab, String, String)] = [(.plan, "Next", "clock")]
+        var out: [(Tab, String, String)] = [(.plan, L("Next"), "clock")]
         out += model.places.map { (.place($0.key), $0.label, "mappin") }
         if case .code(let c, let l) = model.target { out.append((.code(c, l), l, "magnifyingglass")) }
-        out.append((.nearby, "Nearby", "location"))
+        out.append((.nearby, L("Nearby"), "location"))
         return out
     }
 

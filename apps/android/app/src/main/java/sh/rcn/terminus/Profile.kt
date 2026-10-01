@@ -19,6 +19,11 @@ class ProfileDoc(val json: JSONObject) {
         json.put("home", if (unique.isEmpty()) JSONObject.NULL else JSONObject().put("stops", JSONArray(unique)))
     }
 
+    /** The account's language (phase 10): auto, en or zh. */
+    var lang: String
+        get() = json.optString("lang", "auto")
+        set(v) { json.put("lang", v) }
+
     var homeWalkMin: Int
         get() = json.optInt("homeWalkMin", 5)
         set(v) { json.put("homeWalkMin", v.coerceIn(0, 30)) }
@@ -147,10 +152,16 @@ fun placeKey(label: String, taken: List<String>): String {
     return key
 }
 
-/** Monday first, as a week reads; values are the server's 0 = Sunday. */
-val WEEKDAYS = listOf(1 to "Monday", 2 to "Tuesday", 3 to "Wednesday", 4 to "Thursday", 5 to "Friday", 6 to "Saturday", 0 to "Sunday")
+private val DAY_NAMES = listOf(1 to R.string.monday, 2 to R.string.tuesday, 3 to R.string.wednesday, 4 to R.string.thursday, 5 to R.string.friday, 6 to R.string.saturday, 0 to R.string.sunday)
+private val DAY_SHORT = mapOf(1 to R.string.monday_short, 2 to R.string.tuesday_short, 3 to R.string.wednesday_short, 4 to R.string.thursday_short, 5 to R.string.friday_short, 6 to R.string.saturday_short, 0 to R.string.sunday_short)
 
-fun dayName(day: Int) = WEEKDAYS.firstOrNull { it.first == day }?.second ?: "?"
+/** Monday first, as a week reads; values are the server's 0 = Sunday. */
+val WEEKDAYS: List<Pair<Int, String>> get() = DAY_NAMES.map { (d, id) -> d to L.s(id) }
+
+fun dayName(day: Int) = DAY_NAMES.firstOrNull { it.first == day }?.second?.let { L.s(it) } ?: "?"
+
+/** "Mon", "周一". */
+fun dayShort(day: Int) = DAY_SHORT[day]?.let { L.s(it) } ?: "?"
 
 /**
  * Where a picker for "later today" starts: half an hour from now on campus
@@ -168,9 +179,9 @@ fun hhmm(min: Int) = "%02d:%02d".format(java.util.Locale.ROOT, min / 60, min % 6
 fun hhmm12(min: Int): String {
     val h = min / 60
     val m = min % 60
-    val suffix = if (h < 12) "am" else "pm"
     val h12 = if (h % 12 == 0) 12 else h % 12
-    return if (m == 0) "$h12 $suffix" else "$h12:%02d $suffix".format(java.util.Locale.ROOT, m)
+    val time = if (m == 0) "$h12" else "$h12:%02d".format(java.util.Locale.ROOT, m)
+    return L.s(if (h < 12) R.string.time_am else R.string.time_pm, time)
 }
 
 private fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }

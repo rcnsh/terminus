@@ -13,6 +13,7 @@
 
 import type { Answer, Arrival, Quality, ScoredOption, Stop } from './types.ts';
 import { LABEL_MAX, WALK, isMeasured } from './config.ts';
+import { m } from './i18n.ts';
 
 /**
  * The contract caps `label` at 40 chars, but a Quick Settings tile truncates
@@ -27,9 +28,9 @@ export function fitsTile(label: string): boolean {
 }
 
 export function mins(seconds: number): string {
-  if (seconds < 45) return 'now';
-  if (seconds < 90) return '1 min';
-  return `${Math.round(seconds / 60)} min`;
+  if (seconds < 45) return m().now;
+  if (seconds < 90) return m().oneMin;
+  return m().nMin(Math.round(seconds / 60));
 }
 
 const ABBREV: Array<[RegExp, string]> = [
@@ -55,7 +56,7 @@ export function clampLabel(s: string): string {
 }
 
 function crowdWord(c: Arrival['crowd']): string | null {
-  return c === 'low' ? 'quiet' : c === 'medium' ? 'filling' : c === 'high' ? 'packed' : null;
+  return c === 'low' ? m().crowdLow : c === 'medium' ? m().crowdMedium : c === 'high' ? m().crowdHigh : null;
 }
 
 function ageMin(nowMs: number, fetchedAt: number): number {
@@ -69,8 +70,8 @@ function ageMin(nowMs: number, fetchedAt: number): number {
  * default headway, not a prediction. It never becomes a number on screen.
  */
 export function etaPhrase(o: ScoredOption): string {
-  if (o.quality === 'unknown') return 'no times';
-  return o.quality === 'scheduled' ? `~${mins(o.boardS)}` : mins(o.boardS);
+  if (o.quality === 'unknown') return m().noTimes;
+  return o.quality === 'scheduled' ? m().approx(mins(o.boardS)) : mins(o.boardS);
 }
 
 export interface FormatInput {
@@ -114,7 +115,7 @@ export function renderAlt(o: ScoredOption): string {
 function buildLabel(best: ScoredOption, nowMs: number): string {
   const svc = best.svc.length > 6 ? best.svc.slice(0, 6) : best.svc;
   if (best.quality === 'stale') {
-    return clampLabel(`${svc} · ${mins(best.boardS)} (${ageMin(nowMs, best.fetchedAt)}m)`);
+    return clampLabel(m().staleLabel(svc, mins(best.boardS), ageMin(nowMs, best.fetchedAt)));
   }
   return clampLabel(`${svc} · ${etaPhrase(best)}`);
 }
@@ -125,49 +126,47 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   // Being sent to the stop you are NOT standing at is the answer that saves
   // the bus, and it is also the one that looks wrong. Say it out loud.
   const elsewhere = Boolean(f.nearestStop && f.nearestStop.code !== best.stop.code);
-  if (elsewhere && f.nearestStop?.opposite === best.stop.code) parts.push('cross the road');
-  else if (best.walkS >= 60) parts.push(`${mins(best.walkS)} walk`);
-  else if (elsewhere) parts.push('short walk');
+  if (elsewhere && f.nearestStop?.opposite === best.stop.code) parts.push(m().crossRoad);
+  else if (best.walkS >= 60) parts.push(m().walkToStop(mins(best.walkS)));
+  else if (elsewhere) parts.push(m().shortWalk);
   // No nearestStop means no coordinates, so we cannot claim you are anywhere.
-  else if (f.nearestStop) parts.push('right here');
+  else if (f.nearestStop) parts.push(m().rightHere);
 
   // The bus only stops across the road from the destination: say where to
   // get off, or you ride on waiting for a stop it never calls at.
-  if (best.off && best.hops > 0) parts.push(`off at ${shortStop(best.off.name)}`);
+  if (best.off && best.hops > 0) parts.push(m().offAt(shortStop(best.off.name)));
 
   if (f.destLabel && best.hops > 0) {
     parts.push(
       best.quality === 'unknown'
-        ? `${f.destLabel}, ${best.hops} stop${best.hops === 1 ? '' : 's'}`
-        : `${f.destLabel} in ~${mins(best.totalS)}`,
+        ? m().destStops(f.destLabel, best.hops)
+        : m().destIn(f.destLabel, mins(best.totalS)),
     );
   } else if (f.destLabel) {
-    parts.push(`at ${f.destLabel}`);
+    parts.push(m().atDest(f.destLabel));
   }
 
   // The whole way on foot, for comparison: "walking 18 min", not "walk", which reads as a walk to the bus.
-  if (verdict === 'close' && f.walkAllS != null) parts.push(`walking ${mins(f.walkAllS)}`);
+  if (verdict === 'close' && f.walkAllS != null) parts.push(m().walkingAll(mins(f.walkAllS)));
 
   const crowd = crowdWord(best.arrival?.crowd ?? null);
   if (crowd) parts.push(crowd);
 
   // Degrade in public: an unresolvable direction is worse than a stale time,
   // because it is the failure that walks you onto the wrong bus.
-  if (best.ambiguousBerth) parts.push('direction unconfirmed');
+  if (best.ambiguousBerth) parts.push(m().directionUnconfirmed);
 
-  if (best.quality === 'stale') parts.push(`${ageMin(f.nowMs, best.fetchedAt)} min old`);
-  else if (best.quality === 'scheduled') parts.push('estimated');
-  else if (best.quality === 'unknown') parts.push('live times unavailable');
+  if (best.quality === 'stale') parts.push(m().minOld(ageMin(f.nowMs, best.fetchedAt)));
+  else if (best.quality === 'scheduled') parts.push(m().estimated);
+  else if (best.quality === 'unknown') parts.push(m().liveUnavailable);
 
   if (f.alt) {
     // Same service off a different stop: naming the service alone reads as
     // "another D2 is coming here", which is not what it means.
     // "or A1 in 14 min": when it comes, not how long it takes.
     const raw = etaPhrase(f.alt);
-    const eta = raw === 'now' || raw === 'no times' ? raw : `in ${raw}`;
-    parts.push(
-      f.alt.svc === best.svc ? `or ${shortStop(f.alt.stop.name)} ${eta}` : `or ${f.alt.svc} ${eta}`,
-    );
+    const plain = raw === m().now || raw === m().noTimes;
+    parts.push(m().orAlt(f.alt.svc === best.svc ? shortStop(f.alt.stop.name) : f.alt.svc, raw, plain));
   }
 
   return parts.join(' · ');
@@ -195,14 +194,14 @@ export function buildAnswer(f: FormatInput): Answer {
     // A short walk with nothing to board is not an outage, it is an answer.
     const trivial = walk != null && walk <= WALK.mentionWithinS;
     const label = clampLabel(
-      walk == null ? 'No buses running' : trivial ? `Walk · ${mins(walk)}` : `No bus · walk ${mins(walk)}`,
+      walk == null ? m().noBuses : trivial ? m().walkLabel(mins(walk)) : m().noBusWalk(mins(walk)),
     );
     const detail =
       walk == null
-        ? 'Services ended for the night'
+        ? m().servicesEnded
         : trivial
-          ? `${f.destLabel ?? 'It'} is a ${mins(walk)} walk`
-          : `Services ended · ${mins(walk)} walk to ${f.destLabel ?? 'there'}`;
+          ? m().isAWalk(f.destLabel, mins(walk))
+          : m().endedWalkTo(mins(walk), f.destLabel);
     return {
       label,
       detail,
@@ -240,15 +239,15 @@ export function buildAnswer(f: FormatInput): Answer {
   if (verdict === 'win' && f.walkAllS != null) {
     const busPhrase =
       best.quality === 'unknown'
-        ? `${best.svc} has no live times`
-        : `${best.svc} would be ${mins(best.totalS)}`;
+        ? m().busNoLive(best.svc)
+        : m().busWouldBe(best.svc, mins(best.totalS));
     return {
       ...common,
-      label: clampLabel(`Walk · ${mins(f.walkAllS)}`),
+      label: clampLabel(m().walkLabel(mins(f.walkAllS))),
       detail: [
-        f.destLabel ? `On foot to ${f.destLabel}` : 'Faster on foot',
+        f.destLabel ? m().onFootTo(f.destLabel) : m().fasterOnFoot,
         busPhrase,
-        `from ${shortStop(best.stop.name)}`,
+        m().fromStop(shortStop(best.stop.name)),
       ].join(' · '),
       alt: renderAlt(best),
       departsAt: null,

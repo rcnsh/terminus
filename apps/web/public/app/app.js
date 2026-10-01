@@ -5,7 +5,7 @@
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
-import { $, api, clock, el } from '/account/dom.js';
+import { $, api, clock, el, t } from '/account/dom.js';
 import { show } from '/account/preview.js';
 
 const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
@@ -22,7 +22,7 @@ let places = [];
 
 /** GET a JSON route; `cached` is when the service worker's copy was fetched, if that's what came back. */
 async function get(path) {
-  const res = await fetch(path, { credentials: 'same-origin' });
+  const res = await fetch(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
   if (res.status === 401) {
     // Sign in on the account page, then come back here. In the installed app
     // on iOS this is its own sign-in: its storage is separate from Safari's.
@@ -36,7 +36,7 @@ async function get(path) {
 
 function stale(cachedAt) {
   $('#offline').hidden = cachedAt === null;
-  if (cachedAt !== null) $('#offline').textContent = `Offline: showing what terminus saw at ${clock(new Date(cachedAt).toISOString())}.`;
+  if (cachedAt !== null) $('#offline').textContent = t('Offline: showing what terminus saw at {0}.', clock(new Date(cachedAt).toISOString()));
   document.body.classList.toggle('is-offline', cachedAt !== null);
 }
 
@@ -76,7 +76,7 @@ async function refresh() {
     const [next, day] = await Promise.all([get(`/me/next${query(params)}`), get(`/me/day${query()}`).catch(() => null)]);
     show(next.data);
     stale(next.cached);
-    $('#updated').textContent = `Updated ${clock(new Date(next.cached ?? Date.now()).toISOString())}`;
+    $('#updated').textContent = t('Updated {0}', clock(new Date(next.cached ?? Date.now()).toISOString()));
     if (day) renderDay(day.data);
     if (JSON.stringify(next.data.places ?? []) !== JSON.stringify(places)) {
       places = next.data.places ?? [];
@@ -85,7 +85,7 @@ async function refresh() {
   } catch (err) {
     if (err.message === 'signed out') return;
     stale(Date.now());
-    $('#offline').textContent = 'Offline, and nothing saved yet. It will update when you are back online.';
+    $('#offline').textContent = t('Offline, and nothing saved yet. It will update when you are back online.');
   }
 }
 
@@ -99,15 +99,15 @@ function renderChips() {
       onclick: () => {
         target = t;
         renderChips();
-        $('#preview').replaceChildren(el('div', { class: 'detail', textContent: 'Checking…' }));
+        $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
         $('#updated').textContent = '';
         refresh();
       },
     });
   $('#chips').replaceChildren(
-    chip('Next', { kind: 'plan' }),
+    chip(t('Next'), { kind: 'plan' }),
     ...places.map((p) => chip(p.label, { kind: 'place', key: p.key })),
-    chip('Nearby', { kind: 'nearby' }),
+    chip(t('Nearby'), { kind: 'nearby' }),
   );
 }
 
@@ -117,15 +117,15 @@ async function refreshNearby() {
   box.className = 'widget';
   const at = await here({ ask: true });
   if (!at) {
-    box.replaceChildren(el('div', { class: 'detail', textContent: 'Allow location for this site to see the buses near you.' }));
+    box.replaceChildren(el('div', { class: 'detail', textContent: t('Allow location for this site to see the buses near you.') }));
     return;
   }
   try {
     const { data } = await get(`/me/nearby${query(at)}`);
     stale(null);
-    $('#updated').textContent = `Updated ${clock(new Date().toISOString())}`;
+    $('#updated').textContent = t('Updated {0}', clock(new Date().toISOString()));
     if (!data.stops?.length) {
-      box.replaceChildren(el('div', { class: 'detail', textContent: 'No campus bus stops near you.' }));
+      box.replaceChildren(el('div', { class: 'detail', textContent: t('No campus bus stops near you.') }));
       return;
     }
     box.replaceChildren(
@@ -133,17 +133,17 @@ async function refreshNearby() {
         el(
           'section',
           { class: 'nearby-stop' },
-          el('header', {}, el('div', { textContent: s.stop.name }), el('span', { textContent: `${Math.max(1, Math.round(s.walkS / 60))} min walk` })),
+          el('header', {}, el('div', { textContent: s.stop.name }), el('span', { textContent: t('{0} min walk', Math.max(1, Math.round(s.walkS / 60))) })),
           ...(s.board.length
             ? s.board.map((b) =>
-                el('div', { class: 'nearby-row' }, el('span', { textContent: b.svc }), el('span', { textContent: b.etaS < 60 ? 'Arriving' : `${b.quality === 'scheduled' ? '~' : ''}${Math.round(b.etaS / 60)} min` })),
+                el('div', { class: 'nearby-row' }, el('span', { textContent: b.svc }), el('span', { textContent: b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', Math.round(b.etaS / 60))) : t('{0} min', Math.round(b.etaS / 60)) })),
               )
-            : [el('div', { class: 'detail', textContent: s.available ? 'No buses due' : 'No times right now' })]),
+            : [el('div', { class: 'detail', textContent: s.available ? t('No buses due') : t('No times right now') })]),
         ),
       ),
     );
   } catch (err) {
-    if (err.message !== 'signed out') box.replaceChildren(el('div', { class: 'detail', textContent: 'Nearby needs a connection.' }));
+    if (err.message !== 'signed out') box.replaceChildren(el('div', { class: 'detail', textContent: t('Nearby needs a connection.') }));
   }
 }
 
@@ -154,18 +154,18 @@ async function refreshNearby() {
 let undoTimer = null;
 async function removeFromToday(it, li) {
   li.remove();
-  const name = it.kind === 'home' ? 'The trip home' : it.label.split(' @ ')[0];
+  const name = it.kind === 'home' ? t('The trip home') : it.label.split(' @ ')[0];
   const bar = $('#today-undo');
   const hide = () => {
     bar.hidden = true;
     clearTimeout(undoTimer);
   };
   bar.replaceChildren(
-    el('span', { textContent: `${name} taken off today` }),
+    el('span', { textContent: t('{0} taken off today', name) }),
     el('button', {
       type: 'button',
       class: 'linkish',
-      textContent: 'Undo',
+      textContent: t('Undo'),
       onclick: async () => {
         hide();
         try {
@@ -183,7 +183,7 @@ async function removeFromToday(it, li) {
     show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: 'skipped', trip: it.key } }));
   } catch {
     hide();
-    $('#offline').textContent = "Couldn't remove that. Check your connection.";
+    $('#offline').textContent = t("Couldn't remove that. Check your connection.");
   }
   refresh();
 }
@@ -194,13 +194,13 @@ function renderDay(day) {
   $('#today').hidden = items.length === 0 && $('#today-undo').hidden;
   $('#today-list').replaceChildren(
     ...items.map((it) => {
-      const title = it.kind === 'home' ? `Home, from ${it.fromName ?? 'your last class'}` : it.label;
+      const title = it.kind === 'home' ? t('Home, from {0}', it.fromName ?? t('your last class')) : it.label;
       let sub = null;
-      if (it.status === 'skipped') sub = 'Not going today';
-      else if (it.onBus) sub = [`On the ${it.onBus.svc}`, it.onBus.off ? `off at ${it.onBus.off}` : null, it.onBus.arrive ? `arrive ${clock(it.onBus.arrive)}` : null].filter(Boolean).join(' · ');
+      if (it.status === 'skipped') sub = t('Not going today');
+      else if (it.onBus) sub = [t('On the {0}', it.onBus.svc), it.onBus.off ? t('off at {0}', it.onBus.off) : null, it.onBus.arrive ? t('arrive {0}', clock(it.onBus.arrive)) : null].filter(Boolean).join(' · ');
       else if (it.status !== 'done' && it.leave?.at) {
-        const how = it.leave.svc ? `${it.leave.svc} from ${it.leave.stop ?? it.fromName}` : 'walk';
-        sub = [`Leave by ${it.leave.estimated ? '~' : ''}${clock(it.leave.at)}`, how, it.timing?.status === 'late' ? it.timing.text : null].filter(Boolean).join(' · ');
+        const how = it.leave.svc ? t('{0} from {1}', it.leave.svc, it.leave.stop ?? it.fromName) : t('walk');
+        sub = [t('Leave by {0}', it.leave.estimated ? t('~{0}', clock(it.leave.at)) : clock(it.leave.at)), how, it.timing?.status === 'late' ? it.timing.text : null].filter(Boolean).join(' · ');
       }
       const li = el(
         'li',
@@ -209,7 +209,7 @@ function renderDay(day) {
         el('span', { class: 'what' }, el('span', { class: 'title', textContent: title }), sub ? el('span', { class: 'sub', textContent: sub }) : ''),
       );
       if (it.removable) {
-        li.append(el('button', { type: 'button', class: 'remove-today', textContent: '×', 'aria-label': `Remove ${title} from today`, onclick: () => removeFromToday(it, li) }));
+        li.append(el('button', { type: 'button', class: 'remove-today', textContent: '×', 'aria-label': t('Remove {0} from today', title), onclick: () => removeFromToday(it, li) }));
       }
       return li;
     }),
@@ -282,14 +282,14 @@ async function setupPush() {
   const render = (on, text) => {
     box.hidden = false;
     $('#notify-text').textContent = text;
-    $('#notify-on').textContent = on ? 'Turn off' : 'Turn on';
+    $('#notify-on').textContent = on ? t('Turn off') : t('Turn on');
     $('#notify-on').className = `btn small ${on ? 'ghost' : 'accent'}`;
     $('#notify-on').dataset.on = on ? '1' : '';
   };
-  const OFF = 'A heads-up before you need to set off, and when your bus leaves, a quick "did you catch it?".';
-  const ON = 'On for this device. They follow your trip, the same as on your other devices.';
+  const OFF = t('A heads-up before you need to set off, and when your bus leaves, a quick "did you catch it?".');
+  const ON = t('On for this device. They follow your trip, the same as on your other devices.');
   if (perm === 'denied') {
-    render(false, 'Notifications are blocked for this site. Allow them in your browser settings to turn this on.');
+    render(false, t('Notifications are blocked for this site. Allow them in your browser settings to turn this on.'));
     $('#notify-on').hidden = true;
     return;
   }
@@ -317,10 +317,10 @@ async function setupPush() {
         await subscribe();
         render(true, ON);
       } else {
-        render(false, 'Notifications stay off: the browser was told not to allow them.');
+        render(false, t('Notifications stay off: the browser was told not to allow them.'));
       }
     } catch (err) {
-      render(false, `Couldn't turn them on. ${err.message}`);
+      render(false, t("Couldn't turn them on. {0}", err.message));
     } finally {
       btn.disabled = false;
     }

@@ -8,6 +8,8 @@ import java.time.Instant
 
 /** The ride on the bus (phase 6): parsed from card.ride, placed by the clock. */
 class RideTest {
+    init { TestStrings.install() }
+
     private val board = Instant.parse("2026-10-01T01:41:00Z").toEpochMilli()
     private val arrive = board + 9 * 60_000
 

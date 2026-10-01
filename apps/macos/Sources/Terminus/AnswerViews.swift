@@ -16,7 +16,7 @@ struct AnswerDetail: View {
                 if a.isFree {
                     // Nothing to catch: no bus to mistake for advice.
                     Row(icon: "calendar", text: a.detail)
-                    Row(icon: "location", text: "Buses near you are under Nearby.").foregroundStyle(.secondary)
+                    Row(icon: "location", text: L("Buses near you are under Nearby.")).foregroundStyle(.secondary)
                 } else if a.isClassPlan {
                     // Each arrival next to the bus it belongs to.
                     // The bus to catch (it names the stop), then when it gets you there.
@@ -65,7 +65,7 @@ struct AnswerDetail: View {
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Checking…").foregroundStyle(.secondary)
+                    Text(L("Checking…")).foregroundStyle(.secondary)
                 }
             }
         }
@@ -111,11 +111,11 @@ struct NearbyList: View {
                         HStack {
                             Text(s.stop.name).font(.system(size: 13, weight: .semibold))
                             Spacer()
-                            Text(s.walkS < 60 ? "You're here" : "\((s.walkS + 30) / 60) min walk")
+                            Text(s.walkS < 60 ? L("You're here") : L("%@ min walk", "\((s.walkS + 30) / 60)"))
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         if s.board.isEmpty || !s.available {
-                            Text(s.available ? "Nothing due" : "No live data").font(.caption).foregroundStyle(.secondary)
+                            Text(s.available ? L("Nothing due") : L("No live data")).font(.caption).foregroundStyle(.secondary)
                         } else {
                             FlowPills(rows: s.board)
                         }
@@ -125,7 +125,7 @@ struct NearbyList: View {
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Checking…").foregroundStyle(.secondary)
+                    Text(L("Checking…")).foregroundStyle(.secondary)
                 }
                 .card()
             }
@@ -156,8 +156,8 @@ struct FlowPills: View {
     }
 
     private func eta(_ r: BoardRow) -> String {
-        guard let s = r.etaS else { return r.quality == "ended" ? "ended" : "–" }
-        return s < 45 ? "now" : "\((s + 30) / 60)m"
+        guard let s = r.etaS else { return r.quality == "ended" ? L("ended") : "–" }
+        return s < 45 ? L("now") : L("%@m", "\((s + 30) / 60)")
     }
 }
 
@@ -171,13 +171,13 @@ struct TodayList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionLabel(text: "Today")
+            SectionLabel(text: L("Today"))
             // Just taken off today: Undo, for a few seconds.
             if let r = removed {
                 HStack {
-                    Text("\(r.kind == "home" ? "The trip home" : r.label.components(separatedBy: " @ ")[0]) taken off today").font(.callout)
+                    Text(L("%@ taken off today", r.kind == "home" ? L("The trip home") : r.label.components(separatedBy: " @ ")[0])).font(.callout)
                     Spacer()
-                    Button("Undo", action: onUndo).buttonStyle(.plain).foregroundStyle(.tint).fontWeight(.medium)
+                    Button(L("Undo"), action: onUndo).buttonStyle(.plain).foregroundStyle(.tint).fontWeight(.medium)
                 }
                 .padding(.vertical, 5).padding(.horizontal, 8)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
@@ -212,8 +212,8 @@ private struct TodayRow: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .opacity(hovering ? 1 : 0)
-                    .help("Remove from today")
-                    .accessibilityLabel("Remove \(item.title) from today")
+                    .help(L("Remove from today"))
+                    .accessibilityLabel(L("Remove %@ from today", item.title))
             }
         }
         .opacity(past ? 0.5 : 1)
@@ -222,7 +222,7 @@ private struct TodayRow: View {
         // One element per row; the hover-only × is its "Remove from today" action.
         .accessibilityElement(children: .combine)
         .accessibilityActions {
-            if item.removable == true { Button("Remove from today") { onRemove(item) } }
+            if item.removable == true { Button(L("Remove from today")) { onRemove(item) } }
         }
     }
 }

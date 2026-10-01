@@ -43,7 +43,7 @@ final class SetupModel {
         } catch let e as ApiError {
             message = e.message
         } catch {
-            message = "Couldn't reach terminus. Check your connection and try again."
+            message = L("Couldn't reach terminus. Check your connection and try again.")
         }
     }
 
@@ -87,10 +87,10 @@ final class SetupModel {
                 message = nil
             } catch let e as ApiError {
                 profile = current
-                message = "Not saved: \(e.message)"
+                message = L("Not saved: %@", e.message)
             } catch {
                 profile = current
-                message = "Not saved: couldn't reach terminus"
+                message = L("Not saved: couldn't reach terminus")
             }
         }
     }
@@ -109,7 +109,7 @@ final class SetupModel {
         } catch let e as ApiError {
             message = e.message
         } catch {
-            message = "Couldn't reach terminus. Check your connection and try again."
+            message = L("Couldn't reach terminus. Check your connection and try again.")
         }
     }
 
@@ -130,7 +130,7 @@ final class SetupModel {
         } catch let e as ApiError {
             message = e.message
         } catch {
-            message = "Couldn't reach terminus. Check your connection and try again."
+            message = L("Couldn't reach terminus. Check your connection and try again.")
         }
     }
 
@@ -143,7 +143,7 @@ final class SetupModel {
         } catch let e as ApiError {
             message = e.message
         } catch {
-            message = "Couldn't remove it. Try again in a moment."
+            message = L("Couldn't remove it. Try again in a moment.")
         }
     }
 
@@ -155,9 +155,9 @@ final class SetupModel {
             message = nil
         } catch let e as ApiError {
             // 403: an account without an email can't add devices.
-            message = e.status == 403 ? "Add an email to your account first: devices are added to an account with one." : e.message
+            message = e.status == 403 ? L("Add an email to your account first: devices are added to an account with one.") : e.message
         } catch {
-            message = "Couldn't reach terminus. Check your connection and try again."
+            message = L("Couldn't reach terminus. Check your connection and try again.")
         }
     }
 
@@ -175,7 +175,7 @@ final class SetupModel {
             guard !Task.isCancelled, pairCode == code, let now = try? await api.devices() else { continue }
             if let added = now.first(where: { !known.contains($0.id) }) {
                 // A tick over the code for a moment, then back to the list.
-                self.added = added.name ?? "Device"
+                self.added = added.name ?? L("Device")
                 try? await Task.sleep(for: .seconds(1.2))
                 devices = now
                 pairCode = nil
@@ -192,7 +192,7 @@ final class SetupModel {
     }
 
     private func object(_ data: Data) throws -> [String: Any] {
-        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ApiError(status: 0, message: "Unexpected answer from terminus") }
+        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ApiError(status: 0, message: L("Unexpected answer from terminus")) }
         return o
     }
 }
@@ -217,9 +217,9 @@ struct SetupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Step \(step + 1) of \(steps)").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                Text(L("Step %@ of %@", "\(step + 1)", "\(steps)")).font(.callout.weight(.medium)).foregroundStyle(.secondary)
                 Spacer()
-                Button("Skip setup") { finish() }.buttonStyle(.link)
+                Button(L("Skip setup")) { finish() }.buttonStyle(.link)
             }
             ProgressView(value: Double(step + 1), total: Double(steps)).padding(.vertical, 10)
 
@@ -228,7 +228,7 @@ struct SetupView: View {
                     VStack(spacing: 12) {
                         if let m = setup.message {
                             Text(m).foregroundStyle(.red)
-                            Button("Try again") { Task { await setup.load() } }
+                            Button(L("Try again")) { Task { await setup.load() } }
                         } else {
                             ProgressView()
                         }
@@ -253,9 +253,9 @@ struct SetupView: View {
             .frame(maxHeight: .infinity, alignment: .top)
 
             HStack {
-                if step > 0 { Button("Back") { step -= 1 } }
+                if step > 0 { Button(L("Back")) { step -= 1 } }
                 Spacer()
-                Button(step + 1 >= steps ? "Done" : "Continue") { step + 1 >= steps ? finish() : (step += 1) }
+                Button(step + 1 >= steps ? L("Done") : L("Continue")) { step + 1 >= steps ? finish() : (step += 1) }
                     .keyboardShortcut(.defaultAction)
                     .disabled(setup.profile == nil || setup.importing)
             }
@@ -302,9 +302,9 @@ private struct HomeStep: View {
     private var residence: Campus.Residence? { setup.campus?.residences.first { $0.stops == setup.homeStops } }
 
     var body: some View {
-        StepTitle(title: "Where do you live?", sub: "Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live.")
+        StepTitle(title: L("Where do you live?"), sub: L("Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live."))
         if let campus = setup.campus {
-            Picker("Residence", selection: Binding(
+            Picker(L("Residence"), selection: Binding(
                 get: { offCampus || residence == nil ? "" : residence!.code },
                 set: { code in
                     if let r = campus.residences.first(where: { $0.code == code }) {
@@ -315,36 +315,36 @@ private struct HomeStep: View {
                     }
                 }
             )) {
-                Text("Off campus, or I'll pick a stop").tag("")
+                Text(L("Off campus, or I'll pick a stop")).tag("")
                 ForEach(campus.residences, id: \.code) { Text($0.name).tag($0.code) }
             }
             if let r = residence, !offCampus {
-                Hint("Stops for \(r.name): \(r.stops.map(campus.stopName).joined(separator: ", ")). terminus won't send you home when you're already there.")
+                Hint(L("Stops for %@: %@. terminus won't send you home when you're already there.", r.name, r.stops.map(campus.stopName).joined(separator: ", ")))
             } else {
-                Picker("Home stop", selection: Binding(
+                Picker(L("Home stop"), selection: Binding(
                     get: { setup.homeStops.first ?? "" },
                     set: { code in setup.setHomeStops([code] + setup.homeStops.dropFirst().filter { $0 != code }) }
                 )) {
-                    Text("Choose a stop").tag("")
+                    Text(L("Choose a stop")).tag("")
                     ForEach(campus.stops, id: \.code) { Text($0.name).tag($0.code) }
                 }
-                Button("Pick the stop nearest me") {
-                    locating = "Finding the nearest stop…"
+                Button(L("Pick the stop nearest me")) {
+                    locating = L("Finding the nearest stop…")
                     Task {
                         if let loc = await app.whereAmI(), let near = campus.nearest(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) {
                             setup.setHomeStops([near.code] + setup.homeStops.filter { $0 != near.code })
-                            locating = "Picked \(near.name). Change it if you use a different stop."
+                            locating = L("Picked %@. Change it if you use a different stop.", near.name)
                         } else {
-                            locating = "Couldn't get this Mac's location. Pick your stop instead."
+                            locating = L("Couldn't get this Mac's location. Pick your stop instead.")
                         }
                     }
                 }
                 .buttonStyle(.link)
                 if let locating { Hint(locating) }
             }
-            Stepper("Walk from home to your stop: \(setup.homeWalkMin) min", value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: 0...30)
+            Stepper(L("Walk from home to your stop: %@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: 0...30)
                 .padding(.top, 6)
-            Hint("Counted in your leave-by time when terminus doesn't have your location.")
+            Hint(L("Counted in your leave-by time when terminus doesn't have your location."))
         } else {
             ProgressView()
         }
@@ -360,19 +360,19 @@ private struct TimetableStep: View {
     }
 
     @ViewBuilder private var content: some View {
-        StepTitle(title: "Your timetable", sub: "Paste your NUSMods share link. Each class goes to the stop nearest its room.")
+        StepTitle(title: L("Your timetable"), sub: L("Paste your NUSMods share link. Each class goes to the stop nearest its room."))
         TextField("https://nusmods.com/timetable/sem-1/share?…", text: $link)
             .textFieldStyle(.roundedBorder)
             .onSubmit { Task { await setup.importTimetable(link) } }
-        Hint("In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here.")
-        Button(setup.importing ? "Importing…" : "Import") { Task { await setup.importTimetable(link) } }
+        Hint(L("In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here."))
+        Button(setup.importing ? L("Importing…") : L("Import")) { Task { await setup.importTimetable(link) } }
             .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || setup.importing)
         if let r = setup.imported {
-            Text("Imported \(r.classes) class\(r.classes == 1 ? "" : "es") for \(r.term).")
-            if !r.unresolved.isEmpty { Hint("No stop found for \(r.unresolved.joined(separator: "; ")). Add those by hand on the account page.") }
-            if !r.missing.isEmpty { Hint("NUSMods has no classes this semester for \(r.missing.joined(separator: ", ")).") }
+            Text(r.classes == 1 ? L("Imported 1 class for %@.", r.term) : L("Imported %@ classes for %@.", "\(r.classes)", r.term))
+            if !r.unresolved.isEmpty { Hint(L("No stop found for %@. Add those by hand on the account page.", r.unresolved.joined(separator: "; "))) }
+            if !r.missing.isEmpty { Hint(L("NUSMods has no classes this semester for %@.", r.missing.joined(separator: ", "))) }
         } else if setup.importedClasses > 0 {
-            Hint("\(setup.importedClasses) classes imported.")
+            Hint(L("%@ classes imported.", "\(setup.importedClasses)"))
         }
     }
 }
@@ -380,13 +380,13 @@ private struct TimetableStep: View {
 private struct PaceStep: View {
     let setup: SetupModel
     private let paces = [
-        ("slow", "Slow", "400 m in about 6 min. Unhurried, or you often have a bag to carry."),
-        ("normal", "Normal", "400 m in about 5 min. Most people."),
-        ("fast", "Fast", "400 m in about 4 min. You're the one overtaking."),
+        ("slow", L("Slow"), L("400 m in about 6 min. Unhurried, or you often have a bag to carry.")),
+        ("normal", L("Normal"), L("400 m in about 5 min. Most people.")),
+        ("fast", L("Fast"), L("400 m in about 4 min. You're the one overtaking.")),
     ]
 
     var body: some View {
-        StepTitle(title: "How you get around", sub: "Walks follow the real paths on campus. Your pace sets how long they take.")
+        StepTitle(title: L("How you get around"), sub: L("Walks follow the real paths on campus. Your pace sets how long they take."))
         ForEach(paces, id: \.0) { value, title, hint in
             let on = setup.walkPace == value
             Button { setup.setPace(value) } label: {
@@ -405,8 +405,8 @@ private struct PaceStep: View {
         }
         Toggle(isOn: Binding(get: { setup.fullBusMargin }, set: { setup.setFullBusMargin($0) })) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Allow for packed buses")
-                Hint("When the bus you'd wait for is often full at that stop and time, aim one bus earlier.")
+                Text(L("Allow for packed buses"))
+                Hint(L("When the bus you'd wait for is often full at that stop and time, aim one bus earlier."))
             }
         }
         .padding(.top, 6)
@@ -418,20 +418,20 @@ private struct PermissionsStep: View {
     @Bindable var app: AppModel
 
     var body: some View {
-        StepTitle(title: "Two last things", sub: "Both are optional. You can change them later in Settings.")
-        Text("Notifications").font(.headline)
-        Text("A heads-up 5 minutes before you need to leave for class, and when it's time to go.")
+        StepTitle(title: L("Two last things"), sub: L("Both are optional. You can change them later in Settings."))
+        Text(L("Notifications")).font(.headline)
+        Text(L("A heads-up 5 minutes before you need to leave for class, and when it's time to go."))
             .fixedSize(horizontal: false, vertical: true)
-        if app.leaveAlerts { Hint("On.") } else { Button("Turn on leave-by alerts") { app.setLeaveAlerts(true) } }
-        Text("Location").font(.headline).padding(.top, 10)
-        Text("So answers start from the stop you're nearest. It's used for that answer only, rounded to about 11 m, and never saved.")
+        if app.leaveAlerts { Hint(L("On.")) } else { Button(L("Turn on leave-by alerts")) { app.setLeaveAlerts(true) } }
+        Text(L("Location")).font(.headline).padding(.top, 10)
+        Text(L("So answers start from the stop you're nearest. It's used for that answer only, rounded to about 11 m, and never saved."))
             .fixedSize(horizontal: false, vertical: true)
         if app.needsLocation {
-            Button("Allow location") { app.askLocation() }
+            Button(L("Allow location")) { app.askLocation() }
         } else if app.locationDenied {
-            Button("Open Location settings") { app.openLocationSettings() }
+            Button(L("Open Location settings")) { app.openLocationSettings() }
         } else {
-            Hint("Allowed.")
+            Hint(L("Allowed."))
         }
     }
 }
@@ -446,7 +446,7 @@ struct DevicesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Devices").font(.title2.weight(.semibold))
+            Text(L("Devices")).font(.title2.weight(.semibold))
             // The code takes the list's place, so the window keeps its size.
             if let code = setup.pairCode {
                 PairCodeCard(code: code) { Task { await setup.closePairCode() } }
@@ -471,21 +471,21 @@ struct DevicesView: View {
                 List(devices) { d in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(d.name ?? "Device") + Text(d.current == true ? "  This Mac" : "").foregroundColor(.secondary)
-                            Hint([platform(d.platform), d.lastSeen.map { "last used \(Date(timeIntervalSince1970: $0 / 1000).formatted(.relative(presentation: .named)))" }].compactMap { $0 }.joined(separator: " · "))
+                            Text(d.name ?? L("Device")) + Text(d.current == true ? "  " + L("This Mac") : "").foregroundColor(.secondary)
+                            Hint([platform(d.platform), d.lastSeen.map { L("last used %@", Date(timeIntervalSince1970: $0 / 1000).formatted(.relative(presentation: .named).locale(Lang.locale))) }].compactMap { $0 }.joined(separator: " · "))
                         }
                         Spacer()
                         if d.current != true {
-                            Button("Remove") { Task { await setup.remove(d) } }.disabled(setup.busy)
+                            Button(L("Remove")) { Task { await setup.remove(d) } }.disabled(setup.busy)
                         }
                     }
                     .padding(.vertical, 2)
                 }
-                Hint("Removing a device signs it out. You're emailed about every device added or removed.")
+                Hint(L("Removing a device signs it out. You're emailed about every device added or removed."))
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Button("Add a device…") { Task { await setup.newPairCode() } }.disabled(setup.busy)
+            Button(L("Add a device…")) { Task { await setup.newPairCode() } }.disabled(setup.busy)
         }
     }
 
@@ -511,7 +511,7 @@ private struct AddedTick: View {
                 .foregroundStyle(.white, .green)
                 .scaleEffect(shown ? 1 : 0.4)
                 .opacity(shown ? 1 : 0)
-            Text("\(name) added").font(.headline)
+            Text(L("%@ added", name)).font(.headline)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -527,15 +527,15 @@ private struct PairCodeCard: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("On the other device, open terminus and enter:")
+            Text(L("On the other device, open terminus and enter:"))
             Text("\(code.prefix(3)) \(code.dropFirst(3))").font(.system(size: 30, weight: .bold, design: .monospaced)).textSelection(.enabled)
-            Text("Or scan this with a phone's camera:").font(.callout)
+            Text(L("Or scan this with a phone's camera:")).font(.callout)
             if let qr = qrImage("\(Api.site)/pair?code=\(code)") {
                 Image(nsImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)
-                    .accessibilityLabel("QR code for pairing code \(code)")
+                    .accessibilityLabel(L("QR code for pairing code %@", code))
             }
-            Hint("Works once, for 10 minutes.")
-            Button("Done", action: onDone)
+            Hint(L("Works once, for 10 minutes."))
+            Button(L("Done"), action: onDone)
         }
         .frame(maxWidth: .infinity)
         .card()

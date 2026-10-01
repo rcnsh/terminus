@@ -1,7 +1,7 @@
 // "Your widget right now": /me/next rendered the way the widget shows it.
 // Every line comes from the server's card (apps/api/src/card.ts).
 
-import { $, api, clock, el } from './dom.js';
+import { $, api, clock, el, t } from './dom.js';
 
 const MOON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
 /** This browser shows 12-hour times: ask for the card in that style. */
@@ -12,7 +12,7 @@ const isOld = (a) => Boolean(a.card?.staleAt) && Date.now() >= Date.parse(a.card
 
 /** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts);
  *  at the stop, the bus to wait for ("D2 at 9:41"), as it is. */
-const leaveHead = (a) => (a.card.phase !== 'waiting' && Date.now() >= Date.parse(a.leave.at) ? 'Leave now' : a.card.leaveBy);
+const leaveHead = (a) => (a.card.phase !== 'waiting' && Date.now() >= Date.parse(a.leave.at) ? t('Leave now') : a.card.leaveBy);
 
 /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
 const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
@@ -26,7 +26,7 @@ function classPlan(a) {
   const c = a.card;
   const late = c.late ? ' late' : '';
   return [
-    el('div', { class: 'where', textContent: `${a.dest.label} · starts ${clock(a.timing.classAt)}` }),
+    el('div', { class: 'where', textContent: `${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}` }),
     el('div', { class: `big${late}`, textContent: leaveHead(a) }),
     el('div', { class: `catch${late}`, textContent: c.catch }),
     c.arrive ? el('div', { class: `arrive${late}`, textContent: c.arrive }) : null,
@@ -116,8 +116,8 @@ export async function renderPreview() {
   } catch {
     shown = null;
     box.replaceChildren(
-      el('div', { class: 'detail', textContent: 'Preview unavailable right now.' }),
-      el('button', { type: 'button', class: 'link-btn', textContent: 'Try again', onclick: renderPreview }),
+      el('div', { class: 'detail', textContent: t('Preview unavailable right now.') }),
+      el('button', { type: 'button', class: 'link-btn', textContent: t('Try again'), onclick: renderPreview }),
     );
     return;
   }
@@ -129,7 +129,7 @@ export function show(a) {
   const box = $('#preview');
   shown = a;
   // The large Android widget's row: Timetable and Nearby, then the usual places, as many as fit.
-  const chips = el('div', { class: 'chips' }, ...['Timetable', 'Nearby', ...(a.places ?? []).slice(0, 2).map((p) => p.label)].map((t) => el('span', { textContent: t })));
+  const chips = el('div', { class: 'chips' }, ...[t('Timetable'), t('Nearby'), ...(a.places ?? []).slice(0, 2).map((p) => p.label)].map((x) => el('span', { textContent: x })));
   if (a.mode === 'rest') {
     const head = el('div', { class: 'rest' });
     head.innerHTML = MOON; // a constant, never data
@@ -152,11 +152,11 @@ export function show(a) {
     return;
   }
   const where =
-    a.mode === 'nearby' ? 'Nearby' : a.dest?.why === 'class' ? `Next class · ${a.dest.label}` : a.dest?.why === 'gap-home' ? `Long gap · ${a.dest.label}` : a.dest?.label ?? 'Next bus';
+    a.mode === 'nearby' ? t('Nearby') : a.dest?.why === 'class' ? t('Next class · {0}', a.dest.label) : a.dest?.why === 'gap-home' ? t('Long gap · {0}', a.dest.label) : a.dest?.label ?? t('Next bus');
   // Show a departure as a clock time, the way the widget does, so it can't go stale.
   const svc = a.label.split(' · ')[0];
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
-  const big = timed ? `${svc} · ${a.quality === 'scheduled' ? '~' : ''}${clock(a.departsAt)}` : a.label;
+  const big = timed ? `${svc} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label;
   const old = isOld(a);
   const notes = [a.card?.quality, a.card?.crowd].filter(Boolean).join(' · ');
   box.className = old ? 'widget old' : 'widget';
@@ -165,7 +165,7 @@ export function show(a) {
       ...phaseParts(a),
       el('div', { class: 'where', textContent: where }),
       el('div', { class: 'big', textContent: big }),
-      el('div', { class: 'detail', textContent: old ? 'Old times · refreshing' : a.detail }),
+      el('div', { class: 'detail', textContent: old ? t('Old times · refreshing') : a.detail }),
       a.leave && a.card && !old ? el('div', { class: 'leave', textContent: leaveText(a) }) : null,
       // On the bus the detail already ends with it ("arrive ~9:52 · ~4 min late").
       a.timing && !old && !a.detail?.includes(a.timing.text) ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
@@ -201,7 +201,7 @@ export function wireReport() {
     e.preventDefault();
     const note = $('#report-note').value.trim();
     if (!reported && !note) {
-      msg.textContent = 'Say what was wrong: the preview has no answer to send.';
+      msg.textContent = t('Say what was wrong: the preview has no answer to send.');
       return;
     }
     const send = $('#report-send');
@@ -209,7 +209,7 @@ export function wireReport() {
     try {
       await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note, platform: 'web', context: reported ?? undefined } });
       close();
-      msg.textContent = 'Thanks, sent. It helps make the answers better.';
+      msg.textContent = t('Thanks, sent. It helps make the answers better.');
     } catch (err) {
       msg.textContent = err.message;
     } finally {

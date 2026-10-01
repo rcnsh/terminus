@@ -18,6 +18,7 @@ import { headwayFor, legRideS, resolveBerths } from './resolve.ts';
 import { ON_TIME_SLACK_S } from './profile.ts';
 import { isoSeconds, shortStop } from './format.ts';
 import { type CrowdRisk, OFTEN_PACKED } from './crowd.ts';
+import { m } from './i18n.ts';
 
 export interface LeaveInput {
   /** Ranked options, best first. */
@@ -119,7 +120,7 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
     const crowd = crowdCheck(leg, latestBoard, arriveBy, risk);
     const back = crowd.earlier ? 2 : arriveBy.oneEarlier ? 2 : 1;
     const ms = latestBoard - headway * back - walk;
-    return { ms, board: ms + walk, arrive: arriveAfter(latestBoard - (back - 1) * headway), estimated: true, late: ms < nowMs, note: crowd.note ?? (arriveBy.oneEarlier ? ONE_EARLIER_NOTE : null) };
+    return { ms, board: ms + walk, arrive: arriveAfter(latestBoard - (back - 1) * headway), estimated: true, late: ms < nowMs, note: crowd.note ?? (arriveBy.oneEarlier ? m().oneEarlierNote : null) };
   }
 
   const earliest = nowMs + walk;
@@ -136,26 +137,23 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
     // Often packed, or you asked for a bus earlier: take the one before, when there is one.
     const earlier = (crowd.earlier || arriveBy.oneEarlier === true) && fits.length > 1;
     if (earlier) b = fits[fits.length - 2];
-    const note = crowd.earlier && fits.length === 1 ? crowd.warnOnly : (crowd.note ?? (earlier ? ONE_EARLIER_NOTE : null));
+    const note = crowd.earlier && fits.length === 1 ? crowd.warnOnly : (crowd.note ?? (earlier ? m().oneEarlierNote : null));
     return { ms: b.at - walk, board: b.at, arrive: arriveAfter(b.at), estimated: b.estimated, late: false, note };
   }
   // Nothing gets you there on time: the first bus you can catch.
   return { ms: buses[0].at - walk, board: buses[0].at, arrive: arriveAfter(buses[0].at), estimated: buses[0].estimated, late: true, note: null };
 }
 
-/** Said when the leave-by is a bus earlier because the user chose that for the class. */
-export const ONE_EARLIER_NOTE = 'One bus earlier, as you chose for this class';
-
 /** Whether the bus you'd wait for is often packed, and what to say. */
 function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk): { earlier: boolean; note: string | null; warnOnly: string | null } {
   const r = risk?.(leg.svc, leg.stop.code, atMs);
   if (r == null || r < OFTEN_PACKED) return { earlier: false, note: null, warnOnly: null };
   const where = shortStop(leg.stop.name);
-  const packed = `${leg.svc} is often packed at ${where} around then`;
+  const packed = m().oftenPacked(leg.svc, where);
   // Said on its own (no earlier bus, or you'd rather not), it says what that means for you.
-  const warnOnly = `${packed}, and may be full`;
+  const warnOnly = m().mayBeFull(packed);
   if (arriveBy.fullBusMargin === false) return { earlier: false, note: warnOnly, warnOnly };
-  return { earlier: true, note: `${packed}, so this is one bus earlier`, warnOnly };
+  return { earlier: true, note: m().soOneEarlier(packed), warnOnly };
 }
 
 /** Every service from every candidate stop, ignoring service hours. */

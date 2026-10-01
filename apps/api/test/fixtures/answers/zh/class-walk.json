@@ -1,0 +1,148 @@
+{
+  "stop": {
+    "code": "CLB",
+    "name": "CLB",
+    "confidence": 0.97
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "high",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 360,
+      "crowd": "medium",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 1080,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 420,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 1020,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "步行 · 5 分钟",
+  "detail": "步行去 CS2030 @ COM1 · 搭 D1 要 13 分钟 · 从 CLB 出发",
+  "alt": "D1 · 7 分钟 · CLB",
+  "departsAt": null,
+  "arriveAt": "2026-08-27T01:05:18Z",
+  "leave": {
+    "at": "2026-08-27T01:48:50Z",
+    "estimated": false,
+    "svc": null,
+    "stop": null,
+    "board": null,
+    "arrive": "2026-08-27T01:57:00Z",
+    "note": null
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "COM3",
+    "label": "CS2030 @ COM1",
+    "why": "class"
+  },
+  "timing": {
+    "status": "on-time",
+    "text": "09:08 到达 · 早到 52 分钟",
+    "classAt": "2026-08-27T02:00:00Z",
+    "reachAt": "2026-08-27T01:08:10Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T02:00:00Z",
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T01:15:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "09:48 前出发",
+    "leaveVia": null,
+    "catch": "走过去",
+    "arrive": "09:57 到达 · 早到 3 分钟",
+    "catchLine": "走过去 · 09:57 到达，早到 3 分钟",
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "09:48 出发",
+    "line": "09:48 前出发 · 步行",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "不去了",
+        "trip": "4:600:COM3"
+      },
+      {
+        "id": "away",
+        "label": "今天不在学校",
+        "trip": "4:600:COM3"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:15:00Z",
+    "ask": null,
+    "askMuted": false,
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": {
+      "name": "COM 3",
+      "lat": 1.294431,
+      "lon": 103.775217
+    }
+  }
+}

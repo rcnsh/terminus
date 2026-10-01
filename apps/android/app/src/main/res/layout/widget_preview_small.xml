@@ -8,12 +8,12 @@
     android:background="@drawable/widget_preview_bg"
     android:paddingHorizontal="14dp" android:paddingVertical="8dp">
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="Next class · CS2030 @ COM1" android:textSize="12sp"
+        android:text="@string/preview_heading" android:textSize="12sp"
         android:textColor="@color/brand_muted" android:maxLines="1" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="D2 · 09:42" android:textSize="20sp" android:textStyle="bold"
         android:textColor="@color/brand_ink" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="PGP · 3 min walk · COM3 ~9 min" android:textSize="12sp"
+        android:text="@string/preview_detail" android:textSize="12sp"
         android:textColor="@color/brand_muted" android:maxLines="1" />
 </LinearLayout>

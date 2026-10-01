@@ -1,4 +1,5 @@
 import { TTL } from './config.ts';
+import { errorText } from './i18n.ts';
 /** Response helpers and query parsing shared by every route. */
 
 export const CORS = {
@@ -8,6 +9,10 @@ export const CORS = {
 };
 
 export function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
+  // Errors are worded in English where they're raised; said in the request's language here.
+  if (body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string') {
+    body = { ...body, error: errorText((body as { error: string }).error) };
+  }
   return new Response(JSON.stringify(body), {
     status,
     headers: {

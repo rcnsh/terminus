@@ -50,6 +50,9 @@ import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.Stop
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
+import sh.rcn.terminus.L
 
 private const val STEPS = 4
 
@@ -71,8 +74,8 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Step ${step + 1} of $STEPS", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = finish) { Text("Skip setup") }
+            Text(stringResource(R.string.step_of, step + 1, STEPS), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            TextButton(onClick = finish) { Text(stringResource(R.string.skip_setup)) }
         }
         LinearProgressIndicator(progress = { (step + 1f) / STEPS }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(16.dp))
@@ -81,7 +84,7 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 if (state.message == null) CircularProgressIndicator() else Text(state.message, color = MaterialTheme.colorScheme.error)
             }
-            if (state.message != null) Button(onClick = account::refresh) { Text("Try again") }
+            if (state.message != null) Button(onClick = account::refresh) { Text(stringResource(R.string.try_again)) }
             return@Column
         }
         val next: () -> Unit = { if (step + 1 >= STEPS) finish() else step++ }
@@ -100,12 +103,12 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
 }
 
 @Composable
-private fun StepActions(next: () -> Unit, back: (() -> Unit)?, nextLabel: String = "Continue", skip: String? = null, enabled: Boolean = true) {
+private fun StepActions(next: () -> Unit, back: (() -> Unit)?, nextLabel: String? = null, skip: String? = null, enabled: Boolean = true) {
     Row(Modifier.fillMaxWidth().padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (back != null) TextButton(onClick = back) { Text("Back") }
+        if (back != null) TextButton(onClick = back) { Text(stringResource(R.string.back)) }
         Spacer(Modifier.weight(1f))
         if (skip != null) TextButton(onClick = next) { Text(skip) }
-        Button(onClick = next, enabled = enabled) { Text(nextLabel) }
+        Button(onClick = next, enabled = enabled) { Text(nextLabel ?: stringResource(R.string.continue_)) }
     }
 }
 
@@ -120,7 +123,7 @@ private fun Title(text: String, sub: String) {
 /** Where do you live? A residence brings all its stops; off campus, pick one. */
 @Composable
 internal fun HomeStep(profile: ProfileDoc, campus: Campus?, account: AccountViewModel, next: () -> Unit) {
-    Title("Where do you live?", "Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live.")
+    Title(stringResource(R.string.where_live), stringResource(R.string.where_live_sub))
     if (campus == null) {
         CircularProgressIndicator()
         return
@@ -128,7 +131,7 @@ internal fun HomeStep(profile: ProfileDoc, campus: Campus?, account: AccountView
     HomePicker(profile, campus, account)
     // Continue means a home is set; with none yet it's a skip, said as one.
     val home = profile.homeStops.isNotEmpty()
-    StepActions(next = next, back = null, skip = if (home) null else "I'll do this later", enabled = home)
+    StepActions(next = next, back = null, skip = if (home) null else stringResource(R.string.later), enabled = home)
 }
 
 /** Residence or stop, and the walk to it. Shared by setup and settings; saves on each change. */
@@ -143,10 +146,10 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
     var locating by remember { mutableStateOf<String?>(null) }
 
     Choice(
-        label = "Where do you live?",
+        label = stringResource(R.string.where_live),
         options = campus.residences.map { it.code to it.name },
         selected = residence?.code,
-        blank = "Off campus, or I'll pick a stop",
+        blank = stringResource(R.string.off_campus),
         onSelect = { code ->
             val r = campus.residences.firstOrNull { it.code == code }
             offCampus = r == null
@@ -159,42 +162,42 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
         },
     )
     if (residence != null) {
-        Hint("Stops for ${residence.name}: ${residence.stops.joinToString(", ") { campus.stopName(it) }}. terminus won't send you home when you're already there.", Modifier.padding(top = 4.dp))
+        Hint(stringResource(R.string.residence_stops, residence.name, residence.stops.joinToString(", ") { campus.stopName(it) }), Modifier.padding(top = 4.dp))
     }
     if (offCampus || residence == null) {
         Spacer(Modifier.height(12.dp))
         Choice(
-            label = "Home stop",
+            label = stringResource(R.string.home_stop),
             options = campus.stops.map { it.code to it.name },
             selected = stops.firstOrNull(),
-            blank = "Choose a stop",
+            blank = stringResource(R.string.choose_stop),
             onSelect = { code -> account.edit { it.setHomeStops(listOfNotNull(code) + stops.drop(1).filter { s -> s != code }) } },
         )
         if (Locator.hasForeground(ctx)) {
             TextButton(onClick = {
-                locating = "Finding the nearest stop…"
+                locating = L.s(R.string.finding_stop)
                 scope.launch {
                     val loc = Locator.lastKnown(ctx, maxAgeMs = 120_000) ?: Locator.current(ctx)
                     val near = loc?.let { l -> nearestStop(campus.stops, l.latitude, l.longitude) }
                     if (near == null) {
-                        locating = "Couldn't get your location. Pick your stop instead."
+                        locating = L.s(R.string.no_location)
                     } else {
                         account.edit { it.setHomeStops(listOf(near.code) + stops.filter { s -> s != near.code }) }
-                        locating = "Picked ${near.name}. Change it if you use a different stop."
+                        locating = L.s(R.string.picked_stop, near.name)
                     }
                 }
-            }) { Text("Pick the stop nearest me") }
+            }) { Text(stringResource(R.string.pick_nearest)) }
         }
         locating?.let { Hint(it) }
     }
     Spacer(Modifier.height(12.dp))
-    Text("Walk from home to your stop")
+    Text(stringResource(R.string.home_walk))
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin - 1 } }, enabled = profile.homeWalkMin > 0) { Text("−") }
-        Text("${profile.homeWalkMin} min", modifier = Modifier.padding(horizontal = 16.dp))
+        Text(stringResource(R.string.n_min, profile.homeWalkMin), modifier = Modifier.padding(horizontal = 16.dp))
         OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin + 1 } }, enabled = profile.homeWalkMin < 30) { Text("+") }
     }
-    Hint("Counted in your leave-by time when terminus doesn't have your location.")
+    Hint(stringResource(R.string.home_walk_hint))
 }
 
 private fun nearestStop(stops: List<Stop>, lat: Double, lon: Double): Stop? = stops.minByOrNull {
@@ -205,7 +208,7 @@ private fun nearestStop(stops: List<Stop>, lat: Double, lon: Double): Stop? = st
 
 @Composable
 private fun TimetableStep(state: AccountState, account: AccountViewModel, next: () -> Unit, back: () -> Unit) {
-    Title("Your timetable", "Paste your NUSMods share link. Each class goes to the stop nearest its room.")
+    Title(stringResource(R.string.your_timetable), stringResource(R.string.your_timetable_sub))
     var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: state.profile?.share.orEmpty()) }
     TimetableImport(state, account, link) { link = it }
     // Continue imports a link that was pasted but not imported yet, then moves on once it has.
@@ -221,7 +224,7 @@ private fun TimetableStep(state: AccountState, account: AccountViewModel, next: 
         next = { if (pending) { waiting = true; account.import(link) } else next() },
         back = back,
         // As on the home step: Continue means there's a timetable; with none, it's the skip.
-        skip = if (state.profile?.trips.isNullOrEmpty() && !pending) "I'll do this later" else null,
+        skip = if (state.profile?.trips.isNullOrEmpty() && !pending) stringResource(R.string.later) else null,
         enabled = !state.importing && (pending || !state.profile?.trips.isNullOrEmpty()),
     )
 }
@@ -232,39 +235,39 @@ internal fun TimetableImport(state: AccountState, account: AccountViewModel, lin
     OutlinedTextField(
         value = link,
         onValueChange = onLink,
-        label = { Text("NUSMods share link") },
+        label = { Text(stringResource(R.string.nusmods_link)) },
         placeholder = { Text("https://nusmods.com/timetable/sem-1/share?…") },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    Hint("In NUSMods: Timetable, then Share/Sync. Tap Share and choose terminus, or copy the link and paste it here.", Modifier.padding(top = 4.dp))
+    Hint(stringResource(R.string.nusmods_hint), Modifier.padding(top = 4.dp))
     Button(onClick = { account.import(link) }, enabled = link.isNotBlank() && !state.importing, modifier = Modifier.padding(top = 8.dp)) {
-        Text(if (state.importing) "Importing…" else "Import")
+        Text(if (state.importing) stringResource(R.string.importing) else stringResource(R.string.import_action))
     }
     val r = state.imported
     if (r != null) {
-        Text("Imported ${r.classes} class${if (r.classes == 1) "" else "es"} for ${r.term}.", modifier = Modifier.padding(top = 8.dp))
+        Text(if (r.classes == 1) stringResource(R.string.imported_one, r.term) else stringResource(R.string.imported_n, r.classes, r.term), modifier = Modifier.padding(top = 8.dp))
         if (r.unresolved.isNotEmpty()) {
-            Hint("No stop found for ${r.unresolved.joinToString("; ")}. Add those by hand in Settings, under Timetable.")
+            Hint(stringResource(R.string.no_stop_for, r.unresolved.joinToString("; ")))
         }
-        if (r.missing.isNotEmpty()) Hint("NUSMods has no classes this semester for ${r.missing.joinToString(", ")}.")
+        if (r.missing.isNotEmpty()) Hint(stringResource(R.string.nusmods_missing, r.missing.joinToString(", ")))
     } else {
         val n = state.profile?.trips?.size ?: 0
-        if (n > 0) Hint(if (n == 1) "1 class imported." else "$n classes imported.", Modifier.padding(top = 8.dp))
+        if (n > 0) Hint(if (n == 1) stringResource(R.string.one_imported) else stringResource(R.string.n_imported, n), Modifier.padding(top = 8.dp))
     }
 }
 
 @Composable
 private fun PaceStep(profile: ProfileDoc, account: AccountViewModel, next: () -> Unit, back: () -> Unit) {
-    Title("How you get around", "Walks follow the real paths on campus. Your pace sets how long they take.")
+    Title(stringResource(R.string.get_around), stringResource(R.string.get_around_sub))
     PacePicker(profile, account)
     StepActions(next = next, back = back)
 }
 
 private val PACES = listOf(
-    Triple("slow", "Slow", "400 m in about 6 min. Unhurried, or you often have a bag to carry."),
-    Triple("normal", "Normal", "400 m in about 5 min. Most people."),
-    Triple("fast", "Fast", "400 m in about 4 min. You're the one overtaking."),
+    Triple("slow", R.string.pace_slow, R.string.pace_slow_hint),
+    Triple("normal", R.string.pace_normal, R.string.pace_normal_hint),
+    Triple("fast", R.string.pace_fast, R.string.pace_fast_hint),
 )
 
 /** Three cards, one chosen, and "allow for packed buses". Shared by setup and settings. */
@@ -279,16 +282,16 @@ internal fun PacePicker(profile: ProfileDoc, account: AccountViewModel) {
                 modifier = Modifier.fillMaxWidth().selectable(selected = on, role = Role.RadioButton) { account.edit { it.walkPace = value } },
             ) {
                 Column(Modifier.padding(12.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleSmall)
-                    Hint(hint)
+                    Text(stringResource(title), style = MaterialTheme.typography.titleSmall)
+                    Hint(stringResource(hint))
                 }
             }
         }
     }
     Spacer(Modifier.height(12.dp))
     SwitchRow(
-        "Allow for packed buses",
-        "When the bus you'd wait for is often full at that stop and time, aim one bus earlier.",
+        stringResource(R.string.packed),
+        stringResource(R.string.packed_hint),
         profile.fullBusMargin,
     ) { on -> account.edit { it.fullBusMargin = on } }
 }
@@ -320,12 +323,12 @@ private fun PermissionsStep(main: MainViewModel, next: () -> Unit, back: () -> U
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) main.setLeaveAlerts(true)
     }
-    Title("Two last things", "Both are optional. You can change them later in Settings.")
+    Title(stringResource(R.string.two_things), stringResource(R.string.two_things_sub))
 
-    Text("Notifications", style = MaterialTheme.typography.titleMedium)
-    Text("A heads-up 5 minutes before you need to leave for class, so you don't have to keep checking.")
+    Text(stringResource(R.string.notifications), style = MaterialTheme.typography.titleMedium)
+    Text(stringResource(R.string.notifications_text))
     if (mainState.leaveAlerts) {
-        Hint("On.", Modifier.padding(top = 4.dp))
+        Hint(stringResource(R.string.on_), Modifier.padding(top = 4.dp))
     } else {
         OutlinedButton(
             onClick = {
@@ -333,19 +336,19 @@ private fun PermissionsStep(main: MainViewModel, next: () -> Unit, back: () -> U
                 else @Suppress("InlinedApi") askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
             },
             modifier = Modifier.padding(top = 4.dp),
-        ) { Text("Turn on leave-by alerts") }
+        ) { Text(stringResource(R.string.turn_on_alerts)) }
     }
 
     Spacer(Modifier.height(20.dp))
-    Text("Location", style = MaterialTheme.typography.titleMedium)
-    Text("So answers start from the stop you're nearest. It's used for that answer only, rounded to about 11 m, and never saved. Without it, terminus assumes you're where your last class was, or at home.")
+    Text(stringResource(R.string.location), style = MaterialTheme.typography.titleMedium)
+    Text(stringResource(R.string.location_text))
     if (hasLocation) {
-        Hint("Allowed.", Modifier.padding(top = 4.dp))
+        Hint(stringResource(R.string.allowed), Modifier.padding(top = 4.dp))
     } else {
         OutlinedButton(
             onClick = { askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) },
             modifier = Modifier.padding(top = 4.dp),
-        ) { Text("Allow location") }
+        ) { Text(stringResource(R.string.allow_location)) }
     }
-    StepActions(next = next, back = back, nextLabel = "Done")
+    StepActions(next = next, back = back, nextLabel = stringResource(R.string.done))
 }

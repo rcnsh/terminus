@@ -19,6 +19,9 @@ import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.SignInRequest
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.deviceName
+import sh.rcn.terminus.R
+import sh.rcn.terminus.L
+import sh.rcn.terminus.Lang
 
 /** Where an email sign-in is. */
 sealed interface SignIn {
@@ -50,6 +53,8 @@ data class AccountState(
     val choices: List<sh.rcn.terminus.TripChoice> = emptyList(),
     /** Trips remembered (the last 35 days), which "Clear trip history" forgets. */
     val history: Int = 0,
+    /** The language just changed: on Android 12 the activity is recreated to show it. */
+    val langChanged: Boolean = false,
 )
 
 /**
@@ -64,8 +69,8 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private fun api() = Api(store.token)
 
     private fun fail(e: Exception): String = when (e) {
-        is ApiError -> e.message ?: "Something went wrong"
-        else -> "Couldn't reach terminus. Check your connection and try again."
+        is ApiError -> e.message ?: L.s(R.string.something_wrong)
+        else -> L.s(R.string.cant_reach)
     }
 
     fun clearMessage() = _state.update { it.copy(message = null) }
@@ -99,7 +104,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(email = me.email) }
             }
             runCatching { ProfileDoc(api().profile()) }
-                .onSuccess { p -> _state.update { it.copy(profile = p) } }
+                .onSuccess { p ->
+                    _state.update { it.copy(profile = p) }
+                    syncLang(p)
+                }
                 .onFailure { e -> if (_state.value.profile == null) _state.update { it.copy(message = fail(e as? Exception ?: Exception(e))) } }
             loadCampus()
         }
@@ -127,7 +135,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(profile = current, message = "Not saved: ${fail(e)}") }
+                _state.update { it.copy(profile = current, message = L.s(R.string.not_saved, fail(e))) }
             }
         }
     }
@@ -154,6 +162,33 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissShared() = _state.update { it.copy(sharedLink = null) }
 
     /** Setup finished or skipped: never shown again, on any device. */
+    /**
+     * The account's language and this phone's: a language picked here before
+     * the account had one (on the welcome screen) goes to the account; one
+     * chosen on another device since is applied here.
+     */
+    private fun syncLang(p: ProfileDoc) {
+        val app = getApplication<Application>()
+        val local = Lang.pref(app)
+        if (p.lang == Lang.AUTO && local != Lang.AUTO && Lang.applied(app) == null) {
+            Lang.noteAccount(app, local)
+            edit { it.lang = local }
+        } else if (Lang.followAccount(app, p.lang)) {
+            _state.update { it.copy(langChanged = true) }
+        }
+    }
+
+    /** Settings → Language: this phone, and the account so the Mac, the web and emails follow. */
+    fun setLang(pref: String) {
+        val app = getApplication<Application>()
+        Lang.set(app, pref)
+        Lang.noteAccount(app, pref)
+        edit { it.lang = pref }
+        _state.update { it.copy(langChanged = true) }
+    }
+
+    fun langShown() = _state.update { it.copy(langChanged = false) }
+
     fun finishSetup() {
         store.needsSetup = false
         val p = _state.value.profile
@@ -237,11 +272,11 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 when (p.status) {
                     "pending" -> continue
                     "approved" -> return@launch approved(p.token!!, p.email!!, p.outcome, onSignedIn)
-                    "denied" -> return@launch _state.update { it.copy(signIn = SignIn.Email, message = "The sign-in was cancelled from the email. If that was you, send a new one.") }
+                    "denied" -> return@launch _state.update { it.copy(signIn = SignIn.Email, message = L.s(R.string.signin_cancelled)) }
                     else -> break
                 }
             }
-            _state.update { it.copy(signIn = SignIn.Email, message = "That request expired. Send a new one.") }
+            _state.update { it.copy(signIn = SignIn.Email, message = L.s(R.string.request_expired)) }
         }
     }
 
@@ -279,7 +314,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         store.email = email
         approvedToken = null
         anonToken = null
-        _state.update { it.copy(signIn = null, busy = false, email = email, message = "Signed in as $email") }
+        _state.update { it.copy(signIn = null, busy = false, email = email, message = L.s(R.string.signed_in_as, email)) }
         viewModelScope.launch {
             // A new account, or one that was never set up, goes through setup.
             val me = runCatching { Api(token).me() }.getOrNull()
@@ -309,7 +344,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun clearHistory() {
         viewModelScope.launch {
             runCatching { api().clearHistory() }
-                .onSuccess { _state.update { it.copy(history = 0, message = "Trip history cleared") } }
+                .onSuccess { _state.update { it.copy(history = 0, message = L.s(R.string.history_cleared)) } }
                 .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
         }
     }

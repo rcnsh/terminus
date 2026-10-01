@@ -1,12 +1,18 @@
 // Helpers every part of the account page uses.
 
+/** The page's language (assets/i18n.js): t('Updated {0}', time). */
+// Outside a browser (the API's tests import search.js) it's English.
+export const t = (en, ...args) => (globalThis.window?.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? '')));
+export const locale = () => globalThis.window?.i18n?.locale;
+
 export const $ = (sel) => document.querySelector(sel);
 
 /** A same-origin JSON call; throws with the server's error message and status. */
 export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(path, {
     method,
-    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    // The API writes answers and errors in the page's language.
+    headers: { 'accept-language': window.i18n?.header ?? 'en', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'same-origin',
   });
@@ -20,7 +26,8 @@ export async function api(path, { method = 'GET', body } = {}) {
 function sentence(text) {
   if (typeof text !== 'string' || !text) return '';
   const s = text[0].toUpperCase() + text.slice(1);
-  return /[.!?]$/.test(s) ? s : `${s}.`;
+  if (/[.!?。！？]$/.test(s)) return s;
+  return /[\u4e00-\u9fff]/.test(s) ? `${s}。` : `${s}.`;
 }
 
 export function el(tag, props = {}, ...children) {
@@ -36,4 +43,4 @@ export function el(tag, props = {}, ...children) {
 }
 
 // Campus time, like the apps: class times from the server are Singapore time.
-export const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' });
+export const clock = (iso) => new Date(iso).toLocaleTimeString(locale() ?? [], { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' });

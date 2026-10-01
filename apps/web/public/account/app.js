@@ -2,10 +2,12 @@
 
 import { runOnboarding } from './onboarding.js';
 import { attachSearch } from './search.js';
-import { $, api, el } from './dom.js';
+import { $, api, el, locale, t } from './dom.js';
+
+const tr = t; // where `t` is a class
 import { renderPreview, wireReport } from './preview.js';
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(d));
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const WALK_RADIUS_M = 450;
 
@@ -68,10 +70,10 @@ function save() {
   saveTimer = setTimeout(async () => {
     try {
       profile = await api('/me/profile', { method: 'PUT', body: profile });
-      toast('Saved');
+      toast(t('Saved'));
       renderPreview();
     } catch (err) {
-      toast(`Not saved. ${err.message}`);
+      toast(t('Not saved. {0}', err.message));
     }
   }, 400);
 }
@@ -147,7 +149,7 @@ function timetableStops() {
 function addFavourite(to, label) {
   // One per stop: COM1 and COM 3 would be the same button.
   const same = profile.places.find((p) => p.to === to);
-  if (same) return toast(`Already a favourite: ${same.label}`);
+  if (same) return toast(t('Already a favourite: {0}', same.label));
   label = label.slice(0, 24);
   let key = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'place';
   while (profile.places.some((p) => p.key === key)) key = `${key.slice(0, 21)}-${Math.floor(Math.random() * 90 + 10)}`;
@@ -176,9 +178,9 @@ function renderClasses() {
     ...profile.trips.map((t) => ({ t: { ...t }, list: 'trips' })),
     ...profile.manual.map((t) => ({ t: { ...t }, list: 'manual' })),
   ];
-  $('#class-count').textContent = all.length ? `${all.length} class${all.length === 1 ? '' : 'es'}${term && profile.trips.length ? ` · ${term}` : ''}` : '';
+  $('#class-count').textContent = all.length ? `${all.length === 1 ? t('1 class') : t('{0} classes', all.length)}${term && profile.trips.length ? ` · ${term}` : ''}` : '';
   if (!all.length) {
-    box.append(el('p', { class: 'hint', textContent: 'No classes yet. Import from NUSMods or add them by hand.' }));
+    box.append(el('p', { class: 'hint', textContent: t('No classes yet. Import from NUSMods or add them by hand.') }));
     return;
   }
   for (const day of DAY_ORDER) {
@@ -187,7 +189,7 @@ function renderClasses() {
     box.append(el('div', { class: 'day', textContent: DAYS[day] }));
     for (const { t, list } of rows) {
       const time = t.endMin ? `${hhmm(t.arriveByMin)}–${hhmm(t.endMin)}` : hhmm(t.arriveByMin);
-      const weeks = Array.isArray(t.weeks) && t.weeks.length < 13 ? ` · wk ${t.weeks[0]}–${t.weeks.at(-1)}` : '';
+      const weeks = Array.isArray(t.weeks) && t.weeks.length < 13 ? ` · ${tr('wk {0}–{1}', t.weeks[0], t.weeks.at(-1))}` : '';
       box.append(
         el(
           'div',
@@ -204,8 +206,8 @@ function renderClasses() {
           el('button', {
             type: 'button',
             class: 'remove',
-            textContent: 'Remove',
-            'aria-label': `Remove ${t.label}`,
+            textContent: tr('Remove'),
+            'aria-label': tr('Remove {0}', t.label),
             onclick: () => {
               const at = findClass(list, t);
               if (at >= 0) profile[list].splice(at, 1);
@@ -223,16 +225,16 @@ function renderUnresolved(list) {
   const box = $('#unresolved');
   box.replaceChildren();
   if (!list?.length) return;
-  box.append(el('p', { class: 'warn-text', textContent: `${list.length} class${list.length === 1 ? '' : 'es'} had a venue we couldn't place. Pick the nearest stop, or skip it:` }));
+  box.append(el('p', { class: 'warn-text', textContent: list.length === 1 ? t("1 class had a venue we couldn't place. Pick the nearest stop, or skip it:") : t("{0} classes had a venue we couldn't place. Pick the nearest stop, or skip it:", list.length) }));
   const ul = el('ul', { class: 'list' });
   for (const u of list) {
-    const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}${u.offCampus ? ' (off campus)' : ''}` }));
+    const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}${u.offCampus ? t(' (off campus)') : ''}` }));
     // The heading goes with the last one placed or skipped.
     const done = () => {
       li.remove();
       if (!ul.children.length) box.replaceChildren();
     };
-    li.append(el('button', { type: 'button', class: 'link-btn', textContent: 'Skip', onclick: done }));
+    li.append(el('button', { type: 'button', class: 'link-btn', textContent: t('Skip'), onclick: done }));
     li.append(
       stopSelect(
         '',
@@ -243,7 +245,7 @@ function renderUnresolved(list) {
           renderClasses();
           save();
         },
-        { blank: 'Choose stop' },
+        { blank: t('Choose stop') },
       ),
     );
     ul.append(li);
@@ -261,8 +263,8 @@ function renderHome() {
     renderHome();
     save();
   };
-  $('#home-1').replaceWith(Object.assign(stopSelect(now[0], pick(0), { blank: 'Main stop' }), { id: 'home-1' }));
-  $('#home-2').replaceWith(Object.assign(stopSelect(now[1], pick(1), { blank: 'Second stop (optional)' }), { id: 'home-2' }));
+  $('#home-1').replaceWith(Object.assign(stopSelect(now[0], pick(0), { blank: t('Main stop') }), { id: 'home-1' }));
+  $('#home-2').replaceWith(Object.assign(stopSelect(now[1], pick(1), { blank: t('Second stop (optional)') }), { id: 'home-2' }));
   $('#gap').value = profile.gapHours;
   $('#home-walk').value = profile.homeWalkMin ?? 5;
   $('#residence').value = residenceFor(now)?.code ?? '';
@@ -291,7 +293,7 @@ function renderPlaces() {
             type: 'button',
             class: 'remove',
             textContent: '×',
-            'aria-label': `Remove ${DAYS[u.day]} ${hhmm(u.atMin)}`,
+            'aria-label': t('Remove {0}', `${DAYS[u.day]} ${hhmm(u.atMin)}`),
             onclick: () => {
               profile.usual = profile.usual.filter((x) => !(x.place === u.place && x.day === u.day && x.atMin === u.atMin));
               renderPlaces();
@@ -301,8 +303,8 @@ function renderPlaces() {
         ),
       ),
     );
-    const day = el('select', { 'aria-label': 'Day' }, ...DAYS.map((d, n) => el('option', { value: String(n), textContent: d, ...(n === 1 ? { selected: true } : {}) })));
-    const at = el('input', { type: 'time', 'aria-label': 'Be there at', required: true });
+    const day = el('select', { 'aria-label': t('Day') }, ...DAYS.map((d, n) => el('option', { value: String(n), textContent: d, ...(n === 1 ? { selected: true } : {}) })));
+    const at = el('input', { type: 'time', 'aria-label': t('Be there at'), required: true });
     const add = el(
       'form',
       {
@@ -318,9 +320,9 @@ function renderPlaces() {
       },
       day,
       at,
-      el('button', { type: 'submit', class: 'btn small ghost', textContent: 'Add' }),
+      el('button', { type: 'submit', class: 'btn small ghost', textContent: t('Add') }),
     );
-    const more = el('details', { class: 'usual-add' }, el('summary', { textContent: 'Add a usual time' }), add);
+    const more = el('details', { class: 'usual-add' }, el('summary', { textContent: t('Add a usual time') }), add);
     ul.append(
       el(
         'li',
@@ -333,7 +335,7 @@ function renderPlaces() {
           el('button', {
             type: 'button',
             class: 'remove',
-            textContent: 'Remove',
+            textContent: t('Remove'),
             onclick: () => {
               profile.places = profile.places.filter((x) => x.key !== p.key);
               profile.usual = profile.usual.filter((u) => u.place !== p.key);
@@ -353,17 +355,17 @@ async function renderDevices() {
   const { devices } = await api('/me/devices');
   const ul = $('#devices');
   ul.replaceChildren();
-  const fmt = (ms) => new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const fmt = (ms) => new Date(ms).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
   for (const d of devices) {
     ul.append(
       el(
         'li',
         {},
-        el('span', {}, el('strong', { textContent: d.name ?? 'Device' }), el('div', { class: 'meta', textContent: `Added ${fmt(d.created)} · used ${fmt(d.lastSeen)}` })),
+        el('span', {}, el('strong', { textContent: d.name ?? t('Device') }), el('div', { class: 'meta', textContent: t('Added {0} · used {1}', fmt(d.created), fmt(d.lastSeen)) })),
         el('button', {
           type: 'button',
           class: 'remove',
-          textContent: 'Remove',
+          textContent: t('Remove'),
           onclick: async () => {
             await api(`/me/devices/${d.id}`, { method: 'DELETE' });
             renderDevices();
@@ -381,20 +383,20 @@ async function renderKeys() {
   const { keys } = await api('/me/keys');
   const ul = $('#keys');
   ul.replaceChildren();
-  const fmt = (ms) => new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const fmt = (ms) => new Date(ms).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
   for (const k of keys) {
     ul.append(
       el(
         'li',
         {},
-        el('span', {}, el('strong', { textContent: k.name }), el('div', { class: 'meta', textContent: `…${k.hint} · made ${fmt(k.created)} · ${k.lastUsed ? `used ${fmt(k.lastUsed)}` : 'never used'}` })),
+        el('span', {}, el('strong', { textContent: k.name }), el('div', { class: 'meta', textContent: `…${k.hint} · ${t('made {0}', fmt(k.created))} · ${k.lastUsed ? t('used {0}', fmt(k.lastUsed)) : t('never used')}` })),
         el('button', {
           type: 'button',
           class: 'remove',
-          textContent: 'Revoke',
-          'aria-label': `Revoke ${k.name}`,
+          textContent: t('Revoke'),
+          'aria-label': t('Revoke {0}', k.name),
           onclick: async () => {
-            if (!confirm(`Revoke "${k.name}"? Anything using it stops working straight away.`)) return;
+            if (!confirm(t('Revoke "{0}"? Anything using it stops working straight away.', k.name))) return;
             await api(`/me/keys/${k.id}`, { method: 'DELETE' });
             $('#new-key').hidden = true;
             renderKeys();
@@ -424,9 +426,9 @@ $('#key-form').addEventListener('submit', async (e) => {
 $('#copy-key').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText($('#new-key-value').textContent);
-    toast('Copied');
+    toast(t('Copied'));
   } catch {
-    toast('Select the key and copy it');
+    toast(t('Select the key and copy it'));
   }
 });
 
@@ -464,7 +466,7 @@ $('#login-form').addEventListener('submit', async (e) => {
   const email = $('#login-email').value.trim();
   err.textContent = '';
   btn.disabled = true;
-  btn.textContent = 'Sending…';
+  btn.textContent = t('Sending…');
   try {
     await sendLink(email);
     $('#sent-to').textContent = email;
@@ -477,7 +479,7 @@ $('#login-form').addEventListener('submit', async (e) => {
     err.textContent = e2.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Email me a sign-in code';
+    btn.textContent = t('Email me a sign-in code');
     resetTurnstile();
   }
 });
@@ -509,7 +511,7 @@ $('#different').addEventListener('click', () => {
 $('#resend').addEventListener('click', () => {
   $('#sent-step').hidden = true;
   $('#login-step').hidden = false;
-  $('#login-msg').textContent = 'Complete the check below, then send again.';
+  $('#login-msg').textContent = t('Complete the check below, then send again.');
 });
 
 $('#logout').addEventListener('click', async () => {
@@ -521,22 +523,22 @@ $('#logout').addEventListener('click', async () => {
 
 async function runImport(share) {
   const msg = $('#import-msg');
-  msg.textContent = 'Importing…';
+  msg.textContent = t('Importing…');
   try {
     const r = await api('/me/import', { method: 'POST', body: { share } });
     profile = r.profile;
     term = r.term;
     const n = profile.trips.length;
-    const notes = [`Imported ${n} class${n === 1 ? '' : 'es'} for ${r.term}.`];
-    if (r.missing?.length) notes.push(`${r.missing.join(', ')} ${r.missing.length === 1 ? 'has' : 'have'} no classes that semester.`);
-    if (r.online) notes.push(`${r.online} online lesson${r.online === 1 ? '' : 's'} skipped.`);
+    const notes = [n === 1 ? t('Imported 1 class for {0}.', r.term) : t('Imported {0} classes for {1}.', n, r.term)];
+    if (r.missing?.length) notes.push(r.missing.length === 1 ? t('{0} has no classes that semester.', r.missing[0]) : t('{0} have no classes that semester.', r.missing.join(', ')));
+    if (r.online) notes.push(r.online === 1 ? t('1 online lesson skipped.') : t('{0} online lessons skipped.', r.online));
     msg.textContent = notes.join(' ');
     $('#reimport').hidden = true;
     renderClasses();
     renderUnresolved(r.unresolved);
     renderPreview();
   } catch (err) {
-    msg.textContent = err.status === 500 ? 'Something went wrong on our side. Your timetable was not changed.' : err.message;
+    msg.textContent = err.status === 500 ? t('Something went wrong on our side. Your timetable was not changed.') : err.message;
   }
 }
 
@@ -550,7 +552,7 @@ $('#manual-form').addEventListener('submit', (e) => {
   const f = new FormData(e.target);
   const to = resolveWhere(e.target.where);
   if (!to) {
-    e.target.where.setCustomValidity('Pick a stop, building or room from the list');
+    e.target.where.setCustomValidity(t('Pick a stop, building or room from the list'));
     e.target.where.reportValidity();
     return;
   }
@@ -568,7 +570,7 @@ $('#place-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const to = resolveWhere(e.target.where);
   if (!to) {
-    e.target.where.setCustomValidity('Pick a stop, building or room from the list');
+    e.target.where.setCustomValidity(t('Pick a stop, building or room from the list'));
     e.target.where.reportValidity();
     return;
   }
@@ -608,6 +610,15 @@ $('#residence').addEventListener('change', (e) => {
   save();
 });
 
+// This browser and the account, so emails and the other devices follow.
+$('#lang').addEventListener('change', async (e) => {
+  const v = e.target.value;
+  profile.lang = v;
+  window.i18n?.noteAccount(v);
+  await saveNow().catch(() => {});
+  window.i18n?.setLang(v);
+});
+
 $('#pace').addEventListener('change', (e) => {
   profile.walkPace = e.target.value;
   save();
@@ -619,7 +630,7 @@ $('#full-bus').addEventListener('change', (e) => {
 
 /* ---------- trip choices (phase 3) ---------- */
 
-const PREF_TEXT = { earlier: 'One bus earlier', quiet: 'No reminders' };
+const PREF_TEXT = { earlier: t('One bus earlier'), quiet: t('No reminders') };
 
 /** Classes you leave a bus earlier for or get no reminders for, and the muted question. */
 async function renderChoices() {
@@ -634,11 +645,11 @@ async function renderChoices() {
       el(
         'li',
         {},
-        el('span', {}, el('span', { textContent: c.label ?? 'A class no longer in your timetable' }), el('div', { class: 'meta', textContent: PREF_TEXT[c.pref] })),
+        el('span', {}, el('span', { textContent: c.label ?? t('A class no longer in your timetable') }), el('div', { class: 'meta', textContent: PREF_TEXT[c.pref] })),
         el('button', {
           type: 'button',
           class: 'btn small ghost',
-          textContent: 'Undo',
+          textContent: t('Undo'),
           onclick: async () => {
             await api('/me/choice', { method: 'POST', body: { trip: c.trip, pref: c.pref, choice: 'undo' } });
             renderChoices();
@@ -650,12 +661,12 @@ async function renderChoices() {
   );
   $('#trip-choices').hidden = !r.choices.length;
   $('#trip-history').hidden = !r.history;
-  $('#history-size').textContent = r.history === 1 ? 'terminus remembers how 1 trip went.' : `terminus remembers how ${r.history} trips went.`;
+  $('#history-size').textContent = r.history === 1 ? t('terminus remembers how 1 trip went.') : t('terminus remembers how {0} trips went.', r.history);
 }
 $('#clear-history').addEventListener('click', async () => {
-  if (!confirm('Forget how your trips went? Choices you made stay.')) return;
+  if (!confirm(t('Forget how your trips went? Choices you made stay.'))) return;
   await api('/me/history', { method: 'DELETE' });
-  toast('Trip history cleared');
+  toast(t('Trip history cleared'));
   renderChoices();
   renderPreview();
 });
@@ -667,7 +678,7 @@ $('#home-walk').addEventListener('change', (e) => {
     profile.homeWalkMin = v;
     save();
   } else {
-    toast('Between 0 and 30 minutes');
+    toast(t('Between 0 and 30 minutes'));
     e.target.value = profile.homeWalkMin ?? 5;
   }
 });
@@ -678,7 +689,7 @@ for (const [id, field] of [['#day-start', 'dayStartMin'], ['#day-end', 'dayEndMi
     if (v == null) return;
     const next = { ...profile, [field]: v };
     if (next.dayStartMin >= next.dayEndMin) {
-      toast('The day has to start before it ends');
+      toast(t('The day has to start before it ends'));
       e.target.value = hhmm(profile[field]);
       return;
     }
@@ -691,10 +702,10 @@ for (const [id, field] of [['#day-start', 'dayStartMin'], ['#day-end', 'dayEndMi
 $('#locate').addEventListener('click', () => {
   const msg = $('#home-msg');
   if (!navigator.geolocation) {
-    msg.textContent = 'This browser cannot share its location.';
+    msg.textContent = t('This browser cannot share its location.');
     return;
   }
-  msg.textContent = 'Finding the nearest stops…';
+  msg.textContent = t('Finding the nearest stops…');
   navigator.geolocation.getCurrentPosition(
     ({ coords }) => {
       const near = stops.map((s) => ({ s, d: haversineM(coords.latitude, coords.longitude, s.lat, s.lon) })).sort((a, b) => a.d - b.d);
@@ -702,13 +713,13 @@ $('#locate').addEventListener('click', () => {
       const picked = (within.length ? within : near.slice(0, 1)).map((n) => n.s.code);
       profile.home = { stops: picked };
       msg.textContent = within.length
-        ? `Picked ${picked.map(stopName).join(' and ')}. Change them if you use a different stop.`
-        : `No stop within ${WALK_RADIUS_M} m, so we picked the nearest: ${stopName(picked[0])}.`;
+        ? t('Picked {0}. Change them if you use a different stop.', picked.map(stopName).join(t(' and ')))
+        : t('No stop within {0} m, so we picked the nearest: {1}.', WALK_RADIUS_M, stopName(picked[0]));
       renderHome();
       save();
     },
     (err) => {
-      msg.textContent = `Couldn't get your location (${err.message}). Pick your stops instead.`;
+      msg.textContent = t("Couldn't get your location ({0}). Pick your stops instead.", err.message);
     },
     { enableHighAccuracy: true, timeout: 10_000 },
   );
@@ -731,10 +742,10 @@ $('#pair').addEventListener('click', async () => {
   clearInterval(pairPoll);
   const tick = async () => {
     const left = Math.max(0, Math.round((expires - Date.now()) / 1000));
-    $('#pair-code').textContent = left ? `${code.slice(0, 3)} ${code.slice(3)}` : 'Expired';
+    $('#pair-code').textContent = left ? `${code.slice(0, 3)} ${code.slice(3)}` : t('Expired');
     $('#pair-hint').textContent = left
-      ? `Scan with your phone's camera, or type the code in the app. Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}.`
-      : 'Get a new code to pair.';
+      ? t("Scan with your phone's camera, or type the code in the app. Expires in {0}.", `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`)
+      : t('Get a new code to pair.');
     if (!left) {
       $('#qr').replaceChildren();
       return clearInterval(pairPoll);
@@ -743,8 +754,8 @@ $('#pair').addEventListener('click', async () => {
     if (left % 4 === 0 && (await renderDevices()) > before) {
       clearInterval(pairPoll);
       $('#qr').replaceChildren();
-      $('#pair-code').textContent = 'Paired';
-      $('#pair-hint').textContent = 'That device is now signed in.';
+      $('#pair-code').textContent = t('Paired');
+      $('#pair-hint').textContent = t('That device is now signed in.');
       renderPreview();
     }
   };
@@ -755,13 +766,13 @@ $('#pair').addEventListener('click', async () => {
 /* ---------- account ---------- */
 
 $('#signout-all').addEventListener('click', async () => {
-  if (!confirm('Sign out of every browser and device, including this one?')) return;
+  if (!confirm(t('Sign out of every browser and device, including this one?'))) return;
   await api('/me/sessions', { method: 'DELETE' });
   location.reload();
 });
 
 $('#delete').addEventListener('click', async () => {
-  const typed = prompt('This deletes your account, timetable, favourites and paired devices immediately. Type DELETE to confirm.');
+  const typed = prompt(t('This deletes your account, timetable, favourites and paired devices immediately. Type DELETE to confirm.'));
   if (typed !== 'DELETE') return;
   try {
     await api('/me', { method: 'DELETE' });
@@ -799,10 +810,18 @@ async function start() {
   $('#who').hidden = false;
   term = me.term;
   $('#reimport').hidden = !me.needsReimport;
-  $('#reimport-text').textContent = `It's for ${me.term}, which has ended. Copy this semester's link from NUSMods and import it below.`;
+  $('#reimport-text').textContent = t("It's for {0}, which has ended. Copy this semester's link from NUSMods and import it below.", me.term);
 
   const [p, campus] = await Promise.all([api('/me/profile'), api('/campus')]);
   profile = p;
+  // The account's language (phase 10): one chosen on another device is used
+  // here; one chosen here before the account had one goes to the account.
+  const mine = window.i18n?.followAccount(profile.lang ?? 'auto');
+  if (mine) {
+    profile.lang = mine;
+    save();
+  }
+  $('#lang').value = window.i18n?.pref() ?? 'auto';
   stops = campus.stops.map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));
 
   destinations = campus.destinations;
@@ -850,5 +869,5 @@ async function start() {
 }
 
 start().catch((err) => {
-  document.querySelector('main').append(el('p', { class: 'hint', textContent: `Something went wrong. ${err.message}` }));
+  document.querySelector('main').append(el('p', { class: 'hint', textContent: t('Something went wrong. {0}', err.message) }));
 });

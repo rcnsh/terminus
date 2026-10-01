@@ -9,6 +9,7 @@
  */
 
 import calendarJson from '../data/calendar.json' with { type: 'json' };
+import { m } from './i18n.ts';
 
 interface CalendarData {
   semesters: Array<{ acadYear: string; semester: number; start: string }>;
@@ -159,12 +160,12 @@ export function termEnded(term: Term, nowMs: number, data: CalendarData = DATA):
 /** "Sem 1 2026/27", "Special Term I 2026/27". */
 export function termName(t: Term): string {
   const ay = t.acadYear.replace(/^(\d{4})\/\d{2}(\d{2})$/, '$1/$2');
-  return t.semester <= 2 ? `Sem ${t.semester} ${ay}` : `Special Term ${t.semester === 3 ? 'I' : 'II'} ${ay}`;
+  return t.semester <= 2 ? m().termSem(t.semester, ay) : m().termSpecial(t.semester === 3 ? 'I' : 'II', ay);
 }
 
 /** Why there are no classes today, in a few words, or null on an ordinary day. */
 export function dayOffReason(nowMs: number, data: CalendarData = DATA): string | null {
   const d = termDay(nowMs, data);
-  if (d.holiday) return d.holiday;
-  return d.kind === 'recess' ? 'Recess week' : d.kind === 'reading' ? 'Reading week' : d.kind === 'exam' ? 'Exams' : d.kind === 'vacation' ? 'Vacation' : null;
+  if (d.holiday) return m().holiday(d.holiday);
+  return d.kind === 'recess' ? m().recessWeek : d.kind === 'reading' ? m().readingWeek : d.kind === 'exam' ? m().exams : d.kind === 'vacation' ? m().vacation : null;
 }

@@ -10,17 +10,17 @@ struct Search: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.secondary)
                 if model.isSnapshot {
-                    Text("Go somewhere else").foregroundStyle(.tertiary)
+                    Text(L("Go somewhere else")).foregroundStyle(.tertiary)
                     Spacer(minLength: 0)
                 } else {
-                    TextField("Go somewhere else", text: $query)
+                    TextField(L("Go somewhere else"), text: $query)
                         .textFieldStyle(.plain)
                         .onChange(of: query) { _, _ in model.loadDestinations() }
                 }
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Clear search")
+                        .accessibilityLabel(L("Clear search"))
                 }
             }
             .padding(.horizontal, 10)
@@ -43,7 +43,7 @@ struct Search: View {
                                     .foregroundStyle(.secondary).frame(width: 16)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(d.label)
-                                    Text(d.kind == "stop" ? "Bus stop" : d.kind == "landmark" ? "\(d.detail.map { "\($0) · " } ?? "")\((d.stops ?? []).map(stopName).joined(separator: " or ")) stop" : "\(d.label != d.code ? "\(d.code) · " : "")\(stopName(d.stopCode)) stop\(d.walkM.map { ", \(Swift.max(1, Int((Double($0) / 1.3 / 60).rounded()))) min walk" } ?? "")")
+                                    Text(d.kind == "stop" ? L("Bus stop") : d.kind == "landmark" ? "\(d.detail.map { "\($0) · " } ?? "")\(L("%@ stop", (d.stops ?? []).map(stopName).joined(separator: L(" or "))))" : "\(d.label != d.code ? "\(d.code) · " : "")\(L("%@ stop", stopName(d.stopCode)))\(d.walkM.map { L(", %@ min walk", "\(Swift.max(1, Int((Double($0) / 1.3 / 60).rounded())))") } ?? "")")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()

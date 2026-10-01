@@ -20,6 +20,7 @@
 
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import { type LessonWeeks, type Term, termsForImport } from './calendar.ts';
+import { m } from './i18n.ts';
 
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
 
@@ -197,9 +198,9 @@ export async function resolveTrips(
   apiBase = 'https://api.nusmods.com/v2',
 ): Promise<ImportResult> {
   const modules = shareModules(share);
-  if (modules.length > MAX_MODULES) throw new ImportInputError(`that link has ${modules.length} modules; the limit is ${MAX_MODULES}`);
+  if (modules.length > MAX_MODULES) throw new ImportInputError(m().tooManyModules(modules.length, MAX_MODULES));
   const bad = modules.find((m) => !MODULE_CODE.test(m));
-  if (bad) throw new ImportInputError(`"${bad.slice(0, 20)}" is not a module code`);
+  if (bad) throw new ImportInputError(m().notAModule(bad.slice(0, 20)));
 
   // A sem-1 link in July means the coming August. If NUSMods has nothing for
   // that year yet, the semester just gone is the next best reading.

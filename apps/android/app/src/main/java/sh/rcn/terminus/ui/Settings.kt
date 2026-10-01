@@ -57,10 +57,14 @@ import sh.rcn.terminus.SavedPlace
 import sh.rcn.terminus.Trip
 import sh.rcn.terminus.UsualTime
 import sh.rcn.terminus.WEEKDAYS
-import sh.rcn.terminus.dayName
+import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
+import sh.rcn.terminus.Lang
+import sh.rcn.terminus.L
 
 /**
  * Everything the account page has, so the website is optional for daily
@@ -82,38 +86,39 @@ internal fun SettingsScreen(
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Settings", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = onClose) { Text("Done") }
+            Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
         }
         state.message?.let {
             Card(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(it, modifier = Modifier.weight(1f))
-                    TextButton(onClick = account::clearMessage) { Text("OK") }
+                    TextButton(onClick = account::clearMessage) { Text(stringResource(R.string.ok)) }
                 }
             }
         }
         val profile = state.profile
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             AccountSection(state, account, main, onAddEmail, onSignedOut)
+            LanguagePicker(account)
             if (profile == null) {
                 Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-                Heading("Timetable")
+                Heading(stringResource(R.string.heading_timetable))
                 var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
                 TimetableImport(state, account, link) { link = it }
                 Classes(profile, state.campus, account)
 
-                Heading("Your day")
+                Heading(stringResource(R.string.heading_your_day))
                 state.campus?.let { HomePicker(profile, it, account) }
                 DayHours(profile, account)
 
-                Heading("Getting around")
+                Heading(stringResource(R.string.heading_getting_around))
                 PacePicker(profile, account)
                 TripChoices(state, account)
                 TripHistory(state, account)
 
-                Heading("Favourites")
+                Heading(stringResource(R.string.heading_favourites))
                 Favourites(profile, state.campus, account)
             }
             Spacer(Modifier.height(32.dp))
@@ -128,10 +133,10 @@ private fun UsualTimeEditor(place: SavedPlace, account: AccountViewModel, done: 
     var at by rememberSaveable { mutableStateOf<Int?>(null) }
     Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice("Day", WEEKDAYS, day, { day = it ?: 1 })
-            TimeButton("Be there at", at, { at = it })
+            Choice(stringResource(R.string.day), WEEKDAYS, day, { day = it ?: 1 })
+            TimeButton(stringResource(R.string.be_there_at), at, { at = it })
             Row {
-                TextButton(onClick = done) { Text("Cancel") }
+                TextButton(onClick = done) { Text(stringResource(R.string.cancel)) }
                 Spacer(Modifier.weight(1f))
                 Button(
                     onClick = {
@@ -140,7 +145,7 @@ private fun UsualTimeEditor(place: SavedPlace, account: AccountViewModel, done: 
                         done()
                     },
                     enabled = at != null,
-                ) { Text("Add") }
+                ) { Text(stringResource(R.string.add)) }
             }
         }
     }
@@ -150,18 +155,18 @@ private fun UsualTimeEditor(place: SavedPlace, account: AccountViewModel, done: 
 @Composable
 private fun TripChoices(state: AccountState, account: AccountViewModel) {
     if (state.choices.isEmpty()) return
-    Text("Your classes", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+    Text(stringResource(R.string.your_classes), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
     state.choices.forEach { c ->
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(c.label ?: "A class no longer in your timetable")
+                Text(c.label ?: stringResource(R.string.class_gone))
                 Text(
-                    if (c.pref == "earlier") "One bus earlier" else "No reminders",
+                    if (c.pref == "earlier") stringResource(R.string.one_bus_earlier) else stringResource(R.string.no_reminders),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = { account.undoChoice(c) }) { Text("Undo") }
+            TextButton(onClick = { account.undoChoice(c) }) { Text(stringResource(R.string.undo)) }
         }
     }
 }
@@ -171,19 +176,16 @@ private fun TripChoices(state: AccountState, account: AccountViewModel) {
 private fun TripHistory(state: AccountState, account: AccountViewModel) {
     if (state.history == 0) return
     var confirm by remember { mutableStateOf(false) }
-    Text("Trip history", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
-    Hint(
-        "terminus remembers how ${if (state.history == 1) "1 trip" else "${state.history} trips"} went, for 35 days, " +
-            "only to notice a class you keep missing or skipping.",
-    )
-    OutlinedButton(onClick = { confirm = true }, modifier = Modifier.padding(top = 4.dp)) { Text("Clear trip history") }
+    Text(stringResource(R.string.trip_history), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+    Hint(if (state.history == 1) stringResource(R.string.history_one) else stringResource(R.string.history_n, state.history))
+    OutlinedButton(onClick = { confirm = true }, modifier = Modifier.padding(top = 4.dp)) { Text(stringResource(R.string.clear_history)) }
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("Clear trip history?") },
-            text = { Text("terminus forgets how your trips went. Choices you've made for your classes stay.") },
-            confirmButton = { TextButton(onClick = { confirm = false; account.clearHistory() }) { Text("Clear") } },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.clear_history_title)) },
+            text = { Text(stringResource(R.string.clear_history_text)) },
+            confirmButton = { TextButton(onClick = { confirm = false; account.clearHistory() }) { Text(stringResource(R.string.clear)) } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -192,35 +194,35 @@ private fun TripHistory(state: AccountState, account: AccountViewModel) {
 private fun AccountSection(state: AccountState, account: AccountViewModel, main: MainViewModel, onAddEmail: () -> Unit, onSignedOut: () -> Unit) {
     val ctx = LocalContext.current
     var confirm by remember { mutableStateOf<String?>(null) }
-    Heading("Account")
+    Heading(stringResource(R.string.heading_account))
     if (state.email == null) {
-        Text("Not signed in")
-        Hint("Your setup is kept on this phone's account only. Add an email to keep it if you lose the phone, and to use terminus on your Mac or the web.")
-        Button(onClick = onAddEmail, modifier = Modifier.padding(top = 8.dp)) { Text("Add your email") }
-        TextButton(onClick = { confirm = "delete" }) { Text("Delete this account") }
+        Text(stringResource(R.string.not_signed_in))
+        Hint(stringResource(R.string.not_signed_in_hint))
+        Button(onClick = onAddEmail, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.add_email)) }
+        TextButton(onClick = { confirm = "delete" }) { Text(stringResource(R.string.delete_account)) }
     } else {
-        Text("Signed in as ${state.email}")
+        Text(stringResource(R.string.signed_in_as, state.email))
         Devices(state, account, onSignedOut)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-            TextButton(onClick = { confirm = "signout" }) { Text("Sign out of this phone") }
-            TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }) { Text("Account page") }
+            TextButton(onClick = { confirm = "signout" }) { Text(stringResource(R.string.sign_out_phone)) }
+            TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }) { Text(stringResource(R.string.account_page)) }
         }
-        Hint("API keys, signing out everywhere and deleting your account are on the account page.")
+        Hint(stringResource(R.string.account_page_hint))
     }
     when (confirm) {
         "delete" -> AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("Delete this account?") },
-            text = { Text("Your timetable and settings are deleted now, and the app starts over. There's no email to get them back with.") },
-            confirmButton = { TextButton(onClick = { confirm = null; account.deleteAccount { main.signedOut(); onSignedOut() } }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.delete_account_title)) },
+            text = { Text(stringResource(R.string.delete_account_text)) },
+            confirmButton = { TextButton(onClick = { confirm = null; account.deleteAccount { main.signedOut(); onSignedOut() } }) { Text(stringResource(R.string.delete)) } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
         )
         "signout" -> AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("Sign out of this phone?") },
-            text = { Text("The app and widget stop showing your timetable. Your account and setup stay; sign in again with ${state.email}.") },
-            confirmButton = { TextButton(onClick = { confirm = null; main.unpair(); account.reset(); onSignedOut() }) { Text("Sign out") } },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.sign_out_title)) },
+            text = { Text(stringResource(R.string.sign_out_text, state.email.orEmpty())) },
+            confirmButton = { TextButton(onClick = { confirm = null; main.unpair(); account.reset(); onSignedOut() }) { Text(stringResource(R.string.sign_out)) } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -229,7 +231,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
 private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut: () -> Unit) {
     val ctx = LocalContext.current
     var removing by remember { mutableStateOf<Device?>(null) }
-    Heading("Devices")
+    Heading(stringResource(R.string.heading_devices))
     val devices = state.devices
     if (devices == null) {
         CircularProgressIndicator(Modifier.size(20.dp))
@@ -237,26 +239,26 @@ private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut:
         for (d in devices) {
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(d.name + if (d.current) " (this phone)" else "")
+                    Text(d.name + if (d.current) stringResource(R.string.this_phone) else "")
                     val now = System.currentTimeMillis()
-                    val used = if (now - d.lastSeenMs < 60_000) "just now" else android.text.format.DateUtils.getRelativeTimeSpanString(d.lastSeenMs, now, android.text.format.DateUtils.MINUTE_IN_MILLIS)
-                    Hint(listOfNotNull(platformName(d.platform), "used $used").joinToString(" · "))
+                    val used = if (now - d.lastSeenMs < 60_000) stringResource(R.string.just_now) else android.text.format.DateUtils.getRelativeTimeSpanString(d.lastSeenMs, now, android.text.format.DateUtils.MINUTE_IN_MILLIS)
+                    Hint(listOfNotNull(platformName(d.platform), stringResource(R.string.used_when, used)).joinToString(" · "))
                 }
-                TextButton(onClick = { removing = d }) { Text("Remove") }
+                TextButton(onClick = { removing = d }) { Text(stringResource(R.string.remove)) }
             }
             HorizontalDivider()
         }
     }
-    OutlinedButton(onClick = account::newPairCode, modifier = Modifier.padding(top = 8.dp)) { Text("Add a device") }
-    Hint("Your Mac, or another phone. Every device added or removed is emailed to you.")
+    OutlinedButton(onClick = account::newPairCode, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.add_device)) }
+    Hint(stringResource(R.string.add_device_hint))
 
     removing?.let { d ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text("Remove ${d.name}?") },
-            text = { Text(if (d.current) "This phone is signed out." else "It's signed out, and you'll get an email saying so.") },
-            confirmButton = { TextButton(onClick = { removing = null; account.removeDevice(d) { onSignedOut() } }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.remove_device_title, d.name)) },
+            text = { Text(if (d.current) stringResource(R.string.remove_this_phone) else stringResource(R.string.remove_other)) },
+            confirmButton = { TextButton(onClick = { removing = null; account.removeDevice(d) { onSignedOut() } }) { Text(stringResource(R.string.remove)) } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     state.pairCode?.let { code -> PairCodeDialog(code, account::closePairCode) }
@@ -277,26 +279,26 @@ private fun PairCodeDialog(code: String, onClose: () -> Unit) {
     val qr = remember(link) { qrBitmap(link, 480) }
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Add a device") },
+        title = { Text(stringResource(R.string.add_device)) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text("On your Mac, open terminus and enter:")
+                Text(stringResource(R.string.on_mac_enter))
                 Text(
                     "${code.take(3)} ${code.drop(3)}",
                     style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 4.sp),
                     modifier = Modifier.padding(vertical = 12.dp),
                 )
-                Text("Or scan this with another phone's camera:")
-                Image(BitmapPainter(qr.asImageBitmap()), contentDescription = "QR code for pairing code $code", modifier = Modifier.size(200.dp).padding(8.dp))
-                Hint("Works once, for 10 minutes.")
+                Text(stringResource(R.string.or_scan))
+                Image(BitmapPainter(qr.asImageBitmap()), contentDescription = stringResource(R.string.qr_desc, code), modifier = Modifier.size(200.dp).padding(8.dp))
+                Hint(stringResource(R.string.works_once))
             }
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.done)) } },
         dismissButton = {
             TextButton(onClick = {
-                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "Pair terminus with this link, or enter code $code: $link")
-                ctx.startActivity(Intent.createChooser(send, "Send the pairing code"))
-            }) { Text("Send") }
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, L.s(R.string.pair_share_text, code, link))
+                ctx.startActivity(Intent.createChooser(send, L.s(R.string.send_pair_code)))
+            }) { Text(stringResource(R.string.send)) }
         },
     )
 }
@@ -321,21 +323,21 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
     val all = (profile.trips.mapIndexed { i, t -> Triple(true, i, t) } + profile.manual.mapIndexed { i, t -> Triple(false, i, t) })
         .sortedWith(compareBy({ order.indexOf(it.third.day) }, { it.third.arriveByMin }))
     if (all.isNotEmpty()) {
-        Text(if (all.size == 1) "1 class" else "${all.size} classes", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        Text(if (all.size == 1) stringResource(R.string.one_class) else stringResource(R.string.n_classes, all.size), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
         for ((imported, i, t) in all) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("${dayName(t.day).take(3)} ${time(t.arriveByMin)} · ${t.label}")
-                    val about = listOfNotNull(campus?.let { "${it.stopName(t.to)} stop" }, if (imported) null else "added by hand")
+                    Text("${dayShort(t.day)} ${time(t.arriveByMin)} · ${t.label}")
+                    val about = listOfNotNull(campus?.let { L.s(R.string.stop_suffix, it.stopName(t.to)) }, if (imported) null else stringResource(R.string.added_by_hand))
                     if (about.isNotEmpty()) Hint(about.joinToString(" · "))
                 }
-                TextButton(onClick = { account.edit { it.removeClass(imported, i) } }) { Text("Remove") }
+                TextButton(onClick = { account.edit { it.removeClass(imported, i) } }) { Text(stringResource(R.string.remove)) }
             }
         }
     }
     var open by rememberSaveable { mutableStateOf(false) }
     if (!open) {
-        TextButton(onClick = { open = true; account.loadCampus() }) { Text("Add a class or commitment by hand") }
+        TextButton(onClick = { open = true; account.loadCampus() }) { Text(stringResource(R.string.add_by_hand)) }
         return
     }
     var day by rememberSaveable { mutableIntStateOf(1) }
@@ -345,15 +347,15 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
     var where by remember { mutableStateOf<Destination?>(null) }
     Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice("Day", WEEKDAYS, day, { day = it ?: 1 })
+            Choice(stringResource(R.string.day), WEEKDAYS, day, { day = it ?: 1 })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TimeButton("Starts", start, { start = it }, Modifier.weight(1f))
-                TimeButton("Ends", end, { end = it }, Modifier.weight(1f))
+                TimeButton(stringResource(R.string.starts), start, { start = it }, Modifier.weight(1f))
+                TimeButton(stringResource(R.string.ends), end, { end = it }, Modifier.weight(1f))
             }
-            OutlinedTextField(label, { if (it.length <= 60) label = it }, label = { Text("Name, e.g. Gym") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            WherePicker("Where", destinations, where) { where = it }
+            OutlinedTextField(label, { if (it.length <= 60) label = it }, label = { Text(stringResource(R.string.name_eg_gym)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            WherePicker(stringResource(R.string.where), destinations, where) { where = it }
             Row {
-                TextButton(onClick = { open = false }) { Text("Cancel") }
+                TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) }
                 Spacer(Modifier.weight(1f))
                 Button(
                     onClick = {
@@ -364,7 +366,7 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
                         start = null; end = null; label = ""; where = null
                     },
                     enabled = start != null && where != null && label.isNotBlank(),
-                ) { Text("Add") }
+                ) { Text(stringResource(R.string.add)) }
             }
         }
     }
@@ -373,26 +375,26 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
 @Composable
 private fun DayHours(profile: ProfileDoc, account: AccountViewModel) {
     Spacer(Modifier.height(12.dp))
-    Text("Show buses between")
+    Text(stringResource(R.string.show_buses_between))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         TimeButton("", profile.dayStartMin, { m -> if (m < profile.dayEndMin) account.edit { it.dayStartMin = m } }, Modifier.weight(1f))
-        Text("and")
+        Text(stringResource(R.string.and))
         TimeButton("", profile.dayEndMin, { m -> if (m > profile.dayStartMin) account.edit { it.dayEndMin = m } }, Modifier.weight(1f))
     }
-    Hint("Outside your day, the widget shows your next class instead of a bus. A class that starts early or runs late stretches the day to fit.")
+    Hint(stringResource(R.string.day_hours_hint))
     Spacer(Modifier.height(12.dp))
-    Text("Go home in gaps longer than")
+    Text(stringResource(R.string.gap_home))
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = { account.edit { it.gapHours = profile.gapHours - 0.5 } }, enabled = profile.gapHours > 0.5) { Text("−") }
         val h = profile.gapHours
-        Text("${if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()} hours", modifier = Modifier.padding(horizontal = 16.dp))
+        Text(stringResource(R.string.n_hours, if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()), modifier = Modifier.padding(horizontal = 16.dp))
         OutlinedButton(onClick = { account.edit { it.gapHours = profile.gapHours + 0.5 } }, enabled = profile.gapHours < 12) { Text("+") }
     }
 }
 
 @Composable
 private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
-    Hint("One tap away in the app, on the widget and in the Mac's menu bar. Give one a usual time (gym on Tuesdays at 6 pm) and it's planned like a class that day.")
+    Hint(stringResource(R.string.favourites_hint))
     val ctx = LocalContext.current
     val time = { m: Int -> if (hour12(ctx)) hhmm12(m) else hhmm(m) }
     // A stop's name, or a food court's (favourites and classes can go to one).
@@ -406,15 +408,15 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
             Column(Modifier.weight(1f)) {
                 Text(p.label)
                 // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
-                if (campus != null && p.label != stopName(p.to)) Hint("${stopName(p.to)} stop")
+                if (campus != null && p.label != stopName(p.to)) Hint(stringResource(R.string.stop_suffix, stopName(p.to)))
             }
-            TextButton(onClick = { timing = if (timing == p.key) null else p.key }) { Text("Usual time") }
-            TextButton(onClick = { account.edit { it.removePlace(p.key) } }) { Text("Remove") }
+            TextButton(onClick = { timing = if (timing == p.key) null else p.key }) { Text(stringResource(R.string.usual_time)) }
+            TextButton(onClick = { account.edit { it.removePlace(p.key) } }) { Text(stringResource(R.string.remove)) }
         }
         for (u in profile.usual.filter { it.place == p.key }) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${dayName(u.day).take(3)} ${time(u.atMin)}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                TextButton(onClick = { account.edit { it.removeUsual(u) } }) { Text("Remove") }
+                Text("${dayShort(u.day)} ${time(u.atMin)}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = { account.edit { it.removeUsual(u) } }) { Text(stringResource(R.string.remove)) }
             }
         }
         if (timing == p.key) UsualTimeEditor(p, account) { timing = null }
@@ -427,13 +429,13 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
         .map { (to, classes) -> Destination(to, stopName(to), to, "timetable", detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(", ")) }
         .sortedBy { it.label }
     Spacer(Modifier.height(8.dp))
-    WherePicker("Add a favourite", campus?.destinations.orEmpty(), null, timetable) { d ->
+    WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable) { d ->
         if (d == null) return@WherePicker
         // No name to type: it's called what was picked, short, as it reads on a button.
         val to = if (d.kind == "landmark") d.code else d.stopCode
         val same = profile.places.firstOrNull { it.to == to }
         if (same != null) {
-            note = "Already a favourite: ${same.label}"
+            note = L.s(R.string.already_favourite, same.label)
         } else {
             note = null
             account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) }
@@ -442,3 +444,18 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
     note?.let { Hint(it) }
     LaunchedEffect(Unit) { account.loadCampus() }
 }
+
+/** Follow the phone, English or 中文 (phase 10). The languages are named in themselves. */
+@Composable
+internal fun LanguagePicker(account: AccountViewModel) {
+    val ctx = LocalContext.current
+    Heading(stringResource(R.string.heading_language))
+    Choice(
+        stringResource(R.string.language),
+        listOf(Lang.AUTO to stringResource(R.string.follow_device), Lang.EN to "English", Lang.ZH to "中文"),
+        Lang.pref(ctx),
+        { it?.let(account::setLang) },
+    )
+    Hint(stringResource(R.string.language_hint), Modifier.padding(top = 4.dp))
+}
+

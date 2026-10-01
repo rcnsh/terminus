@@ -18,6 +18,8 @@ import java.time.Instant
  * the API's own tests), so a change in the response shape fails here too.
  */
 class AnswerTest {
+    init { TestStrings.install() }
+
     private fun golden(name: String): NextAnswer {
         val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
         return NextAnswer.parse(JSONObject(File(dir, "$name.json").readText()))

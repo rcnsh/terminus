@@ -6,6 +6,8 @@ import org.junit.Test
 
 /** The widget's usual places (phase 8.3): saved places, and stops asked for, by recent use. */
 class DestinationsTest {
+    init { TestStrings.install() }
+
     private val now = 1_790_000_000_000L
     private val day = 86_400_000L
     private val places = listOf(Place("krmrt", "KR MRT"), Place("utown", "UTown"), Place("deck", "The Deck"))

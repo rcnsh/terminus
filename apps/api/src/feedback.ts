@@ -7,6 +7,7 @@
 
 import type { Env } from './types.ts';
 import { mailName, siteOrigin } from './site.ts';
+import { m } from './i18n.ts';
 
 export const FEEDBACK_LIMITS = {
   note: 1000,
@@ -33,7 +34,7 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
   const kind = b.kind === 'other' ? 'other' : b.kind === 'wrong' || b.kind === undefined ? 'wrong' : null;
   if (!kind) return { ok: false, error: "kind is 'wrong' or 'other'" };
   const note = typeof b.note === 'string' ? b.note.trim() : '';
-  if (note.length > FEEDBACK_LIMITS.note) return { ok: false, error: `keep the note under ${FEEDBACK_LIMITS.note} characters` };
+  if (note.length > FEEDBACK_LIMITS.note) return { ok: false, error: m().noteTooLong(FEEDBACK_LIMITS.note) };
   if (kind === 'other' && !note) return { ok: false, error: 'say what went wrong' };
   const platform = PLATFORMS.find((p) => p === b.platform);
   if (!platform) return { ok: false, error: "platform is 'android', 'mac' or 'web'" };

@@ -8,6 +8,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProfileTest {
+    init { TestStrings.install() }
+
     @Test
     fun `a link shared from NUSMods is found in the sentence around it`() {
         val shared = "My timetable: https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1,TUT:03&MA1521=LEC:1."

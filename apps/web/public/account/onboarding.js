@@ -2,10 +2,12 @@
 // screen for accounts set up before it existed. Everything it needs comes in
 // through `ctx`, so it has no hold on the account page's own state.
 
+import { t } from './dom.js';
+
 const PACES = [
-  { value: 'slow', title: 'Slow', hint: 'Unhurried, or you often have a bag to carry', min: 6 },
-  { value: 'normal', title: 'Normal', hint: 'Most people', min: 5 },
-  { value: 'fast', title: 'Fast', hint: "You're the one overtaking", min: 4 },
+  { value: 'slow', title: t('Slow'), hint: t('Unhurried, or you often have a bag to carry'), min: 6 },
+  { value: 'normal', title: t('Normal'), hint: t('Most people'), min: 5 },
+  { value: 'fast', title: t('Fast'), hint: t("You're the one overtaking"), min: 4 },
 ];
 
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -34,7 +36,7 @@ export function runOnboarding(ctx) {
     };
 
     const frame = (n) => {
-      const bar = el('div', { class: 'ob-progress', role: 'progressbar', 'aria-label': 'Setup progress' });
+      const bar = el('div', { class: 'ob-progress', role: 'progressbar', 'aria-label': t('Setup progress') });
       bar.setAttribute('aria-valuemin', '1');
       bar.setAttribute('aria-valuemax', String(steps.length));
       bar.setAttribute('aria-valuenow', String(n + 1));
@@ -47,8 +49,8 @@ export function runOnboarding(ctx) {
       const top = el(
         'div',
         { class: 'ob-top' },
-        el('span', { class: 'ob-count', textContent: n ? `Step ${n} of ${steps.length - 1}` : 'Welcome' }),
-        el('button', { type: 'button', class: 'link-btn', textContent: 'Skip setup', onclick: finish }),
+        el('span', { class: 'ob-count', textContent: n ? t('Step {0} of {1}', n, steps.length - 1) : t('Welcome') }),
+        el('button', { type: 'button', class: 'link-btn', textContent: t('Skip setup'), onclick: finish }),
       );
       return [top, bar];
     };
@@ -90,9 +92,9 @@ export function runOnboarding(ctx) {
     return sub ? [h, el('p', { class: 'ob-sub', textContent: sub })] : [h];
   }
 
-  function actions(nav, { next = 'Continue', skip, onNext } = {}) {
+  function actions(nav, { next = t('Continue'), skip, onNext } = {}) {
     const row = el('div', { class: 'ob-actions' });
-    if (nav.back) row.append(el('button', { type: 'button', class: 'btn ghost', textContent: 'Back', onclick: nav.back }));
+    if (nav.back) row.append(el('button', { type: 'button', class: 'btn ghost', textContent: t('Back'), onclick: nav.back }));
     row.append(el('span', { class: 'ob-grow' }));
     if (skip) row.append(el('button', { type: 'button', class: 'link-btn', textContent: skip, onclick: () => nav.next() }));
     const primary = el('button', { type: 'button', class: 'btn accent', textContent: next });
@@ -112,45 +114,45 @@ export function runOnboarding(ctx) {
   function welcome(_ctx, nav) {
     return [
       el('img', { class: 'ob-mark', src: '/assets/mark.svg', alt: '' }),
-      ...heading('Welcome to terminus', 'It tells you when to leave for class, not just when the bus comes. Setting up takes about a minute.'),
+      ...heading(t('Welcome to terminus'), t('It tells you when to leave for class, not just when the bus comes. Setting up takes about a minute.')),
       el(
         'ul',
         { class: 'ob-list' },
-        el('li', { textContent: 'Your timetable, so it knows where you are going' }),
-        el('li', { textContent: 'Where your day starts' }),
-        el('li', { textContent: 'How fast you walk' }),
+        el('li', { textContent: t('Your timetable, so it knows where you are going') }),
+        el('li', { textContent: t('Where your day starts') }),
+        el('li', { textContent: t('How fast you walk') }),
       ),
-      actions(nav, { next: 'Get started' }),
+      actions(nav, { next: t('Get started') }),
     ].filter(Boolean);
   }
 
   function timetable(ctx, nav) {
     const input = el('input', { type: 'url', placeholder: 'https://nusmods.com/timetable/sem-1/share?…', value: ctx.profile.share ?? '' });
-    input.setAttribute('aria-label', 'NUSMods share link');
+    input.setAttribute('aria-label', t('NUSMods share link'));
     const msg = el('p', { class: 'hint', role: 'status' });
     let imported = Boolean(ctx.profile.trips?.length);
-    if (imported) msg.textContent = `${ctx.profile.trips.length} classes already imported.`;
+    if (imported) msg.textContent = t('{0} classes already imported.', ctx.profile.trips.length);
     const doImport = async () => {
       const share = input.value.trim();
       if (!share) return;
-      msg.textContent = 'Importing…';
+      msg.textContent = t('Importing…');
       const r = await api('/me/import', { method: 'POST', body: { share } });
       Object.assign(ctx.profile, r.profile);
       ctx.onImport?.(r);
       imported = true;
       const n = r.profile.trips.length;
-      msg.textContent = `Imported ${n} class${n === 1 ? '' : 'es'} for ${r.term}.`;
+      msg.textContent = n === 1 ? t('Imported 1 class for {0}.', r.term) : t('Imported {0} classes for {1}.', n, r.term);
       // The next step replaces this one straight away: say it where it stays.
       ctx.toast(msg.textContent);
     };
     return [
-      ...heading('Your timetable', 'Paste your NUSMods share link. Each class goes to the stop nearest its room.'),
-      el('label', { textContent: 'NUSMods share link' }),
+      ...heading(t('Your timetable'), t('Paste your NUSMods share link. Each class goes to the stop nearest its room.')),
+      el('label', { textContent: t('NUSMods share link') }),
       input,
-      el('p', { class: 'hint', textContent: 'In NUSMods: Timetable, then Share/Sync, then Copy link.' }),
+      el('p', { class: 'hint', textContent: t('In NUSMods: Timetable, then Share/Sync, then Copy link.') }),
       msg,
       actions(nav, {
-        skip: "I'll do this later",
+        skip: t("I'll do this later"),
         onNext: async () => {
           if (input.value.trim() && (!imported || input.value.trim() !== ctx.profile.share)) {
             try {
@@ -168,28 +170,28 @@ export function runOnboarding(ctx) {
   function home(ctx, nav) {
     const current = ctx.profile.home?.stops ?? [];
     let picked = null; // a residence's stops, when one is chosen
-    const residence = el('select', {}, el('option', { value: '', textContent: "Off campus, or I'll pick a stop" }));
+    const residence = el('select', {}, el('option', { value: '', textContent: t("Off campus, or I'll pick a stop") }));
     for (const r of ctx.residences) residence.append(el('option', { value: r.code, textContent: r.name }));
-    residence.setAttribute('aria-label', 'Where you live');
-    const first = ctx.stopSelect(current[0], () => {}, { blank: 'Choose a stop' });
-    first.setAttribute('aria-label', 'Home stop');
+    residence.setAttribute('aria-label', t('Where you live'));
+    const first = ctx.stopSelect(current[0], () => {}, { blank: t('Choose a stop') });
+    first.setAttribute('aria-label', t('Home stop'));
     const walk = el('input', { type: 'number', min: 0, max: 30, step: 1, value: ctx.profile.homeWalkMin ?? 5 });
-    walk.setAttribute('aria-label', 'Minutes from home to your stop');
+    walk.setAttribute('aria-label', t('Minutes from home to your stop'));
     const msg = el('p', { class: 'hint', role: 'status' });
     const locate = el('button', {
       type: 'button',
       class: 'link-btn locate',
-      textContent: 'Pick the stop nearest me',
+      textContent: t('Pick the stop nearest me'),
       onclick: () => {
-        if (!navigator.geolocation) return (msg.textContent = 'This browser cannot share its location.');
-        msg.textContent = 'Finding the nearest stop…';
+        if (!navigator.geolocation) return (msg.textContent = t('This browser cannot share its location.'));
+        msg.textContent = t('Finding the nearest stop…');
         navigator.geolocation.getCurrentPosition(
           ({ coords }) => {
             const s = ctx.nearestStop(coords.latitude, coords.longitude);
             first.value = s.code;
-            msg.textContent = `Picked ${s.name}. Change it if you use a different stop.`;
+            msg.textContent = t('Picked {0}. Change it if you use a different stop.', s.name);
           },
-          (err) => (msg.textContent = `Couldn't get your location (${err.message}). Pick your stop instead.`),
+          (err) => (msg.textContent = t("Couldn't get your location ({0}). Pick your stop instead.", err.message)),
           { enableHighAccuracy: true, timeout: 10_000 },
         );
       },
@@ -199,19 +201,19 @@ export function runOnboarding(ctx) {
       if (!picked) return;
       first.value = picked.stops[0];
       walk.value = Math.max(1, Math.round(picked.walkM / 1.3 / 60));
-      msg.textContent = `Stops for ${picked.name} filled in. The app won't send you home when you're already there.`;
+      msg.textContent = t("Stops for {0} filled in. The app won't send you home when you're already there.", picked.name);
     });
     return [
-      ...heading('Where your day starts', 'Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved, never where you live.'),
-      el('label', { textContent: 'Where do you live?' }),
+      ...heading(t('Where your day starts'), t('Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved, never where you live.')),
+      el('label', { textContent: t('Where do you live?') }),
       residence,
-      el('label', { textContent: 'Home stop' }),
+      el('label', { textContent: t('Home stop') }),
       first,
       locate,
       msg,
-      el('label', { textContent: 'Walk from home to that stop' }),
-      el('div', { class: 'row tight' }, walk, el('span', { textContent: 'minutes' })),
-      el('p', { class: 'hint', textContent: 'Used when the app does not have your location.' }),
+      el('label', { textContent: t('Walk from home to that stop') }),
+      el('div', { class: 'row tight' }, walk, el('span', { textContent: t('minutes') })),
+      el('p', { class: 'hint', textContent: t('Used when the app does not have your location.') }),
       actions(nav, {
         onNext: async () => {
           const v = Number(walk.value);
@@ -229,7 +231,7 @@ export function runOnboarding(ctx) {
     const picker = pacePicker(ctx);
     const full = fullBusToggle(ctx);
     return [
-      ...heading('How you get around', 'Walks follow the real paths on campus. Your pace sets how long they take.'),
+      ...heading(t('How you get around'), t('Walks follow the real paths on campus. Your pace sets how long they take.')),
       picker.node,
       full.node,
       actions(nav, {
@@ -246,14 +248,14 @@ export function runOnboarding(ctx) {
     const link = (href, title, text) =>
       el('a', { class: 'ob-app', href }, el('strong', { textContent: title }), el('span', { class: 'hint', textContent: text }));
     return [
-      ...heading("You're set", 'Your widget preview is on the next page. For times on your phone or Mac, get the app and sign in with this email, or pair it from the Devices card with a code.'),
+      ...heading(t("You're set"), t('Your widget preview is on the next page. For times on your phone or Mac, get the app and sign in with this email, or pair it from the Devices card with a code.')),
       el(
         'div',
         { class: 'ob-apps' },
-        link('/download/android', 'Android', 'App and home-screen widgets'),
-        link('/download/mac', 'Mac', 'Menu bar app, Apple silicon'),
+        link('/download/android', 'Android', t('App and home-screen widgets')),
+        link('/download/mac', 'Mac', t('Menu bar app, Apple silicon')),
       ),
-      actions(nav, { next: 'Go to my account' }),
+      actions(nav, { next: t('Go to my account') }),
     ];
   }
 }
@@ -262,13 +264,13 @@ export function runOnboarding(ctx) {
 export function pacePicker(ctx) {
   const { el } = ctx;
   let chosen = ctx.profile.walkPace ?? 'normal';
-  const group = el('div', { class: 'ob-paces', role: 'radiogroup', 'aria-label': 'Walking pace' });
+  const group = el('div', { class: 'ob-paces', role: 'radiogroup', 'aria-label': t('Walking pace') });
   const cards = PACES.map((p) => {
     const card = el(
       'button',
       { type: 'button', class: 'ob-pace', role: 'radio' },
       el('strong', { textContent: p.title }),
-      el('span', { class: 'ob-pace-eg', textContent: `400 m in about ${p.min} min` }),
+      el('span', { class: 'ob-pace-eg', textContent: t('400 m in about {0} min', p.min) }),
       el('span', { class: 'hint', textContent: p.hint }),
     );
     card.addEventListener('click', () => select(p.value));
@@ -306,8 +308,8 @@ export function fullBusToggle(ctx) {
     el(
       'span',
       {},
-      el('strong', { textContent: 'Allow for packed buses' }),
-      el('span', { class: 'hint', textContent: 'When the bus you would wait for is often full at that stop and time, aim one bus earlier.' }),
+      el('strong', { textContent: t('Allow for packed buses') }),
+      el('span', { class: 'hint', textContent: t('When the bus you would wait for is often full at that stop and time, aim one bus earlier.') }),
     ),
   );
   return { node, value: () => box.checked };

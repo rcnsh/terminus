@@ -34,6 +34,8 @@ import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.rankDestinations
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
 
 /** One choice from a list, as a dropdown field. `null` is the blank option. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,7 +88,7 @@ internal fun WherePicker(
             if (picked != null) onPick(null)
         },
         label = { Text(label) },
-        placeholder = { Text("Stop, building or room") },
+        placeholder = { Text(stringResource(R.string.search_placeholder)) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
@@ -97,11 +99,11 @@ internal fun WherePicker(
     if (top.isEmpty() && rest.isEmpty() && query.isBlank()) return
     Column {
         if (top.isEmpty() && rest.isEmpty() && destinations.isNotEmpty()) {
-            Text("No stop, building or room by that name", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+            Text(stringResource(R.string.search_none), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
         }
         if (top.isNotEmpty()) {
             Text(
-                "IN YOUR TIMETABLE",
+                stringResource(R.string.in_your_timetable),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
@@ -119,10 +121,10 @@ internal fun WherePicker(
                 Text(
                     when (d.kind) {
                         "timetable" -> d.detail.orEmpty()
-                        "stop" -> "Bus stop"
-                        "landmark" -> d.detail ?: "Place"
-                        "building" -> "Building"
-                        else -> "Room ${d.code}"
+                        "stop" -> stringResource(R.string.bus_stop)
+                        "landmark" -> d.detail ?: stringResource(R.string.place)
+                        "building" -> stringResource(R.string.building)
+                        else -> stringResource(R.string.room_code, d.code)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -154,9 +156,9 @@ internal fun TimeButton(label: String, minutes: Int?, onPick: (Int) -> Unit, mod
                 TextButton(onClick = {
                     open = false
                     onPick(state.hour * 60 + state.minute)
-                }) { Text("OK") }
+                }) { Text(stringResource(R.string.ok)) }
             },
-            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) } },
             // AM/PM in the same tint as the selected hour (the default is the theme's unset tertiary, a pink).
             text = {
                 TimePicker(

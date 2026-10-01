@@ -37,27 +37,35 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import sh.rcn.terminus.BuildConfig
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
+import sh.rcn.terminus.Lang
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 
 /** First launch: start straight away, or sign in to an account you already have. */
 @Composable
-internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit, onSignIn: () -> Unit, onPair: () -> Unit) {
+internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit, onSignIn: () -> Unit, onPair: () -> Unit, onLang: (String) -> Unit) {
     val ctx = LocalContext.current
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Wordmark(MaterialTheme.typography.headlineMedium)
-        Text("When to leave for class, not just when the bus comes.", style = MaterialTheme.typography.titleMedium)
-        Text("Setting up takes about a minute: where you live, your NUSMods timetable, and how fast you walk. No account or email needed.")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { Wordmark(MaterialTheme.typography.headlineMedium) }
+            LanguageSwitch(onLang)
+        }
+        Text(stringResource(R.string.tagline), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.welcome_text))
         Spacer(Modifier.height(8.dp))
         Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(if (busy) "Starting…" else "Get started")
+            Text(if (busy) stringResource(R.string.starting) else stringResource(R.string.get_started))
         }
         OutlinedButton(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("I have an account: sign in")
+            Text(stringResource(R.string.have_account))
         }
-        TextButton(onClick = onPair, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Pair with a code instead") }
+        TextButton(onClick = onPair, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(stringResource(R.string.pair_instead)) }
         message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/privacy".toUri())) }) {
-            Text("Privacy: what's kept, and for how long")
+            Text(stringResource(R.string.privacy_link))
         }
     }
 }
@@ -82,38 +90,38 @@ internal fun SignInScreen(state: AccountState, adding: Boolean, onSend: (String)
 private fun EmailStep(adding: Boolean, busy: Boolean, onSend: (String) -> Unit, onCancel: () -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
     val ok = Regex("^[^@\\s]+@[^@\\s]+\\.[a-zA-Z]{2,}$").matches(email.trim())
-    Text(if (adding) "Add your email" else "Sign in", style = MaterialTheme.typography.headlineSmall)
+    Text(if (adding) stringResource(R.string.add_email) else stringResource(R.string.sign_in), style = MaterialTheme.typography.headlineSmall)
     Text(
         if (adding) {
-            "Keeps your setup if you lose this phone, and lets you use it on your Mac or the web. Nothing else changes."
+            stringResource(R.string.add_email_why)
         } else {
-            "Use the email you signed up with. We'll email you a code to type here."
+            stringResource(R.string.sign_in_why)
         },
     )
     OutlinedTextField(
         value = email,
         onValueChange = { email = it },
-        label = { Text("Email") },
+        label = { Text(stringResource(R.string.email)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { if (ok && !busy) onSend(email) }),
         modifier = Modifier.fillMaxWidth(),
     )
     Button(onClick = { onSend(email) }, enabled = ok && !busy, modifier = Modifier.fillMaxWidth()) {
-        Text(if (busy) "Sending…" else "Email me a code")
+        Text(if (busy) stringResource(R.string.sending) else stringResource(R.string.email_me_code))
     }
-    TextButton(onClick = onCancel) { Text("Cancel") }
+    TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
 }
 
 @Composable
 private fun Waiting(s: SignIn.Waiting, busy: Boolean, onCode: (String) -> Unit, onCancel: () -> Unit) {
     var code by rememberSaveable { mutableStateOf("") }
-    Text("Check your email", style = MaterialTheme.typography.headlineSmall)
-    Text("We sent a code to ${s.email}. Type it here:")
+    Text(stringResource(R.string.check_email), style = MaterialTheme.typography.headlineSmall)
+    Text(stringResource(R.string.sent_code_to, s.email))
     OutlinedTextField(
         value = code,
         onValueChange = { v -> code = v.filter { it.isLetterOrDigit() }.uppercase().take(6) },
-        label = { Text("Code from the email") },
+        label = { Text(stringResource(R.string.code_from_email)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { if (code.length == 6 && !busy) onCode(code) }),
@@ -121,30 +129,41 @@ private fun Waiting(s: SignIn.Waiting, busy: Boolean, onCode: (String) -> Unit, 
         modifier = Modifier.fillMaxWidth(),
     )
     Button(onClick = { onCode(code) }, enabled = code.length == 6 && !busy, modifier = Modifier.fillMaxWidth()) {
-        Text(if (busy) "Checking…" else "Sign in")
+        Text(if (busy) stringResource(R.string.checking) else stringResource(R.string.sign_in))
     }
     Spacer(Modifier.height(8.dp))
-    Hint("Reading your email on another device? Open the link in it, and when it asks, choose:")
+    Hint(stringResource(R.string.other_device_hint))
+    val numberLabel = stringResource(R.string.number_to_choose, s.match.toString())
     Text(
         s.match.toString(),
         style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.primary,
         textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "The number to choose: ${s.match}" },
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = numberLabel },
     )
-    Hint("This phone signs in by itself once you do. No email after a minute? Check spam. It works for 15 minutes.")
-    TextButton(onClick = onCancel) { Text("Cancel") }
+    Hint(stringResource(R.string.code_wait_hint))
+    TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
 }
 
 @Composable
 private fun Choose(s: SignIn.Choose, busy: Boolean, onChoose: (Boolean) -> Unit) {
-    Text("Which setup?", style = MaterialTheme.typography.headlineSmall)
-    Text("${s.email} already has a timetable and settings, and so does this phone. Keep one:")
+    Text(stringResource(R.string.which_setup), style = MaterialTheme.typography.headlineSmall)
+    Text(stringResource(R.string.which_setup_text, s.email))
     Button(onClick = { onChoose(false) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-        Text("Keep my account's setup")
+        Text(stringResource(R.string.keep_account))
     }
     OutlinedButton(onClick = { onChoose(true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-        Text("Replace it with this phone's")
+        Text(stringResource(R.string.replace_with_phone))
     }
-    Hint("Replacing changes it on every device signed in to ${s.email}.")
+    Hint(stringResource(R.string.replace_hint, s.email))
+}
+
+/** "English · 中文" on the first screen, before there's an account to keep it in. */
+@Composable
+private fun LanguageSwitch(onLang: (String) -> Unit) {
+    val zh = Lang.current(LocalContext.current) == Lang.ZH
+    Row {
+        TextButton(onClick = { onLang(Lang.EN) }, enabled = zh) { Text("English") }
+        TextButton(onClick = { onLang(Lang.ZH) }, enabled = !zh) { Text("中文") }
+    }
 }

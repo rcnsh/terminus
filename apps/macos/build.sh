@@ -44,6 +44,8 @@ if [ "$CHANNEL" = beta ]; then
 fi
 mkdir -p "$APP/Contents/Resources"
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
+# Chinese (phase 10): macOS shows it when the app or the Mac is set to it.
+cp -R Support/zh-Hans.lproj "$APP/Contents/Resources/"
 TERMINUS_CERT=C4EE234DA75ED3CD7699A31394C276801F93C4A9
 if [ -z "${SIGN_IDENTITY:-}" ] && security find-identity -p codesigning | grep -q "$TERMINUS_CERT"; then
   SIGN_IDENTITY=$TERMINUS_CERT

@@ -1,5 +1,6 @@
 package sh.rcn.terminus.widget
 
+import sh.rcn.terminus.TestStrings
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -8,6 +9,8 @@ import sh.rcn.terminus.NextAnswer
 
 /** What a widget shows (phase 8.3), and when it goes back to the timetable by itself. */
 class WidgetModesTest {
+    init { TestStrings.install() }
+
     private val now = 1_790_000_000_000L
     private val utown = Mode.To(Destinations.Dest("place:utown", "UTown"))
 
