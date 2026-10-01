@@ -313,6 +313,8 @@ struct DayPlan: Decodable {
         let leave: Leave?
         let timing: Timing?
         let onBus: OnBus?
+        /// Can be taken off today (the × on the row): anything not done yet.
+        let removable: Bool?
         var id: String { key }
 
         /// "Leave by 09:38 · D2 from PGP", "On the D2 · off at UTown · arrive 09:52", or nil.
@@ -328,7 +330,7 @@ struct DayPlan: Decodable {
         }
         var title: String { kind == "home" ? "Home, from \(fromName ?? "your last class")" : label }
     }
-    let items: [Item]
+    var items: [Item]
     let note: String?
 }
 

@@ -14,6 +14,10 @@ import { clockAt, slackText } from './clock.ts';
 import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, offStop, rideOf } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
 import type { Suggestion } from './outcomes.ts';
+import { GRAPH } from './graph.ts';
+import { indexGraph } from './resolve.ts';
+import { targetStops } from './landmarks.ts';
+import { shortStop } from './format.ts';
 
 export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup' | 'free';
 
@@ -122,6 +126,10 @@ export interface Card {
   /** The phase was worked out from the phone's location, not tapped (phase
    *  8.1). The card then has a button to say it's wrong. */
   detected: boolean;
+  /** Where to walk to now, for a maps app's walking directions: the stop to
+   *  catch the bus at, or the destination's stop when the answer is to walk.
+   *  Null on the bus, at the stop, once there, and with nothing to catch. */
+  walkTo: { name: string; lat: number; lon: number } | null;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -160,7 +168,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 
 const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
-type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion' | 'ride' | 'detected';
+type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
 type V1 = Omit<Card, V2>;
 
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }): Card {
@@ -256,6 +264,18 @@ export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number): number 
 
 /** Someone said what happened (or detection did); having been at the stop isn't that. */
 const answered = (trip: TripView) => trip.rec !== undefined && trip.rec.kind !== 'waiting';
+
+/** The stop to walk to (see Card.walkTo). */
+function walkToOf(a: MeAnswer, kind: CardKind, phase: Phase): Card['walkTo'] {
+  if (kind === 'rest' || kind === 'free' || kind === 'setup' || kind === 'arrived' || kind === 'nearby') return null;
+  if (phase === 'riding' || phase === 'waiting' || phase === 'arrived') return null;
+  const l = a.leave ?? null;
+  // The bus's stop; on foot, the destination's (a food court's nearest stop).
+  const code = l?.svc ? (l.stopCode ?? a.stop.code) : l ? (a.dest?.to ? targetStops(a.dest.to).to : null) : null;
+  const s = code ? indexGraph(GRAPH).byCode.get(code) : undefined;
+  if (!s) return null;
+  return { name: l?.svc && l.stop ? l.stop : shortStop(s.name), lat: s.lat, lon: s.lon };
+}
 
 /** "9:38" or "9:38p": clocks short enough for a glance. */
 function shortClock(ms: number, h12: boolean): string {
@@ -382,5 +402,6 @@ function v2(
     suggestion: trip.suggestion ?? null,
     ride: phase === 'riding' && onBus ? rideOf(onBus) : null,
     detected,
+    walkTo: walkToOf(a, card.kind, phase),
   };
 }

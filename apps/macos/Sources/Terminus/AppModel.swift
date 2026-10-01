@@ -51,6 +51,9 @@ final class AppModel {
     /// Today, for the popover: fetched while it's open, at most every 2 minutes.
     var day: DayPlan?
     private var dayFetched: Date?
+    /// Just taken off Today, offered back with Undo for a few seconds.
+    var removed: DayPlan.Item?
+    private var removedTask: Task<Void, Never>?
 
     /// "Notify me when to leave for class" (phase 7), mirrored from LeaveNotifier.
     private(set) var leaveAlerts = LeaveNotifier.shared.enabled
@@ -243,6 +246,46 @@ final class AppModel {
             } catch {
                 self.error = "Couldn't save that"
             }
+        }
+    }
+
+    /// The × on a Today row: taken off today, whatever it is (a timetabled
+    /// class, one you added, the trip home). Gone at once, with Undo.
+    func removeFromToday(_ item: DayPlan.Item) {
+        guard let token = TokenStore.read() else { return }
+        day?.items.removeAll { $0.key == item.key }
+        removed = item
+        removedTask?.cancel()
+        removedTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            if !Task.isCancelled { removed = nil }
+        }
+        Task { await sendDay("skipped", item.key, token: token) }
+    }
+
+    /// Undo on the bar: back on today's list.
+    func undoRemove() {
+        guard let item = removed, let token = TokenStore.read() else { return }
+        removed = nil
+        removedTask?.cancel()
+        Task { await sendDay("reset", item.key, token: token) }
+    }
+
+    /// A signal about one of today's entries, then the plan and Today again.
+    private func sendDay(_ kind: String, _ key: String, token: String) async {
+        do {
+            let api = Api(token: token)
+            let a = try await api.signal(CardAction(id: kind, label: "", trip: key))
+            answers[.plan] = a
+            updated = Date()
+            error = nil
+            LeaveNotifier.shared.update(a)
+            dayFetched = Date()
+            day = try? await api.day()
+        } catch let e as ApiError {
+            error = e.message
+        } catch {
+            self.error = "Offline"
         }
     }
 

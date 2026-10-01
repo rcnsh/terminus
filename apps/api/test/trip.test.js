@@ -193,8 +193,43 @@ test('/me/day: each class with where you set off, the leave-by, and the trip hom
 
   await signal(phone, { kind: 'skipped', trip: FIRST });
   day = await (await call('/me/day', { token: phone })).json();
-  assert.equal(day.items[0].status, 'skipped');
-  assert.equal(day.items[0].onBus, undefined);
+  assert.equal(day.items.some((i) => i.key === FIRST), false, 'taken off today: not listed');
+});
+
+test('/me/day: anything not done yet can be taken off today, the trip home too, and put back', async () => {
+  const t = await setup({ ...PROFILE, gapHours: 0.5 });
+  const list = async () => (await (await t.call('/me/day', { token: t.phone })).json()).items;
+  let items = await list();
+  assert.deepEqual(items.map((i) => i.removable), [true, true, true, true]);
+  const gap = items.find((i) => i.key.startsWith('gap-home:'));
+  const home = items.find((i) => i.key.startsWith('home:'));
+
+  // The gap's trip home off: you stay, and the next class goes from where you are.
+  await t.signal(t.phone, { kind: 'skipped', trip: gap.key });
+  items = await list();
+  assert.deepEqual(items.map((i) => i.kind), ['class', 'class', 'home']);
+  assert.equal(items[1].from, 'UTOWN', 'from the first class, not home');
+  assert.deepEqual(outcomesToday(t.env), [], 'a trip home is not an outcome');
+  t.clock(FROZEN_NOW + 90 * 60_000); // 10:30, in the gap
+  assert.equal((await t.next(t.phone)).dest.label, 'CS2030 @ COM1', 'the next class, not home');
+
+  // The last trip home off: nothing after the last class.
+  await t.signal(t.phone, { kind: 'skipped', trip: home.key });
+  assert.deepEqual((await list()).map((i) => i.kind), ['class', 'class']);
+  t.clock(FROZEN_NOW + 5 * 60 * 60_000); // 14:00, after the last class
+  assert.notEqual((await t.next(t.phone)).dest?.label, 'Home');
+
+  // Undo puts it back.
+  await t.signal(t.phone, { kind: 'reset', trip: home.key });
+  assert.equal((await list()).at(-1).kind, 'home');
+});
+
+test('/me/day: what is done cannot be taken off', async () => {
+  const t = await setup();
+  await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
+  const items = (await (await t.call('/me/day', { token: t.phone })).json()).items;
+  assert.equal(items.find((i) => i.key === FIRST).removable, false);
+  assert.equal(items.find((i) => i.key === SECOND).removable, true);
 });
 
 test('/me/day on a free day says what is next', async () => {
@@ -787,4 +822,13 @@ test('a class entered by hand ends when it says', async () => {
   const t = await setup({ home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'UTOWN', 'GEA1000 @ UTown'), endMin: 720 }] });
   const day = await (await t.call('/me/day', { token: t.phone })).json();
   assert.equal(Date.parse(day.items.find((i) => i.kind === 'class').endsAt), FROZEN_NOW + 180 * 60_000, 'ends 12:00');
+});
+
+test('the card says where to walk to for directions: the stop to catch the bus at, and nothing once on it', async () => {
+  const t = await setup();
+  const a = await t.next(t.phone);
+  const stop = stopAt(a.leave.stopCode);
+  assert.deepEqual(a.card.walkTo, { name: a.leave.stop, lat: stop.lat, lon: stop.lon });
+  const riding = await (await t.signal(t.phone, { kind: 'boarded', trip: FIRST })).json();
+  assert.equal(riding.card.walkTo, null);
 });

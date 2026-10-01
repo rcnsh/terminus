@@ -15,6 +15,7 @@ import sh.rcn.terminus.CardAction
 import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.LeaveAlerts
+import sh.rcn.terminus.DayItem
 import sh.rcn.terminus.Destinations
 import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.Locator
@@ -60,6 +61,8 @@ data class UiState(
     val reportResult: String? = null,
     /** Today's timeline (/me/day), for under the planned answer. */
     val day: DayPlan? = null,
+    /** Just swiped off Today, offered back with Undo. */
+    val removed: DayItem? = null,
     /** A card button's signal on its way. */
     val signalling: Boolean = false,
 ) {
@@ -287,6 +290,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(signalling = false, error = e.message ?: "Couldn't save that") }
             }
         }
+    }
+
+    /**
+     * Swiped off Today: taken off today, whatever it is (a timetabled class,
+     * one you added, a one-off trip, the trip home). Gone from the list at
+     * once, with Undo for a few seconds.
+     */
+    fun removeFromToday(item: DayItem) {
+        val token = store.token ?: return
+        _state.update { s -> s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item) }
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            try {
+                applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(removed = null, error = (e as? ApiError)?.message ?: "Couldn't remove that; check your connection") }
+            }
+            dayJob?.cancel()
+            loadDay()
+        }
+    }
+
+    /** Undo on the bar: back on today's list. */
+    fun undoRemove() {
+        val item = _state.value.removed ?: return
+        val token = store.token ?: return
+        _state.update { it.copy(removed = null) }
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            runCatching { applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("reset", item.key)) }
+                .onFailure { e -> if (e is CancellationException) throw e; _state.update { it.copy(error = "Couldn't put that back; check your connection") } }
+            dayJob?.cancel()
+            loadDay()
+        }
+    }
+
+    fun dismissRemoved() = _state.update { it.copy(removed = null) }
+
+    /** A new plan from /me/signal: shown, cached for the widget, and the alarms moved. */
+    private fun applyPlan(ctx: Application, json: org.json.JSONObject) {
+        val answer = NextAnswer.parse(json)
+        val now = System.currentTimeMillis()
+        store.saveAnswer(json, now)
+        Refresher.scheduleNext(ctx, answer, now)
+        viewModelScope.launch { redrawWidgets(ctx) }
+        _state.update { it.copy(answers = it.answers + (Target.Plan to answer), rawAnswers = it.rawAnswers + (Target.Plan to json.toString()), fetchedAt = now) }
     }
 
     fun loadDay() {

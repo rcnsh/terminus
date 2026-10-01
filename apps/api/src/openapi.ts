@@ -605,7 +605,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             'Each of today\'s classes with where you set off from and its leave-by (an estimate hours ahead), the trips home in long gaps and after the ' +
             'last class, and where each stands: `done`, `now`, `next`, `later` or `skipped`. A class you are on the bus to has `onBus` (`svc`, `off`, `arrive`) ' +
-            'in place of a leave-by. Clients cache it for the day. `note` says why a day has no classes.',
+            'in place of a leave-by. Anything not done yet is `removable`: POST /me/signal `{kind: "skipped", trip: key}` takes it off today (a class, ' +
+            'a usual time, a one-off, or a trip home, which then means staying), `reset` puts it back; entries taken off are not listed. ' +
+            'Clients cache it for the day. `note` says why a day has no classes.',
           operationId: 'meDay',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ type: 'object', properties: { date: { type: 'string' }, dayStart: { type: 'string' }, dayEnd: { type: 'string' }, items: { type: 'array', items: { type: 'object' } }, note: { type: ['string', 'null'] } } }) },

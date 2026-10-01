@@ -124,8 +124,17 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val error = if (onTimetable) planError else chosen.error
         // The live notification keeps the plan current, so no refresh button then.
         val refreshButton = paired && (!live || !onTimetable)
-        // A tap on the widget refreshes what it shows (a place with a new location fix).
-        val tap = if (!paired) actionStartActivity<MainActivity>() else if (onTimetable) actionRunCallback<RefreshAction>() else chipAction(ctx, mode, appWidgetId)
+        // ↻ refreshes what it shows (a place with a new location fix); a tap
+        // anywhere else on the widget opens the app on the same view.
+        val refresh = if (onTimetable) actionRunCallback<RefreshAction>() else chipAction(ctx, mode, appWidgetId)
+        val tap = actionStartActivity(
+            when (mode) {
+                Mode.Timetable -> MainActivity.intentFor(ctx)
+                Mode.Nearby -> MainActivity.intentFor(ctx, nearby = true)
+                is Mode.To -> (mode.target as? sh.rcn.terminus.Target.SavedPlace)?.let { MainActivity.intentFor(ctx, place = it.key) }
+                    ?: MainActivity.intentFor(ctx, to = mode.dest.id.removePrefix("stop:"), label = mode.label)
+            },
+        )
 
         // TalkBack reads the widget as one sentence instead of fragments.
         val spoken = if (mode == Mode.Nearby) nearbySpoken(chosen) else spokenSummary(ctx, paired, answer, fetchedAt, error)
@@ -271,7 +280,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         )
                         val line = when {
                             error == UPDATING -> UPDATING
-                            old -> "Old times · tap to refresh"
+                            old -> "Old times · tap ↻ to refresh"
                             error != null && !roomy -> "$error · ${answer.catchLine}"
                             else -> answer.catchLine.orEmpty()
                         }
@@ -314,7 +323,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         // A compact widget has no footer, so a problem goes on this line.
                         val line = when {
                             error == UPDATING -> UPDATING
-                            old -> "Old times · tap to refresh"
+                            old -> "Old times · tap ↻ to refresh"
                             error != null && !roomy -> "$error · ${answer.detail}"
                             else -> answer.detail
                         }
@@ -339,19 +348,19 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     }
                 }
             }
-            if (refreshButton) RefreshButton()
+            if (refreshButton) RefreshButton(refresh)
         }
     }
 
-    /** Bottom right: the whole widget refreshes on a tap too, but this says so. */
+    /** Bottom right: refreshes what the widget shows (a tap elsewhere opens the app). */
     @Composable
-    private fun RefreshButton() {
+    private fun RefreshButton(action: androidx.glance.action.Action) {
         Box(
             modifier = GlanceModifier
                 .size(40.dp)
                 .cornerRadius(20.dp)
                 .semantics { contentDescription = "Refresh" }
-                .clickable(actionRunCallback<RefreshAction>()),
+                .clickable(action),
             contentAlignment = Alignment.Center,
         ) {
             Image(
@@ -461,7 +470,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         .background(if (on) colors.primaryContainer else colors.secondaryContainer)
                         .cornerRadius(14.dp)
                         .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .semantics { contentDescription = if (on) "${m.label}, showing. Double tap to refresh." else "Show ${m.label}" }
+                        .semantics { contentDescription = if (on) "${m.label}, showing. Double tap to open terminus." else "Show ${m.label}" }
                         .clickable(chipAction(ctx, m, b.appWidgetId)),
                 ) {
                     Text(m.label, style = TextStyle(color = if (on) colors.onPrimaryContainer else colors.onSecondaryContainer, fontSize = 13.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal), maxLines = 1)
@@ -495,7 +504,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val others = stops.drop(1).take(if (large) 2 else 1).mapNotNull { s -> departures(s, age, 3).takeIf { it.isNotEmpty() }?.let { "${s.name}: $it" } }
         val lines = when {
             chosen.error == UPDATING -> listOf(UPDATING)
-            old -> listOf("Old times · tap to refresh")
+            old -> listOf("Old times · tap ↻ to refresh")
             // The rest of this stop's buses, then the next stops, a line each where there's room.
             large -> listOfNotNull(departures(first, age, 4, skip = 2).takeIf { it.isNotEmpty() }) + others
             else -> listOf((listOfNotNull(departures(first, age, 4, skip = 2).takeIf { it.isNotEmpty() }) + others).joinToString(" · "))
@@ -519,10 +528,10 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     /** Nearby, as a sentence for screen readers. */
     private fun nearbySpoken(chosen: ModeState): String {
         val stops = chosen.json?.let { runCatching { sh.rcn.terminus.parseNearby(org.json.JSONObject(it)) }.getOrNull() }
-        val first = stops?.firstOrNull() ?: return "terminus, buses near you. ${chosen.error ?: "Checking"}. Double tap to refresh."
+        val first = stops?.firstOrNull() ?: return "terminus, buses near you. ${chosen.error ?: "Checking"}. Double tap to open terminus."
         val age = chosen.fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
         val due = departures(first, age, 3).replace(" · ", ", ").ifEmpty { "no buses due" }
-        return "Buses near you. At ${first.name}: $due. Double tap to refresh."
+        return "Buses near you. At ${first.name}: $due. Double tap to open terminus."
     }
 }
 
@@ -539,7 +548,7 @@ internal fun chipAction(ctx: Context, mode: Mode, appWidgetId: Int): androidx.gl
 /** What the widget says, as a sentence for screen readers. */
 fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt: Long?, error: String?): String {
     if (!paired) return "terminus. Not paired. Double tap to pair this phone."
-    if (answer == null) return "terminus. ${error ?: "Loading"}. Double tap to refresh."
+    if (answer == null) return "terminus. ${error ?: "Loading"}. Double tap to open terminus."
     val old = isOld(answer, fetchedAt, System.currentTimeMillis())
     val ride = answer.card?.ride?.takeIf { answer.card.phase == "riding" }
     if (ride != null) {
@@ -548,7 +557,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
             "On the ${ride.svc}" + (answer.destLabel?.let { ", to $it" } ?: ""),
             "Off at ${ride.stops.last()} at ${clock(ctx, ride.arriveMs)}",
             ride.nextText(now).replace(" · ", ", "),
-        ).joinToString(". ") + ". Double tap to refresh."
+        ).joinToString(". ") + ". Double tap to open terminus."
     }
     if (answer.isClassPlan && !old) {
         val fmt = { ms: Long -> clock(ctx, ms) }
@@ -558,7 +567,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
             answer.leaveHeadline(now),
             answer.catchLine?.replace(" · ", ", "),
             answer.goNowLine?.replace(" · ", ", "),
-        ).joinToString(". ") + ". Double tap to refresh."
+        ).joinToString(". ") + ". Double tap to open terminus."
     }
     val parts = listOfNotNull(
         answer.destLabel?.let { "To $it" },
@@ -568,7 +577,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
         answer.timingText?.takeIf { !old },
         error?.takeIf { it != UPDATING },
     )
-    return parts.joinToString(". ") + ". Double tap to refresh."
+    return parts.joinToString(". ") + ". Double tap to open terminus."
 }
 
 /** The app's brand colours, so the widget doesn't take the wallpaper's. */

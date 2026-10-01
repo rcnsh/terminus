@@ -81,8 +81,8 @@ struct Main: View {
             .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.target)
 
             // Today, on the plan's tab: the rest of the day under the next trip.
-            if !model.showNearby, model.target == .plan, let day = model.day, !day.items.isEmpty {
-                TodayList(day: day).padding(.horizontal, 4)
+            if !model.showNearby, model.target == .plan, let day = model.day, !day.items.isEmpty || model.removed != nil {
+                TodayList(day: day, removed: model.removed, onRemove: model.removeFromToday, onUndo: model.undoRemove).padding(.horizontal, 4)
             }
 
             if model.reporting {

@@ -88,16 +88,19 @@ class MainActivity : ComponentActivity() {
             "plan" -> vm.select(Target.Plan)
             "place" -> data.lastPathSegment?.let { vm.select(Target.SavedPlace(it)) }
             "nearby" -> vm.showNearby()
+            // A stop or place looked up, from the widget showing it.
+            "to" -> data.lastPathSegment?.let { vm.select(Target.Code(it, data.getQueryParameter("label") ?: it)) }
         }
     }
 
     companion object {
         /** Distinct URIs, so each shortcut gets its own intent. */
-        fun intentFor(ctx: Context, place: String? = null, nearby: Boolean = false): Intent =
+        fun intentFor(ctx: Context, place: String? = null, nearby: Boolean = false, to: String? = null, label: String? = null): Intent =
             Intent(ctx, MainActivity::class.java).apply {
                 data = when {
                     place != null -> "terminus://place/${Uri.encode(place)}".toUri()
                     nearby -> "terminus://nearby".toUri()
+                    to != null -> "terminus://to/${Uri.encode(to)}?label=${Uri.encode(label ?: to)}".toUri()
                     else -> "terminus://plan".toUri()
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP

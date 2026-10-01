@@ -401,8 +401,8 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
   const prev = [...today].reverse().find((x) => x !== next && (x.arriveByMin <= nowMin || state.done.has(classKey(x)))) ?? null;
 
   if (!next) {
-    // After the last class of the day.
-    if (!homeStop || !prev) return null;
+    // After the last class of the day. Its trip home taken off today: staying.
+    if (!homeStop || !prev || state.skipped.has(`home:${endOf(prev)}`)) return null;
     return { to: homeStop, label: 'Home', why: 'home', from: prev.to, trip: null, fromVenue: prev.venue || null, lastEndMin: endOf(prev) };
   }
   if (!prev) {
@@ -411,12 +411,14 @@ export function planFor(profile: Profile, nowMs: number, state: DayState = NO_DA
 
   const gapMin = next.arriveByMin - endOf(prev);
   const returnAt = next.arriveByMin - GAP_RETURN_MIN;
-  if (homeStop && gapMin > profile.gapHours * 60 && nowMin < returnAt && homeStop !== next.to) {
+  // A long gap goes home in between, unless that trip was taken off today.
+  const goesHome = homeStop && gapMin > profile.gapHours * 60 && !state.skipped.has(`gap-home:${prev.to}`);
+  if (goesHome && nowMin < returnAt && homeStop !== next.to) {
     // Still in class: nothing to catch yet, but the answer is the trip home.
     return { to: homeStop, label: 'Home', why: 'gap-home', from: prev.to, trip: null, fromVenue: prev.venue || null };
   }
   // In a long gap after going home, the origin is home, not the last class.
-  const wentHome = homeStop && gapMin > profile.gapHours * 60 && nowMin >= endOf(prev);
+  const wentHome = goesHome && nowMin >= endOf(prev);
   return { to: next.to, label: next.label, why: 'class', from: wentHome ? homeStop : prev.to, trip: next, fromVenue: wentHome ? null : prev.venue || null };
 }
 

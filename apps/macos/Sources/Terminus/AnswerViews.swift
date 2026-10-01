@@ -44,7 +44,7 @@ struct AnswerDetail: View {
                         ForEach(Array(actions.enumerated()), id: \.element) { i, action in
                             if action.id == "undetected" {
                                 // "Not right?": a quiet correction of what the phone worked out.
-                                Button(action.label) { onAction(action) }.buttonStyle(.link).controlSize(.small)
+                                Button(action.label) { onAction(action) }.buttonStyle(.plain).foregroundStyle(.secondary).underline().font(.callout)
                             } else if i == 0 && action.id != "skipped" && action.id != "reset" {
                                 Button(action.label) { onAction(action) }.buttonStyle(.borderedProminent).controlSize(.small)
                             } else {
@@ -170,25 +170,61 @@ struct FlowPills: View {
 /// on), and the trips home. What's done is dimmed, a skipped class struck through.
 struct TodayList: View {
     let day: DayPlan
+    var removed: DayPlan.Item? = nil
+    var onRemove: (DayPlan.Item) -> Void = { _ in }
+    var onUndo: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionLabel(text: "Today")
-            ForEach(day.items) { item in
-                let past = item.status == "done" || item.status == "skipped"
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(parseISODate(item.startsAt).map(campusTime) ?? "")
-                        .font(.callout.monospacedDigit().weight(item.status == "next" || item.status == "now" ? .semibold : .regular))
-                        .frame(width: 58, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(item.title).font(.callout).strikethrough(item.status == "skipped")
-                        if let sub = item.sub { Text(sub).font(.caption).foregroundStyle(.secondary) }
-                    }
+            // Just taken off today: Undo, for a few seconds.
+            if let r = removed {
+                HStack {
+                    Text("\(r.kind == "home" ? "The trip home" : r.label.components(separatedBy: " @ ")[0]) taken off today").font(.callout)
+                    Spacer()
+                    Button("Undo", action: onUndo).buttonStyle(.plain).foregroundStyle(.tint).fontWeight(.medium)
                 }
-                .opacity(past ? 0.5 : 1)
-                .accessibilityElement(children: .combine)
+                .padding(.vertical, 5).padding(.horizontal, 8)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            }
+            ForEach(day.items) { item in
+                TodayRow(item: item, onRemove: onRemove)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// One of today's entries; anything still to come has an × on hover to take it off today.
+private struct TodayRow: View {
+    let item: DayPlan.Item
+    let onRemove: (DayPlan.Item) -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        let past = item.status == "done" || item.status == "skipped"
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(parseISODate(item.startsAt).map(campusTime) ?? "")
+                .font(.callout.monospacedDigit().weight(item.status == "next" || item.status == "now" ? .semibold : .regular))
+                .frame(width: 58, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title).font(.callout).strikethrough(item.status == "skipped")
+                if let sub = item.sub { Text(sub).font(.caption).foregroundStyle(.secondary) }
+            }
+            Spacer(minLength: 0)
+            if item.removable == true {
+                Button { onRemove(item) } label: { Image(systemName: "xmark").font(.caption.weight(.semibold)) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .opacity(hovering ? 1 : 0)
+                    .help("Remove from today")
+                    .accessibilityLabel("Remove \(item.title) from today")
+            }
+        }
+        .opacity(past ? 0.5 : 1)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .accessibilityElement(children: .combine)
+        .accessibilityAction(named: "Remove from today") { if item.removable == true { onRemove(item) } }
     }
 }

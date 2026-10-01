@@ -601,7 +601,8 @@ const ME_ROUTES: MeRoute[] = [
       // What happened to the trip, for what terminus learns (outcomes.ts).
       const outcome = rec ? OUTCOME_OF[rec.kind] : undefined;
       if (rec === null || rec?.kind === 'undetected') await clearOutcome(db, session.user.id, key, nowMs);
-      else if (outcome) await recordOutcome(db, session.user.id, key, outcome, nowMs);
+      // A trip home isn't a class: nothing to learn from skipping it.
+      else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const prefs = await prefsFor(db, session.user.id, profile, nowMs);
       const out = await nextBody(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
       // A tap here changes the other phones' cards now, not at their next refresh.
