@@ -1,8 +1,6 @@
-<!-- 2.0.3 -->
-### terminus 2.0.3
+<!-- 2.0.4 -->
+### terminus 2.0.4
 
-**Places you look up stay.** Pick somewhere in **Go somewhere else** and it keeps its own tab next to your favourites, even after you go back to Next. Tap the **×** on a tab to remove it. terminus keeps your last five, on this phone only.
+**No email needed on the web either.** On iPhone, or anywhere without the Android app, choose **Use terminus without an email** when you open terminus.rcn.sh/app. Your setup stays in that browser. Add an email any time from the account page to use it on your other devices, or to keep it if the browser's data is cleared.
 
-**On the widget too.** The places you add get buttons after your favourites, and the newest one always has a button, even when your favourites fill the row.
-
-**Fixed.** The widget could stop updating when it was wide enough for six buttons.
+**Clearer start on Android.** The welcome screen says what it means: no email or sign-in needed.
