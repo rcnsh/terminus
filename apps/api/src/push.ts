@@ -118,26 +118,31 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
         continue;
       }
       if (!a) continue;
+      const send = (token: string) =>
+        fetch(`https://fcm.googleapis.com/v1/projects/${a.project_id}/messages:send`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            message: {
+              token: r.push_token,
+              data: { kind: 'card', phase: nudge.phase, ask: nudge.ask ? '1' : '0' },
+              android: { priority: nudge.urgent ? 'HIGH' : 'NORMAL', ttl: '600s', collapse_key: 'card' },
+            },
+          }),
+        });
       bearer ??= await accessToken(env, a, nowMs);
-      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${a.project_id}/messages:send`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          message: {
-            token: r.push_token,
-            data: { kind: 'card', phase: nudge.phase, ask: nudge.ask ? '1' : '0' },
-            android: { priority: nudge.urgent ? 'HIGH' : 'NORMAL', ttl: '600s', collapse_key: 'card' },
-          },
-        }),
-      });
+      let res = await send(bearer);
+      if (res.status === 401) {
+        // The access token went stale before its cache entry did: a new one, and once more.
+        await env.KV.delete(TOKEN_KV).catch(() => {});
+        bearer = await accessToken(env, a, nowMs);
+        res = await send(bearer);
+      }
       if (res.ok) {
         sent++;
       } else if (res.status === 404 || res.status === 400) {
         // UNREGISTERED or INVALID_ARGUMENT: the app was uninstalled or the token is stale.
         await env.DB.prepare('UPDATE sessions SET push_token = NULL WHERE token_hash = ?').bind(r.token_hash).run();
-      } else if (res.status === 401) {
-        await env.KV.delete(TOKEN_KV).catch(() => {});
-        console.error('fcm send 401');
       } else {
         console.error('fcm send', res.status);
       }

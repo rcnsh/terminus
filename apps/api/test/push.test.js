@@ -169,6 +169,16 @@ test('the morning cron starts the day for push users, so the push comes without 
   assert.equal(await armTrips(env, Date.now()), 0, 'once a day');
 });
 
+test('an access token that went stale is replaced, and the push still goes', async () => {
+  const { call, phone, next, fcm, wakeUntil } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  fcm.expire = 1;
+  await next(phone);
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.equal(fcm.sent[0].data.phase, 'due');
+  assert.equal(fcm.oauth, 2, 'a new access token for the retry');
+});
+
 test('a token Firebase no longer knows is dropped', async () => {
   const { phone, call, next, fcm, pushTokens, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-gone' } });
