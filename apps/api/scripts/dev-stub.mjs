@@ -18,7 +18,7 @@
  * moves it ahead, to walk through a trip (phase 8: detection on the emulator).
  *
  * Point a debug Android build at it:
- *   ./gradlew installDebug -PapiBase=http://localhost:8787
+ *   ./gradlew installStableDebug -PapiBase=http://localhost:8787
  *   adb reverse tcp:8787 tcp:8787
  * and the Mac app: TERMINUS_API_BASE=http://localhost:8787
  */

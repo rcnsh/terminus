@@ -47,12 +47,12 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 
 echo "== android"
-(cd apps/android && JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}" ./gradlew :app:assembleRelease :app:bundleRelease --console=plain -q)
+(cd apps/android && JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}" ./gradlew :app:assembleStableRelease :app:bundleStableRelease --console=plain -q)
 APK="$OUT/terminus-$VERSION.apk"
-cp apps/android/app/build/outputs/apk/release/app-release.apk "$APK"
+cp apps/android/app/build/outputs/apk/stable/release/app-stable-release.apk "$APK"
 # The same build as an app bundle, the format Google Play takes. Not
 # published anywhere: upload it in Play Console.
-cp apps/android/app/build/outputs/bundle/release/app-release.aab "$OUT/terminus-$VERSION.aab"
+cp apps/android/app/build/outputs/bundle/stableRelease/app-stable-release.aab "$OUT/terminus-$VERSION.aab"
 echo "Play bundle: $OUT/terminus-$VERSION.aab"
 
 # latest.json gets the new APK, but keeps the current Mac download and

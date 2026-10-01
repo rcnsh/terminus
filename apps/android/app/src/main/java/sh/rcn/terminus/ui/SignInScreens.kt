@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
+import sh.rcn.terminus.BuildConfig
 
 /** First launch: start straight away, or sign in to an account you already have. */
 @Composable
@@ -55,7 +56,7 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
         TextButton(onClick = onPair, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Pair with a code instead") }
         message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Spacer(Modifier.height(8.dp))
-        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "https://terminus.rcn.sh/privacy".toUri())) }) {
+        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/privacy".toUri())) }) {
             Text("Privacy: what's kept, and for how long")
         }
     }

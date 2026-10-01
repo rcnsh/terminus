@@ -46,7 +46,7 @@ jobs:
           java-version: "21"
       # Lint and the JVM unit tests (which parse apps/api/test/fixtures/answers).
       # Release signing isn't needed: debug tasks only.
-      - run: ./gradlew :app:lintDebug :app:testDebugUnitTest --console=plain
+      - run: ./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin --console=plain
         working-directory: apps/android
 
   mac:

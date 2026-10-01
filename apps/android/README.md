@@ -13,17 +13,26 @@ Android 12 or later.
 ## Run it
 
 ```bash
-./gradlew :app:installDebug                                   # against terminus.rcn.sh
-./gradlew :app:installDebug -PapiBase=http://localhost:8787   # against the dev stub
-adb reverse tcp:8787 tcp:8787                                 # so the phone can reach it
-./gradlew :app:lintDebug :app:testDebugUnitTest               # what CI runs
+./gradlew :app:installStableDebug                                   # against terminus.rcn.sh
+./gradlew :app:installBetaDebug                                     # against beta.terminus.rcn.sh
+./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub
+adb reverse tcp:8787 tcp:8787                                       # so the phone can reach it
+./gradlew :app:lintStableDebug :app:testStableDebugUnitTest         # what CI runs
 ```
+
+There are two apps from the same code (product flavors). **stable** is
+`sh.rcn.terminus`, on Google Play and the website. **beta** is
+`sh.rcn.terminus.beta`, "terminus beta", with the icon inverted and BETA by
+the name. It uses `beta.terminus.rcn.sh` and its own accounts, and installs
+beside the stable app.
 
 The unit tests read the same answer fixtures as the API's tests
 (`apps/api/test/fixtures/answers`).
 
 Push (Firebase Cloud Messaging) needs the Firebase app's config at
 `app/google-services.json`, downloaded from the terminus Firebase project.
+Each flavor reads the entry for its own package, so the beta has push once
+`sh.rcn.terminus.beta` is added to the project and the file downloaded again.
 It's kept out of git; the build reads it into `BuildConfig.FIREBASE_*` and the
 app sets Firebase up in code (no Google Services Gradle plugin). Without it the
 app builds and works as on a phone without Play services: its own alarms and

@@ -13,15 +13,26 @@ android {
         targetSdk = 37
         versionCode = 38
         versionName = "2.0.0-beta.12"
-        // `./gradlew -PapiBase=http://localhost:8787 installDebug` plus
-        // `adb reverse tcp:8787 tcp:8787` points a debug build at a local wrangler dev.
-        val apiBase = providers.gradleProperty("apiBase").orElse("https://terminus.rcn.sh").get()
-        buildConfigField("String", "API_BASE", "\"$apiBase\"")
-        // Push: the Firebase app from google-services.json (not in git; see
-        // apps/android/README.md). Without it the fields are empty and the app
-        // keeps its own alarms and refresh, as on a phone without Play services.
-        val firebase = firebaseConfig(file("google-services.json"))
-        for ((name, value) in firebase) buildConfigField("String", name, "\"$value\"")
+    }
+
+    // Two apps from one source: stable (sh.rcn.terminus, Google Play and the
+    // website) and beta (sh.rcn.terminus.beta, beta.terminus.rcn.sh). They
+    // install side by side; each talks to its own site, with its own accounts.
+    flavorDimensions += "channel"
+    productFlavors {
+        create("stable") {
+            dimension = "channel"
+            site("https://terminus.rcn.sh", "sh.rcn.terminus", "terminus")
+        }
+        create("beta") {
+            dimension = "channel"
+            applicationIdSuffix = ".beta"
+            site("https://beta.terminus.rcn.sh", "sh.rcn.terminus.beta", "terminus beta")
+            // Its own version line, from scripts/release-beta.sh: the next
+            // stable version's pre-release (2.0.1-beta.3), numbered by commit.
+            providers.gradleProperty("betaVersion").orNull?.let { versionName = it }
+            providers.gradleProperty("betaCode").orNull?.let { versionCode = it.toInt() }
+        }
     }
 
     // The release key lives outside the repo: its path and passwords come
@@ -50,6 +61,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -57,16 +69,34 @@ android {
     }
 }
 
-/** FIREBASE_* values for BuildConfig, empty strings when there's no config file. */
-fun firebaseConfig(json: File): Map<String, String> {
+/**
+ * One channel's site and name. SITE is where links go (the account page,
+ * pairing QR codes); API_BASE is the same unless `-PapiBase` points a debug
+ * build elsewhere: `./gradlew -PapiBase=http://localhost:8787
+ * installStableDebug` plus `adb reverse tcp:8787 tcp:8787` uses the dev stub.
+ */
+fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String) {
+    buildConfigField("String", "SITE", "\"$site\"")
+    val apiBase = project.providers.gradleProperty("apiBase").orElse(site).get()
+    buildConfigField("String", "API_BASE", "\"$apiBase\"")
+    manifestPlaceholders["siteHost"] = site.removePrefix("https://")
+    resValue("string", "app_name", name)
+    // Push: this package's Firebase app from google-services.json (not in
+    // git; see apps/android/README.md). Without it the fields are empty and
+    // the app keeps its own alarms and refresh, as on a phone without Play services.
+    for ((field, value) in firebaseConfig(project.file("google-services.json"), packageName)) buildConfigField("String", field, "\"$value\"")
+}
+
+/** FIREBASE_* values for BuildConfig, empty strings when there's no config file or no app for the package in it. */
+fun firebaseConfig(json: File, packageName: String): Map<String, String> {
     val empty = mapOf("FIREBASE_APP_ID" to "", "FIREBASE_API_KEY" to "", "FIREBASE_PROJECT_ID" to "", "FIREBASE_SENDER_ID" to "")
     if (!json.exists()) return empty
     @Suppress("UNCHECKED_CAST")
     val root = groovy.json.JsonSlurper().parse(json) as Map<String, Any?>
     val project = root["project_info"] as Map<String, Any?>
-    val client = (root["client"] as List<Map<String, Any?>>).first {
-        ((it["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == "sh.rcn.terminus"
-    }
+    val client = (root["client"] as List<Map<String, Any?>>).firstOrNull {
+        ((it["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == packageName
+    } ?: return empty
     return mapOf(
         "FIREBASE_APP_ID" to (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"].toString(),
         "FIREBASE_API_KEY" to ((client["api_key"] as List<Map<String, Any?>>).first())["current_key"].toString(),
