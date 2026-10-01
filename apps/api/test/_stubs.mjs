@@ -271,7 +271,16 @@ export function makeDurableObjects(Class, env = {}) {
     };
   };
   const instance = (name) => {
-    if (!instances.has(name)) instances.set(name, new Class({ storage: storageFor(name), waitUntil: (p) => pending.push(p) }, typeof env === 'function' ? env() : env));
+    if (!instances.has(name)) {
+      // blockConcurrencyWhile as the platform does it: one at a time.
+      let queue = Promise.resolve();
+      const blockConcurrencyWhile = (fn) => {
+        const run = queue.then(fn);
+        queue = run.catch(() => {});
+        return run;
+      };
+      instances.set(name, new Class({ storage: storageFor(name), waitUntil: (p) => pending.push(p), blockConcurrencyWhile }, typeof env === 'function' ? env() : env));
+    }
     return instances.get(name);
   };
   return {

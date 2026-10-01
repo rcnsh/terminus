@@ -1010,3 +1010,20 @@ test('at the stop and from the heads-up, the bus you were told stays the plan wh
   assert.equal(after.leave.board, told.leave.board);
   assert.equal((await next(mac)).leave.svc, told.leave.svc, 'and on every device');
 });
+
+test('a plan and a watch sent together both stick (the Trip object reads the day after the body)', async () => {
+  installGlobals(makeFetch({}));
+  const trips = makeDurableObjects(Trip);
+  const s = trips.get('u1');
+  const date = sgtDate(FROZEN_NOW);
+  const deleteAt = endOfDayMs(FROZEN_NOW);
+  const post = (path, body) => s.fetch(`https://trip${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  // As one /me/next does: the plan and the watch, neither waiting for the other.
+  await Promise.all([
+    post('/plan', { date, key: 'k', plan: { svc: 'D2', stop: 'PGP', board: new Date(FROZEN_NOW + 600_000).toISOString() }, deleteAt }),
+    post('/watch', { userId: 'u1', date, at: FROZEN_NOW + 60_000, deleteAt }),
+  ]);
+  const day = await (await s.fetch(`https://trip/day?date=${date}`)).json();
+  assert.equal(day.plans?.k?.svc, 'D2', 'the plan survives the watch');
+  assert.equal(day.watch, FROZEN_NOW + 60_000);
+});
