@@ -129,13 +129,13 @@ for (const split of document.querySelectorAll('[data-split]')) {
   // horizontal: dragging a little past the phone's edge gets you there.
   const tilt = () => parseFloat(getComputedStyle(split).getPropertyValue('--tilt')) || 0;
   const set = (pct) => {
-    const t = tilt();
-    const x = Math.max(-t, Math.min(100 + t, pct));
+    const lean = tilt();
+    const x = Math.max(-lean, Math.min(100 + lean, pct));
     split.style.setProperty('--x', `${x}%`);
-    const full = x >= 100 + t ? 'light' : x <= -t ? 'dark' : '';
+    const full = x >= 100 + lean ? 'light' : x <= -lean ? 'dark' : '';
     if (full) split.dataset.full = full;
     else delete split.dataset.full;
-    const dark = Math.round(((100 + t - x) / (100 + 2 * t)) * 100);
+    const dark = Math.round(((100 + lean - x) / (100 + 2 * lean)) * 100);
     knob.setAttribute('aria-valuenow', String(100 - dark));
     knob.setAttribute('aria-valuetext', full ? (full === 'light' ? t('all light') : t('all dark')) : t('{0}% dark', dark));
   };
@@ -146,8 +146,8 @@ for (const split of document.querySelectorAll('[data-split]')) {
   // The seam is slanted: put it under the pointer at the pointer's height.
   const fromPointer = (e) => {
     const r = split.getBoundingClientRect();
-    const t = (e.clientY - r.top) / r.height;
-    set(((e.clientX - r.left) / r.width) * 100 - tilt() * (1 - 2 * t));
+    const y = (e.clientY - r.top) / r.height;
+    set(((e.clientX - r.left) / r.width) * 100 - tilt() * (1 - 2 * y));
   };
   split.addEventListener('pointerdown', (e) => {
     split.classList.remove('sweep');

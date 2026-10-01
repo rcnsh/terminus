@@ -91,13 +91,13 @@ async function refresh() {
 
 /** Next, each saved place, and Nearby: the phone app's chips. */
 function renderChips() {
-  const chip = (label, t) =>
+  const chip = (label, to) =>
     el('button', {
       type: 'button',
       textContent: label,
-      'aria-pressed': String(JSON.stringify(t) === JSON.stringify(target)),
+      'aria-pressed': String(JSON.stringify(to) === JSON.stringify(target)),
       onclick: () => {
-        target = t;
+        target = to;
         renderChips();
         $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
         $('#updated').textContent = '';
