@@ -9,6 +9,7 @@
     <string name="a11y_loading">terminus。%1$s。点按两下打开 terminus。</string>
     <string name="a11y_loading_word">正在加载</string>
     <string name="a11y_nearby">附近的巴士。%1$s：%2$s。点按两下打开 terminus。</string>
+    <string name="nearby_swap">改看 %1$s</string>
     <string name="a11y_nearby_none">terminus，附近的巴士。%1$s。点按两下打开 terminus。</string>
     <string name="a11y_no_buses">暂时没有巴士</string>
     <string name="a11y_not_paired">terminus。未配对。点按两下配对这部手机。</string>

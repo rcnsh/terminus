@@ -5,10 +5,19 @@
     "Stops across the road from each other that the feed doesn't link. The",
     "scrape pairs 'X' with 'X-OPP' and 'Opp X' with 'X'; a pair with unrelated",
     "names needs listing here. Each pair is two stop codes, one per direction",
-    "of travel. A listed pair replaces whatever either stop was paired with."
+    "of travel. A listed pair replaces whatever either stop was paired with.",
+    "",
+    "'nearby' pairs are only for the Nearby widget's swap button: stops near",
+    "enough for a location to put you at the wrong one, but too far apart for",
+    "routing to treat them as one stop (PGP and PGP Foyer, 118 m)."
   ],
   "pairs": [
     ["BIZ2", "HSSML-OPP"],
-    ["AS5", "NUSS-OPP"]
+    ["AS5", "NUSS-OPP"],
+    ["LT27", "S17"],
+    ["CLB", "IT"]
+  ],
+  "nearby": [
+    ["PGP", "PGPR"]
   ]
 }

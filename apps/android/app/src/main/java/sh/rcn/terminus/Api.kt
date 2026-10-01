@@ -328,6 +328,8 @@ data class NearbyStop(
     val walkS: Int,
     val available: Boolean,
     val board: List<BoardRow>,
+    /** The stop across the road, if it has one. */
+    val opposite: String? = null,
 )
 
 data class Destination(
@@ -740,6 +742,7 @@ fun parseNearby(json: JSONObject): List<NearbyStop> {
             name = s.getJSONObject("stop").getString("name"),
             walkS = s.optInt("walkS"),
             available = s.optBoolean("available", true),
+            opposite = if (s.isNull("opposite")) null else s.optString("opposite").ifEmpty { null },
             board = (0 until board.length()).map { j ->
                 val r = board.getJSONObject(j)
                 BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"))
