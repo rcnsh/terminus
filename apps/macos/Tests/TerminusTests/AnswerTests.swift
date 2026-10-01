@@ -112,3 +112,8 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect(day.items[3].title == "Home, from COM 3")
     #expect(day.items[3].sub == nil)
 }
+
+@Test func theServersErrorsAreShownAsSentences() {
+    #expect(sentence("not a valid NUSMods share link") == "Not a valid NUSMods share link.")
+    #expect(sentence("Nothing imported: no stop. Your timetable was not changed.") == "Nothing imported: no stop. Your timetable was not changed.")
+}
