@@ -320,7 +320,7 @@ async function setupPush() {
         render(false, 'Notifications stay off: the browser was told not to allow them.');
       }
     } catch (err) {
-      render(false, `Couldn't turn them on: ${err.message}`);
+      render(false, `Couldn't turn them on. ${err.message}`);
     } finally {
       btn.disabled = false;
     }

@@ -70,7 +70,7 @@ function save() {
       toast('Saved');
       renderPreview();
     } catch (err) {
-      toast(`Not saved: ${err.message}`);
+      toast(`Not saved. ${err.message}`);
     }
   }, 400);
 }
@@ -811,5 +811,5 @@ async function start() {
 }
 
 start().catch((err) => {
-  document.querySelector('main').append(el('p', { class: 'hint', textContent: `Something went wrong: ${err.message}` }));
+  document.querySelector('main').append(el('p', { class: 'hint', textContent: `Something went wrong. ${err.message}` }));
 });
