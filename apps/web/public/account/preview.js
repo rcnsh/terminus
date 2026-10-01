@@ -128,26 +128,27 @@ export async function renderPreview() {
 export function show(a) {
   const box = $('#preview');
   shown = a;
-  const chips = a.places?.length ? el('div', { class: 'chips' }, ...a.places.slice(0, 3).map((p) => el('span', { textContent: p.label })), el('span', { textContent: 'Nearby' })) : null;
+  // The large Android widget's row: Timetable and Nearby, then the usual places, as many as fit.
+  const chips = el('div', { class: 'chips' }, ...['Timetable', 'Nearby', ...(a.places ?? []).slice(0, 2).map((p) => p.label)].map((t) => el('span', { textContent: t })));
   if (a.mode === 'rest') {
     const head = el('div', { class: 'rest' });
     head.innerHTML = MOON; // a constant, never data
     head.append(el('div', { class: 'big', textContent: a.label }));
     box.className = 'widget';
-    // replaceChildren prints a null as the text "null": no places, no chips.
-    box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), actions(a) ?? '', chips ?? '');
+    // replaceChildren prints a null as the text "null".
+    box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), actions(a) ?? '', chips);
     return;
   }
   if (a.mode === 'free') {
     // No classes today: said plainly, with no bus to mistake for advice.
     box.className = 'widget';
     // "Undo" when the class just taken off was the day's last, and "Back on campus".
-    box.replaceChildren(el('div', { class: 'big', textContent: a.label }), el('div', { class: 'detail', textContent: a.detail }), actions(a) ?? '', chips ?? '');
+    box.replaceChildren(el('div', { class: 'big', textContent: a.label }), el('div', { class: 'detail', textContent: a.detail }), actions(a) ?? '', chips);
     return;
   }
   if (a.card?.kind === 'class' && !isOld(a)) {
     box.className = 'widget';
-    box.replaceChildren(...phaseParts(a), ...classPlan(a), actions(a) ?? '', chips ?? '');
+    box.replaceChildren(...phaseParts(a), ...classPlan(a), actions(a) ?? '', chips);
     return;
   }
   const where =
