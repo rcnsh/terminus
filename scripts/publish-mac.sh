@@ -41,28 +41,7 @@ r2 put "terminus-downloads/releases/$VERSION/terminus-$VERSION.dmg" --file "$DMG
 # The appcast: one item, the new version. Sparkle compares CFBundleVersion.
 SIG=$(printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$SPARKLE_BIN/sign_update" --ed-key-file - -p "$DMG")
 printf '%s' "$SIG" | grep -q . || { echo "sign_update gave no signature"; exit 1; }
-python3 - "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" > "$OUT/appcast.xml" <<'EOF'
-import email.utils, os, sys
-from xml.sax.saxutils import quoteattr
-version, build, min_os, sig, dmg = sys.argv[1:]
-url = f'https://terminus.rcn.sh/download/releases/{version}/terminus-{version}.dmg'
-print(f'''<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>terminus</title>
-    <link>https://terminus.rcn.sh</link>
-    <item>
-      <title>terminus {version}</title>
-      <pubDate>{email.utils.formatdate(usegmt=True)}</pubDate>
-      <link>https://github.com/rcnsh/terminus/releases/tag/v{version}</link>
-      <sparkle:version>{build}</sparkle:version>
-      <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>{min_os}</sparkle:minimumSystemVersion>
-      <enclosure url={quoteattr(url)} type="application/octet-stream" sparkle:edSignature={quoteattr(sig)} length="{os.path.getsize(dmg)}"/>
-    </item>
-  </channel>
-</rss>''')
-EOF
+python3 scripts/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" https://terminus.rcn.sh > "$OUT/appcast.xml"
 r2 put terminus-downloads/appcast.xml --file "$OUT/appcast.xml" --content-type "application/xml; charset=utf-8"
 python3 - "$VERSION" "$OUT/latest.before.json" "$DMG" "$APK" > "$OUT/latest.json" <<'EOF'
 import datetime, hashlib, json, os, sys
