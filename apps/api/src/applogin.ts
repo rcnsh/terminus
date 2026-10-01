@@ -22,6 +22,7 @@
  */
 
 import type { Env } from './types.ts';
+import { mailName } from './site.ts';
 import { type Client, type User, ACCOUNT_TTL, ensureUser, hashToken, inboxKey, loadProfileJson, newPairCode, newToken, openSession, saveProfileJson } from './accounts.ts';
 
 export const LOGIN_TTL = {
@@ -109,7 +110,7 @@ async function sendApproval(env: Env, email: string, device: string, code: strin
   const site = new URL(origin).host;
   const why = `You're getting this because someone entered this address in the terminus app (${site}, NUS shuttle bus times) on ${device}. If that wasn't you, ignore this email: nothing happens without the code.`;
   await env.EMAIL!.send({
-    from: { email: env.EMAIL_FROM!, name: 'terminus' },
+    from: { email: env.EMAIL_FROM!, name: mailName(env) },
     to: email,
     subject: `Your terminus code: ${code}`,
     text: `Your terminus sign-in code is ${code}

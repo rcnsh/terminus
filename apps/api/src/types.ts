@@ -56,6 +56,10 @@ export interface Env {
   VAPID_PRIVATE_KEY?: string;
   /** One global ceiling on new anonymous accounts (apps can't run Turnstile). */
   RL_ANON?: RateLimit;
+  /** The site's own origin, set on the beta (site.ts). Unset: https://terminus.rcn.sh. */
+  PUBLIC_ORIGIN?: string;
+  /** The Analytics Engine dataset the dashboard queries. Unset: terminus. */
+  AE_DATASET?: string;
   /** Tests only: "1" lets anyone call the bus-answer routes without a key. */
   PUBLIC_API_OPEN?: string;
 }

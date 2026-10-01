@@ -182,6 +182,19 @@ test('tokens are stored hashed, never raw', async () => {
   assert.match(rows[0].token_hash, /^[0-9a-f]{64}$/);
 });
 
+test('on the beta, emails come from "terminus beta" and link to the beta site', async () => {
+  const { env, email } = setup();
+  env.PUBLIC_ORIGIN = 'https://beta.terminus.rcn.sh';
+  const cookie = await signIn(env, email);
+  assert.equal(email.sent[0].from.name, 'terminus beta');
+
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  await call(env, '/pair', { method: 'POST', body: { code, name: 'Pixel' } });
+  assert.equal(email.sent.at(-1).from.name, 'terminus beta');
+  assert.match(email.sent.at(-1).text, /https:\/\/beta\.terminus\.rcn\.sh\/account/);
+  assert.doesNotMatch(email.sent.at(-1).text, /https:\/\/terminus\.rcn\.sh/);
+});
+
 test('/me needs a session', async () => {
   const { env } = setup();
   assert.equal((await call(env, '/me')).status, 401);

@@ -59,6 +59,7 @@ import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
+import { siteOrigin } from './site.ts';
 
 export interface MeDeps {
   graph: Graph;
@@ -86,12 +87,12 @@ const EXPIRED = '<h1>That link has expired</h1><p class="hint">Sign-in links wor
 
 /**
  * Where emailed links point. The request's own origin only for local
- * development; otherwise always the real site, whatever hostname the request
- * came in on (the old name, a workers.dev preview).
+ * development; otherwise always this Worker's site (stable or beta), whatever
+ * hostname the request came in on (a workers.dev preview).
  */
-function linkOrigin(url: URL): string {
+function linkOrigin(url: URL, env: Env): string {
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.endsWith('.test');
-  return local ? url.origin : 'https://terminus.rcn.sh';
+  return local ? url.origin : siteOrigin(env);
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -770,7 +771,7 @@ export async function handleMe(
       return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     }
     try {
-      await requestLink(env, db, email, linkOrigin(url), nowMs);
+      await requestLink(env, db, email, linkOrigin(url, env), nowMs);
     } catch (err) {
       // The error text can carry the recipient: log its kind only.
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
@@ -848,7 +849,7 @@ export async function handleMe(
     }
     let started;
     try {
-      started = await startAppLogin(env, db, { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null }, linkOrigin(url), nowMs);
+      started = await startAppLogin(env, db, { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null }, linkOrigin(url, env), nowMs);
     } catch (err) {
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
