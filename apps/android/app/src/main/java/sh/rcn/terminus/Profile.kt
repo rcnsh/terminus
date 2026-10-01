@@ -62,8 +62,9 @@ class ProfileDoc(val json: JSONObject) {
         json.put("manual", list)
     }
 
-    fun removeManual(index: Int) {
-        val list = json.optJSONArray("manual") ?: return
+    /** Takes one class off: imported ([trips]) or added by hand ([manual]), by its place in that list. */
+    fun removeClass(imported: Boolean, index: Int) {
+        val list = json.optJSONArray(if (imported) "trips" else "manual") ?: return
         list.remove(index)
     }
 
