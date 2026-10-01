@@ -5,114 +5,156 @@ import { bindings, defineConfig, exports, triggers } from "cf/config";
 // the declarations, a cf deploy uploads a version with no secrets at all.
 // D1 migrations are in ./migrations, the default for `cf d1 migrations`.
 // The website directory (../web/public) is in wrangler.config.ts.
+//
+// Two Workers from one config. `cf deploy` is the stable site; `cf deploy
+// --mode beta` (pnpm run deploy:beta) is the beta at beta.terminus.rcn.sh,
+// with its own database, KV, trips, downloads and analytics, so beta accounts
+// and migrations never touch the stable ones (ids in BETA).
 
-export default defineConfig({
-	worker: {
-		name: "terminus",
-		compatibilityDate: "2025-01-15",
-		compatibilityFlags: [
-			"nodejs_compat",
-		],
-		entrypoint: "src/index.ts",
-		workersDev: false,
-		observability: {
-			enabled: true,
-			logs: {
+const BETA = {
+	d1: "d7f309ef-6e3a-457f-a106-154fa797b933",
+	kv: "5bd33589cdfc43c0bb324d158edd46ba",
+};
+
+function site(mode: string | undefined) {
+	if (mode === undefined || mode === "production") {
+		return {
+			name: "terminus",
+			domain: "terminus.rcn.sh",
+			d1: { name: "terminus", id: "27067356-8691-458f-bc69-fa5ca5bbc374" },
+			kv: "1f88f570f6e04f78aa2888ee7aa78e6a",
+			downloads: "terminus-downloads",
+			dataset: "terminus",
+			// Rate limit counters are per namespace; the beta has its own.
+			rl: { auth: "1001", public: "1002", me: "1003", mail: "1004", anon: "1005" },
+			env: {},
+		};
+	}
+	if (mode !== "beta") throw new Error(`unknown mode ${mode}: use --mode beta, or none for the stable site`);
+	if (!BETA.d1 || !BETA.kv) throw new Error("the beta's D1 and KV ids aren't in cloudflare.config.ts yet");
+	return {
+			name: "terminus-beta",
+			domain: "beta.terminus.rcn.sh",
+			d1: { name: "terminus-beta", id: BETA.d1 },
+			kv: BETA.kv,
+			downloads: "terminus-beta-downloads",
+			dataset: "terminus_beta",
+			rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005" },
+			env: {
+				PUBLIC_ORIGIN: bindings.text("https://beta.terminus.rcn.sh"),
+				AE_DATASET: bindings.text("terminus_beta"),
+			},
+		};
+	}
+
+	export default defineConfig(({ mode }) => {
+		const s = site(mode);
+		return {
+		worker: {
+			name: s.name,
+			compatibilityDate: "2025-01-15",
+			compatibilityFlags: [
+				"nodejs_compat",
+			],
+			entrypoint: "src/index.ts",
+			workersDev: false,
+			observability: {
 				enabled: true,
-				invocationLogs: false,
+				logs: {
+					enabled: true,
+					invocationLogs: false,
+				},
+			},
+			assets: {
+				runWorkerFirst: true,
+			},
+			domains: [
+				s.domain,
+			],
+			// The trip engine: one Durable Object per user with today's trip signals.
+			exports: {
+				Trip: exports.durableObject({ storage: "sqlite" }),
+			},
+			triggers: [
+				triggers.scheduled({
+					schedule: "*/15 * * * *",
+				}),
+			],
+			env: {
+				EMAIL_FROM: bindings.text("login@terminus.rcn.sh"),
+				TURNSTILE_SITE_KEY: bindings.text("0x4AAAAAAFHR71tKL907Buou"),
+				// For the dashboard's Analytics Engine queries (with the optional ANALYTICS_TOKEN secret).
+				CF_ACCOUNT_ID: bindings.text("31e51704ff7169c03d7014c3a1e5f110"),
+				TRIPS: bindings.durableObject({
+					worker: s.name,
+					exportName: "Trip",
+				}),
+				AE: bindings.analyticsEngineDataset({
+					name: s.dataset,
+				}),
+				DB: bindings.d1(s.d1),
+				KV: bindings.kv({
+					id: s.kv,
+				}),
+				DOWNLOADS: bindings.r2({
+					name: s.downloads,
+				}),
+				EMAIL: bindings.sendEmail({
+					allowedSenderAddresses: [
+						"login@terminus.rcn.sh",
+					],
+				}),
+				RL_AUTH: bindings.rateLimit({
+					namespace: s.rl.auth,
+					simple: {
+						limit: 10,
+						period: 60,
+					},
+				}),
+				RL_PUBLIC: bindings.rateLimit({
+					namespace: s.rl.public,
+					simple: {
+						limit: 60,
+						period: 60,
+					},
+				}),
+				RL_MAIL: bindings.rateLimit({
+					namespace: s.rl.mail,
+					simple: {
+						limit: 30,
+						period: 60,
+					},
+				}),
+				// New anonymous accounts from apps, across everyone.
+				RL_ANON: bindings.rateLimit({
+					namespace: s.rl.anon,
+					simple: {
+						limit: 30,
+						period: 60,
+					},
+				}),
+				RL_ME: bindings.rateLimit({
+					namespace: s.rl.me,
+					simple: {
+						limit: 120,
+						period: 60,
+					},
+				}),
+				ASSETS: bindings.assets(),
+				ALERT_EMAIL: bindings.secret(),
+				HEALTH_TOKEN: bindings.secret(),
+				NEXTBUS_APP_API: bindings.secret(),
+				NEXTBUS_APP_VERSION: bindings.secret(),
+				NEXTBUS_AUTH_BASE: bindings.secret(),
+				NEXTBUS_HTD_API: bindings.secret(),
+				NEXTBUS_PROXY_API_KEY: bindings.secret(),
+				NEXTBUS_PROXY_BASE: bindings.secret(),
+				TURNSTILE_SECRET: bindings.secret(),
+				FCM_SERVICE_ACCOUNT: bindings.secret(),
+				// Web Push (phase 5): the VAPID key, a P-256 JWK (scripts/vapid-key.mjs).
+				VAPID_PRIVATE_KEY: bindings.secret(),
+				...s.env,
 			},
 		},
-		assets: {
-			runWorkerFirst: true,
-		},
-		domains: [
-			"terminus.rcn.sh",
-		],
-		// The trip engine: one Durable Object per user with today's trip signals.
-		exports: {
-			Trip: exports.durableObject({ storage: "sqlite" }),
-		},
-		triggers: [
-			triggers.scheduled({
-				schedule: "*/15 * * * *",
-			}),
-		],
-		env: {
-			EMAIL_FROM: bindings.text("login@terminus.rcn.sh"),
-			TURNSTILE_SITE_KEY: bindings.text("0x4AAAAAAFHR71tKL907Buou"),
-			// For the dashboard's Analytics Engine queries (with the optional ANALYTICS_TOKEN secret).
-			CF_ACCOUNT_ID: bindings.text("31e51704ff7169c03d7014c3a1e5f110"),
-			TRIPS: bindings.durableObject({
-				worker: "terminus",
-				exportName: "Trip",
-			}),
-			AE: bindings.analyticsEngineDataset({
-				name: "terminus",
-			}),
-			DB: bindings.d1({
-				name: "terminus",
-				id: "27067356-8691-458f-bc69-fa5ca5bbc374",
-			}),
-			KV: bindings.kv({
-				id: "1f88f570f6e04f78aa2888ee7aa78e6a",
-			}),
-			DOWNLOADS: bindings.r2({
-				name: "terminus-downloads",
-			}),
-			EMAIL: bindings.sendEmail({
-				allowedSenderAddresses: [
-					"login@terminus.rcn.sh",
-				],
-			}),
-			RL_AUTH: bindings.rateLimit({
-				namespace: "1001",
-				simple: {
-					limit: 10,
-					period: 60,
-				},
-			}),
-			RL_PUBLIC: bindings.rateLimit({
-				namespace: "1002",
-				simple: {
-					limit: 60,
-					period: 60,
-				},
-			}),
-			RL_MAIL: bindings.rateLimit({
-				namespace: "1004",
-				simple: {
-					limit: 30,
-					period: 60,
-				},
-			}),
-			// New anonymous accounts from apps, across everyone.
-			RL_ANON: bindings.rateLimit({
-				namespace: "1005",
-				simple: {
-					limit: 30,
-					period: 60,
-				},
-			}),
-			RL_ME: bindings.rateLimit({
-				namespace: "1003",
-				simple: {
-					limit: 120,
-					period: 60,
-				},
-			}),
-			ASSETS: bindings.assets(),
-			ALERT_EMAIL: bindings.secret(),
-			HEALTH_TOKEN: bindings.secret(),
-			NEXTBUS_APP_API: bindings.secret(),
-			NEXTBUS_APP_VERSION: bindings.secret(),
-			NEXTBUS_AUTH_BASE: bindings.secret(),
-			NEXTBUS_HTD_API: bindings.secret(),
-			NEXTBUS_PROXY_API_KEY: bindings.secret(),
-			NEXTBUS_PROXY_BASE: bindings.secret(),
-			TURNSTILE_SECRET: bindings.secret(),
-			FCM_SERVICE_ACCOUNT: bindings.secret(),
-			// Web Push (phase 5): the VAPID key, a P-256 JWK (scripts/vapid-key.mjs).
-			VAPID_PRIVATE_KEY: bindings.secret(),
-		},
-	},
+	};
 });
