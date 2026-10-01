@@ -435,6 +435,8 @@ $('#copy-key').addEventListener('click', async () => {
 /* ---------- sign in ---------- */
 
 let turnstileToken = null;
+/** Using terminus without an email (this browser's account). */
+let anonymous = false;
 
 async function setupTurnstile() {
   const { turnstileSiteKey } = await api('/auth/config').catch(() => ({}));
@@ -479,7 +481,7 @@ $('#login-form').addEventListener('submit', async (e) => {
     err.textContent = e2.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = t('Email me a sign-in code');
+    btn.textContent = anonymous ? t('Email me a code') : t('Email me a sign-in code');
     resetTurnstile();
   }
 });
@@ -512,6 +514,42 @@ $('#resend').addEventListener('click', () => {
   $('#sent-step').hidden = true;
   $('#login-step').hidden = false;
   $('#login-msg').textContent = t('Complete the check below, then send again.');
+});
+
+// Without an email: the same account an app starts with, kept by this browser.
+$('#no-email').addEventListener('click', async (e) => {
+  const err = $('#login-msg');
+  err.textContent = '';
+  e.target.disabled = true;
+  try {
+    await api('/auth/anon/web', { method: 'POST', body: { turnstile: turnstileToken } });
+    // The session cookie is set; start over, which sets up first.
+    location.reload();
+  } catch (e2) {
+    err.textContent = e2.message;
+    e.target.disabled = false;
+    resetTurnstile();
+  }
+});
+
+// Adding an email to it later: the sign-in card, which keeps this setup
+// when the email is new (or switches to the email's account if it has one).
+$('#add-email').addEventListener('click', async () => {
+  $('#login-step h1').textContent = t('Add an email');
+  $('#login-step .hint').textContent = t("We'll send you a code. Your setup stays as it is. If the email has an account already, you'll switch to that one.");
+  $('#login-form button').textContent = t('Email me a code');
+  $('#no-email-box').hidden = true;
+  $('#cancel-add').hidden = false;
+  $('#app').hidden = true;
+  $('#signin').hidden = false;
+  window.scrollTo(0, 0);
+  if (!turnstileToken && !document.querySelector('#turnstile-box iframe')) await setupTurnstile().catch(() => {});
+  $('#login-email').focus();
+});
+
+$('#cancel-add').addEventListener('click', () => {
+  $('#signin').hidden = true;
+  $('#app').hidden = false;
 });
 
 $('#logout').addEventListener('click', async () => {
@@ -806,8 +844,17 @@ async function start() {
     }
     throw err;
   }
-  $('#email').textContent = me.email;
+  $('#email').textContent = me.email ?? t('No email');
   $('#who').hidden = false;
+  anonymous = me.anonymous === true;
+  if (anonymous) {
+    // Signing out would leave no way back in, so it's Add an email instead.
+    $('#logout').hidden = true;
+    $('#add-email').hidden = false;
+    $('#pair').hidden = true;
+    $('#devices-hint').textContent = t('Add an email to use terminus on your other devices too.');
+    $('#report-hint').textContent = t('This sends the answer above and your note. Add an email if you want a reply.');
+  }
   term = me.term;
   $('#reimport').hidden = !me.needsReimport;
   $('#reimport-text').textContent = t("It's for {0}, which has ended. Copy this semester's link from NUSMods and import it below.", me.term);

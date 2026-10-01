@@ -900,3 +900,41 @@ test('a device paired before platforms were recorded gets one on its next reques
   await worker.fetch(new Request(BASE + '/me/profile', { headers: { authorization: `Bearer ${token}`, 'user-agent': 'Dalvik/2.1.0 (Linux; U; Android 16; Pixel 8)' } }), env, makeCtx());
   assert.equal(db._db.prepare("SELECT platform FROM sessions WHERE kind = 'device'").get().platform, 'android');
 });
+
+test('a browser can use terminus without an email, and an email added later keeps its setup', async () => {
+  const { env, email } = setup();
+  const anon = await call(env, '/auth/anon/web', { method: 'POST', body: {} });
+  assert.equal(anon.status, 201);
+  const cookie = anon.headers.get('set-cookie').split(';')[0];
+  const me = await (await call(env, '/me', { cookie })).json();
+  assert.equal(me.anonymous, true);
+  assert.equal(me.email, null);
+  const put = await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, places: [], trips: [], manual: [] } });
+  assert.equal(put.status, 200);
+
+  // The emailed code, typed in the same browser: the email goes to this account.
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const res = await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() }, cookie });
+  assert.equal(res.status, 303);
+  const signedIn = res.headers.get('set-cookie').split(';')[0];
+  const after = await (await call(env, '/me', { cookie: signedIn })).json();
+  assert.equal(after.email, INVITED);
+  assert.deepEqual((await (await call(env, '/me/profile', { cookie: signedIn })).json()).home, { stops: ['PGP'] });
+  // The browser's old session is gone with its anonymity.
+  assert.equal((await call(env, '/me', { cookie })).status, 401);
+});
+
+test('an email that has an account already wins over a browser without one', async () => {
+  const { env, email } = setup();
+  const owner = await signIn(env, email);
+  await call(env, '/me/profile', { method: 'PUT', cookie: owner, body: { home: { stops: ['KR-MRT'] }, places: [], trips: [], manual: [] } });
+  const cookie = (await call(env, '/auth/anon/web', { method: 'POST', body: {} })).headers.get('set-cookie').split(';')[0];
+  await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, places: [], trips: [], manual: [] } });
+  // A minute later, as far as the one-email-a-minute rule goes.
+  for (const k of [...env.KV._map.keys()]) if (k.startsWith('mail:')) env.KV._map.delete(k);
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const res = await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() }, cookie });
+  const signedIn = res.headers.get('set-cookie').split(';')[0];
+  assert.deepEqual((await (await call(env, '/me/profile', { cookie: signedIn })).json()).home, { stops: ['KR-MRT'] });
+  assert.equal((await call(env, '/me', { cookie })).status, 401, 'the browser account is gone');
+});
