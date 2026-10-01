@@ -1,32 +1,59 @@
 package sh.rcn.terminus.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.rankDestinations
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun Search(state: UiState, vm: MainViewModel) {
     var query by rememberSaveable { mutableStateOf("") }
+    val q = query.trim()
+    // The field sits at the bottom of the screen, so typing put the results
+    // under the keyboard: once there are results, scroll the field to the top
+    // with as many results under it as fit.
+    val reveal = remember { BringIntoViewRequester() }
+    var height by remember { mutableIntStateOf(0) }
+    val room = with(LocalDensity.current) { 360.dp.toPx() }
+    LaunchedEffect(q.isEmpty(), height) {
+        if (q.isNotEmpty()) reveal.bringIntoView(Rect(0f, 0f, 1f, minOf(height.toFloat(), room)))
+    }
+    Column(Modifier.bringIntoViewRequester(reveal).onSizeChanged { height = it.height }) {
+        SearchField(state, vm, query, q) { query = it }
+    }
+}
+
+@Composable
+private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: String, setQuery: (String) -> Unit) {
     OutlinedTextField(
         value = query,
         onValueChange = {
-            query = it
+            setQuery(it)
             vm.loadDestinations()
         },
         label = { Text("Go somewhere else") },
@@ -34,7 +61,6 @@ internal fun Search(state: UiState, vm: MainViewModel) {
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    val q = query.trim()
     if (q.isEmpty()) return
     val matches = rankDestinations(state.destinations, q)
     val stopName = { code: String -> state.destinations.firstOrNull { it.kind == "stop" && it.code == code }?.label ?: code }
@@ -68,7 +94,7 @@ internal fun Search(state: UiState, vm: MainViewModel) {
                 Modifier
                     .fillMaxWidth()
                     .clickable(role = Role.Button) {
-                        query = ""
+                        setQuery("")
                         vm.select(Target.Code(d.code, if (d.kind == "stop" || d.kind == "landmark") d.label else d.code))
                     }
                     .padding(vertical = 10.dp),
