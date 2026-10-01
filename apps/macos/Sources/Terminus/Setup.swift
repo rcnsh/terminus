@@ -530,7 +530,7 @@ private struct PairCodeCard: View {
             Text("On the other device, open terminus and enter:")
             Text("\(code.prefix(3)) \(code.dropFirst(3))").font(.system(size: 30, weight: .bold, design: .monospaced)).textSelection(.enabled)
             Text("Or scan this with a phone's camera:").font(.callout)
-            if let qr = qrImage("https://terminus.rcn.sh/pair?code=\(code)") {
+            if let qr = qrImage("\(Api.site)/pair?code=\(code)") {
                 Image(nsImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)
                     .accessibilityLabel("QR code for pairing code \(code)")
             }

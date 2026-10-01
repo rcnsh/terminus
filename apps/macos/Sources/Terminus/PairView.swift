@@ -59,7 +59,7 @@ struct Pair: View {
             Button("Pair with a code instead") { useCode = true }
                 .buttonStyle(.link)
                 .font(.callout)
-            Text("New to terminus? Get the Android app, or set up at terminus.rcn.sh/account, then sign in here.")
+            Text("New to terminus? Get the Android app, or set up at \(Api.siteHost)/account, then sign in here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -120,7 +120,7 @@ struct Pair: View {
     private var pairCard: some View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Pair this Mac")
-                Text("On your phone: Settings, then Add a device. Or on terminus.rcn.sh/account: Pair a device. Then enter the 6-character code here.")
+                Text("On your phone: Settings, then Add a device. Or on \(Api.siteHost)/account: Pair a device. Then enter the 6-character code here.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
