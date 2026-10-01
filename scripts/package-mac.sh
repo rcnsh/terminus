@@ -4,6 +4,10 @@
 #
 #   SIGN_IDENTITY=<certificate SHA-1> SIGN_KEYCHAIN=<keychain> scripts/package-mac.sh
 #
+# With CHANNEL=beta (and BETA_VERSION, BETA_BUILD; scripts/release-beta.sh
+# sets them) it packages "terminus beta.app" as
+# build/release/beta/<version>/terminus-<version>.dmg instead.
+#
 # The release workflow (.github/workflows/release.yml) runs this with the
 # terminus self-signed certificate. That certificate is not trusted by macOS
 # and the app is not notarised, so Gatekeeper still asks on first open; what
@@ -14,27 +18,35 @@ set -eu
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
-VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/macos/Support/Info.plist)
-OUT="$ROOT/build/release/$VERSION"
+CHANNEL=${CHANNEL:-stable}
+if [ "$CHANNEL" = beta ]; then
+  VERSION="${BETA_VERSION:?BETA_VERSION is needed for a beta}"
+  OUT="$ROOT/build/release/beta/$VERSION"
+  NAME="terminus beta"
+else
+  VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/macos/Support/Info.plist)
+  OUT="$ROOT/build/release/$VERSION"
+  NAME=terminus
+fi
 DMG="$OUT/terminus-$VERSION.dmg"
 mkdir -p "$OUT"
 KC_ARGS=""
 [ -n "${SIGN_KEYCHAIN:-}" ] && KC_ARGS="--keychain $SIGN_KEYCHAIN"
 
-echo "== mac $VERSION"
+echo "== mac $VERSION ($CHANNEL)"
 (cd apps/macos && ./build.sh >/dev/null)
-APP=apps/macos/build/terminus.app
+APP="apps/macos/build/$NAME.app"
 codesign --verify --strict "$APP"
 codesign -d -r- "$APP" 2>&1 | grep designated
 
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
-cp -R "$APP" "$STAGE/terminus.app"
+cp -R "$APP" "$STAGE/$NAME.app"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG"
 # hdiutil sometimes fails with "Resource busy" on CI runners; a retry does it.
 for try in 1 2 3; do
-  hdiutil create -quiet -volname terminus -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" && break
+  hdiutil create -quiet -volname "$NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" && break
   [ "$try" = 3 ] && exit 1
   sleep 5
 done

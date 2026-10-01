@@ -377,8 +377,15 @@ func sentence(_ text: String) -> String {
 }
 
 struct Api {
+    static let stableSite = "https://terminus.rcn.sh"
+    /// The site this app belongs to: terminus.rcn.sh, or the beta's
+    /// (TerminusSite in the beta build's Info.plist; see build.sh).
+    static let site = Bundle.main.object(forInfoDictionaryKey: "TerminusSite") as? String ?? stableSite
+    /// The site as people type it, for text.
+    static var siteHost: String { site.replacingOccurrences(of: "https://", with: "") }
+    static var isBeta: Bool { site != stableSite }
     /// Override with TERMINUS_API_BASE=http://localhost:8787 for a local wrangler dev.
-    static let base = ProcessInfo.processInfo.environment["TERMINUS_API_BASE"] ?? "https://terminus.rcn.sh"
+    static let base = ProcessInfo.processInfo.environment["TERMINUS_API_BASE"] ?? site
 
     let token: String?
 

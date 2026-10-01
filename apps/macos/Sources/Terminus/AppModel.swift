@@ -590,7 +590,7 @@ final class AppModel {
         } catch let e as ApiError where e.status == 401 {
             TokenStore.write(nil)
             clearLocal()
-            pairError = "This Mac was signed out of your account. Sign in at terminus.rcn.sh/account and pair it again."
+            pairError = "This Mac was signed out of your account. Sign in at \(Api.siteHost)/account and pair it again."
             return true
         } catch let e as ApiError {
             log.error("api error \(e.status): \(e.message, privacy: .public)")

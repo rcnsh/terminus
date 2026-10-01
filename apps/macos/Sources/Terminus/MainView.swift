@@ -26,7 +26,7 @@ struct Main: View {
                     if Updater.shared.running {
                         Button("Update") { Updater.shared.checkNow() }.controlSize(.small)
                     } else {
-                        Button("Download") { NSWorkspace.shared.open(URL(string: "https://terminus.rcn.sh/download/mac")!) }.controlSize(.small)
+                        Button("Download") { NSWorkspace.shared.open(URL(string: "\(Api.site)/download/mac")!) }.controlSize(.small)
                     }
                 }
                 .card(padding: 10)

@@ -28,9 +28,10 @@ extension Color {
 struct Wordmark: View {
     var size: CGFloat = 17
     var body: some View {
-        (Text("termi") + Text("nus").foregroundColor(.brand))
+        // The beta says so wherever the name is, like the beta site.
+        (Text("termi") + Text("nus").foregroundColor(.brand) + Text(Api.isBeta ? " BETA" : "").font(.system(size: size * 0.5, weight: .semibold)).foregroundColor(.brand))
             .font(.system(size: size, weight: .semibold))
-            .accessibilityLabel("terminus")
+            .accessibilityLabel(Api.isBeta ? "terminus beta" : "terminus")
     }
 }
 

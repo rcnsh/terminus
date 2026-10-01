@@ -12,6 +12,7 @@ TERMINUS_API_BASE=http://localhost:8787 swift run    # against the dev stub
 swift test                                           # tests on the API's answer fixtures
 ./build.sh                                           # build/terminus.app
 ./build.sh install                                   # also copy to /Applications and open it
+CHANNEL=beta ./build.sh                              # build/terminus beta.app, for beta.terminus.rcn.sh
 ```
 
 `TERMINUS_SNAPSHOT=<dir> swift run` renders every screen with sample data to

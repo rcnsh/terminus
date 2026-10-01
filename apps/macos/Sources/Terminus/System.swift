@@ -30,9 +30,11 @@ enum TokenStore {
     /// Tests point this at a temporary folder; the app never sets it.
     nonisolated(unsafe) static var folder: URL?
 
-    /// A build pointed at a local API (TERMINUS_API_BASE) keeps its own
-    /// token, so pairing it to the dev stub never signs this Mac out of the real one.
-    private static var folderName: String { Api.base == "https://terminus.rcn.sh" ? "terminus" : "terminus-dev" }
+    /// The beta, and a build pointed at a local API (TERMINUS_API_BASE), keep
+    /// their own token, so neither signs this Mac out of the real one.
+    private static var folderName: String {
+        Api.base == Api.stableSite ? "terminus" : Api.base == Api.site ? "terminus-beta" : "terminus-dev"
+    }
 
     static var fileURL: URL {
         (folder ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(folderName, isDirectory: true))
