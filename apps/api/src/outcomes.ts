@@ -2,13 +2,11 @@
  * What happened to each planned trip, and what terminus learns from it
  * without being creepy about it (phase 3).
  *
- * One row per trip per day in `trip_outcomes`: the answer to "On the 9:41
- * D2?" (boarded, missed), "Not going" (skipped), "I'm there" (arrived), or no
- * answer at all (none). Kept 35 days. From it:
+ * One row per trip per day in `trip_outcomes`: what detection saw from the
+ * phone's location (boarded, missed, arrived) or "Not going" (skipped). terminus
+ * never asks what happened. Rows from before that may say `none` (a question
+ * nobody answered); nothing reads them any more. Kept 35 days. From it:
  *
- * - **The question stops** after five trips in a row with no answer. Silence
- *   already counts as "on it", so asking again is only noise. A settings
- *   switch turns it back on (`users.ask_from`: only answers after it count).
  * - **Three misses of the same trip in 30 days** suggest leaving one bus
  *   earlier for it. Only a suggestion; nothing changes until it's accepted.
  * - **"Not going" three weeks running** offers to stop reminders for it.
@@ -23,8 +21,6 @@ export type PrefKind = 'earlier' | 'quiet';
 
 /** Rows older than this are deleted by the cron. */
 export const KEEP_DAYS = 35;
-/** This many unanswered trips in a row, and the question stops. */
-export const MUTE_AFTER = 5;
 /** This many misses of one trip within MISS_DAYS suggest a bus earlier. */
 export const MISSES = 3;
 export const MISS_DAYS = 30;
@@ -50,13 +46,11 @@ export interface TripPrefs {
   earlier: Set<string>;
   /** Trip keys with no reminders. */
   quiet: Set<string>;
-  /** The question is no longer asked. */
-  askMuted: boolean;
   /** At most one pending suggestion. */
   suggestion: Suggestion | null;
 }
 
-export const NO_PREFS: TripPrefs = { earlier: new Set(), quiet: new Set(), askMuted: false, suggestion: null };
+export const NO_PREFS: TripPrefs = { earlier: new Set(), quiet: new Set(), suggestion: null };
 
 /** Records (or replaces) today's outcome for a trip. */
 export async function recordOutcome(db: D1Database, userId: string, key: string, outcome: Exclude<Outcome, 'none'>, nowMs: number): Promise<void> {
@@ -71,19 +65,6 @@ export async function recordOutcome(db: D1Database, userId: string, key: string,
 /** "Undo": today's outcome for that trip is forgotten. */
 export async function clearOutcome(db: D1Database, userId: string, key: string, nowMs: number): Promise<void> {
   await db.prepare('DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND day = ?').bind(userId, key, sgtDate(nowMs)).run();
-}
-
-/** The question went unanswered: noted once, and never over a real answer. */
-export async function noteUnanswered(db: D1Database, userId: string, key: string, nowMs: number): Promise<void> {
-  await db
-    .prepare("INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES (?, ?, ?, 'none', ?) ON CONFLICT (user_id, trip_key, day) DO NOTHING")
-    .bind(userId, key, sgtDate(nowMs), nowMs)
-    .run();
-}
-
-/** Turns the question back on. */
-export async function askAgain(db: D1Database, userId: string, nowMs: number): Promise<void> {
-  await db.prepare('UPDATE users SET ask_from = ? WHERE id = ?').bind(nowMs, userId).run();
 }
 
 /** Accepts or turns down a suggestion, or undoes an accepted one. */
@@ -124,24 +105,18 @@ interface OutcomeRow {
  */
 export async function tripPrefs(db: D1Database, userId: string, nowMs: number, labelOf: (key: string) => string | null): Promise<TripPrefs> {
   const since = nowMs - KEEP_DAYS * DAY_MS;
-  const [rows, prefs, user] = await db.batch([
+  const [rows, prefs] = await db.batch([
     db.prepare('SELECT trip_key, day, outcome, at FROM trip_outcomes WHERE user_id = ? AND at >= ? ORDER BY at DESC LIMIT 200').bind(userId, since),
     db.prepare('SELECT trip_key, pref, set_at FROM trip_prefs WHERE user_id = ?').bind(userId),
-    db.prepare('SELECT ask_from FROM users WHERE id = ?').bind(userId),
   ]);
   const outcomes = (rows.results ?? []) as OutcomeRow[];
   const chosen = (prefs.results ?? []) as Array<{ trip_key: string; pref: string; set_at: number }>;
-  const askFrom = ((user.results?.[0] as { ask_from: number | null } | undefined)?.ask_from ?? 0) || 0;
 
   const has = (key: string, pref: string, withinMs = Infinity) => chosen.some((c) => c.trip_key === key && c.pref === pref && nowMs - c.set_at < withinMs);
   const earlier = new Set(chosen.filter((c) => c.pref === 'earlier').map((c) => c.trip_key));
   const quiet = new Set(chosen.filter((c) => c.pref === 'quiet').map((c) => c.trip_key));
 
-  // Five in a row with no answer, counting only since the question was turned back on.
-  const recent = outcomes.filter((o) => o.at >= askFrom).slice(0, MUTE_AFTER);
-  const askMuted = recent.length === MUTE_AFTER && recent.every((o) => o.outcome === 'none');
-
-  return { earlier, quiet, askMuted, suggestion: suggest() };
+  return { earlier, quiet, suggestion: suggest() };
 
   function suggest(): Suggestion | null {
     const byTrip = new Map<string, OutcomeRow[]>();

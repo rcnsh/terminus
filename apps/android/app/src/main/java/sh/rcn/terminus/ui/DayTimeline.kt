@@ -121,7 +121,7 @@ private fun Row(item: DayItem, fmt: (Long) -> String) {
                     listOfNotNull("On the ${b.svc}", b.off?.let { "off at $it" }, b.arriveMs?.let { "arrive ${fmt(it)}" }).joinToString(" · ")
                 } ?: item.leaveAtMs?.let { at ->
                     val by = "Leave by ${if (item.leaveEstimated) "~" else ""}${fmt(at)}"
-                    listOfNotNull(by, item.svc?.let { "$it from ${item.fromName}" } ?: "walk", item.timingText.takeIf { item.timingStatus == "late" }).joinToString(" · ")
+                    listOfNotNull(by, item.svc?.let { "$it from ${item.leaveStop ?: item.fromName}" } ?: "walk", item.timingText.takeIf { item.timingStatus == "late" }).joinToString(" · ")
                 }
             }
             sub?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }

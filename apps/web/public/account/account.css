@@ -85,7 +85,6 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .list .meta { color: var(--muted); font-size: 0.82rem; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.widget .ask { margin-top: 12px; font-weight: 600; }
 .suggestion { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 0.93rem; line-height: 1.4; }
 #trip-choices h3 { margin: 18px 0 4px; font-size: 1rem; }
 

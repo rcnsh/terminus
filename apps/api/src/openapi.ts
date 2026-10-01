@@ -618,20 +618,17 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Say what happened on the trip',
           description:
-            '`boarded`, `missed`, `skipped` (not going today), `left`, `arrived`, `location` (with `lat` and `lon`; only what it means is kept) or `reset` ' +
-            '(undo). `trip` is the key from a card action or /me/day; without it, the trip in progress. Recorded for the day on every device, and ' +
-            'answered with the new `/me/next`, whose `card.phase` and `card.actions` follow. Deleted at the end of the day. ' +
-            'From the planned bus\'s departure, `card.ask` puts the question ("On the 9:41 D2?") with `boarded` (On it), `missed` and `skipped`; ' +
-            'no answer is taken as `boarded` a few minutes later. `boarded` records the bus\'s plate when the feed has one, and the ride then shows ' +
-            'its arrival at your stop from the feed. Each answer is kept 35 days as the trip\'s outcome (in the export, deleted with the account): ' +
-            'five trips in a row without one mute the question (`card.askMuted`), and repeated misses or skips produce a `card.suggestion`. ' +
-            'During a trip an app may send a `location` every 20 seconds or so, with `speed` (m/s) and `acc` (metres) when it has them: waiting at the ' +
-            'stop and then moving at bus speed along its road is taken as `boarded`, still at the stop or at home a few minutes after the bus left as ' +
-            '`missed`, and reaching the stop you get off at as `arrived`. While fixes keep coming (the last within 90 s) the card has no buttons ' +
-            'asking what happened and no question. What was detected shows `card.detected` and one quiet action, `undetected` ("Not right?"), ' +
-            'which says detection got it wrong; the trip is then left to the clock and the taps. A tap always wins. ' +
-            'A ride seen from start to end is kept, without who or where, as a measured ride time. `away` ("Not on campus today", offered on an ' +
-            'idle trip) skips every trip left today, not counted as outcomes; `back` ("Back on campus", on the card while away) undoes it.',
+            'What happened on a trip, or a plan for today. Cards offer only plans: `skipped` (not going today), `away` ("Not on campus today", ' +
+            'on an idle trip: every trip left today, not counted as outcomes) and `back` (undoes it), and `reset` (undo). Nothing asks what ' +
+            'happened (`card.ask` is always null): no answer is taken as on the planned bus a few minutes after it leaves, and the phone\'s location ' +
+            'corrects it. `boarded`, `missed`, `left`, `arrived` and `undetected` still work, for older apps. `trip` is the key from a card action ' +
+            'or /me/day; without it, the trip in progress. Recorded for the day on every device, and answered with the new `/me/next`. Deleted at the ' +
+            'end of the day. During a trip an app may send a `location` every 20 seconds or so, with `speed` (m/s) and `acc` (metres) when it has ' +
+            'them; only what it means is kept: waiting at the stop and then moving at bus speed along its road is taken as `boarded` (with the plate ' +
+            'of the bus, whose arrival at your stop then comes from the feed), still at the stop or at home a few minutes after the bus left, or ' +
+            'standing still off the road of the bus you were taken to be on, as `missed`, and reaching the stop you get off at as `arrived` ' +
+            '(`card.detected`). What was detected, and "Not going", is kept 35 days as the trip\'s outcome (in the export, deleted with the account); ' +
+            'repeated misses or skips produce a `card.suggestion`. A ride seen from start to end is kept, without who or where, as a measured ride time.',
           operationId: 'meSignal',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
@@ -760,8 +757,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       '/me/ask': {
         post: {
           tags: ['Account'],
-          summary: 'Ask if I caught the bus again',
-          description: 'Turns the question back on after it was muted; only answers from now on count toward muting it again.',
+          summary: 'Ask if I caught the bus again (no longer used)',
+          description: 'Nothing is asked any more, so there is nothing to turn back on. Kept for older apps; answers `{ok: true, askMuted: false}`.',
+          deprecated: true,
           operationId: 'meAskAgain',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, askMuted: { type: 'boolean' } } }) },

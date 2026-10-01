@@ -64,11 +64,11 @@ class AnswerTest {
         assertEquals("No classes", a.card!!.glance)
     }
 
-    @Test fun cardV2CarriesThePhaseAndItsButtons() {
+    @Test fun cardV2CarriesThePhaseAndOnlyPlans() {
         val a = golden("class-late")
         assertEquals("heading", a.card!!.phase)
         assertEquals("On your way", a.phaseText)
-        assertEquals(listOf("boarded", "missed", "skipped"), a.card!!.actions.map { it.id })
+        assertEquals(listOf("skipped"), a.card!!.actions.map { it.id })
         assertTrue(a.card!!.actions.all { it.trip == "4:545:UTOWN" })
         assertTrue(a.card!!.glance!!.length <= 12)
         assertNotNull(a.card!!.nextChangeAtMs)
@@ -88,7 +88,7 @@ class AnswerTest {
         assertTrue(isOld(old, ms("2026-08-27T01:00:00Z"), ms("2026-08-27T01:04:31Z")))
     }
 
-    @Test fun theQuestionAndASuggestionParse() {
+    @Test fun aSuggestionParsesAndAnOldQuestionIsIgnored() {
         val a = NextAnswer.parse(
             JSONObject(
                 """{"label":"On the R2","detail":"Off at UTown · arrive ~9:52","mode":"trip","card":{"kind":"trip","phase":"riding",
@@ -98,14 +98,12 @@ class AnswerTest {
                 "suggestion":{"id":"earlier:4:600:UTOWN","text":"Leave one bus earlier?","accept":"Leave earlier","dismiss":"No thanks"}}}""",
             ),
         )
+        // A question from an older server is simply not shown: nothing asks any more.
         val card = a.card!!
-        assertEquals("On the 9:41 R2?", card.ask!!.question)
-        assertEquals(listOf("boarded", "missed", "skipped"), card.ask!!.actions.map { it.id })
         assertFalse(card.remind)
         assertEquals("earlier:4:600:UTOWN", card.suggestion!!.id)
         // Older cards have none of it, and still remind.
         val golden = golden("class-bus").card!!
-        assertNull(golden.ask)
         assertNull(golden.suggestion)
         assertTrue(golden.remind)
     }

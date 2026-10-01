@@ -176,27 +176,44 @@ account into another one.
 
 ### Tap to confirm, and push (phase 3)
 
-- **The planned bus is remembered.** From the moment a trip is due, the Worker
-  saves the bus it's for in the day's record (`DayRecord.plans`, only when it
-  changes). The plan freezes at its leave-by time, or when its bus leaves if
-  that comes first. After that the answer moves on to later buses, but the
-  question and the ride stay about this one. It freezes at the leave-by time,
-  not at departure, because devices keep polling in between, and past the
-  leave time every answer names a later bus. Before it freezes, a plan made
-  without a location (the widget, the background refresh) doesn't replace one
-  made with one (`Boarded.located`), since they plan from different places.
-- **The question** (`card.ask`: "On the 9:41 D2?" with On it · Missed it ·
-  Not going) is on the card from the bus's departure until the class starts,
-  while nobody has answered. Three minutes after the departure with no answer
-  the phase is taken as `riding` (`TripView.assumed`); a location still at the
-  boarding stop makes it `missed` instead. Nothing is recorded for an assumption.
+- **One plan, everywhere** ([src/plan.ts](../src/plan.ts)). The Worker saves the bus a trip is for in the
+  day's record (`DayRecord.plans`): from the moment the trip is due, or
+  earlier when it was planned from the phone's location (`Boarded.located`).
+  Every device then says that bus (the card, the notifications, Today in
+  `/me/day`), and it's the bus detection watches. A device without a location
+  (the widget, the background refresh, the Mac, the web) shows the phone's
+  plan rather than one of its own from where the timetable puts you; a
+  located answer replaces it. The same service from the same stop within
+  three minutes is the same bus (live times move a little each answer), so
+  it isn't saved again. From 15 minutes before its leave-by (at the stop, and the
+  heads-up), the bus you were told stays the plan while it still gets you there on time, even if a fresh answer would
+  prefer another; only one that would now make you late gives way. The plan freezes at its leave-by, or when its bus
+  leaves if that comes first: after that the answer would name later buses
+  (and, from a moving bus, other stops), but the trip, the card and the ride
+  stay about this one, until a miss, when the card shows the next way there.
+- **"At the stop"** means at the plan's boarding stop from 15 minutes before
+  its leave-by (`WAIT_EARLY_MS`): not hours before at a stop you live by, and
+  not at a stop you're riding past. The headline is then the bus ("D2 at
+  9:41"), never "Leave by" or "Leave now".
+- **A missed class is not where you are.** One whose last record is `missed`
+  isn't where the next trip is planned from (`DayState.missed`), on the card
+  or in Today: without a location, from the class before or from home.
+- **Nothing is asked.** terminus used to ask "On the 9:41 D2?" at the
+  departure and offer On the D2 · Missed it · I'm there; it doesn't any more
+  (`card.ask` is always null and `askMuted` false, kept for older apps, which
+  can still send those signals). The app should be invisible: three minutes
+  after the departure the phase is taken as `riding` (`TripView.assumed`),
+  and the phone's location corrects it: at the boarding stop, or standing
+  still off the bus's road, makes it `missed` (detect.ts); in your residence
+  ends a trip home, and at the destination ends the trip (`reached`, recorded
+  as `arrived` for every device). Nothing is recorded for an assumption.
 - **The ride from the feed.** "On it" records the plate of the bus due at the
   boarding stop within five minutes; while riding, the same plate in the
   alighting stop's arrivals gives the arrival (quality `live`). Without a
   plate, the estimate from the tap, marked `~`.
 - **Outcomes** ([src/outcomes.ts](../src/outcomes.ts), `trip_outcomes`, 35
-  days): each answer, and `none` once for a question left unanswered. Five
-  `none` in a row mute the question (`users.ask_from` turns it back on);
+  days): what detection saw (boarded, missed, arrived) and "Not going". Older
+  `none` rows (a question nobody answered) are ignored;
   three misses of one class in 30 days suggest a bus earlier (`ArriveBy.oneEarlier`);
   three skips in a row offer to stop reminders (`card.remind: false`). Choices
   are `trip_prefs`; a turned-down suggestion waits 30 days.
@@ -204,10 +221,10 @@ account into another one.
   When `FCM_SERVICE_ACCOUNT` is set, a card served on a class day asks the
   Trip object to wake at `nextPhaseAt` (due, leave-by, departure, +3 min,
   class start, ride end; not at `staleAt`). At each wake it works out the card
-  again, nudges the user's devices (`sessions.push_token`) if the phase or
-  the question changed, and schedules the next wake; with no device taking
-  push it stops. A nudge is a data message, `{kind: 'card', phase, ask}`, high
-  priority for due, missed and a new question; the app fetches /me/next
+  again, nudges the user's devices (`sessions.push_token`) if the phase
+  changed, and schedules the next wake; with no device taking
+  push it stops. A nudge is a data message, `{kind: 'card', phase, ask}` (`ask`
+  always `0` now), high priority for due and missed; the app fetches /me/next
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).
 
@@ -284,13 +301,9 @@ page. It uses the same routes as the account page, with the session cookie.
 - **What a push shows.** A web push must show a notification (iOS insists).
   So the web app isn't pushed an idle card, or a trip with reminders off. The
   service worker fetches `/me/next` and words the notification as the Android
-  app does: the question at the departure; the ride, or the next way there
-  after a missed bus; otherwise when to leave. Where the browser has
-  notification buttons (Android Chrome), there is one: "Missed it" at the
-  question (silence already means on it), otherwise the card's main action.
-  Only one, because Chrome for Android 149 reported the second button's
-  action when the first of two was tapped (checked on the emulator). Where
-  there are no buttons (iOS), a tap opens the app on the card's buttons.
+  app does: the ride, or the next way there after a missed bus; otherwise
+  when to leave. It has no buttons: nothing asks what happened, and plans
+  ("Not going") are made in the app. A tap opens the app.
 
 ### Every trip, detected (phase 8)
 
@@ -319,21 +332,17 @@ A tap always wins: detection only changes a trip nobody has answered, or one
 it answered itself, except that it notices the end of a ride someone said they
 were on.
 
-Nobody is asked what detection can tell. Each fix also notes the time on the
-day's record (`followed`, at most once a minute); while the last one is under
-90 seconds old the card has no "On the D2" / "Missed it" / "I'm there" and no
-question, and a silence isn't noted as "no answer". Plans ("Not going", "Not
-on campus today") stay on the app's card. Anything detected has
-`detected: true` and one quiet action, `undetected` ("Not right?", also for
-ten minutes after a detected arrival, which puts you back on the bus), shown
-as a link on the app's card and never on the widget or in a notification. The
-widget shows only status buttons, and notifications never show "Not going".
-When the fixes stop, the buttons and the question come back. A `waiting`
-record (a fix at the stop) is not an answer: after the departure only a
-location at the stop now counts as missed. The trip
-record is then `undetected` (or the ride again, with `noDetect`), which the
-planner reads as no record at all but which stops detection, and the
-"no answer means on it" assumption, for that trip. Analytics counts
+Nothing is asked, so a wrong guess puts itself right: taken to be on the bus
+(detected, or nobody said) but standing still more than twice the corridor
+off its road is a miss, and the plan moves on to the next way there. Each fix
+also notes the time on the day's record (`followed`, at most once a minute).
+Anything detected has `detected: true` ("Looks like you're on the bus"). The
+cards offer only plans ("Not going", "Not on campus today"). An older app can
+still send `undetected`: the trip record is then `undetected` (or the ride
+again, with `noDetect`), which the planner reads as no record at all but
+which stops detection, and the "no answer means on it" assumption, for that
+trip. A `waiting` record (a fix at the stop) is not an answer: after the
+departure only a location at the stop now counts as missed. Analytics counts
 `detected:<kind>` signals separately from taps.
 
 **Measured ride times (8.2, `ridetimes.ts`).** A ride detection saw start and
@@ -367,7 +376,7 @@ home isn't an outcome.
 
 **More than class trips (8.3).** Today's trips are `classesOn(profile)`:
 the imported and hand-entered classes, plus two kinds that are planned the
-same way (leave-by, the question, push, detection, "Not going"):
+same way (leave-by, push, detection, "Not going"):
 
 - `profile.usual`: a saved place at a usual time, `{place, day, atMin}`,
   kept apart from `places` so an older app rewriting the places can't drop it.

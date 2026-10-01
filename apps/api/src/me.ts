@@ -41,10 +41,10 @@ import {
 import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
 import { hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
-import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, loadDay, markFollowed, savePlan, saveSignal, sgtDate, watchTrip } from './trip.ts';
+import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, isHomeKey, loadDay, markFollowed, savePlan, saveSignal, sgtDate, watchTrip } from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
-import { NO_PREFS, type PrefKind, type TripPrefs, askAgain, clearHistory, clearOutcome, historySize, listPrefs, noteUnanswered, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
+import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, indexGraph, rideStops } from './resolve.ts';
@@ -543,8 +543,10 @@ const ME_ROUTES: MeRoute[] = [
               detected: true,
               boarded: { ...bus, departed: new Date(departedAt(deps.graph, bus, fix, nowMs)).toISOString(), ...(await plateOnBoard(env, ctx, deps, bus, nowMs)) },
             };
-          } else if (seen === 'missed' && bus) {
-            rec = { kind: 'missed', at: nowMs, label, detected: true, missed: bus.board, ...(atStopOf(deps.graph, bus, fix) ? { atStop: true } : {}) };
+          } else if (seen === 'missed' && (bus || prev?.boarded)) {
+            // The bus it's about: the plan, or the one you were taken to be on.
+            const about = prev?.kind === 'boarded' && prev.boarded ? prev.boarded : bus!;
+            rec = { kind: 'missed', at: nowMs, label, detected: true, missed: about.board, ...(atStopOf(deps.graph, about, fix) ? { atStop: true } : {}) };
           } else if (prev?.kind === 'missed' && prev.detected && !prev.atStop && atStopOf(deps.graph, now.trip.plan ?? null, fix)) {
             // Missed it at home, and now at the stop: the next bus can be noticed too.
             rec = { ...prev, atStop: true };
@@ -675,10 +677,9 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'GET',
     path: '/me/choices',
-    run: async ({ nowMs, deps, db, session }) => {
-      const profile = await getProfile(db, session.user.id, deps.graph);
-      const prefs = await prefsFor(db, session.user.id, profile, nowMs);
-      return json({ choices: await listPrefs(db, session.user.id), askMuted: prefs.askMuted, history: await historySize(db, session.user.id) });
+    run: async ({ db, session }) => {
+      // askMuted: always false now that nothing is asked; kept for older apps.
+      return json({ choices: await listPrefs(db, session.user.id), askMuted: false, history: await historySize(db, session.user.id) });
     },
   },
   {
@@ -693,9 +694,10 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/me/ask',
-    run: async ({ nowMs, db, session }) => {
-      // "Ask if I caught the bus" back on: earlier silence no longer counts.
-      await askAgain(db, session.user.id, nowMs);
+    run: async () => {
+      // "Ask if I caught the bus" back on, from older apps. Nothing is asked
+      // any more (the trip follows the plan and the phone's location), so
+      // there's nothing to turn on.
       return json({ ok: true, askMuted: false });
     },
   },
@@ -1008,17 +1010,18 @@ async function nextWithTrip(
 ) {
   const { answer, trip } = await planned(url, env, ctx, nowMs, deps, profile, day, prefs);
   const keepPlan = local ? local.savePlan : (key: string, plan: Boarded) => savePlan(env, userId, key, plan, nowMs);
-  // Nobody answered the question and the plan was taken as what happened:
-  // noted once as "no answer", which is what mutes the question in the end.
-  // A followed trip was never asked, so its silence isn't one.
-  if (trip.assumed && !trip.followed && trip.key && trip.plan && !trip.plan.noted && env.DB) {
-    const key = trip.key;
-    const plan = { ...trip.plan, noted: true };
-    ctx.waitUntil(Promise.all([noteUnanswered(env.DB, userId, key, nowMs), keepPlan(key, plan)]).catch(outcomeFailed));
+  // At home (this request's location): the trip home is over, for every device.
+  // At the destination, or home (this request's location): that trip is over, for every device.
+  if (trip.reached && !local) {
+    const label = isHomeKey(trip.reached) ? 'Home' : (answer.dest?.label ?? undefined);
+    const onBus = day?.trips[trip.reached]?.kind === 'boarded' ? day.trips[trip.reached].boarded : undefined;
+    ctx.waitUntil(saveSignal(env, userId, trip.reached, { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) }, nowMs).then(() => undefined).catch(outcomeFailed));
   }
-  // From when the trip is due, remember which bus it's for, so the question at
-  // its departure is about that bus. Written only when the plan changes.
-  if (trip.planChanged && trip.key && trip.plan && trip.phase !== 'idle') ctx.waitUntil(keepPlan(trip.key, trip.plan));
+  // Remember which bus the trip is for, so every device says it and detection
+  // watches it: from when it's due, or before then when it was planned from
+  // where the phone is (the widget and the Mac would otherwise each plan
+  // from where the timetable puts you). Written only when the plan changes.
+  if (trip.planChanged && trip.key && trip.plan && (trip.phase !== 'idle' || trip.plan.located)) ctx.waitUntil(keepPlan(trip.key, trip.plan));
   // When the plan itself moves on (class starts, day ends). Only the planned
   // answer has one; a place or a stop never changes by itself.
   const isPlan = !url.searchParams.get('place') && !url.searchParams.get('to');

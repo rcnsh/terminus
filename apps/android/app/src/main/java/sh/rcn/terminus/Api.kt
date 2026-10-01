@@ -53,9 +53,11 @@ data class NextAnswer(
     /** The trip's phase, when one is in progress ("On your way"). */
     val phaseText: String? get() = card?.phaseText
 
-    /** "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks. */
+    /** "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks.
+     *  At the stop it's the bus to wait for ("D2 at 09:41"), as the server says it. */
     fun leaveHeadline(now: Long): String? {
         val at = leaveAtMs ?: return null
+        if (card?.phase == "waiting") return card.leaveBy
         return if (now >= at) "Leave now" else card?.leaveBy
     }
 
@@ -157,10 +159,6 @@ data class Card(
     val warning: String? = null,
     /** When this card changes by itself: refresh then. */
     val nextChangeAtMs: Long? = null,
-    /** "On the 9:41 D2?": from the bus's departure until the class starts, unanswered. */
-    val ask: CardAsk? = null,
-    /** The question was ignored five trips running; Settings can turn it back on. */
-    val askMuted: Boolean = false,
     /** False when the user turned reminders off for this class: no leave notification. */
     val remind: Boolean = true,
     /** "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice. */
@@ -194,10 +192,6 @@ data class Card(
             }.orEmpty(),
             warning = o.optStringOrNull("warning"),
             nextChangeAtMs = o.optStringOrNull("nextChangeAt")?.let(::parseInstant),
-            ask = o.optJSONObject("ask")?.let { a ->
-                CardAsk(a.getString("trip"), a.getString("question"), parseActions(a.optJSONArray("actions")))
-            },
-            askMuted = o.optBoolean("askMuted", false),
             remind = o.optBoolean("remind", true),
             suggestion = o.optJSONObject("suggestion")?.let { s ->
                 Suggestion(s.getString("id"), s.getString("text"), s.getString("accept"), s.getString("dismiss"))
@@ -255,7 +249,6 @@ data class WalkTo(val name: String, val lat: Double, val lon: Double) {
         "https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=walking".toUri()
 }
 
-data class CardAsk(val trip: String, val question: String, val actions: List<CardAction>)
 
 /** Something terminus learned and offers to change; `id` goes back to /me/choice. */
 data class Suggestion(val id: String, val text: String, val accept: String, val dismiss: String)
@@ -280,6 +273,8 @@ data class DayItem(
     val leaveAtMs: Long?,
     val leaveEstimated: Boolean,
     val svc: String?,
+    /** Where to catch it: the bus's stop, which may not be where you set off from. */
+    val leaveStop: String? = null,
     val timingText: String?,
     val timingStatus: String?,
     /** On the bus to it: "On the D2 · off at UTown · arrive 9:52", worded by [DayTimeline]. */
@@ -312,6 +307,7 @@ data class DayPlan(val items: List<DayItem>, val note: String?) {
                         leaveAtMs = leave?.optStringOrNull("at")?.let(::parseInstant),
                         leaveEstimated = leave?.optBoolean("estimated", false) ?: false,
                         svc = leave?.optStringOrNull("svc"),
+                        leaveStop = leave?.optStringOrNull("stop"),
                         timingText = timing?.optStringOrNull("text"),
                         timingStatus = timing?.optStringOrNull("status"),
                         onBus = bus?.let { OnBus(it.optString("svc"), it.optStringOrNull("off"), it.optStringOrNull("arrive")?.let(::parseInstant)) },
@@ -531,20 +527,15 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return parseChoices(request("POST", "/me/choice", body))
     }
 
-    /** Classes with a bus earlier or no reminders, whether the question is muted, and how many trips are remembered. */
-    suspend fun choices(): Triple<List<TripChoice>, Boolean, Int> {
+    /** Classes with a bus earlier or no reminders, and how many trips are remembered. */
+    suspend fun choices(): Pair<List<TripChoice>, Int> {
         val o = request("GET", "/me/choices")
-        return Triple(parseChoices(o), o.optBoolean("askMuted", false), o.optInt("history", 0))
+        return parseChoices(o) to o.optInt("history", 0)
     }
 
     /** "Clear trip history": forgets how each trip went; choices stay. */
     suspend fun clearHistory() {
         request("DELETE", "/me/history")
-    }
-
-    /** "Ask if I caught the bus" back on. */
-    suspend fun askAgain() {
-        request("POST", "/me/ask")
     }
 
     private fun parseChoices(o: JSONObject): List<TripChoice> {

@@ -48,8 +48,6 @@ data class AccountState(
     val sharedLink: String? = null,
     /** Classes with a bus earlier or no reminders (phase 3). */
     val choices: List<sh.rcn.terminus.TripChoice> = emptyList(),
-    /** "On the 9:41 D2?" is no longer asked: ignored five trips running. */
-    val askMuted: Boolean = false,
     /** Trips remembered (the last 35 days), which "Clear trip history" forgets. */
     val history: Int = 0,
 )
@@ -296,7 +294,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun loadChoices() {
         viewModelScope.launch {
             runCatching { api().choices() }
-                .onSuccess { (c, muted, history) -> _state.update { it.copy(choices = c, askMuted = muted, history = history) } }
+                .onSuccess { (c, history) -> _state.update { it.copy(choices = c, history = history) } }
         }
     }
 
@@ -311,18 +309,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun clearHistory() {
         viewModelScope.launch {
             runCatching { api().clearHistory() }
-                .onSuccess { _state.update { it.copy(history = 0, askMuted = false, message = "Trip history cleared") } }
+                .onSuccess { _state.update { it.copy(history = 0, message = "Trip history cleared") } }
                 .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
         }
     }
 
-    fun askAgain() {
-        viewModelScope.launch {
-            runCatching { api().askAgain() }
-                .onSuccess { _state.update { it.copy(askMuted = false, message = "It'll ask again") } }
-                .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
-        }
-    }
+
 
     /* ---------- devices ---------- */
 

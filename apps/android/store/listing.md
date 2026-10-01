@@ -32,11 +32,11 @@ ONE ANSWER, ON YOUR HOME SCREEN
 • Late? It says so, and offers the quickest way there.
 • If the bus you'd wait for is often packed at that stop and time, it aims one bus earlier.
 
-IT FOLLOWS YOUR TRIP
-• When your bus leaves, the notification asks "On the 9:41 D2?". Tap On it, Missed it or Not going, or ignore it: no answer counts as on it.
-• On it: your arrival comes from that bus's live position.
-• Missed it: the next way there, straight away.
-• Not going: that class is dropped for today, on every device.
+IT FOLLOWS YOUR TRIP, WITHOUT ASKING
+• Once your bus leaves, terminus takes it you're on it and shows when you'll get there. It never asks.
+• Turn on "Notice when I board" and it uses your location during the trip to tell when you're on the bus, missed it, or are there. On the bus, your arrival comes from that bus's live position.
+• Missed it? The next way there, straight away.
+• Not going? Swipe it off today's list, on every device.
 
 IT LEARNS, AND ASKS FIRST
 • Keep missing the bus to one class? It offers to leave one bus earlier for it.

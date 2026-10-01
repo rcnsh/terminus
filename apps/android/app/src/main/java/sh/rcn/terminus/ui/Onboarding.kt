@@ -247,7 +247,7 @@ internal fun TimetableImport(state: AccountState, account: AccountViewModel, lin
         if (r.missing.isNotEmpty()) Hint("NUSMods has no classes this semester for ${r.missing.joinToString(", ")}.")
     } else {
         val n = state.profile?.trips?.size ?: 0
-        if (n > 0) Hint("$n classes imported.", Modifier.padding(top = 8.dp))
+        if (n > 0) Hint(if (n == 1) "1 class imported." else "$n classes imported.", Modifier.padding(top = 8.dp))
     }
 }
 

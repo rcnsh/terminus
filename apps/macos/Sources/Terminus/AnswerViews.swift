@@ -36,16 +36,11 @@ struct AnswerDetail: View {
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
                 }
-                // From the bus's departure, the question and its answers in place of the buttons.
-                if let ask = a.card?.ask { Text(ask.question).font(.subheadline.weight(.semibold)).padding(.top, 2) }
-                // The server's buttons, in its order: the first one prominent.
-                if let actions = a.card?.ask?.actions ?? a.card?.actions, !actions.isEmpty {
+                // The server's buttons (plans only: Not going, Not on campus today, undo), the first one prominent.
+                if let actions = a.card?.actions, !actions.isEmpty {
                     Flow(spacing: 6) {
                         ForEach(Array(actions.enumerated()), id: \.element) { i, action in
-                            if action.id == "undetected" {
-                                // "Not right?": a quiet correction of what the phone worked out.
-                                Button(action.label) { onAction(action) }.buttonStyle(.plain).foregroundStyle(.secondary).underline().font(.callout)
-                            } else if i == 0 && action.id != "skipped" && action.id != "reset" {
+                            if i == 0 && action.id != "skipped" && action.id != "reset" {
                                 Button(action.label) { onAction(action) }.buttonStyle(.borderedProminent).controlSize(.small)
                             } else {
                                 Button(action.label) { onAction(action) }.buttonStyle(.bordered).controlSize(.small)

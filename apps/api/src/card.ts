@@ -11,7 +11,7 @@
 
 import type { Crowd, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
-import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, offStop, rideOf } from './trip.ts';
+import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
 import type { Suggestion } from './outcomes.ts';
 import { GRAPH } from './graph.ts';
@@ -34,17 +34,14 @@ export interface TripView {
   key: string | null;
   phase: Phase;
   rec?: TripRecord;
-  /** A trip skipped a moment ago, so it can be undone; or taken as reached
-   *  from the phone's location (`arrived`), so that can be said to be wrong. */
-  undo?: { key: string; label: string; arrived?: boolean } | null;
+  /** A trip skipped a moment ago, so it can be undone. */
+  undo?: { key: string; label: string } | null;
   /** The bus the plan says to catch, kept once the answer has moved on to riding. */
   plan?: Boarded | null;
   /** The phase is the plan's, not something anyone said (no answer to the question). */
   assumed?: boolean;
   /** The plan's bus differs from the one remembered for this trip (the caller saves it). */
   planChanged?: boolean;
-  /** The question isn't asked: its buttons were ignored too often (phase 3). */
-  askMuted?: boolean;
   /** False when the user turned reminders off for this trip. */
   remind?: boolean;
   /** Something terminus has learned and offers to change (outcomes.ts). */
@@ -54,10 +51,13 @@ export interface TripView {
   /** The phone is following this trip by location (phase 8.1): nobody is
    *  asked what happened, it's worked out. */
   followed?: boolean;
+  /** A trip this request's location says is over (home, in your
+   *  residence, or at the destination): the caller records it as reached. */
+  reached?: string;
 }
 
-/** "On the 9:41 D2?", asked once, at the bus's departure, in the notification
- *  that's already showing. No answer means yes. */
+/** "On the 9:41 D2?": no longer asked (Card.ask is always null). The shape
+ *  stays for older apps. */
 export interface CardAsk {
   trip: string;
   question: string;
@@ -73,7 +73,8 @@ export interface Card {
   crowd: string | null;
   /** "Timetable estimate", "Live data a few minutes old", "No live data". */
   quality: string | null;
-  /** "Leave by ~6:36 PM". Clients say "Leave now" once `leave.at` passes. */
+  /** "Leave by ~6:36 PM". Clients say "Leave now" once `leave.at` passes,
+   *  except at the stop (phase `waiting`), where it's the bus: "D2 at 6:41 PM". */
   leaveBy: string | null;
   /** "catch the 6:38 PM D2 at PGP", after the leave-by on non-class trips. */
   leaveVia: string | null;
@@ -107,11 +108,9 @@ export interface Card {
   warning: string | null;
   /** When this card should be expected to change by itself; refetch then. */
   nextChangeAt: string | null;
-  /** The question to put in the trip's notification, from the bus's departure
-   *  until the class starts, while nobody has answered it. Null otherwise. */
+  /** Always null: terminus no longer asks "On the 9:41 D2?". Kept for older apps. */
   ask: CardAsk | null;
-  /** True when the question is no longer asked because it was ignored five
-   *  trips running; a settings switch turns it back on. */
+  /** Always false (nothing is asked). Kept for older apps. */
   askMuted: boolean;
   /** False when the user asked for no reminders for this trip: no leave
    *  notification. The card itself is unchanged. */
@@ -124,7 +123,7 @@ export interface Card {
    *  progress bar. Null otherwise. */
   ride: Ride | null;
   /** The phase was worked out from the phone's location, not tapped (phase
-   *  8.1). The card then has a button to say it's wrong. */
+   *  8.1): "Looks like you're on the bus". */
   detected: boolean;
   /** Where to walk to now, for a maps app's walking directions: the stop to
    *  catch the bus at, or the destination's stop when the answer is to walk.
@@ -173,6 +172,10 @@ type V1 = Omit<Card, V2>;
 
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }): Card {
   const card = v1(a, h12);
+  // At the stop, there's nowhere to leave: the headline is the bus to wait for
+  // ("D2 at 9:41"). Apps show it as it is, without turning it into "Leave now".
+  const l = a.leave ?? null;
+  if (trip.key && trip.phase === 'waiting' && l?.svc && l.board) card.leaveBy = `${l.svc} at ${l.estimated ? '~' : ''}${clockAt(Date.parse(l.board), h12)}`;
   return { ...card, ...v2(a, card, h12, trip) };
 }
 
@@ -332,56 +335,20 @@ function v2(
   const actions: CardAction[] = [];
   const key = trip.key;
   if (key) {
-    const onIt: CardAction | null = svc ? { id: 'boarded', label: `On the ${svc}`, trip: key } : null;
-    // Followed by location: what happened is worked out, so no buttons asking it.
-    if (trip.followed) {
-      // (only "Not right?" below, when something was concluded)
-    } else if (phase === 'due' || phase === 'heading' || phase === 'waiting') {
-      if (onIt) actions.push(onIt, { id: 'missed', label: 'Missed it', trip: key });
-      else actions.push({ id: 'arrived', label: "I'm there", trip: key });
-    } else if (phase === 'missed') {
-      if (onIt) actions.push(onIt);
-    } else if (phase === 'riding') {
-      actions.push({ id: 'arrived', label: "I'm there", trip: key });
-    }
-    // Detected rather than tapped: one quiet way to say it's wrong.
-    if (detected) actions.push({ id: 'undetected', label: 'Not right?', trip: key });
+    // Nothing asks what happened (on the bus, missed it, there): the trip
+    // follows the plan and, when the phone says, where you are. Only plans.
     if (a.dest?.why === 'class' && phase !== 'arrived' && phase !== 'riding') actions.push({ id: 'skipped', label: 'Not going', trip: key });
     // Before the trip starts: the whole day off campus, every trip at once (phase 8.3).
     if (a.dest?.why === 'class' && phase === 'idle') actions.push({ id: 'away', label: 'Not on campus today', trip: key });
   }
   if (trip.away) actions.push({ id: 'back', label: 'Back on campus', trip: 'day' });
   if (trip.undo) {
-    actions.push(
-      trip.undo.arrived
-        ? { id: 'undetected', label: 'Not right?', trip: trip.undo.key }
-        : { id: 'reset', label: `Undo: going to ${trip.undo.label}`, trip: trip.undo.key },
-    );
+    actions.push({ id: 'reset', label: isHomeKey(trip.undo.key) ? 'Undo: going home' : `Undo: going to ${trip.undo.label}`, trip: trip.undo.key });
   }
 
-  // "On the 9:41 D2?": from the departure until the class starts (or the bus
-  // should have got you there), unless someone already said.
-  const plan = trip.plan ?? null;
-  let ask: CardAsk | null = null;
-  if (key && plan?.board && !answered(trip) && !trip.askMuted && !trip.followed) {
-    const board = Date.parse(plan.board);
-    const until = a.timing?.classAt
-      ? Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000
-      : plan.arrive
-        ? Date.parse(plan.arrive) + RIDE_GRACE_MS
-        : board + 30 * 60_000;
-    if (nowMs >= board && nowMs < until) {
-      ask = {
-        trip: key,
-        question: `On the ${at(plan.board)} ${plan.svc}?`,
-        actions: [
-          { id: 'boarded', label: 'On it', trip: key },
-          { id: 'missed', label: 'Missed it', trip: key },
-          ...(a.dest?.why === 'class' ? [{ id: 'skipped' as const, label: 'Not going', trip: key }] : []),
-        ],
-      };
-    }
-  }
+  // The question ("On the 9:41 D2?") is no longer asked: always null, and
+  // askMuted always false, for older apps that still read them.
+  const ask: CardAsk | null = null;
 
   // The next moment this card changes by itself: the trip's next phase, or
   // the answer going stale, whichever is sooner.
@@ -397,7 +364,7 @@ function v2(
     warning: a.warning ?? null,
     nextChangeAt: next === undefined ? null : iso(next),
     ask,
-    askMuted: Boolean(trip.askMuted),
+    askMuted: false,
     remind: trip.remind !== false,
     suggestion: trip.suggestion ?? null,
     ride: phase === 'riding' && onBus ? rideOf(onBus) : null,
