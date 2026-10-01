@@ -55,6 +55,7 @@ import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Target
+import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
 
 @Composable
@@ -144,7 +145,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         if (!state.showNearby && state.target == Target.Plan) state.day?.let { DayTimeline(it, state.removed, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved) }
         // Somewhere else: going there later today, planned like a class (phase 8.3).
         if (!state.showNearby && state.target != Target.Plan && state.paired) {
-            TimeButton("Go later today at…", null, vm::goLater, Modifier.padding(top = 8.dp))
+            TimeButton("Go later today at…", null, vm::goLater, Modifier.padding(top = 8.dp), initial = ::soonOnCampus)
         }
 
         val footer = listOfNotNull(

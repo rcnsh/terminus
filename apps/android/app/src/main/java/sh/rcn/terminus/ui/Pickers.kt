@@ -1,10 +1,10 @@
 package sh.rcn.terminus.ui
 
-import android.app.TimePickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -15,9 +15,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDefaults
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -109,19 +114,41 @@ internal fun WherePicker(label: String, destinations: List<Destination>, picked:
     }
 }
 
-/** A time of day as a button that opens the system time picker. */
+/**
+ * A time of day as a button that opens a time picker in the app's theme.
+ * With no time set yet, the picker starts at [initial] (minutes past midnight).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TimeButton(label: String, minutes: Int?, onPick: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val h12 = hour12(ctx)
-    OutlinedButton(
-        onClick = {
-            val m = minutes ?: 9 * 60
-            TimePickerDialog(ctx, { _, h, min -> onPick(h * 60 + min) }, m / 60, m % 60, !h12).show()
-        },
-        modifier = modifier,
-    ) {
+internal fun TimeButton(label: String, minutes: Int?, onPick: (Int) -> Unit, modifier: Modifier = Modifier, initial: () -> Int = { 9 * 60 }) {
+    val h12 = hour12(LocalContext.current)
+    var open by rememberSaveable { mutableStateOf(false) }
+    OutlinedButton(onClick = { open = true }, modifier = modifier) {
         Text(if (minutes == null) label else "$label ${if (h12) hhmm12(minutes) else hhmm(minutes)}")
+    }
+    if (open) {
+        val m = remember { minutes ?: initial() }
+        val state = rememberTimePickerState(initialHour = m / 60, initialMinute = m % 60, is24Hour = !h12)
+        AlertDialog(
+            onDismissRequest = { open = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    open = false
+                    onPick(state.hour * 60 + state.minute)
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } },
+            // AM/PM in the same tint as the selected hour (the default is the theme's unset tertiary, a pink).
+            text = {
+                TimePicker(
+                    state,
+                    colors = TimePickerDefaults.colors(
+                        periodSelectorSelectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        periodSelectorSelectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                )
+            },
+        )
     }
 }
 

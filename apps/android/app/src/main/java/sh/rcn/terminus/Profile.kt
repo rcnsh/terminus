@@ -151,6 +151,16 @@ val WEEKDAYS = listOf(1 to "Monday", 2 to "Tuesday", 3 to "Wednesday", 4 to "Thu
 
 fun dayName(day: Int) = WEEKDAYS.firstOrNull { it.first == day }?.second ?: "?"
 
+/**
+ * Where a picker for "later today" starts: half an hour from now on campus
+ * (Singapore time), on a five-minute mark, and never past 23:55.
+ */
+fun soonOnCampus(nowMs: Long = System.currentTimeMillis()): Int {
+    val now = java.time.Instant.ofEpochMilli(nowMs).atZone(java.time.ZoneId.of("Asia/Singapore"))
+    val m = now.hour * 60 + now.minute + 30
+    return minOf(23 * 60 + 55, (m + 4) / 5 * 5)
+}
+
 /** 570 -> "09:30". The profile is always 24-hour; show it in the phone's style with [hhmm12]. */
 fun hhmm(min: Int) = "%02d:%02d".format(java.util.Locale.ROOT, min / 60, min % 60)
 
