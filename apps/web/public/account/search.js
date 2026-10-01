@@ -2,8 +2,8 @@
 // Replaces the browser's own <datalist>, which listed every entry at once and
 // could not say where a room or building actually takes you.
 
-const KINDS = { place: 0, class: 1, stop: 2, landmark: 3, building: 4, room: 5 };
-const GROUP = { place: 'Your places', class: 'Your classes', stop: 'Stops', landmark: 'Food & places', building: 'Buildings', room: 'Rooms' };
+const KINDS = { timetable: 0, place: 1, class: 2, stop: 3, landmark: 4, building: 5, room: 6 };
+const GROUP = { timetable: 'In your timetable', place: 'Your favourites', class: 'Your classes', stop: 'Stops', landmark: 'Food & places', building: 'Buildings', room: 'Rooms' };
 const MAX = 8;
 
 const norm = (s) => s.toLowerCase().replace(/[\s\-_]+/g, '');
@@ -38,9 +38,10 @@ const walkMin = (m) => Math.max(1, Math.round(m / 1.3 / 60));
 /**
  * Turns `input` into a search box. `source()` gives the destinations,
  * `suggestions()` what to offer before anything is typed, `stopName(code)`
- * a stop's name. The pick lands in input.dataset.stop (a stop code).
+ * a stop's name. `pinned()`, if given, is listed first whenever it matches,
+ * in its own group. The pick lands in input.dataset.stop (a stop code).
  */
-export function attachSearch(input, { source, suggestions, stopName, onPick }) {
+export function attachSearch(input, { source, suggestions, stopName, onPick, pinned = () => [] }) {
   const wrap = document.createElement('div');
   wrap.className = 'search';
   input.replaceWith(wrap);
@@ -62,6 +63,7 @@ export function attachSearch(input, { source, suggestions, stopName, onPick }) {
   let active = -1;
 
   const meta = (d) => {
+    if (d.kind === 'timetable') return d.detail;
     if (d.kind === 'stop') return 'Bus stop';
     if (d.kind === 'place' || d.kind === 'class') return `${stopName(d.stopCode)} stop`;
     // Served by more than one stop: the quicker one is used at the time.
@@ -94,7 +96,12 @@ export function attachSearch(input, { source, suggestions, stopName, onPick }) {
 
   const open = () => {
     const q = input.value.trim();
-    items = q ? rank(source(), q) : suggestions();
+    if (q) {
+      const top = rank(pinned(), q);
+      items = [...top, ...rank(source(), q).filter((d) => !top.some((t) => t.code === d.code))].slice(0, MAX);
+    } else {
+      items = suggestions();
+    }
     list.replaceChildren();
     if (!items.length) {
       if (q) {
