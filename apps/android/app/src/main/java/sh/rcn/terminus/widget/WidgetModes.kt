@@ -82,6 +82,8 @@ sealed interface Mode {
 }
 
 object WidgetModes {
+    /** A Glance Row holds at most 10 children; this many buttons is plenty. */
+    const val MAX_BUTTONS = 8
     /** A place chosen on the widget goes back to the timetable after this long. */
     const val KEEP_MS = 30 * 60_000L
     /** A chosen place's answer is fetched again in the background at most this often. */
@@ -120,11 +122,25 @@ object WidgetModes {
         return labels.size
     }
 
-    /** The buttons for a row this wide: Timetable and Nearby, then the usual places. None if those two don't fit. */
-    fun chips(store: Store, places: List<sh.rcn.terminus.Place>, widthDp: Float, now: Long = System.currentTimeMillis()): List<Mode> {
-        val all = listOf(Mode.Timetable, Mode.Nearby) + Destinations.rank(places, store.destinationUses(), now).map { Mode.To(it) }
-        val n = fitting(all.map { it.label }, widthDp)
-        return if (n < 2) emptyList() else all.take(n)
+    /** The buttons for a row this wide: Timetable and Nearby, then favourites and added places. None if those two don't fit. */
+    fun chips(store: Store, places: List<sh.rcn.terminus.Place>, added: List<Destinations.Dest>, widthDp: Float, now: Long = System.currentTimeMillis()): List<Mode> {
+        val ranked = Destinations.rank(places, added, store.destinationUses(), now).map { Mode.To(it) }
+        return pick(listOf(Mode.Timetable, Mode.Nearby) + ranked, ranked.firstOrNull { it.dest.id == added.firstOrNull()?.id }, widthDp)
+    }
+
+    /**
+     * As many of `all` as fit, in order; but the place added last from "Go
+     * somewhere else" always gets the last button, in place of favourites
+     * that would have pushed it off. None if Timetable and Nearby don't fit.
+     */
+    fun pick(all: List<Mode>, newest: Mode?, widthDp: Float): List<Mode> {
+        val fits = { modes: List<Mode> -> fitting(modes.map { it.label }, widthDp) == modes.size }
+        val shown = all.take(minOf(fitting(all.map { it.label }, widthDp), MAX_BUTTONS))
+        if (shown.size < 2) return emptyList()
+        if (newest == null || newest in shown) return shown
+        var head = shown.dropLast(1).let { if (it.size < 2) shown else it }
+        while (head.size > 2 && !fits(head + newest)) head = head.dropLast(1)
+        return if (fits(head + newest)) head + newest else shown
     }
 
     /**

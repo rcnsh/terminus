@@ -116,6 +116,11 @@ class Store(context: Context) {
     /** Where you usually go, counted on this phone for the widget's buttons (Destinations). */
     fun destinationUses(): Map<String, Destinations.Use> = Destinations.parse(prefs.getString(KEY_DEST_USE, null))
 
+    /** Places added from "Go somewhere else" (a tab each, and widget buttons), newest first. */
+    var addedPlaces: List<Destinations.Dest>
+        get() = Destinations.parseAdded(prefs.getString(KEY_ADDED, null))
+        set(value) = prefs.edit { putString(KEY_ADDED, Destinations.serialiseAdded(value)) }
+
     fun noteDestination(dest: Destinations.Dest, now: Long = System.currentTimeMillis()) = synchronized(Store) {
         prefs.edit { putString(KEY_DEST_USE, Destinations.serialise(Destinations.note(destinationUses(), dest, now))) }
     }
@@ -166,6 +171,7 @@ class Store(context: Context) {
         const val KEY_LIVE = "live-updates"
         const val KEY_DETECT = "detect-trips"
         const val KEY_DEST_USE = "destination-uses"
+        const val KEY_ADDED = "added-places"
         const val KEY_LEAVE_NOTIFIED = "leave-notified"
         const val KEY_NEEDS_SETUP = "needs-setup"
         const val KEY_EMAIL = "email"

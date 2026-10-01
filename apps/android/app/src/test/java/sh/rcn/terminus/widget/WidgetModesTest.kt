@@ -54,4 +54,21 @@ class WidgetModesTest {
         "leave":{"at":"${java.time.Instant.ofEpochMilli(leaveAt)}","svc":"D2","stop":"PGP"},
         "card":{"kind":"trip","phase":"$phase","actions":[]}
     }"""
+
+    @Test fun theNewestAddedPlaceKeepsTheLastButton() {
+        val fav = listOf("KR MRT", "UTown", "The Deck").map { Mode.To(Destinations.Dest("place:$it", it)) }
+        val com3 = Mode.To(Destinations.Dest("stop:COM3", "COM 3"))
+        val all = listOf(Mode.Timetable, Mode.Nearby) + fav + com3
+        // Room for four: Timetable, Nearby, the top favourite, then COM 3.
+        assertEquals(listOf("Timetable", "Nearby", "KR MRT", "COM 3"), WidgetModes.pick(all, com3, 330f).map { it.label })
+        // Room for all: nothing moves.
+        assertEquals(all, WidgetModes.pick(all, com3, 600f))
+        // Nothing added: as before.
+        assertEquals(listOf("Timetable", "Nearby", "KR MRT", "UTown"), WidgetModes.pick(all.dropLast(1), null, 330f).map { it.label })
+        // However wide, no more than a Glance Row can hold.
+        val many = listOf(Mode.Timetable, Mode.Nearby) + (1..10).map { Mode.To(Destinations.Dest("stop:S$it", "S$it")) }
+        assertEquals(WidgetModes.MAX_BUTTONS, WidgetModes.pick(many, null, 2000f).size)
+        // Only Timetable and Nearby fit: they stay.
+        assertEquals(listOf("Timetable", "Nearby"), WidgetModes.pick(all, com3, 175f).map { it.label })
+    }
 }

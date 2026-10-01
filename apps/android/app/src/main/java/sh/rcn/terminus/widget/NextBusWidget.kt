@@ -74,7 +74,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             // what makes a running Glance session pick up a new answer; values
             // read once outside the composition would stay stale.
             val version = currentState(VERSION) ?: 0L
-            val snap = remember(version) { Snap(store.paired, store.lastAnswer(), store.lastError, store.liveUpdates) }
+            val snap = remember(version) { Snap(store.paired, store.lastAnswer(), store.lastError, store.liveUpdates, store.addedPlaces) }
             // This widget's own choice (phase 8.3): the timetable, Nearby or a place.
             val chosen = ModeState(
                 Mode.of(currentState(WidgetModes.MODE), currentState(WidgetModes.MODE_LABEL)),
@@ -87,12 +87,13 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                 },
             )
             GlanceTheme(colors = BrandColors) {
-                Content(snap.paired, snap.last?.first, snap.last?.second, snap.error, snap.live, chosen, store, appWidgetId)
+                Content(snap.paired, snap.last?.first, snap.last?.second, snap.error, snap.live, snap.added, chosen, store, appWidgetId)
             }
         }
     }
 
-    private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?, val live: Boolean)
+    /** What the widget shows from the app, read again on each redraw (and only then, so it's all in here). */
+    private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?, val live: Boolean, val added: List<sh.rcn.terminus.Destinations.Dest>)
 
     private data class ModeState(val mode: Mode, val at: Long?, val json: String?, val fetchedAt: Long?, val error: String?, val swap: NearbySwap.Swap? = null) {
         /** Nearby's stops as shown: the API's order, or the twin first after a swap. */
@@ -104,7 +105,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     private data class Bottom(val chips: List<Mode>, val mode: Mode, val appWidgetId: Int)
 
     @Composable
-    private fun Content(paired: Boolean, plan: NextAnswer?, planAt: Long?, planError: String?, live: Boolean, chosen: ModeState, store: Store, appWidgetId: Int) {
+    private fun Content(paired: Boolean, plan: NextAnswer?, planAt: Long?, planError: String?, live: Boolean, added: List<sh.rcn.terminus.Destinations.Dest>, chosen: ModeState, store: Store, appWidgetId: Int) {
         val ctx = LocalContext.current
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
@@ -118,7 +119,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // Buttons for Timetable, Nearby and the usual places, as many as fit;
         // none on a compact widget, which then always shows the timetable.
         val now0 = System.currentTimeMillis()
-        val chips = if (large && paired) WidgetModes.chips(store, plan?.places.orEmpty(), LocalSize.current.width.value - 28f, now0) else emptyList()
+        val chips = if (large && paired) WidgetModes.chips(store, plan?.places.orEmpty(), added, LocalSize.current.width.value - 28f, now0) else emptyList()
         val mode = WidgetModes.effective(chosen.mode, chosen.at, plan, chips.isNotEmpty(), now0)
         val bottom = Bottom(chips, mode, appWidgetId)
         val onTimetable = mode == Mode.Timetable
@@ -410,19 +411,22 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     @Composable
     private fun ModeChips(ctx: Context, b: Bottom) {
         val colors = GlanceTheme.colors
+        // Gaps as padding, not Spacers: a Glance Row holds at most 10 children,
+        // and a wide widget fits six buttons.
         Row(modifier = GlanceModifier.fillMaxWidth()) {
             b.chips.forEachIndexed { i, m ->
-                if (i > 0) Spacer(GlanceModifier.width(6.dp))
                 val on = m.id == b.mode.id
-                Box(
-                    modifier = GlanceModifier
-                        .background(if (on) colors.primaryContainer else colors.secondaryContainer)
-                        .cornerRadius(14.dp)
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .semantics { contentDescription = if (on) L.s(R.string.mode_showing, m.label) else L.s(R.string.mode_show, m.label) }
-                        .clickable(chipAction(ctx, m, b.appWidgetId)),
-                ) {
-                    Text(m.label, style = TextStyle(color = if (on) colors.onPrimaryContainer else colors.onSecondaryContainer, fontSize = 13.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal), maxLines = 1)
+                Box(modifier = GlanceModifier.padding(start = if (i > 0) 6.dp else 0.dp)) {
+                    Box(
+                        modifier = GlanceModifier
+                            .background(if (on) colors.primaryContainer else colors.secondaryContainer)
+                            .cornerRadius(14.dp)
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .semantics { contentDescription = if (on) L.s(R.string.mode_showing, m.label) else L.s(R.string.mode_show, m.label) }
+                            .clickable(chipAction(ctx, m, b.appWidgetId)),
+                    ) {
+                        Text(m.label, style = TextStyle(color = if (on) colors.onPrimaryContainer else colors.onSecondaryContainer, fontSize = 13.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal), maxLines = 1)
+                    }
                 }
             }
         }

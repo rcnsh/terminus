@@ -233,6 +233,7 @@
     <string name="remove_device_title">移除 %1$s？</string>
     <string name="remove_from_today">从今天移除</string>
     <string name="remove_other">它会退出登录，你也会收到一封邮件通知。</string>
+    <string name="remove_tab">移除 %1$s</string>
     <string name="remove_this_phone">这部手机会退出登录。</string>
     <string name="replace_hint">替换会改变所有登录 %1$s 的设备上的设置。</string>
     <string name="replace_with_phone">用这部手机的设置替换</string>
