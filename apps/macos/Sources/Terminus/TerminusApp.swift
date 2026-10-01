@@ -35,6 +35,12 @@ struct TerminusApp: App {
         Window("Devices", id: "devices") { DevicesView() }
             .windowResizability(.contentSize)
             .defaultPosition(.center)
+        #if DEBUG
+        // The popover's content in a window (TERMINUS_OPEN=popover), for
+        // testing it when the menu bar item is hidden behind the notch.
+        Window("terminus", id: "popover") { Popover(model: model) }
+            .windowResizability(.contentSize)
+        #endif
     }
 }
 
@@ -57,7 +63,7 @@ private struct MenuBarLabel: View {
                 Image(systemName: "bus.fill")
             }
         }
-        // TERMINUS_OPEN=setup or devices opens that window at launch, for
+        // TERMINUS_OPEN=setup, devices or (debug) popover opens that window at launch, for
         // testing when the menu bar item is hidden behind the notch.
         .task {
             guard let id = ProcessInfo.processInfo.environment["TERMINUS_OPEN"] else { return }
