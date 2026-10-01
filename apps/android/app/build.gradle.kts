@@ -11,8 +11,8 @@ android {
         applicationId = "sh.rcn.terminus"
         minSdk = 31
         targetSdk = 37
-        versionCode = 40
-        versionName = "2.0.1"
+        versionCode = 41
+        versionName = "2.0.2"
     }
 
     // Two apps from one source: stable (sh.rcn.terminus, Google Play and the
