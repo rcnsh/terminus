@@ -383,7 +383,15 @@ sealed interface Target {
     data class Code(val code: String, val label: String) : Target
 }
 
-class ApiError(val status: Int, message: String) : IOException(message)
+/** The server said no. [message] is a sentence to show: the API's own errors are lowercase phrases, written for API users. */
+class ApiError(val status: Int, message: String) : IOException(sentence(message))
+
+/** "not a valid NUSMods share link" -> "Not a valid NUSMods share link." */
+internal fun sentence(text: String): String {
+    if (text.isEmpty()) return text
+    val s = text.replaceFirstChar { it.uppercaseChar() }
+    return if (s.last() in ".!?") s else "$s."
+}
 
 /** The answer arrived but isn't what this version understands. Not a network problem. */
 class ParseError(message: String) : Exception(message)

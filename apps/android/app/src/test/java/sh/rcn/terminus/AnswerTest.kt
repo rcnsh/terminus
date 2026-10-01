@@ -133,4 +133,10 @@ class AnswerTest {
         assertFalse(isNewer("2.0.0-beta", "2.0.0"))
         assertFalse(isNewer("2.0.0-beta", "2.0.0-beta"))
     }
+
+    @Test
+    fun `the server's errors are shown as sentences`() {
+        assertEquals("Not a valid NUSMods share link.", ApiError(400, "not a valid NUSMods share link").message)
+        assertEquals("Nothing imported: no stop. Your timetable was not changed.", sentence("Nothing imported: no stop. Your timetable was not changed."))
+    }
 }
