@@ -67,4 +67,12 @@ class ProfileTest {
         assertEquals("12 pm", hhmm12(720))
         assertEquals("12:30 am", hhmm12(30))
     }
+
+    @Test
+    fun `later today starts half an hour from now on campus`() {
+        // 14:12 in Singapore: 14:42, up to the five-minute mark.
+        assertEquals(14 * 60 + 45, soonOnCampus(java.time.Instant.parse("2026-10-01T06:12:00Z").toEpochMilli()))
+        // 23:40: not into tomorrow.
+        assertEquals(23 * 60 + 55, soonOnCampus(java.time.Instant.parse("2026-10-01T15:40:00Z").toEpochMilli()))
+    }
 }
