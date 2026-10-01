@@ -9,13 +9,19 @@
 # marked a pre-release on GitHub. The site's downloads are unaffected: they
 # follow latest.json in R2.
 #
+# With CHANNEL=beta it publishes a beta from scripts/release-beta.sh: the
+# files in build/release/beta/<version>, as a pre-release for terminus beta.
+#
 #   scripts/github-release.sh 1.3.8          # publish
 #   scripts/github-release.sh 1.3.8 --notes  # print the notes only
+#   CHANNEL=beta scripts/github-release.sh 2.0.1-beta.1
 set -eu
 cd "$(dirname "$0")/.."
-VERSION="${1:?usage: scripts/github-release.sh <version> [--notes]}"
+VERSION="${1:?usage: [CHANNEL=beta] scripts/github-release.sh <version> [--notes]}"
 TAG="v$VERSION"
+CHANNEL="${CHANNEL:-}"
 DIR="build/release/$VERSION"
+if [ "$CHANNEL" = beta ]; then DIR="build/release/beta/$VERSION"; fi
 APK="$DIR/terminus-$VERSION.apk"
 MAC="$DIR/terminus-$VERSION.dmg"
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG"; exit 1; }
@@ -26,8 +32,8 @@ case "$VERSION" in
   *-*) PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true) ;;
   *) PREV=$(git describe --tags --abbrev=0 --exclude '*-*' "$TAG^" 2>/dev/null || true) ;;
 esac
-NOTES="build/release/$VERSION/notes.md"
-python3 scripts/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" > "$NOTES"
+NOTES="$DIR/notes.md"
+python3 scripts/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" "$CHANNEL" > "$NOTES"
 
 if [ "${2:-}" = "--notes" ]; then cat "$NOTES"; exit 0; fi
 TITLE="terminus $(python3 scripts/release-notes.py --title "$VERSION")"
