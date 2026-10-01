@@ -368,6 +368,14 @@ struct ApiError: LocalizedError {
     var errorDescription: String? { message }
 }
 
+/// The API's errors are lowercase phrases for API users ("not a valid NUSMods
+/// share link"); shown here as sentences, as on the web and Android.
+func sentence(_ text: String) -> String {
+    guard let first = text.first else { return text }
+    let s = first.uppercased() + text.dropFirst()
+    return ".!?".contains(s.last!) ? s : s + "."
+}
+
 struct Api {
     /// Override with TERMINUS_API_BASE=http://localhost:8787 for a local wrangler dev.
     static let base = ProcessInfo.processInfo.environment["TERMINUS_API_BASE"] ?? "https://terminus.rcn.sh"
@@ -542,7 +550,7 @@ struct Api {
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw ApiError(status: status, message: msg ?? "HTTP \(status)")
+            throw ApiError(status: status, message: msg.map(sentence) ?? "HTTP \(status)")
         }
         return data
     }
