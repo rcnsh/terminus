@@ -294,12 +294,15 @@ final class AppModel {
         Task {
             defer { signalling = false }
             do {
-                let a = try await Api(token: token).signal(action)
+                let api = Api(token: token)
+                let a = try await api.signal(action)
                 answers[.plan] = a
                 updated = Date()
                 error = nil
                 LeaveNotifier.shared.update(a)
-                dayFetched = nil
+                // "Not going", "Undo", "Back on campus" change Today too: now, not at the next refresh.
+                dayFetched = Date()
+                day = try? await api.day()
             } catch let e as ApiError {
                 error = e.message
             } catch {
