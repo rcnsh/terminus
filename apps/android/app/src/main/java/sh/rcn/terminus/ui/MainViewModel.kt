@@ -43,6 +43,8 @@ data class UiState(
     val rawAnswers: Map<Target, String> = emptyMap(),
     val nearby: List<NearbyStop>? = null,
     val places: List<Place> = emptyList(),
+    /** Places added from "Go somewhere else", a tab each until removed (Destinations). */
+    val added: List<Destinations.Dest> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
     val fetchedAt: Long? = null,
@@ -76,7 +78,7 @@ data class PendingPair(val code: String, val account: String)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(
-        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app)),
+        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app)),
     )
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
@@ -369,15 +371,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun select(target: Target) {
-        // What the widget offers as buttons: the places you actually ask for.
+    fun select(picked: Target) {
+        val places = _state.value.places
+        // Somewhere that's a favourite already is that favourite's tab.
+        val target = (picked as? Target.Code)?.let { c -> places.find { it.label.equals(c.label, ignoreCase = true) }?.let { Target.SavedPlace(it.key) } } ?: picked
         when (target) {
-            is Target.SavedPlace -> _state.value.places.find { it.key == target.key }?.let { store.noteDestination(Destinations.Dest(Destinations.placeId(it.key), it.label)) }
-            is Target.Code -> store.noteDestination(Destinations.Dest(Destinations.stopId(target.code), target.label))
+            // The widget ranks favourites by how often you ask for them.
+            is Target.SavedPlace -> places.find { it.key == target.key }?.let { store.noteDestination(Destinations.Dest(Destinations.placeId(it.key), it.label)) }
+            // Anywhere else gets a tab of its own, and a widget button, until removed.
+            is Target.Code -> setAdded(Destinations.add(store.addedPlaces, Destinations.Dest(Destinations.stopId(target.code), target.label), places))
             Target.Plan -> {}
         }
         _state.update { it.copy(target = target, showNearby = false, error = null) }
         load(restart = true)
+    }
+
+    /** The X on an added place's tab: gone from the tabs and the widget; showing it, back to Next. */
+    fun removeAdded(dest: Destinations.Dest) {
+        setAdded(store.addedPlaces.filter { it.id != dest.id })
+        val showing = (_state.value.target as? Target.Code)?.let { Destinations.stopId(it.code) == dest.id } == true
+        if (!showing) return
+        if (_state.value.showNearby) _state.update { it.copy(target = Target.Plan) } else select(Target.Plan)
+    }
+
+    private fun setAdded(added: List<Destinations.Dest>) {
+        if (added == store.addedPlaces) return
+        store.addedPlaces = added
+        _state.update { it.copy(added = added) }
+        viewModelScope.launch { redrawWidgets(getApplication()) }
     }
 
     fun showNearby() {

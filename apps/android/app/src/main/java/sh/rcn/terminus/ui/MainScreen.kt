@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
@@ -50,8 +52,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -63,11 +67,10 @@ import kotlinx.coroutines.delay
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
+import sh.rcn.terminus.R
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
-import androidx.compose.ui.res.stringResource
-import sh.rcn.terminus.R
 
 @Composable
 internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit) {
@@ -131,8 +134,9 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
             }
         }
 
-        // Next and Nearby first, as on the widget, so they're always in view;
-        // the places after them scroll, and the edge fades while there's more.
+        // Next and Nearby first, as on the widget, then favourites and the
+        // places added from "Go somewhere else" (each with an X); the row
+        // scrolls, and the edge fades while there's more.
         val chips = rememberScrollState()
         Row(Modifier.fadeEnd(chips).horizontalScroll(chips), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !state.showNearby && state.target == Target.Plan, onClick = { vm.select(Target.Plan) }, label = { Text(stringResource(R.string.chip_next)) })
@@ -144,8 +148,14 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
                     label = { Text(p.label) },
                 )
             }
-            (state.target as? Target.Code)?.let { t ->
-                FilterChip(selected = !state.showNearby, onClick = { vm.select(t) }, label = { Text(t.label) })
+            for (d in state.added) {
+                val code = d.id.removePrefix("stop:")
+                AddedChip(
+                    label = d.label,
+                    selected = !state.showNearby && (state.target as? Target.Code)?.code == code,
+                    onClick = { vm.select(Target.Code(code, d.label)) },
+                    onRemove = { vm.removeAdded(d) },
+                )
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -349,6 +359,32 @@ private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: 
 }
 
 /** Fades the trailing edge out while [scroll] can still go further, so a cut-off row reads as scrollable. */
+/**
+ * A place added from "Go somewhere else": a tab with an X that removes it.
+ * Scrolled into view when it's the one showing, as a new one is.
+ */
+@Composable
+private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onRemove: () -> Unit) {
+    val reveal = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(selected) { if (selected) reveal.bringIntoView() }
+    val remove = stringResource(R.string.remove_tab, label)
+    androidx.compose.material3.InputChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+        trailingIcon = {
+            androidx.compose.material3.Icon(
+                androidx.compose.ui.res.painterResource(R.drawable.ic_close),
+                contentDescription = remove,
+                modifier = Modifier.size(18.dp).clickable(onClickLabel = remove, role = androidx.compose.ui.semantics.Role.Button, onClick = onRemove),
+            )
+        },
+        modifier = Modifier
+            .bringIntoViewRequester(reveal)
+            .semantics { customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction(remove) { onRemove(); true }) },
+    )
+}
+
 private fun Modifier.fadeEnd(scroll: ScrollState, width: Dp = 32.dp): Modifier =
     graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
         drawContent()
