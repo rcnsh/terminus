@@ -1,8 +1,10 @@
 """
 Release notes for scripts/github-release.sh, as GitHub-flavoured Markdown:
 a beta callout for a pre-release, the hand-written highlights in
-release-notes/<version>.md (if any), every commit since the previous tag
-(folded away when there are highlights), the downloads and the checksums.
+RELEASE_NOTES.md (when its first line is `<!-- <version> -->`), every commit
+since the previous tag (folded away when there are highlights), the downloads
+and the checksums. RELEASE_NOTES.md holds only the latest release's
+highlights: write over it for the next one.
 
     python3 scripts/release-notes.py <version> <tag> <previous tag> <apk> <dmg>
     python3 scripts/release-notes.py --title 2.0.0-beta   # -> 2.0 beta
@@ -43,10 +45,11 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str) -> str:
         )
     out.append(f'<sub>Released {date}</sub>\n')
 
-    highlights = f'release-notes/{version}.md'
-    has_highlights = os.path.exists(highlights)
+    highlights = open('RELEASE_NOTES.md').read() if os.path.exists('RELEASE_NOTES.md') else ''
+    first, _, rest = highlights.partition('\n')
+    has_highlights = first.strip() == f'<!-- {version} -->'
     if has_highlights:
-        out.append(open(highlights).read().strip() + '\n')
+        out.append(rest.strip() + '\n')
 
     if not prev:
         # Everything before the first tag was the pre-beta build-up.

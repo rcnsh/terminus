@@ -1,3 +1,4 @@
+<!-- 2.0.0 -->
 ### terminus 2.0
 
 The biggest update since terminus began. What's new since 1.3.10:
