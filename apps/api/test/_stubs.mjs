@@ -199,6 +199,11 @@ export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = 
     if (fcm && url.startsWith('https://fcm.googleapis.com/v1/projects/')) {
       const msg = JSON.parse(init.body).message;
       if (fcm.dead?.has(msg.token)) return Response.json({ error: { status: 'NOT_FOUND' } }, { status: 404 });
+      // `fcm.expire = n`: the next n sends find the access token stale.
+      if (fcm.expire > 0) {
+        fcm.expire--;
+        return Response.json({ error: { status: 'UNAUTHENTICATED' } }, { status: 401 });
+      }
       (fcm.sent ??= []).push(msg);
       return Response.json({ name: 'projects/x/messages/1' });
     }
