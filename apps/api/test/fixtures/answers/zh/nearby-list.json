@@ -5,6 +5,7 @@
         "code": "PGPR",
         "name": "PGP Foyer"
       },
+      "opposite": "PGP",
       "distM": 192,
       "walkS": 175,
       "available": true,
@@ -34,6 +35,7 @@
         "code": "PGP",
         "name": "PGP"
       },
+      "opposite": "PGPR",
       "distM": 266,
       "walkS": 243,
       "available": true,

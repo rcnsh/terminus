@@ -356,6 +356,9 @@ test('/me/nearby lists boards for stops near the given point', async () => {
   const body = await res.json();
   assert.ok(body.stops.length >= 1);
   assert.equal(body.stops[0].stop.code, 'PGP');
+  // Its twin is always there, for the widget to swap to.
+  assert.equal(body.stops[0].opposite, 'PGPR');
+  assert.ok(body.stops.some((s) => s.stop.code === 'PGPR'));
 });
 
 test('the public API still works without the DB binding', async () => {

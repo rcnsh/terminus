@@ -9,6 +9,7 @@
     <string name="a11y_loading">terminus. %1$s. Double tap to open terminus.</string>
     <string name="a11y_loading_word">Loading</string>
     <string name="a11y_nearby">Buses near you. At %1$s: %2$s. Double tap to open terminus.</string>
+    <string name="nearby_swap">Show %1$s instead</string>
     <string name="a11y_nearby_none">terminus, buses near you. %1$s. Double tap to open terminus.</string>
     <string name="a11y_no_buses">no buses due</string>
     <string name="a11y_not_paired">terminus. Not paired. Double tap to pair this phone.</string>

@@ -55,6 +55,7 @@ import { isoSeconds } from './format.ts';
 import { cardFor, nextPhaseAt } from './card.ts';
 import { RIDE, WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
+import { nearbyTwin } from './graph.ts';
 import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
@@ -1122,12 +1123,19 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   const near = ranked.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
   // In a residence: its own stops, walked by the paths, like /me/next.
   const picked = residenceStops(lat, lon, idx.byCode)?.slice(0, WALK.maxCandidates) ?? (near.length ? near : ranked.slice(0, 1));
+  // The nearest stop's twin (across the road, or PGP and PGP Foyer), always:
+  // a location a few metres out puts you at the wrong one, and the widget
+  // offers the other.
+  const twinCode = picked[0] ? nearbyTwin(picked[0].stop) : null;
+  const twin = twinCode ? ranked.find((c) => c.stop.code === twinCode) : undefined;
+  if (twin && !picked.some((c) => c.stop.code === twin.stop.code)) picked.push(twin);
 
   const byStop = await deps.collectArrivals(env, ctx, picked.map((c) => c.stop.code), nowMs);
   const stops = picked.map(({ stop, distM, footM: foot }) => {
     const sa = byStop.get(stop.code)!;
     return {
       stop: { code: stop.code, name: stop.name },
+      opposite: nearbyTwin(stop),
       distM: Math.round(distM),
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,

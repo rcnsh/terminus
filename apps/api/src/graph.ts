@@ -42,3 +42,14 @@ export const GRAPH = {
   ),
 } as Graph;
 
+
+/**
+ * The stop Nearby offers in place of `stop`: its twin across the road, or a
+ * stop listed only for Nearby (data/opposites.json `nearby`), near enough for
+ * a location to put you at the wrong one but kept apart for routing.
+ */
+export function nearbyTwin(stop: Stop): string | null {
+  if (stop.opposite) return stop.opposite;
+  const pair = oppositesJson.nearby.find((p) => p.includes(stop.code));
+  return pair ? (pair[0] === stop.code ? pair[1] : pair[0]) : null;
+}

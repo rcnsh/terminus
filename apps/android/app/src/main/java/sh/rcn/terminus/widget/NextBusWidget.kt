@@ -82,6 +82,9 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                 currentState(WidgetModes.MODE_JSON),
                 currentState(WidgetModes.MODE_FETCHED),
                 currentState(WidgetModes.MODE_ERROR),
+                currentState(NearbySwap.FROM)?.let { from ->
+                    NearbySwap.Swap(from, currentState(NearbySwap.TO) ?: "", currentState(NearbySwap.AT) ?: 0L)
+                },
             )
             GlanceTheme(colors = BrandColors) {
                 Content(snap.paired, snap.last?.first, snap.last?.second, snap.error, snap.live, chosen, store, appWidgetId)
@@ -91,7 +94,11 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
     private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?, val live: Boolean)
 
-    private data class ModeState(val mode: Mode, val at: Long?, val json: String?, val fetchedAt: Long?, val error: String?)
+    private data class ModeState(val mode: Mode, val at: Long?, val json: String?, val fetchedAt: Long?, val error: String?, val swap: NearbySwap.Swap? = null) {
+        /** Nearby's stops as shown: the API's order, or the twin first after a swap. */
+        fun nearby(now: Long): List<sh.rcn.terminus.NearbyStop>? =
+            json?.let { runCatching { sh.rcn.terminus.parseNearby(org.json.JSONObject(it)) }.getOrNull() }?.let { NearbySwap.order(it, swap, now) }
+    }
 
     /** The row of buttons, worked out once for the layout. */
     private data class Bottom(val chips: List<Mode>, val mode: Mode, val appWidgetId: Int)
@@ -426,8 +433,9 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     private fun NearbyBody(chosen: ModeState, large: Boolean) {
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
-        val stops = chosen.json?.let { runCatching { sh.rcn.terminus.parseNearby(org.json.JSONObject(it)) }.getOrNull() }
         val now = System.currentTimeMillis()
+        val api = chosen.json?.let { runCatching { sh.rcn.terminus.parseNearby(org.json.JSONObject(it)) }.getOrNull() }
+        val stops = api?.let { NearbySwap.order(it, chosen.swap, now) }
         val age = chosen.fetchedAt?.let { (now - it) / 1000 } ?: 0L
         val old = age > NEARBY_OLD_S
         val first = stops?.firstOrNull()
@@ -437,7 +445,12 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             return
         }
         val walk = if (first.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (first.walkS + 30) / 60)
-        Text(L.s(R.string.nearby_line, first.name, walk), style = muted, maxLines = 1)
+        // The other side of the road, a tap away: the stop shown second when swapped.
+        val other = if (NearbySwap.active(api.orEmpty(), chosen.swap, now)) stops.getOrNull(1) else api?.let(NearbySwap::twin)
+        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(L.s(R.string.nearby_line, first.name, walk), style = muted, maxLines = 1, modifier = GlanceModifier.defaultWeight())
+            if (other != null) SwapButton(other, api!!.first().code)
+        }
         Text(
             departures(first, age, 2).ifEmpty { if (first.available) L.s(R.string.no_buses_due) else L.s(R.string.no_live_data) },
             style = TextStyle(color = if (old) colors.onSurfaceVariant else colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
@@ -452,6 +465,30 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             else -> listOf((listOfNotNull(departures(first, age, 4, skip = 2).takeIf { it.isNotEmpty() }) + others).joinToString(" · "))
         }.filter { it.isNotEmpty() }
         lines.forEach { Text(it, style = muted, maxLines = 1) }
+    }
+
+    /** Shows the stop across the road first, or the nearest one again. */
+    @Composable
+    private fun SwapButton(other: sh.rcn.terminus.NearbyStop, nearest: String) {
+        Box(
+            modifier = GlanceModifier
+                .size(28.dp)
+                .cornerRadius(14.dp)
+                .semantics { contentDescription = L.s(R.string.nearby_swap, other.name) }
+                .clickable(
+                    actionRunCallback<SwapAction>(
+                        androidx.glance.action.actionParametersOf(SwapAction.FROM to nearest, SwapAction.TO to other.code),
+                    ),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_swap),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+                modifier = GlanceModifier.size(18.dp),
+            )
+        }
     }
 
     companion object {
@@ -469,7 +506,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
     /** Nearby, as a sentence for screen readers. */
     private fun nearbySpoken(chosen: ModeState): String {
-        val stops = chosen.json?.let { runCatching { sh.rcn.terminus.parseNearby(org.json.JSONObject(it)) }.getOrNull() }
+        val stops = chosen.nearby(System.currentTimeMillis())
         val first = stops?.firstOrNull() ?: return L.s(R.string.a11y_nearby_none, chosen.error ?: L.s(R.string.a11y_checking))
         val age = chosen.fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
         val due = departures(first, age, 3).replace(" · ", ", ").ifEmpty { L.s(R.string.a11y_no_buses) }

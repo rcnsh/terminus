@@ -569,7 +569,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         get: {
           tags: ['Account'],
           summary: 'Departures near you',
-          description: 'Upcoming buses at up to three stops within walking range. Without coordinates, uses your home.',
+          description:
+            'Upcoming buses at up to three stops within walking range, nearest first, plus the nearest stop\'s twin ' +
+            '(across the road, or a stop easily mistaken for it) when it isn\'t one of them. `opposite` is each stop\'s twin, if it has one. Without coordinates, uses your home.',
           operationId: 'meNearby',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: coordParams,
@@ -583,6 +585,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     type: 'object',
                     properties: {
                       stop: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } },
+                      opposite: { type: ['string', 'null'] },
                       distM: { type: 'integer' },
                       walkS: { type: 'integer' },
                       available: { type: 'boolean' },
