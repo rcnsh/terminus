@@ -24,7 +24,7 @@ import { sgt } from './config.ts';
 import { isoSeconds } from './format.ts';
 import { indexGraph } from './resolve.ts';
 import { tripAnswer } from './next.ts';
-import { type DayRecord, dayState, leaveOf, offStop, sgtDate } from './trip.ts';
+import { ASSUME_MS, type DayRecord, dayState, leaveOf, offStop, sgtDate } from './trip.ts';
 import { m } from './i18n.ts';
 
 export type DayStatus = 'done' | 'now' | 'next' | 'later' | 'skipped';
@@ -117,8 +117,14 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
     // The next class's bus, once a device has planned it from where the
     // phone is (or it's due): the same bus the card and the notifications say.
     const plan = status === 'next' && rec?.kind !== 'missed' ? day?.plans?.[key] : undefined;
+    // Its bus gone and nobody saying otherwise: the card takes it you're on
+    // it a few minutes on (next.ts), and so does this, until it gets there.
+    const unsaid = !rec || rec.kind === 'waiting';
+    const assumed = plan?.board && unsaid && nowMs >= Date.parse(plan.board) + ASSUME_MS && plan.arrive && Date.parse(plan.arrive) > nowMs;
     if (boarded) item.onBus = { svc: boarded.svc, off: offStop(boarded), arrive: boarded.arrive };
-    else if (plan?.board && Date.parse(plan.board) > nowMs) item.leave = leaveOf(plan);
+    else if (assumed) item.onBus = { svc: plan.svc, off: offStop(plan), arrive: plan.arrive };
+    // The plan's leave-by until then, even once its bus has left (the card still says it).
+    else if (plan?.board && (Date.parse(plan.board) > nowMs || (unsaid && nowMs < Date.parse(plan.board) + ASSUME_MS))) item.leave = leaveOf(plan);
     // Upcoming classes get a leave-by, from where you'll be then.
     else if ((status === 'next' || status === 'later') && from) {
       pending.push(
