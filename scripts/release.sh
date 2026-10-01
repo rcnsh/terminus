@@ -21,6 +21,7 @@ DRY=0
 
 VERSION=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' apps/android/app/build.gradle.kts)
 [ -n "$VERSION" ] || { echo "no versionName found"; exit 1; }
+case "$VERSION" in *-*) echo "$VERSION is a beta: release it with scripts/release-beta.sh"; exit 1 ;; esac
 MAC_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/macos/Support/Info.plist)
 [ "$MAC_VERSION" = "$VERSION" ] || { echo "Android is $VERSION but the Mac app is $MAC_VERSION; bump both"; exit 1; }
 grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || { echo "Android release key not configured (TERMINUS_KEYSTORE)"; exit 1; }

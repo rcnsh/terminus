@@ -11,10 +11,14 @@
 # A beta version is the next stable version's pre-release (after 2.0.0:
 # 2.0.1-beta.1, 2.0.1-beta.2, ...). The build number is the commit count, so
 # it only goes up. A release's own version (2.0.0) can go out on the beta
-# too, so the beta apps move onto it from their betas. Nothing touches the stable site, its data or its downloads,
-# and there's no tag, GitHub release or CI: it runs on this Mac and signs with
+# too, so the beta apps move onto it from their betas. Nothing touches the
+# stable site, its data or its downloads. It runs on this Mac and signs with
 # the same keys as stable (the Android release key in ~/.gradle, and the Mac
-# certificate and the Sparkle key in ~/.terminus).
+# certificate and the Sparkle key in ~/.terminus), with no CI.
+#
+# Last, a beta version gets its tag (pushed) and a GitHub pre-release with
+# both files and the commits since the previous tag. A release's version
+# already has its own, from scripts/release.sh.
 set -eu
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
@@ -34,6 +38,11 @@ SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 # What's released must be what's committed (untracked files, like PLAN.md, don't count).
 if [ $DRY -eq 0 ] && [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "uncommitted changes; commit them before releasing"; exit 1
+fi
+BETA=0
+case "$VERSION" in *-beta.*) BETA=1 ;; esac
+if [ $DRY -eq 0 ] && [ $BETA -eq 1 ] && git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+  echo "v$VERSION is already tagged; pick the next number"; exit 1
 fi
 if [ $DRY -eq 0 ]; then
   CURRENT=$(curl -fsS "$SITE/download/latest.json" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])' 2>/dev/null || true)
@@ -97,3 +106,10 @@ r2 appcast.xml "$OUT/appcast.xml" "application/xml; charset=utf-8"
 # latest.json last, so /download/* never points at a file that isn't there yet.
 r2 latest.json "$OUT/latest.json" application/json
 echo "== released beta $VERSION at $SITE"
+
+if [ $BETA -eq 1 ]; then
+  echo "== GitHub"
+  git tag "v$VERSION"
+  git push -q origin "v$VERSION"
+  CHANNEL=beta scripts/github-release.sh "$VERSION"
+fi

@@ -13,9 +13,11 @@ name: release
 # Not notarised: that needs a paid Apple Developer account. Gatekeeper asks
 # once on first open, as the install steps say.
 
+# Betas (v2.0.1-beta.1) are released from this Mac by scripts/release-beta.sh,
+# which pushes their tag too: they don't run this.
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "!v*-beta.*"]
   workflow_dispatch:
 
 permissions:

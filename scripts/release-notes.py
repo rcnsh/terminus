@@ -6,7 +6,10 @@ since the previous tag (folded away when there are highlights), the downloads
 and the checksums. RELEASE_NOTES.md holds only the latest release's
 highlights: write over it for the next one.
 
-    python3 scripts/release-notes.py <version> <tag> <previous tag> <apk> <dmg>
+    python3 scripts/release-notes.py <version> <tag> <previous tag> <apk> <dmg> [beta]
+
+With `beta`, the notes are for terminus beta (beta.terminus.rcn.sh), which
+installs beside terminus.
     python3 scripts/release-notes.py --title 2.0.0-beta   # -> 2.0 beta
 """
 
@@ -34,10 +37,18 @@ def sha(path: str) -> str:
     return hashlib.sha256(open(path, 'rb').read()).hexdigest()
 
 
-def notes(version: str, tag: str, prev: str, apk: str, mac: str) -> str:
+def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = '') -> str:
     date = git('log', '-1', '--format=%cd', '--date=format:%-d %B %Y', tag).strip()
+    beta = channel == 'beta'
     out = []
-    if '-' in version:
+    if beta:
+        out.append(
+            '> [!NOTE]\n'
+            '> **This is terminus beta**, from [beta.terminus.rcn.sh](https://beta.terminus.rcn.sh): the next version early, '
+            'with its own account. It installs beside terminus as **terminus beta**. Expect rough edges, and tap '
+            '**Is this wrong?** under any answer to tell us.\n'
+        )
+    elif '-' in version:
         out.append(
             '> [!NOTE]\n'
             "> **This is a beta.** It's what everyone gets from terminus.rcn.sh, but expect rough edges. "
@@ -65,6 +76,8 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str) -> str:
         for s in git('log', '--no-merges', '--reverse', '--format=%s', f'{prev}..{tag}').splitlines():
             if re.fullmatch(r'(terminus|nusbus) \d+\.\d+\.\d+(-[a-z]+(\.\d+)?)?', s, re.I):
                 continue  # the version bump itself
+            if s.startswith('[ImgBot]'):
+                continue  # image compression, nothing to see
             # The first sentence of each commit subject.
             changes.append('- ' + re.split(r'(?<=[a-z0-9)`"])\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.'))
         if changes:
@@ -76,15 +89,18 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str) -> str:
 
     a, m = os.path.basename(apk), os.path.basename(mac)
     dl = f'{REPO}/releases/download/{tag}'
+    name = 'terminus beta' if beta else 'terminus'
+    keeps = ('It installs beside terminus, and installing over an older beta keeps everything.' if beta
+             else 'Installing over an older version keeps everything.')
     out.append(
         '## Install\n\n'
         '| | Download | Runs on |\n'
         '| :-- | :-- | :-- |\n'
         f'| **Android** | [`{a}`]({dl}/{a}) | Android 12 or later |\n'
         f'| **Mac** | [`{m}`]({dl}/{m}) | macOS 14 or later, Apple silicon |\n\n'
-        '- **Android:** open the APK and allow your browser to install apps when asked. Then open terminus and tap '
-        '**Get started**, or sign in if you already have an account. Installing over an older version keeps everything.\n'
-        '- **Mac:** open the disk image and drag terminus to Applications, then sign in with your email. '
+        f'- **Android:** open the APK and allow your browser to install apps when asked. Then open {name} and tap '
+        f'**Get started**, or sign in if you already have an account. {keeps}\n'
+        f'- **Mac:** open the disk image and drag {name} to Applications, then sign in with your email. '
         'Installed Mac apps update themselves.\n\n'
         '<details>\n<summary>SHA-256 checksums</summary>\n\n'
         '| File | SHA-256 |\n'
@@ -100,4 +116,4 @@ if __name__ == '__main__':
     if sys.argv[1] == '--title':
         print(title(sys.argv[2]))
     else:
-        print(notes(*sys.argv[1:6]))
+        print(notes(*sys.argv[1:7]))
