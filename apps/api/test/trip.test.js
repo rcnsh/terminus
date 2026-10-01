@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { endOfDayMs, phaseFor, sgtDate } from '../src/trip.ts';
+import { ASSUME_MS, endOfDayMs, phaseFor, sgtDate } from '../src/trip.ts';
 import { Trip } from '../src/tripdo.ts';
 import { GRAPH } from '../src/graph.ts';
 import { indexGraph, rideStops, serviceEndsAt } from '../src/resolve.ts';
@@ -1026,4 +1026,24 @@ test('a plan and a watch sent together both stick (the Trip object reads the day
   const day = await (await s.fetch(`https://trip/day?date=${date}`)).json();
   assert.equal(day.plans?.k?.svc, 'D2', 'the plan survives the watch');
   assert.equal(day.watch, FROZEN_NOW + 60_000);
+});
+
+test('/me/day follows the plan once its bus has left: the same leave-by, then on the bus when the card assumes it', async () => {
+  const { phone, call, next, clock } = await setup();
+  // Planned from where the phone is (PGP), so it's the trip's plan.
+  const planned = await next(phone, '?lat=1.291765&lon=103.780419');
+  const board = Date.parse(planned.leave.board);
+  assert.ok(planned.leave.svc, 'a bus to catch');
+
+  // The bus has just left: still the plan's leave-by, not a new one.
+  clock(board + 60_000);
+  let day = await (await call('/me/day', { token: phone })).json();
+  assert.equal(day.items[0].leave?.board, planned.leave.board);
+
+  // A few minutes on, the card takes it you're on that bus; so does Today.
+  clock(board + ASSUME_MS + 60_000);
+  assert.equal((await next(phone)).card.phase, 'riding');
+  day = await (await call('/me/day', { token: phone })).json();
+  assert.equal(day.items[0].onBus?.svc, planned.leave.svc);
+  assert.equal(day.items[0].leave, undefined);
 });
