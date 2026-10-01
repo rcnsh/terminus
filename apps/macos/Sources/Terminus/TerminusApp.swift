@@ -29,10 +29,10 @@ struct TerminusApp: App {
         .menuBarExtraStyle(.window)
 
         // Setup and devices (phase 7): real windows, opened from the popover.
-        Window("Set up terminus", id: "setup") { SetupView(app: model) }
+        Window("Set up terminus", id: "setup") { SetupView(app: model).closesWhenSignedOut(model, id: "setup") }
             .windowResizability(.contentSize)
             .defaultPosition(.center)
-        Window("Devices", id: "devices") { DevicesView() }
+        Window("Devices", id: "devices") { DevicesView().closesWhenSignedOut(model, id: "devices") }
             .windowResizability(.contentSize)
             .defaultPosition(.center)
         #if DEBUG
@@ -45,6 +45,24 @@ struct TerminusApp: App {
 }
 
 // MARK: - Shell
+
+extension View {
+    /// Closes this window when the Mac is signed out (from the menu, or the
+    /// device removed elsewhere): what it shows belongs to the account.
+    func closesWhenSignedOut(_ model: AppModel, id: String) -> some View {
+        modifier(ClosesWhenSignedOut(model: model, id: id))
+    }
+}
+
+private struct ClosesWhenSignedOut: ViewModifier {
+    let model: AppModel
+    let id: String
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    func body(content: Content) -> some View {
+        content.onChange(of: model.paired) { _, paired in if !paired { dismissWindow(id: id) } }
+    }
+}
 
 /// The menu bar item. Recomputed from the departure time on the model's 30 s
 /// clock, so the menu bar never shows a count that was true two refreshes
