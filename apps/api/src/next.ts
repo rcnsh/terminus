@@ -25,7 +25,7 @@ import {
 import { type ImportedTrip, venueToStop } from './nusmods.ts';
 import { indexGraph, serviceEndsAt } from './resolve.ts';
 import { haversineM } from './geo.ts';
-import { clockAt, clockMin } from './clock.ts';
+import { clockAt, clockMin, slackText } from './clock.ts';
 import { sgt } from './config.ts';
 import { shortStop } from './format.ts';
 import { landmark, targetStops } from './landmarks.ts';
@@ -36,6 +36,7 @@ import type { TripView } from './card.ts';
 import { NO_PREFS, type TripPrefs } from './outcomes.ts';
 import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, isFollowed, leaveOf, offStop, phaseFor, signalOf } from './trip.ts';
 import { choosePlan, planOfLeave } from './plan.ts';
+import { m } from './i18n.ts';
 
 /** `?h12=1`: the client shows 12-hour times. Default 24-hour, as always. */
 export const hour12 = (url: URL) => url.searchParams.get('h12') === '1';
@@ -80,13 +81,13 @@ function base(nowMs: number, label: string, detail: string): Answer {
 /** In your residence with nothing left today: no bus, and what's next. */
 function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>): MeAnswer {
   return {
-    ...base(nowMs, "You're home", restDetail(profile, nowMs, h12, skipped)),
+    ...base(nowMs, m().youreHome, restDetail(profile, nowMs, h12, skipped)),
     stop: { code: homeStop ?? '', name: '', confidence: 1 },
     quality: 'live',
     arrived: true,
     leave: null,
     mode: 'trip',
-    dest: { to: homeStop ?? '', label: 'Home', why: 'home' },
+    dest: { to: homeStop ?? '', label: m().home, why: 'home' },
     places,
   };
 }
@@ -99,8 +100,8 @@ function youreHome(profile: Profile, nowMs: number, homeStop: string | null, pla
 function freeAnswer(profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>, away = false): MeAnswer {
   const hadClasses = classesOn(profile, nowMs).length > 0;
   const empty = !profile.trips.length && !profile.manual.length && !profile.usual.length && !profile.once.length;
-  const label = away ? 'Not on campus today' : empty ? 'No timetable yet' : hadClasses ? 'No more classes today' : 'No classes today';
-  const detail = empty ? 'Add your timetable in Settings. Buses near you are under Nearby.' : restDetail(profile, nowMs, h12, skipped);
+  const label = away ? m().notOnCampus : empty ? m().noTimetableYet : hadClasses ? m().noMoreClassesToday : m().noClassesToday;
+  const detail = empty ? m().addTimetableHint : restDetail(profile, nowMs, h12, skipped);
   return { ...base(nowMs, label, detail), quality: 'ended', mode: 'free', dest: null, places };
 }
 
@@ -143,7 +144,7 @@ export async function tripAnswer(
   // has no stop to check and says "Services ended" at 9 am.
   if (lat === null && !dest.from) {
     return {
-      ...base(nowMs, 'Add a home stop', 'Pick where your day starts in Settings, or turn on location'),
+      ...base(nowMs, m().addHomeStop, m().addHomeStopHint),
       mode: 'trip',
       dest: { to: dest.to, label: dest.label, why: dest.why },
       places,
@@ -182,7 +183,7 @@ function lastBusWarning(graph: Graph, a: MeAnswer, nowMs: number): string | null
   if (!svc || !a.leave?.stop) return null;
   const ends = serviceEndsAt(graph, svc, nowMs);
   if (ends === null || ends <= nowMs || ends - nowMs > LAST_BUS_WARN_MS) return null;
-  return `Last ${svc} from ${a.leave.stop} in ${Math.max(1, Math.round((ends - nowMs) / 60_000))} min`;
+  return m().lastBus(svc, a.leave.stop, Math.max(1, Math.round((ends - nowMs) / 60_000)));
 }
 
 /** A trip skipped a moment ago, offered back as "Undo". */
@@ -190,7 +191,7 @@ function undoOf(day: DayRecord | null, nowMs: number): TripView['undo'] {
   const recent = Object.entries(day?.trips ?? {})
     .filter(([, r]) => r.kind === 'skipped' && !r.away && nowMs - r.at < UNDO_MS)
     .sort(([, a], [, b]) => b.at - a.at)[0];
-  return recent ? { key: recent[0], label: recent[1].label ?? 'it' } : null;
+  return recent ? { key: recent[0], label: recent[1].label ?? m().it } : null;
 }
 
 /**
@@ -213,15 +214,17 @@ export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
 function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
   const off = offStop(b) ?? dest.label;
   const arrive = b.arrive ? Date.parse(b.arrive) : null;
-  let detail = arrive !== null ? `Off at ${off} · arrive ${live ? '' : '~'}${clockAt(arrive, h12)}` : `Off at ${off}`;
+  let detail = arrive !== null ? `${m().offAtCap(off)} · ${m().arriveAt(live ? clockAt(arrive, h12) : m().approx(clockAt(arrive, h12)))}` : m().offAtCap(off);
   let timing = null;
   if (dest.trip && b.arrive) {
     const venueM = dest.trip.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
-    timing = timingFor(b.arrive, dest.trip, Math.round(venueM / paceSpeed(profile.walkPace)), nowMs, h12);
-    if (timing) detail += ` · ${timing.status === 'late' ? timing.text : timing.text.split(' · ')[1] ?? ''}`.replace(/ · $/, '');
+    const walkS = Math.round(venueM / paceSpeed(profile.walkPace));
+    timing = timingFor(b.arrive, dest.trip, walkS, nowMs, h12);
+    // Late: "~3 min late"; otherwise only the spare time, as the arrival is already said.
+    if (timing) detail += ` · ${timing.status === 'late' ? timing.text : slackText((Date.parse(timing.classAt) - Date.parse(timing.reachAt!)) / 1000)}`;
   }
   return {
-    ...base(nowMs, `On the ${b.svc}`, detail),
+    ...base(nowMs, m().onThe(b.svc), detail),
     quality: live ? 'live' : 'scheduled',
     arriveAt: b.arrive ?? undefined,
     mode: 'trip',
@@ -238,12 +241,12 @@ function thereAnswer(profile: Profile, nowMs: number, dest: Dest, places: PlaceC
   const end = dest.trip?.endMin !== undefined ? endOf(dest.trip) : undefined;
   // There before it starts: when it starts, not "In GEA1000".
   const early = dest.trip && sgt(nowMs).minutes < dest.trip.arriveByMin;
-  const label = early ? "You're there" : dest.trip ? `In ${dest.trip.label}` : `At ${dest.label}`;
-  const when = early ? `${dest.trip!.label} starts ${clockMin(dest.trip!.arriveByMin, h12)}` : end ? `till ${dest.trip?.nusmods ? '~' : ''}${clockMin(end, h12)}` : null;
+  const label = early ? m().youreThere : dest.trip ? m().inClass(dest.trip.label) : m().atPlace(dest.label);
+  const when = early ? m().startsAt(dest.trip!.label, clockMin(dest.trip!.arriveByMin, h12)) : end ? m().till(dest.trip?.nusmods ? m().approx(clockMin(end, h12)) : clockMin(end, h12)) : null;
   const detail = [when, !early && next ? restDetail(profile, nowMs, h12, skipped) : null]
     .filter(Boolean)
     .join(' · ');
-  return { ...base(nowMs, label, detail || "You're there"), quality: 'live', arrived: true, leave: null, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, places };
+  return { ...base(nowMs, label, detail || m().youreThere), quality: 'live', arrived: true, leave: null, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, places };
 }
 
 /**
@@ -302,7 +305,7 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   if (isResting(profile, nowMs)) {
     // Evenings: on campus and not at home, the way home rather than a moon.
     if (homeStop && lat !== null && lon !== null && !homeHere && onCampus(deps.graph, lat, lon)) {
-      const dest: Dest = { to: homeStop, label: 'Home', why: 'home', from: null };
+      const dest: Dest = { to: homeStop, label: m().home, why: 'home', from: null };
       const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12);
       return withPhase({ ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) }, 'home:evening');
     }

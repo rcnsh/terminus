@@ -72,7 +72,8 @@ export function makeEmail() {
     },
     /** The code from the most recent sign-in email. */
     lastCode() {
-      const m = /sign-in code is ([A-Z0-9]{6})/.exec(sent.at(-1)?.text ?? '');
+      // English or Chinese ("登录验证码是 X").
+      const m = /(?:sign-in code is|登录验证码是) ([A-Z0-9]{6})/.exec(sent.at(-1)?.text ?? '');
       return m ? m[1] : null;
     },
   };

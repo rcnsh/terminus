@@ -25,6 +25,7 @@ import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 import { hopSecondsFor, loadTable } from './ridetimes.ts';
 
 import { GRAPH } from './graph.ts';
+import { m } from './i18n.ts';
 
 export async function collectArrivals(
   env: Env,
@@ -84,7 +85,7 @@ export async function answerFor(
   // No coordinates and no origin stop: nothing to resolve from. Saying
   // "No buses running" here would be a claim about the network.
   if (!cands.length) {
-    return { ...needsSetupAnswer(nowMs), label: 'No start point', detail: 'Send your location, or a stop to start from' };
+    return { ...needsSetupAnswer(nowMs), label: m().noStartPoint, detail: m().noStartPointHint };
   }
 
   const byStop = await collectArrivals(
@@ -145,11 +146,11 @@ export async function answerFor(
  *  certain answer, even though no bus data was needed for it. */
 export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: number): Answer {
   return {
-    label: "You're here",
+    label: m().youreHere,
     // A place's stop is worth naming ("The Deck is at UTown"); a class's label
     // already says where it is ("GEA1000 @ UTown is at UTown" said it twice).
     detail:
-      destLabel && !destLabel.includes(' @ ') && destLabel !== stop.name && destLabel !== shortStop(stop.name, 14) ? `${destLabel} is at ${stop.name}` : `You're at ${stop.name}`,
+      destLabel && !destLabel.includes(' @ ') && destLabel !== stop.name && destLabel !== shortStop(stop.name, 14) ? m().destIsAt(destLabel, stop.name) : m().youreAt(stop.name),
     alt: null,
     stop: { code: stop.code, name: stop.name, confidence: 1 },
     quality: 'live',
@@ -164,8 +165,8 @@ export function arrivedAnswer(stop: Stop, destLabel: string | null, nowMs: numbe
  *  resolve. Not an error, and not a fake bus. */
 export function needsSetupAnswer(nowMs: number): Answer {
   return {
-    label: 'Set up',
-    detail: 'Send lat/lon for nearby buses, or ?to= a stop or venue',
+    label: m().setUp,
+    detail: m().setUpHint,
     alt: null,
     stop: { code: '', name: '', confidence: 0 },
     quality: 'unknown',

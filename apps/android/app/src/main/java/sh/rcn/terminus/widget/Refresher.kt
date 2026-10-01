@@ -32,6 +32,8 @@ import sh.rcn.terminus.Push
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import java.util.concurrent.TimeUnit
+import sh.rcn.terminus.R
+import sh.rcn.terminus.L
 
 /**
  * Keeping the widget true without a process running:
@@ -80,11 +82,11 @@ object Refresher {
             } else {
                 armFromCache(ctx, store)
             }
-            store.lastError = if (e.status == 401) "Device removed. Pair again in the app." else e.message
+            store.lastError = if (e.status == 401) L.s(R.string.device_removed) else e.message
         } catch (e: ParseError) {
-            store.lastError = "Unexpected answer from terminus"
+            store.lastError = L.s(R.string.unexpected_answer)
         } catch (e: Exception) {
-            store.lastError = "Offline"
+            store.lastError = L.s(R.string.offline)
             armFromCache(ctx, store)
         }
         // Widgets showing a place or Nearby (phase 8.3) keep counting down too.

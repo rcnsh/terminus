@@ -66,6 +66,8 @@ import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
 
 @Composable
 internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit) {
@@ -102,14 +104,14 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { Wordmark(MaterialTheme.typography.titleLarge) }
-            TextButton(onClick = onSettings) { Text("Settings") }
+            TextButton(onClick = onSettings) { Text(stringResource(R.string.settings)) }
         }
 
         state.update?.let { v ->
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("terminus $v is out", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/download/android".toUri())) }) { Text("Update") }
+                    Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
+                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/download/android".toUri())) }) { Text(stringResource(R.string.update)) }
                 }
             }
         }
@@ -117,13 +119,13 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         if (!hasLocation) {
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Column(Modifier.padding(12.dp)) {
-                    Text("Allow location so answers start from the stop you're nearest. Without it, terminus assumes you're where your last class was, or at home.")
+                    Text(stringResource(R.string.location_ask))
                     if (blocked) {
-                        TextButton(onClick = openSettings) { Text("Open settings to allow location") }
+                        TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings_location)) }
                     } else {
                         TextButton(onClick = {
                             askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                        }) { Text("Allow location") }
+                        }) { Text(stringResource(R.string.allow_location)) }
                     }
                 }
             }
@@ -133,8 +135,8 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         // the places after them scroll, and the edge fades while there's more.
         val chips = rememberScrollState()
         Row(Modifier.fadeEnd(chips).horizontalScroll(chips), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !state.showNearby && state.target == Target.Plan, onClick = { vm.select(Target.Plan) }, label = { Text("Next") })
-            FilterChip(selected = state.showNearby, onClick = vm::showNearby, label = { Text("Nearby") })
+            FilterChip(selected = !state.showNearby && state.target == Target.Plan, onClick = { vm.select(Target.Plan) }, label = { Text(stringResource(R.string.chip_next)) })
+            FilterChip(selected = state.showNearby, onClick = vm::showNearby, label = { Text(stringResource(R.string.chip_nearby)) })
             for (p in state.places) {
                 FilterChip(
                     selected = !state.showNearby && state.target == Target.SavedPlace(p.key),
@@ -157,16 +159,17 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         if (!state.showNearby && state.target == Target.Plan) state.day?.let { DayTimeline(it, state.removed, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved) }
         // Somewhere else: going there later today, planned like a class (phase 8.3).
         if (!state.showNearby && state.target != Target.Plan && state.paired) {
-            TimeButton("Go later today at…", null, vm::goLater, Modifier.padding(top = 8.dp), initial = ::soonOnCampus)
+            TimeButton(stringResource(R.string.go_later), null, vm::goLater, Modifier.padding(top = 8.dp), initial = ::soonOnCampus)
         }
 
         val footer = listOfNotNull(
             state.error,
-            state.fetchedAt?.let { "Updated ${clock(ctx, it)}" },
+            state.fetchedAt?.let { stringResource(R.string.updated_at, clock(ctx, it)) },
         ).joinToString(" · ")
+        val refreshing = stringResource(R.string.refreshing)
         Row(Modifier.padding(top = 8.dp).height(20.dp), verticalAlignment = Alignment.CenterVertically) {
             if (state.loading) {
-                CircularProgressIndicator(Modifier.size(12.dp).semantics { contentDescription = "Refreshing" }, strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.size(12.dp).semantics { contentDescription = refreshing }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
             }
             Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -175,7 +178,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         if (!state.showNearby && state.answer != null) {
             var reporting by remember { mutableStateOf<String?>(null) }
             var opened by remember { mutableStateOf(false) }
-            TextButton(onClick = { reporting = state.rawAnswers[state.target]; opened = true; vm.clearReportResult() }) { Text("Is this wrong?") }
+            TextButton(onClick = { reporting = state.rawAnswers[state.target]; opened = true; vm.clearReportResult() }) { Text(stringResource(R.string.is_this_wrong)) }
             if (opened) {
                 ReportDialog(
                     sending = state.reportSending,
@@ -193,23 +196,23 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
 
         Spacer(Modifier.height(16.dp))
         NotifyToggle(
-            "Notify me when to leave for class",
-            "A heads-up 5 minutes before you need to set off, then the ride or the next way there, without asking you anything.",
+            stringResource(R.string.notify_leave),
+            stringResource(R.string.notify_leave_hint),
             state.leaveAlerts, vm::setLeaveAlerts, openSettings,
         )
         NotifyToggle(
-            "Live notification during trips",
-            "During each trip, from time to go until you're there, keeps the next bus and a countdown in your notifications and the widget up to date. It checks for new times every 30 seconds then, which uses more battery.",
+            stringResource(R.string.live_notification),
+            stringResource(R.string.live_notification_hint),
             state.liveUpdates, vm::setLiveUpdates, openSettings,
         )
         DetectToggle(state.detectTrips, vm::setDetectTrips, openSettings)
         if ((state.leaveAlerts || state.liveUpdates) && !exact) {
             Text(
-                "\"Alarms & reminders\" is off for terminus, so the heads-up can come a few minutes late, and the live notification may wait for the next update to start.",
+                stringResource(R.string.exact_off),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) { Text("Allow alarms & reminders") }
+            TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) { Text(stringResource(R.string.allow_exact)) }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -257,8 +260,8 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
         Switch(checked = on, onCheckedChange = null)
     }
     if (refused && !on) {
-        Text("Notifications are off for terminus.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = openSettings) { Text("Open settings") }
+        Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings)) }
     }
 }
 
@@ -299,10 +302,9 @@ private fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings:
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Notice when I board")
+            Text(stringResource(R.string.detect))
             Text(
-                "During a trip, the live notification uses your location to tell when you're on the bus, missed it, or are there, and keeps your plan right on every device. " +
-                    "It starts when you open terminus or tap its notification or widget during the trip. Only what it means is kept, never where you were.",
+                stringResource(R.string.detect_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -311,8 +313,8 @@ private fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings:
         Switch(checked = on, onCheckedChange = null)
     }
     if (refused && !on) {
-        Text("terminus needs precise location and notifications for this.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = openSettings) { Text("Open settings") }
+        Text(stringResource(R.string.detect_needs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings)) }
     }
 }
 
@@ -322,27 +324,27 @@ private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: 
     var note by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("What was wrong?") },
+        title = { Text(stringResource(R.string.report_title)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = note,
                     onValueChange = { if (it.length <= 1000) note = it },
-                    placeholder = { Text("The D2 never came, the walk is longer…") },
+                    placeholder = { Text(stringResource(R.string.report_placeholder)) },
                     minLines = 2,
                     maxLines = 5,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Sends this answer and your note, with your email address (if you've added one) so you can get a reply.",
+                    stringResource(R.string.report_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onSend(note) }, enabled = !sending) { Text("Send") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onSend(note) }, enabled = !sending) { Text(stringResource(R.string.send)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 

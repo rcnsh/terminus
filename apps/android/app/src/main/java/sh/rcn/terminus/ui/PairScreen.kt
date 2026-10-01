@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import sh.rcn.terminus.BuildConfig
+import androidx.compose.ui.res.stringResource
+import sh.rcn.terminus.R
 
 /** The site as people type it: terminus.rcn.sh, or the beta's. */
 private val SITE_HOST = BuildConfig.SITE.removePrefix("https://")
@@ -35,14 +37,14 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Wordmark(MaterialTheme.typography.headlineMedium)
         val ctx = LocalContext.current
-        Text("Pair this phone with your account. On a phone that's signed in, go to Settings, then Add a device; or on ${SITE_HOST}/account, choose Pair a device. Then enter the 6-character code here, or scan the QR code with your camera.")
+        Text(stringResource(R.string.pair_intro, SITE_HOST))
         TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }) {
-            Text("Open ${SITE_HOST}/account")
+            Text(stringResource(R.string.open_url, "$SITE_HOST/account"))
         }
         OutlinedTextField(
             value = code,
             onValueChange = { v -> code = v.filter { it.isLetterOrDigit() }.uppercase().take(6) },
-            label = { Text("Pairing code") },
+            label = { Text(stringResource(R.string.pairing_code)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { if (code.length == 6) onPair(code) }),
@@ -51,7 +53,7 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit) {
         )
         state.pairError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Button(onClick = { onPair(code) }, enabled = code.length == 6 && !state.pairing, modifier = Modifier.fillMaxWidth()) {
-            Text(if (state.pairing) "Pairing…" else "Pair")
+            Text(if (state.pairing) stringResource(R.string.pairing) else stringResource(R.string.pair))
         }
     }
 }

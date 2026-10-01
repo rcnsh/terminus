@@ -112,7 +112,7 @@ struct NextAnswer: Decodable {
     func leaveHeadline(now: Date = Date()) -> String? {
         guard let at = leaveAt else { return nil }
         if card?.phase == "waiting" { return card?.leaveBy }
-        return now >= at ? "Leave now" : card?.leaveBy
+        return now >= at ? L("Leave now") : card?.leaveBy
     }
     var catchHow: String? { card?.catch }
     var catchArrive: String? { card?.arrive }
@@ -146,7 +146,7 @@ private enum ISOFormats {
 /// Campus time. Class times and "Arrive 09:52" come from the server in
 /// Singapore time, so bus times must too, even on a Mac set to another zone.
 func campusTime(_ d: Date) -> String {
-    d.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: TimeZone(identifier: "Asia/Singapore")!))
+    d.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Lang.locale, timeZone: TimeZone(identifier: "Asia/Singapore")!))
 }
 
 
@@ -319,16 +319,16 @@ struct DayPlan: Decodable {
 
         /// "Leave by 09:38 · D2 from PGP", "On the D2 · off at UTown · arrive 09:52", or nil.
         var sub: String? {
-            if status == "skipped" { return "Not going today" }
+            if status == "skipped" { return L("Not going today") }
             if status == "done" { return nil }
             if let b = onBus {
-                return (["On the \(b.svc)", b.off.map { "off at \($0)" }, b.arrive.flatMap(parseISODate).map { "arrive \(campusTime($0))" }] as [String?]).compactMap { $0 }.joined(separator: " · ")
+                return ([L("On the %@", b.svc), b.off.map { L("off at %@", $0) }, b.arrive.flatMap(parseISODate).map { L("arrive %@", campusTime($0)) }] as [String?]).compactMap { $0 }.joined(separator: " · ")
             }
             guard let l = leave, let at = parseISODate(l.at) else { return nil }
-            let how = l.svc.map { "\($0) from \(l.stop ?? fromName ?? "")" } ?? "walk"
-            return (["Leave by \(l.estimated == true ? "~" : "")\(campusTime(at))", how, timing?.status == "late" ? timing?.text : nil] as [String?]).compactMap { $0 }.joined(separator: " · ")
+            let how = l.svc.map { L("%@ from %@", $0, l.stop ?? fromName ?? "") } ?? L("walk")
+            return ([L("Leave by %@", l.estimated == true ? L("~%@", campusTime(at)) : campusTime(at)), how, timing?.status == "late" ? timing?.text : nil] as [String?]).compactMap { $0 }.joined(separator: " · ")
         }
-        var title: String { kind == "home" ? "Home, from \(fromName ?? "your last class")" : label }
+        var title: String { kind == "home" ? L("Home, from %@", fromName ?? L("your last class")) : label }
     }
     var items: [Item]
     let note: String?
@@ -373,7 +373,9 @@ struct ApiError: LocalizedError {
 func sentence(_ text: String) -> String {
     guard let first = text.first else { return text }
     let s = first.uppercased() + text.dropFirst()
-    return ".!?".contains(s.last!) ? s : s + "."
+    if ".!?。！？".contains(s.last!) { return s }
+    // Chinese (phase 10) ends with a full-width stop.
+    return s.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) } ? s + "。" : s + "."
 }
 
 struct Api {
@@ -548,6 +550,8 @@ struct Api {
         req.setValue("application/json", forHTTPHeaderField: "accept")
         // So the server can tell the Mac from other CFNetwork clients, and versions apart.
         req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
+        // The server writes answers, cards and errors in the app's language.
+        req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
         if let json {
             req.setValue("application/json", forHTTPHeaderField: "content-type")

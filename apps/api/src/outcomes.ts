@@ -15,6 +15,7 @@
  */
 
 import { sgtDate } from './trip.ts';
+import { m } from './i18n.ts';
 
 export type Outcome = 'boarded' | 'missed' | 'skipped' | 'arrived' | 'none';
 export type PrefKind = 'earlier' | 'quiet';
@@ -127,11 +128,11 @@ export async function tripPrefs(db: D1Database, userId: string, nowMs: number, l
       // "Not going" on its last three occurrences (the list is newest first).
       const last = list.slice(0, SKIPS);
       if (!quiet.has(key) && !has(key, 'no-quiet', DISMISS_DAYS * DAY_MS) && last.length === SKIPS && last.every((o) => o.outcome === 'skipped')) {
-        return { id: `quiet:${key}`, text: `You've skipped ${label} ${SKIPS} weeks running. Stop reminders for it?`, accept: 'Stop reminders', dismiss: 'Keep them' };
+        return { id: `quiet:${key}`, text: m().suggestQuiet(label, SKIPS), accept: m().stopReminders, dismiss: m().keepThem };
       }
       const misses = list.filter((o) => o.outcome === 'missed' && nowMs - o.at < MISS_DAYS * DAY_MS).length;
       if (!earlier.has(key) && !has(key, 'no-earlier', DISMISS_DAYS * DAY_MS) && misses >= MISSES) {
-        return { id: `earlier:${key}`, text: `You've missed the bus to ${label} ${misses} times this month. Leave one bus earlier for it?`, accept: 'Leave earlier', dismiss: 'No thanks' };
+        return { id: `earlier:${key}`, text: m().suggestEarlier(label, misses), accept: m().leaveEarlier, dismiss: m().noThanks };
       }
     }
     return null;

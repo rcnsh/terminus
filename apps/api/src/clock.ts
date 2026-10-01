@@ -6,14 +6,16 @@
  * (`?h12=1`); without it, 24-hour, which is what the API has always sent.
  */
 
+import { m } from './i18n.ts';
+
 const SGT_MS = 8 * 3_600_000;
 
 /** "18:36", or "6:36 PM" with h12. */
 export function clockMin(minutes: number, h12 = false): string {
   const h = Math.floor(minutes / 60) % 24;
-  const m = String(minutes % 60).padStart(2, '0');
-  if (!h12) return `${String(h).padStart(2, '0')}:${m}`;
-  return `${h % 12 || 12}:${m} ${h < 12 ? 'AM' : 'PM'}`;
+  const mm = String(minutes % 60).padStart(2, '0');
+  if (!h12) return `${String(h).padStart(2, '0')}:${mm}`;
+  return m().clock12(`${h % 12 || 12}:${mm}`, h >= 12);
 }
 
 /** An instant as campus clock time. */
@@ -27,6 +29,6 @@ export function clockAt(ms: number, h12 = false): string {
  * "~3 min late". Rounded to the minute, so the card and the pill agree.
  */
 export function slackText(slackS: number): string {
-  const m = Math.round(slackS / 60);
-  return m > 0 ? `${m} min early` : m === 0 ? 'just in time' : `~${-m} min late`;
+  const n = Math.round(slackS / 60);
+  return n > 0 ? m().earlyBy(n) : n === 0 ? m().justInTime : m().lateBy(-n);
 }

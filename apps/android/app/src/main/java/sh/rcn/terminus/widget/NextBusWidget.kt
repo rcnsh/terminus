@@ -54,6 +54,7 @@ import sh.rcn.terminus.ui.BrandDark
 import sh.rcn.terminus.ui.BrandLight
 import sh.rcn.terminus.ui.MainActivity
 import java.util.Date
+import sh.rcn.terminus.L
 
 /**
  * Two widgets in the picker. "Next bus" is one glanceable line; "Next bus +
@@ -157,7 +158,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                 when {
                     !paired -> {
                         Text("terminus", style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp))
-                        Text(error ?: "Tap to pair this phone", style = muted, maxLines = 2)
+                        Text(error ?: L.s(R.string.tap_to_pair), style = muted, maxLines = 2)
                     }
                     mode == Mode.Nearby -> {
                         NearbyBody(chosen, large)
@@ -169,8 +170,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Footer(ctx, chosen.fetchedAt, chosen.error, roomy)
                     }
                     answer == null -> {
-                        Text(if (onTimetable) error ?: "Loading…" else "${mode.label} · ${error ?: "Loading…"}", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
-                        Text("Tap to refresh", style = muted)
+                        Text(if (onTimetable) error ?: L.s(R.string.loading) else "${mode.label} · ${error ?: L.s(R.string.loading)}", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
+                        Text(L.s(R.string.tap_to_refresh), style = muted)
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
                             ModeRow(ctx, bottom)
@@ -232,11 +233,11 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         val now = System.currentTimeMillis()
                         Text(listOfNotNull(answer.phaseText, answer.destLabel).joinToString(" · "), style = muted, maxLines = 1)
                         Text(
-                            "Off at ${ride.stops.last()} ${clock(ctx, ride.arriveMs)}",
+                            L.s(R.string.off_at_time, ride.stops.last(), clock(ctx, ride.arriveMs)),
                             style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
                             maxLines = 1,
                         )
-                        Text(if (error == UPDATING) UPDATING else ride.nextText(now), style = muted, maxLines = 1)
+                        Text(if (error == UPDATING) L.s(R.string.updating) else ride.nextText(now), style = muted, maxLines = 1)
                         if (roomy) {
                             Spacer(GlanceModifier.height(6.dp))
                             LinearProgressIndicator(
@@ -262,7 +263,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         val fmt = { ms: Long -> clock(ctx, ms) }
                         val missed = answer.card?.takeIf { it.phase == "missed" }?.line?.substringBefore(" · ")
                         Text(
-                            listOfNotNull(missed ?: answer.phaseText?.substringBefore(':'), answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "),
+                            listOfNotNull(missed ?: answer.phaseText?.let(::phaseHead), answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "),
                             style = muted, maxLines = 1,
                         )
                         Text(
@@ -279,8 +280,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             maxLines = 1,
                         )
                         val line = when {
-                            error == UPDATING -> UPDATING
-                            old -> "Old times · tap ↻ to refresh"
+                            error == UPDATING -> L.s(R.string.updating)
+                            old -> L.s(R.string.old_times)
                             error != null && !roomy -> "$error · ${answer.catchLine}"
                             else -> answer.catchLine.orEmpty()
                         }
@@ -289,7 +290,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         if (large && !old) {
                             if (answer.leaveNote != null) Text(answer.leaveNote, style = tiny, maxLines = 2)
                             // Deliberately shorter than the card's estimate note: one line of widget.
-                            else if (answer.leaveEstimated) Text("~ estimated from the usual bus gap", style = tiny, maxLines = 1)
+                            else if (answer.leaveEstimated) Text(L.s(R.string.estimated_gap), style = tiny, maxLines = 1)
                             else answer.qualityText?.let { Text(it, style = muted, maxLines = 1) }
                         }
                         if (large) {
@@ -301,9 +302,9 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     }
                     else -> {
                         val heading = listOfNotNull(
-                            answer.phaseText?.substringBefore(':'),
-                            answer.destLabel ?: if (answer.mode == "nearby") "Nearby" else null,
-                            if (answer.why == "gap-home") "long gap" else null,
+                            answer.phaseText?.let(::phaseHead),
+                            answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null,
+                            if (answer.why == "gap-home") L.s(R.string.long_gap_short) else null,
                         ).joinToString(" · ")
                         if (heading.isNotEmpty()) Text(heading, style = muted, maxLines = 1)
                         // A clock time stays true until the bus leaves; "4 min"
@@ -322,8 +323,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         )
                         // A compact widget has no footer, so a problem goes on this line.
                         val line = when {
-                            error == UPDATING -> UPDATING
-                            old -> "Old times · tap ↻ to refresh"
+                            error == UPDATING -> L.s(R.string.updating)
+                            old -> L.s(R.string.old_times)
                             error != null && !roomy -> "$error · ${answer.detail}"
                             else -> answer.detail
                         }
@@ -359,7 +360,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             modifier = GlanceModifier
                 .size(40.dp)
                 .cornerRadius(20.dp)
-                .semantics { contentDescription = "Refresh" }
+                .semantics { contentDescription = L.s(R.string.refresh) }
                 .clickable(action),
             contentAlignment = Alignment.Center,
         ) {
@@ -375,7 +376,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     /** "Updated 17:14", with any problem in front, where there's room. */
     @Composable
     private fun Footer(ctx: Context, fetchedAt: Long?, error: String?, roomy: Boolean) {
-        val stamp = fetchedAt?.let { "Updated ${clock(ctx, it)}" }
+        val stamp = fetchedAt?.let { L.s(R.string.updated_at, clock(ctx, it)) }
         val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
         if (roomy && foot.isNotEmpty()) Text(foot, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp), maxLines = 1)
     }
@@ -411,7 +412,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         .background(if (on) colors.primaryContainer else colors.secondaryContainer)
                         .cornerRadius(14.dp)
                         .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .semantics { contentDescription = if (on) "${m.label}, showing. Double tap to open terminus." else "Show ${m.label}" }
+                        .semantics { contentDescription = if (on) L.s(R.string.mode_showing, m.label) else L.s(R.string.mode_show, m.label) }
                         .clickable(chipAction(ctx, m, b.appWidgetId)),
                 ) {
                     Text(m.label, style = TextStyle(color = if (on) colors.onPrimaryContainer else colors.onSecondaryContainer, fontSize = 13.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal), maxLines = 1)
@@ -431,21 +432,21 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val old = age > NEARBY_OLD_S
         val first = stops?.firstOrNull()
         if (first == null) {
-            Text("Nearby", style = muted, maxLines = 1)
-            Text(if (chosen.error == UPDATING || chosen.json == null) "Checking…" else chosen.error ?: "No stops near you", style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
+            Text(L.s(R.string.chip_nearby), style = muted, maxLines = 1)
+            Text(if (chosen.error == UPDATING || chosen.json == null) L.s(R.string.checking) else chosen.error ?: L.s(R.string.no_stops_near), style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
             return
         }
-        val walk = if (first.walkS < 60) "here" else "${(first.walkS + 30) / 60} min walk"
-        Text("Nearby · ${first.name} · $walk", style = muted, maxLines = 1)
+        val walk = if (first.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (first.walkS + 30) / 60)
+        Text(L.s(R.string.nearby_line, first.name, walk), style = muted, maxLines = 1)
         Text(
-            departures(first, age, 2).ifEmpty { if (first.available) "No buses due" else "No live data" },
+            departures(first, age, 2).ifEmpty { if (first.available) L.s(R.string.no_buses_due) else L.s(R.string.no_live_data) },
             style = TextStyle(color = if (old) colors.onSurfaceVariant else colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
             maxLines = 1,
         )
-        val others = stops.drop(1).take(if (large) 2 else 1).mapNotNull { s -> departures(s, age, 3).takeIf { it.isNotEmpty() }?.let { "${s.name}: $it" } }
+        val others = stops.drop(1).take(if (large) 2 else 1).mapNotNull { s -> departures(s, age, 3).takeIf { it.isNotEmpty() }?.let { L.s(R.string.stop_departures, s.name, it) } }
         val lines = when {
-            chosen.error == UPDATING -> listOf(UPDATING)
-            old -> listOf("Old times · tap ↻ to refresh")
+            chosen.error == UPDATING -> listOf(L.s(R.string.updating))
+            old -> listOf(L.s(R.string.old_times))
             // The rest of this stop's buses, then the next stops, a line each where there's room.
             large -> listOfNotNull(departures(first, age, 4, skip = 2).takeIf { it.isNotEmpty() }) + others
             else -> listOf((listOfNotNull(departures(first, age, 4, skip = 2).takeIf { it.isNotEmpty() }) + others).joinToString(" · "))
@@ -469,10 +470,10 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     /** Nearby, as a sentence for screen readers. */
     private fun nearbySpoken(chosen: ModeState): String {
         val stops = chosen.json?.let { runCatching { sh.rcn.terminus.parseNearby(org.json.JSONObject(it)) }.getOrNull() }
-        val first = stops?.firstOrNull() ?: return "terminus, buses near you. ${chosen.error ?: "Checking"}. Double tap to open terminus."
+        val first = stops?.firstOrNull() ?: return L.s(R.string.a11y_nearby_none, chosen.error ?: L.s(R.string.a11y_checking))
         val age = chosen.fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
-        val due = departures(first, age, 3).replace(" · ", ", ").ifEmpty { "no buses due" }
-        return "Buses near you. At ${first.name}: $due. Double tap to open terminus."
+        val due = departures(first, age, 3).replace(" · ", ", ").ifEmpty { L.s(R.string.a11y_no_buses) }
+        return L.s(R.string.a11y_nearby, first.name, due)
     }
 }
 
@@ -488,37 +489,37 @@ internal fun chipAction(ctx: Context, mode: Mode, appWidgetId: Int): androidx.gl
 
 /** What the widget says, as a sentence for screen readers. */
 fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt: Long?, error: String?): String {
-    if (!paired) return "terminus. Not paired. Double tap to pair this phone."
-    if (answer == null) return "terminus. ${error ?: "Loading"}. Double tap to open terminus."
+    if (!paired) return L.s(R.string.a11y_not_paired)
+    if (answer == null) return L.s(R.string.a11y_loading, error ?: L.s(R.string.a11y_loading_word))
     val old = isOld(answer, fetchedAt, System.currentTimeMillis())
     val ride = answer.card?.ride?.takeIf { answer.card.phase == "riding" }
     if (ride != null) {
         val now = System.currentTimeMillis()
         return listOfNotNull(
-            "On the ${ride.svc}" + (answer.destLabel?.let { ", to $it" } ?: ""),
-            "Off at ${ride.stops.last()} at ${clock(ctx, ride.arriveMs)}",
+            answer.destLabel?.let { L.s(R.string.a11y_on_the_to, ride.svc, it) } ?: L.s(R.string.on_the, ride.svc),
+            L.s(R.string.a11y_off_at, ride.stops.last(), clock(ctx, ride.arriveMs)),
             ride.nextText(now).replace(" · ", ", "),
-        ).joinToString(". ") + ". Double tap to open terminus."
+        ).joinToString(". ") + "." + L.s(R.string.a11y_open)
     }
     if (answer.isClassPlan && !old) {
         val fmt = { ms: Long -> clock(ctx, ms) }
         val now = System.currentTimeMillis()
         return listOfNotNull(
-            answer.destLabel?.let { "$it, starts ${answer.classAtMs?.let(fmt)}" },
+            answer.destLabel?.let { L.s(R.string.a11y_starts, it, answer.classAtMs?.let(fmt).orEmpty()) },
             answer.leaveHeadline(now),
             answer.catchLine?.replace(" · ", ", "),
             answer.goNowLine?.replace(" · ", ", "),
-        ).joinToString(". ") + ". Double tap to open terminus."
+        ).joinToString(". ") + "." + L.s(R.string.a11y_open)
     }
     val parts = listOfNotNull(
-        answer.destLabel?.let { "To $it" },
-        if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", ", leaves "),
-        if (old) "These times are old" else answer.detail.replace(" · ", ", "),
+        answer.destLabel?.let { L.s(R.string.a11y_to, it) },
+        if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", L.s(R.string.a11y_leaves)),
+        if (old) L.s(R.string.a11y_old) else answer.detail.replace(" · ", ", "),
         answer.leaveText(System.currentTimeMillis())?.takeIf { !old }?.replace(" · ", ", "),
         answer.timingText?.takeIf { !old },
         error?.takeIf { it != UPDATING },
     )
-    return parts.joinToString(". ") + ". Double tap to open terminus."
+    return parts.joinToString(". ") + "." + L.s(R.string.a11y_open)
 }
 
 /** The app's brand colours, so the widget doesn't take the wallpaper's. */
@@ -549,7 +550,11 @@ class RefreshAction : ActionCallback {
     }
 }
 
+/** Stored as the error while an update is under way; shown as R.string.updating. */
 const val UPDATING = "Updating…"
+
+/** "Missed it: here is the next way there" -> "Missed it": the phase's head, either colon. */
+internal fun phaseHead(text: String) = text.substringBefore(':').substringBefore('：')
 
 open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = widget

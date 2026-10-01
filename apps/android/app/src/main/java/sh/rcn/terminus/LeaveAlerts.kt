@@ -133,8 +133,8 @@ object LeaveAlerts {
     private fun post(ctx: Context, answer: NextAnswer, now: Long) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Time to leave", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "When to set off for your next class"
+            NotificationChannel(CHANNEL, L.s(R.string.channel_leave), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = L.s(R.string.channel_leave_desc)
             },
         )
         val fmt = { ms: Long -> clock(ctx, ms) }
@@ -146,7 +146,7 @@ object LeaveAlerts {
             card?.phase == "riding" || card?.phase == "missed" -> (card.line ?: answer.label) to answer.detail
             else -> (answer.leaveHeadline(now) ?: return) to (answer.catchLine ?: answer.destLabel.orEmpty())
         }
-        val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · ")
+        val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · ")
         val open = PendingIntent.getActivity(
             ctx, 0, MainActivity.intentFor(ctx),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

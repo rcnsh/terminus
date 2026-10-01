@@ -1,0 +1,144 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.75
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "high",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 360,
+      "crowd": "medium",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "R2",
+      "etaS": 1080,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 420,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D1",
+      "etaS": 1020,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "R2 · 6 分钟",
+  "detail": "PGP · 步行 5 分钟 · 约 16 分钟 到 GEA1000 @ UTown · 人渐多 · 或 D2，14 分钟后",
+  "alt": "D2 · 14 分钟 · PGP",
+  "departsAt": "2026-08-27T01:06:00Z",
+  "arriveAt": "2026-08-27T01:15:30Z",
+  "leave": {
+    "at": "2026-08-27T01:00:00Z",
+    "estimated": false,
+    "svc": "R2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "board": "2026-08-27T01:06:00Z",
+    "arrive": "2026-08-27T01:15:30Z",
+    "note": null
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "GEA1000 @ UTown",
+    "why": "class"
+  },
+  "timing": {
+    "status": "late",
+    "text": "约迟到 11 分钟",
+    "classAt": "2026-08-27T01:05:00Z",
+    "reachAt": "2026-08-27T01:15:30Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T01:05:00Z",
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T01:05:00Z",
+    "crowd": "人渐多",
+    "quality": null,
+    "leaveBy": "09:00 前出发",
+    "leaveVia": "在 PGP 搭 09:06 的 R2",
+    "catch": "在 PGP 搭 09:06 的 R2",
+    "arrive": "09:15 到达 · 约迟到 10 分钟",
+    "catchLine": "在 PGP 搭 09:06 的 R2 · 09:15 到达，约迟到 10 分钟",
+    "late": true,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "heading",
+    "phaseText": "在路上",
+    "glance": "R2 09:06",
+    "line": "在 PGP 搭 09:06 的 R2 · 09:15 到达 · 约迟到 10 分钟",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "不去了",
+        "trip": "4:545:UTOWN"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:05:00Z",
+    "ask": null,
+    "askMuted": false,
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": {
+      "name": "PGP",
+      "lat": 1.291765,
+      "lon": 103.780419
+    }
+  }
+}

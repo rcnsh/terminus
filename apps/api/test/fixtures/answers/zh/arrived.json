@@ -1,0 +1,61 @@
+{
+  "label": "你已经在这里",
+  "detail": "你在 COM 3",
+  "alt": null,
+  "stop": {
+    "code": "COM3",
+    "name": "COM 3",
+    "confidence": 1
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [],
+  "arrived": true,
+  "leave": null,
+  "mode": "trip",
+  "dest": {
+    "to": "COM3",
+    "label": "COM 3",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "card": {
+    "kind": "arrived",
+    "staleAt": "2026-08-27T01:15:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "已到达",
+    "line": "你已经在这里 · 你在 COM 3",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:15:00Z",
+    "ask": null,
+    "askMuted": false,
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": null
+  }
+}

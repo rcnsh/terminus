@@ -9,7 +9,7 @@
 // - Signing out, deleting the account, or a 401 empties the kept replies:
 //   they belong to one account and must not outlive it.
 
-const SHELL = 'shell-v2';
+const SHELL = 'shell-v3';
 const DATA = 'data-v1';
 const SHELL_FILES = [
   '/app/',
@@ -19,6 +19,8 @@ const SHELL_FILES = [
   '/account/preview.js',
   '/account/account.css',
   '/assets/site.css',
+  '/assets/i18n.js',
+  '/assets/zh.js',
   '/assets/mark.svg',
   '/favicon.svg',
   '/assets/icons/icon-192.png',
@@ -127,8 +129,12 @@ async function notifyFromCard(urgent, fetched) {
   }
   // A push must always show something (iOS insists), even when the card can't be fetched.
   if (!a?.card) {
-    return self.registration.showNotification('terminus', { body: 'Your trip has changed. Open terminus to see it.', tag: 'trip', icon: '/assets/icons/icon-192.png' });
+    const zh = /^zh/i.test(self.navigator.language ?? '');
+    const body = zh ? '你的行程有变化。打开 terminus 查看。' : 'Your trip has changed. Open terminus to see it.';
+    return self.registration.showNotification('terminus', { body, tag: 'trip', icon: '/assets/icons/icon-192.png' });
   }
+  // The server wrote the card in the account's language; the few words here follow it.
+  const zh = /[\u4e00-\u9fff]/.test(`${a.label} ${a.detail ?? ''}`);
   const c = a.card;
   let title;
   let body;
@@ -136,10 +142,10 @@ async function notifyFromCard(urgent, fetched) {
     title = c.line ?? a.label;
     body = a.detail ?? '';
   } else {
-    title = c.phase !== 'waiting' && a.leave?.at && Date.now() >= Date.parse(a.leave.at) ? 'Leave now' : (c.leaveBy ?? a.label);
+    title = c.phase !== 'waiting' && a.leave?.at && Date.now() >= Date.parse(a.leave.at) ? (zh ? '现在出发' : 'Leave now') : (c.leaveBy ?? a.label);
     body = c.catch ?? a.dest?.label ?? '';
   }
-  const where = [a.dest?.label, a.timing?.classAt ? `starts ${hhmm(a.timing.classAt)}` : null].filter(Boolean).join(' · ');
+  const where = [a.dest?.label, a.timing?.classAt ? (zh ? `${hhmm(a.timing.classAt)} 开始` : `starts ${hhmm(a.timing.classAt)}`) : null].filter(Boolean).join(' · ');
   // No buttons: nothing asks what happened, and plans ("Not going") are made
   // in the app. A tap opens it.
   return self.registration.showNotification(title, {

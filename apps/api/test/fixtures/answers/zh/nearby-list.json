@@ -1,0 +1,75 @@
+{
+  "stops": [
+    {
+      "stop": {
+        "code": "PGPR",
+        "name": "PGP Foyer"
+      },
+      "distM": 192,
+      "walkS": 175,
+      "available": true,
+      "board": [
+        {
+          "svc": "D2",
+          "etaS": 240,
+          "quality": "live",
+          "ambiguousBerth": false
+        },
+        {
+          "svc": "A2",
+          "etaS": null,
+          "quality": "scheduled",
+          "ambiguousBerth": false
+        },
+        {
+          "svc": "K",
+          "etaS": null,
+          "quality": "scheduled",
+          "ambiguousBerth": false
+        }
+      ]
+    },
+    {
+      "stop": {
+        "code": "PGP",
+        "name": "PGP"
+      },
+      "distM": 266,
+      "walkS": 243,
+      "available": true,
+      "board": [
+        {
+          "svc": "D2",
+          "etaS": 240,
+          "quality": "live",
+          "ambiguousBerth": false
+        },
+        {
+          "svc": "R2",
+          "etaS": 360,
+          "quality": "live",
+          "ambiguousBerth": false
+        },
+        {
+          "svc": "A1",
+          "etaS": 540,
+          "quality": "live",
+          "ambiguousBerth": false
+        },
+        {
+          "svc": "K",
+          "etaS": null,
+          "quality": "scheduled",
+          "ambiguousBerth": false
+        },
+        {
+          "svc": "R1",
+          "etaS": null,
+          "quality": "scheduled",
+          "ambiguousBerth": false
+        }
+      ]
+    }
+  ],
+  "asOf": "2026-08-27T01:00:00.000Z"
+}

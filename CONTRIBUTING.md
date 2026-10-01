@@ -27,4 +27,21 @@ node apps/api/scripts/dev-stub.mjs        # local API with fake buses
   `TERMINUS_API_BASE=http://localhost:8787` points it at the dev server, and
   `TERMINUS_SNAPSHOT=<dir>` on a debug build renders every state to PNGs.
 
+## English and Chinese
+
+Everything a user reads is in English and Simplified Chinese. Every new
+string needs both; each platform's tests fail on one without its Chinese:
+
+- **API:** `apps/api/src/i18n.ts`, read with `m()`. Errors stay English in
+  the code (`json({ error: '...' })`) and get an entry in `ERRORS_ZH`. Answers
+  are checked word for word by the Chinese goldens in `test/fixtures/answers/zh`.
+- **Android:** `res/values/strings.xml` and `res/values-zh/strings.xml`;
+  `L.s(R.string.x)` outside Compose. Lint fails on a missing translation.
+- **Website:** `t('English {0}', value)` in scripts; page text needs nothing
+  in the HTML. The Chinese, keyed by the English, is in `assets/zh.js`.
+- **Mac:** `L("English %@", value)`; the Chinese is in
+  `Support/zh-Hans.lproj/Localizable.strings`.
+
+Place and service names (KR MRT, COM3, D2) stay English in both.
+
 Please include tests for API changes, and screenshots for UI changes.

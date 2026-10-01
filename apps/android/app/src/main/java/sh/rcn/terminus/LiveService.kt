@@ -193,8 +193,8 @@ class LiveService : Service() {
         private fun build(ctx: Context, answer: NextAnswer?, watching: Boolean = false): Notification {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             nm?.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Live bus times", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "The next bus, kept up to date while your day is on"
+                NotificationChannel(CHANNEL, L.s(R.string.channel_live), NotificationManager.IMPORTANCE_LOW).apply {
+                    description = L.s(R.string.channel_live_desc)
                     setShowBadge(false)
                 },
             )
@@ -213,7 +213,7 @@ class LiveService : Service() {
                 .setOnlyAlertOnce(true)
                 .setContentIntent(open)
                 .setCategory(Notification.CATEGORY_STATUS)
-            b.addAction(Notification.Action.Builder(null, "Turn off", stop).build())
+            b.addAction(Notification.Action.Builder(null, L.s(R.string.turn_off), stop).build())
             // "Notice when I board": on while following, offered while not (a tap is what lets it start).
             if (Store(ctx).detectTrips && Locator.hasPrecise(ctx)) {
                 val action = if (watching) ACTION_UNWATCH else ACTION_WATCH
@@ -221,9 +221,9 @@ class LiveService : Service() {
                     ctx, if (watching) 6 else 7, Intent(ctx, LiveService::class.java).setAction(action),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
-                b.addAction(Notification.Action.Builder(null, if (watching) "Stop following" else "Follow this trip", pi).build())
+                b.addAction(Notification.Action.Builder(null, if (watching) L.s(R.string.stop_following) else L.s(R.string.follow_trip), pi).build())
             }
-            if (answer == null) return b.setContentTitle("terminus").setContentText("Checking…").build()
+            if (answer == null) return b.setContentTitle("terminus").setContentText(L.s(R.string.checking)).build()
             // During a trip, a Live Update (Android 16 QPR1, API 36.1): kept at
             // the top of the shade and on the lock screen, with the card's
             // glance ("Off 9:52") as the chip in the status bar.
@@ -248,7 +248,7 @@ class LiveService : Service() {
                 b.setContentTitle(answer.leaveHeadline(now))
                     .setContentText(catch)
                     .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(catch, answer.leaveNote, answer.goNowLine).joinToString("\n")))
-                    .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "))
+                    .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "))
                 val leaveAt = answer.leaveAtMs!!
                 if (leaveAt > now) b.setWhen(leaveAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
                 else b.setShowWhen(false)
@@ -259,7 +259,7 @@ class LiveService : Service() {
             b.setContentTitle(title)
                 .setContentText(leave ?: answer.detail)
                 .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(leave, answer.detail).joinToString("\n")))
-            (answer.destLabel ?: if (answer.mode == "nearby") "Nearby" else null)?.let { b.setSubText(it) }
+            (answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null)?.let { b.setSubText(it) }
             // The system ticks this down; nothing to redraw between refreshes.
             val departs = answer.departsAtMs
             if (departs != null && departs > now && answer.quality != "unknown") {

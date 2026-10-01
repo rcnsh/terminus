@@ -1,0 +1,55 @@
+{
+  "label": "今天没有课",
+  "detail": "下一节：CS2030 @ COM1，明天 10:00",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "ended",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [],
+  "mode": "free",
+  "dest": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T10:00:00Z",
+  "card": {
+    "kind": "free",
+    "staleAt": "2026-08-27T10:00:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "没有课",
+    "line": "今天没有课 · 下一节：CS2030 @ COM1，明天 10:00",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T10:00:00Z",
+    "ask": null,
+    "askMuted": false,
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": null
+  }
+}

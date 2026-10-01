@@ -30,6 +30,8 @@ import sh.rcn.terminus.isNewer
 import sh.rcn.terminus.deviceName
 import sh.rcn.terminus.widget.redrawWidgets
 import sh.rcn.terminus.widget.Refresher
+import sh.rcn.terminus.R
+import sh.rcn.terminus.L
 
 data class UiState(
     val paired: Boolean = false,
@@ -90,7 +92,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: ApiError) {
                 _state.update { it.copy(pairing = false, pairError = e.message) }
             } catch (e: Exception) {
-                _state.update { it.copy(pairing = false, pairError = "Couldn't reach terminus. Check your connection and try again.") }
+                _state.update { it.copy(pairing = false, pairError = L.s(R.string.cant_reach)) }
             }
         }
     }
@@ -110,7 +112,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: ApiError) {
                 _state.update { it.copy(pairing = false, pairError = e.message) }
             } catch (e: Exception) {
-                _state.update { it.copy(pairing = false, pairError = "Couldn't reach terminus. Check your connection and try again.") }
+                _state.update { it.copy(pairing = false, pairError = L.s(R.string.cant_reach)) }
             }
         }
     }
@@ -168,7 +170,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: ApiError) {
                 _state.update { it.copy(error = e.message) }
             } catch (e: Exception) {
-                _state.update { it.copy(error = "Couldn't add that; check your connection") }
+                _state.update { it.copy(error = L.s(R.string.cant_add)) }
             }
         }
     }
@@ -221,13 +223,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val result = try {
                 Api(token).report(note.trim(), answer?.let { org.json.JSONObject(it) }, appVersion)
-                "Thanks, sent. It helps make the answers better."
+                L.s(R.string.report_thanks)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
                 e.message
             } catch (e: Exception) {
-                "Couldn't send it. Check your connection and try again."
+                L.s(R.string.report_failed)
             }
             _state.update { it.copy(reportSending = false, reportResult = result) }
         }
@@ -266,7 +268,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: ApiError) {
                 _state.update { it.copy(signalling = false, error = e.message) }
             } catch (e: Exception) {
-                _state.update { it.copy(signalling = false, error = "Offline") }
+                _state.update { it.copy(signalling = false, error = L.s(R.string.offline)) }
             }
         }
     }
@@ -287,7 +289,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(signalling = false, error = e.message ?: "Couldn't save that") }
+                _state.update { it.copy(signalling = false, error = e.message ?: L.s(R.string.cant_save)) }
             }
         }
     }
@@ -307,7 +309,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(removed = null, error = (e as? ApiError)?.message ?: "Couldn't remove that; check your connection") }
+                _state.update { it.copy(removed = null, error = (e as? ApiError)?.message ?: L.s(R.string.cant_remove)) }
             }
             dayJob?.cancel()
             loadDay()
@@ -322,7 +324,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val ctx = getApplication<Application>()
             runCatching { applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("reset", item.key)) }
-                .onFailure { e -> if (e is CancellationException) throw e; _state.update { it.copy(error = "Couldn't put that back; check your connection") } }
+                .onFailure { e -> if (e is CancellationException) throw e; _state.update { it.copy(error = L.s(R.string.cant_put_back)) } }
             dayJob?.cancel()
             loadDay()
         }
@@ -393,7 +395,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (token == null) {
             // The background refresh saw a 401 and cleared the token while
             // this screen was alive. Don't sit on a paired screen forever.
-            if (_state.value.paired) _state.value = UiState(paired = false, pairError = REMOVED)
+            if (_state.value.paired) _state.value = UiState(paired = false, pairError = L.s(R.string.signed_out_removed))
             return
         }
         if (loadJob?.isActive == true) {
@@ -442,15 +444,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     store.clear()
                     Refresher.cancel(ctx)
                     redrawWidgets(ctx)
-                    _state.value = UiState(paired = false, pairError = REMOVED)
+                    _state.value = UiState(paired = false, pairError = L.s(R.string.signed_out_removed))
                 } else {
                     _state.update { it.copy(loading = false, error = e.message) }
                 }
             } catch (e: ParseError) {
                 // Not the network: the server said something this version can't read.
-                _state.update { it.copy(loading = false, error = if (it.update != null) "Update terminus to keep going" else "Unexpected answer from terminus") }
+                _state.update { it.copy(loading = false, error = if (it.update != null) L.s(R.string.update_to_continue) else L.s(R.string.unexpected_answer)) }
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = "Offline") }
+                _state.update { it.copy(loading = false, error = L.s(R.string.offline)) }
             }
         }
     }
@@ -465,7 +467,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-private const val REMOVED = "This phone was signed out of your account. Sign in again with your email."
 
 /** Installed by the Play Store, rather than the APK from the website. */
 internal fun installedFromPlay(ctx: android.content.Context): Boolean =

@@ -37,6 +37,7 @@ import sh.rcn.terminus.CardAction
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 import sh.rcn.terminus.widget.clock
+import androidx.compose.ui.res.stringResource
 
 @Composable
 internal fun AnswerCard(
@@ -55,7 +56,7 @@ internal fun AnswerCard(
             verticalArrangement = if (short) Arrangement.spacedBy(4.dp, Alignment.CenterVertically) else Arrangement.spacedBy(4.dp),
         ) {
             if (answer == null) {
-                Text(if (loading) "Checking…" else "No answer yet", style = MaterialTheme.typography.titleLarge)
+                Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.no_answer_yet), style = MaterialTheme.typography.titleLarge)
                 return@Column
             }
             if (answer.mode == "rest") {
@@ -65,14 +66,14 @@ internal fun AnswerCard(
                     Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
                 Text(answer.detail)
-                Text(if (answer.places.isEmpty()) "No buses until your day starts. Tap Nearby to check one anyway." else "No buses until your day starts. Tap a favourite or Nearby to check one anyway.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (answer.places.isEmpty()) stringResource(R.string.rest_hint_none) else stringResource(R.string.rest_hint_places), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 return@Column
             }
             if (answer.isFree) {
                 // Nothing to catch: said plainly, with no bus to mistake for advice.
                 Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(answer.detail)
-                Text(if (answer.places.isEmpty()) "Tap Nearby for buses around you." else "Tap a favourite above, or Nearby for buses around you.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (answer.places.isEmpty()) stringResource(R.string.free_hint_none) else stringResource(R.string.free_hint_places), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
@@ -80,8 +81,8 @@ internal fun AnswerCard(
             answer.phaseText?.let { Pill(it, MaterialTheme.colorScheme.primary) }
             answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
             val heading = when {
-                answer.mode == "nearby" -> "Nearby"
-                answer.why == "gap-home" -> "${answer.destLabel} · long gap"
+                answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
+                answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())
                 else -> answer.destLabel
             }
             if (!answer.isClassPlan) heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -130,7 +131,7 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
         TextButton(
             onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, w.mapsUri())) } },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-        ) { Text("Directions to ${w.name}") }
+        ) { Text(stringResource(R.string.directions_to, w.name)) }
     }
     val actions = answer.card?.actions.orEmpty()
     if (actions.isNotEmpty()) {
@@ -176,8 +177,9 @@ internal fun ClassPlan(answer: NextAnswer) {
     }
     val late = answer.leaveLate
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val starts = answer.classAtMs?.let { stringResource(R.string.starts_at, fmt(it)) }
     Text(
-        listOfNotNull(answer.destLabel, answer.classAtMs?.let { "starts ${fmt(it)}" }).joinToString(" · "),
+        listOfNotNull(answer.destLabel, starts).joinToString(" · "),
         color = muted,
     )
     Text(
@@ -190,7 +192,7 @@ internal fun ClassPlan(answer: NextAnswer) {
     val left = if (answer.card?.phase == "waiting") 0 else (at - now) / 1000
     if (left > 0) {
         Text(
-            if (left >= 120) "in ${(left + 30) / 60} min" else "in ${left / 60} min ${left % 60} s",
+            if (left >= 120) stringResource(R.string.in_min, ((left + 30) / 60).toInt()) else stringResource(R.string.in_min_s, (left / 60).toInt(), (left % 60).toInt()),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -241,9 +243,9 @@ internal fun Countdown(answer: NextAnswer) {
     }
     val left = (at - now) / 1000
     val text = when {
-        left > 60 -> "Leaves in ${left / 60} min ${left % 60} s"
-        left > 0 -> "Leaves in $left s"
-        else -> "Left ${(-left + 59) / 60} min ago · refreshing"
+        left > 60 -> stringResource(R.string.leaves_in_min_s, (left / 60).toInt(), (left % 60).toInt())
+        left > 0 -> stringResource(R.string.leaves_in_s, left.toInt())
+        else -> stringResource(R.string.left_ago, ((-left + 59) / 60).toInt())
     }
     Text(text, style = MaterialTheme.typography.titleSmall, color = if (left > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
 }

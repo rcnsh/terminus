@@ -2,8 +2,10 @@
 // Replaces the browser's own <datalist>, which listed every entry at once and
 // could not say where a room or building actually takes you.
 
+import { t } from './dom.js';
+
 const KINDS = { timetable: 0, place: 1, class: 2, stop: 3, landmark: 4, building: 5, room: 6 };
-const GROUP = { timetable: 'In your timetable', place: 'Your favourites', class: 'Your classes', stop: 'Stops', landmark: 'Food & places', building: 'Buildings', room: 'Rooms' };
+const GROUP = { timetable: t('In your timetable'), place: t('Your favourites'), class: t('Your classes'), stop: t('Stops'), landmark: t('Food & places'), building: t('Buildings'), room: t('Rooms') };
 const MAX = 8;
 
 const norm = (s) => s.toLowerCase().replace(/[\s\-_]+/g, '');
@@ -64,12 +66,12 @@ export function attachSearch(input, { source, suggestions, stopName, onPick, pin
 
   const meta = (d) => {
     if (d.kind === 'timetable') return d.detail;
-    if (d.kind === 'stop') return 'Bus stop';
-    if (d.kind === 'place' || d.kind === 'class') return `${stopName(d.stopCode)} stop`;
+    if (d.kind === 'stop') return t('Bus stop');
+    if (d.kind === 'place' || d.kind === 'class') return t('{0} stop', stopName(d.stopCode));
     // Served by more than one stop: the quicker one is used at the time.
-    if (d.kind === 'landmark') return `${d.detail ? `${d.detail} · ` : ''}${d.stops.map(stopName).join(' or ')} stop`;
+    if (d.kind === 'landmark') return `${d.detail ? `${d.detail} · ` : ''}${t('{0} stop', d.stops.map(stopName).join(t(' or ')))}`;
     const code = d.label !== d.code ? `${d.code} · ` : '';
-    return `${code}${stopName(d.stopCode)} stop${d.walkM != null ? `, ${walkMin(d.walkM)} min walk` : ''}`;
+    return `${code}${t('{0} stop', stopName(d.stopCode))}${d.walkM != null ? t(', {0} min walk', walkMin(d.walkM)) : ''}`;
   };
 
   const close = () => {
@@ -107,7 +109,7 @@ export function attachSearch(input, { source, suggestions, stopName, onPick, pin
       if (q) {
         const li = document.createElement('li');
         li.className = 'search-empty';
-        li.textContent = 'No stop, building or room by that name';
+        li.textContent = t('No stop, building or room by that name');
         list.append(li);
       } else return close();
     }

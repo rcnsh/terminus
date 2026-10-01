@@ -1,17 +1,21 @@
+// The page's language (i18n.js).
+const t = (en, ...a) => (window.i18n ? window.i18n.t(en, ...a) : en);
+
 // The current version next to the download buttons, from the release manifest.
 fetch('/download/latest.json')
   .then((r) => (r.ok ? r.json() : null))
   .then((l) => {
     if (!l?.version) return;
-    document.getElementById('version').textContent = ` Version ${l.version}.`;
-    document.getElementById('dl-version').textContent = ` Version ${l.version}.`;
+    const v = ` ${t('Version {0}.', l.version)}`;
+    document.getElementById('version').textContent = v;
+    document.getElementById('dl-version').textContent = v;
   })
   .catch(() => {});
 
 // Signed in already: the header says Account, not Sign in.
 fetch('/me', { credentials: 'same-origin' })
   .then((r) => {
-    if (r.ok) document.getElementById('account-link').textContent = 'Account';
+    if (r.ok) document.getElementById('account-link').textContent = t('Account');
   })
   .catch(() => {});
 
@@ -108,16 +112,16 @@ for (const split of document.querySelectorAll('[data-split]')) {
   knob.className = 'knob';
   knob.tabIndex = 0;
   knob.setAttribute('role', 'slider');
-  knob.setAttribute('aria-label', 'Compare light and dark');
+  knob.setAttribute('aria-label', t('Compare light and dark'));
   knob.setAttribute('aria-valuemin', '0');
   knob.setAttribute('aria-valuemax', '100');
   knob.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>';
   const light = document.createElement('span');
   light.className = 'tag l';
-  light.textContent = 'Light';
+  light.textContent = t('Light');
   const dark = document.createElement('span');
   dark.className = 'tag d';
-  dark.textContent = 'Dark';
+  dark.textContent = t('Dark');
   split.append(seam, light, dark, knob);
 
   // The seam leans by --tilt, so it has to pass that far beyond either edge
@@ -133,7 +137,7 @@ for (const split of document.querySelectorAll('[data-split]')) {
     else delete split.dataset.full;
     const dark = Math.round(((100 + t - x) / (100 + 2 * t)) * 100);
     knob.setAttribute('aria-valuenow', String(100 - dark));
-    knob.setAttribute('aria-valuetext', full ? `all ${full}` : `${dark}% dark`);
+    knob.setAttribute('aria-valuetext', full ? (full === 'light' ? t('all light') : t('all dark')) : t('{0}% dark', dark));
   };
   // Where the seam rests: the middle, or where the interesting part is.
   const rest = Number(split.dataset.x) || 50;

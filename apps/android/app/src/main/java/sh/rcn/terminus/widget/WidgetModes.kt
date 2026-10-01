@@ -37,6 +37,7 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
+import sh.rcn.terminus.L
 
 /**
  * What a widget shows (phase 8.3). The timetable's plan by default; a row of
@@ -54,12 +55,12 @@ sealed interface Mode {
 
     data object Timetable : Mode {
         override val id = "plan"
-        override val label = "Timetable"
+        override val label get() = L.s(R.string.timetable)
     }
 
     data object Nearby : Mode {
         override val id = "nearby"
-        override val label = "Nearby"
+        override val label get() = L.s(R.string.chip_nearby)
     }
 
     /** A saved place (`place:<key>`) or a stop looked up (`stop:<code>`). */
@@ -178,9 +179,9 @@ object WidgetModes {
                 it.remove(MODE_ERROR)
             }.onFailure { e ->
                 it[MODE_ERROR] = when {
-                    e is ApiError && e.status == 400 && mode == Mode.Nearby -> "Turn on location, or set a home"
-                    e is ApiError -> e.message ?: "Couldn't load"
-                    else -> "Offline"
+                    e is ApiError && e.status == 400 && mode == Mode.Nearby -> L.s(R.string.turn_on_location)
+                    e is ApiError -> e.message ?: L.s(R.string.couldnt_load)
+                    else -> L.s(R.string.offline)
                 }
             }
         }
@@ -269,14 +270,14 @@ class WidgetModeService : Service() {
     private fun notification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         nm?.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Widget updates", NotificationManager.IMPORTANCE_MIN).apply {
-                description = "Shown only if the widget takes a while to find buses near you"
+            NotificationChannel(CHANNEL, L.s(R.string.channel_widget), NotificationManager.IMPORTANCE_MIN).apply {
+                description = L.s(R.string.channel_widget_desc)
                 setShowBadge(false)
             },
         )
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(Icon.createWithResource(this, R.drawable.ic_bus))
-            .setContentTitle("Checking buses")
+            .setContentTitle(L.s(R.string.checking_buses))
             .setOngoing(true)
             .build()
     }

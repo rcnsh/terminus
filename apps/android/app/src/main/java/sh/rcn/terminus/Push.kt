@@ -76,6 +76,7 @@ object Push {
 class TerminusApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        L.init(this)
         Push.init(this)
     }
 }

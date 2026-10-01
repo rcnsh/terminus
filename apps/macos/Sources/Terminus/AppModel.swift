@@ -90,18 +90,18 @@ final class AppModel {
 
     func setOpenAtLogin(_ on: Bool) {
         if on && misplaced {
-            error = "Move terminus to Applications first, then turn this on"
+            error = L("Move terminus to Applications first, then turn this on")
             return
         }
         do {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         } catch {
-            self.error = "Couldn't change the login item: \(error.localizedDescription)"
+            self.error = L("Couldn't change the login item: %@", error.localizedDescription)
         }
         refreshLoginItem()
         // An app outside the App Store may need the user's OK first.
         if on && loginItem == .requiresApproval {
-            self.error = "Allow terminus in System Settings → General → Login Items"
+            self.error = L("Allow terminus in System Settings → General → Login Items")
             SMAppService.openSystemSettingsLoginItems()
         }
     }
@@ -122,7 +122,7 @@ final class AppModel {
                 leaveAlerts = true
                 LeaveNotifier.shared.update(plan)
             } else {
-                error = "Allow terminus in System Settings → Notifications"
+                error = L("Allow terminus in System Settings → Notifications")
                 LeaveNotifier.shared.openSettings()
             }
         }
@@ -170,10 +170,10 @@ final class AppModel {
     func menuTitle(at now: Date) -> String? {
         // A trip under way: its phase, as the phone and the widget say it.
         if let plan, plan.tripUnderWay, let g = plan.card?.glance { return g }
-        guard let plan, plan.quality != "ended", plan.label != "Set up", !plan.isFree else { return nil }
+        guard let plan, plan.quality != "ended", plan.card?.kind != "setup", !plan.isFree else { return nil }
         // A class: when to leave is what matters from the menu bar.
         if plan.isClassPlan, let at = plan.leaveAt {
-            return now >= at ? "Leave now" : "Leave \(campusTime(at))"
+            return now >= at ? L("Leave now") : L("Leave %@", campusTime(at))
         }
         guard plan.hasLiveTime, let at = plan.departure else {
             let short = plan.label.replacingOccurrences(of: " · ", with: " ").replacingOccurrences(of: " min", with: "m")
@@ -181,7 +181,7 @@ final class AppModel {
         }
         let left = at.timeIntervalSince(now)
         if left < -30 { return nil }
-        return left < 45 ? "\(plan.service) now" : "\(plan.service) \(Int((left / 60).rounded()))m"
+        return left < 45 ? "\(plan.service) \(L("now"))" : "\(plan.service) \(L("%@m", "\(Int((left / 60).rounded()))"))"
     }
 
     /// Same rule as the Android widget: the bus has left, the plan has moved
@@ -208,7 +208,7 @@ final class AppModel {
                 let token = try await Api(token: nil).pair(code: code, name: String(name.prefix(40)))
                 guard TokenStore.write(token) else {
                     pairing = false
-                    pairError = "Couldn't save the pairing on this Mac. Check there's disk space, then pair again."
+                    pairError = L("Couldn't save the pairing on this Mac. Check there's disk space, then pair again.")
                     return
                 }
                 paired = true
@@ -220,7 +220,7 @@ final class AppModel {
                 pairError = e.message
             } catch {
                 pairing = false
-                pairError = "Couldn't reach terminus. Check your connection and try again."
+                pairError = L("Couldn't reach terminus. Check your connection and try again.")
             }
         }
     }
@@ -243,7 +243,7 @@ final class AppModel {
             } catch let e as ApiError {
                 error = e.message
             } catch {
-                self.error = "Couldn't save that"
+                self.error = L("Couldn't save that")
             }
         }
     }
@@ -284,7 +284,7 @@ final class AppModel {
         } catch let e as ApiError {
             error = e.message
         } catch {
-            self.error = "Offline"
+            self.error = L("Offline")
         }
     }
 
@@ -306,7 +306,7 @@ final class AppModel {
             } catch let e as ApiError {
                 error = e.message
             } catch {
-                self.error = "Offline"
+                self.error = L("Offline")
             }
         }
     }
@@ -333,7 +333,7 @@ final class AppModel {
                 signInError = e.message
             } catch {
                 signingIn = false
-                signInError = "Couldn't reach terminus. Check your connection and try again."
+                signInError = L("Couldn't reach terminus. Check your connection and try again.")
             }
         }
     }
@@ -356,7 +356,7 @@ final class AppModel {
                 signInError = e.message
             } catch {
                 signingIn = false
-                signInError = "Couldn't reach terminus. Check your connection and try again."
+                signInError = L("Couldn't reach terminus. Check your connection and try again.")
             }
         }
     }
@@ -365,7 +365,7 @@ final class AppModel {
         signInRequest = nil
         guard let token = p.token, TokenStore.write(token) else {
             signInWaiting = nil
-            signInError = "Couldn't save the sign-in on this Mac. Check there's disk space, then try again."
+            signInError = L("Couldn't save the sign-in on this Mac. Check there's disk space, then try again.")
             return
         }
         signInWaiting = nil
@@ -398,17 +398,17 @@ final class AppModel {
                 return
             case "denied":
                 signInWaiting = nil
-                signInError = "The sign-in was cancelled from the email. If that was you, send a new one."
+                signInError = L("The sign-in was cancelled from the email. If that was you, send a new one.")
                 return
             default:
                 // Expired, or already used.
                 signInWaiting = nil
-                signInError = "That request expired. Send a new one."
+                signInError = L("That request expired. Send a new one.")
                 return
             }
         }
         signInWaiting = nil
-        signInError = "That request expired. Send a new one."
+        signInError = L("That request expired. Send a new one.")
     }
 
     /// Local state goes first, so the popover reacts at once even offline.
@@ -458,7 +458,7 @@ final class AppModel {
     func whereAmI() async -> CLLocation? { await locator.current(maxAge: 120) }
 
     /// No home and no timetable yet (the server's "Set up" answer), or a new account.
-    var wantsSetup: Bool { paired && (needsSetup || plan?.label == "Set up") }
+    var wantsSetup: Bool { paired && (needsSetup || plan?.card?.kind == "setup") }
 
     // MARK: reports
 
@@ -477,7 +477,7 @@ final class AppModel {
     func sendReport() {
         let note = reportNote.trimmingCharacters(in: .whitespacesAndNewlines)
         guard reported != nil || !note.isEmpty else {
-            reportResult = "Say what was wrong: there's no answer on screen to send."
+            reportResult = L("Say what was wrong: there's no answer on screen to send.")
             return
         }
         reportSending = true
@@ -486,11 +486,11 @@ final class AppModel {
             do {
                 try await Api(token: TokenStore.read()).report(note: note, answer: reported)
                 reporting = false
-                reportResult = "Thanks, sent. It helps make the answers better."
+                reportResult = L("Thanks, sent. It helps make the answers better.")
             } catch let e as ApiError {
                 reportResult = e.message
             } catch {
-                reportResult = "Couldn't reach terminus. Try again in a moment."
+                reportResult = L("Couldn't reach terminus. Try again in a moment.")
             }
         }
     }
@@ -519,6 +519,31 @@ final class AppModel {
     /// resting; nothing while asleep or locked. Also right after the bus
     /// leaves or the plan changes, and soon after a failure. The API caches
     /// each stop for 15 s, so faster shows nothing new.
+    // MARK: language (phase 10)
+
+    /// The account's language once per launch: one chosen on another device
+    /// shows from the next launch; one chosen here first goes to the account.
+    private var langSynced = false
+    private func syncLang(_ api: Api) async {
+        guard !langSynced, let data = try? await api.profile(), var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+        langSynced = true
+        guard let mine = Lang.followAccount(p["lang"] as? String ?? "auto"), let body = try? JSONSerialization.data(withJSONObject: { p["lang"] = mine; return p }()) else { return }
+        _ = try? await api.saveProfile(body)
+    }
+
+    /// Settings → Language: this Mac and the account, then terminus starts again in it.
+    func setLang(_ pref: String) {
+        Lang.set(pref)
+        Lang.noteAccount(pref)
+        Task {
+            if let token = TokenStore.read(), let data = try? await Api(token: token).profile(), var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                p["lang"] = pref
+                if let body = try? JSONSerialization.data(withJSONObject: p) { _ = try? await Api(token: token).saveProfile(body) }
+            }
+            Lang.relaunch()
+        }
+    }
+
     private func start() {
         loop?.cancel()
         loop = Task {
@@ -564,6 +589,7 @@ final class AppModel {
         defer { refreshing = false }
         log.debug("refreshing against \(Api.base, privacy: .public)")
         let api = Api(token: token)
+        if !langSynced { Task { await syncLang(api) } }
         let loc = await locator.current(maxAge: popoverOpen ? 120 : 600)
         let lat = loc?.coordinate.latitude, lon = loc?.coordinate.longitude
         loading = true
@@ -590,7 +616,7 @@ final class AppModel {
         } catch let e as ApiError where e.status == 401 {
             TokenStore.write(nil)
             clearLocal()
-            pairError = "This Mac was signed out of your account. Sign in at \(Api.siteHost)/account and pair it again."
+            pairError = L("This Mac was signed out of your account. Sign in at %@/account and pair it again.", Api.siteHost)
             return true
         } catch let e as ApiError {
             log.error("api error \(e.status): \(e.message, privacy: .public)")
@@ -598,14 +624,14 @@ final class AppModel {
             return false
         } catch is DecodingError {
             // Not the network: the API sent something this version can't read.
-            error = update != nil ? "Update terminus to keep going" : "Unexpected answer from terminus"
+            error = update != nil ? L("Update terminus to keep going") : L("Unexpected answer from terminus")
             return false
         } catch {
             // kick() restarts the loop and cancels a refresh in flight; that
             // is not an outage.
             if Task.isCancelled || (error as? URLError)?.code == .cancelled { return true }
             log.error("refresh failed: \(error.localizedDescription, privacy: .public)")
-            self.error = "Offline"
+            self.error = L("Offline")
             return false
         }
     }

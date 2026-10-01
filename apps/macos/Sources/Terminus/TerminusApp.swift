@@ -29,10 +29,10 @@ struct TerminusApp: App {
         .menuBarExtraStyle(.window)
 
         // Setup and devices (phase 7): real windows, opened from the popover.
-        Window("Set up terminus", id: "setup") { SetupView(app: model).closesWhenSignedOut(model, id: "setup") }
+        Window(L("Set up terminus"), id: "setup") { SetupView(app: model).closesWhenSignedOut(model, id: "setup") }
             .windowResizability(.contentSize)
             .defaultPosition(.center)
-        Window("Devices", id: "devices") { DevicesView().closesWhenSignedOut(model, id: "devices") }
+        Window(L("Devices"), id: "devices") { DevicesView().closesWhenSignedOut(model, id: "devices") }
             .windowResizability(.contentSize)
             .defaultPosition(.center)
         #if DEBUG

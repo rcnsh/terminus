@@ -10,6 +10,7 @@ import { exportOutcomes } from './outcomes.ts';
 import type { Env } from './types.ts';
 import { DEVICE_IDLE_MS } from './monitor.ts';
 import { mailName, siteOrigin } from './site.ts';
+import { m } from './i18n.ts';
 
 export const ACCOUNT_TTL = {
   linkMs: 15 * 60_000,
@@ -175,23 +176,24 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
  */
 async function sendLink(env: Env, email: string, link: string, code: string, origin: string): Promise<void> {
   const site = new URL(origin).host;
-  const why = `You're getting this because someone entered this address at ${site}, the NUS shuttle bus times app. If that wasn't you, ignore this email: nothing happens without the code.`;
+  const t = m();
+  const why = t.codeWhyWeb(site);
   await env.EMAIL!.send({
     from: { email: env.EMAIL_FROM!, name: mailName(env) },
     to: email,
-    subject: `Your terminus code: ${code}`,
-    text: `Your terminus sign-in code is ${code}
+    subject: t.codeSubject(code),
+    text: `${t.codeIs(code)}
 
-Type it on the terminus page where you asked to sign in. It works once and expires in 15 minutes. Never give it to anyone.
+${t.codeTypeWeb}
 
-Or sign in with this link instead:
+${t.codeOrLinkText}
 ${link}
 
 ${why}`,
-    html: `<p>Your terminus sign-in code is</p>
+    html: `<p>${t.codeIsHtml}</p>
 <p style="font-size:28px;font-weight:700;letter-spacing:4px;font-family:ui-monospace,Menlo,monospace">${code}</p>
-<p>Type it on the terminus page where you asked to sign in. It works once and expires in 15 minutes. Never give it to anyone.</p>
-<p>Or <a href="${link}">sign in with this link</a> instead.</p>
+<p>${t.codeTypeWeb}</p>
+<p>${t.codeOrLinkHtml(link)}</p>
 <p style="color:#666;font-size:13px">${why}</p>`,
   });
 }
@@ -495,17 +497,15 @@ export async function revokeDevice(db: D1Database, userId: string, id: string): 
  */
 export async function mailDeviceChange(env: Env, email: string | null, change: 'added' | 'removed', name: string, nowMs: number): Promise<void> {
   if (!email || !env.EMAIL || !env.EMAIL_FROM) return;
-  const device = name.trim() || 'a device';
-  const when = new Date(nowMs + 8 * 3_600_000).toISOString().replace('T', ' ').slice(0, 16) + ' Singapore time';
+  const t = m();
+  const device = name.trim() || t.aDevice;
+  const when = t.singaporeTime(new Date(nowMs + 8 * 3_600_000).toISOString().replace('T', ' ').slice(0, 16));
   const site = siteOrigin(env);
-  const text =
-    change === 'added'
-      ? `terminus was added to ${device} on your account, ${when}.\n\nIf that wasn't you, remove it on the account page (${site}/account) or from any of your devices, and sign out everywhere.`
-      : `${device} was removed from your terminus account, ${when}. It is signed out.\n\nIf that wasn't you, sign in at ${site}/account and sign out everywhere.`;
+  const text = change === 'added' ? t.deviceAddedText(device, when, site) : t.deviceRemovedText(device, when, site);
   await env.EMAIL.send({
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: email,
-    subject: change === 'added' ? `terminus was added to ${device}` : `${device} was removed from terminus`,
+    subject: change === 'added' ? t.deviceAddedSubject(device) : t.deviceRemovedSubject(device),
     text,
   });
 }

@@ -18,7 +18,7 @@ struct Pair: View {
                 IconTile(system: "bus.fill")
                 VStack(alignment: .leading, spacing: 2) {
                     Wordmark()
-                    StatusLine(color: .gray, text: "Not signed in")
+                    StatusLine(color: .gray, text: L("Not signed in"))
                 }
             }
             .card()
@@ -36,8 +36,8 @@ struct Pair: View {
     /// Sign in with the email: approved from any device, the phone's mail app included.
     private var emailCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "Sign in")
-            Text("Use the email you set terminus up with. We'll email you a code to type here.")
+            SectionLabel(text: L("Sign in"))
+            Text(L("Use the email you set terminus up with. We'll email you a code to type here."))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -48,7 +48,7 @@ struct Pair: View {
             Button {
                 model.signIn(email: email.trimmingCharacters(in: .whitespaces))
             } label: {
-                Text(model.signingIn ? "Sending…" : "Email me a code").frame(maxWidth: .infinity)
+                Text(model.signingIn ? L("Sending…") : L("Email me a code")).frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -56,10 +56,10 @@ struct Pair: View {
             if let e = model.signInError {
                 Text(e).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
-            Button("Pair with a code instead") { useCode = true }
+            Button(L("Pair with a code instead")) { useCode = true }
                 .buttonStyle(.link)
                 .font(.callout)
-            Text("New to terminus? Get the Android app, or set up at \(Api.siteHost)/account, then sign in here.")
+            Text(L("New to terminus? Get the Android app, or set up at %@/account, then sign in here.", Api.siteHost))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -69,8 +69,8 @@ struct Pair: View {
 
     private func waiting(_ email: String, _ match: Int) -> some View {
         VStack(alignment: .center, spacing: 10) {
-            SectionLabel(text: "Check your email").frame(maxWidth: .infinity, alignment: .leading)
-            Text("We sent a code to \(email). Type it here:")
+            SectionLabel(text: L("Check your email")).frame(maxWidth: .infinity, alignment: .leading)
+            Text(L("We sent a code to %@. Type it here:", email))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -89,7 +89,7 @@ struct Pair: View {
             Button {
                 model.enterCode(emailCode)
             } label: {
-                Text(model.signingIn ? "Checking…" : "Sign in").frame(maxWidth: .infinity)
+                Text(model.signingIn ? L("Checking…") : L("Sign in")).frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -97,7 +97,7 @@ struct Pair: View {
             if let e = model.signInError {
                 Text(e).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
-            Text("Reading your email on your phone? Open the link in it, and when it asks, choose:")
+            Text(L("Reading your email on your phone? Open the link in it, and when it asks, choose:"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -105,13 +105,13 @@ struct Pair: View {
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Color.brand)
-                .accessibilityLabel("The number to choose: \(match)")
-            Text("This Mac signs in by itself once you do. It works for 15 minutes.")
+                .accessibilityLabel(L("The number to choose: %@", "\(match)"))
+            Text(L("This Mac signs in by itself once you do. It works for 15 minutes."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Cancel") { model.cancelSignIn() }
+            Button(L("Cancel")) { model.cancelSignIn() }
         }
         .frame(maxWidth: .infinity)
         .card()
@@ -119,8 +119,8 @@ struct Pair: View {
 
     private var pairCard: some View {
             VStack(alignment: .leading, spacing: 10) {
-                SectionLabel(text: "Pair this Mac")
-                Text("On your phone: Settings, then Add a device. Or on \(Api.siteHost)/account: Pair a device. Then enter the 6-character code here.")
+                SectionLabel(text: L("Pair this Mac"))
+                Text(L("On your phone: Settings, then Add a device. Or on %@/account: Pair a device. Then enter the 6-character code here.", Api.siteHost))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -139,7 +139,7 @@ struct Pair: View {
                 Button {
                     model.pair(code)
                 } label: {
-                    Text(model.pairing ? "Pairing…" : "Pair").frame(maxWidth: .infinity)
+                    Text(model.pairing ? L("Pairing…") : L("Pair")).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -147,7 +147,7 @@ struct Pair: View {
                 if let e = model.pairError {
                     Text(e).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
                 }
-                Button("Sign in with email instead") { useCode = false }
+                Button(L("Sign in with email instead")) { useCode = false }
                     .buttonStyle(.link)
                     .font(.callout)
             }

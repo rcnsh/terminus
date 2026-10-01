@@ -24,6 +24,7 @@
 import type { Env } from './types.ts';
 import { mailName } from './site.ts';
 import { type Client, type User, ACCOUNT_TTL, ensureUser, hashToken, inboxKey, loadProfileJson, newPairCode, newToken, openSession, saveProfileJson } from './accounts.ts';
+import { m } from './i18n.ts';
 
 export const LOGIN_TTL = {
   requestMs: 15 * 60_000,
@@ -108,24 +109,25 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
  */
 async function sendApproval(env: Env, email: string, device: string, code: string, link: string, origin: string): Promise<void> {
   const site = new URL(origin).host;
-  const why = `You're getting this because someone entered this address in the terminus app (${site}, NUS shuttle bus times) on ${device}. If that wasn't you, ignore this email: nothing happens without the code.`;
+  const t = m();
+  const why = t.codeWhyApp(site, device);
   await env.EMAIL!.send({
     from: { email: env.EMAIL_FROM!, name: mailName(env) },
     to: email,
-    subject: `Your terminus code: ${code}`,
-    text: `Your terminus sign-in code is ${code}
+    subject: t.codeSubject(code),
+    text: `${t.codeIs(code)}
 
-Type it in terminus on ${device}. It works once and expires in 15 minutes. Never give it to anyone.
+${t.codeTypeApp(device)}
 
-Reading this on another device? Open this link instead and choose the number ${device} is showing:
+${t.codeOtherDeviceText(device)}
 ${link}
 
 ${why}`,
-    html: `<p>Your terminus sign-in code is</p>
+    html: `<p>${t.codeIsHtml}</p>
 <p style="font-size:28px;font-weight:700;letter-spacing:4px;font-family:ui-monospace,Menlo,monospace">${code}</p>
-<p>Type it in terminus on <strong>${escapeHtml(device)}</strong>. It works once and expires in 15 minutes. Never give it to anyone.</p>
-<p>Reading this on another device? <a href="${link}">Open this link</a> instead and choose the number ${escapeHtml(device)} is showing.</p>
-<p style="color:#666;font-size:13px">${escapeHtml(why)}</p>`,
+<p>${t.codeTypeApp(`<strong>${escapeHtml(device)}</strong>`)}</p>
+<p>${t.codeOtherDeviceHtml(link, escapeHtml(device))}</p>
+<p style="color:#666;font-size:13px">${t.codeWhyApp(site, escapeHtml(device))}</p>`,
   });
 }
 

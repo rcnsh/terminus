@@ -19,14 +19,14 @@ struct Main: View {
             if let v = model.update {
                 HStack(spacing: 10) {
                     Image(systemName: "arrow.down.circle.fill").foregroundStyle(.orange).accessibilityHidden(true)
-                    Text("terminus \(v) is out").font(.callout)
+                    Text(L("terminus %@ is out", v)).font(.callout)
                     Spacer()
                     // Sparkle usually gets there first; this is for when it hasn't
                     // yet, or can't (a copy outside Applications).
                     if Updater.shared.running {
-                        Button("Update") { Updater.shared.checkNow() }.controlSize(.small)
+                        Button(L("Update")) { Updater.shared.checkNow() }.controlSize(.small)
                     } else {
-                        Button("Download") { NSWorkspace.shared.open(URL(string: "\(Api.site)/download/mac")!) }.controlSize(.small)
+                        Button(L("Download")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/download/mac")!) }.controlSize(.small)
                     }
                 }
                 .card(padding: 10)
@@ -35,9 +35,9 @@ struct Main: View {
             if model.wantsSetup {
                 HStack(spacing: 10) {
                     Image(systemName: "house.fill").foregroundStyle(Color.brand).accessibilityHidden(true)
-                    Text("Add where you live and your timetable").font(.callout)
+                    Text(L("Add where you live and your timetable")).font(.callout)
                     Spacer()
-                    Button("Set up") {
+                    Button(L("Set up")) {
                         openWindow(id: "setup")
                         NSApp.activate()
                     }
@@ -49,9 +49,9 @@ struct Main: View {
             if model.needsLocation {
                 HStack(spacing: 10) {
                     Image(systemName: "location.fill").foregroundStyle(.blue).accessibilityHidden(true)
-                    Text("Start from the stop you're nearest").font(.callout)
+                    Text(L("Start from the stop you're nearest")).font(.callout)
                     Spacer()
-                    Button("Allow") { model.askLocation() }.controlSize(.small)
+                    Button(L("Allow")) { model.askLocation() }.controlSize(.small)
                 }
                 .card(padding: 10)
             } else if model.locationDenied {
@@ -59,9 +59,9 @@ struct Main: View {
                 // one) can lose the permission; say so instead of quietly guessing.
                 HStack(spacing: 10) {
                     Image(systemName: "location.slash").foregroundStyle(.secondary).accessibilityHidden(true)
-                    Text("Location is off, so answers follow your timetable").font(.callout)
+                    Text(L("Location is off, so answers follow your timetable")).font(.callout)
                     Spacer()
-                    Button("Settings") { model.openLocationSettings() }.controlSize(.small)
+                    Button(L("Settings")) { model.openLocationSettings() }.controlSize(.small)
                 }
                 .card(padding: 10)
             }
@@ -103,19 +103,19 @@ struct ReportForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("What was wrong?").font(.callout.weight(.semibold))
-            TextField("The D2 never came, the walk is longer…", text: $model.reportNote, axis: .vertical)
+            Text(L("What was wrong?")).font(.callout.weight(.semibold))
+            TextField(L("The D2 never came, the walk is longer…"), text: $model.reportNote, axis: .vertical)
                 .lineLimit(2...4)
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
                 .onSubmit { model.sendReport() }
-            Text("Sends the answer above and your note, with your email so you can get a reply.")
+            Text(L("Sends the answer above and your note, with your email so you can get a reply."))
                 .font(.caption).foregroundStyle(.secondary)
             if let r = model.reportResult { Text(r).font(.caption).foregroundStyle(.red) }
             HStack {
                 Spacer()
-                Button("Cancel") { model.cancelReport() }.controlSize(.small)
-                Button("Send") { model.sendReport() }
+                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small)
+                Button(L("Send")) { model.sendReport() }
                     .controlSize(.small)
                     .keyboardShortcut(.defaultAction)
                     .disabled(model.reportSending)

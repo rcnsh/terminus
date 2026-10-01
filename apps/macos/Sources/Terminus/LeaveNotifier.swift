@@ -99,9 +99,9 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         if !soonDone {
             defaults.set(trip, forKey: "soonTrip")
             defaults.set(max(soonAt, now).timeIntervalSince1970, forKey: "soonAt")
-            schedule(Self.soonID, at: soonAt, now: now, title: card?.leaveBy ?? "Leave by \(campusTime(leaveAt))", plan: plan)
+            schedule(Self.soonID, at: soonAt, now: now, title: card?.leaveBy ?? L("Leave by %@", campusTime(leaveAt)), plan: plan)
         }
-        schedule(Self.nowID, at: leaveAt, now: now, title: "Leave now", plan: plan)
+        schedule(Self.nowID, at: leaveAt, now: now, title: L("Leave now"), plan: plan)
     }
 
     /// The trip a notification is about: the key the card's buttons carry.
@@ -132,7 +132,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     /// "GEA1000 @ UTown · starts 09:00".
     private func where_(_ plan: NextAnswer) -> String {
-        ([plan.dest?.label, plan.classAt.map { "starts \(campusTime($0))" }] as [String?]).compactMap { $0 }.joined(separator: " · ")
+        ([plan.dest?.label, plan.classAt.map { L("starts %@", campusTime($0)) }] as [String?]).compactMap { $0 }.joined(separator: " · ")
     }
 
     // MARK: UNUserNotificationCenterDelegate

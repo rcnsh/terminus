@@ -25,6 +25,7 @@ import { isoSeconds } from './format.ts';
 import { indexGraph } from './resolve.ts';
 import { tripAnswer } from './next.ts';
 import { type DayRecord, dayState, leaveOf, offStop, sgtDate } from './trip.ts';
+import { m } from './i18n.ts';
 
 export type DayStatus = 'done' | 'now' | 'next' | 'later' | 'skipped';
 
@@ -159,7 +160,7 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
     return {
       kind: 'home',
       key,
-      label: 'Home',
+      label: m().home,
       status,
       from: after.to,
       fromName: name(after.to),
