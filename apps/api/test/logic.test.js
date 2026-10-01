@@ -599,7 +599,7 @@ test('walking does not win on thirty seconds', () => {
   assert.equal(walkVerdict(555, best), 'close', 'faster, but not by enough to be worth it');
   const a = answerWith([best], 555);
   assert.match(a.label, /^D2 · /);
-  assert.match(a.detail, /walk 9 min/, 'mentioned, not recommended');
+  assert.match(a.detail, /walking 9 min/, 'mentioned, not recommended');
 });
 
 test('a walk that is much slower is not mentioned at all', () => {

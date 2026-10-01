@@ -70,5 +70,5 @@ test('often packed: leave-by aims one bus earlier and says why; off, it only war
 
   const warned = leaveBy({ ...base, arriveBy: { ...arriveBy, fullBusMargin: false }, crowdRisk: risk });
   assert.equal(Date.parse(warned.at), THU + 25 * MIN - walk);
-  assert.equal(warned.note, 'D2 is often packed at COM 3 around then');
+  assert.equal(warned.note, 'D2 is often packed at COM 3 around then, and may be full');
 });

@@ -151,9 +151,11 @@ function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk
   const r = risk?.(leg.svc, leg.stop.code, atMs);
   if (r == null || r < OFTEN_PACKED) return { earlier: false, note: null, warnOnly: null };
   const where = shortStop(leg.stop.name);
-  const warnOnly = `${leg.svc} is often packed at ${where} around then`;
+  const packed = `${leg.svc} is often packed at ${where} around then`;
+  // Said on its own (no earlier bus, or you'd rather not), it says what that means for you.
+  const warnOnly = `${packed}, and may be full`;
   if (arriveBy.fullBusMargin === false) return { earlier: false, note: warnOnly, warnOnly };
-  return { earlier: true, note: `${warnOnly}, so this is one bus earlier`, warnOnly };
+  return { earlier: true, note: `${packed}, so this is one bus earlier`, warnOnly };
 }
 
 /** Every service from every candidate stop, ignoring service hours. */
