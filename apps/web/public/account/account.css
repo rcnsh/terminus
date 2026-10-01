@@ -197,7 +197,9 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .report textarea { width: 100%; resize: vertical; font: inherit; }
 .report .actions { margin-top: 0; }
 
-/* Saved places with their usual times (phase 8.3). */
+/* Favourites with their usual times (phase 8.3). */
+#place-form .search { flex: 1; }
+#place-form input { width: 100%; }
 .list li.place { flex-direction: column; align-items: stretch; }
 .place-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .usual { display: flex; flex-wrap: wrap; gap: 6px; }

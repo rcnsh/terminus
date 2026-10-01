@@ -112,15 +112,15 @@ internal fun SettingsScreen(
                 TripChoices(state, account)
                 TripHistory(state, account)
 
-                Heading("Saved places")
-                Places(profile, state.campus?.destinations.orEmpty(), account)
+                Heading("Favourites")
+                Favourites(profile, state.campus, account)
             }
             Spacer(Modifier.height(32.dp))
         }
     }
 }
 
-/** A day and a time for a saved place: from then on it's a trip that day, like a class. */
+/** A day and a time for a favourite: from then on it's a trip that day, like a class. */
 @Composable
 private fun UsualTimeEditor(place: SavedPlace, account: AccountViewModel, done: () -> Unit) {
     var day by rememberSaveable { mutableIntStateOf(1) }
@@ -390,14 +390,23 @@ private fun DayHours(profile: ProfileDoc, account: AccountViewModel) {
 }
 
 @Composable
-private fun Places(profile: ProfileDoc, destinations: List<Destination>, account: AccountViewModel) {
-    Hint("One-tap buttons in the app, on the widget and in the Mac's menu bar. Give one a usual time (gym on Tuesdays at 6 pm) and it's planned like a class that day.")
+private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
+    Hint("One tap away in the app, on the widget and in the Mac's menu bar. Give one a usual time (gym on Tuesdays at 6 pm) and it's planned like a class that day.")
     val ctx = LocalContext.current
     val time = { m: Int -> if (hour12(ctx)) hhmm12(m) else hhmm(m) }
+    // A stop's name, or a food court's (favourites and classes can go to one).
+    val stopName = { code: String ->
+        campus?.stops?.firstOrNull { it.code == code }?.name ?: campus?.destinations?.firstOrNull { it.code == code && it.kind == "landmark" }?.label ?: code
+    }
     var timing by rememberSaveable { mutableStateOf<String?>(null) }
+    var note by remember { mutableStateOf<String?>(null) }
     for (p in profile.places) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(p.label, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text(p.label)
+                // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
+                if (campus != null && p.label != stopName(p.to)) Hint("${stopName(p.to)} stop")
+            }
             TextButton(onClick = { timing = if (timing == p.key) null else p.key }) { Text("Usual time") }
             TextButton(onClick = { account.edit { it.removePlace(p.key) } }) { Text("Remove") }
         }
@@ -410,18 +419,25 @@ private fun Places(profile: ProfileDoc, destinations: List<Destination>, account
         if (timing == p.key) UsualTimeEditor(p, account) { timing = null }
     }
     if (profile.places.size >= 12) return
-    var label by rememberSaveable { mutableStateOf("") }
-    var where by remember { mutableStateOf<Destination?>(null) }
-    OutlinedTextField(label, { if (it.length <= 24) label = it }, label = { Text("Name, e.g. Gym") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-    WherePicker("Where", destinations, where) { where = it; account.loadCampus() }
-    Button(
-        onClick = {
-            val w = where ?: return@Button
-            account.edit { it.addPlace(label, w.stopCode) }
-            label = ""
-            where = null
-        },
-        enabled = label.isNotBlank() && where != null,
-        modifier = Modifier.padding(top = 8.dp),
-    ) { Text("Add place") }
+    // The stops your classes go to come first, each saying which classes use it.
+    val favourite = profile.places.map { it.to }.toSet()
+    val timetable = (profile.trips + profile.manual).groupBy { it.to }
+        .filterKeys { it !in favourite }
+        .map { (to, classes) -> Destination(to, stopName(to), to, "timetable", detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(", ")) }
+        .sortedBy { it.label }
+    Spacer(Modifier.height(8.dp))
+    WherePicker("Add a favourite", campus?.destinations.orEmpty(), null, timetable) { d ->
+        if (d == null) return@WherePicker
+        // No name to type: it's called what was picked, short, as it reads on a button.
+        val to = if (d.kind == "landmark") d.code else d.stopCode
+        val same = profile.places.firstOrNull { it.to == to }
+        if (same != null) {
+            note = "Already a favourite: ${same.label}"
+        } else {
+            note = null
+            account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) }
+        }
+    }
+    note?.let { Hint(it) }
+    LaunchedEffect(Unit) { account.loadCampus() }
 }

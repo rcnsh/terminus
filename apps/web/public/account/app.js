@@ -19,7 +19,7 @@ let residences = []; // on-campus residences and their stops, from /campus
 
 const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : null);
-// A stop's name, or a food court's (saved places and classes can go to one).
+// A stop's name, or a food court's (favourites and classes can go to one).
 const stopName = (code) => stops.find((s) => s.code === code)?.name ?? destinations.find((d) => d.code === code)?.label ?? code;
 
 function haversineM(aLat, aLon, bLat, bLon) {
@@ -50,6 +50,7 @@ function resolveWhere(input) {
   return stops.some((s) => s.code === code) ? code : null;
 }
 
+let favouriteSearch = null;
 let toastTimer = null;
 function toast(text) {
   const t = $('#saved');
@@ -109,7 +110,7 @@ const onboardingCtx = {
   },
 };
 
-/** Before anything is typed: saved places, then where classes are. */
+/** Before anything is typed: favourites, then where classes are. */
 function mySuggestions() {
   const places = (profile?.places ?? []).map((p) => ({ code: p.to, label: p.label, stopCode: p.to, kind: 'place' }));
   const seen = new Set();
@@ -118,6 +119,41 @@ function mySuggestions() {
     .slice(0, 4)
     .map((t) => ({ code: t.to, label: t.label, stopCode: t.to, kind: 'class' }));
   return [...places.slice(0, 4), ...classes];
+}
+
+/**
+ * The stops your classes go to, for the top of the favourites picker: one
+ * entry per stop, saying which classes use it, leaving out favourites already.
+ */
+function timetableStops() {
+  const byStop = new Map();
+  for (const t of [...(profile?.trips ?? []), ...(profile?.manual ?? [])]) {
+    const names = byStop.get(t.to) ?? [];
+    const name = t.label.split(' @ ')[0];
+    if (!names.includes(name)) names.push(name);
+    byStop.set(t.to, names);
+  }
+  const fav = new Set((profile?.places ?? []).map((p) => p.to));
+  return [...byStop]
+    .filter(([to]) => !fav.has(to))
+    .map(([to, names]) => ({ code: to, label: stopName(to), stopCode: to, kind: 'timetable', detail: names.join(', ') }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * A favourite has no name to type: it's called what was picked, short, as
+ * it reads on a button ("KR MRT", "The Deck", "COM1" for School of Computing).
+ */
+function addFavourite(to, label) {
+  // One per stop: COM1 and COM 3 would be the same button.
+  const same = profile.places.find((p) => p.to === to);
+  if (same) return toast(`Already a favourite: ${same.label}`);
+  label = label.slice(0, 24);
+  let key = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'place';
+  while (profile.places.some((p) => p.key === key)) key = `${key.slice(0, 21)}-${Math.floor(Math.random() * 90 + 10)}`;
+  profile.places.push({ key, label, to });
+  renderPlaces();
+  save();
 }
 
 /* ---------- widget preview ---------- */
@@ -292,7 +328,8 @@ function renderPlaces() {
         el(
           'div',
           { class: 'place-row' },
-          el('span', {}, el('strong', { textContent: p.label }), el('span', { class: 'meta', textContent: ` → ${stopName(p.to)}` })),
+          // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
+          el('span', {}, el('strong', { textContent: p.label }), p.label === stopName(p.to) ? '' : el('span', { class: 'meta', textContent: ` → ${stopName(p.to)}` })),
           el('button', {
             type: 'button',
             class: 'remove',
@@ -526,23 +563,17 @@ $('#manual-form').addEventListener('submit', (e) => {
   save();
 });
 
+// Picking from the list adds it; Enter on a typed stop code or name does too.
 $('#place-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  const f = new FormData(e.target);
   const to = resolveWhere(e.target.where);
   if (!to) {
     e.target.where.setCustomValidity('Pick a stop, building or room from the list');
     e.target.where.reportValidity();
     return;
   }
-  const label = f.get('label').trim();
-  let key = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'place';
-  while (profile.places.some((p) => p.key === key)) key = `${key.slice(0, 21)}-${Math.floor(Math.random() * 90 + 10)}`;
-  profile.places.push({ key, label, to });
-  e.target.reset();
-  delete e.target.where.dataset.stop;
-  renderPlaces();
-  save();
+  addFavourite(to, stopName(to));
+  favouriteSearch.clear();
 });
 
 for (const form of ['#manual-form', '#place-form']) {
@@ -730,7 +761,7 @@ $('#signout-all').addEventListener('click', async () => {
 });
 
 $('#delete').addEventListener('click', async () => {
-  const typed = prompt('This deletes your account, timetable, places and paired devices immediately. Type DELETE to confirm.');
+  const typed = prompt('This deletes your account, timetable, favourites and paired devices immediately. Type DELETE to confirm.');
   if (typed !== 'DELETE') return;
   try {
     await api('/me', { method: 'DELETE' });
@@ -777,9 +808,17 @@ async function start() {
   destinations = campus.destinations;
   residences = (campus.residences ?? []).sort((a, b) => a.name.localeCompare(b.name));
   for (const r of residences) $('#residence').append(el('option', { value: r.code, textContent: r.name }));
-  for (const form of ['#manual-form', '#place-form']) {
-    attachSearch($(form).where, { source: () => destinations, suggestions: mySuggestions, stopName });
-  }
+  attachSearch($('#manual-form').where, { source: () => destinations, suggestions: mySuggestions, stopName });
+  favouriteSearch = attachSearch($('#place-form').where, {
+    source: () => destinations,
+    pinned: timetableStops,
+    suggestions: timetableStops,
+    stopName,
+    onPick: (d) => {
+      addFavourite(d.kind === 'landmark' ? d.code : d.stopCode, d.kind === 'building' || d.kind === 'room' ? d.code : d.label);
+      favouriteSearch.clear();
+    },
+  });
   if (profile.share) $('#share').value = profile.share;
 
   // First sign-in: set up before the account page appears.

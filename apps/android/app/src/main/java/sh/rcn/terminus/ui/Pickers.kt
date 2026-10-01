@@ -71,7 +71,13 @@ internal fun <T> Choice(
  * [onPick] with the result; the caller stores its `stopCode`.
  */
 @Composable
-internal fun WherePicker(label: String, destinations: List<Destination>, picked: Destination?, onPick: (Destination?) -> Unit) {
+internal fun WherePicker(
+    label: String,
+    destinations: List<Destination>,
+    picked: Destination?,
+    pinned: List<Destination> = emptyList(),
+    onPick: (Destination?) -> Unit,
+) {
     var query by rememberSaveable { mutableStateOf("") }
     OutlinedTextField(
         value = picked?.label ?: query,
@@ -84,13 +90,25 @@ internal fun WherePicker(label: String, destinations: List<Destination>, picked:
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    if (picked != null || query.isBlank()) return
-    val matches = rankDestinations(destinations, query, max = 6)
+    if (picked != null) return
+    // [pinned] comes first in its own group, before anything is typed too.
+    val top = if (query.isBlank()) pinned else rankDestinations(pinned, query, max = 6)
+    val rest = if (query.isBlank()) emptyList() else rankDestinations(destinations, query, max = 6).filter { d -> top.none { it.code == d.code } }
+    if (top.isEmpty() && rest.isEmpty() && query.isBlank()) return
     Column {
-        if (matches.isEmpty() && destinations.isNotEmpty()) {
+        if (top.isEmpty() && rest.isEmpty() && destinations.isNotEmpty()) {
             Text("No stop, building or room by that name", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
         }
-        for (d in matches) {
+        if (top.isNotEmpty()) {
+            Text(
+                "IN YOUR TIMETABLE",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+            )
+        }
+        for ((i, d) in (top + rest).withIndex()) {
+            if (i == top.size && top.isNotEmpty()) HorizontalDivider(thickness = 2.dp)
             Column(
                 Modifier.fillMaxWidth().clickable(role = Role.Button) {
                     query = ""
@@ -100,6 +118,7 @@ internal fun WherePicker(label: String, destinations: List<Destination>, picked:
                 Text(d.label)
                 Text(
                     when (d.kind) {
+                        "timetable" -> d.detail.orEmpty()
                         "stop" -> "Bus stop"
                         "landmark" -> d.detail ?: "Place"
                         "building" -> "Building"

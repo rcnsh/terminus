@@ -322,10 +322,10 @@ const ME_ROUTES: MeRoute[] = [
       // like a class on its day; "Not going" drops it. Answers with /me/next.
       const body = await readJson(req);
       const profile = await getProfile(db, session.user.id, deps.graph);
-      // A saved place by its key, or a stop, food court or room by its code.
+      // A favourite by its key, or a stop, food court or room by its code.
       const saved = typeof body?.place === 'string' ? profile.places.find((p) => p.key === body.place) : undefined;
       const dest = saved ? { to: saved.to, label: saved.label } : typeof body?.to === 'string' ? resolveTo(deps.graph, body.to) : null;
-      if (!dest) return json({ error: 'send place (a saved place key) or to (a stop, place or room code)' }, 400);
+      if (!dest) return json({ error: "send place (a favourite's key) or to (a stop, place or room code)" }, 400);
       const atMin = body?.atMin;
       if (typeof atMin !== 'number' || !Number.isInteger(atMin) || atMin < 0 || atMin > 1439) return json({ error: 'atMin must be minutes past midnight, Singapore time' }, 400);
       const today = sgtDate(nowMs);

@@ -65,14 +65,14 @@ internal fun AnswerCard(
                     Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
                 Text(answer.detail)
-                Text("No buses until your day starts. Tap a place or Nearby to check one anyway.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (answer.places.isEmpty()) "No buses until your day starts. Tap Nearby to check one anyway." else "No buses until your day starts. Tap a favourite or Nearby to check one anyway.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 return@Column
             }
             if (answer.isFree) {
                 // Nothing to catch: said plainly, with no bus to mistake for advice.
                 Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(answer.detail)
-                Text("Tap a place above, or Nearby for buses around you.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (answer.places.isEmpty()) "Tap Nearby for buses around you." else "Tap a favourite above, or Nearby for buses around you.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }

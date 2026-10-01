@@ -554,12 +554,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '- after your last class: home\n' +
             '- no classes today: `mode: nearby`, the next buses at the nearest stop\n' +
             '- outside your day hours (default 06:00-18:00, stretched for early or late classes): `mode: rest`, no bus\n\n' +
-            'The response also carries your saved places, so a widget can show them as buttons.',
+            'The response also carries your favourites (`places`), so a widget can show them as buttons.',
           operationId: 'meNext',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: [
             ...coordParams,
-            { name: 'place', in: 'query', description: 'Key of a saved place.', schema: { type: 'string' }, example: 'mrt' },
+            { name: 'place', in: 'query', description: 'Key of a favourite (one of `places`).', schema: { type: 'string' }, example: 'mrt' },
             { name: 'to', in: 'query', description: 'Any stop code or NUSMods venue code.', schema: { type: 'string' }, example: 'COM3' },
           ],
           responses: { '200': ok({ $ref: '#/components/schemas/MeAnswer' }), '401': errorResponse('No valid session.') },
@@ -842,7 +842,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Add a one-off trip',
           description:
-            '"Science library at 14:00 today": `place` (a saved place key) or `to` (a stop, place or room code), `atMin` (minutes past midnight, Singapore time), and optionally `label` ' +
+            '"Science library at 14:00 today": `place` (a favourite\'s key) or `to` (a stop, place or room code), `atMin` (minutes past midnight, Singapore time), and optionally `label` ' +
             'and `date` (today by default, up to a week ahead). Kept in the profile\'s `once` and planned like a class that day, with its leave-by, ' +
             'question and "Not going". Answers with the new /me/next.',
           operationId: 'meOnce',
@@ -1148,6 +1148,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             places: {
               type: 'array',
               maxItems: 12,
+              description: 'Favourites: one-tap destinations. The apps set `label` to the name of what was picked (a stop, a food court, or a building\'s code).',
               items: {
                 type: 'object',
                 required: ['key', 'label', 'to'],
@@ -1157,11 +1158,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             usual: {
               type: 'array',
               maxItems: 30,
-              description: 'Saved places with a usual time ("Gym, Tuesdays 18:00"): each is a trip on that day like a class, arriving by `atMin`, then an hour there. One whose place is gone is ignored.',
+              description: 'Favourites with a usual time ("Gym, Tuesdays 18:00"): each is a trip on that day like a class, arriving by `atMin`, then an hour there. One whose place is gone is ignored.',
               items: {
                 type: 'object',
                 required: ['place', 'day', 'atMin'],
-                properties: { place: { type: 'string', description: 'A saved place key.' }, day: { type: 'integer', minimum: 0, maximum: 6 }, atMin: { type: 'integer', minimum: 0, maximum: 1439 } },
+                properties: { place: { type: 'string', description: 'A favourite\'s key.' }, day: { type: 'integer', minimum: 0, maximum: 6 }, atMin: { type: 'integer', minimum: 0, maximum: 1439 } },
               },
             },
             once: {
