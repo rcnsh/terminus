@@ -126,7 +126,9 @@ internal fun HomeStep(profile: ProfileDoc, campus: Campus?, account: AccountView
         return
     }
     HomePicker(profile, campus, account)
-    StepActions(next = next, back = null)
+    // Continue means a home is set; with none yet it's a skip, said as one.
+    val home = profile.homeStops.isNotEmpty()
+    StepActions(next = next, back = null, skip = if (home) null else "I'll do this later", enabled = home)
 }
 
 /** Residence or stop, and the walk to it. Shared by setup and settings; saves on each change. */
@@ -218,8 +220,9 @@ private fun TimetableStep(state: AccountState, account: AccountViewModel, next: 
     StepActions(
         next = { if (pending) { waiting = true; account.import(link) } else next() },
         back = back,
-        skip = if (state.profile?.trips.isNullOrEmpty()) "I'll do this later" else null,
-        enabled = !state.importing,
+        // As on the home step: Continue means there's a timetable; with none, it's the skip.
+        skip = if (state.profile?.trips.isNullOrEmpty() && !pending) "I'll do this later" else null,
+        enabled = !state.importing && (pending || !state.profile?.trips.isNullOrEmpty()),
     )
 }
 
