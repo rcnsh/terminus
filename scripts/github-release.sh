@@ -21,7 +21,11 @@ MAC="$DIR/terminus-$VERSION.dmg"
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG"; exit 1; }
 [ -f "$APK" ] && [ -f "$MAC" ] || { echo "missing $APK or $MAC"; exit 1; }
 
-PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+# A release lists the commits since the previous release, past its betas.
+case "$VERSION" in
+  *-*) PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true) ;;
+  *) PREV=$(git describe --tags --abbrev=0 --exclude '*-*' "$TAG^" 2>/dev/null || true) ;;
+esac
 NOTES="build/release/$VERSION/notes.md"
 python3 scripts/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" > "$NOTES"
 
