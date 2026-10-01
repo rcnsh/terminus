@@ -11,8 +11,16 @@ export async function api(path, { method = 'GET', body } = {}) {
     credentials: 'same-origin',
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error(sentence(data.error) || `HTTP ${res.status}`), { status: res.status });
   return data;
+}
+
+// The API's errors are lowercase phrases ("not a valid NUSMods share link"),
+// written for API users; on the page they're shown as sentences.
+function sentence(text) {
+  if (typeof text !== 'string' || !text) return '';
+  const s = text[0].toUpperCase() + text.slice(1);
+  return /[.!?]$/.test(s) ? s : `${s}.`;
 }
 
 export function el(tag, props = {}, ...children) {
