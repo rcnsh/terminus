@@ -47,8 +47,17 @@ class ProfileTest {
         p.addManual(Trip(1, 9 * 60, 10 * 60, "COM3", "Gym", ""))
         assertTrue(p.hasSetup)
         assertEquals(600, p.manual.single().endMin)
-        p.removeManual(0)
+        p.removeClass(imported = false, 0)
         assertFalse(p.hasSetup)
+    }
+
+    @Test
+    fun `removing an imported class leaves the others as they were`() {
+        // Imported classes carry fields the app doesn't model (weeks); only the one removed goes.
+        val p = ProfileDoc(JSONObject("""{"trips":[{"day":1,"arriveByMin":600,"to":"COM3","label":"CS2030","venue":"","weeks":[1,2]},{"day":3,"arriveByMin":540,"to":"UTOWN","label":"GEA1000","venue":"","weeks":[3]}]}"""))
+        p.removeClass(imported = true, 0)
+        assertEquals("GEA1000", p.trips.single().label)
+        assertEquals(3, p.json.getJSONArray("trips").getJSONObject(0).getJSONArray("weeks").getInt(0))
     }
 
     @Test

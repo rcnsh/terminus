@@ -48,6 +48,7 @@ import androidx.core.net.toUri
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import sh.rcn.terminus.Campus
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.Device
 import sh.rcn.terminus.ProfileDoc
@@ -100,7 +101,7 @@ internal fun SettingsScreen(
                 Heading("Timetable")
                 var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
                 TimetableImport(state, account, link) { link = it }
-                ManualClasses(profile, state.campus?.destinations.orEmpty(), account)
+                Classes(profile, state.campus, account)
 
                 Heading("Your day")
                 state.campus?.let { HomePicker(profile, it, account) }
@@ -307,18 +308,27 @@ private fun qrBitmap(text: String, size: Int): Bitmap {
     return bmp
 }
 
+/** Every class, imported or added by hand, by day and time, each with Remove; then adding one by hand. */
 @Composable
-private fun ManualClasses(profile: ProfileDoc, destinations: List<Destination>, account: AccountViewModel) {
+private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
     val ctx = LocalContext.current
     val h12 = hour12(ctx)
     val time = { m: Int -> if (h12) hhmm12(m) else hhmm(m) }
-    val manual = profile.manual
-    if (manual.isNotEmpty()) {
-        Text("Added by hand", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
-        manual.forEachIndexed { i, t ->
+    val destinations = campus?.destinations.orEmpty()
+    // Monday first, as the week reads; the index is the class's place in its own list.
+    val order = WEEKDAYS.map { it.first }
+    val all = (profile.trips.mapIndexed { i, t -> Triple(true, i, t) } + profile.manual.mapIndexed { i, t -> Triple(false, i, t) })
+        .sortedWith(compareBy({ order.indexOf(it.third.day) }, { it.third.arriveByMin }))
+    if (all.isNotEmpty()) {
+        Text(if (all.size == 1) "1 class" else "${all.size} classes", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        for ((imported, i, t) in all) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("${dayName(t.day).take(3)} ${time(t.arriveByMin)} · ${t.label}", modifier = Modifier.weight(1f))
-                TextButton(onClick = { account.edit { it.removeManual(i) } }) { Text("Remove") }
+                Column(Modifier.weight(1f)) {
+                    Text("${dayName(t.day).take(3)} ${time(t.arriveByMin)} · ${t.label}")
+                    val about = listOfNotNull(campus?.let { "${it.stopName(t.to)} stop" }, if (imported) null else "added by hand")
+                    if (about.isNotEmpty()) Hint(about.joinToString(" · "))
+                }
+                TextButton(onClick = { account.edit { it.removeClass(imported, i) } }) { Text("Remove") }
             }
         }
     }
