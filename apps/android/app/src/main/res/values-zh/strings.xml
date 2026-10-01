@@ -314,7 +314,7 @@
     <string name="walk">步行</string>
     <string name="wednesday">星期三</string>
     <string name="wednesday_short">周三</string>
-    <string name="welcome_text">设置大约只要一分钟：你住哪里、你的 NUSMods 课表，以及你走路多快。不需要账户或邮箱。</string>
+    <string name="welcome_text">设置大约只要一分钟：你住哪里、你的 NUSMods 课表，以及你走路多快。不需要邮箱，也不用登录。</string>
     <string name="where">地点</string>
     <string name="where_live">你住在哪里？</string>
     <string name="where_live_sub">早上在哪里搭巴士、晚上回到哪里。只保存车站，绝不保存你住在哪里。</string>
