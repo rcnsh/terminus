@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -24,11 +25,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,10 +42,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
@@ -120,8 +129,12 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
             }
         }
 
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Next and Nearby first, as on the widget, so they're always in view;
+        // the places after them scroll, and the edge fades while there's more.
+        val chips = rememberScrollState()
+        Row(Modifier.fadeEnd(chips).horizontalScroll(chips), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !state.showNearby && state.target == Target.Plan, onClick = { vm.select(Target.Plan) }, label = { Text("Next") })
+            FilterChip(selected = state.showNearby, onClick = vm::showNearby, label = { Text("Nearby") })
             for (p in state.places) {
                 FilterChip(
                     selected = !state.showNearby && state.target == Target.SavedPlace(p.key),
@@ -132,7 +145,6 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
             (state.target as? Target.Code)?.let { t ->
                 FilterChip(selected = !state.showNearby, onClick = { vm.select(t) }, label = { Text(t.label) })
             }
-            FilterChip(selected = state.showNearby, onClick = vm::showNearby, label = { Text("Nearby") })
         }
         Spacer(Modifier.height(12.dp))
 
@@ -333,3 +345,17 @@ private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: 
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+/** Fades the trailing edge out while [scroll] can still go further, so a cut-off row reads as scrollable. */
+private fun Modifier.fadeEnd(scroll: ScrollState, width: Dp = 32.dp): Modifier =
+    graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
+        drawContent()
+        if (scroll.canScrollForward) {
+            val w = width.toPx()
+            drawRect(
+                Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - w, endX = size.width),
+                topLeft = Offset(size.width - w, 0f),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
