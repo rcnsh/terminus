@@ -219,7 +219,10 @@ private struct TodayRow: View {
         .opacity(past ? 0.5 : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
+        // One element per row; the hover-only × is its "Remove from today" action.
         .accessibilityElement(children: .combine)
-        .accessibilityAction(named: "Remove from today") { if item.removable == true { onRemove(item) } }
+        .accessibilityActions {
+            if item.removable == true { Button("Remove from today") { onRemove(item) } }
+        }
     }
 }

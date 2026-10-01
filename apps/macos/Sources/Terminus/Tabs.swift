@@ -28,18 +28,26 @@ struct Tabs: View {
     }
 
     var body: some View {
-        // No scrolling unless the tabs genuinely don't fit.
-        // Icons and text, then text only, then scroll: the first that fits.
+        // No scrolling unless the tabs genuinely don't fit. Icons and text,
+        // then text only, then text with less room around it, then scroll:
+        // the first that fits.
         ViewThatFits(in: .horizontal) {
             strip(icons: true)
             strip(icons: false)
-            ScrollView(.horizontal, showsIndicators: false) { strip(icons: false) }
+            strip(icons: false, inset: 6)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) { strip(icons: false, inset: 6) }
+                    // A tab cut off at the edge fades out, so the row reads as more to scroll to.
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
+                    .onAppear { proxy.scrollTo(current, anchor: .center) }
+                    .onChange(of: current) { _, tab in withAnimation { proxy.scrollTo(tab, anchor: .center) } }
+            }
         }
         .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(.primary.opacity(0.05)))
         .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(.primary.opacity(0.08)))
     }
 
-    private func strip(icons: Bool) -> some View {
+    private func strip(icons: Bool, inset: CGFloat = 10) -> some View {
         HStack(spacing: 2) {
             ForEach(tabs, id: \.0) { tab, title, icon in
                 let on = tab == current
@@ -51,7 +59,7 @@ struct Tabs: View {
                         .labelStyle(TabLabelStyle(icons: icons))
                         .foregroundStyle(on ? .primary : .secondary)
                         .fixedSize()
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, inset)
                         .padding(.vertical, 6)
                         .frame(maxWidth: .infinity)
                         .background {
@@ -66,6 +74,7 @@ struct Tabs: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(title)
                 .accessibilityAddTraits(on ? .isSelected : [])
+                .id(tab)
             }
         }
         .padding(3)
