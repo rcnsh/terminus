@@ -410,6 +410,22 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/auth/anon/web': {
+        post: {
+          tags: ['Account'],
+          summary: 'Start without an account, in a browser',
+          description:
+            'The website\'s "Use terminus without an email": the same account as `/auth/anon`, as a web session cookie. Needs the Turnstile token when ' +
+            'Turnstile is on. Signing in with an email from that browser (`/auth/code` or the link) adds the email to it, or switches to the email\'s account if it has one.',
+          operationId: 'anonWeb',
+          requestBody: jsonBody({ type: 'object', properties: { turnstile: { type: 'string' } } }, {}),
+          responses: {
+            '201': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
+            '400': errorResponse('The human check failed.'),
+            '429': errorResponse('Too many new accounts, from this IP or overall.'),
+          },
+        },
+      },
       '/auth/app/start': {
         post: {
           tags: ['Account'],

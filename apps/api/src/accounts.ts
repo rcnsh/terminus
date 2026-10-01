@@ -208,15 +208,22 @@ export async function linkEmail(db: D1Database, token: string, nowMs: number): P
   return row?.email ?? null;
 }
 
-/**
- * Spends a sign-in link and opens a web session. Returns the raw session
- * token for the cookie, or null when the link is unknown, used or expired.
- */
-export async function redeemLink(db: D1Database, token: string, nowMs: number): Promise<string | null> {
-  return spendLink(db, await hashToken(token), nowMs);
+/** A spent sign-in: the new web session's raw token, and the anonymous account it replaced, if any. */
+export interface Redeemed {
+  token: string;
+  removed?: string;
 }
 
-async function spendLink(db: D1Database, hash: string, nowMs: number): Promise<string | null> {
+/**
+ * Spends a sign-in link and opens a web session, or returns null when the
+ * link is unknown, used or expired. `anonId`: the browser's account without
+ * an email, if it has one, which the email then goes to (claimEmail).
+ */
+export async function redeemLink(db: D1Database, token: string, nowMs: number, anonId: string | null = null): Promise<Redeemed | null> {
+  return spendLink(db, await hashToken(token), nowMs, anonId);
+}
+
+async function spendLink(db: D1Database, hash: string, nowMs: number, anonId: string | null): Promise<Redeemed | null> {
   // DELETE ... RETURNING makes the link single-use even under two racing POSTs.
   const row = await db
     .prepare('DELETE FROM magic_links WHERE token_hash = ? RETURNING email, expires')
@@ -224,9 +231,48 @@ async function spendLink(db: D1Database, hash: string, nowMs: number): Promise<s
     .first<{ email: string; expires: number }>();
   if (!row || row.expires < nowMs) return null;
 
-  const user = await ensureUser(db, row.email, nowMs);
-  return openSession(db, user.id, 'web', null, nowMs);
+  const { userId, removed } = await claimEmail(db, row.email, anonId, nowMs);
+  return { token: await openSession(db, userId, 'web', null, nowMs), ...(removed ? { removed } : {}) };
 }
+
+/**
+ * Signing in with an email from a browser that's using terminus without
+ * one. A new email goes to that account, setup and all. An email that has
+ * an account already wins: the browser's setup moves to it only when it
+ * has none of its own, and the browser's account goes. (The apps ask which
+ * setup to keep; a browser's is a minute to redo.)
+ */
+export async function claimEmail(db: D1Database, email: string, anonId: string | null, nowMs: number): Promise<{ userId: string; removed?: string }> {
+  const existing = await db.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first<User>();
+  const anon = anonId ? await db.prepare('SELECT id FROM users WHERE id = ? AND email IS NULL').bind(anonId).first<{ id: string }>() : null;
+  if (!anon) return { userId: (existing ?? (await ensureUser(db, email, nowMs))).id };
+  if (!existing) {
+    await db.prepare('UPDATE users SET email = ?, email_added = ? WHERE id = ? AND email IS NULL').bind(email, nowMs, anon.id).run();
+    // Its old session is replaced by the one the caller opens.
+    await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(anon.id).run();
+    return { userId: anon.id };
+  }
+  const mine = await loadProfileJson(db, anon.id);
+  if (hasSetup(mine) && !hasSetup(await loadProfileJson(db, existing.id))) await saveProfileJson(db, existing.id, mine, nowMs);
+  await removeAnonymous(db, anon.id, existing.id);
+  return { userId: existing.id, removed: anon.id };
+}
+
+/** A profile worth keeping: somewhere to go or somewhere to start. */
+export function hasSetup(json: unknown): boolean {
+  const p = json as { home?: { stops?: unknown[] } | null; trips?: unknown[]; manual?: unknown[]; places?: unknown[] } | null;
+  if (!p) return false;
+  return Boolean(p.home?.stops?.length || p.trips?.length || p.manual?.length || p.places?.length);
+}
+
+/** Deletes an anonymous account once it's been signed in elsewhere; its reports move with it. */
+export async function removeAnonymous(db: D1Database, anonId: string, intoUserId: string): Promise<void> {
+  await db.batch([
+    db.prepare('UPDATE feedback SET user_id = ? WHERE user_id = ?').bind(intoUserId, anonId),
+    db.prepare('DELETE FROM users WHERE id = ? AND email IS NULL').bind(anonId),
+  ]);
+}
+
 
 /** A sign-in code waiting in KV: hashes of the code and of its link's token,
  *  when it expires, and how many wrong guesses it has had. */
@@ -248,7 +294,7 @@ async function signInCodeKey(email: string): Promise<string> {
  * session itself comes from spending the link's D1 row, which is atomic, so
  * a code and its link together still sign in exactly once.
  */
-export async function redeemCode(env: Env, db: D1Database, email: string, code: string, nowMs: number): Promise<string | null> {
+export async function redeemCode(env: Env, db: D1Database, email: string, code: string, nowMs: number, anonId: string | null = null): Promise<Redeemed | null> {
   const key = await signInCodeKey(email);
   const pending = await env.KV.get<PendingCode>(key, 'json').catch(() => null);
   if (!pending || pending.e < nowMs) return null;
@@ -261,7 +307,7 @@ export async function redeemCode(env: Env, db: D1Database, email: string, code: 
     return null;
   }
   await env.KV.delete(key).catch(() => {});
-  return spendLink(db, pending.t, nowMs);
+  return spendLink(db, pending.t, nowMs, anonId);
 }
 
 export async function ensureUser(db: D1Database, email: string, nowMs: number, via: 'web' | 'app' = 'web'): Promise<User> {
@@ -328,9 +374,18 @@ export function clientFrom(req: Request): Client {
 
 /** Starts an account with no email for an app's first launch; returns its device token. */
 export async function createAnonymous(db: D1Database, name: string, client: Client, nowMs: number): Promise<string> {
+  return openSession(db, await newAnonymousUser(db, 'app', nowMs), 'device', name, nowMs, client);
+}
+
+/** The same for a browser ("Use terminus without an email"); returns its web session token. */
+export async function createAnonymousWeb(db: D1Database, nowMs: number): Promise<string> {
+  return openSession(db, await newAnonymousUser(db, 'web', nowMs), 'web', null, nowMs);
+}
+
+async function newAnonymousUser(db: D1Database, via: 'app' | 'web', nowMs: number): Promise<string> {
   const id = crypto.randomUUID();
-  await db.prepare("INSERT INTO users (id, email, created, last_seen, via) VALUES (?, NULL, ?, ?, 'app')").bind(id, nowMs, nowMs).run();
-  return openSession(db, id, 'device', name, nowMs, client);
+  await db.prepare('INSERT INTO users (id, email, created, last_seen, via) VALUES (?, NULL, ?, ?, ?)').bind(id, nowMs, nowMs, via).run();
+  return id;
 }
 
 /* ------------------------------------------------------------------ */

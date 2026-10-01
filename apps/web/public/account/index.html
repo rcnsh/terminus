@@ -24,6 +24,7 @@
   <nav class="nav-links" id="who" hidden>
     <span class="hint hide-sm" id="email"></span>
     <a class="btn small accent" href="/app/">Open the app</a>
+    <button type="button" class="btn small ghost" id="add-email" hidden>Add an email</button>
     <button type="button" class="btn small ghost" id="logout">Sign out</button>
   </nav>
 </header>
@@ -43,6 +44,12 @@
           <button type="submit" class="btn accent wide">Email me a sign-in code</button>
         </form>
         <p id="login-msg" class="form-error" role="alert"></p>
+        <div id="no-email-box">
+          <p class="signin-or"><span>or</span></p>
+          <button type="button" class="btn ghost wide" id="no-email">Use terminus without an email</button>
+          <p class="hint small">Your setup stays in this browser. Add an email any time to use it on your other devices, or to keep it if this browser's data is cleared.</p>
+        </div>
+        <button type="button" class="btn ghost wide" id="cancel-add" hidden>Cancel</button>
       </div>
 
       <div id="sent-step" hidden>
@@ -211,7 +218,7 @@
         <form id="report" class="report" hidden>
           <label for="report-note">What was wrong? <span class="hint">(optional)</span></label>
           <textarea id="report-note" rows="3" maxlength="1000" placeholder="The D2 never came, the walk is longer than that…"></textarea>
-          <p class="hint">This sends the answer above and your note, with your email address so you can get a reply.</p>
+          <p class="hint" id="report-hint">This sends the answer above and your note, with your email address so you can get a reply.</p>
           <div class="actions">
             <button type="submit" class="btn small accent" id="report-send">Send</button>
             <button type="button" class="btn small ghost" id="report-cancel">Cancel</button>
@@ -222,7 +229,7 @@
 
       <section class="card">
         <h2>Devices</h2>
-        <p class="hint">Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.</p>
+        <p class="hint" id="devices-hint">Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.</p>
         <button type="button" class="btn wide" id="pair">Pair a device</button>
         <div id="pairing" class="pairing" hidden>
           <div id="qr" class="qr" aria-label="QR code to pair a phone"></div>

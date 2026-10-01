@@ -23,7 +23,9 @@
 
 import type { Env } from './types.ts';
 import { mailName } from './site.ts';
-import { type Client, type User, ACCOUNT_TTL, ensureUser, hashToken, inboxKey, loadProfileJson, newPairCode, newToken, openSession, saveProfileJson } from './accounts.ts';
+import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
+
+export { hasSetup } from './accounts.ts';
 import { m } from './i18n.ts';
 
 export const LOGIN_TTL = {
@@ -238,13 +240,6 @@ export type PollResult =
       removed?: string;
     };
 
-/** A profile worth keeping: somewhere to go or somewhere to start. */
-export function hasSetup(json: unknown): boolean {
-  const p = json as { home?: { stops?: unknown[] } | null; trips?: unknown[]; manual?: unknown[]; places?: unknown[] } | null;
-  if (!p) return false;
-  return Boolean(p.home?.stops?.length || p.trips?.length || p.manual?.length || p.places?.length);
-}
-
 /**
  * The app's poll. Once approved, the first poll with the right secret gets
  * the token (and the request is spent); every other answer is a status.
@@ -304,14 +299,6 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
   const token = await openSession(db, userId, 'device', req.device_name, nowMs, client);
   const removed = anon && (outcome === 'signed-in' || outcome === 'moved-setup') ? anon.id : undefined;
   return { status: 'approved', token, email: req.email, outcome, userId, device: req.device_name, removed };
-}
-
-/** Deletes an anonymous account once it's been signed in elsewhere; its reports move with it. */
-async function removeAnonymous(db: D1Database, anonId: string, intoUserId: string): Promise<void> {
-  await db.batch([
-    db.prepare('UPDATE feedback SET user_id = ? WHERE user_id = ?').bind(intoUserId, anonId),
-    db.prepare('DELETE FROM users WHERE id = ? AND email IS NULL').bind(anonId),
-  ]);
 }
 
 /**

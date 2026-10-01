@@ -28,6 +28,7 @@ import {
   linkEmail,
   pairCodeOwner,
   maskEmail,
+  createAnonymousWeb,
   redeemCode,
   redeemLink,
   redeemPairCode,
@@ -736,6 +737,12 @@ const ME_ROUTES: MeRoute[] = [
   },
 ];
 
+/** The browser's own account without an email, when its session is one: a sign-in from it adds the email there. */
+async function browserAnon(db: D1Database, req: Request, nowMs: number): Promise<string | null> {
+  const s = await authenticate(db, req, nowMs);
+  return s?.kind === 'web' && s.user.email === null ? s.user.id : null;
+}
+
 /**
  * Routes under /auth, /pair and /me. Returns null for any other path so the
  * caller can fall through to the public routes.
@@ -796,9 +803,10 @@ export async function handleMe(
     const email = normalizeEmail(body?.email);
     const code = normalizePairCode(body?.code);
     if (!email || !code) return json({ error: 'enter the 6-character code from the email' }, 400);
-    const token = await redeemCode(env, db, email, code, nowMs);
-    if (!token) return json({ error: 'that code is wrong or has expired' }, 400);
-    return json({ ok: true }, 200, { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
+    const done = await redeemCode(env, db, email, code, nowMs, await browserAnon(db, req, nowMs));
+    if (!done) return json({ error: 'that code is wrong or has expired' }, 400);
+    if (done.removed) await clearTrip(env, done.removed);
+    return json({ ok: true }, 200, { 'set-cookie': sessionCookie(done.token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
   }
 
   if (path === '/auth/verify') {
@@ -819,7 +827,9 @@ export async function handleMe(
     if (req.method === 'POST') {
       const form = await req.formData().catch(() => null);
       const t = form?.get('t');
-      const token = typeof t === 'string' ? await redeemLink(db, t, nowMs) : null;
+      const done = typeof t === 'string' ? await redeemLink(db, t, nowMs, await browserAnon(db, req, nowMs)) : null;
+      if (done?.removed) await clearTrip(env, done.removed);
+      const token = done?.token;
       if (!token) {
         return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
       }
@@ -841,6 +851,22 @@ export async function handleMe(
     const body = await readJson(req);
     const token = await createAnonymous(db, deviceName(body), clientWith(req, body), nowMs);
     return json({ token }, 201);
+  }
+
+  if (path === '/auth/anon/web' && req.method === 'POST') {
+    // "Use terminus without an email" on the website (an iPhone has no app):
+    // the same account as an app's first launch, as a web session. A browser
+    // can run Turnstile, so it does, on top of the app's limits.
+    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    const body = await readJson(req);
+    if (!(await verifyTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip')))) {
+      return json({ error: 'the human check failed, try again' }, 400);
+    }
+    if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
+      return json({ error: 'terminus is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    }
+    const token = await createAnonymousWeb(db, nowMs);
+    return json({ ok: true }, 201, { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
   }
 
   if (path === '/auth/app/start' && req.method === 'POST') {
