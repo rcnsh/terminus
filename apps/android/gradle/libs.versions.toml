@@ -11,6 +11,7 @@ junit = "4.13.2"
 orgJson = "20260814"
 zxing = "3.5.3"
 firebaseBom = "34.19.0"
+maplibreCompose = "0.19.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -30,6 +31,10 @@ work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work"
 # Push (phase 3). Firebase is set up in code from google-services.json, without its Gradle plugin.
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+# The Map tab (MapLibre Native through Compose). OpenGL rather than Vulkan:
+# it runs on every phone and emulator the app supports.
+maplibre-compose = { module = "org.maplibre.compose:maplibre-compose", version.ref = "maplibreCompose" }
+maplibre-compose-runtime = { module = "org.maplibre.compose:maplibre-compose-runtime-opengl-android", version.ref = "maplibreCompose" }
 junit = { module = "junit:junit", version.ref = "junit" }
 # Android's org.json is a stub on the JVM; unit tests need the real one.
 org-json = { module = "org.json:json", version.ref = "orgJson" }
