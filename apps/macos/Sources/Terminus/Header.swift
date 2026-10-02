@@ -41,7 +41,7 @@ struct Header: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                             if old {
-                                StatusLine(color: .gray, text: L("Old times · refreshing"))
+                                StatusLine(color: .gray, text: L("Updating times…"))
                             } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
                                 let left = Int(at.timeIntervalSince(now))
                                 StatusLine(color: a.leaveLate ? .red : .brand, text: left <= 0 ? L("Time to go") : left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)"))
@@ -120,7 +120,7 @@ struct Header: View {
         switch a?.quality {
         case "live": return L("Live") + when
         case "scheduled": return L("Timetable estimate") + when
-        case "stale": return L("Live data a few minutes old") + when
+        case "stale": return L("Live times are a few minutes old") + when
         case "ended": return L("Services ended") + when
         case "unknown": return L("No live data") + when
         default: return L("Loading")

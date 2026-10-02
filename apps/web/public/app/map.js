@@ -667,6 +667,6 @@ async function saveAsPlace(stop, button) {
     markSaved(stop, button);
   } catch (err) {
     button.disabled = false;
-    button.textContent = err.status === 400 ? t('Places are full: remove one in Settings') : t('Not saved. {0}', err.message);
+    button.textContent = err.status === 400 ? t("You've reached the limit of saved places. Remove one in Settings to add another.") : t('Not saved. {0}', err.message);
   }
 }

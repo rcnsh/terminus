@@ -537,7 +537,7 @@ $('#no-email').addEventListener('click', async (e) => {
 // when the email is new (or switches to the email's account if it has one).
 $('#add-email').addEventListener('click', async () => {
   $('#login-step h1').textContent = t('Add an email');
-  $('#login-step .hint').textContent = t("We'll send you a code. Your setup stays as it is. If the email has an account already, you'll switch to that one.");
+  $('#login-step .hint').textContent = t("We'll send you a code. Your settings are kept. If this email already has an account, you'll be switched to it.");
   $('#login-form button').textContent = t('Email me a code');
   $('#no-email-box').hidden = true;
   $('#cancel-add').hidden = false;
@@ -700,10 +700,10 @@ async function renderChoices() {
   );
   $('#trip-choices').hidden = !r.choices.length;
   $('#trip-history').hidden = !r.history;
-  $('#history-size').textContent = r.history === 1 ? t('terminus remembers how 1 trip went.') : t('terminus remembers how {0} trips went.', r.history);
+  $('#history-size').textContent = r.history === 1 ? t('1 trip recorded.') : t('{0} trips recorded.', r.history);
 }
 $('#clear-history').addEventListener('click', async () => {
-  if (!confirm(t('Forget how your trips went? Choices you made stay.'))) return;
+  if (!confirm(t("Clear your trip history? Your settings won't change."))) return;
   await api('/me/history', { method: 'DELETE' });
   toast(t('Trip history cleared'));
   renderChoices();
@@ -728,7 +728,7 @@ for (const [id, field] of [['#day-start', 'dayStartMin'], ['#day-end', 'dayEndMi
     if (v == null) return;
     const next = { ...profile, [field]: v };
     if (next.dayStartMin >= next.dayEndMin) {
-      toast(t('The day has to start before it ends'));
+      toast(t('The start time must be before the end time'));
       e.target.value = hhmm(profile[field]);
       return;
     }
@@ -868,7 +868,7 @@ async function start() {
   }
   term = me.term;
   $('#reimport').hidden = !me.needsReimport;
-  $('#reimport-text').textContent = t("It's for {0}, which has ended. Copy this semester's link from NUSMods and import it below.", me.term);
+  $('#reimport-text').textContent = t("This link is for {0}, which has ended. Copy this semester's link from NUSMods and import it below.", me.term);
 
   const [p, campus] = await Promise.all([api('/me/profile'), api('/campus')]);
   profile = p;

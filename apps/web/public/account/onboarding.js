@@ -5,9 +5,9 @@
 import { t } from './dom.js';
 
 const PACES = [
-  { value: 'slow', title: t('Slow'), hint: t('Unhurried, or you often have a bag to carry'), min: 6 },
-  { value: 'normal', title: t('Normal'), hint: t('Most people'), min: 5 },
-  { value: 'fast', title: t('Fast'), hint: t("You're the one overtaking"), min: 4 },
+  { value: 'slow', title: t('Slow'), hint: t('A relaxed pace, or if you often carry a bag'), min: 6 },
+  { value: 'normal', title: t('Normal'), hint: t('An average pace'), min: 5 },
+  { value: 'fast', title: t('Fast'), hint: t("A brisk pace"), min: 4 },
 ];
 
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -200,7 +200,7 @@ export function runOnboarding(ctx) {
       if (!picked) return;
       first.value = picked.stops[0];
       walk.value = Math.max(1, Math.round(picked.walkM / 1.3 / 60));
-      msg.textContent = t("Stops for {0} filled in. The app won't send you home when you're already there.", picked.name);
+      msg.textContent = t("Stops for {0} added. The app won't direct you home when you're already there.", picked.name);
     });
     return [
       ...heading(t('Where your day starts'), t('Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved, never where you live.')),

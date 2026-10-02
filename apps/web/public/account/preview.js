@@ -165,7 +165,7 @@ export function show(a) {
       ...phaseParts(a),
       el('div', { class: 'where', textContent: where }),
       el('div', { class: 'big', textContent: big }),
-      el('div', { class: 'detail', textContent: old ? t('Old times · refreshing') : a.detail }),
+      el('div', { class: 'detail', textContent: old ? t('Updating times…') : a.detail }),
       a.leave && a.card && !old ? el('div', { class: 'leave', textContent: leaveText(a) }) : null,
       // On the bus the detail already ends with it ("arrive ~9:52 · ~4 min late").
       a.timing && !old && !a.detail?.includes(a.timing.text) ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
@@ -201,7 +201,7 @@ export function wireReport() {
     e.preventDefault();
     const note = $('#report-note').value.trim();
     if (!reported && !note) {
-      msg.textContent = t('Say what was wrong: the preview has no answer to send.');
+      msg.textContent = t('Please describe the problem. The preview has no answer to attach.');
       return;
     }
     const send = $('#report-send');
@@ -209,7 +209,7 @@ export function wireReport() {
     try {
       await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note, platform: 'web', context: reported ?? undefined } });
       close();
-      msg.textContent = t('Thanks, sent. It helps make the answers better.');
+      msg.textContent = t('Thanks for the report. It helps us improve terminus.');
     } catch (err) {
       msg.textContent = err.message;
     } finally {

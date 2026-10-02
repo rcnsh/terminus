@@ -175,7 +175,7 @@ struct TodayList: View {
             // Just taken off today: Undo, for a few seconds.
             if let r = removed {
                 HStack {
-                    Text(L("%@ taken off today", r.kind == "home" ? L("The trip home") : r.label.components(separatedBy: " @ ")[0])).font(.callout)
+                    Text(L("%@ removed from today", r.kind == "home" ? L("The trip home") : r.label.components(separatedBy: " @ ")[0])).font(.callout)
                     Spacer()
                     Button(L("Undo"), action: onUndo).buttonStyle(.plain).foregroundStyle(.tint).fontWeight(.medium)
                 }

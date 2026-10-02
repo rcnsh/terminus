@@ -155,7 +155,7 @@ final class SetupModel {
             message = nil
         } catch let e as ApiError {
             // 403: an account without an email can't add devices.
-            message = e.status == 403 ? L("Add an email to your account first: devices are added to an account with one.") : e.message
+            message = e.status == 403 ? L("Add an email to your account first. Devices can only be added to an account with an email.") : e.message
         } catch {
             message = L("Couldn't reach terminus. Check your connection and try again.")
         }
@@ -192,7 +192,7 @@ final class SetupModel {
     }
 
     private func object(_ data: Data) throws -> [String: Any] {
-        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ApiError(status: 0, message: L("Unexpected answer from terminus")) }
+        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ApiError(status: 0, message: L("Unexpected response from terminus")) }
         return o
     }
 }
@@ -319,7 +319,7 @@ private struct HomeStep: View {
                 ForEach(campus.residences, id: \.code) { Text($0.name).tag($0.code) }
             }
             if let r = residence, !offCampus {
-                Hint(L("Stops for %@: %@. terminus won't send you home when you're already there.", r.name, r.stops.map(campus.stopName).joined(separator: ", ")))
+                Hint(L("Stops for %@: %@. terminus won't direct you home when you're already there.", r.name, r.stops.map(campus.stopName).joined(separator: ", ")))
             } else {
                 Picker(L("Home stop"), selection: Binding(
                     get: { setup.homeStops.first ?? "" },
@@ -344,7 +344,7 @@ private struct HomeStep: View {
             }
             Stepper(L("Walk from home to your stop: %@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: 0...30)
                 .padding(.top, 6)
-            Hint(L("Counted in your leave-by time when terminus doesn't have your location."))
+            Hint(L("Included in your departure time when your location isn't available."))
         } else {
             ProgressView()
         }
@@ -380,9 +380,9 @@ private struct TimetableStep: View {
 private struct PaceStep: View {
     let setup: SetupModel
     private let paces = [
-        ("slow", L("Slow"), L("400 m in about 6 min. Unhurried, or you often have a bag to carry.")),
-        ("normal", L("Normal"), L("400 m in about 5 min. Most people.")),
-        ("fast", L("Fast"), L("400 m in about 4 min. You're the one overtaking.")),
+        ("slow", L("Slow"), L("400 m in about 6 min. A relaxed pace, or if you often carry a bag.")),
+        ("normal", L("Normal"), L("400 m in about 5 min. An average pace.")),
+        ("fast", L("Fast"), L("400 m in about 4 min. A brisk pace.")),
     ]
 
     var body: some View {
@@ -418,13 +418,13 @@ private struct PermissionsStep: View {
     @Bindable var app: AppModel
 
     var body: some View {
-        StepTitle(title: L("Two last things"), sub: L("Both are optional. You can change them later in Settings."))
+        StepTitle(title: L("Two more things"), sub: L("Both are optional. You can change them later in Settings."))
         Text(L("Notifications")).font(.headline)
-        Text(L("A heads-up 5 minutes before you need to leave for class, and when it's time to go."))
+        Text(L("A reminder 5 minutes before you need to leave for class, and another when it's time to go."))
             .fixedSize(horizontal: false, vertical: true)
         if app.leaveAlerts { Hint(L("On.")) } else { Button(L("Turn on leave-by alerts")) { app.setLeaveAlerts(true) } }
         Text(L("Location")).font(.headline).padding(.top, 10)
-        Text(L("So answers start from the stop you're nearest. It's used for that answer only, rounded to about 11 m, and never saved."))
+        Text(L("So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored."))
             .fixedSize(horizontal: false, vertical: true)
         if app.needsLocation {
             Button(L("Allow location")) { app.askLocation() }
@@ -481,7 +481,7 @@ struct DevicesView: View {
                     }
                     .padding(.vertical, 2)
                 }
-                Hint(L("Removing a device signs it out. You're emailed about every device added or removed."))
+                Hint(L("Removing a device signs it out. You'll get an email whenever a device is added or removed."))
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }

@@ -49,7 +49,7 @@ struct Main: View {
             if model.needsLocation {
                 HStack(spacing: 10) {
                     Image(systemName: "location.fill").foregroundStyle(.blue).accessibilityHidden(true)
-                    Text(L("Start from the stop you're nearest")).font(.callout)
+                    Text(L("Start from my nearest stop")).font(.callout)
                     Spacer()
                     Button(L("Allow")) { model.askLocation() }.controlSize(.small)
                 }
@@ -59,7 +59,7 @@ struct Main: View {
                 // one) can lose the permission; say so instead of quietly guessing.
                 HStack(spacing: 10) {
                     Image(systemName: "location.slash").foregroundStyle(.secondary).accessibilityHidden(true)
-                    Text(L("Location is off, so answers follow your timetable")).font(.callout)
+                    Text(L("Location is off, so times are based on your timetable")).font(.callout)
                     Spacer()
                     Button(L("Settings")) { model.openLocationSettings() }.controlSize(.small)
                 }

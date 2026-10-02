@@ -37,7 +37,7 @@ struct Pair: View {
     private var emailCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: L("Sign in"))
-            Text(L("Use the email you set terminus up with. We'll email you a code to type here."))
+            Text(L("Use the email you set up terminus with. We'll send you a code to enter here."))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -106,7 +106,7 @@ struct Pair: View {
                 .monospacedDigit()
                 .foregroundStyle(Color.brand)
                 .accessibilityLabel(L("The number to choose: %@", "\(match)"))
-            Text(L("This Mac signs in by itself once you do. It works for 15 minutes."))
+            Text(L("This Mac will sign in automatically once you do. The code expires after 15 minutes."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

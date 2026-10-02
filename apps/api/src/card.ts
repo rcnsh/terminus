@@ -72,7 +72,7 @@ export interface Card {
   staleAt: string | null;
   /** "Quiet" / "Filling" / "Packed", for the bus in the headline. */
   crowd: string | null;
-  /** "Timetable estimate", "Live data a few minutes old", "No live data". */
+  /** "Timetable estimate", "Live times are a few minutes old", "No live data". */
   quality: string | null;
   /** "Leave by ~6:36 PM". Clients say "Leave now" once `leave.at` passes,
    *  except at the stop (phase `waiting`), where it's the bus: "D2 at 6:41 PM". */

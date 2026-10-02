@@ -216,7 +216,7 @@ final class AppModel {
                 let token = try await Api(token: nil).pair(code: code, name: String(name.prefix(40)))
                 guard TokenStore.write(token) else {
                     pairing = false
-                    pairError = L("Couldn't save the pairing on this Mac. Check there's disk space, then pair again.")
+                    pairError = L("Couldn't save the pairing on this Mac. Check that there's enough disk space, then pair again.")
                     return
                 }
                 paired = true
@@ -373,7 +373,7 @@ final class AppModel {
         signInRequest = nil
         guard let token = p.token, TokenStore.write(token) else {
             signInWaiting = nil
-            signInError = L("Couldn't save the sign-in on this Mac. Check there's disk space, then try again.")
+            signInError = L("Couldn't save the sign-in on this Mac. Check that there's enough disk space, then try again.")
             return
         }
         signInWaiting = nil
@@ -485,7 +485,7 @@ final class AppModel {
     func sendReport() {
         let note = reportNote.trimmingCharacters(in: .whitespacesAndNewlines)
         guard reported != nil || !note.isEmpty else {
-            reportResult = L("Say what was wrong: there's no answer on screen to send.")
+            reportResult = L("Please describe the problem. There's no answer on screen to attach.")
             return
         }
         reportSending = true
@@ -494,7 +494,7 @@ final class AppModel {
             do {
                 try await Api(token: TokenStore.read()).report(note: note, answer: reported)
                 reporting = false
-                reportResult = L("Thanks, sent. It helps make the answers better.")
+                reportResult = L("Thanks for the report. It helps us improve terminus.")
             } catch let e as ApiError {
                 reportResult = e.message
             } catch {
@@ -651,7 +651,7 @@ final class AppModel {
             return false
         } catch is DecodingError {
             // Not the network: the API sent something this version can't read.
-            error = update != nil ? L("Update terminus to keep going") : L("Unexpected answer from terminus")
+            error = update != nil ? L("Update terminus to continue") : L("Unexpected response from terminus")
             return false
         } catch {
             // kick() restarts the loop and cancels a refresh in flight; that

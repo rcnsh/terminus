@@ -38,7 +38,7 @@ async function get(path) {
 
 function stale(cachedAt) {
   $('#offline').hidden = cachedAt === null;
-  if (cachedAt !== null) $('#offline').textContent = t('Offline: showing what terminus saw at {0}.', clock(new Date(cachedAt).toISOString()));
+  if (cachedAt !== null) $('#offline').textContent = t("You're offline. Showing the update from {0}.", clock(new Date(cachedAt).toISOString()));
   document.body.classList.toggle('is-offline', cachedAt !== null);
 }
 
@@ -106,7 +106,7 @@ async function refresh() {
   } catch (err) {
     if (err.message === 'signed out' || mine !== generation) return;
     stale(Date.now());
-    $('#offline').textContent = t('Offline, and nothing saved yet. It will update when you are back online.');
+    $('#offline').textContent = t("You're offline and nothing has been saved yet. This will update when you're back online.");
   }
 }
 
@@ -252,7 +252,7 @@ async function removeFromToday(it, li) {
     clearTimeout(undoTimer);
   };
   bar.replaceChildren(
-    el('span', { textContent: t('{0} taken off today', name) }),
+    el('span', { textContent: t('{0} removed from today', name) }),
     el('button', {
       type: 'button',
       class: 'linkish',
@@ -377,8 +377,8 @@ async function setupPush() {
     $('#notify-on').className = `btn small ${on ? 'ghost' : 'accent'}`;
     $('#notify-on').dataset.on = on ? '1' : '';
   };
-  const OFF = t('A heads-up before you need to set off, and when your bus leaves, a quick "did you catch it?".');
-  const ON = t('On for this device. They follow your trip, the same as on your other devices.');
+  const OFF = t("A reminder before it's time to leave, then updates on your bus as your trip goes on.");
+  const ON = t('On for this device. Notifications follow your trip, as on your other devices.');
   if (perm === 'denied') {
     render(false, t('Notifications are blocked for this site. Allow them in your browser settings to turn this on.'));
     $('#notify-on').hidden = true;
@@ -408,10 +408,10 @@ async function setupPush() {
         await subscribe();
         render(true, ON);
       } else {
-        render(false, t('Notifications stay off: the browser was told not to allow them.'));
+        render(false, t('Notifications are blocked. To turn them on, allow notifications for this site in your browser settings.'));
       }
     } catch (err) {
-      render(false, t("Couldn't turn them on. {0}", err.message));
+      render(false, t("Couldn't turn on notifications. {0}", err.message));
     } finally {
       btn.disabled = false;
     }

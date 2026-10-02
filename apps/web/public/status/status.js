@@ -17,7 +17,7 @@ function duration(ms) {
 }
 
 const CAUSE = {
-  version: t('NUS released a new uNivUS version and stopped answering the old one'),
+  version: t('NUS released a new version of uNivUS and stopped accepting the old one'),
   feed: t("NUS's feed didn't answer"),
 };
 
@@ -30,14 +30,14 @@ function render(s) {
   } else if (s.feed === 'down') {
     dot.classList.add('bad');
     $('headline').textContent = t("NUS's live feed is down");
-    $('detail').textContent = t("Since {0}. The apps show timetable estimates until it's back.", dateTime(s.since));
+    $('detail').textContent = t("Since {0}. The apps show estimated times until it's restored.", dateTime(s.since));
   } else {
     dot.classList.add('off');
     $('headline').textContent = t('No checks yet');
     $('detail').textContent = '';
   }
   if (s.checkedAt) {
-    const note = s.checking ? t('Last checked {0}.', time(s.checkedAt)) : t('Checks have stopped; last one {0}.', dateTime(s.checkedAt));
+    const note = s.checking ? t('Last checked {0}.', time(s.checkedAt)) : t('Status checks have paused. Last check: {0}.', dateTime(s.checkedAt));
     $('detail').textContent = `${$('detail').textContent} ${note}`.trim();
     if (!s.checking) dot.className = 'dot warn';
   }
