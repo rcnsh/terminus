@@ -115,77 +115,29 @@ Read the commits (`git show <hash>`) for detail; the subjects are accurate.
 The owner approved a four-step plan. Push after each step and show evidence
 (videos or screenshots) before moving on.
 
-### Step 1: Android tab motion (half done, NOT on main)
+### Step 1: Android tab motion (done, on main)
 
-The work is saved as one commit on branch **`ccr-6bfb8175-pou0tm`**,
-"WIP: Android tabs fade through…". It has **not been compiled**: there's no
-Android SDK in the cloud container, and CI only builds `main` and PRs.
+`edd52e9`: tabs fade through (`AnimatedContent` in `Tabs()`), each tab's
+saved state kept, the map on a TextureView. The owner watched an emulator
+video and approved it. The map is rebuilt on each visit (returning to the
+saved camera) rather than kept alive in the background; the owner was told.
 
-To pick it up:
+### Step 2: web, Settings inside the app (done, on main)
 
-```sh
-git fetch origin ccr-6bfb8175-pou0tm
-git show origin/ccr-6bfb8175-pou0tm --stat
-git cherry-pick origin/ccr-6bfb8175-pou0tm     # onto main
-```
+`3ddea01`: Settings is `/app/#settings`. The account page's settings are a
+component, `account/settings.html` drawn by `account/settings.js`
+(`mountSettings`), used by both `/account/` and the app. The fade through is
+Web Animations in `app/app.js` `showTab()`; `in-app.js` and the view
+transitions are gone. Details are in `docs/internals.md` ("The web app").
 
-Then push to `main` and watch the **android** CI job. If it's red, fix and
-push. It holds the only compile check.
-
-What the commit does:
-
-- **`ui/MainActivity.kt` `Tabs()`:**
-  - The `when (tab)` content is wrapped in
-    `AnimatedContent(targetState = tab, transitionSpec = { fadeThrough() })`
-    (Material fade through: out in 90 ms, in over 210 ms after a 90 ms delay,
-    scale 0.92 → 1).
-  - Each tab sits inside `rememberSaveableStateHolder().SaveableStateProvider(t.name)`,
-    so scroll position and the map camera survive switching tabs.
-  - The imports in that file were re-sorted alphabetically.
-- **`ui/MapScreen.kt`:**
-  - The map uses `uiOptions = MapUiOptions { renderMode = AndroidRenderMode.Texture }`,
-    so it fades with the tab (a SurfaceView ignores alpha).
-  - The first-view camera fit is guarded by `rememberSaveable framed`, and the
-    pill's fit-to-line by `framedLine`, so coming back to the Map tab doesn't
-    re-frame.
-- **Not done, deliberately:** the plan said "keep the map alive in the
-  background". Hiding a live GL map while it's still polling is risky, so the
-  map is rebuilt on each visit but returns to the saved camera. Say so to the
-  owner, or do the keep-alive properly: compose it once, hide it, and pause
-  polling and glides while it's hidden.
-- **API reference:** the maplibre-compose 0.19.0 source is on GitHub
-  (`maplibre/maplibre-compose`, tag `v0.19.0`). `AndroidRenderMode` and
-  `MapUiOptions(from) { … }` are in `lib/maplibre-compose/src/androidMain|commonMain/.../map/`.
-- **Still to do for step 1:** a one-off workflow that runs the debug app on
-  an Android emulator and **records video** (`adb shell screenrecord`) of
-  switching tabs, uploaded as an artifact, for the owner to watch on their
-  phone.
-  - An earlier one-off emulator screenshot workflow existed. See commits
-    `5fed1b6`, `18ebd1f`, `297c9f0`, `9832f62`, `2c521e1`, and `082a9d2`,
-    which removed it. Reuse its setup: emulator action, debug flavour, the
-    stub API.
-  - Remove the workflow once it has served.
-  - Artifacts can't be downloaded in a cloud session (see "Gotchas"), but
-    the owner can open them on GitHub.
-
-### Step 2: web, Settings inside the app
-
-- Settings becomes a third view in `/app/`, with no page load.
-- The account page's code (`apps/web/public/account/app.js`, ~930 lines, plus
-  `account/index.html`) becomes a component that can draw into a container.
-- `/account/` keeps working standalone for desktop, email sign-in links and
-  onboarding, using the same component.
-- Replace the view-transition fade from `b309eeb` with plain CSS/Web
-  Animations fade-through, matching Android, so it works in every browser.
-- Keep `account/in-app.js` only if it's still needed.
-- **Testing:**
-  - Playwright + Chromium against the dev stub, with video recording
-    (`recordVideo`).
-  - Because the owner has no iPhone, add a one-off **macOS-runner workflow**
-    that boots an **iOS Simulator**, opens Mobile Safari on the dev stub
-    (runner localhost) and records with `xcrun simctl io booted recordVideo`.
-  - Also a Playwright **WebKit** run with an iPhone device profile, on CI,
-    since WebKit isn't installed in the container.
+- Checked in Chromium (this container), Playwright WebKit with an iPhone
+  profile and Mobile Safari on an iOS Simulator, through the one-off
+  **web tabs video** workflow. Remove it once the owner has watched it.
+- In the Simulator, opening the Map tab ended the WebDriver session (most
+  likely the simulator's WebGL), so that run leaves the map out. WebKit on
+  Linux draws it fine. Worth a look on a real iPhone when one is at hand.
+- WebDriver taps don't reach page handlers in Mobile Safari; the workflow
+  clicks by script.
 
 ### Step 3: Settings redesign on all three apps
 
