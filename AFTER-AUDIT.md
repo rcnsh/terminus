@@ -38,6 +38,15 @@ Check it:
 - Sign in on the website with the emailed **code** once: that's the path
   the migration is for.
 
+### The street map (once the map work is merged and deployed)
+
+Works from your phone too: GitHub → Actions → **map tiles** → Run workflow.
+It puts the campus map, its fonts and its icons on R2 (a few minutes). Then
+`https://terminus.rcn.sh/map/campus.pmtiles` downloads a file of about 4 MB.
+If the run fails at "Build and upload" with a Cloudflare sign-in error, the
+`CLOUDFLARE_API_TOKEN` secret is only in the `release` environment: add it
+as a repository secret too.
+
 ## 4. Beta (only if you use it)
 
 ```sh
