@@ -812,8 +812,8 @@ test('/map/style.json is a quiet light or dark map with every URL on our own dom
   assert.ok(light.glyphs.startsWith(`${BASE}/map/fonts/`));
   assert.equal(light.sprite, `${BASE}/map/sprites/v4/light`);
   assert.match(light.sources.protomaps.attribution, /OpenStreetMap/);
-  const pois = light.layers.find((l) => l.id === 'pois');
-  assert.match(JSON.stringify(pois.filter), /bus_stop/, 'the app draws its own stops');
+  assert.equal(light.layers.find((l) => l.id === 'pois'), undefined, 'quiet: no icons for libraries, cafés or its own bus stops');
+  assert.ok(light.layers.some((l) => l.id.startsWith('roads_labels')), 'street names stay');
 
   const dark = await (await get('/map/style.json?theme=dark&lang=zh')).json();
   assert.equal(dark.sprite, `${BASE}/map/sprites/v4/dark`);

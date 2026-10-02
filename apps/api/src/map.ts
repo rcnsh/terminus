@@ -29,24 +29,23 @@ const ATTRIBUTION = '<a href="https://www.openstreetmap.org/copyright">© OpenSt
 const FONT = /^\/map\/fonts\/(Noto Sans (?:Regular|Medium|Italic))\/(\d{1,5}-\d{1,5})\.pbf$/;
 const SPRITE = /^\/map\/sprites\/v4\/(light|dark)(@2x)?\.(json|png)$/;
 
-/** Kinds of place the base map would mark that the app marks itself, or
- *  that only clutter a campus map. */
-const HIDDEN_POIS = ['bus_stop'];
+/**
+ * The base map's points of interest (libraries, parks, cafés, its own bus
+ * stops): left out, so the routes and stops on top are what stands out.
+ * Street, area and place names stay.
+ */
+const HIDDEN_LAYERS = new Set(['pois']);
 
 export type Theme = 'light' | 'dark';
 
 /**
- * The style: Protomaps' light or dark map, quietened so the bus routes and
- * stops on top stand out, with every URL absolute (MapLibre Native needs
- * that).
+ * The style: Protomaps' light or dark map without its points of interest,
+ * so the bus routes and stops on top stand out, with every URL absolute
+ * (MapLibre Native needs that).
  */
 export function mapStyle(origin: string, theme: Theme, lang: 'en' | 'zh'): Record<string, unknown> {
   const flavor = namedFlavor(theme);
-  const base = layers('protomaps', flavor, { lang: lang === 'zh' ? 'zh-Hans' : 'en' }).map((layer) => {
-    if (layer.id !== 'pois' || layer.type !== 'symbol') return layer;
-    const filter = layer.filter ? ['all', layer.filter, ['!', ['in', ['get', 'kind'], ['literal', HIDDEN_POIS]]]] : undefined;
-    return { ...layer, filter } as typeof layer;
-  });
+  const base = layers('protomaps', flavor, { lang: lang === 'zh' ? 'zh-Hans' : 'en' }).filter((layer) => !HIDDEN_LAYERS.has(layer.id));
   return {
     version: 8,
     name: `terminus ${theme}`,
