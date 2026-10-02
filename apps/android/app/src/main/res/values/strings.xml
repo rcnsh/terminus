@@ -166,6 +166,7 @@
     <string name="language_hint">Also used on your Mac, on the web and in emails. Place and bus names stay in English, as on the signs.</string>
     <string name="all_off">All off</string>
     <string name="devices_need_email">Add an email to use other devices</string>
+    <string name="heading_appearance">Appearance</string>
     <string name="heading_your_trips">Your trips</string>
     <string name="just_now">just now</string>
     <string name="keep_account">Keep my account\'s setup</string>
@@ -329,6 +330,10 @@
     <string name="taken_off_today">%1$s removed from today</string>
     <string name="tap_to_pair">Tap to pair this phone</string>
     <string name="tap_to_refresh">Tap to refresh</string>
+    <string name="theme">Theme</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_hint">Only on this phone.</string>
+    <string name="theme_light">Light</string>
     <string name="this_phone">" (this phone)"</string>
     <string name="thursday">Thursday</string>
     <string name="thursday_short">Thu</string>

@@ -6,7 +6,7 @@ import SwiftUI
 /// Settings' groups, in the order the sidebar shows them: the same as the
 /// phone's and the website's.
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case trips, timetable, favourites, notifications, devices, language, account
+    case trips, timetable, favourites, notifications, devices, language, appearance, account
 
     var id: String { rawValue }
 
@@ -18,6 +18,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .notifications: L("Notifications")
         case .devices: L("Devices")
         case .language: L("Language")
+        case .appearance: L("Appearance")
         case .account: L("Account")
         }
     }
@@ -30,6 +31,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .notifications: "bell"
         case .devices: "laptopcomputer.and.iphone"
         case .language: "globe"
+        case .appearance: "circle.lefthalf.filled"
         case .account: "person.crop.circle"
         }
     }
@@ -101,6 +103,7 @@ struct SettingsPaneView: View {
     let pane: SettingsPane
     @Bindable var app: AppModel
     let setup: SetupModel
+    @AppStorage(Appearance.key) private var theme = "auto"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -133,6 +136,15 @@ struct SettingsPaneView: View {
                 }
                 .pickerStyle(.radioGroup)
                 Hint(L("Also used for emails and on your other devices. Place and bus names stay in English, as on the signs."))
+            case .appearance:
+                Picker(L("Theme"), selection: $theme) {
+                    Text(L("Follow this Mac")).tag("auto")
+                    Text(L("Light")).tag("light")
+                    Text(L("Dark")).tag("dark")
+                }
+                .pickerStyle(.radioGroup)
+                .onChange(of: theme) { Appearance.apply() }
+                Hint(L("Only on this Mac."))
             case .account:
                 account
             }

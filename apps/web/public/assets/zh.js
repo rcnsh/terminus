@@ -421,5 +421,9 @@ window.TERMINUS_ZH = {
  "Off": "关闭",
  "Add an email to use other devices": "添加邮箱后可在其他设备上使用",
  "1 device": "1 台设备",
- "{0} devices": "{0} 台设备"
+ "{0} devices": "{0} 台设备",
+ "Appearance": "外观",
+ "Theme": "主题",
+ "Follow this device": "跟随此设备",
+ "Only in this browser.": "仅限此浏览器。"
 };

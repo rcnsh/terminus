@@ -603,6 +603,15 @@ function wire() {
     window.i18n?.setLang(v);
   });
 
+  // This browser only, so straight away, with nothing to save.
+  for (const radio of root.querySelectorAll('input[name="theme"]')) {
+    radio.checked = radio.value === (window.theme?.pref() ?? 'auto');
+    radio.addEventListener('change', () => {
+      window.theme?.set(radio.value);
+      renderSummaries();
+    });
+  }
+
   $('#pace').addEventListener('change', (e) => {
     profile.walkPace = e.target.value;
     save();
@@ -744,7 +753,7 @@ function wire() {
 
 /* ---------- pages ---------- */
 
-const PAGES = ['trips', 'timetable', 'favourites', 'notifications', 'devices', 'language', 'account'];
+const PAGES = ['trips', 'timetable', 'favourites', 'notifications', 'devices', 'language', 'appearance', 'account'];
 /** The addresses: the list's (#settings in the web app, none on the account page) and a page's prefix. */
 let listHash = '';
 let pageHash = '#';
@@ -786,6 +795,7 @@ function renderSummaries() {
   sum('notifications', notify?.dataset.on ? t('On for this device') : t('Off'));
   sum('devices', me?.anonymous ? t('Add an email to use other devices') : deviceCount === null ? '' : deviceCount === 1 ? t('1 device') : t('{0} devices', deviceCount));
   sum('language', { en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'));
+  sum('appearance', { light: t('Light'), dark: t('Dark') }[window.theme?.pref()] ?? t('Follow this device'));
   sum('account', me?.email ?? t('No email'));
 }
 

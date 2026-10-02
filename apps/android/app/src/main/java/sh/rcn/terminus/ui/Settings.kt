@@ -76,6 +76,7 @@ import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Device
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.SavedPlace
+import sh.rcn.terminus.Theme
 import sh.rcn.terminus.Trip
 import sh.rcn.terminus.UsualTime
 import sh.rcn.terminus.WEEKDAYS
@@ -97,6 +98,7 @@ internal enum class SettingsPage(val title: Int) {
     Notifications(R.string.notifications),
     Devices(R.string.heading_devices),
     Language(R.string.heading_language),
+    Appearance(R.string.heading_appearance),
     Account(R.string.heading_account),
 }
 
@@ -230,6 +232,7 @@ private fun SettingsList(state: AccountState, main: MainViewModel, onClose: () -
                         Lang.ZH -> "中文"
                         else -> stringResource(R.string.follow_device)
                     }
+                    SettingsPage.Appearance -> stringResource(themeName(Theme.pref(ctx)))
                     SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
                 }
                 Row(
@@ -251,6 +254,12 @@ private fun SettingsList(state: AccountState, main: MainViewModel, onClose: () -
             }
         }
     }
+}
+
+private fun themeName(theme: String) = when (theme) {
+    Theme.LIGHT -> R.string.theme_light
+    Theme.DARK -> R.string.theme_dark
+    else -> R.string.follow_device
 }
 
 private fun paceName(pace: String) = when (pace) {
@@ -303,6 +312,7 @@ private fun SettingsPageContent(
             }
         }
         SettingsPage.Language -> LanguagePicker(account)
+        SettingsPage.Appearance -> ThemePicker()
         SettingsPage.Account -> AccountSection(state, account, main, onAddEmail, onSignedOut)
     }
 }
@@ -653,6 +663,19 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
     }
     note?.let { Hint(it) }
     LaunchedEffect(Unit) { account.loadCampus() }
+}
+
+/** Light, dark or the phone's own setting, on this phone only. */
+@Composable
+private fun ThemePicker() {
+    val ctx = LocalContext.current
+    Choice(
+        stringResource(R.string.theme),
+        listOf(Theme.AUTO, Theme.LIGHT, Theme.DARK).map { it to stringResource(themeName(it)) },
+        Theme.pref(ctx),
+        { it?.let { pref -> Theme.set(ctx, pref) } },
+    )
+    Hint(stringResource(R.string.theme_hint), Modifier.padding(top = 4.dp))
 }
 
 /** Follow the phone, English or 中文 (phase 10). The languages are named in themselves. */

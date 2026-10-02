@@ -298,13 +298,18 @@ Settings. It uses the same routes as the account page, with the session cookie.
   Add an email in Account. It reloads the profile each time it's opened again,
   since a stop may have been saved as a place on the map.
 - **Settings' pages.** A list of groups (Your trips, Timetable, Favourites,
-  Notifications in the app, Devices, Language, Account), each with a line
+  Notifications in the app, Devices, Language, Appearance, Account), each with a line
   saying what's set, opening its page. The page is in the address (`#trips`
   on the account page, `#settings/trips` in the app), so the browser's Back
   returns to the list. On a phone the page slides in over the list; from
   900 px wide they sit side by side. The installed app on an iPhone, which has
   no browser swipe, goes back on a swipe from the left edge. "Notify me when
   to leave" is under Notifications.
+- **Theme.** Appearance chooses light, dark or the device's own, for this
+  browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
+  page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`
+  has the dark colours under both the device's dark mode (unless
+  `data-theme="light"`) and `data-theme="dark"`. The map follows it too.
 
 - **Install.** `/manifest.webmanifest` has `start_url` `/app/`, the icons in
   `assets/icons` (drawn by `apps/android/store/render.swift`), and a share

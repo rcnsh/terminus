@@ -11,7 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exit(0)
         }
         #endif
-        MainActor.assumeIsolated { _ = AppModel.shared }
+        MainActor.assumeIsolated {
+            Appearance.apply()
+            _ = AppModel.shared
+        }
     }
 }
 

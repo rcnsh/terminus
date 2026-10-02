@@ -46,6 +46,10 @@
         <span class="row-text"><span class="row-title">Language</span><span class="row-sum" data-sum="language"></span></span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
       </button>
+      <button type="button" class="settings-row" data-page="appearance">
+        <span class="row-text"><span class="row-title">Appearance</span><span class="row-sum" data-sum="appearance"></span></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
       <button type="button" class="settings-row" data-page="account">
         <span class="row-text"><span class="row-title">Account</span><span class="row-sum" data-sum="account"></span></span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
@@ -206,6 +210,22 @@
           <option value="zh" data-no-t>中文</option>
         </select>
         <p class="hint">Also used for emails and on your other devices. Place and bus names stay in English, as on the signs.</p>
+      </div>
+    </section>
+
+    <section class="settings-page" data-page="appearance" aria-labelledby="page-appearance" hidden>
+      <header class="page-head">
+        <button type="button" class="page-back" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+        <h2 id="page-appearance" tabindex="-1">Appearance</h2>
+      </header>
+      <div class="card">
+        <fieldset class="theme-choice">
+          <legend>Theme</legend>
+          <label class="check"><input type="radio" name="theme" value="auto"> Follow this device</label>
+          <label class="check"><input type="radio" name="theme" value="light"> Light</label>
+          <label class="check"><input type="radio" name="theme" value="dark"> Dark</label>
+        </fieldset>
+        <p class="hint">Only in this browser.</p>
       </div>
     </section>
 

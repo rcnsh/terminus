@@ -27,6 +27,8 @@
   --display: "Space Grotesk", var(--font);
   color-scheme: light;
 }
+/* Dark: the device's own dark mode, unless this browser chose light in
+   Settings › Appearance (theme.js sets data-theme); or dark, chosen there. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0f0e0d;
@@ -49,6 +51,27 @@
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0e0d;
+  --surface: #1a1816;
+  --surface-2: #211f1c;
+  --ink: #f2efeb;
+  --muted: #a39d97;
+  --faint: #6f6964;
+  --line: #2c2926;
+  --line-strong: #6f6964;
+  --accent: #fb923c;
+  --accent-bright: #fb923c;
+  --accent-soft: #2a1a0e;
+  --good: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --good-ink: #4ade80;
+  --warn-ink: #fbbf24;
+  --bad-ink: #f87171;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -84,10 +107,11 @@ p { margin: 0; }
 .nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 18px; padding-bottom: 18px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
 .brand img { width: 30px; height: 30px; border-radius: 8px; }
+/* The mark's dark tile vanishes on a dark page without an edge. */
 @media (prefers-color-scheme: dark) {
-  /* The mark's dark tile vanishes on a dark page without an edge. */
   :root:not([data-theme="light"]) .brand img { box-shadow: 0 0 0 1px var(--line-strong); }
 }
+:root[data-theme="dark"] .brand img { box-shadow: 0 0 0 1px var(--line-strong); }
 .wordmark { font: 600 1.25rem/1 var(--display); letter-spacing: -0.03em; }
 .wordmark b { font-weight: inherit; color: var(--accent); }
 /* Only on beta.terminus.rcn.sh, added by the Worker (apps/api/src/site.ts). */

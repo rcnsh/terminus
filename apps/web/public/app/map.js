@@ -49,7 +49,8 @@ let shown = new Map();
 let glides = new Map();
 let glide = null;
 
-const dark = () => window.matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light';
+/** Dark as the page is: the theme chosen in Settings, or the device's (assets/theme.js). */
+const dark = () => window.theme?.dark() ?? window.matchMedia('(prefers-color-scheme: dark)').matches;
 const lang = () => (window.i18n?.lang === 'zh' ? 'zh' : 'en');
 const styleUrl = () => `/map/style.json?theme=${dark() ? 'dark' : 'light'}&lang=${lang()}`;
 const colorOf = (svc) => campus?.routes[svc]?.color ?? '#8a939c';
@@ -168,6 +169,7 @@ async function build() {
   // Our layers again after every style load: the first, and each light/dark switch.
   map.on('style.load', addLayers);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => map.setStyle(styleUrl()));
+  document.addEventListener('themechange', () => map.setStyle(styleUrl()));
   map.on('click', onClick);
   for (const layer of ['stops', 'stop-names', 'buses']) {
     map.on('mouseenter', layer, () => (map.getCanvas().style.cursor = 'pointer'));

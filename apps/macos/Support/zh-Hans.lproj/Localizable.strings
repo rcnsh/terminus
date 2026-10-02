@@ -25,6 +25,7 @@
 "Allow terminus in System Settings → Notifications" = "请在“系统设置”→“通知”中允许 terminus";
 "Allowed." = "已允许。";
 "Also used for emails and on your other devices. Place and bus names stay in English, as on the signs." = "也用于电子邮件和你的其他设备。地点和巴士名称保持英文，与站牌一致。";
+"Appearance" = "外观";
 "Available in one tap from the menu bar. Add favourites, and the times you usually go, on the account page or in the phone app." = "在菜单栏中一键可用。在账户页面或手机应用中添加收藏和你常去的时间。";
 "Back" = "返回";
 "Both are optional. You can change them later in Settings." = "都是可选的，之后可以在“设置”里修改。";
@@ -46,6 +47,7 @@
 "Couldn't save that" = "无法保存";
 "Couldn't save the pairing on this Mac. Check that there's enough disk space, then pair again." = "无法在这台 Mac 上保存配对。请确认磁盘空间充足，然后重新配对。";
 "Couldn't save the sign-in on this Mac. Check that there's enough disk space, then try again." = "无法在这台 Mac 上保存登录信息。请确认磁盘空间充足，然后重试。";
+"Dark" = "深色";
 "Favourites" = "收藏";
 "Included in your departure time when your location isn't available." = "无法获取你的位置时，会计入出发时间。";
 "Departures near you" = "你附近的发车";
@@ -76,6 +78,7 @@
 "Leaves in %@ min %@ s" = "%1$@ 分 %2$@ 秒后开";
 "Leaves in %@ s" = "%@ 秒后开";
 "Leaving now" = "正在开出";
+"Light" = "浅色";
 "Live" = "实时";
 "Live times are a few minutes old" = "实时时间已是几分钟前的";
 "Loading" = "正在加载";
@@ -105,8 +108,10 @@
 "Off campus, or I'll pick a stop" = "校外，或我自己选车站";
 "Off hours" = "休息时间";
 "Offline" = "离线";
+"Only on this Mac." = "仅限这台 Mac。";
 "Open the account page" = "打开账户页面";
 "Settings…" = "设置…";
+"Theme" = "主题";
 "Timetable" = "课表";
 "Updating times…" = "正在更新时间…";
 "On the %@" = "在 %@ 上";

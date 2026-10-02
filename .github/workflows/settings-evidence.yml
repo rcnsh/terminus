@@ -1,7 +1,8 @@
 # ONE-OFF (step 3 of the redesign in HANDOFF.md; delete once watched): the
 # new Settings on an Android emulator against the dev stub, recorded opening
-# groups and going back (the back gesture and the back key), and the Mac
-# app's snapshot renders of each settings group. Both are the run's artifacts.
+# groups, going back (the back gesture and the back key) and switching the
+# theme, and the Mac app's snapshot renders of each settings group. Both are
+# the run's artifacts.
 name: settings evidence
 
 on:
@@ -15,7 +16,6 @@ permissions:
 
 jobs:
   android:
-    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,6 +92,13 @@ jobs:
           open_row 'Language'
           edge_back
           open_row 'Account'
+          adb shell input keyevent KEYCODE_BACK; sleep 2
+          # The theme: dark, light, then back to following the phone.
+          # The picker is a menu: opened by its current value, then the new one chosen.
+          open_row 'Appearance'
+          open_row 'Follow this phone'; open_row 'Dark'; sleep 1
+          open_row 'Dark'; open_row 'Light'; sleep 1
+          open_row 'Light'; open_row 'Follow this phone'; sleep 1
           adb shell input keyevent KEYCODE_BACK; sleep 2
           adb exec-out screencap -p > list.png
           adb shell pkill -INT screenrecord

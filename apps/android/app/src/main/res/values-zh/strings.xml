@@ -166,6 +166,7 @@
     <string name="language_hint">也用于你的 Mac、网页和电子邮件。地点和巴士名称保持英文，与站牌一致。</string>
     <string name="all_off">全部关闭</string>
     <string name="devices_need_email">添加邮箱后可在其他设备上使用</string>
+    <string name="heading_appearance">外观</string>
     <string name="heading_your_trips">你的行程</string>
     <string name="just_now">刚刚</string>
     <string name="keep_account">保留账户的设置</string>
@@ -329,6 +330,10 @@
     <string name="taken_off_today">已从今天移除 %1$s</string>
     <string name="tap_to_pair">点按以配对这部手机</string>
     <string name="tap_to_refresh">点按以刷新</string>
+    <string name="theme">主题</string>
+    <string name="theme_dark">深色</string>
+    <string name="theme_hint">仅限这部手机。</string>
+    <string name="theme_light">浅色</string>
     <string name="this_phone">（这部手机）</string>
     <string name="thursday">星期四</string>
     <string name="thursday_short">周四</string>

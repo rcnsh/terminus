@@ -31,6 +31,7 @@ const SHELL_FILES = [
   '/account/preview.js',
   '/account/account.css',
   '/assets/site.css',
+  '/assets/theme.js',
   '/assets/i18n.js',
   '/assets/zh.js',
   '/assets/mark.svg',
