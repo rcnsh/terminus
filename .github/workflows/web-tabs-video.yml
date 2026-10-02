@@ -144,26 +144,17 @@ jobs:
             const seen = await run('return location.href + " :: " + document.body.innerText.slice(0, 300)').catch(() => '');
             throw new Error(`not found: ${sel} (on ${seen})`);
           };
-          const click = async (sel, using) => call('POST', `/session/${s}/element/${await find(sel, using)}/click`, {});
-          await call('POST', `/session/${s}/url`, { url: 'http://localhost:8787/account/?next=/app/' });
-          const runAsync = (script) => call('POST', `/session/${s}/execute/async`, { script, args: [] });
-          // What the sign-in calls answer in this Safari, for the log.
-          const probe = await runAsync(`const done = arguments[arguments.length - 1];
-            fetch('/auth/anon/web', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}', credentials: 'same-origin' })
-              .then(async (r) => 'anon ' + r.status + ' ' + (await r.text()).slice(0, 120))
-              .then(async (a) => { const m = await fetch('/me', { credentials: 'same-origin' }); done(a + ' / me ' + m.status); })
-              .catch((e) => done('error ' + e));`);
-          console.log(`::notice::iOS Simulator sign-in probe: ${probe}`);
+          // A tap from WebDriver doesn't reach the page's handlers in Mobile Safari; a script click does.
+          const click = async (sel, using) => call('POST', `/session/${s}/execute/sync`, { script: 'arguments[0].click()', args: [{ 'element-6066-11e4-a52e-4f735466cecf': await find(sel, using) }] });
           await call('POST', `/session/${s}/url`, { url: 'http://localhost:8787/account/?next=/app/' });
           // Once the page's script has wired the button: tapped until setup shows.
           await sleep(3000);
           for (let i = 0; i < 5 && !(await run("return !!document.querySelector('#onboarding:not([hidden])')")); i++) {
-            if (i % 2) await run("document.querySelector('#no-email').click()");
-            else await click('#no-email');
+            await click('#no-email');
             await sleep(2500);
           }
           await click("//button[contains(., 'Skip setup')]", 'xpath');
-          await find('#preview .big, #preview .detail');
+          await find('.tabbar a[data-tab="map"]');
           await sleep(2000);
           const rec = spawn('xcrun', ['simctl', 'io', process.env.UDID, 'recordVideo', '--codec=h264', '--force', 'ios-simulator.mp4'], { stdio: 'inherit' });
           await sleep(3000);
