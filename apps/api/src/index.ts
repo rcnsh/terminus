@@ -28,6 +28,7 @@ import { accountsConfigured } from './accounts.ts';
 import { readIncidents, readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
 import { handleDownload } from './downloads.ts';
+import { handleMap } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
@@ -315,6 +316,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       }
       const dl = await handleDownload(url.pathname, env);
       if (dl) return dl;
+      // The street map: open like the website, and served from R2 or built.
+      const map = await handleMap(req, url, env);
+      if (map) return map;
 
       switch (url.pathname) {
         case '/docs':

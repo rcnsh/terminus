@@ -730,3 +730,74 @@ test('every response carries nosniff and HSTS; HTML gets a CSP, /docs one that a
   assert.match(docs.headers.get('content-security-policy'), /script-src[^;]*unpkg\.com/);
   assert.match(await docs.text(), /integrity="sha384-/);
 });
+
+/** An R2 bucket that understands range requests, as the real one does. */
+function rangedBucket(files) {
+  return {
+    async get(key, opts = {}) {
+      if (!files.has(key)) return null;
+      const data = new TextEncoder().encode(files.get(key));
+      const etag = `"${key.length}-${data.length}"`;
+      const h = opts.onlyIf instanceof Headers ? opts.onlyIf : new Headers();
+      const base = { size: data.length, httpEtag: etag };
+      if (h.get('if-none-match') === etag) return base;
+      const r = opts.range instanceof Headers ? /bytes=(\d+)-(\d+)?/.exec(opts.range.get('range') ?? '') : null;
+      if (!r) return { ...base, body: data };
+      const offset = Number(r[1]);
+      if (offset >= data.length) throw new Error('range not satisfiable');
+      const end = r[2] != null ? Math.min(Number(r[2]), data.length - 1) : data.length - 1;
+      return { ...base, body: data.slice(offset, end + 1), range: { offset, length: end - offset + 1 } };
+    },
+  };
+}
+
+test('/map serves the map file in pieces, and its fonts and icons', async () => {
+  const files = new Map([
+    ['map/campus.pmtiles', 'PMTiles-0123456789'],
+    ['map/fonts/Noto Sans Regular/0-255.pbf', 'GLYPHS'],
+    ['map/sprites/v4/dark@2x.png', 'PNG'],
+  ]);
+  const env = { ...makeEnv(), DOWNLOADS: rangedBucket(files) };
+  const get = async (p, headers) => (await call(p, { fetchImpl: makeFetch({}), env, headers })).res;
+
+  const part = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
+  assert.equal(part.status, 206);
+  assert.equal(await part.text(), 'PMTiles');
+  assert.equal(part.headers.get('content-range'), 'bytes 0-6/18');
+  assert.equal(part.headers.get('accept-ranges'), 'bytes');
+  const etag = part.headers.get('etag');
+  assert.ok(etag);
+
+  const whole = await get('/map/campus.pmtiles');
+  assert.equal(whole.status, 200);
+  assert.equal(whole.headers.get('content-length'), '18');
+  assert.equal((await get('/map/campus.pmtiles', { 'if-none-match': etag })).status, 304);
+  assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=99-' })).status, 416);
+
+  const glyphs = await get('/map/fonts/Noto%20Sans%20Regular/0-255.pbf');
+  assert.equal(glyphs.status, 200);
+  assert.equal(glyphs.headers.get('content-type'), 'application/x-protobuf');
+  assert.equal((await get('/map/sprites/v4/dark@2x.png')).headers.get('content-type'), 'image/png');
+
+  // Nothing else under map/ is reachable.
+  assert.equal((await get('/map/fonts/..%2F..%2Flatest.json/0-255.pbf')).status, 404);
+  assert.equal((await get('/map/latest.json')).status, 404);
+  assert.equal((await get('/map/fonts/Noto Sans Regular/0-255.pbf.bak')).status, 404);
+});
+
+test('/map/style.json is a quiet light or dark map with every URL on our own domain', async () => {
+  const get = async (p) => (await call(p, { fetchImpl: makeFetch({}) })).res;
+  const light = await (await get('/map/style.json')).json();
+  assert.equal(light.version, 8);
+  assert.equal(light.sources.protomaps.url, `pmtiles://${BASE}/map/campus.pmtiles`);
+  assert.ok(light.glyphs.startsWith(`${BASE}/map/fonts/`));
+  assert.equal(light.sprite, `${BASE}/map/sprites/v4/light`);
+  assert.match(light.sources.protomaps.attribution, /OpenStreetMap/);
+  const pois = light.layers.find((l) => l.id === 'pois');
+  assert.match(JSON.stringify(pois.filter), /bus_stop/, 'the app draws its own stops');
+
+  const dark = await (await get('/map/style.json?theme=dark&lang=zh')).json();
+  assert.equal(dark.sprite, `${BASE}/map/sprites/v4/dark`);
+  assert.notDeepEqual(dark.layers.find((l) => l.id === 'background').paint, light.layers.find((l) => l.id === 'background').paint);
+  assert.match(JSON.stringify(dark.layers), /name:zh-Hans/, 'Chinese labels where OpenStreetMap has them');
+});
