@@ -156,8 +156,8 @@ Language, Account), each with a line saying what's set, opening its page.
   sidebar and a back arrow; the menu keeps quick actions. The popover's tabs
   already had a sliding highlight and a crossfade (`Tabs.swift`,
   `MainView.swift`), so nothing changed there.
-- Evidence: the one-off **settings evidence** workflow (Android emulator
-  video, Mac renders). Remove it once the owner has looked. The Mac renders
+- Evidence: a one-off **settings evidence** workflow (Android emulator
+  video, Mac renders), removed after the owner looked. The Mac renders
   need `macos-latest`: `macos-15`'s Swift rejects `LeaveNotifier.swift:52`.
 - Not checked by eye from the cloud session: the Mac renders and the Android
   video (artifacts can't be downloaded here).
