@@ -8,35 +8,48 @@ struct Header: View {
     var body: some View {
         let a = model.showNearby ? model.plan : model.shown
         let resting = !model.showNearby && a?.mode == "rest"
+        // Offline with the plan gone stale: the day plan's next thing (OfflineDay).
+        let offline = !model.showNearby && model.target == .plan ? model.offlinePick(at: model.clock) : nil
         HStack(alignment: .center, spacing: 12) {
             IconTile(
                 system: model.showNearby ? "location.fill" : resting ? "moon.zzz.fill" : a?.arrived == true ? "checkmark.circle.fill" : "bus.fill",
                 tint: .brand
             )
             VStack(alignment: .leading, spacing: 3) {
-                Text(heading(a))
+                Text(offline.map { p in [L("Offline"), OfflineDay.lines(p).head].compactMap { $0 }.joined(separator: " · ") } ?? heading(a))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 // Ticks every second: the countdown and the dimming are
                 // computed from the departure time, never from `label`.
                 Ticking(every: 1) { now in
-                    let old = !model.showNearby && !resting && a?.arrived != true && model.isOld(a, at: now)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(model.showNearby ? L("Departures near you") : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)))
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundStyle(old ? .secondary : .primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        if old {
-                            StatusLine(color: .gray, text: L("Old times · refreshing"))
-                        } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
-                            let left = Int(at.timeIntervalSince(now))
-                            StatusLine(color: a.leaveLate ? .red : .brand, text: left <= 0 ? L("Time to go") : left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)"))
-                        } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
-                            StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
-                        } else {
-                            StatusLine(color: resting ? .brand : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : a?.isFree == true ? L("Nothing to catch") : a?.arrived == true ? L("You're at the stop") : status(a))
+                    if let p = offline.flatMap({ _ in model.offlinePick(at: now) }) {
+                        let lines = OfflineDay.lines(p)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(lines.big)
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            StatusLine(color: .gray, text: L("Offline"))
+                        }
+                    } else {
+                        let old = !model.showNearby && !resting && a?.arrived != true && model.isOld(a, at: now)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(model.showNearby ? L("Departures near you") : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)))
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundStyle(old ? .secondary : .primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            if old {
+                                StatusLine(color: .gray, text: L("Old times · refreshing"))
+                            } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
+                                let left = Int(at.timeIntervalSince(now))
+                                StatusLine(color: a.leaveLate ? .red : .brand, text: left <= 0 ? L("Time to go") : left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)"))
+                            } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
+                                StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
+                            } else {
+                                StatusLine(color: resting ? .brand : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : a?.isFree == true ? L("Nothing to catch") : a?.arrived == true ? L("You're at the stop") : status(a))
+                            }
                         }
                     }
                 }
