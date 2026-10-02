@@ -145,11 +145,21 @@ jobs:
             throw new Error(`not found: ${sel} (on ${seen})`);
           };
           // A tap from WebDriver doesn't reach the page's handlers in Mobile Safari; a script click does.
-          const click = async (sel, using) => call('POST', `/session/${s}/execute/sync`, { script: 'arguments[0].click()', args: [{ 'element-6066-11e4-a52e-4f735466cecf': await find(sel, using) }] });
+          // A click that leaves the page can answer "no such window": it still happened.
+          const click = async (sel, using) => {
+            const id = await find(sel, using);
+            try {
+              await call('POST', `/session/${s}/execute/sync`, { script: 'arguments[0].click()', args: [{ 'element-6066-11e4-a52e-4f735466cecf': id }] });
+            } catch (e) {
+              if (!/no such window/.test(e.message)) throw e;
+              await sleep(2000);
+            }
+          };
           await call('POST', `/session/${s}/url`, { url: 'http://localhost:8787/account/?next=/app/' });
           // Once the page's script has wired the button: tapped until setup shows.
           await sleep(3000);
-          for (let i = 0; i < 5 && !(await run("return !!document.querySelector('#onboarding:not([hidden])')")); i++) {
+          const setupShown = () => run("return !!document.querySelector('#onboarding:not([hidden])')").catch(() => false);
+          for (let i = 0; i < 5 && !(await setupShown()); i++) {
             await click('#no-email');
             await sleep(2500);
           }
