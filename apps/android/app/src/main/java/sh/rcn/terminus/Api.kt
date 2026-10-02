@@ -285,7 +285,8 @@ data class DayItem(
 
 data class OnBus(val svc: String, val off: String?, val arriveMs: Long?)
 
-data class DayPlan(val items: List<DayItem>, val note: String?) {
+/** `date` is the SGT day it's for (YYYY-MM-DD): a plan kept for offline is only used that day. */
+data class DayPlan(val items: List<DayItem>, val note: String?, val date: String? = null) {
     companion object {
         fun parse(o: JSONObject): DayPlan {
             val a = o.optJSONArray("items") ?: JSONArray()
@@ -315,6 +316,7 @@ data class DayPlan(val items: List<DayItem>, val note: String?) {
                     )
                 },
                 note = o.optStringOrNull("note"),
+                date = o.optStringOrNull("date"),
             )
         }
     }
@@ -556,7 +558,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** Today's timeline. */
-    suspend fun day(): DayPlan = DayPlan.parse(request("GET", "/me/day" + if (hour12) "?h12=1" else ""))
+    suspend fun day(): DayPlan = DayPlan.parse(dayJson())
+
+    /** /me/day as it came: kept for when the phone is offline ([Store.saveDay]). */
+    suspend fun dayJson(): JSONObject = request("GET", "/me/day" + if (hour12) "?h12=1" else "")
 
     /** Whose account a pairing code belongs to (masked), without spending it. */
     suspend fun pairCheck(code: String): String =

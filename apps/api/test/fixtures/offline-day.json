@@ -1,0 +1,22 @@
+{
+  "_help": [
+    "What an app shows offline, from the day plan it kept (answers/day.json,",
+    "fetched Thu 2026-08-27 09:00 SGT): the item it falls back to at each",
+    "moment, and which line. The web, Android and Mac tests all read this",
+    "file, so the three apps make the same choice. Times are UTC; SGT is +8.",
+    "step: leaveBy (before the leave-by), leaveNow (after it, before the",
+    "class has been on for 15 min), home (a trip home). null: nothing to show."
+  ],
+  "day": "answers/day.json",
+  "cases": [
+    { "at": "2026-08-27T01:00:00Z", "key": "4:600:UTOWN", "step": "leaveBy" },
+    { "at": "2026-08-27T01:40:00Z", "key": "4:600:UTOWN", "step": "leaveNow" },
+    { "at": "2026-08-27T02:10:00Z", "key": "4:600:UTOWN", "step": "leaveNow" },
+    { "at": "2026-08-27T02:20:00Z", "key": "gap-home:UTOWN", "step": "home" },
+    { "at": "2026-08-27T05:10:00Z", "key": "4:840:COM3", "step": "leaveBy" },
+    { "at": "2026-08-27T05:45:00Z", "key": "4:840:COM3", "step": "leaveNow" },
+    { "at": "2026-08-27T07:30:00Z", "key": "home:900", "step": "home" },
+    { "at": "2026-08-27T08:10:00Z", "key": null, "step": null },
+    { "at": "2026-08-28T01:00:00Z", "key": null, "step": null }
+  ]
+}

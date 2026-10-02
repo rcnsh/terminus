@@ -72,6 +72,9 @@ struct Main: View {
             ZStack(alignment: .top) {
                 if model.showNearby {
                     NearbyList(stops: model.nearby).transition(.opacity.combined(with: .offset(y: 6)))
+                } else if model.target == .plan, let p = model.offlinePick(at: model.clock) {
+                    // Offline, the stale answer's details would mislead: how to the day plan's next thing.
+                    OfflineDetail(pick: p).transition(.opacity.combined(with: .offset(y: 6)))
                 } else {
                     AnswerDetail(answer: answer, busy: model.signalling, onAction: model.signal, onChoice: model.choose).transition(.opacity.combined(with: .offset(y: 6)))
                 }

@@ -48,7 +48,7 @@ final class AppModel {
     var error: String?
     var updated: Date?
 
-    /// Today, for the popover: fetched while it's open, at most every 2 minutes.
+    /// Today, for the popover, and kept for when the Mac goes offline (OfflineDay).
     var day: DayPlan?
     private var dayFetched: Date?
     /// Just taken off Today, offered back with Undo for a few seconds.
@@ -165,9 +165,17 @@ final class AppModel {
     /// Outside the user's day the plan rests: no bus, a moon in the menu bar.
     var resting: Bool { plan?.mode == "rest" }
 
+    /// Offline (the last refresh failed) with the plan gone stale, or none
+    /// yet: the next thing on the day plan kept for it.
+    func offlinePick(at now: Date) -> OfflineDay.Pick? {
+        guard error != nil, plan == nil || isOld(plan, at: now) else { return nil }
+        return OfflineDay.next(day, now: now)
+    }
+
     /// The menu bar text at `now`: "D2 4m" counted from the departure time,
     /// or nil for the plain icon once the bus has gone or there's no bus.
     func menuTitle(at now: Date) -> String? {
+        if let p = offlinePick(at: now) { return OfflineDay.menuTitle(p) }
         // A trip under way: its phase, as the phone and the widget say it.
         if let plan, plan.tripUnderWay, let g = plan.card?.glance { return g }
         guard let plan, plan.quality != "ended", plan.card?.kind != "setup", !plan.isFree else { return nil }
@@ -619,9 +627,14 @@ final class AppModel {
             updated = Date()
             clock = Date()
             LeaveNotifier.shared.update(p)
-            if popoverOpen, dayFetched.map({ Date().timeIntervalSince($0) > 120 }) ?? true {
+            // Today: while the popover is open, at most every 2 minutes; and,
+            // for when the Mac goes offline (OfflineDay), whenever the one kept
+            // is another day's or an hour old.
+            let dayAge = dayFetched.map { Date().timeIntervalSince($0) } ?? .infinity
+            if (popoverOpen && dayAge > 120) || dayAge > 3600 || day?.date != OfflineDay.sgtDate(Date()) {
                 dayFetched = Date()
-                day = try? await api.day()
+                // A failed fetch keeps the plan there was: it's what offline falls back to.
+                if let d = try? await api.day() { day = d }
             }
             return true
         } catch let e as ApiError where e.status == 401 && TokenStore.read() != token {

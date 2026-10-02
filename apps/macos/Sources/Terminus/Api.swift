@@ -310,6 +310,8 @@ struct DayPlan: Decodable {
         let status: String
         let fromName: String?
         let startsAt: String
+        /// A trip home: when it stops being the next thing (nil: an hour after it starts).
+        let endsAt: String?
         let leave: Leave?
         let timing: Timing?
         let onBus: OnBus?
@@ -332,6 +334,8 @@ struct DayPlan: Decodable {
     }
     var items: [Item]
     let note: String?
+    /// The SGT day it's for (YYYY-MM-DD): a plan kept for offline is only used that day.
+    let date: String?
 }
 
 /// A button on the card: `id` is the signal to send, `trip` which trip it's about.

@@ -292,6 +292,18 @@ page. It uses the same routes as the account page, with the session cookie.
   is down, the kept reply comes back with `x-terminus-cached` (when it was
   fetched), and the page dims the card and says so. Signing out, deleting the
   account or a 401 empties the kept replies.
+- **Offline, all day.** Once the kept answer has gone stale (its bus has
+  left, or 15 minutes have passed) and the network is still down, every app
+  falls back to the day plan it kept from `/me/day`: the next class's
+  leave-by and how ("Leave by ~13:38 · walk"), "Leave now" once that has
+  passed, then the trip home. The rule is the same on all three
+  (`app/offline.js`, `OfflineDay.kt`, `OfflineDay.swift`): skip what was done
+  or taken off when the plan was fetched, a class 15 minutes after it starts,
+  and a trip home at its end (or an hour after it starts); only a plan for
+  today counts. All three are tested against `test/fixtures/offline-day.json`
+  on the `/me/day` golden. The Android widget's background refresh fetches
+  `/me/day` hourly to keep the plan current, and arms a redraw alarm (no
+  network needed) for the moment the offline line next changes.
 - **Push.** `POST /me/push` with `{subscription}` keeps the browser's Web Push
   subscription on the session as `web:` plus its JSON, next to where an
   Android session keeps its FCM token. So the Trip object's nudges reach both,

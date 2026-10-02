@@ -1,0 +1,92 @@
+{
+  "date": "2026-08-27",
+  "dayStart": "2026-08-26T22:00:00Z",
+  "dayEnd": "2026-08-27T10:00:00Z",
+  "items": [
+    {
+      "kind": "class",
+      "key": "4:600:UTOWN",
+      "label": "GEA1000 @ UTown",
+      "status": "next",
+      "from": "PGP",
+      "fromName": "PGP",
+      "to": "UTOWN",
+      "toName": "UTown",
+      "startsAt": "2026-08-27T02:00:00Z",
+      "endsAt": "2026-08-27T03:00:00Z",
+      "removable": true,
+      "leave": {
+        "at": "2026-08-27T01:36:40Z",
+        "estimated": true,
+        "svc": "R2",
+        "stop": "PGP",
+        "stopCode": "PGP",
+        "board": "2026-08-27T01:42:00Z",
+        "arrive": "2026-08-27T01:51:30Z",
+        "note": null
+      },
+      "timing": {
+        "status": "on-time",
+        "text": "Arrive 09:15 · 45 min early",
+        "classAt": "2026-08-27T02:00:00Z",
+        "reachAt": "2026-08-27T01:15:30Z"
+      }
+    },
+    {
+      "kind": "home",
+      "key": "gap-home:UTOWN",
+      "label": "Home",
+      "status": "later",
+      "from": "UTOWN",
+      "fromName": "UTown",
+      "to": "PGP",
+      "toName": "PGP",
+      "startsAt": "2026-08-27T03:00:00Z",
+      "endsAt": "2026-08-27T05:00:00Z",
+      "removable": true
+    },
+    {
+      "kind": "class",
+      "key": "4:840:COM3",
+      "label": "CS2030 @ COM1",
+      "status": "later",
+      "from": "PGP",
+      "fromName": "PGP",
+      "to": "COM3",
+      "toName": "COM 3",
+      "startsAt": "2026-08-27T06:00:00Z",
+      "endsAt": "2026-08-27T07:00:00Z",
+      "venue": "COM1",
+      "removable": true,
+      "leave": {
+        "at": "2026-08-27T05:39:16Z",
+        "estimated": false,
+        "svc": null,
+        "stop": null,
+        "board": null,
+        "arrive": "2026-08-27T05:57:00Z",
+        "note": null
+      },
+      "timing": {
+        "status": "on-time",
+        "text": "Arrive 09:17 · 282 min early",
+        "classAt": "2026-08-27T06:00:00Z",
+        "reachAt": "2026-08-27T01:17:44Z"
+      }
+    },
+    {
+      "kind": "home",
+      "key": "home:900",
+      "label": "Home",
+      "status": "later",
+      "from": "COM3",
+      "fromName": "COM 3",
+      "to": "PGP",
+      "toName": "PGP",
+      "startsAt": "2026-08-27T07:00:00Z",
+      "endsAt": null,
+      "removable": true
+    }
+  ],
+  "note": null
+}
