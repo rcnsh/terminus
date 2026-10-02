@@ -72,7 +72,7 @@ data class NextAnswer(
     /** The headline bus, when it's not the one to wait for. */
     val goNowLine: String? get() = card?.goNow
     /** "Quiet" / "Filling" / "Packed". */
-    val crowdText: String? get() = card?.crowd
+    val crowdText: String? get() = card?.crowd?.takeUnless { detail.contains(it, ignoreCase = true) }
     /** "Timetable estimate", "Live data a few minutes old", "No live data". */
     val qualityText: String? get() = card?.quality
 

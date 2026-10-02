@@ -158,7 +158,9 @@ export function show(a) {
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const big = timed ? `${svc} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label;
   const old = isOld(a);
-  const notes = [a.card?.quality, a.card?.crowd].filter(Boolean).join(' · ');
+  // The crowd only when the detail line doesn't already say it ("· packed ·").
+  const crowd = a.card?.crowd && !a.detail?.toLowerCase().includes(a.card.crowd.toLowerCase()) ? a.card.crowd : null;
+  const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');
   box.className = old ? 'widget old' : 'widget';
   box.replaceChildren(
     ...[

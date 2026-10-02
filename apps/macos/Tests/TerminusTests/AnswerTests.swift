@@ -17,13 +17,20 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect(try golden(name).card != nil)
 }
 
+@Test func crowdIsShownOnceWhenTheDetailSaysIt() throws {
+    // "… · packed · or D2 in 14 min": no separate "Packed" under it.
+    let a = try golden("place")
+    #expect(a.detail.contains("packed"))
+    #expect(a.crowdText == nil)
+}
+
 @Test func classCardLinesComeFromTheServer() throws {
     let a = try golden("class-bus")
     #expect(a.isClassPlan)
     #expect(a.catchHow == "Catch the ~09:42 R2 at PGP")
     #expect(a.catchArrive == "Arrive ~09:51 · 9 min early")
     #expect(a.goNowLine == "Or go now: R2 at 09:06 · arrive 09:15")
-    #expect(a.crowdText == "Filling")
+    #expect(a.card?.crowd == "Filling")
     let at = try #require(a.leaveAt)
     #expect(a.leaveHeadline(now: at.addingTimeInterval(-1)) == "Leave by ~09:36")
     #expect(a.leaveHeadline(now: at) == "Leave now")
