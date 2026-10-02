@@ -11,6 +11,7 @@ git checkout main
 git pull
 pnpm install
 pnpm test          # optional: the API tests, as CI runs them
+pnpm lint          # optional: oxlint, as CI runs it
 ```
 
 ## 2. Sign in to Cloudflare (skip if already signed in)
@@ -82,6 +83,11 @@ scripts/release.sh             # uploads the APK and pushes the tag
 
 The release workflow now refuses a tag that isn't on `main`, so release from
 `main`.
+
+Its actions were bumped to new major versions (Dependabot, PR #4), which CI
+doesn't run. Before the real release, check them with a run that publishes
+nothing: GitHub → Actions → release → Run workflow, on `main`. It builds,
+signs and packages the Mac app and keeps the DMG as an artifact.
 
 ## 7. Undecided: hardened runtime for the Mac app
 

@@ -169,7 +169,7 @@ async function serve(req, res) {
     const out = [...TRIPS.instances.entries()].map(([id, o]) => ({
       id,
       alarm: TRIPS.alarms.has(id) ? new Date(TRIPS.alarms.get(id)).toISOString() : null,
-      storage: Object.fromEntries([...o.storage._map.entries()]),
+      storage: Object.fromEntries(o.storage._map.entries()),
     }));
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(out, null, 1));
@@ -212,7 +212,10 @@ async function serve(req, res) {
   if (cookies.length) outHeaders['set-cookie'] = cookies.map((c) => c.replace(`${DEV_COOKIE}=`, 'tm_dev=').replace(/; Secure/i, ''));
   res.writeHead(out.status, outHeaders);
   res.end(Buffer.from(await out.arrayBuffer()));
-  if (email.sent.length) console.log('sign-in code:', email.lastCode(), ' link:', email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`), (email.sent.length = 0);
+  if (email.sent.length) {
+    console.log('sign-in code:', email.lastCode(), ' link:', email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`);
+    email.sent.length = 0;
+  }
 }
 
 http.createServer(serve).listen(PORT, () => console.log(`dev API with fake buses on http://localhost:${PORT} (pairing codes TEST67, TEST78, TEST89)`));

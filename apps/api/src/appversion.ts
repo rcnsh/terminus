@@ -143,7 +143,7 @@ export async function autoUpdateVersion(env: Env, nowMs: number, detail: string 
   const current = parseVersion(currentString);
   if (!current) return { status: 'failed', note: `the current version string (${currentString || 'unset'}) is not univus_android_<name>_<code>` };
 
-  const state: AutoState = { tried: [], lookedAt: 0, ...((await env.KV.get<AutoState>(KV_AUTO, 'json').catch(() => null)) ?? {}) };
+  const state: AutoState = { tried: [], lookedAt: 0, ...(await env.KV.get<AutoState>(KV_AUTO, 'json').catch(() => null)) };
   const f: Findings = { refusal: versionsFromRefusal(detail), play: null, apkcombo: null, errors: [] };
   const lookedUp = nowMs - state.lookedAt >= LOOKUP_EVERY_MS;
   if (lookedUp) {

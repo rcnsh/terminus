@@ -61,7 +61,7 @@ async function setup({ push = true } = {}) {
     if (cookie) headers.cookie = cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }), env, ctx);
+    const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, ctx);
     await ctx.settle();
     return res;
   };
@@ -110,7 +110,7 @@ test('a device registers its push token; the same token moves with the device', 
 });
 
 test('the Trip object wakes when the phase changes and nudges the phone, once per change', async () => {
-  const { call, phone, next, fcm, TRIPS, clock, alarm, wakeUntil } = await setup();
+  const { call, phone, next, fcm, TRIPS, alarm, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   const first = await next(phone);
   assert.equal(first.card.phase, 'idle');
