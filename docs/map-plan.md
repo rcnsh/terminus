@@ -117,4 +117,39 @@ they come in.
 
 ## Phase 0 findings
 
-(Filled in as Phase 0 runs.)
+### 0.1 Libraries
+
+- **maplibre-compose** has moved to `org.maplibre.compose:maplibre-compose` (0.19.0, released 1 October 2026).
+  - Maintained in the MapLibre organisation, and very active.
+  - Built with Kotlin 2.4.20 and Compose 1.12. Needs Android minSdk 24 (the app is 31).
+  - Runs on Android, iOS, desktop and web.
+  - Android needs a render runtime alongside it: `maplibre-compose-runtime-vulkan-android` (or the OpenGL one).
+  - Offline packs (a bounding box and zoom range, downloaded and then used automatically) work on Android and iOS, but not in the browser.
+  - The location dot never asks for permission itself.
+- **MapLibre Native Android** 13.6.1 is what maplibre-compose uses. Its native code per CPU type:
+
+  | | arm64 | armv7 | x86 | x86_64 |
+  |---|---|---|---|---|
+  | uncompressed | 12.8 MB | 9.5 MB | 13.2 MB | 13.4 MB |
+  | compressed | ~4.5 MB | ~3.9 MB | ~4.6 MB | ~4.6 MB |
+
+  The build tools store native code uncompressed by default, so a universal APK would grow by about 49 MB. A per-CPU arm64 APK grows by about 13 MB, or about 4.5 MB with `packaging.jniLibs.useLegacyPackaging = true`; that's the plan.
+- **Web:** `maplibre-gl` 6.11.2 and `pmtiles` 4.5.0 on npm. cdnjs is unreachable from the build container, so the web app will serve MapLibre from our own domain (copied from npm), not cdnjs. That keeps the site's security policy same-site and lets the service worker cache it for offline use.
+
+### 0.2 Route shapes
+
+- **Plan A is out.** The bus proxy has no route-shape endpoint: `check-point`, `checkpoint`, `route`, `routes`, `polyline`, `service-description` and the like all return 404.
+- The proxy does have `active-bus`: the live position, heading and crowding of each bus on a route. That could put moving buses on the map later, but it isn't in this plan.
+- **Plan B:** route each service stop to stop along OpenStreetMap's drivable roads, respecting one-way streets and choosing the correct side of the road at each stop. Probed with a one-off workflow, since Overpass (OpenStreetMap's query service) can't be reached from the build container.
+
+### 0.3 The map file
+
+- The Worker serves R2 files today without range support. R2's `get(key, { range: request.headers })` handles it, so serving `206` partial responses is a small addition.
+- The Protomaps build server can't be reached from the build container; the file is cut in the one-off workflow.
+
+### 0.4 Fonts and icons
+
+- `protomaps/basemaps-assets` has Noto Sans in Regular, Medium and Italic, split into 256 small character-range files (about 6 MB per weight), plus light and dark icon sets. MapLibre fetches only the ranges a label uses.
+- Chinese labels need no font files: MapLibre draws CJK characters with the device's fonts (`localIdeographFontFamily`).
+- Fonts and icons go on R2 with the map file.
+- `@protomaps/basemaps` 5.7.2 generates the map style, including a `lang` option.
