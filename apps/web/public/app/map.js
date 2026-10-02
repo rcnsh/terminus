@@ -169,7 +169,7 @@ async function build() {
   map.on('style.load', addLayers);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => map.setStyle(styleUrl()));
   map.on('click', onClick);
-  for (const layer of ['stops', 'buses']) {
+  for (const layer of ['stops', 'stop-names', 'buses']) {
     map.on('mouseenter', layer, () => (map.getCanvas().style.cursor = 'pointer'));
     map.on('mouseleave', layer, () => (map.getCanvas().style.cursor = ''));
   }
@@ -509,11 +509,30 @@ function drawBuses(buses) {
 /** Re-renders the open sheet's live part; null when no sheet is open. */
 let sheetRefresh = null;
 
+/** How far from a stop or bus a tap still picks it, in pixels: about a
+ *  fingertip on a touch screen, less with a mouse. */
+const tapSlop = () => (window.matchMedia('(pointer: coarse)').matches ? 24 : 10);
+
+/** The stop or bus nearest the tap, within [tapSlop]; else a stop's name
+ *  under the finger. */
 function onClick(e) {
-  const hit = map.queryRenderedFeatures(e.point, { layers: ['buses', 'stops'] })[0];
-  if (!hit) return closeSheet();
-  if (hit.layer.id === 'buses') openBus(hit.properties.id);
-  else openStop(hit.properties.code);
+  const r = tapSlop();
+  const around = (n) => [[e.point.x - n, e.point.y - n], [e.point.x + n, e.point.y + n]];
+  let best = null;
+  for (const f of map.queryRenderedFeatures(around(r), { layers: ['buses', 'stops'] })) {
+    const p = map.project(f.geometry.coordinates);
+    // A bus wins over a stop under it.
+    const d = Math.hypot(p.x - e.point.x, p.y - e.point.y) - (f.layer.id === 'buses' ? 12 : 0);
+    if (d <= r && (!best || d < best.d)) best = { f, d };
+  }
+  // A stop's name, tapped on (not just near), is the stop, after any dot.
+  if (!best) {
+    const [name] = map.queryRenderedFeatures(around(4), { layers: ['stop-names'] });
+    if (name) best = { f: name };
+  }
+  if (!best) return closeSheet();
+  if (best.f.layer.id === 'buses') openBus(best.f.properties.id);
+  else openStop(best.f.properties.code);
 }
 
 function closeSheet() {

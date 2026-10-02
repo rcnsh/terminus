@@ -34,6 +34,14 @@ class MapDataTest {
         assertEquals(1.2955, b[3], 1e-9)
     }
 
+    @Test fun aTapTakingInTwoStopsOpensTheNearer() {
+        val (campus, _) = CampusMap.parse(campusJson)
+        assertEquals("BG-MRT", campus.nearest(listOf("COM3", "BG-MRT"), 1.3220, 103.8150))
+        assertEquals("COM3", campus.nearest(listOf("BG-MRT", "COM3"), 1.2950, 103.7746))
+        assertEquals("without a position, the first", "COM3", campus.nearest(listOf("COM3", "BG-MRT"), null, null))
+        assertNull(campus.nearest(emptyList(), 1.0, 103.0))
+    }
+
     @Test fun badColoursAreGrey() {
         assertEquals(0xFF8A939CL, parseColor("nope"))
         assertEquals(0xFF8A939CL, parseColor(null))

@@ -109,6 +109,14 @@ data class CampusMap(val stops: List<MapStop>, val routes: Map<String, MapRoute>
 
     fun stop(code: String) = stops.firstOrNull { it.code == code }
 
+    /** Of the stops [codes], the one nearest ([lat], [lon]): a tap's slop can take in two stops a road apart. */
+    fun nearest(codes: List<String>, lat: Double?, lon: Double?): String? {
+        val known = codes.distinct().mapNotNull(::stop)
+        if (lat == null || lon == null) return known.firstOrNull()?.code ?: codes.firstOrNull()
+        val k = cos(lat * PI / 180)
+        return known.minByOrNull { (it.lat - lat).pow(2) + ((it.lon - lon) * k).pow(2) }?.code ?: codes.firstOrNull()
+    }
+
     /** [west, south, east, north] of the main campus (not P's trip to the Botanic Gardens). */
     fun coreBounds(core: Set<String>): DoubleArray {
         val pts = stops.filter { it.code in core }.ifEmpty { stops }

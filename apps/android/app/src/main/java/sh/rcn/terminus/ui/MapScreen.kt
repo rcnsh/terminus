@@ -82,6 +82,7 @@ import org.maplibre.compose.expressions.value.LineCap
 import org.maplibre.compose.expressions.value.LineJoin
 import org.maplibre.compose.expressions.value.SymbolAnchor
 import org.maplibre.compose.interaction.ClickResult
+import org.maplibre.compose.layers.FeaturesClickHandler
 import org.maplibre.compose.interaction.MapInteractions
 import org.maplibre.compose.layers.CircleLayer
 import org.maplibre.compose.layers.LineLayer
@@ -281,6 +282,12 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 join = const(LineJoin.Round),
             )
         }
+        // Of the stops a tap takes in, the one nearest the finger.
+        val openNearestStop: FeaturesClickHandler = { features ->
+            val codes = features.mapNotNull { it.properties?.get("code")?.toString()?.trim('"') }
+            campus.nearest(codes, position?.latitude, position?.longitude)?.let(actions.openStop)
+            ClickResult.Consume
+        }
         val onRoute = if (selected == null) const(true) else feature["services"].asString().contains(" $selected ")
         CircleLayer(
             id = "stops",
@@ -291,11 +298,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             strokeWidth = interpolate(linear(), zoom(), 13 to const(1.dp), 16 to const(2.dp)),
             opacity = switch(condition(onRoute, const(1f)), fallback = const(0.35f)),
             strokeOpacity = switch(condition(onRoute, const(1f)), fallback = const(0.35f)),
-            hitPadding = 12.dp,
-            onClick = { features ->
-                features.firstOrNull()?.properties?.get("code")?.toString()?.trim('"')?.let(actions.openStop)
-                ClickResult.Consume
-            },
+            // About a fingertip: the dots are small.
+            hitPadding = 24.dp,
+            onClick = openNearestStop,
         )
         SymbolLayer(
             id = "stop-names",
@@ -312,6 +317,8 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             textOptional = const(true),
             textMaxWidth = const(8.em),
             textOpacity = switch(condition(onRoute, const(1f)), fallback = const(0.4f)),
+            hitPadding = 4.dp,
+            onClick = openNearestStop,
         )
         CircleLayer(id = "me-halo", source = meSource, radius = const(14.dp), color = const(Color(0xFF2B7BF3)), opacity = const(0.18f))
         CircleLayer(id = "me", source = meSource, radius = const(6.5.dp), color = const(Color(0xFF2B7BF3)), strokeColor = const(Color.White), strokeWidth = const(2.5.dp))
