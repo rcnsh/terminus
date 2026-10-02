@@ -533,6 +533,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'unknown destination: pass ?to= a stop or venue code': '未知的目的地：用 ?to= 指定车站或地点代码',
   'pass lat and lon, or ?from= a stop code': '请提供 lat 和 lon，或用 ?from= 指定车站代码',
   'unknown stop': '未知的车站',
+  'unknown service': '未知的路线',
   'that request came from another site': '这个请求来自其他网站',
   'no such trip today': '今天没有这趟行程',
   'too many requests, slow down': '请求太多了，请慢一点',
