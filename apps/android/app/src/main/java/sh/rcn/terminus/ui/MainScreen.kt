@@ -73,7 +73,7 @@ import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
 
 @Composable
-internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit) {
+internal fun MainScreen(state: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
@@ -107,14 +107,14 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { Wordmark(MaterialTheme.typography.titleLarge) }
-            TextButton(onClick = onSettings) { Text(stringResource(R.string.settings)) }
         }
 
         state.update?.let { v ->
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
-                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/download/android".toUri())) }) { Text(stringResource(R.string.update)) }
+                    // The APK built for this phone's CPU (the site falls back to arm64).
+                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}".toUri())) }) { Text(stringResource(R.string.update)) }
                 }
             }
         }

@@ -152,7 +152,7 @@ export function makeAnalytics() {
  * so the forced-refresh retry can be exercised. Every proxy request is kept in
  * `requests` so tests can assert on headers and body.
  */
-export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null, fcm = null } = {}) {
+export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null, fcm = null } = {}) {
   const counts = { auth: 0, shuttle: 0 };
   const requests = [];
   const mints = [];
@@ -198,6 +198,11 @@ export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = 
         return Response.json({ code: rejectCode, msg: rejectCode === '10009' ? 'We have a new release of uNivUS' : 'token invalid', data: null });
       }
       if (raw) return Response.json(raw);
+      // active-bus: one service's buses, as the proxy shapes them.
+      if (url.endsWith('/active-bus')) {
+        const list = buses[body.route_code] ?? [];
+        return Response.json({ code: '00000', msg: '', data: { ActiveBusCount: list.length, TimeStamp: '2026-10-02 09:14:02', activebus: list } });
+      }
       return Response.json(shuttlePayload(byStop[body.busstopname] ?? []));
     }
 

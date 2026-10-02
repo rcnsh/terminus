@@ -54,6 +54,7 @@
     <h2>What is not stored</h2>
     <ul>
       <li><strong>Your location.</strong> When the app sends your location to find the nearest stop, it is rounded to about 11 metres, used for that one answer and not saved. The same answer also checks whether you are inside an on-campus residence that your home stops serve, so it doesn't send you home when you're already there; which residence is never stored. It travels in the request's address, and terminus's own request logs are switched off; Cloudflare, which carries every request, processes it only to deliver it.</li>
+      <li><strong>Where you are on the map.</strong> The dot on the campus map is drawn by your device from its own location, and only when you have already allowed location. It is not sent to terminus.</li>
       <li>No tracking, ads, analytics cookies or trackers. The only cookie is the one that keeps you signed in.</li>
     </ul>
     <p>To tune its estimates, terminus records anonymous statistics about answers: which stop, which service and bus (its plate), and how long until it came. These carry no account, email or location.</p>
@@ -73,6 +74,7 @@
     <p>If you turn on notifications in the web app, the same message goes through your browser's own push service (Apple's for Safari, Google's for Chrome, Mozilla's for Firefox), encrypted so that only your browser can read it. Your browser then asks terminus for the details and shows the notification. Turning notifications off in the web app, or signing out there, removes the address.</p>
     <p>When you import a timetable, terminus asks <strong>NUSMods</strong> for the timetables of the modules in your link. It sends module codes only, nothing about you.</p>
     <p>Walking times follow footpaths from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> (map data &copy; OpenStreetMap contributors), with room positions from NUSMods. Both were downloaded once to work out distances; nothing about you is ever sent to either.</p>
+    <p>The campus map's streets come from <a href="https://protomaps.com">Protomaps</a>' build of OpenStreetMap, the bus route lines from OpenStreetMap's roads. terminus keeps its own copy and serves it from this site, so no map company sees where you look. <strong>Walking directions</strong> on a stop opens Google Maps (or Apple Maps on Apple devices) with that stop's position, only when you tap it; from there their own privacy terms apply.</p>
 
     <h2>How long it is kept</h2>
     <ul>

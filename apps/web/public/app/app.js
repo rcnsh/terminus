@@ -1,5 +1,6 @@
 // The installed web app (phase 5): the answer card and today, the way the
-// phone app shows them. Settings are the account page, one tap away.
+// phone app shows them, and the campus map (app/map.js). A bar along the
+// bottom switches between them; Settings is the account page.
 //
 // The service worker (/sw.js) answers /me/next and /me/day from its cache
 // when the network is down; those replies carry x-terminus-cached with when
@@ -17,7 +18,7 @@ const standalone = window.matchMedia('(display-mode: standalone)').matches || na
 // iPadOS says it's a Mac; one with a touch screen is an iPad.
 const iPhone = !/Android/.test(navigator.userAgent) && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-/** What the card shows: the plan, a saved place (its key), or the buses nearby. */
+/** What the card shows: the plan, a saved place (its key), a stop picked on the map, or the buses nearby. */
 let target = { kind: 'plan' };
 let places = [];
 
@@ -77,7 +78,7 @@ async function refresh() {
   if (target.kind === 'nearby') return refreshNearby(mine);
   try {
     const at = await here();
-    const params = { ...(target.kind === 'place' ? { place: target.key } : {}), ...at };
+    const params = { ...(target.kind === 'place' ? { place: target.key } : target.kind === 'stop' ? { to: target.to } : {}), ...at };
     const [nextR, dayR] = await Promise.allSettled([get(`/me/next${query(params)}`), get(`/me/day${query()}`)]);
     if (mine !== generation) return;
     if (nextR.status === 'rejected' && nextR.reason?.message === 'signed out') return;
@@ -158,7 +159,45 @@ function renderChips() {
     chip(t('Next'), { kind: 'plan' }),
     ...places.map((p) => chip(p.label, { kind: 'place', key: p.key })),
     chip(t('Nearby'), { kind: 'nearby' }),
+    // A stop picked on the map (Go there), until another chip is tapped.
+    target.kind === 'stop' ? chip(target.label, target) : '',
   );
+}
+
+/* ---------- tabs ---------- */
+
+let mapModule = null;
+let tab = 'now';
+
+/** Now or Map, from the address (#map), so Back and a reload keep the tab. */
+async function showTab() {
+  const next = location.hash === '#map' ? 'map' : 'now';
+  if (next === tab && (next === 'now' || mapModule)) return;
+  tab = next;
+  for (const a of document.querySelectorAll('.tabbar a[data-tab]')) {
+    if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  }
+  document.body.classList.toggle('on-map', tab === 'map');
+  $('#tab-map').hidden = tab !== 'map';
+  if (tab === 'map') {
+    mapModule ??= await import('/app/map.js');
+    if (tab === 'map') mapModule.showMap();
+  } else {
+    mapModule?.hideMap();
+    refresh();
+  }
+}
+
+/** Go there, from a stop on the map: Now, with the card for that stop. */
+function goToStop({ code, name, place }) {
+  // A saved place already has its chip: that one, not a second.
+  target = place ? { kind: 'place', key: place } : { kind: 'stop', to: code, label: name };
+  renderChips();
+  $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
+  $('#updated').textContent = '';
+  if (location.hash === '#map') history.pushState(null, '', '#now');
+  showTab();
 }
 
 /** Every bus at the stops around you, from the browser's location. */
@@ -393,9 +432,15 @@ async function start() {
   }
   renderChips();
   setupPush();
+  window.addEventListener('hashchange', showTab);
+  document.addEventListener('go-to-stop', (e) => goToStop(e.detail));
+  // A stop saved as a place on the map: its chip comes with the next card.
+  document.addEventListener('places-changed', refresh);
+  showTab();
   await refresh();
-  setInterval(() => document.visibilityState === 'visible' && refresh(), REFRESH_MS);
-  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refresh());
+  const nowShown = () => document.visibilityState === 'visible' && tab === 'now';
+  setInterval(() => nowShown() && refresh(), REFRESH_MS);
+  document.addEventListener('visibilitychange', () => nowShown() && refresh());
   window.addEventListener('online', refresh);
   document.addEventListener('trip-signal', refresh);
 }

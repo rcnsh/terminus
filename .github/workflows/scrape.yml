@@ -37,6 +37,13 @@ jobs:
           NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
         run: python3 apps/api/scripts/scrape_stops.py
 
+      # Each service's path along OpenStreetMap roads, for the map. Overpass is
+      # often busy: on failure the committed shapes stay, and the API draws a
+      # route whose stops changed as straight lines until next week.
+      - name: Route shapes
+        continue-on-error: true
+        run: python3 apps/api/scripts/route_shapes.py
+
       # Semester dates (NUSMods) and public holidays (MOM). No credentials.
       - name: Refresh calendar
         run: python3 apps/api/scripts/fetch_calendar.py
@@ -52,12 +59,12 @@ jobs:
 
       - name: Commit if changed
         run: |
-          if git diff --quiet -- apps/api/data/stops.json apps/api/data/calendar.json; then
-            echo "stop graph and calendar unchanged"
+          if git diff --quiet -- apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json; then
+            echo "stop graph, shapes and calendar unchanged"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/api/data/stops.json apps/api/data/calendar.json
-          git commit -m "data: refresh stop graph and calendar"
+          git add apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json
+          git commit -m "data: refresh stop graph, shapes and calendar"
           git push

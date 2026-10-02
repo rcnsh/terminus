@@ -13,10 +13,11 @@ import { sgt } from './config.ts';
 import { venueToStop } from './nusmods.ts';
 import { appVersion, authConfigured, getSession } from './auth.ts';
 import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
-import { fmsConfigured, getArrivals } from './fms.ts';
+import { fmsConfigured, getArrivals, getBuses } from './fms.ts';
 import { shortStop } from './format.ts';
 import { boardAt, indexGraph } from './resolve.ts';
-import { buildCampusMap, buildDestinations } from './campus.ts';
+import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
+import { placeBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
 import { adminStats, isOperator } from './admin.ts';
 import { analyticsEnabled, logError } from './analytics.ts';
@@ -27,6 +28,7 @@ import { accountsConfigured } from './accounts.ts';
 import { readIncidents, readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
 import { handleDownload } from './downloads.ts';
+import { handleMap } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
@@ -162,6 +164,26 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   });
 }
 
+/**
+ * GET /buses?svc=<service> -- where that service's buses are now, for the
+ * map. One upstream call per service per 10s however many people watch it
+ * (getBuses). Like /arrivals, an unreachable feed is `available: false`, not
+ * an error and not "no buses".
+ */
+async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
+  const svc = url.searchParams.get('svc')?.trim().toUpperCase() || '';
+  if (!GRAPH.routes?.[svc]) return json({ error: 'unknown service', svc }, 400);
+  const live = await getBuses(env, ctx, svc, nowMs).catch(() => null);
+  return json({
+    svc,
+    color: ROUTE_COLORS[svc] ?? null,
+    buses: live ? await placeBuses(GRAPH, svc, live.buses) : [],
+    asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
+    available: Boolean(live),
+    stale: Boolean(live?.stale),
+  }, 200, { 'cache-control': 'private, max-age=5' });
+}
+
 /** The cron runs every 15 minutes; older than this and it has stopped. */
 const CRON_STALE_MS = 40 * 60_000;
 
@@ -248,7 +270,7 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
 const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
-const KEYED = ['/next', '/trip', '/arrivals', '/campus', '/stops/pairs'];
+const KEYED = ['/next', '/trip', '/arrivals', '/buses', '/campus', '/stops/pairs'];
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
@@ -292,8 +314,11 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return json({ error: 'too many requests for this key, slow down' }, 429, { 'retry-after': '60' });
         }
       }
-      const dl = await handleDownload(url.pathname, env);
+      const dl = await handleDownload(url.pathname, env, url);
       if (dl) return dl;
+      // The street map: open like the website, and served from R2 or built.
+      const map = await handleMap(req, url, env);
+      if (map) return map;
 
       switch (url.pathname) {
         case '/docs':
@@ -324,6 +349,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return jsonCached(STOP_PAIRS, 3600, 'private');
         case '/arrivals':
           return await handleArrivals(url, env, ctx, nowMs);
+        case '/buses':
+          return await handleBuses(url, env, ctx, nowMs);
         default:
           // Everything else is the website.
           if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return markBeta(await env.ASSETS.fetch(req), env);

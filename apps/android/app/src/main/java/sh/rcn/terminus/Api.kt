@@ -427,6 +427,15 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     /** Stops and residences, for the home and place pickers. */
     suspend fun campus(): Campus = Campus.parse(request("GET", "/campus"))
 
+    /** `/campus` as it came, for the map (MapData), which keeps a copy for offline. */
+    suspend fun campusJson(): JSONObject = request("GET", "/campus")
+
+    /** One service's live buses, for the map. */
+    suspend fun buses(svc: String): BusList = BusList.parse(request("GET", "/buses?svc=${enc(svc)}"))
+
+    /** What's coming at one stop, for the map's stop sheet. */
+    suspend fun arrivals(stop: String): StopBoard = StopBoard.parse(request("GET", "/arrivals?stop=${enc(stop)}"))
+
     /** Starts a sign-in approved from the email; send it with this device's anonymous token to keep its setup. */
     suspend fun signInStart(email: String, name: String): SignInRequest {
         val o = request("POST", "/auth/app/start", JSONObject().put("email", email).put("name", name))

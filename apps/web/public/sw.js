@@ -9,9 +9,18 @@
 // - Signing in or out, deleting the account, or a 401 empties the kept
 //   replies: they belong to one account and must not outlive it, or reach
 //   the next one to sign in on this browser.
+// - The map (app/map.js) is kept once it's been opened, not before: its
+//   script, MapLibre, the stops and routes, the style, the fonts and icons
+//   it used, and the whole campus map file, which is then read from here in
+//   the pieces MapLibre asks for. So the campus map works offline after the
+//   first look. Live buses and arrivals are never kept.
 
 const SHELL = 'shell-v4';
 const DATA = 'data-v2';
+const MAP = 'map-v1';
+const TILES = '/map/campus.pmtiles';
+/** A kept map file older than this is checked for a newer one (they change twice a year). */
+const TILES_CHECK_MS = 7 * 86_400_000;
 const SHELL_FILES = [
   '/app/',
   '/app/app.js',
@@ -46,7 +55,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== DATA).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== DATA && k !== MAP).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -68,7 +77,95 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (SHELL_FILES.includes(url.pathname)) event.respondWith(shellFile(req, url.pathname));
+  else if (url.pathname === TILES) event.respondWith(tiles(req, event));
+  else if (url.pathname.startsWith('/vendor/') || url.pathname.startsWith('/map/fonts/') || url.pathname.startsWith('/map/sprites/')) event.respondWith(cacheFirst(req));
+  else if (url.pathname === '/app/map.js' || url.pathname === '/campus' || url.pathname === '/map/style.json') event.respondWith(networkThenKept(req));
 });
+
+/* ---------- the map ---------- */
+
+/** Files that never change at their address (versioned, or glyphs and icons). */
+async function cacheFirst(req) {
+  const cache = await caches.open(MAP);
+  const kept = await cache.match(req);
+  if (kept) return kept;
+  const res = await fetch(req);
+  if (res.ok) await cache.put(req, res.clone());
+  return res;
+}
+
+/** The newest from the network, the kept copy without one. */
+async function networkThenKept(req) {
+  const cache = await caches.open(MAP);
+  try {
+    const res = await fetch(req);
+    if (res.ok) await cache.put(req, res.clone());
+    return res;
+  } catch (err) {
+    const kept = await cache.match(req);
+    if (kept) return kept;
+    throw err;
+  }
+}
+
+/** The kept map file, read once per worker. */
+let tilesBlob = null;
+let tilesFetching = null;
+
+/**
+ * The campus map file, in the byte ranges MapLibre asks for. The first time,
+ * from the network as asked, while the whole file (about 4 MB) is kept in
+ * the background; after that, from the kept copy, checked weekly for a newer
+ * one. The Cache API can't keep partial (206) replies, hence the whole file.
+ */
+async function tiles(req, event) {
+  const cache = await caches.open(MAP);
+  const kept = await cache.match(TILES);
+  if (!kept) {
+    event.waitUntil(keepTiles(cache, null));
+    return fetch(req);
+  }
+  const age = Date.now() - Number(kept.headers.get('x-terminus-kept') ?? 0);
+  if (age > TILES_CHECK_MS && navigator.onLine) event.waitUntil(keepTiles(cache, kept.headers.get('etag')));
+  tilesBlob ??= { etag: kept.headers.get('etag'), blob: await kept.blob() };
+  const { blob, etag } = tilesBlob;
+  const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.get('range') ?? '');
+  const headers = { 'content-type': 'application/vnd.pmtiles', 'accept-ranges': 'bytes', ...(etag ? { etag } : {}) };
+  if (!m) return new Response(blob, { headers: { ...headers, 'content-length': String(blob.size) } });
+  const start = Number(m[1]);
+  const end = m[2] ? Math.min(Number(m[2]), blob.size - 1) : blob.size - 1;
+  if (start >= blob.size || end < start) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${blob.size}` } });
+  return new Response(blob.slice(start, end + 1), {
+    status: 206,
+    headers: { ...headers, 'content-range': `bytes ${start}-${end}/${blob.size}`, 'content-length': String(end - start + 1) },
+  });
+}
+
+/** Fetches and keeps the whole map file; with an ETag, only if it changed. */
+function keepTiles(cache, etag) {
+  tilesFetching ??= (async () => {
+    try {
+      const res = await fetch(TILES, { headers: etag ? { 'if-none-match': etag } : {} });
+      const kept = await cache.match(TILES);
+      if (res.status === 304 && kept) {
+        // Unchanged: just note when it was checked.
+        const headers = new Headers(kept.headers);
+        headers.set('x-terminus-kept', String(Date.now()));
+        await cache.put(TILES, new Response(await kept.blob(), { headers }));
+      } else if (res.status === 200) {
+        const headers = new Headers(res.headers);
+        headers.set('x-terminus-kept', String(Date.now()));
+        await cache.put(TILES, new Response(await res.blob(), { headers }));
+        tilesBlob = null;
+      }
+    } catch {
+      // Offline or failed: try again on a later visit.
+    } finally {
+      tilesFetching = null;
+    }
+  })();
+  return tilesFetching;
+}
 
 /** Bumped whenever the kept replies are emptied: a reply fetched before that is not kept. */
 let dataGeneration = 0;

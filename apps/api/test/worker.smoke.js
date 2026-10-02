@@ -218,7 +218,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
 
   const documented = Object.keys(spec.paths).sort();
   assert.deepEqual(documented, [
-    '/arrivals', '/auth/anon', '/auth/anon/web', '/auth/app/code', '/auth/app/merge', '/auth/app/poll', '/auth/app/start', '/auth/code', '/auth/login', '/campus', '/health',
+    '/arrivals', '/auth/anon', '/auth/anon/web', '/auth/app/code', '/auth/app/merge', '/auth/app/poll', '/auth/app/start', '/auth/code', '/auth/login', '/buses', '/campus', '/health',
     '/me/ask', '/me/choice', '/me/choices', '/me/day', '/me/feedback', '/me/history', '/me/import', '/me/keys', '/me/nearby', '/me/next', '/me/once', '/me/profile', '/me/push', '/me/push/key', '/me/signal', '/next', '/pair', '/pair/check', '/status.json', '/stops/pairs', '/trip',
   ]);
 
@@ -283,6 +283,59 @@ test('/arrivals on an unknown stop is a 400, not a fabricated empty board', asyn
   const { res } = await call('/arrivals?stop=narnia', { fetchImpl });
   assert.equal(res.status, 400);
   assert.equal(fetchImpl.counts.shuttle, 0);
+});
+
+// Two D2 buses: one on its route (placed by the test), one parked far from it.
+const D2_BUSES = [
+  { vehplate: 'PD123A', lat: 0, lon: 0, speed: 30, direction: 90, loadInfo: { occupancy: 0.9, crowdLevel: 'high', capacity: 88, ridership: 80 } },
+  { vehplate: 'PD999Z', lat: 1.3015, lng: 103.7605, speed: 0, direction: 10, loadInfo: { crowdLevel: 'low' } },
+];
+
+test('/buses places each bus on its route and never gives the plate', async () => {
+  const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D2;
+  // Put the first bus a third of the way along D2's line, heading along it.
+  const i = Math.floor(shape.line.length / 3);
+  const [aLon, aLat] = shape.line[i];
+  const [bLon, bLat] = shape.line[i + 1];
+  const heading = (Math.atan2((bLon - aLon) * Math.cos((aLat * Math.PI) / 180), bLat - aLat) * 180) / Math.PI;
+  const buses = [{ ...D2_BUSES[0], lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, direction: (heading + 360) % 360 }, D2_BUSES[1]];
+  const fetchImpl = makeFetch({ buses: { D2: buses } });
+  const cache = installGlobals(fetchImpl);
+  const { res } = await call('/buses?svc=d2', { fetchImpl, cache });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.svc, 'D2');
+  assert.equal(body.color, '#8e44c9');
+  assert.equal(body.available, true);
+  assert.equal(body.buses.length, 2);
+  const [on, parked] = body.buses;
+  assert.equal(on.crowd, 'high');
+  assert.equal(on.moving, true);
+  assert.ok(on.nextStop, 'a bus on its line has a next stop');
+  assert.ok(shape.stops.includes(on.nextStop.code));
+  assert.equal(parked.nextStop, null, 'a bus away from its line has none');
+  assert.equal(parked.moving, false);
+  assert.match(on.id, /^[0-9a-f]{12}$/);
+  assert.notEqual(on.id, parked.id);
+  assert.ok(!JSON.stringify(body).includes('PD123A'), 'the plate is not passed on');
+  assert.equal(fetchImpl.requests[0].body.route_code, 'D2');
+
+  // A second look within 10 s is served from the cache.
+  await call('/buses?svc=D2', { fetchImpl, cache });
+  assert.equal(fetchImpl.counts.shuttle, 1);
+});
+
+test('/buses: an unknown service is a 400; an unreachable feed is unavailable, not empty', async () => {
+  const none = makeFetch({});
+  const { res: bad } = await call('/buses?svc=Z9', { fetchImpl: none });
+  assert.equal(bad.status, 400);
+  assert.equal(none.counts.shuttle, 0);
+
+  const { res } = await call('/buses?svc=K', { fetchImpl: makeFetch({ fail: true }) });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.available, false);
+  assert.deepEqual(body.buses, []);
 });
 
 test('walking is offered end to end when it beats the bus', async () => {
@@ -601,6 +654,25 @@ test('downloads serve whatever latest.json points at', async () => {
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
   }));
+  // One APK per CPU type from 2.1: the arm64 one unless the app asks for its own.
+  put('releases/1.0.1/terminus-1.0.1.apk', 'ARM64');
+  put('releases/1.0.1/terminus-1.0.1-armv7.apk', 'ARMV7');
+  put('latest.json', JSON.stringify({
+    version: '1.0.1', released: '2026-10-01',
+    android: { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
+    androidAbis: {
+      'arm64-v8a': { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
+      'armeabi-v7a': { file: 'releases/1.0.1/terminus-1.0.1-armv7.apk', sha256: 'a7', size: 5 },
+    },
+    mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
+  }));
+  assert.equal(await (await get('/download/android')).text(), 'ARM64');
+  assert.equal(await (await get('/download/android?abi=armeabi-v7a')).text(), 'ARMV7');
+  assert.equal(await (await get('/download/android?abi=x86_64')).text(), 'ARM64', 'a type not built: the arm64 one');
+  assert.equal(await (await get('/download/android?abi=__proto__')).text(), 'ARM64');
+  assert.equal(await (await get('/download/releases/1.0.1/terminus-1.0.1-armv7.apk')).text(), 'ARMV7');
+  assert.equal((await get('/download/releases/1.0.1/terminus-1.0.1-mips.apk')).status, 404);
+
   const dmg = await get('/download/mac');
   assert.equal(dmg.headers.get('content-type'), 'application/x-apple-diskimage');
   assert.match(dmg.headers.get('content-disposition'), /terminus-1\.0\.1\.dmg/);
@@ -676,4 +748,75 @@ test('every response carries nosniff and HSTS; HTML gets a CSP, /docs one that a
   const docs = (await call('/docs', { fetchImpl })).res;
   assert.match(docs.headers.get('content-security-policy'), /script-src[^;]*unpkg\.com/);
   assert.match(await docs.text(), /integrity="sha384-/);
+});
+
+/** An R2 bucket that understands range requests, as the real one does. */
+function rangedBucket(files) {
+  return {
+    async get(key, opts = {}) {
+      if (!files.has(key)) return null;
+      const data = new TextEncoder().encode(files.get(key));
+      const etag = `"${key.length}-${data.length}"`;
+      const h = opts.onlyIf instanceof Headers ? opts.onlyIf : new Headers();
+      const base = { size: data.length, httpEtag: etag };
+      if (h.get('if-none-match') === etag) return base;
+      const r = opts.range instanceof Headers ? /bytes=(\d+)-(\d+)?/.exec(opts.range.get('range') ?? '') : null;
+      if (!r) return { ...base, body: data };
+      const offset = Number(r[1]);
+      if (offset >= data.length) throw new Error('range not satisfiable');
+      const end = r[2] != null ? Math.min(Number(r[2]), data.length - 1) : data.length - 1;
+      return { ...base, body: data.slice(offset, end + 1), range: { offset, length: end - offset + 1 } };
+    },
+  };
+}
+
+test('/map serves the map file in pieces, and its fonts and icons', async () => {
+  const files = new Map([
+    ['map/campus.pmtiles', 'PMTiles-0123456789'],
+    ['map/fonts/Noto Sans Regular/0-255.pbf', 'GLYPHS'],
+    ['map/sprites/v4/dark@2x.png', 'PNG'],
+  ]);
+  const env = { ...makeEnv(), DOWNLOADS: rangedBucket(files) };
+  const get = async (p, headers) => (await call(p, { fetchImpl: makeFetch({}), env, headers })).res;
+
+  const part = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
+  assert.equal(part.status, 206);
+  assert.equal(await part.text(), 'PMTiles');
+  assert.equal(part.headers.get('content-range'), 'bytes 0-6/18');
+  assert.equal(part.headers.get('accept-ranges'), 'bytes');
+  const etag = part.headers.get('etag');
+  assert.ok(etag);
+
+  const whole = await get('/map/campus.pmtiles');
+  assert.equal(whole.status, 200);
+  assert.equal(whole.headers.get('content-length'), '18');
+  assert.equal((await get('/map/campus.pmtiles', { 'if-none-match': etag })).status, 304);
+  assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=99-' })).status, 416);
+
+  const glyphs = await get('/map/fonts/Noto%20Sans%20Regular/0-255.pbf');
+  assert.equal(glyphs.status, 200);
+  assert.equal(glyphs.headers.get('content-type'), 'application/x-protobuf');
+  assert.equal((await get('/map/sprites/v4/dark@2x.png')).headers.get('content-type'), 'image/png');
+
+  // Nothing else under map/ is reachable.
+  assert.equal((await get('/map/fonts/..%2F..%2Flatest.json/0-255.pbf')).status, 404);
+  assert.equal((await get('/map/latest.json')).status, 404);
+  assert.equal((await get('/map/fonts/Noto Sans Regular/0-255.pbf.bak')).status, 404);
+});
+
+test('/map/style.json is a quiet light or dark map with every URL on our own domain', async () => {
+  const get = async (p) => (await call(p, { fetchImpl: makeFetch({}) })).res;
+  const light = await (await get('/map/style.json')).json();
+  assert.equal(light.version, 8);
+  assert.equal(light.sources.protomaps.url, `pmtiles://${BASE}/map/campus.pmtiles`);
+  assert.ok(light.glyphs.startsWith(`${BASE}/map/fonts/`));
+  assert.equal(light.sprite, `${BASE}/map/sprites/v4/light`);
+  assert.match(light.sources.protomaps.attribution, /OpenStreetMap/);
+  assert.equal(light.layers.find((l) => l.id === 'pois'), undefined, 'quiet: no icons for libraries, cafés or its own bus stops');
+  assert.ok(light.layers.some((l) => l.id.startsWith('roads_labels')), 'street names stay');
+
+  const dark = await (await get('/map/style.json?theme=dark&lang=zh')).json();
+  assert.equal(dark.sprite, `${BASE}/map/sprites/v4/dark`);
+  assert.notDeepEqual(dark.layers.find((l) => l.id === 'background').paint, light.layers.find((l) => l.id === 'background').paint);
+  assert.match(JSON.stringify(dark.layers), /name:zh-Hans/, 'Chinese labels where OpenStreetMap has them');
 });

@@ -63,6 +63,21 @@ android {
     bundle {
         language { enableSplit = false }
     }
+    // One APK per CPU type for the website and GitHub (MapLibre's native code
+    // is about 4.5 MB per type, compressed); Play builds from the bundle and
+    // splits by itself. MapLibre ships arm64, 32-bit ARM and x86_64 (emulators).
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
+        }
+    }
+    // Native code compressed in the APK: a third the size, unpacked on install.
+    packaging {
+        jniLibs { useLegacyPackaging = true }
+    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -124,6 +139,8 @@ dependencies {
     implementation(libs.glance.material3)
     implementation(libs.work.runtime)
     implementation(libs.zxing.core)
+    implementation(libs.maplibre.compose)
+    runtimeOnly(libs.maplibre.compose.runtime)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     testImplementation(libs.junit)

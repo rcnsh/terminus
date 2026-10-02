@@ -231,12 +231,43 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/buses': {
+        get: {
+          tags: ['Stops'],
+          summary: 'Live buses on one service',
+          description:
+            'Where each bus on a service is now, how full it is and the stop it reaches next. Positions come from the live feed through a 10-second cache per service. `nextStop` is worked out from the bus\'s position and heading along its route, and is null for a bus away from its route (such as one parked at the depot). Bus plates are not given; `id` stays the same for a bus while it runs, so a map can move it smoothly between updates.',
+          operationId: 'getBuses',
+          parameters: [
+            { name: 'svc', in: 'query', required: true, description: 'Service code, case-insensitive.', schema: { type: 'string' }, example: 'D2' },
+          ],
+          responses: {
+            '200': {
+              description: 'The service\'s buses. `available` is false when the live feed could not be reached, which is not the same as no buses running.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/Buses' },
+                  example: {
+                    svc: 'D2',
+                    color: '#8e44c9',
+                    buses: [{ id: '3f9a1c0b7e21', lat: 1.29497, lon: 103.77349, heading: 92, moving: true, crowd: 'low', nextStop: { code: 'COM3', name: 'COM 3' } }],
+                    asOf: '2026-10-02T01:14:02.000Z',
+                    available: true,
+                    stale: false,
+                  },
+                },
+              },
+            },
+            '400': errorResponse('Unknown service.', { error: 'unknown service', svc: 'Z9' }),
+          },
+        },
+      },
       '/campus': {
         get: {
           tags: ['Stops'],
           summary: 'Campus map and destinations',
           description:
-            'Returns stop positions and route shapes as SVG coordinates, plus a destination search list: every stop, named buildings and NUSMods rooms, each mapped to the stop an import would use. The data only changes when the API is redeployed, and responses are cached for an hour.',
+            'Returns stop positions (as SVG coordinates and lat/lon) and each route\'s path along the roads, plus a destination search list: every stop, named buildings and NUSMods rooms, each mapped to the stop an import would use. The data only changes when the API is redeployed, and responses are cached for an hour.',
           operationId: 'getCampus',
           responses: {
             '200': {
@@ -246,9 +277,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   schema: { $ref: '#/components/schemas/Campus' },
                   example: {
                     viewBox: '0 0 1000 871',
-                    stops: [{ code: 'AS5', name: 'AS 5', longName: 'AS 5', opposite: null, x: 177.7, y: 657.9, core: true }],
+                    stops: [{ code: 'AS5', name: 'AS 5', longName: 'AS 5', opposite: null, x: 177.7, y: 657.9, lat: 1.293619, lon: 103.771475, services: ['A1', 'D1', 'R1'], core: true }],
                     routes: {
-                      A1: { seq: ['KRB', 'LT13', 'AS5', 'BIZ2', 'TCOMS-OPP', 'PGP', 'KR-MRT'], loop: true, color: '#4f8fe8' },
+                      A1: { seq: ['KRB', 'LT13', 'AS5', 'BIZ2', 'TCOMS-OPP', 'PGP', 'KR-MRT'], loop: true, color: '#e53935', line: [[103.77438, 1.29464], [103.77421, 1.29475]], shaped: true },
                     },
                     destinations: [
                       { code: 'AS5', label: 'AS 5', stopCode: 'AS5', kind: 'stop' },
@@ -1034,6 +1065,36 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             },
           },
         },
+        Buses: {
+          type: 'object',
+          required: ['svc', 'color', 'buses', 'asOf', 'available', 'stale'],
+          properties: {
+            svc: { type: 'string' },
+            color: { type: ['string', 'null'] },
+            buses: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['id', 'lat', 'lon', 'heading', 'moving', 'crowd', 'nextStop'],
+                properties: {
+                  id: { type: 'string', description: 'Stable for a bus while it runs; not its plate.' },
+                  lat: { type: 'number' },
+                  lon: { type: 'number' },
+                  heading: { type: ['integer', 'null'], description: 'Degrees clockwise from north.' },
+                  moving: { type: 'boolean' },
+                  crowd: { type: ['string', 'null'], enum: ['low', 'medium', 'high', null] },
+                  nextStop: {
+                    type: ['object', 'null'],
+                    properties: { code: { type: 'string' }, name: { type: 'string' } },
+                  },
+                },
+              },
+            },
+            asOf: { type: 'string', format: 'date-time' },
+            available: { type: 'boolean' },
+            stale: { type: 'boolean', description: 'True when the feed failed and these are the last positions known.' },
+          },
+        },
         Campus: {
           type: 'object',
           required: ['viewBox', 'stops', 'routes', 'destinations', 'residences'],
@@ -1052,6 +1113,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   y: { type: 'number' },
                   lat: { type: 'number' },
                   lon: { type: 'number' },
+                  services: { type: 'array', items: { type: 'string' }, description: 'The services that stop here.' },
                   core: { type: 'boolean', description: 'False for the few stops far off the main campus cluster.' },
                 },
               },
@@ -1064,7 +1126,13 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 properties: {
                   seq: { type: 'array', items: { type: 'string' }, description: 'Stop codes in route order.' },
                   loop: { type: 'boolean' },
-                  color: { type: 'string' },
+                  color: { type: 'string', description: "The service's colour, as on the buses." },
+                  line: {
+                    type: 'array',
+                    items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+                    description: 'The path to draw, as [lon, lat] pairs (GeoJSON LineString coordinates).',
+                  },
+                  shaped: { type: 'boolean', description: 'True when `line` follows the roads (OpenStreetMap); false when it is straight lines between stops, because the stops changed since the road shapes were last made.' },
                 },
               },
             },
