@@ -42,7 +42,9 @@ class MapShots {
 
     private fun shot(name: String, dark: Boolean, ui: (CampusMap, Set<String>) -> MapUi) {
         val (campus, core) = CampusMap.parse(JSONObject(asset("campus.json")))
-        val style = MapFiles.localTiles(asset(if (dark) "style-dark.json" else "style-light.json"), tiles())
+        // Without the icon sheet: fetched from GitHub Pages it sometimes fails,
+        // and MapLibre then fails the whole style (the app's comes from its own site).
+        val style = JSONObject(MapFiles.localTiles(asset(if (dark) "style-dark.json" else "style-light.json"), tiles())).apply { remove("sprite") }.toString()
         val state = ui(campus, core).copy(campus = campus, core = core, style = style)
         rule.setContent {
             MaterialTheme(colorScheme = if (dark) BrandDark else BrandLight) {
