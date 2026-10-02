@@ -146,7 +146,7 @@ test('housekeeping removes expired links, codes, sessions and idle devices only'
   const db = makeD1();
   const now = 10 * DEVICE_IDLE_MS;
   db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', 'a@b.c', 0, 0)`);
-  db.exec(`INSERT INTO magic_links VALUES ('old', 'a@b.c', 0, ${now - 1}), ('new', 'a@b.c', 0, ${now + 1})`);
+  db.exec(`INSERT INTO magic_links (token_hash, email, created, expires) VALUES ('old', 'a@b.c', 0, ${now - 1}), ('new', 'a@b.c', 0, ${now + 1})`);
   db.exec(`INSERT INTO pair_codes VALUES ('AAAAAA', 'u', ${now - 1}), ('BBBBBB', 'u', ${now + 1})`);
   db.exec(`INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires) VALUES
     ('w-old', 'u', 'web', NULL, 0, 0, ${now - 1}),

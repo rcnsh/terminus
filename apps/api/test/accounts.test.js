@@ -96,6 +96,15 @@ test('opening the link does not spend it; the POST does, once', async () => {
   assert.equal(again.status, 400);
 });
 
+test('wrong emailed codes sent all at once still only get five tries', async () => {
+  const { env, email } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const code = email.lastCode();
+  const wrong = code === '222222' ? '333333' : '222222';
+  await Promise.all(Array.from({ length: 20 }, () => call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code: wrong } })));
+  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400);
+});
+
 test('another site cannot post a sign-in link or a sign-out', async () => {
   const { env, email } = setup();
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
