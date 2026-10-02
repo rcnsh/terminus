@@ -765,6 +765,13 @@ export async function handleMe(
   if (!(path.startsWith('/auth/') || path === '/pair' || path === '/pair/check' || path === '/me' || path.startsWith('/me/'))) return null;
   const db = env.DB;
   if (!db) return json({ error: 'accounts are not configured' }, 503);
+  // Form posts that set or end the browser's session come from our own pages.
+  // Without this, another site could post a sign-in link it holds and sign
+  // the visitor in to its account, or sign them out. Apps send no such header.
+  const fetchSite = req.headers.get('sec-fetch-site');
+  if (req.method === 'POST' && (path === '/auth/verify' || path === '/auth/approve' || path === '/auth/logout') && fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+    return json({ error: 'that request came from another site' }, 403);
+  }
 
   /* ---------- sign-in ---------- */
 
