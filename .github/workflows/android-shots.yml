@@ -36,7 +36,8 @@ jobs:
           script: |
             adb logcat -c
             ./gradlew :app:connectedStableDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sh.rcn.terminus.MapShots --console=plain || true
-            adb logcat -d -s MAPSHOT:I AndroidRuntime:E Mbgl:E MapLibre:E > shots.log || true
+            adb logcat -d -s MAPSHOT:I AndroidRuntime:E Mbgl:E MapLibre:E TestRunner:E > shots.log || true
             grep -c MAPSHOT shots.log || true
             grep -v MAPSHOT shots.log | tail -60 || true
+            grep -h -A12 "<failure" app/build/outputs/androidTest-results/connected/*/*/*.xml app/build/outputs/androidTest-results/connected/*/*.xml 2>/dev/null | head -60 || true
             grep MAPSHOT shots.log | sed 's/^.*MAPSHOT: //' || true
