@@ -363,8 +363,10 @@ Settings. It uses the same routes as the account page, with the session cookie.
   So the web app isn't pushed an idle card, or a trip with reminders off. The
   service worker fetches `/me/next` and words the notification as the Android
   app does: the ride, or the next way there after a missed bus; otherwise
-  when to leave. It has no buttons: nothing asks what happened, and plans
-  ("Not going") are made in the app. A tap opens the app.
+  when to leave. Nothing asks what happened. Its one button, before you've
+  left, is the card's "Not going today": the service worker posts
+  `/me/signal` `{kind: 'skipped'}` itself, without opening the app (the
+  Android notification has the same button). A tap elsewhere opens the app.
 
 ### Every trip, detected (phase 8)
 

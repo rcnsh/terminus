@@ -271,23 +271,45 @@ async function notifyFromCard(urgent, fetched) {
     body = c.catch ?? a.dest?.label ?? '';
   }
   const where = [a.dest?.label, a.timing?.classAt ? (zh ? `${hhmm(a.timing.classAt)} 开始` : `starts ${hhmm(a.timing.classAt)}`) : null].filter(Boolean).join(' · ');
-  // No buttons: nothing asks what happened, and plans ("Not going") are made
-  // in the app. A tap opens it.
+  // Nothing asks what happened. The one button, before you've left, is the
+  // card's "Not going today" (its words the server's); a tap anywhere else
+  // opens the app. Browsers without buttons (iOS) just leave it out.
+  const skip = c.phase !== 'riding' && c.phase !== 'missed' ? c.actions?.find((x) => x.id === 'skipped') : null;
   return self.registration.showNotification(title, {
     body: where ? `${body}\n${where}` : body,
     tag: 'trip',
     renotify: urgent,
     silent: !urgent,
     icon: '/assets/icons/icon-192.png',
-    data: { url: '/app/' },
+    actions: skip ? [{ action: 'skipped', title: skip.label }] : [],
+    data: { url: '/app/', trip: skip?.trip ?? null },
   });
 }
 
 self.addEventListener('notificationclick', (event) => {
-  // No buttons any more: a tap opens the app.
   event.notification.close();
-  event.waitUntil(openApp());
+  const trip = event.notification.data?.trip;
+  // "Not going today": the class off today, as the app's button does, without opening it.
+  if (event.action === 'skipped' && trip) event.waitUntil(skipTrip(trip));
+  else event.waitUntil(openApp());
 });
+
+/** Takes a class off today from the notification, then tells an open app to show the new plan. */
+async function skipTrip(trip) {
+  try {
+    const res = await fetch(`/me/signal${HOUR12 ? '?h12=1' : ''}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'skipped', trip }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch {
+    // Not done (offline, signed out): the app, where it can be tried again.
+    return openApp();
+  }
+  for (const w of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) w.postMessage({ kind: 'refresh' });
+}
 
 /** The app, focused if it's open, opened if not. */
 async function openApp() {

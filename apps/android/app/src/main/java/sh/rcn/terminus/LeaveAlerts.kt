@@ -28,10 +28,12 @@ import sh.rcn.terminus.widget.clock
  *
  * From then on (phase 3) the same notification follows the trip, updated in
  * place and never posted again once dismissed: the ride, or the next way
- * there after a missed bus. It never asks anything or offers buttons: what
- * happened comes from the plan and the phone's location. A push brings each
- * change; without one, an alarm at the card's next change does. A class with
- * reminders turned off (`card.remind`) gets none of it.
+ * there after a missed bus. It never asks what happened: that comes from
+ * the plan and the phone's location. Its one button, before you've left, is
+ * the card's "Not going today", so a class you're skipping can be dropped
+ * from the alert itself. A push brings each change; without one, an alarm at
+ * the card's next change does. A class with reminders turned off
+ * (`card.remind`) gets none of it.
  */
 object LeaveAlerts {
     private const val CHANNEL = "leave"
@@ -45,6 +47,9 @@ object LeaveAlerts {
     const val ACTION_NOW = "sh.rcn.terminus.LEAVE_NOW"
     /** On the bus: redraw the ride at the next stop, from the saved answer. */
     const val ACTION_RIDE = "sh.rcn.terminus.LEAVE_RIDE"
+    /** "Not going today", from the notification's button: the trip in EXTRA_TRIP. */
+    const val ACTION_SKIP = "sh.rcn.terminus.LEAVE_SKIP"
+    const val EXTRA_TRIP = "trip"
 
     /** Android 12 needs no permission to notify; 13 and later ask. */
     fun canNotify(ctx: Context): Boolean =
@@ -168,11 +173,51 @@ object LeaveAlerts {
             // Gone once the class has started: it's no longer true.
             .apply { answer.classAtMs?.let { setTimeoutAfter((it - now).coerceAtLeast(60_000)) } }
             .apply { ride?.let { RideStyle.apply(ctx, this, card, it, now) } }
+            .apply { skipAction(ctx, answer)?.let { addAction(it) } }
             .build()
         nm.notify(NOTIFICATION_ID, n)
         // The bus's place on the bar is the clock's estimate: move it on at each stop.
         val redraw = ride?.let { RideStyle.nextRedrawAt(it, now) }
         if (redraw != null) setAlarm(ctx, ACTION_RIDE, redraw) else cancelAlarm(ctx, ACTION_RIDE)
+    }
+
+    /**
+     * The card's "Not going today", as a button, before the trip has begun
+     * (not on the ride, nor after a missed bus). Its words are the server's.
+     */
+    private fun skipAction(ctx: Context, answer: NextAnswer): android.app.Notification.Action? {
+        val card = answer.card ?: return null
+        if (card.phase == "riding" || card.phase == "missed") return null
+        val skip = card.actions.firstOrNull { it.id == "skipped" } ?: return null
+        val pi = PendingIntent.getBroadcast(
+            ctx, 6,
+            Intent(ctx, LeaveReceiver::class.java).setAction(ACTION_SKIP).putExtra(EXTRA_TRIP, skip.trip),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return android.app.Notification.Action.Builder(null, skip.label, pi).build()
+    }
+
+    /**
+     * "Not going today" from the notification: gone at once, then the class
+     * is taken off today as the app's button does, and the widgets and the
+     * next alert follow the new plan. If that fails (no connection), a fresh
+     * answer puts the alert back as it should be.
+     */
+    suspend fun skip(ctx: Context, trip: String) {
+        ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+        val store = Store(ctx)
+        val token = store.token ?: return
+        try {
+            val json = Api(token, hour12 = hour12(ctx)).signal("skipped", trip)
+            val now = System.currentTimeMillis()
+            store.saveAnswer(json, now)
+            Refresher.scheduleNext(ctx, NextAnswer.parse(json), now)
+            sh.rcn.terminus.widget.redrawWidgets(ctx)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Refresher.refresh(ctx, fast = true)
+        }
     }
 
     /** At the next stop on the ride: redraw from the saved answer, if still showing. */
@@ -223,6 +268,17 @@ class LeaveReceiver : BroadcastReceiver() {
             }
             LeaveAlerts.ACTION_NOW -> LeaveAlerts.leaveNow(context)
             LeaveAlerts.ACTION_RIDE -> LeaveAlerts.redrawRide(context)
+            LeaveAlerts.ACTION_SKIP -> {
+                val trip = intent.getStringExtra(LeaveAlerts.EXTRA_TRIP) ?: return
+                val pending = goAsync()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        LeaveAlerts.skip(context, trip)
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }
         }
     }
 }
