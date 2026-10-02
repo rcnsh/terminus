@@ -118,11 +118,25 @@ jobs:
           process.on('uncaughtException', fail);
           process.on('unhandledRejection', fail);
           const D = 'http://localhost:4444';
-          const call = async (method, path, body) => {
+          const raw = async (method, path, body) => {
             const r = await fetch(D + path, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) });
             const j = await r.json();
             if (!r.ok) throw new Error(`${method} ${path}: ${JSON.stringify(j.value)}`);
             return j.value;
+          };
+          // Safari's window changes when the page moves on (to /app/): switch to the one open now, and try again.
+          const call = async (method, path, body) => {
+            try {
+              return await raw(method, path, body);
+            } catch (e) {
+              const sid = path.split('/')[2];
+              if (!/no such window/.test(e.message) || !sid) throw e;
+              await new Promise((r) => setTimeout(r, 1500));
+              const handles = await raw('GET', `/session/${sid}/window/handles`);
+              console.log(`::notice::window lost on ${path}; handles now ${handles.join(', ')}`);
+              await raw('POST', `/session/${sid}/window`, { handle: handles.at(-1) });
+              return raw(method, path, body);
+            }
           };
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
           // The first try often times out on CI runners (actions/runner-images#1453).
