@@ -425,5 +425,6 @@ window.TERMINUS_ZH = {
  "Appearance": "外观",
  "Theme": "主题",
  "Follow this device": "跟随此设备",
- "Only in this browser.": "仅限此浏览器。"
+ "Only in this browser.": "仅限此浏览器。",
+ "Updating…": "正在更新…"
 };

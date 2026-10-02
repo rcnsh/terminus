@@ -41,7 +41,7 @@
 .settings-row .chev { color: var(--faint); }
 .settings-page { display: grid; gap: 16px; align-content: start; min-width: 0; background: var(--bg); }
 .page-head { display: flex; align-items: center; gap: 4px; margin: 0 0 -4px -8px; }
-.page-head h2 { font-size: 1.35rem; outline: none; }
+.page-head h2, .settings-title { font-size: 1.35rem; outline: none; margin: 0; }
 .page-back { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 999px; background: none; color: var(--ink); cursor: pointer; }
 .page-back:hover { background: var(--surface-2); }
 .page-back:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

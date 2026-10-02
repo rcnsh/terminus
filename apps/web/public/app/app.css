@@ -169,6 +169,15 @@ button.svc-tag { cursor: pointer; }
 }
 :root[data-theme="dark"] .map .maplibregl-ctrl button .maplibregl-ctrl-icon { filter: invert(1); }
 
-/* Settings (account/settings.js): the account page's, under the app's header. */
+/* The header row's height, the same on every tab that has one. */
+:root { --header-h: 60px; }
+
+/* Settings (account/settings.js). Its title ("Settings", or a page's with a
+   back arrow) takes the header's place, at the header's height, so the top
+   of the screen stays put between tabs. */
 .settings-tab { padding-bottom: 32px; }
+body.on-settings > .nav { display: none; }
+.settings-tab .settings { padding-top: 0; }
+body.app > .nav { height: var(--header-h); padding-top: 0; padding-bottom: 0; }
+.settings-tab .settings-title, .settings-tab .page-head { display: flex; align-items: center; height: var(--header-h); margin-bottom: -4px; }
 body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); }

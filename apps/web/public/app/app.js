@@ -98,6 +98,7 @@ async function refresh() {
     }
     if (!next) throw nextR.reason;
     show(next.data);
+    seen.set(seenKey(target), next.data);
     stale(next.cached);
     $('#updated').textContent = t('Updated {0}', clock(new Date(next.cached ?? Date.now()).toISOString()));
     if (JSON.stringify(next.data.places ?? []) !== JSON.stringify(places)) {
@@ -113,6 +114,44 @@ async function refresh() {
 
 /** Past the card's staleAt: its bus has gone, the plan has moved on, or it's old. */
 const isStale = (a) => Boolean(a.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
+
+/** Each card drawn this visit, by what it was for: shown again at once when its chip is tapped, while it refreshes. */
+const seen = new Map();
+const seenKey = (to) => JSON.stringify(to);
+
+/**
+ * The card the service worker kept for this target, from an earlier visit.
+ * Its key is the one sw.js keeps it under (route, place, clock style,
+ * language), and it's this account's: sw.js empties the cache on sign-out.
+ */
+async function keptCard(to) {
+  if (!('caches' in window) || (to.kind !== 'plan' && to.kind !== 'place')) return null;
+  const q = new URLSearchParams();
+  if (to.kind === 'place') q.set('place', to.key);
+  if (HOUR12) q.set('h12', '1');
+  q.set('lang', window.i18n?.header ?? 'en');
+  try {
+    // DATA in sw.js.
+    const res = await (await caches.open('data-v2')).match(`${location.origin}/me/next?${q}`);
+    return res ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Before the answer arrives: the card already seen for this target if it still holds, else "Checking…". */
+async function drawSeen() {
+  const to = target;
+  const known = seen.get(seenKey(to)) ?? (await keptCard(to));
+  if (to !== target) return;
+  if (known && !isStale(known)) {
+    show(known);
+    $('#updated').textContent = t('Updating…');
+  } else {
+    $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
+    $('#updated').textContent = '';
+  }
+}
 
 /**
  * The offline card: the day plan's next item, worded as the Today list words
@@ -151,8 +190,12 @@ function renderChips() {
       onclick: () => {
         target = to;
         renderChips();
-        $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
-        $('#updated').textContent = '';
+        if (to.kind === 'nearby') {
+          $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
+          $('#updated').textContent = '';
+        } else {
+          drawSeen();
+        }
         refresh();
       },
     });
@@ -213,6 +256,7 @@ async function showTab() {
   }
   for (const n of TABS) view(n).hidden = n !== tab;
   document.body.classList.toggle('on-map', tab === 'map');
+  document.body.classList.toggle('on-settings', tab === 'settings');
   if (from === 'map') mapModule?.hideMap();
   window.scrollTo(0, scrolled[tab] ?? 0);
   if (animate) fadeIn(view(tab));
@@ -277,8 +321,7 @@ function goToStop({ code, name, place }) {
   // A saved place already has its chip: that one, not a second.
   target = place ? { kind: 'place', key: place } : { kind: 'stop', to: code, label: name };
   renderChips();
-  $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
-  $('#updated').textContent = '';
+  drawSeen();
   if (location.hash === '#map') history.pushState(null, '', '#now');
   showTab();
 }
@@ -523,6 +566,8 @@ async function start() {
   // A stop saved as a place on the map: its chip comes with the next card.
   document.addEventListener('places-changed', refresh);
   showTab();
+  // The plan from last time while this one loads, if it still holds.
+  await drawSeen();
   await refresh();
   const nowShown = () => document.visibilityState === 'visible' && tab === 'now';
   setInterval(() => nowShown() && refresh(), REFRESH_MS);
