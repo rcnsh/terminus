@@ -189,6 +189,7 @@ button.svc-tag { cursor: pointer; }
 .bus-line { display: flex; align-items: center; gap: 10px; }
 
 /* MapLibre's own controls, in the app's colours. */
+.map .map-recentre { display: grid; place-items: center; color: var(--ink); }
 .map .maplibregl-ctrl-attrib { background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--muted); font-size: 11px; }
 .map .maplibregl-ctrl-attrib a { color: var(--muted); }
 .map .maplibregl-ctrl-group { background: var(--surface); }

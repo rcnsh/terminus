@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -173,9 +174,11 @@ internal class MapActions(
 internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
     val campus = ui.campus
     val style = ui.style
+    // "Back to campus": bumped by the button, watched by the map.
+    var recentre by remember { mutableStateOf(0) }
     Box(Modifier.fillMaxSize()) {
         when {
-            campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions)
+            campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions, recentre)
             ui.failed -> Text(
                 stringResource(R.string.map_needs_connection),
                 modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -187,6 +190,21 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
             Column(Modifier.statusBarsPadding().padding(top = 8.dp)) {
                 Pills(campus, ui.selected, actions.choose)
                 ui.busStatus?.let { BusStatusLine(it, ui.selected.orEmpty()) }
+                when {
+                    ui.downloading -> StatusChip(stringResource(R.string.map_downloading), busy = true)
+                    ui.downloadFailed -> StatusChip(stringResource(R.string.map_download_failed))
+                }
+            }
+            if (ui.sheet == null) {
+                // Lost after a pinch or a fling: one tap back to the whole campus.
+                SmallFloatingActionButton(
+                    onClick = { recentre++ },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 40.dp),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ) {
+                    Icon(painterResource(R.drawable.ic_recentre), contentDescription = stringResource(R.string.map_recentre))
+                }
             }
             ui.sheet?.let { sheet ->
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
@@ -201,7 +219,7 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
 }
 
 @Composable
-private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boolean, actions: MapActions) {
+private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boolean, actions: MapActions, recentre: Int) {
     val ctx = LocalContext.current
     val ink = if (dark) Color(0xFFF2EFEB) else Color(0xFF1C1917)
     val paper = if (dark) Color(0xFF1A1816) else Color.White
@@ -331,6 +349,12 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             state.setCameraPosition(CameraPosition(target = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0))
         }
     }
+    // Back to campus, from the button.
+    LaunchedEffect(recentre) {
+        if (recentre == 0) return@LaunchedEffect
+        val core = campus.coreBounds(ui.core)
+        state.animateCameraToBounds(BoundingBox(west = core[0], south = core[1], east = core[2], north = core[3]), fitPadding = DpPadding(left = 24.dp, top = 96.dp, right = 24.dp, bottom = 24.dp), animation = CameraAnimation.Ease())
+    }
     // A pill: its whole line in view.
     LaunchedEffect(selected) {
         val r = selected?.let { campus.routes[it] } ?: return@LaunchedEffect
@@ -341,7 +365,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     MaplibreMap(
         state = state,
         modifier = Modifier.fillMaxSize(),
-        cameraConstraints = CameraConstraints(minZoom = 12.0, maxZoom = 19.0, boundingBox = PAN_LIMIT),
+        cameraConstraints = CameraConstraints(minZoom = 13.0, maxZoom = 19.0, boundingBox = PAN_LIMIT),
         interactions = MapInteractions {
             camera {
                 rotate { enabled = false }
@@ -395,13 +419,25 @@ private fun BusStatusLine(status: BusStatus, svc: String) {
         BusStatus.NoneRunning -> stringResource(R.string.map_no_buses, svc)
         BusStatus.Unavailable -> stringResource(R.string.map_buses_unavailable)
     }
+    StatusChip(text)
+}
+
+/** A line of status over the map, under the pills. */
+@Composable
+private fun StatusChip(text: String, busy: Boolean = false) {
     Surface(
-        modifier = Modifier.padding(start = 12.dp, top = 8.dp),
+        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 2.dp,
     ) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (busy) {
+                CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.size(8.dp))
+            }
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

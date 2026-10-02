@@ -115,7 +115,8 @@ async function build() {
     bounds: fit,
     fitBoundsOptions: { padding: { top: 70, bottom: 30, left: 30, right: 30 } },
     maxBounds: [[BOUNDS[0][0] - 0.02, BOUNDS[0][1] - 0.02], [BOUNDS[1][0] + 0.02, BOUNDS[1][1] + 0.02]],
-    minZoom: 12,
+    // Not past the campus area: the map file covers only that.
+    minZoom: 13,
     maxZoom: 19,
     dragRotate: false,
     pitchWithRotate: false,
@@ -127,6 +128,30 @@ async function build() {
   map.touchZoomRotate.disableRotation();
   map.keyboard.disableRotation();
   map.addControl(new ml.NavigationControl({ showCompass: false }), 'bottom-right');
+  // Lost after a pinch or a drag: one tap back to the whole campus.
+  map.addControl(
+    {
+      onAdd() {
+        this.box = el(
+          'div',
+          { class: 'maplibregl-ctrl maplibregl-ctrl-group' },
+          el('button', {
+            type: 'button',
+            class: 'map-recentre',
+            title: t('Back to campus'),
+            'aria-label': t('Back to campus'),
+            innerHTML: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>',
+            onclick: () => map.fitBounds(fit, { padding: { top: 70, bottom: 30, left: 30, right: 30 }, duration: 600 }),
+          }),
+        );
+        return this.box;
+      },
+      onRemove() {
+        this.box.remove();
+      },
+    },
+    'bottom-right',
+  );
   // Our layers again after every style load: the first, and each light/dark switch.
   map.on('style.load', addLayers);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => map.setStyle(styleUrl()));
