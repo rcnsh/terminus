@@ -12,8 +12,6 @@ orgJson = "20260814"
 zxing = "3.5.3"
 firebaseBom = "34.19.0"
 maplibreCompose = "0.19.0"
-androidxTestRunner = "1.6.2"
-androidxTestJunit = "1.2.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -37,11 +35,6 @@ firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 # it runs on every phone and emulator the app supports.
 maplibre-compose = { module = "org.maplibre.compose:maplibre-compose", version.ref = "maplibreCompose" }
 maplibre-compose-runtime = { module = "org.maplibre.compose:maplibre-compose-runtime-opengl-android", version.ref = "maplibreCompose" }
-# ONE-OFF: the map screenshot test on an emulator (androidTest/MapShots.kt).
-androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
-androidx-test-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestJunit" }
-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 junit = { module = "junit:junit", version.ref = "junit" }
 # Android's org.json is a stub on the JVM; unit tests need the real one.
 org-json = { module = "org.json:json", version.ref = "orgJson" }
