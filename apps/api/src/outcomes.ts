@@ -32,7 +32,7 @@ export const DISMISS_DAYS = 30;
 
 const DAY_MS = 86_400_000;
 
-/** A suggestion for the card: accept or turn down with /me/suggestion. */
+/** A suggestion for the card: accept or turn down with /me/choice. */
 export interface Suggestion {
   /** `earlier:<trip>` or `quiet:<trip>`. */
   id: string;

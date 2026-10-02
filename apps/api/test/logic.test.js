@@ -24,7 +24,7 @@ import {
   nearestStop,
   walkAllTheWayS,
 } from '../src/resolve.ts';
-import { crowdFromLoad, normalize, parseCrowd, parseEtaS, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
+import { crowdFromLoad, normalize, normalizeBuses, parseCrowd, parseEtaS, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
@@ -270,6 +270,20 @@ test('"-" parses to null, not 0 -- and "Arr" parses to 0', () => {
     assert.equal(parseEtaS(v), null, `${JSON.stringify(v)} must be null`);
   }
   assert.equal(Number(null), 0, 'the reason the check above exists');
+});
+
+test('a minus or a clock time is not minutes to go', () => {
+  assert.equal(parseEtaS('-3'), null, 'not 3 min');
+  assert.equal(parseEtaS('12:30'), null, 'not 1230 min');
+});
+
+test('a live bus with no position is skipped, not drawn at 0', () => {
+  const buses = normalizeBuses({ activebus: [
+    { vehplate: 'PA1234A', lat: null, lng: 103.77, direction: 90 },
+    { vehplate: 'PA1234B', lat: 1.29, lng: 103.77, direction: '' },
+  ] });
+  assert.deepEqual(buses.map((b) => b.plate), ['PA1234B']);
+  assert.equal(buses[0].heading, null, 'a blank direction is no heading, not north');
 });
 
 test('crowd level survives the shapes the feed uses', () => {

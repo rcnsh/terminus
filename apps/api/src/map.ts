@@ -77,7 +77,14 @@ export async function handleMap(req: Request, url: URL, env: Env): Promise<Respo
 
   if (path === `/map/${TILES}`) return servePart(req, env.DOWNLOADS, PREFIX + TILES, 'application/vnd.pmtiles', 86400);
 
-  const font = FONT.exec(decodeURIComponent(path));
+  // A malformed escape ("%E0") is a bad path: not found, not an error.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    return json({ error: 'not found' }, 404);
+  }
+  const font = FONT.exec(decoded);
   if (font) return servePart(req, env.DOWNLOADS, `${PREFIX}fonts/${font[1]}/${font[2]}.pbf`, 'application/x-protobuf', 30 * 86400);
 
   const sprite = SPRITE.exec(path);

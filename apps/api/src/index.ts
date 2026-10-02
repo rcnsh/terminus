@@ -166,7 +166,7 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
 
 /**
  * GET /buses?svc=<service> -- where that service's buses are now, for the
- * map. One upstream call per service per 10s however many people watch it
+ * map. One upstream call per service per 5 s however many people watch it
  * (getBuses). Like /arrivals, an unreachable feed is `available: false`, not
  * an error and not "no buses".
  */

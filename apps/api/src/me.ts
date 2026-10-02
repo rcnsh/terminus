@@ -148,8 +148,8 @@ async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   // Refuse a big body before reading it, not after.
   if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return null;
   try {
-    const text = await req.text();
-    if (text.length > MAX_BODY_BYTES) return null;
+    const text = await readCapped(req, MAX_BODY_BYTES);
+    if (text === null) return null;
     const body = JSON.parse(text);
     return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
   } catch {
@@ -161,8 +161,36 @@ async function readJson(req: Request): Promise<Record<string, unknown> | null> {
 const MAX_FORM_BYTES = 4096;
 async function readForm(req: Request): Promise<URLSearchParams | null> {
   if (Number(req.headers.get('content-length') ?? 0) > MAX_FORM_BYTES) return null;
-  const text = await req.text().catch(() => null);
-  return text !== null && text.length <= MAX_FORM_BYTES ? new URLSearchParams(text) : null;
+  const text = await readCapped(req, MAX_FORM_BYTES).catch(() => null);
+  return text !== null ? new URLSearchParams(text) : null;
+}
+
+/**
+ * The body as text, or null once it passes `max` bytes. Read in pieces, so a
+ * chunked body (no content-length to refuse up front) can't fill memory.
+ */
+export async function readCapped(req: Request, max: number): Promise<string | null> {
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    parts.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) {
+    all.set(p, at);
+    at += p.byteLength;
+  }
+  return new TextDecoder().decode(all);
 }
 
 async function limited(env: Env, req: Request, scope: string): Promise<boolean> {
@@ -171,8 +199,9 @@ async function limited(env: Env, req: Request, scope: string): Promise<boolean> 
   return !success;
 }
 
-export async function getProfile(db: D1Database, userId: string, graph: Graph): Promise<Profile> {
-  const raw = await loadProfileJson(db, userId);
+/** The account's profile, checked against today's stops. `raw`: the saved JSON, when the caller has already read it. */
+export async function getProfile(db: D1Database, userId: string, graph: Graph, raw?: unknown): Promise<Profile> {
+  if (raw === undefined) raw = await loadProfileJson(db, userId);
   if (!raw) return structuredClone(DEFAULT_PROFILE);
   const idx = indexGraph(graph);
   // A stop can vanish from a new scrape. Re-validating on read would reject
@@ -185,18 +214,33 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph): 
   }
   const p = raw as Profile;
   useProfileLang(LANG_PREFS.includes(p.lang) ? p.lang : 'auto');
-  const ok = (c: string) => idx.byCode.has(c) || landmark(c) !== null;
+  return salvageProfile(p, (c) => idx.byCode.has(c) || landmark(c) !== null);
+}
+
+/**
+ * A saved profile that no longer validates whole (a stop gone from a new
+ * scrape): everything that still holds, so the next save doesn't write the
+ * user's hours, usual times or one-off trips back as the defaults.
+ */
+export function salvageProfile(p: Profile, ok: (code: string) => boolean): Profile {
+  const minute = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60;
+  const hours = minute(p.dayStartMin) && minute(p.dayEndMin) && p.dayStartMin < p.dayEndMin;
+  const places = (p.places ?? []).filter((x) => ok(x.to));
+  const placeKeys = new Set(places.map((x) => x.key));
   return {
     ...structuredClone(DEFAULT_PROFILE),
     gapHours: typeof p.gapHours === 'number' ? p.gapHours : DEFAULT_PROFILE.gapHours,
     homeWalkMin: typeof p.homeWalkMin === 'number' ? p.homeWalkMin : DEFAULT_PROFILE.homeWalkMin,
     walkPace: p.walkPace ?? DEFAULT_PROFILE.walkPace,
     fullBusMargin: p.fullBusMargin ?? DEFAULT_PROFILE.fullBusMargin,
+    ...(hours ? { dayStartMin: p.dayStartMin, dayEndMin: p.dayEndMin } : {}),
     seen: Array.isArray(p.seen) ? p.seen : [],
     home: p.home?.stops?.some(ok) ? { stops: p.home.stops.filter(ok) } : null,
     trips: (p.trips ?? []).filter((t) => ok(t.to)),
     manual: (p.manual ?? []).filter((t) => ok(t.to)),
-    places: (p.places ?? []).filter((x) => ok(x.to)),
+    places,
+    usual: (Array.isArray(p.usual) ? p.usual : []).filter((u) => placeKeys.has(u.place) && Number.isInteger(u.day) && u.day >= 0 && u.day <= 6 && minute(u.atMin)),
+    once: (Array.isArray(p.once) ? p.once : []).filter((o) => typeof o.date === 'string' && minute(o.arriveByMin) && ok(o.to)),
     share: p.share ?? null,
     term: p.term ?? null,
     lang: LANG_PREFS.includes(p.lang) ? p.lang : 'auto',
@@ -318,7 +362,7 @@ const ME_ROUTES: MeRoute[] = [
       const token = session.kind === 'web' ? tokenFrom(req) : null;
       const renewed = token !== null && (await renewWebSession(db, session.tokenHash, nowMs));
       const saved = await loadProfileJson(db, session.user.id);
-      const profile = await getProfile(db, session.user.id, deps.graph);
+      const profile = await getProfile(db, session.user.id, deps.graph, saved);
       const reason = reimportReason(profile, nowMs);
       return json({
         email: session.user.email,
@@ -1017,7 +1061,8 @@ export async function handleMe(
     if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429);
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
-    const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 40) || 'Device' : 'Device';
+    // It goes into the email to the account's owner: cleaned as at /auth/app/start.
+    const name = deviceName(body);
     if (!code) return json({ error: 'enter the 6-character code from the account page' }, 400);
     const paired = await redeemPairCode(db, code, name, nowMs, clientFrom(req));
     if (!paired) return json({ error: 'that code is wrong or has expired' }, 400);

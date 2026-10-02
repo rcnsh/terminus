@@ -187,7 +187,7 @@ const en = {
   // Rest, the next class, will I make it (profile.ts, calendar.ts)
   dayStarts: ((t: string) => `Day starts ${t}`) as Fn<[string]>,
   doneForToday: 'Done for today',
-  timetableFor: ((term: string) => `Your timetable is for ${term} · import this semester's on the account page`) as Fn<[string]>,
+  timetableFor: ((term: string) => `Your timetable is for ${term} · import this semester's in Settings`) as Fn<[string]>,
   noClassesComing: 'No classes coming up',
   nothingOnTimetable: 'Nothing on your timetable',
   today: 'today',
@@ -343,7 +343,7 @@ const zh: Msgs = {
   walkLabel: (t) => `步行 · ${t}`,
   noBusWalk: (t) => `无巴士 · 步行 ${t}`,
   servicesEnded: '今晚已停运',
-  isAWalk: (dest, t) => (dest ? `${zhTo(dest)}步行 ${t}` : `步行 ${t}`),
+  isAWalk: (dest, t) => (dest ? `${zhTo(dest)} 步行 ${t}` : `步行 ${t}`),
   endedWalkTo: (t, dest) => (dest ? `已停运 · 步行 ${t} ${zhTo(dest)}` : `已停运 · 步行 ${t}`),
   busNoLive: (svc) => `${svc} 暂无实时时间`,
   busWouldBe: (svc, t) => `搭 ${svc} 要 ${t}`,
@@ -409,7 +409,7 @@ const zh: Msgs = {
 
   dayStarts: (t) => `${t} 开始一天`,
   doneForToday: '今天结束了',
-  timetableFor: (term) => `你的课表是 ${term} 的 · 请在账户页面导入本学期的课表`,
+  timetableFor: (term) => `你的课表是 ${term} 的 · 请在设置中导入本学期的课表`,
   noClassesComing: '接下来没有课',
   nothingOnTimetable: '课表上没有课',
   today: '今天',

@@ -117,7 +117,7 @@ export interface Card {
    *  notification. The card itself is unchanged. */
   remind: boolean;
   /** "Leave one bus earlier for CS2030?", with its two buttons: send the id
-   *  to /me/suggestion. Never during a trip. */
+   *  to /me/choice. Never during a trip. */
   suggestion: Suggestion | null;
   /** On the bus: the stops from boarding to getting off and the board and
    *  arrival times (the arrival live when the bus's plate is known), for a

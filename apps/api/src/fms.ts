@@ -76,6 +76,9 @@ export function parseEtaS(v: unknown): number | null {
   if (NO_BUS.has(low)) return null;
   if (low.startsWith('arr')) return 0;
   if (low.startsWith('lv') || low.startsWith('left') || low.startsWith('dep')) return null;
+  // A minus or a clock time isn't minutes to go: stripping the rest would
+  // read "-3" as 3 min and "12:30" as 1230 min.
+  if (/[-:]/.test(s)) return null;
   const cleaned = s.replace(/[^0-9.]/g, '');
   if (!cleaned || cleaned === '.') return null;
   const n = Number(cleaned);
@@ -450,17 +453,19 @@ export function normalizeBuses(data: unknown): RawBus[] {
     if (!raw || typeof raw !== 'object') continue;
     const item = raw as Record<string, unknown>;
     const plate = plateOf(field(item, 'vehplate', 'veh_plate', 'vehiclePlate', 'plate'));
-    const lat = Number(field(item, 'lat', 'latitude'));
-    const lon = Number(field(item, 'lng', 'lon', 'longitude'));
+    // Missing or blank is missing, not 0 (Number(null) and Number('') are 0).
+    const num = (v: unknown) => (v == null || v === '' ? NaN : Number(v));
+    const lat = num(field(item, 'lat', 'latitude'));
+    const lon = num(field(item, 'lng', 'lon', 'longitude'));
     if (!plate || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) continue;
-    const dir = Number(field(item, 'direction', 'heading', 'bearing'));
+    const dir = num(field(item, 'direction', 'heading', 'bearing'));
     const speed = Number(field(item, 'speed'));
     const load = (item.loadInfo ?? {}) as Record<string, unknown>;
     out.push({
       plate,
       lat,
       lon,
-      heading: Number.isFinite(dir) && field(item, 'direction', 'heading', 'bearing') != null ? ((dir % 360) + 360) % 360 : null,
+      heading: Number.isFinite(dir) ? ((dir % 360) + 360) % 360 : null,
       speed: Number.isFinite(speed) && speed > 0 ? speed : 0,
       crowd: crowdFromLoad(load.capacity, load.ridership) ?? parseCrowd(load.crowdLevel),
     });

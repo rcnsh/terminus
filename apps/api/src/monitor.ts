@@ -283,7 +283,7 @@ export async function armTrips(env: Env, nowMs: number): Promise<number> {
   const today = sgtDate(nowMs);
   const hour = new Date(nowMs + 8 * 3_600_000).getUTCHours();
   if (hour < ARM_FROM_HOUR || (await env.KV.get(ARMED_KEY)) === today) return 0;
-  const { results } = await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL LIMIT ?').bind(ARM_MAX).all<{ user_id: string }>();
+  const { results } = await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL ORDER BY user_id LIMIT ?').bind(ARM_MAX).all<{ user_id: string }>();
   for (const r of results) await watchTrip(env, r.user_id, nowMs, nowMs);
   await env.KV.put(ARMED_KEY, today, { expirationTtl: 2 * 86_400 });
   return results.length;

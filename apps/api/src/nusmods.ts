@@ -110,9 +110,6 @@ export function venueToStop(venue: string): { stop: string; m: number } | null {
   if (VENUES.venues[building]) return VENUES.venues[building];
   // Trailing digits sometimes distinguish rooms in a bare code (COM1 vs COM12).
   const stripped = building.replace(/\d+$/, '');
-  for (const key of Object.keys(VENUES.venues)) {
-    if (key === building) return VENUES.venues[key];
-  }
   if (stripped && VENUES.venues[stripped]) return VENUES.venues[stripped];
   return null;
 }
