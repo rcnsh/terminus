@@ -47,7 +47,7 @@ internal fun OfflinePlanOr(offline: Boolean, answer: NextAnswer?, fetchedAt: Lon
     Card(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
         Column(Modifier.fillMaxWidth().heightIn(min = 180.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                listOfNotNull(stringResource(R.string.offline), lines.head).joinToString(" · "),
+                "${stringResource(R.string.offline)} · ${lines.head}",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

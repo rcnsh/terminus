@@ -50,12 +50,18 @@ class OfflineDayTest {
     }
 
     @Test fun linesAreWordedLikeTheTodayList() {
-        val first = OfflineDay.next(day, ms("2026-08-27T01:00:00Z"))!!
-        val lines = OfflineDay.lines(first) { "09:36" }
-        assertEquals("GEA1000 @ UTown", lines.head)
-        assertEquals("Leave by ~09:36", lines.big)
-        assertEquals("R2 from PGP", lines.how)
-        val home = OfflineDay.lines(OfflineDay.next(day, ms("2026-08-27T07:30:00Z"))!!) { it.toString() }
+        val hhmm = { at: Long -> java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(Instant.ofEpochMilli(at).atOffset(java.time.ZoneOffset.ofHours(8))) }
+        val first = OfflineDay.lines(OfflineDay.next(day, ms("2026-08-27T01:00:00Z"))!!, hhmm)
+        assertEquals("GEA1000 @ UTown · starts 10:00", first.head)
+        assertEquals("Leave by ~09:36", first.big)
+        assertEquals("R2 from PGP", first.how)
+        // Planned a while ago: an estimate, so "~" even on a live time. A walk reads as a line of its own.
+        val walk = OfflineDay.lines(OfflineDay.next(day, ms("2026-08-27T05:10:00Z"))!!, hhmm)
+        assertEquals("Leave by ~13:39", walk.big)
+        assertEquals("Walk", walk.how)
+        val home = OfflineDay.lines(OfflineDay.next(day, ms("2026-08-27T07:30:00Z"))!!, hhmm)
+        assertEquals("15:00", home.head)
         assertEquals("Home, from COM 3", home.big)
+        assertNull(home.how)
     }
 }

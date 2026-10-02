@@ -112,21 +112,30 @@ async function refresh() {
 /** Past the card's staleAt: its bus has gone, the plan has moved on, or it's old. */
 const isStale = (a) => Boolean(a.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
 
-/** The offline card: the day plan's next item, worded as the Today list words it. */
+/**
+ * The offline card: the day plan's next item, worded as the Today list words
+ * it. Always an estimate (it was planned a while ago), so always "~"; the
+ * class's start time is there so a "Leave now" after it has started reads
+ * as late, and a trip home says from when.
+ */
 function showOffline({ item, step }) {
   const box = $('#preview');
-  box.className = 'widget';
-  const l = item.leave;
-  const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
+  box.className = 'widget offline-plan';
   if (step === 'home') {
-    box.replaceChildren(el('div', { class: 'big', textContent: t('Home, from {0}', item.fromName ?? t('your last class')) }));
+    box.replaceChildren(
+      el('div', { class: 'where', textContent: clock(item.startsAt) }),
+      el('div', { class: 'big', textContent: t('Home, from {0}', item.fromName ?? t('your last class')) }),
+    );
     return;
   }
-  const big = step === 'leaveBy' ? t('Leave by {0}', l.estimated ? t('~{0}', clock(l.at)) : clock(l.at)) : t('Leave now');
+  const l = item.leave;
+  const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
+  const big = step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now');
   box.replaceChildren(
-    el('div', { class: 'where', textContent: t('Next class · {0}', item.label) }),
+    el('div', { class: 'where', textContent: `${t('Next class · {0}', item.label)} · ${t('starts {0}', clock(item.startsAt))}` }),
     el('div', { class: 'big', textContent: big }),
-    how ? el('div', { class: 'detail', textContent: how }) : '',
+    // Capitalised: on a line of its own, not after "Leave by …" as in Today.
+    how ? el('div', { class: 'detail', textContent: how.charAt(0).toUpperCase() + how.slice(1) }) : '',
   );
 }
 

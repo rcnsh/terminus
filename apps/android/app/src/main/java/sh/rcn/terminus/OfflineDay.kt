@@ -48,19 +48,21 @@ object OfflineDay {
         return marks.filter { it > now }.minOrNull()
     }
 
-    /** What it was for, the headline, and how: worded as the Today list words them. */
-    data class Lines(val head: String?, val big: String, val how: String?)
+    /**
+     * What it's for, the headline, and how: worded as the Today list words
+     * them. Always an estimate (it was planned a while ago), so always "~";
+     * the class's start time is there so a "Leave now" after it has started
+     * reads as late, and a trip home says from when.
+     */
+    data class Lines(val head: String, val big: String, val how: String?)
 
     fun lines(p: Pick, clock: (Long) -> String): Lines {
         val item = p.item
-        if (p.step == Step.Home) return Lines(null, L.s(R.string.home_from, item.fromName ?: L.s(R.string.your_last_class)), null)
+        if (p.step == Step.Home) return Lines(clock(item.startsAtMs), L.s(R.string.home_from, item.fromName ?: L.s(R.string.your_last_class)), null)
         val at = item.leaveAtMs
-        val big = if (p.step == Step.LeaveBy && at != null) {
-            L.s(R.string.leave_by, if (item.leaveEstimated) L.s(R.string.approx, clock(at)) else clock(at))
-        } else {
-            L.s(R.string.leave_now)
-        }
+        val big = if (p.step == Step.LeaveBy && at != null) L.s(R.string.leave_by, L.s(R.string.approx, clock(at))) else L.s(R.string.leave_now)
         val how = item.svc?.let { L.s(R.string.svc_from, it, item.leaveStop ?: item.fromName.orEmpty()) } ?: at?.let { L.s(R.string.walk) }
-        return Lines(item.label, big, how)
+        // Capitalised: on a line of its own, not after "Leave by …" as in Today.
+        return Lines("${item.label} · ${L.s(R.string.starts_at, clock(item.startsAtMs))}", big, how?.replaceFirstChar { it.titlecase() })
     }
 }

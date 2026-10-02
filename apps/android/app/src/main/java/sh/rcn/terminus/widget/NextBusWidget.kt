@@ -191,7 +191,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     }
                     offline != null -> {
                         val lines = OfflineDay.lines(offline) { clock(ctx, it) }
-                        Text(listOfNotNull(L.s(R.string.offline), lines.head).joinToString(" · "), style = muted, maxLines = 1)
+                        // A roomy widget's footer already says Offline; a compact one has no footer.
+                        Text(if (roomy) lines.head else "${L.s(R.string.offline)} · ${lines.head}", style = muted, maxLines = 1)
                         Text(lines.big, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp), maxLines = 1)
                         lines.how?.let { Text(it, style = muted, maxLines = 1) }
                         if (large) {

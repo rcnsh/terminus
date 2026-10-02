@@ -36,14 +36,25 @@ private func load() throws -> (Spec, DayPlan) {
     }
 }
 
+/// The plan's pick at an ISO time. (A #require can't hold another #require.)
+private func pick(_ day: DayPlan, at iso: String) throws -> OfflineDay.Pick {
+    let now = try #require(parseISODate(iso))
+    return try #require(OfflineDay.next(day, now: now))
+}
+
 @Test func theMenuBarSaysWhenToLeave() throws {
     let (_, day) = try load()
-    let first = try #require(OfflineDay.next(day, now: try #require(parseISODate("2026-08-27T01:00:00Z"))))
-    #expect(OfflineDay.lines(first).head == "GEA1000 @ UTown")
+    let first = try pick(day, at: "2026-08-27T01:00:00Z")
+    #expect(OfflineDay.lines(first).head.hasPrefix("GEA1000 @ UTown · starts "))
+    #expect(OfflineDay.lines(first).big.hasPrefix("Leave by ~"))
     #expect(OfflineDay.lines(first).how == "R2 from PGP")
-    let late = try #require(OfflineDay.next(day, now: try #require(parseISODate("2026-08-27T01:40:00Z"))))
+    let walk = try pick(day, at: "2026-08-27T05:10:00Z")
+    #expect(OfflineDay.lines(walk).how == "Walk")
+    #expect(OfflineDay.menuTitle(walk)?.hasPrefix("Leave ~") == true)
+    let late = try pick(day, at: "2026-08-27T01:40:00Z")
     #expect(OfflineDay.menuTitle(late) == "Leave now")
-    let home = try #require(OfflineDay.next(day, now: try #require(parseISODate("2026-08-27T07:30:00Z"))))
+    let home = try pick(day, at: "2026-08-27T07:30:00Z")
     #expect(OfflineDay.menuTitle(home) == nil)
     #expect(OfflineDay.lines(home).big == "Home, from COM 3")
+    #expect(OfflineDay.lines(home).how == nil)
 }
