@@ -48,6 +48,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import sh.rcn.terminus.NextAnswer
+import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.ui.BrandDark
@@ -131,6 +132,13 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         }
         val fetchedAt = if (onTimetable) planAt else chosen.fetchedAt
         val error = if (onTimetable) planError else chosen.error
+        // Offline (the last refresh failed) with the plan gone stale, or none
+        // kept: the next thing on the day plan kept for it.
+        val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, fetchedAt, now0))) {
+            OfflineDay.next(store.lastDay()?.first, now0)
+        } else {
+            null
+        }
         // The live notification keeps the plan current, so no refresh button then.
         val refreshButton = paired && (!live || !onTimetable)
         // ↻ refreshes what it shows (a place with a new location fix); a tap
@@ -146,7 +154,11 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         )
 
         // TalkBack reads the widget as one sentence instead of fragments.
-        val spoken = if (mode == Mode.Nearby) nearbySpoken(chosen) else spokenSummary(ctx, paired, answer, fetchedAt, error)
+        val spoken = when {
+            mode == Mode.Nearby -> nearbySpoken(chosen)
+            offline != null -> OfflineDay.lines(offline) { clock(ctx, it) }.let { listOfNotNull(L.s(R.string.offline), it.head, it.big, it.how).joinToString(". ") }
+            else -> spokenSummary(ctx, paired, answer, fetchedAt, error)
+        }
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
@@ -176,6 +188,19 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             Spacer(GlanceModifier.height(6.dp))
                         }
                         Footer(ctx, chosen.fetchedAt, chosen.error, roomy)
+                    }
+                    offline != null -> {
+                        val lines = OfflineDay.lines(offline) { clock(ctx, it) }
+                        // A roomy widget's footer already says Offline; a compact one has no footer.
+                        Text(if (roomy) lines.head else "${L.s(R.string.offline)} · ${lines.head}", style = muted, maxLines = 1)
+                        Text(lines.big, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp), maxLines = 1)
+                        lines.how?.let { Text(it, style = muted, maxLines = 1) }
+                        if (large) {
+                            Spacer(GlanceModifier.defaultWeight())
+                            ModeRow(ctx, bottom)
+                            Spacer(GlanceModifier.height(6.dp))
+                        }
+                        Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer == null -> {
                         Text(if (onTimetable) error ?: L.s(R.string.loading) else "${mode.label} · ${error ?: L.s(R.string.loading)}", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))

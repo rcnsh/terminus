@@ -163,7 +163,15 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
         // A minimum height keeps the chips and search from jumping as views
         // switch or data arrives.
         Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
-            if (state.showNearby) NearbyList(state.nearby, state.loading) else AnswerCard(state.answer, state.loading, vm::signal, state.signalling, vm::choose)
+            if (state.showNearby) {
+                NearbyList(state.nearby, state.loading)
+            } else {
+                // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
+                val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
+                OfflinePlanOr(offline, state.answer, state.fetchedAt, state.day) {
+                    AnswerCard(state.answer, state.loading, vm::signal, state.signalling, vm::choose)
+                }
+            }
         }
         // The rest of today under the planned answer.
         if (!state.showNearby && state.target == Target.Plan) state.day?.let { DayTimeline(it, state.removed, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved) }

@@ -10,11 +10,12 @@
 //   replies: they belong to one account and must not outlive it, or reach
 //   the next one to sign in on this browser.
 
-const SHELL = 'shell-v3';
+const SHELL = 'shell-v4';
 const DATA = 'data-v2';
 const SHELL_FILES = [
   '/app/',
   '/app/app.js',
+  '/app/offline.js',
   '/app/app.css',
   '/account/dom.js',
   '/account/preview.js',

@@ -75,6 +75,9 @@ const CASES = {
   'home': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(420, 'COM3', 'CS2030 @ COM1')], places }, `/me/next?${DORM}`],
   'setup': [{}, '/me/next'],
   'nearby-list': [{ home: { stops: ['PGP'] } }, `/me/nearby?${DORM}`],
+  // The day the apps keep for when they're offline (see offline-day.json):
+  // a class, a long gap home, a class, the way home.
+  'day': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown'), cls(840, 'COM3', 'CS2030 @ COM1', 'COM1')], places }, '/me/day'],
 };
 
 // Each case again with the account set to Chinese (phase 10), in zh/: the
