@@ -126,6 +126,8 @@ function sgtTime(ms: number): string {
 
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   if (!(req.headers.get('content-type') ?? '').includes('application/json')) return null;
+  // Refuse a big body before reading it, not after.
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return null;
   try {
     const text = await req.text();
     if (text.length > MAX_BODY_BYTES) return null;
@@ -356,7 +358,11 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/me/import',
-    run: async ({ req, nowMs, deps, db, session }) => {
+    run: async ({ env, req, nowMs, deps, db, session }) => {
+      // Each import can fetch 15 modules from NUSMods: a few a minute per account, not 120.
+      if (env.RL_AUTH && !(await env.RL_AUTH.limit({ key: `import:${session.user.id}` })).success) {
+        return json({ error: 'too many attempts, try again in a minute' }, 429);
+      }
       const body = await readJson(req);
       const share = typeof body?.share === 'string' ? body.share.trim() : '';
       let parsed;
