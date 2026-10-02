@@ -234,6 +234,7 @@
     <string name="on_">On.</string>
     <string name="on_mac_enter">On your Mac, open terminus and enter:</string>
     <string name="on_the">On the %1$s</string>
+    <string name="on_the_map">%1$s on the map</string>
     <string name="one_bus_earlier">One bus earlier</string>
     <string name="one_class">1 class</string>
     <string name="one_device">1 device</string>

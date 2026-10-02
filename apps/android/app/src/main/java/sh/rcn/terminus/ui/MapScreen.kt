@@ -463,9 +463,9 @@ private fun StatusChip(text: String, busy: Boolean = false) {
     }
 }
 
-/** A service's code on its colour, as on the bus. */
+/** A service's code on its colour, as on the bus. Also Nearby's, on Now. */
 @Composable
-private fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
+internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
     val shape = RoundedCornerShape(7.dp)
     val content: @Composable () -> Unit = {
         Text(svc, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp).widthIn(min = 24.dp))

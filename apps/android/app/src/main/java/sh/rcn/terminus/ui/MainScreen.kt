@@ -76,7 +76,7 @@ import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
 
 @Composable
-internal fun MainScreen(state: UiState, vm: MainViewModel) {
+internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) -> Unit) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
@@ -168,7 +168,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
         // switch or data arrives.
         Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
             if (state.showNearby) {
-                NearbyList(state.nearby, state.loading)
+                NearbyList(state.nearby, state.loading, onOpenStop)
             } else {
                 // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
                 val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading

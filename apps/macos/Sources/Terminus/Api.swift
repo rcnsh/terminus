@@ -178,6 +178,8 @@ struct BoardRow: Decodable, Hashable {
     let svc: String
     let etaS: Int?
     let quality: String
+    /// The service's colour ("#8e44c9"), as on the buses: /me/nearby sends it.
+    var color: String? = nil
 }
 
 struct NearbyStop: Decodable, Identifiable {

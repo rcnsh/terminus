@@ -618,7 +618,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Departures near you',
           description:
             'Upcoming buses at up to three stops within walking range, nearest first, plus the nearest stop\'s twin ' +
-            '(across the road, or a stop easily mistaken for it) when it isn\'t one of them. `opposite` is each stop\'s twin, if it has one. Without coordinates, uses your home.',
+            '(across the road, or a stop easily mistaken for it) when it isn\'t one of them. `opposite` is each stop\'s twin, if it has one. Each departure has its service\'s `color`. Without coordinates, uses your home.',
           operationId: 'meNearby',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: coordParams,
@@ -636,7 +636,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       distM: { type: 'integer' },
                       walkS: { type: 'integer' },
                       available: { type: 'boolean' },
-                      board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
+                      board: {
+                        type: 'array',
+                        items: {
+                          allOf: [
+                            { $ref: '#/components/schemas/BoardRow' },
+                            { type: 'object', properties: { color: { type: ['string', 'null'], description: 'The colour of the service, as on the buses (#rrggbb).' } } },
+                          ],
+                        },
+                      },
                     },
                   },
                 },

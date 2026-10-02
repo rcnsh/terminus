@@ -141,7 +141,14 @@ struct FlowPills: View {
         Flow(spacing: 6) {
             ForEach(rows, id: \.self) { r in
                 HStack(spacing: 5) {
-                    Text(r.svc).font(.system(size: 11, weight: .bold))
+                    // In the service's colour, as on the buses and the map.
+                    if let c = r.color.flatMap(Color.init(hex:)) {
+                        Text(r.svc).font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c))
+                    } else {
+                        Text(r.svc).font(.system(size: 11, weight: .bold))
+                    }
                     Text(eta(r))
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .foregroundStyle(.secondary)

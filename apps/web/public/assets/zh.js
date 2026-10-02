@@ -428,5 +428,6 @@ window.TERMINUS_ZH = {
  "Only in this browser.": "仅限此浏览器。",
  "Updating…": "正在更新…",
  "Go somewhere else": "去别的地方",
- "Import from NUSMods": "从 NUSMods 导入"
+ "Import from NUSMods": "从 NUSMods 导入",
+ "{0} on the map": "在地图上查看{0}"
 };

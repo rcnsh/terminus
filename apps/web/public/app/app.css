@@ -36,7 +36,8 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .nearby-stop + .nearby-stop { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .nearby-stop header { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; margin-bottom: 6px; }
 .nearby-stop header span { font-weight: 400; color: var(--muted); }
-.nearby-row { display: flex; justify-content: space-between; padding: 3px 0; font-variant-numeric: tabular-nums; }
+.nearby-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-variant-numeric: tabular-nums; }
+.nearby-stop header .linkish { padding: 0; font: inherit; font-weight: 600; color: var(--ink); text-align: left; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 
 .offline {
   padding: 10px 14px;
@@ -150,7 +151,7 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
   min-width: 2.6em;
   padding: 3px 8px;
   border-radius: 7px;
-  background: var(--svc);
+  background: var(--svc, var(--muted));
   color: #fff;
   font-weight: 700;
   font-size: 0.85rem;

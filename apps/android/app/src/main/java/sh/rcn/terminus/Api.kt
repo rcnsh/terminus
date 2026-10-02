@@ -322,7 +322,8 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
     }
 }
 
-data class BoardRow(val svc: String, val etaS: Int?, val quality: String)
+/** A service due at a stop. `color` (#rrggbb), the service's colour, comes with /me/nearby's rows. */
+data class BoardRow(val svc: String, val etaS: Int?, val quality: String, val color: String? = null)
 
 data class NearbyStop(
     val code: String,
@@ -759,7 +760,7 @@ fun parseNearby(json: JSONObject): List<NearbyStop> {
             opposite = if (s.isNull("opposite")) null else s.optString("opposite").ifEmpty { null },
             board = (0 until board.length()).map { j ->
                 val r = board.getJSONObject(j)
-                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"))
+                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"), if (r.isNull("color")) null else r.optString("color").ifEmpty { null })
             },
         )
     }

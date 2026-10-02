@@ -57,6 +57,7 @@ import { cardFor, nextPhaseAt } from './card.ts';
 import { RIDE, WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
 import { nearbyTwin } from './graph.ts';
+import { ROUTE_COLORS } from './campus.ts';
 import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
@@ -1214,7 +1215,8 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
       distM: Math.round(distM),
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
-      board: boardAt(deps.graph, idx, stop.code, sa, nowMs),
+      // Each service in its colour, as on the buses and the map.
+      board: boardAt(deps.graph, idx, stop.code, sa, nowMs).map((r) => ({ ...r, color: ROUTE_COLORS[r.svc] ?? null })),
     };
   });
   return json({ stops, asOf: new Date(nowMs).toISOString() });

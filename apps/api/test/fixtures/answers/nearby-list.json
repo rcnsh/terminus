@@ -14,19 +14,22 @@
           "svc": "D2",
           "etaS": 240,
           "quality": "live",
-          "ambiguousBerth": false
+          "ambiguousBerth": false,
+          "color": "#8e44c9"
         },
         {
           "svc": "A2",
           "etaS": null,
           "quality": "scheduled",
-          "ambiguousBerth": false
+          "ambiguousBerth": false,
+          "color": "#d9a000"
         },
         {
           "svc": "K",
           "etaS": null,
           "quality": "scheduled",
-          "ambiguousBerth": false
+          "ambiguousBerth": false,
+          "color": "#2b9ad6"
         }
       ]
     },
@@ -44,31 +47,36 @@
           "svc": "D2",
           "etaS": 240,
           "quality": "live",
-          "ambiguousBerth": false
+          "ambiguousBerth": false,
+          "color": "#8e44c9"
         },
         {
           "svc": "R2",
           "etaS": 360,
           "quality": "live",
-          "ambiguousBerth": false
+          "ambiguousBerth": false,
+          "color": "#34a853"
         },
         {
           "svc": "A1",
           "etaS": 540,
           "quality": "live",
-          "ambiguousBerth": false
+          "ambiguousBerth": false,
+          "color": "#e53935"
         },
         {
           "svc": "K",
           "etaS": null,
           "quality": "scheduled",
-          "ambiguousBerth": false
+          "ambiguousBerth": false,
+          "color": "#2b9ad6"
         },
         {
           "svc": "R1",
           "etaS": null,
           "quality": "scheduled",
-          "ambiguousBerth": false
+          "ambiguousBerth": false,
+          "color": "#f57c1f"
         }
       ]
     }

@@ -234,6 +234,7 @@
     <string name="on_">已开启。</string>
     <string name="on_mac_enter">在你的 Mac 上打开 terminus，输入：</string>
     <string name="on_the">在 %1$s 上</string>
+    <string name="on_the_map">在地图上查看%1$s</string>
     <string name="one_bus_earlier">提早一班</string>
     <string name="one_class">1 节课</string>
     <string name="one_device">1 台设备</string>

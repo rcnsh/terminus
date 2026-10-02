@@ -332,7 +332,11 @@ async function showTab() {
   if (tab === 'map') {
     // The map's code on its first opening, after the fade: the tab shows at once.
     mapModule ??= await import('/app/map.js');
-    if (tab === 'map') mapModule.showMap();
+    if (tab === 'map') {
+      await mapModule.showMap();
+      if (stopToShow) mapModule.focusStop(stopToShow);
+      stopToShow = null;
+    }
   } else if (tab === 'settings') {
     openSettings();
   } else if (from !== null) {
@@ -395,6 +399,9 @@ function goToStop({ code, name, place }) {
   showTab();
 }
 
+/** A stop tapped in Nearby, for the map to open once it's on screen. */
+let stopToShow = null;
+
 /** Every bus at the stops around you, from the browser's location. */
 async function refreshNearby(mine) {
   const box = $('#preview');
@@ -419,10 +426,31 @@ async function refreshNearby(mine) {
         el(
           'section',
           { class: 'nearby-stop' },
-          el('header', {}, el('div', { textContent: s.stop.name }), el('span', { textContent: t('{0} min walk', Math.max(1, Math.round(s.walkS / 60))) })),
+          el(
+            'header',
+            {},
+            // The stop's name opens it on the map, with its services and what's coming.
+            el('button', {
+              type: 'button',
+              class: 'linkish',
+              textContent: s.stop.name,
+              'aria-label': t('{0} on the map', s.stop.name),
+              onclick: () => {
+                stopToShow = s.stop.code;
+                location.hash = '#map';
+              },
+            }),
+            el('span', { textContent: t('{0} min walk', Math.max(1, Math.round(s.walkS / 60))) }),
+          ),
           ...(s.board.length
             ? s.board.map((b) =>
-                el('div', { class: 'nearby-row' }, el('span', { textContent: b.svc }), el('span', { textContent: b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', Math.round(b.etaS / 60))) : t('{0} min', Math.round(b.etaS / 60)) })),
+                el(
+                  'div',
+                  { class: 'nearby-row' },
+                  // In the service's colour, as on the buses and the map.
+                  el('span', { class: 'svc-tag', style: b.color ? `--svc:${b.color}` : '', textContent: b.svc }),
+                  el('span', { textContent: b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', Math.round(b.etaS / 60))) : t('{0} min', Math.round(b.etaS / 60)) }),
+                ),
               )
             : [el('div', { class: 'detail', textContent: s.available ? t('No buses due') : t('No times right now') })]),
         ),

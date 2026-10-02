@@ -98,6 +98,18 @@ export async function showMap() {
   }
 }
 
+/** A stop opened from elsewhere (a stop in Nearby, on Now): centred, with its sheet open. */
+export function focusStop(code) {
+  const stop = campus?.stops.find((s) => s.code === code);
+  if (!map || !stop) return;
+  const go = () => {
+    map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), 17), duration: 600 });
+    openStop(code);
+  };
+  if (map.loaded()) go();
+  else map.once('load', go);
+}
+
 /** Stops everything that runs while the map is on screen. */
 export function hideMap() {
   visible = false;
