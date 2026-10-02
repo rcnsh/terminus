@@ -19,8 +19,8 @@ function zh() {
 }
 
 // The privacy policy has a page of its own in Chinese (privacy/zh/), checked below.
-const PAGES = ['index.html', 'account/index.html', 'app/index.html', 'pair/index.html', 'status/index.html'];
-const SCRIPTS = ['account/app.js', 'account/onboarding.js', 'account/preview.js', 'account/search.js', 'app/app.js', 'app/map.js', 'assets/landing.js', 'status/status.js'];
+const PAGES = ['index.html', 'account/index.html', 'account/settings.html', 'app/index.html', 'pair/index.html', 'status/index.html'];
+const SCRIPTS = ['account/app.js', 'account/settings.js', 'account/onboarding.js', 'account/preview.js', 'account/search.js', 'app/app.js', 'app/map.js', 'assets/landing.js', 'status/status.js'];
 
 // Names and codes that read the same in Chinese.
 const SAME = /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.rcn\.sh\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;

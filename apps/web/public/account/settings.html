@@ -1,0 +1,175 @@
+<!-- Settings: the signed-in part of the account page, drawn by settings.js
+     into the account page (/account/) and the web app's Settings (/app/#settings). -->
+<div class="layout">
+  <div class="col">
+    <div id="reimport" class="banner" hidden>
+      <strong>Re-import your timetable.</strong> <span id="reimport-text"></span>
+    </div>
+
+    <section class="card">
+      <div class="head"><h2>Timetable</h2><span class="hint" id="class-count"></span></div>
+      <form id="import-form">
+        <label for="share">NUSMods share link</label>
+        <div class="row">
+          <input id="share" type="url" placeholder="https://nusmods.com/timetable/sem-1/share?…">
+          <button type="submit" class="btn">Import</button>
+        </div>
+        <p class="hint">In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester.</p>
+      </form>
+      <p id="import-msg" class="hint" role="status"></p>
+      <div id="unresolved"></div>
+      <div id="classes" class="classes"></div>
+      <details class="add">
+        <summary>Add a class or commitment by hand</summary>
+        <form id="manual-form" class="grid">
+          <label>Day
+            <select name="day" required>
+              <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
+              <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
+            </select>
+          </label>
+          <label>Starts <input name="start" type="time" required></label>
+          <label>Ends <input name="end" type="time"></label>
+          <label class="wide">Name <input name="label" maxlength="60" required placeholder="e.g. Gym"></label>
+          <label class="wide">Where <input name="where" required placeholder="Stop, building or room"></label>
+          <button type="submit" class="btn wide">Add</button>
+        </form>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Your day</h2>
+      <label for="residence">Where do you live?</label>
+      <select id="residence"><option value="">Off campus, or I'll pick stops</option></select>
+      <p class="hint">If you live on campus, this fills in your stops so the app doesn't direct you home when you're already there.</p>
+      <label>Home stops</label>
+      <p class="hint">Where your day starts and ends. Only the stops are saved, never where you live.</p>
+      <div class="row">
+        <select id="home-1" aria-label="Main home stop"></select>
+        <select id="home-2" aria-label="Second home stop"></select>
+      </div>
+      <button type="button" class="link-btn locate" id="locate">Pick the stops nearest me</button>
+      <p id="home-msg" class="hint" role="status"></p>
+      <label for="home-walk">Walk from home to your stop</label>
+      <div class="row tight"><input id="home-walk" type="number" min="0" max="30" step="1"><span>minutes</span></div>
+      <p class="hint">Included in your departure time when your location isn't available.</p>
+
+      <div class="split">
+        <div>
+          <label for="day-start">Show buses between</label>
+          <div class="row tight"><input id="day-start" type="time" aria-label="Day starts"><span>and</span><input id="day-end" type="time" aria-label="Day ends"></div>
+        </div>
+        <div>
+          <label for="gap">Go home in gaps longer than</label>
+          <div class="row tight"><input id="gap" type="number" min="0.5" max="12" step="0.5"><span>hours</span></div>
+        </div>
+      </div>
+      <p class="hint">Outside these hours, the widget shows your next class instead of a bus. Classes that start earlier or end later extend these hours automatically.</p>
+
+      <div class="split">
+        <div>
+          <label for="pace">Walking pace</label>
+          <select id="pace">
+            <option value="slow">Slow, about 4 km/h</option>
+            <option value="normal">Normal, about 4.7 km/h</option>
+            <option value="fast">Fast, about 5.4 km/h</option>
+          </select>
+        </div>
+        <div>
+          <label class="check"><input id="full-bus" type="checkbox"> Aim one bus earlier when the bus is often packed</label>
+        </div>
+      </div>
+      <p class="hint">Walking times follow campus paths. Your pace applies to every walk except the one from home, which you set above.</p>
+
+      <div id="trip-choices" hidden>
+        <h3>Your classes</h3>
+        <ul id="choice-list" class="list"></ul>
+      </div>
+      <div id="trip-history" hidden>
+        <h3>Trip history</h3>
+        <p class="hint"><span id="history-size"></span> Kept for 35 days and used only to spot classes you often miss or skip.</p>
+        <button id="clear-history" class="btn small ghost" type="button">Clear trip history</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Favourites</h2>
+      <p class="hint">Available in one tap from the app, the widget and the menu bar. Give a place a usual time (for example, the gym on Tuesdays at 6 pm) and it's planned like a class that day.</p>
+      <ul id="places" class="list"></ul>
+      <form id="place-form" class="row">
+        <input name="where" required placeholder="Add a stop, building or room" aria-label="Add a favourite">
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>API keys</h2>
+      <p class="hint">For your own scripts and projects. See the <a href="/docs">API docs</a>; send the key in the <code>x-api-key</code> header.</p>
+      <ul id="keys" class="list"></ul>
+      <form id="key-form" class="row">
+        <input name="name" maxlength="40" required placeholder="What it's for, e.g. My script" aria-label="Key name">
+        <button type="submit" class="btn">Create</button>
+      </form>
+      <div id="new-key" class="new-key" hidden>
+        <p class="warn-text">Copy this key now. It won't be shown again.</p>
+        <div class="row"><code id="new-key-value"></code><button type="button" class="btn small" id="copy-key">Copy</button></div>
+        <p class="hint">Try it: <code id="new-key-eg"></code></p>
+      </div>
+      <p id="key-msg" class="hint" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Account</h2>
+      <!-- In the web app, which has no header for these. -->
+      <div class="who-row" id="who-row" hidden>
+        <span class="hint" id="who-email"></span>
+        <button type="button" class="btn small ghost" id="who-add-email" hidden>Add an email</button>
+        <button type="button" class="btn small ghost" id="who-logout">Sign out</button>
+      </div>
+      <label for="lang">Language</label>
+      <select id="lang">
+        <option value="auto">Follow this browser</option>
+        <option value="en" data-no-t>English</option>
+        <option value="zh" data-no-t>中文</option>
+      </select>
+      <p class="hint">Also used for emails and on your other devices. Place and bus names stay in English, as on the signs.</p>
+      <div class="actions">
+        <a class="btn ghost small" href="/me/export" download>Download my data</a>
+        <button type="button" class="btn ghost small" id="signout-all">Sign out everywhere</button>
+        <button type="button" class="btn danger small" id="delete">Delete account</button>
+      </div>
+      <p id="account-msg" class="hint" role="status"></p>
+    </section>
+  </div>
+
+  <aside class="col side">
+    <!-- The account page only: the web app has the card itself, on Now. -->
+    <section class="side-preview">
+      <p class="eyebrow">Your widget right now</p>
+      <div class="widget" id="preview"><div class="big">…</div></div>
+      <button type="button" class="link-btn report-open" id="report-open">Is this wrong?</button>
+      <form id="report" class="report" hidden>
+        <label for="report-note">What was wrong? <span class="hint">(optional)</span></label>
+        <textarea id="report-note" rows="3" maxlength="1000" placeholder="The D2 never came, the walk is longer than that…"></textarea>
+        <p class="hint" id="report-hint">This sends the answer above and your note, with your email address so you can get a reply.</p>
+        <div class="actions">
+          <button type="submit" class="btn small accent" id="report-send">Send</button>
+          <button type="button" class="btn small ghost" id="report-cancel">Cancel</button>
+        </div>
+      </form>
+      <p id="report-msg" class="hint" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Devices</h2>
+      <p class="hint" id="devices-hint">Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.</p>
+      <button type="button" class="btn wide" id="pair">Pair a device</button>
+      <div id="pairing" class="pairing" hidden>
+        <div id="qr" class="qr" aria-label="QR code to pair a phone"></div>
+        <p class="code" id="pair-code"></p>
+        <p class="hint" id="pair-hint">Scan with your phone's camera, or type the code in the app.</p>
+      </div>
+      <ul id="devices" class="list"></ul>
+    </section>
+  </aside>
+</div>
+<p id="saved" class="toast" role="status" aria-live="polite"></p>

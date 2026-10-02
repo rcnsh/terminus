@@ -157,6 +157,7 @@ window.TERMINUS_ZH = {
  "Name": "名称",
  "Nearby": "附近",
  "Nearby needs a connection.": "“附近”需要联网。",
+ "Settings need a connection.": "设置需要联网。",
  "Next": "下一个",
  "Next bus": "下一班巴士",
  "Next class · {0}": "下一节课 · {0}",

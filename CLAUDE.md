@@ -126,8 +126,9 @@ apps/api/
   docs/internals.md        How everything works, in depth; docs/analytics.md
 apps/web/public/
   index.html          Landing page
-  account/            Sign-in, import, places, pairing (dom.js has $, el, t, api)
-  app/                Installed web app: app.js (Now), map.js (campus map), offline.js
+  account/            Sign-in, onboarding; settings.js + settings.html (the settings,
+                      shared with the app); dom.js has $, el, t, api
+  app/                Installed web app: app.js (Now, tabs), map.js (campus map), offline.js
   admin/, status/, pair/, privacy/
   assets/             site.css (shared colours/type), i18n.js, zh.js (Chinese), shots/
   vendor/             MapLibre GL + PMTiles: copied by scripts/vendor-map.sh, never hand-edited, not linted

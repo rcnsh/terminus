@@ -1,16 +1,4 @@
-/*
- * The bar along the bottom (Now · Map · Settings), shared by the web app
- * and the account page when it's opened from the app, and the fade between
- * them: the browser keeps the bar in place while the page under it fades
- * (cross-document view transitions; a browser without them switches
- * instantly, as before).
- */
-
-@media (prefers-reduced-motion: no-preference) {
-  @view-transition { navigation: auto; }
-}
-::view-transition-old(root),
-::view-transition-new(root) { animation-duration: 180ms; }
+/* The web app's bar along the bottom: Now · Map · Settings. */
 
 :root { --tabbar-h: 60px; }
 body.app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
@@ -41,9 +29,4 @@ body.app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); 
 .tabbar a[aria-current="page"] { color: var(--ink); }
 .tabbar a[aria-current="page"] svg { stroke-width: 2.2; color: var(--accent); }
 .tabbar a:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 10px; }
-.tabbar { view-transition-name: tabbar; }
 
-/* The account page shows the bar only inside the app (account/in-app.js). */
-html:not(.in-app) .tabbar.account-tabbar { display: none; }
-html.in-app body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
-html.in-app .open-app { display: none; }

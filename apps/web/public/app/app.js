@@ -1,6 +1,7 @@
 // The installed web app (phase 5): the answer card and today, the way the
-// phone app shows them, and the campus map (app/map.js). A bar along the
-// bottom switches between them; Settings is the account page.
+// phone app shows them, the campus map (app/map.js) and settings (the
+// account page's, account/settings.js). A bar along the bottom switches
+// between them, fading through as the phone app does.
 //
 // The service worker (/sw.js) answers /me/next and /me/day from its cache
 // when the network is down; those replies carry x-terminus-cached with when
@@ -166,40 +167,107 @@ function renderChips() {
 
 /* ---------- tabs ---------- */
 
+const TABS = ['now', 'map', 'settings'];
+const view = (name) => $(`#tab-${name}`);
 let mapModule = null;
-/** Now or Map; null until the first draw. */
+/** Now, Map or Settings; null until the first draw. */
 let tab = null;
+/** Counts switches: a fade that finishes after a newer tap is left to that one. */
+let switches = 0;
+/** Where Now and Settings were scrolled to, for coming back. */
+const scrolled = {};
 
-/** Now or Map, from the address (#map), so Back and a reload keep the tab. */
+/**
+ * Material's fade through, as on the phone: the old tab fades out quickly,
+ * then the new one fades in with a slight zoom from the middle of the
+ * screen. Reduced motion keeps only a short fade.
+ */
+function fadeIn(node) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  node.style.transformOrigin = `50% ${window.innerHeight / 2 - node.getBoundingClientRect().top}px`;
+  const frames = reduce ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'scale(0.92)' }, { opacity: 1, transform: 'none' }];
+  node.animate(frames, { duration: reduce ? 150 : 210, easing: 'cubic-bezier(0, 0, 0.2, 1)' });
+}
+const fadeOut = (node) => node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+
+/** Now, Map or Settings, from the address (#map, #settings), so Back and a reload keep the tab. */
 async function showTab() {
-  const next = location.hash === '#map' ? 'map' : 'now';
-  if (next === tab && (next === 'now' || mapModule)) return;
-  const first = tab === null;
+  const next = TABS.find((n) => location.hash === `#${n}`) ?? 'now';
+  if (next === tab) return;
+  const from = tab;
   tab = next;
-  const swap = () => {
-    for (const a of document.querySelectorAll('.tabbar a[data-tab]')) {
-      if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
-      else a.removeAttribute('aria-current');
-    }
-    document.body.classList.toggle('on-map', tab === 'map');
-    $('#tab-map').hidden = tab !== 'map';
-    if (tab === 'map') mapModule?.showMap();
-    else {
-      mapModule?.hideMap();
-      // start() refreshes once it has drawn the first tab.
-      if (!first) refresh();
-    }
-  };
-  // The same fade as going to Settings (assets/tabbar.css): the bar stays, the
-  // page under it fades. Not on the first draw, nor where it isn't supported.
-  const fade = !first && document.startViewTransition && document.visibilityState === 'visible' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (fade) await document.startViewTransition(swap).updateCallbackDone.catch(() => {});
-  else swap();
-  // The map's code on its first opening, after the fade: the tab shows at once.
-  if (tab === 'map' && !mapModule) {
-    mapModule = await import('/app/map.js');
-    if (tab === 'map') mapModule.showMap();
+  const mine = ++switches;
+  for (const a of document.querySelectorAll('.tabbar a[data-tab]')) {
+    if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
   }
+  const animate = from !== null && document.visibilityState === 'visible';
+  if (from !== null) scrolled[from] = window.scrollY;
+  if (animate) {
+    const out = fadeOut(view(from));
+    await out.finished.catch(() => {});
+    // Tapped again meanwhile: that switch draws its own tab.
+    if (mine !== switches) return out.cancel();
+    for (const n of TABS) view(n).hidden = n !== tab;
+    out.cancel();
+  }
+  for (const n of TABS) view(n).hidden = n !== tab;
+  document.body.classList.toggle('on-map', tab === 'map');
+  if (from === 'map') mapModule?.hideMap();
+  window.scrollTo(0, scrolled[tab] ?? 0);
+  if (animate) fadeIn(view(tab));
+  if (tab === 'map') {
+    // The map's code on its first opening, after the fade: the tab shows at once.
+    mapModule ??= await import('/app/map.js');
+    if (tab === 'map') mapModule.showMap();
+  } else if (tab === 'settings') {
+    openSettings();
+  } else if (from !== null) {
+    // start() refreshes once it has drawn the first tab.
+    refresh();
+  }
+}
+
+/** /me, as start() got it: who's signed in, for Settings. */
+let me = null;
+/** account/settings.js once Settings is drawn, and the drawing while it's under way. */
+let settings = null;
+let settingsLoading = null;
+/** A NUSMods link shared to the app, for Settings to offer to import. */
+let shared = null;
+
+/** Settings the first time (the account page's, without its preview), and fresh from the account after. */
+function openSettings() {
+  if (settings) {
+    settings.reload().catch(() => {});
+    if (shared) settings.offerImport(shared);
+    shared = null;
+    return;
+  }
+  settingsLoading ??= (async () => {
+    const box = $('#tab-settings');
+    box.replaceChildren(el('p', { class: 'hint', textContent: t('Loading…') }));
+    try {
+      me ??= (await get('/me')).data;
+      const mod = await import('/account/settings.js');
+      await mod.mountSettings(box, { me, inApp: true });
+      settings = mod;
+      if (shared) mod.offerImport(shared);
+      shared = null;
+      await mod.renderLists();
+    } catch (err) {
+      if (err.message !== 'signed out') box.replaceChildren(el('p', { class: 'hint', textContent: t('Settings need a connection.') }));
+    } finally {
+      settingsLoading = null;
+    }
+  })();
+}
+
+/** A NUSMods link shared to the installed app (the manifest's share_target), if this is one. */
+function sharedLink() {
+  const q = new URLSearchParams(location.search);
+  const text = [q.get('url'), q.get('text'), q.get('title')].filter(Boolean).join(' ');
+  return text.match(/https:\/\/nusmods\.com\/timetable\/\S+/)?.[0] ?? null;
 }
 
 /** Go there, from a stop on the map: Now, with the card for that stop. */
@@ -439,10 +507,13 @@ async function start() {
   // /me first: it renews the session, so the installed app stays signed in.
   // Offline it comes from the cache like everything else, or not at all.
   try {
-    await get('/me');
+    me = (await get('/me')).data;
   } catch (err) {
     if (err.message === 'signed out') return;
   }
+  // Shared from NUSMods: Settings, with the link ready to import.
+  shared = sharedLink();
+  if (shared) history.replaceState(null, '', '/app/#settings');
   renderChips();
   setupPush();
   window.addEventListener('hashchange', showTab);

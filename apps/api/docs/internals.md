@@ -283,16 +283,29 @@ Email Sending in the dashboard.
 ### The web app (phase 5)
 
 `/app/` is terminus as an installable web app, meant for iPhones: the answer
-card, chips for saved places and Nearby, and Today. Settings are the account
-page. It uses the same routes as the account page, with the session cookie.
+card, chips for saved places and Nearby, and Today; the campus map; and
+Settings. It uses the same routes as the account page, with the session cookie.
+
+- **Tabs.** Now, Map and Settings are three views of one page (`#map`,
+  `#settings` in the address, so Back and a reload keep the tab). Switching
+  fades through as the Android app does (Web Animations: out in 90 ms, in
+  over 210 ms from a 0.92 zoom; a plain short fade with reduced motion), and
+  Now and Settings come back where they were scrolled to.
+- **Settings** is the account page's own: `account/settings.html` drawn by
+  `account/settings.js` (`mountSettings`). The account page draws it after
+  sign-in and setup, with its widget preview; the app draws it the first time
+  Settings opens, without the preview (Now has the card) and with Sign out or
+  Add an email in Account. It reloads the profile each time it's opened again,
+  since a stop may have been saved as a place on the map.
 
 - **Install.** `/manifest.webmanifest` has `start_url` `/app/`, the icons in
   `assets/icons` (drawn by `apps/android/store/render.swift`), and a share
-  target that sends a shared NUSMods link to the account page's import. On an
+  target that opens Settings with a shared NUSMods link ready to import. On an
   iPhone in Safari, the page explains Add to Home Screen, since iOS never
   offers it. A web app on the Home Screen has its own cookies, so it signs in
   once by itself. The sign-in code is typed there; the emailed link would open
-  in Safari. `/account/?next=/app/` comes back to the app after sign-in.
+  in Safari. `/account/?next=/app/` comes back to the app after sign-in, and
+  `/account/?add=1&next=/app/` adds an email from the app's Settings.
 - **Offline.** `/sw.js` fetches the app's files network-first and keeps a
   copy for offline. `/me`, `/me/next` and `/me/day` are also network-first,
   and the last good reply is kept (one per route and place). When the network
