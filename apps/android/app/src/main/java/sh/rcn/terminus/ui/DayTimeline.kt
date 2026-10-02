@@ -27,6 +27,7 @@ import sh.rcn.terminus.widget.clock
 import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
 import sh.rcn.terminus.L
+import androidx.compose.foundation.layout.widthIn
 
 /**
  * Today at a glance, from /me/day: each class with its leave-by, and the
@@ -108,7 +109,7 @@ private fun Row(item: DayItem, fmt: (Long) -> String) {
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
             color = if (past) muted else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.width(72.dp),
+            modifier = Modifier.widthIn(min = 72.dp).padding(end = 8.dp),
         )
         Column(Modifier.weight(1f)) {
             val title = if (item.kind == "home") stringResource(R.string.home_from, item.fromName ?: stringResource(R.string.your_last_class)) else item.label

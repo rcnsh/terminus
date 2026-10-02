@@ -44,6 +44,8 @@ data class MapUi(
     val buses: List<LiveBus> = emptyList(),
     val busStatus: BusStatus? = null,
     val sheet: MapSheet? = null,
+    /** A stop opened from elsewhere (Nearby on Now), for the map to move to once. */
+    val focus: String? = null,
     /** The open stop's board; null while it loads. */
     val board: StopBoard? = null,
     /** True when the board couldn't be fetched at all (offline). */
@@ -142,9 +144,15 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openStop(code: String) = _state.update { it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false) }
 
+    /** A stop from Nearby: its sheet, and the map moved to it. Unknown codes are ignored. */
+    fun showStop(code: String) = _state.update {
+        if (it.campus != null && it.campus.stop(code) == null) it
+        else it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false, focus = code)
+    }
+
     fun openBus(id: String) = _state.update { it.copy(sheet = MapSheet.Bus(id)) }
 
-    fun closeSheet() = _state.update { it.copy(sheet = null, board = null) }
+    fun closeSheet() = _state.update { it.copy(sheet = null, board = null, focus = null) }
 
     suspend fun refreshBoard() {
         val code = (_state.value.sheet as? MapSheet.Stop)?.code ?: return

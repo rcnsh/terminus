@@ -67,7 +67,12 @@ class LiveService : Service() {
         // The location type only when a tap started this (the app, the
         // notification, the widget): from an alarm or a push Android refuses it.
         val watching = wantWatch && runCatching { foreground(cached?.first, location = true) }.isSuccess
-        if (!watching) foreground(cached?.first, location = false)
+        // Restarted by the system after it stopped the app (START_STICKY), Android
+        // can refuse a foreground service at all: then stop, rather than crash.
+        if (!watching && runCatching { foreground(cached?.first, location = false) }.isFailure) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (watching && watch == null) watch = TripWatch(this).takeIf { it.start() }
         if (loop?.isActive != true) loop = scope.launch { run() }
         return START_STICKY
@@ -228,7 +233,8 @@ class LiveService : Service() {
             // the top of the shade and on the lock screen, with the card's
             // glance ("Off 9:52") as the chip in the status bar.
             val card = answer.card
-            if (android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1 && card?.phase in TRIP_PHASES) {
+            // SDK_INT_FULL only exists from API 36: reading it on 12-15 throws, so check SDK_INT first.
+            if (android.os.Build.VERSION.SDK_INT >= 36 && android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1 && card?.phase in TRIP_PHASES) {
                 b.setRequestPromotedOngoing(true)
                 card?.glance?.let { b.setShortCriticalText(it) }
             }

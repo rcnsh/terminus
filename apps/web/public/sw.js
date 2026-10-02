@@ -274,7 +274,7 @@ async function notifyFromCard(urgent, fetched) {
   }
   const where = [a.dest?.label, a.timing?.classAt ? (zh ? `${hhmm(a.timing.classAt)} 开始` : `starts ${hhmm(a.timing.classAt)}`) : null].filter(Boolean).join(' · ');
   // Nothing asks what happened. The one button, before you've left, is the
-  // card's "Not going today" (its words the server's); a tap anywhere else
+  // card's "Not going" (its words the server's); a tap anywhere else
   // opens the app. Browsers without buttons (iOS) just leave it out.
   const skip = c.phase !== 'riding' && c.phase !== 'missed' ? c.actions?.find((x) => x.id === 'skipped') : null;
   return self.registration.showNotification(title, {
@@ -291,7 +291,7 @@ async function notifyFromCard(urgent, fetched) {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const trip = event.notification.data?.trip;
-  // "Not going today": the class off today, as the app's button does, without opening it.
+  // "Not going": the class off today, as the app's button does, without opening it.
   if (event.action === 'skipped' && trip) event.waitUntil(skipTrip(trip));
   else event.waitUntil(openApp());
 });

@@ -99,6 +99,9 @@ object Refresher {
             store.lastError = if (e.status == 401) L.s(R.string.device_removed) else e.message
         } catch (e: ParseError) {
             store.lastError = L.s(R.string.unexpected_answer)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Replaced by a newer refresh (refreshSoon): not offline, nothing to record.
+            throw e
         } catch (e: Exception) {
             store.lastError = L.s(R.string.offline)
             armFromCache(ctx, store)

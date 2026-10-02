@@ -53,6 +53,8 @@ import sh.rcn.terminus.Stop
 import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
 import sh.rcn.terminus.L
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 
 private const val STEPS = 4
 
@@ -193,9 +195,9 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
     Spacer(Modifier.height(12.dp))
     Text(stringResource(R.string.home_walk))
     Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin - 1 } }, enabled = profile.homeWalkMin > 0) { Text("−") }
+        OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin - 1 } }, enabled = profile.homeWalkMin > 0, modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_less) }) { Text("−") }
         Text(stringResource(R.string.n_min, profile.homeWalkMin), modifier = Modifier.padding(horizontal = 16.dp))
-        OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin + 1 } }, enabled = profile.homeWalkMin < 30) { Text("+") }
+        OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin + 1 } }, enabled = profile.homeWalkMin < 30, modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_more) }) { Text("+") }
     }
     Hint(stringResource(R.string.home_walk_hint))
 }

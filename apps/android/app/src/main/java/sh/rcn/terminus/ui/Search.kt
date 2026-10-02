@@ -60,7 +60,8 @@ private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: Str
         modifier = modifier.fillMaxWidth(),
     )
     if (q.isEmpty()) return
-    val matches = rankDestinations(state.destinations, q)
+    // Once per query, not on every recomposition (the screen refreshes every 30 s).
+    val matches = remember(state.destinations, q) { rankDestinations(state.destinations, q) }
     val stopName = { code: String -> state.destinations.firstOrNull { it.kind == "stop" && it.code == code }?.label ?: code }
     val groups = mapOf("stop" to stringResource(R.string.group_stops), "landmark" to stringResource(R.string.group_places), "building" to stringResource(R.string.group_buildings), "room" to stringResource(R.string.group_rooms))
     Column {

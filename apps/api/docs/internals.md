@@ -364,7 +364,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   service worker fetches `/me/next` and words the notification as the Android
   app does: the ride, or the next way there after a missed bus; otherwise
   when to leave. Nothing asks what happened. Its one button, before you've
-  left, is the card's "Not going today": the service worker posts
+  left, is the card's "Not going": the service worker posts
   `/me/signal` `{kind: 'skipped'}` itself, without opening the app (the
   Android notification has the same button). A tap elsewhere opens the app.
 

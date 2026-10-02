@@ -166,6 +166,8 @@
     <string name="language_hint">Also used on your Mac, on the web and in emails. Place and bus names stay in English, as on the signs.</string>
     <string name="all_off">All off</string>
     <string name="devices_need_email">Add an email to use other devices</string>
+    <string name="gap_longer">Half an hour longer</string>
+    <string name="gap_shorter">Half an hour shorter</string>
     <string name="heading_appearance">Appearance</string>
     <string name="heading_your_trips">Your trips</string>
     <string name="just_now">just now</string>
@@ -238,6 +240,7 @@
     <string name="one_bus_earlier">One bus earlier</string>
     <string name="one_class">1 class</string>
     <string name="one_device">1 device</string>
+    <string name="one_hour">1 hour</string>
     <string name="one_imported">1 class imported.</string>
     <string name="open_settings">Open settings</string>
     <string name="open_settings_location">Open settings to allow location</string>
@@ -362,6 +365,8 @@
     <string name="used_when">used %1$s</string>
     <string name="usual_time">Usual time</string>
     <string name="walk">walk</string>
+    <string name="walk_one_less">One minute less</string>
+    <string name="walk_one_more">One minute more</string>
     <string name="wednesday">Wednesday</string>
     <string name="wednesday_short">Wed</string>
     <string name="welcome_text">Setting up takes about a minute: where you live, your NUSMods timetable, and how fast you walk. No email or sign-in needed.</string>

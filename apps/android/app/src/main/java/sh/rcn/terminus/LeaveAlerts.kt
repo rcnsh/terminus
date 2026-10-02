@@ -30,7 +30,7 @@ import sh.rcn.terminus.widget.clock
  * place and never posted again once dismissed: the ride, or the next way
  * there after a missed bus. It never asks what happened: that comes from
  * the plan and the phone's location. Its one button, before you've left, is
- * the card's "Not going today", so a class you're skipping can be dropped
+ * the card's "Not going", so a class you're skipping can be dropped
  * from the alert itself. A push brings each change; without one, an alarm at
  * the card's next change does. A class with reminders turned off
  * (`card.remind`) gets none of it.
@@ -47,7 +47,7 @@ object LeaveAlerts {
     const val ACTION_NOW = "sh.rcn.terminus.LEAVE_NOW"
     /** On the bus: redraw the ride at the next stop, from the saved answer. */
     const val ACTION_RIDE = "sh.rcn.terminus.LEAVE_RIDE"
-    /** "Not going today", from the notification's button: the trip in EXTRA_TRIP. */
+    /** "Not going", from the notification's button: the trip in EXTRA_TRIP. */
     const val ACTION_SKIP = "sh.rcn.terminus.LEAVE_SKIP"
     const val EXTRA_TRIP = "trip"
 
@@ -182,7 +182,7 @@ object LeaveAlerts {
     }
 
     /**
-     * The card's "Not going today", as a button, before the trip has begun
+     * The card's "Not going", as a button, before the trip has begun
      * (not on the ride, nor after a missed bus). Its words are the server's.
      */
     private fun skipAction(ctx: Context, answer: NextAnswer): android.app.Notification.Action? {
@@ -198,17 +198,18 @@ object LeaveAlerts {
     }
 
     /**
-     * "Not going today" from the notification: gone at once, then the class
-     * is taken off today as the app's button does, and the widgets and the
-     * next alert follow the new plan. If that fails (no connection), a fresh
-     * answer puts the alert back as it should be.
+     * "Not going" from the notification: the class taken off today, as the
+     * app's button does, then the notification goes and the widgets and the
+     * next alert follow the new plan. Offline, it stays as it was, so the
+     * button can be tried again (or the app opened).
      */
     suspend fun skip(ctx: Context, trip: String) {
-        ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
         val store = Store(ctx)
         val token = store.token ?: return
         try {
-            val json = Api(token, hour12 = hour12(ctx)).signal("skipped", trip)
+            // Fast timeouts: a broadcast has about ten seconds in all.
+            val json = Api(token, fast = true, hour12 = hour12(ctx)).signal("skipped", trip)
+            ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
             val now = System.currentTimeMillis()
             store.saveAnswer(json, now)
             Refresher.scheduleNext(ctx, NextAnswer.parse(json), now)
@@ -216,7 +217,7 @@ object LeaveAlerts {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Refresher.refresh(ctx, fast = true)
+            // Left showing, button and all.
         }
     }
 

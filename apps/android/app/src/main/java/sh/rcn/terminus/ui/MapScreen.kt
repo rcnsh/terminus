@@ -109,6 +109,7 @@ import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.MapGeoJson
 import sh.rcn.terminus.MapStop
 import sh.rcn.terminus.R
+import androidx.compose.ui.graphics.luminance
 
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts), with room to spare. */
 private val PAN_LIMIT = BoundingBox(west = 103.735, south = 1.26, east = 103.85, north = 1.352)
@@ -358,6 +359,8 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     LaunchedEffect(state) {
         if (framed) return@LaunchedEffect
         framed = true
+        // Opened on a stop from Nearby: that's the first view (below).
+        if (ui.focus != null) return@LaunchedEffect
         val core = campus.coreBounds(ui.core)
         state.fitCameraToBounds(BoundingBox(west = core[0], south = core[1], east = core[2], north = core[3]), fitPadding = DpPadding(left = 24.dp, top = 96.dp, right = 24.dp, bottom = 24.dp))
         val at = sh.rcn.terminus.Locator.lastKnown(ctx) ?: return@LaunchedEffect
@@ -365,6 +368,13 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         if (kotlin.math.abs(near.lat - at.latitude) < NEAR_CAMPUS_DEG && kotlin.math.abs(near.lon - at.longitude) < NEAR_CAMPUS_DEG) {
             state.setCameraPosition(CameraPosition(target = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0))
         }
+    }
+    // A stop opened from Nearby: close in, and a little above the middle,
+    // so its sheet (over the lower part of the map) doesn't cover it. At
+    // zoom 17, 0.0006 degrees of latitude is about a sixth of the screen.
+    LaunchedEffect(ui.focus) {
+        val stop = ui.focus?.let { campus.stop(it) } ?: return@LaunchedEffect
+        state.setCameraPosition(CameraPosition(target = Position(longitude = stop.lon, latitude = stop.lat - 0.0006), zoom = 17.0))
     }
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
@@ -463,12 +473,18 @@ private fun StatusChip(text: String, busy: Boolean = false) {
     }
 }
 
+/**
+ * White or near-black, whichever reads on a service's colour (WCAG
+ * contrast): white on the yellow A2 or blue K was under 3.5:1.
+ */
+internal fun inkOn(c: Color): Color = if (1.05f / (c.luminance() + 0.05f) >= (c.luminance() + 0.05f) / 0.061f) Color.White else Color(0xFF1C1917)
+
 /** A service's code on its colour, as on the bus. Also Nearby's, on Now. */
 @Composable
 internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
     val shape = RoundedCornerShape(7.dp)
     val content: @Composable () -> Unit = {
-        Text(svc, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp).widthIn(min = 24.dp))
+        Text(svc, color = inkOn(color), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp).widthIn(min = 24.dp))
     }
     if (onClick == null) Surface(shape = shape, color = color, content = content)
     else Surface(onClick = onClick, shape = shape, color = color, content = content)

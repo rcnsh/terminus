@@ -316,7 +316,7 @@ private fun Tabs(
                             )
                         } else {
                             // A stop tapped in Nearby: open on the map, with its sheet.
-                            MainScreen(state, vm, onOpenStop = { code -> map.openStop(code); onTab(Tab.Map) })
+                            MainScreen(state, vm, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })
                         }
                     }
                 }

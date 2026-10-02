@@ -146,9 +146,9 @@ class Store(context: Context) {
             prefs.getString(KEY_INTENT, null) ?: java.util.UUID.randomUUID().toString().also { prefs.edit(commit = true) { putString(KEY_INTENT, it) } }
         }
 
-    /** Signing out: the account's things go; the phone's language and the intent key stay. */
+    /** Signing out: the account's things go; the phone's language, theme and the intent key stay. */
     fun clear() = synchronized(Store) {
-        val keep = listOf(KEY_LANG, KEY_INTENT).associateWith { prefs.getString(it, null) }
+        val keep = listOf(KEY_LANG, KEY_THEME, KEY_INTENT).associateWith { prefs.getString(it, null) }
         prefs.edit(commit = true) {
             clear()
             for ((k, v) in keep) if (v != null) putString(k, v)
@@ -197,6 +197,8 @@ class Store(context: Context) {
         const val KEY_DAY_AT = "day-fetched"
         /** Lang.kt's key, in the same file. */
         const val KEY_LANG = "lang"
+        /** Theme.kt's key: Android keeps the night mode itself, so this must outlive a sign-out too. */
+        const val KEY_THEME = "theme"
         const val KEY_ANSWER = "answer"
         const val KEY_FETCHED = "fetched"
         const val KEY_ERROR = "error"

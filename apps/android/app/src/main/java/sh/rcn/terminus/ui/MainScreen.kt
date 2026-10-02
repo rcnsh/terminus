@@ -95,6 +95,8 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
     // is 15 s, so polling faster than that would show nothing new.
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // Location may have been allowed in system settings meanwhile.
+            hasLocation = Locator.hasForeground(ctx)
             while (true) {
                 vm.load()
                 delay(30_000)
@@ -189,7 +191,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
             state.fetchedAt?.let { stringResource(R.string.updated_at, clock(ctx, it)) },
         ).joinToString(" · ")
         val refreshing = stringResource(R.string.refreshing)
-        Row(Modifier.padding(top = 8.dp).height(20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(top = 8.dp).heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             if (state.loading) {
                 CircularProgressIndicator(Modifier.size(12.dp).semantics { contentDescription = refreshing }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))

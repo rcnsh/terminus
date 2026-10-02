@@ -90,6 +90,9 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.L
 import kotlin.coroutines.cancellation.CancellationException
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 
 /** Settings' pages, in the order the list shows them. */
 internal enum class SettingsPage(val title: Int) {
@@ -235,7 +238,7 @@ private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (Sett
                     SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
                 }
                 Row(
-                    Modifier.fillMaxWidth().clickable { onOpen(page) }.padding(vertical = 14.dp),
+                    Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(page) }.padding(vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -604,10 +607,10 @@ private fun DayHours(profile: ProfileDoc, account: AccountViewModel) {
     Spacer(Modifier.height(12.dp))
     Text(stringResource(R.string.gap_home))
     Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = { account.edit { it.gapHours = profile.gapHours - 0.5 } }, enabled = profile.gapHours > 0.5) { Text("−") }
+        OutlinedButton(onClick = { account.edit { it.gapHours = profile.gapHours - 0.5 } }, enabled = profile.gapHours > 0.5, modifier = Modifier.semantics { contentDescription = L.s(R.string.gap_shorter) }) { Text("−") }
         val h = profile.gapHours
-        Text(stringResource(R.string.n_hours, if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()), modifier = Modifier.padding(horizontal = 16.dp))
-        OutlinedButton(onClick = { account.edit { it.gapHours = profile.gapHours + 0.5 } }, enabled = profile.gapHours < 12) { Text("+") }
+        Text(if (h == 1.0) stringResource(R.string.one_hour) else stringResource(R.string.n_hours, if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()), modifier = Modifier.padding(horizontal = 16.dp))
+        OutlinedButton(onClick = { account.edit { it.gapHours = profile.gapHours + 0.5 } }, enabled = profile.gapHours < 12, modifier = Modifier.semantics { contentDescription = L.s(R.string.gap_longer) }) { Text("+") }
     }
 }
 
