@@ -250,7 +250,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   example: {
                     svc: 'D2',
                     color: '#8e44c9',
-                    buses: [{ id: '3f9a1c0b7e21', lat: 1.29497, lon: 103.77349, heading: 92, moving: true, crowd: 'low', nextStop: { code: 'COM3', name: 'COM 3' } }],
+                    buses: [{ id: '3f9a1c0b7e21', lat: 1.29497, lon: 103.77349, along: 1834.2, heading: 92, moving: true, crowd: 'low', nextStop: { code: 'COM3', name: 'COM 3' } }],
                     asOf: '2026-10-02T01:14:02.000Z',
                     available: true,
                     stale: false,
@@ -1075,11 +1075,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['id', 'lat', 'lon', 'heading', 'moving', 'crowd', 'nextStop'],
+                required: ['id', 'lat', 'lon', 'along', 'heading', 'moving', 'crowd', 'nextStop'],
                 properties: {
                   id: { type: 'string', description: 'Stable for a bus while it runs; not its plate.' },
                   lat: { type: 'number' },
                   lon: { type: 'number' },
+                  along: { type: ['number', 'null'], description: 'Metres along the service’s route line in `/campus` (`routes[svc].line`), so a map can glide the bus along the road between updates. Null for a bus away from its line.' },
                   heading: { type: ['integer', 'null'], description: 'Degrees clockwise from north.' },
                   moving: { type: 'boolean' },
                   crowd: { type: ['string', 'null'], enum: ['low', 'medium', 'high', null] },

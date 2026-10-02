@@ -1,9 +1,8 @@
 package sh.rcn.terminus.ui
 
 import android.content.Intent
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -39,9 +38,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -97,12 +98,12 @@ import org.maplibre.compose.util.DpPadding
 import org.maplibre.spatialk.geojson.BoundingBox
 import org.maplibre.spatialk.geojson.Position
 import sh.rcn.terminus.CampusMap
+import sh.rcn.terminus.Glides
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.MapGeoJson
 import sh.rcn.terminus.MapStop
 import sh.rcn.terminus.R
-import sh.rcn.terminus.glide
 
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts), with room to spare. */
 private val PAN_LIMIT = BoundingBox(west = 103.735, south = 1.26, east = 103.85, north = 1.352)
@@ -226,18 +227,18 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val routes = remember(campus) { MapGeoJson.routes(campus) }
     val stops = remember(campus) { MapGeoJson.stops(campus) }
 
-    // Buses glide to each new position instead of jumping: from where each
-    // was drawn last (a plain holder, not state, so drawing doesn't redraw).
-    val drawn = remember { arrayOf<Map<String, LiveBus>>(emptyMap()) }
-    val k = remember { Animatable(1f) }
-    var from by remember { mutableStateOf<Map<String, LiveBus>>(emptyMap()) }
-    LaunchedEffect(ui.buses) {
-        from = drawn[0]
-        k.snapTo(0f)
-        k.animateTo(1f, tween(1_200))
+    // Buses glide to each new position, along their line (see Glides): a
+    // plain holder, not state, redrawn by the frame clock while one moves.
+    val glides = remember(ui.selected) { Glides() }
+    var now by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
+    val path = ui.selected?.let { campus.routes[it]?.path }
+    LaunchedEffect(ui.buses, glides) {
+        glides.update(ui.buses, path, SystemClock.uptimeMillis())
+        do {
+            withFrameMillis { now = SystemClock.uptimeMillis() }
+        } while (glides.moving(now))
     }
-    val gliding = glide(from, ui.buses, k.value)
-    drawn[0] = gliding.associateBy { it.id }
+    val gliding = glides.at(now)
     val color = ui.selected?.let { campus.routes[it]?.color } ?: 0xFF8A939CL
     val buses = MapGeoJson.buses(ui.selected.orEmpty(), color, gliding)
     val me = ui.me?.let { (lat, lon) -> MapGeoJson.me(lat, lon) } ?: MapGeoJson.EMPTY

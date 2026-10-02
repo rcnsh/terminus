@@ -57,6 +57,9 @@ export interface LiveBus {
   id: string;
   lat: number;
   lon: number;
+  /** Metres along the service's route line (`/campus` routes[svc].line),
+   *  so a map can glide the bus along the road; null off its line. */
+  along: number | null;
   heading: number | null;
   moving: boolean;
   crowd: Crowd | null;
@@ -183,12 +186,14 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
       const id = await idFor(svc, b.plate);
       let nextStop: LiveBus['nextStop'] = null;
       let { lat, lon, heading } = b;
+      let along: number | null = null;
       if (shape) {
         const last = lastPlace.get(id);
         const prior = last && now - last.at < TRACK_MS ? { along: last.along, ageS: Math.max(0, now - last.at) / 1000 } : null;
         const place = placeOnLine(shape, b.lat, b.lon, b.speed > 0 ? b.heading : null, prior, loop);
         if (place) {
           lastPlace.set(id, { along: place.along, at: now });
+          along = place.along;
           // On its line, pointing along the road.
           lat = place.lat;
           lon = place.lon;
@@ -204,6 +209,7 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
         id,
         lat: Math.round(lat * 1e6) / 1e6,
         lon: Math.round(lon * 1e6) / 1e6,
+        along: along == null ? null : Math.round(along * 10) / 10,
         heading: heading == null ? null : Math.round(heading),
         moving: b.speed > 0,
         crowd: b.crowd,

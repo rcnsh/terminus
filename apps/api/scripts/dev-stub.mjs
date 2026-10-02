@@ -54,15 +54,17 @@ for (const [svc, seq] of Object.entries(graph.routes)) for (const code of new Se
 const crowds = ['low', 'medium', 'high'];
 const shapes = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes;
 
-/** Three buses per service, a third of the route apart, at 20 km/h along its line. */
+/** Three buses per service, a third of the route apart, at 20 km/h along its
+ *  line. Like the real feed, a bus's position only moves every 18 s. */
 function fakeBuses(svc) {
   const shape = shapes[svc];
   if (!shape) return [];
+  const t = Math.floor(stubNow() / 18_000) * 18_000;
   const pts = shape.line;
   const seg = pts.slice(1).map((p, i) => Math.hypot((p[0] - pts[i][0]) * 111_320, (p[1] - pts[i][1]) * 110_540));
   const total = seg.reduce((a, b) => a + b, 0);
   return [0, 1, 2].map((n) => {
-    let at = ((stubNow() / 1000) * 5.5 + (n * total) / 3) % total;
+    let at = ((t / 1000) * 5.5 + (n * total) / 3) % total;
     let i = 0;
     while (i < seg.length - 1 && at > seg[i]) at -= seg[i++];
     const k = seg[i] ? at / seg[i] : 0;

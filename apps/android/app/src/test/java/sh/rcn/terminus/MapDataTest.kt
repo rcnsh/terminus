@@ -76,13 +76,56 @@ class MapDataTest {
         assertFalse("no heading, no arrow", props.getBoolean("moving"))
     }
 
-    @Test fun busesGlideFromWhereTheyWere() {
+    @Test fun busesGlideStraightAShortWayOffTheirLine() {
+        val g = Glides(ms = 1_000)
         val was = LiveBus("b1", 1.0, 103.0, 0.0, true, null, null)
-        val now = was.copy(lat = 2.0, lon = 104.0)
-        val half = glide(mapOf("b1" to was), listOf(now, now.copy(id = "new")), 0.5f)
-        assertEquals(1.5, half[0].lat, 1e-9)
-        assertEquals(103.5, half[0].lon, 1e-9)
-        assertEquals(2.0, half[1].lat, 1e-9)
+        g.update(listOf(was), null, 0)
+        // 0.001 deg is about 110 m: a glide.
+        val now = was.copy(lat = 1.001)
+        g.update(listOf(now, now.copy(id = "new")), null, 0)
+        val half = g.at(500)
+        assertEquals(1.0005, half[0].lat, 1e-9)
+        assertEquals("a new bus appears where it is", 1.001, half[1].lat, 1e-9)
+        assertTrue(g.moving(500))
+        assertFalse(g.moving(1_000))
+        // About 1.1 km: it jumps.
+        g.update(listOf(now.copy(lat = 1.011)), null, 1_000)
+        assertEquals(1.011, g.at(1_000)[0].lat, 1e-9)
+    }
+
+    @Test fun busesGlideAlongTheirLineRoundACorner() {
+        // East, then north: an L with its corner at (103.001, 1.0).
+        val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))
+        val leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
+        fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 0.0, true, null, null, along = m) }
+        val g = Glides(ms = 1_000)
+        g.update(listOf(at(leg - 50)), path, 0)
+        g.update(listOf(at(leg + 50)), path, 0)
+        val half = g.at(500)[0]
+        assertEquals("at the corner, not cutting it", 1.0, half.lat, 1e-9)
+        assertEquals(103.001, half.lon, 1e-9)
+        // The same position again, mid-glide: it keeps going.
+        g.update(listOf(at(leg + 50)), path, 600)
+        val later = g.at(750)[0]
+        assertEquals("on the north leg", 103.001, later.lon, 1e-9)
+        assertEquals("pointing north", 0.0, later.heading!!, 1e-6)
+        // A new position mid-glide: on from where it's drawn, not from the old start.
+        g.update(listOf(at(leg + 100)), path, 750)
+        assertEquals(later.lat, g.at(750)[0].lat, 1e-9)
+        // Put back a little (GPS error): it stays put rather than reversing.
+        g.update(listOf(at(leg + 80)), path, 2_000)
+        assertEquals(path.pointAt(leg + 100).first, g.at(2_500)[0].lat, 1e-9)
+        // A line that isn't the API's (kept from before the route changed), or off its line: not along it.
+        assertNull(path.alongBy(at(0.0), at(50.0).copy(lat = 1.001)))
+        assertNull(path.alongBy(at(0.0).copy(along = null), at(50.0)))
+    }
+
+    @Test fun busesSayHowFarAlongTheirLineTheyAre() {
+        val list = BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": [
+            {"id": "a", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "nextStop": null},
+            {"id": "b", "lat": 1.0, "lon": 103.0, "along": null, "heading": null, "moving": false, "crowd": null, "nextStop": null}]}"""))
+        assertEquals(812.5, list.buses[0].along!!, 1e-9)
+        assertNull(list.buses[1].along)
     }
 
     @Test fun theStyleReadsTheMapFileFromStorage() {

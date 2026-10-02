@@ -297,9 +297,11 @@ test('a live bus is drawn on its line, pointing along the road; one far off stay
   const [bus] = await placeBuses(graph, 'A1', [raw('P1', off[0], off[1])]);
   assert.ok(m([bus.lon, bus.lat], mid) < 2, `drawn ${m([bus.lon, bus.lat], mid)} m from the line`);
   assert.equal(bus.heading, Math.round(road));
+  assert.ok(Math.abs(bus.along - alongLine(shape, mid[1], mid[0], road)) < 1, 'along: where it is drawn, for gliding along the road');
   const [far] = await placeBuses(graph, 'A1', [raw('P2', mid[0], mid[1] + 0.01)]);
   assert.equal(far.lat, Math.round((mid[1] + 0.01) * 1e6) / 1e6, 'off its route: where it is');
   assert.equal(far.nextStop, null);
+  assert.equal(far.along, null);
 });
 
 test('past its last stop, a loop starts again and a one-way route has ended', () => {

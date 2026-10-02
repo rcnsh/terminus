@@ -16,8 +16,19 @@ const PMTILES = '/vendor/pmtiles@4.5.0/pmtiles.mjs';
 const BUSES_MS = 5_000;
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
 const ARRIVALS_MS = 15_000;
-/** How long a bus takes to glide to its new position. */
-const GLIDE_MS = 1_200;
+/** How long a bus takes to glide to a new position: about as long as the
+ *  feed holds one (it moves a bus every 15–20 s), so a bus keeps driving
+ *  instead of jumping and then waiting. */
+const GLIDE_MS = 15_000;
+/** Further than this along its line in one update (back from a hidden tab),
+ *  a bus doesn't glide along it. */
+const GLIDE_ALONG_MAX_M = 1_500;
+/** Off its line, further than this from where it's drawn, a bus jumps
+ *  instead of gliding straight across (through buildings). */
+const GLIDE_STRAIGHT_MAX_M = 250;
+/** Put back along its line by less than this (GPS error), a bus stays where
+ *  it's drawn instead of reversing. */
+const HOLD_BACK_M = 60;
 /** Further than this from campus, the map opens on campus, not on you. */
 const NEAR_CAMPUS_M = 3_000;
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts). */
@@ -32,8 +43,10 @@ let selected = null;
 let busTimer = null;
 let sheetTimer = null;
 let watchId = null;
-/** Each bus as drawn now, by id, for gliding to the next position. */
+/** Each bus as it last came from the API, by id (for its card). */
 let shown = new Map();
+/** Each bus's glide, by id: from where it was drawn to where it is now. */
+let glides = new Map();
 let glide = null;
 
 const dark = () => window.matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light';
@@ -267,7 +280,7 @@ function addLayers() {
     layout: { 'icon-image': 'heading', 'icon-rotate': ['get', 'heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.7, 17, 1] },
   });
   highlight();
-  drawBuses([...shown.values()]);
+  drawBuses(frameAt(performance.now()));
 }
 
 /** A small white arrow pointing up (north) before rotation. */
@@ -320,7 +333,9 @@ function renderPills() {
 function choose(svc) {
   selected = svc;
   clearTimeout(busTimer);
+  cancelAnimationFrame(glide);
   shown = new Map();
+  glides = new Map();
   drawBuses([]);
   renderPills();
   highlight();
@@ -357,23 +372,125 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && visible && selected) pollBuses();
 });
 
-/** Glides each bus from where it's drawn to where it is now. */
+/**
+ * Starts a glide for each bus whose position changed, from where it's drawn
+ * to where it is: along its route line when both ends are on it, so it
+ * follows the road round corners; straight across a short way otherwise. A
+ * bus whose position hasn't changed keeps gliding: the API answers every
+ * few seconds, the feed moves a bus every 15–20.
+ */
 function moveTo(buses) {
-  const from = new Map([...shown].map(([id, b]) => [id, { lat: b.lat, lon: b.lon }]));
-  shown = new Map(buses.map((b) => [b.id, b]));
-  cancelAnimationFrame(glide);
-  const start = performance.now();
+  const now = performance.now();
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const step = (now) => {
-    const k = reduce ? 1 : Math.min(1, (now - start) / GLIDE_MS);
-    const ease = 1 - (1 - k) ** 3;
-    drawBuses(buses.map((b) => {
-      const f = from.get(b.id);
-      return f ? { ...b, lat: f.lat + (b.lat - f.lat) * ease, lon: f.lon + (b.lon - f.lon) * ease } : b;
-    }));
-    if (k < 1) glide = requestAnimationFrame(step);
+  const path = pathOf(campus?.routes[selected]?.line);
+  shown = new Map(buses.map((b) => [b.id, b]));
+  const next = new Map();
+  for (const b of buses) {
+    const g = glides.get(b.id);
+    if (g && g.to.lat === b.lat && g.to.lon === b.lon) next.set(b.id, { ...g, to: b });
+    else next.set(b.id, g && !reduce ? glideFrom(positionAt(g, now), b, path, now) : { from: null, to: b });
+  }
+  glides = next;
+  cancelAnimationFrame(glide);
+  const step = (t) => {
+    drawBuses(frameAt(t));
+    if ([...glides.values()].some((g) => g.from && t - g.start < GLIDE_MS)) glide = requestAnimationFrame(step);
   };
   glide = requestAnimationFrame(step);
+}
+
+function frameAt(now) {
+  return [...glides.values()].map((g) => positionAt(g, now));
+}
+
+/** A glide for bus [b] from [from] (where it's drawn), or none: it jumps. */
+function glideFrom(from, b, path, now) {
+  const d = path && alongBy(path, from, b);
+  if (d != null) {
+    if (d < -HOLD_BACK_M) return { from: null, to: b };
+    return { from, to: b, start: now, path, d: Math.max(0, d) };
+  }
+  if (haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return { from: null, to: b };
+  return { from, to: b, start: now, path: null, d: null };
+}
+
+/** Where glide [g]'s bus is drawn at [now], at a steady pace. */
+function positionAt(g, now) {
+  if (!g.from) return g.to;
+  const k = Math.max(0, Math.min(1, (now - g.start) / GLIDE_MS));
+  // Mid-glide straight, it's off the line: the next glide is straight too.
+  if (g.d == null) return k === 1 ? g.to : { ...g.to, along: null, lat: g.from.lat + (g.to.lat - g.from.lat) * k, lon: g.from.lon + (g.to.lon - g.from.lon) * k };
+  const along = g.from.along + g.d * k;
+  const at = pointAt(g.path, along);
+  const total = g.path.total;
+  return { ...g.to, along: g.path.closed ? ((along % total) + total) % total : along, lat: at.lat, lon: at.lon, heading: g.d > 0 ? at.bearing : g.to.heading };
+}
+
+/* A route line measured as the API measures it (haversine, metres from its
+   start at each point), so a bus's `along` is a place on it. */
+
+const paths = new WeakMap();
+
+function pathOf(line) {
+  if (!line || line.length < 2) return null;
+  let p = paths.get(line);
+  if (!p) {
+    const cum = [0];
+    for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]));
+    const total = cum[cum.length - 1];
+    const [a, z] = [line[0], line[line.length - 1]];
+    p = { line, cum, total, closed: haversine(a[1], a[0], z[1], z[0]) < 5 };
+    paths.set(line, p);
+  }
+  return p;
+}
+
+/** Metres to glide along [path] from bus [f] to bus [b]; null when not
+ *  along it (off the line, a line that isn't the API's, or a long way). */
+function alongBy(path, f, b) {
+  if (f.along == null || b.along == null || path.total <= 0) return null;
+  // A line kept from before the route changed: `along` isn't a place on it.
+  for (const x of [f, b]) {
+    const at = pointAt(path, x.along);
+    if (haversine(at.lat, at.lon, x.lat, x.lon) > 10) return null;
+  }
+  let d = b.along - f.along;
+  // Round a loop the short way, past its start.
+  if (path.closed) {
+    if (d < -path.total / 2) d += path.total;
+    else if (d > path.total / 2) d -= path.total;
+  }
+  return Math.abs(d) > GLIDE_ALONG_MAX_M ? null : d;
+}
+
+/** The point [m] metres along [path], and the road's direction there. */
+function pointAt(path, m) {
+  const { line, cum, total } = path;
+  m = path.closed ? ((m % total) + total) % total : Math.max(0, Math.min(total, m));
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= m) lo = mid; else hi = mid;
+  }
+  const [aLon, aLat] = line[lo];
+  const [bLon, bLat] = line[hi];
+  const seg = cum[hi] - cum[lo];
+  const t = seg > 0 ? (m - cum[lo]) / seg : 0;
+  return { lat: aLat + (bLat - aLat) * t, lon: aLon + (bLon - aLon) * t, bearing: bearing(aLat, aLon, bLat, bLon) };
+}
+
+/** As apps/api/src/geo.ts, so distances along a line match the API's. */
+function haversine(aLat, aLon, bLat, bLon) {
+  const r = Math.PI / 180;
+  const s = Math.sin(((bLat - aLat) * r) / 2) ** 2 + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.sin(((bLon - aLon) * r) / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+function bearing(aLat, aLon, bLat, bLon) {
+  const r = Math.PI / 180;
+  const y = Math.sin((bLon - aLon) * r) * Math.cos(bLat * r);
+  const x = Math.cos(aLat * r) * Math.sin(bLat * r) - Math.sin(aLat * r) * Math.cos(bLat * r) * Math.cos((bLon - aLon) * r);
+  return ((Math.atan2(y, x) / r) % 360 + 360) % 360;
 }
 
 function drawBuses(buses) {
