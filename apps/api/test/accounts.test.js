@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { newPairCode, normalizePairCode } from '../src/accounts.ts';
+import { hashToken, newPairCode, normalizePairCode } from '../src/accounts.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import residencesJson from '../data/residences.json' with { type: 'json' };
 
@@ -94,6 +94,52 @@ test('opening the link does not spend it; the POST does, once', async () => {
 
   const again = await call(env, '/auth/verify', { method: 'POST', form: { t } });
   assert.equal(again.status, 400);
+});
+
+test('wrong emailed codes sent all at once still only get five tries', async () => {
+  const { env, email } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const code = email.lastCode();
+  const wrong = code === '222222' ? '333333' : '222222';
+  await Promise.all(Array.from({ length: 20 }, () => call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code: wrong } })));
+  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400);
+});
+
+test('signing in from the web app: the emailed link goes back to it, and nowhere else', async () => {
+  const { env, email } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED, next: '/app/' } });
+  const text = email.sent.at(-1).text;
+  assert.match(text, /\/auth\/verify\?t=[A-Za-z0-9_-]+&next=app/);
+  const t = email.lastToken();
+  assert.match(await (await call(env, `/auth/verify?t=${t}&next=app`)).text(), /name="next" value="app"/);
+  const res = await call(env, '/auth/verify', { method: 'POST', form: { t, next: 'app' } });
+  assert.equal(res.headers.get('location'), '/account/?next=/app/');
+
+  const { env: env2, email: email2 } = setup();
+  await call(env2, '/auth/login', { method: 'POST', body: { email: INVITED, next: 'https://evil.example/' } });
+  assert.doesNotMatch(email2.sent.at(-1).text, /next=/);
+  const other = await call(env2, '/auth/verify', { method: 'POST', form: { t: email2.lastToken(), next: 'https://evil.example/' } });
+  assert.equal(other.headers.get('location'), '/account');
+});
+
+test('another site cannot post a sign-in link or a sign-out', async () => {
+  const { env, email } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const t = email.lastToken();
+  const post = async (path, site, body) => {
+    const ctx = makeCtx();
+    const headers = { 'content-type': 'application/x-www-form-urlencoded' };
+    if (site) headers['sec-fetch-site'] = site;
+    const res = await worker.fetch(new Request(BASE + path, { method: 'POST', headers, body }), env, ctx);
+    await ctx.settle();
+    return res;
+  };
+  for (const site of ['cross-site', 'same-site']) {
+    assert.equal((await post('/auth/verify', site, new URLSearchParams({ t }).toString())).status, 403, site);
+    assert.equal((await post('/auth/logout', site, '')).status, 403, site);
+  }
+  // The link is still good from our own page.
+  assert.equal((await post('/auth/verify', 'same-origin', new URLSearchParams({ t }).toString())).status, 303);
 });
 
 test('an expired link is refused', async () => {
@@ -267,6 +313,18 @@ test('a web session in use renews itself; a fresh one is left alone', async () =
   assert.match(res.headers.get('set-cookie'), /Max-Age=2592000/);
   const { expires } = await db.prepare('SELECT expires FROM sessions').first();
   assert.ok(expires > Date.now() + 29 * 86_400_000);
+});
+
+test('a web session in daily use still ends 180 days after sign-in, except with no email to sign in again', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const old = Date.now() - 181 * 86_400_000;
+  db.exec(`UPDATE sessions SET created = ${old}, expires = ${Date.now() + 20 * 86_400_000}`);
+  assert.equal((await call(env, '/me', { cookie })).status, 401);
+  // An account with no email keeps its browser: it has no other way in.
+  const anon = db._db.prepare('SELECT user_id FROM sessions').get().user_id;
+  db.exec(`UPDATE users SET email = NULL WHERE id = '${anon}'`);
+  assert.equal((await call(env, '/me', { cookie })).status, 200);
 });
 
 test('logout ends the session', async () => {
@@ -485,6 +543,20 @@ function withNusmods(modules, { down = [] } = {}) {
 }
 
 const LAB = { semesterData: [{ semester: 1, timetable: [{ lessonType: 'Laboratory', classNo: 'B1', day: 'Monday', startTime: '1000', endTime: '1200', venue: 'COM3-0120', weeks: [3, 4, 5] }] }] };
+
+test('import: limited per account, since each one fetches from NUSMods', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  withNusmods({ CS2030: LAB });
+  const keys = [];
+  const res = await call({ ...env, RL_AUTH: { limit: async ({ key }) => (keys.push(key), { success: !key.startsWith('import:') }) } }, '/me/import', {
+    method: 'POST',
+    cookie,
+    body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1' },
+  });
+  assert.equal(res.status, 429);
+  assert.ok(keys.some((k) => /^import:.+/.test(k)), 'keyed by account');
+});
 
 test('import: a NUSMods failure changes nothing and names the module', async () => {
   const { env, email } = setup();
@@ -755,7 +827,7 @@ test('/me/next in your residence: "You\'re home" after the last class, leave-by 
 
 test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
   const { env, email } = setup();
-  delete env.PUBLIC_API_OPEN; // locked, as in production
+  delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
   for (const path of ['/next?lat=1.2966&lon=103.7764', '/trip?to=UTOWN&from=PGP', '/arrivals?stop=COM3', '/campus', '/stops/pairs']) {
     const res = await call(env, path);
     assert.equal(res.status, 401, path);
@@ -772,7 +844,7 @@ test('the bus answers need a key or an account; downloads, health and docs stay 
 
 test('API keys: made on the account page, shown once, work anywhere, revocable', async () => {
   const { env, db, email } = setup();
-  delete env.PUBLIC_API_OPEN;
+  delete env[Symbol.for('terminus.testOpen')];
   const cookie = await signIn(env, email);
   const made = await (await call(env, '/me/keys', { method: 'POST', cookie, body: { name: 'My script' } })).json();
   assert.match(made.key, /^tk_/);
@@ -795,6 +867,17 @@ test('API keys: made on the account page, shown once, work anywhere, revocable',
 
   assert.equal((await call(env, `/me/keys/${made.id}`, { method: 'DELETE', cookie })).status, 200);
   assert.equal((await call(env, '/arrivals?stop=COM3', { key: made.key })).status, 401, 'revoked');
+});
+
+test('a session token that happens to start tk_ is still a session, not a missing key', async () => {
+  const { env, db } = setup();
+  delete env[Symbol.for('terminus.testOpen')];
+  const { token } = await (await call(env, '/auth/anon', { method: 'POST', body: { name: 'Pixel' } })).json();
+  // Session tokens are random base64url: 1 in 262,144 starts this way.
+  const unlucky = `tk_${token.slice(3)}`;
+  db._db.prepare('UPDATE sessions SET token_hash = ? WHERE token_hash = ?').run(await hashToken(unlucky), await hashToken(token));
+  assert.equal((await call(env, '/arrivals?stop=COM3', { token: unlucky })).status, 200);
+  assert.equal((await call(env, '/arrivals?stop=COM3', { token: 'tk_nonsense' })).status, 401);
 });
 
 test('API keys: a name is required, five at most, and a phone cannot make them', async () => {
@@ -937,4 +1020,35 @@ test('an email that has an account already wins over a browser without one', asy
   const signedIn = res.headers.get('set-cookie').split(';')[0];
   assert.deepEqual((await (await call(env, '/me/profile', { cookie: signedIn })).json()).home, { stops: ['KR-MRT'] });
   assert.equal((await call(env, '/me', { cookie })).status, 401, 'the browser account is gone');
+});
+
+test('limits hold when requests arrive all at once: API keys and feedback', async () => {
+  const { env, db, email } = setup();
+  const cookie = await signIn(env, email);
+  await Promise.all(Array.from({ length: 12 }, (_, i) => call(env, '/me/keys', { method: 'POST', cookie, body: { name: `k${i}` } })));
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM api_keys').get().n, 5);
+  await Promise.all(Array.from({ length: 25 }, () => call(env, '/me/feedback', { method: 'POST', cookie, body: { note: 'x', platform: 'web' } })));
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 10);
+});
+
+test('feedback emails to the operator stop at fifty a day; the reports are still kept', async () => {
+  const { mailFeedback, OPERATOR_MAILS_PER_DAY } = await import('../src/feedback.ts');
+  const { env, email } = setup();
+  env.ALERT_EMAIL = 'ops@example.test';
+  const f = { kind: 'other', note: 'x', platform: 'web', appVersion: null, context: null };
+  const day = Date.UTC(2026, 9, 1, 2, 0, 0);
+  for (let i = 0; i < OPERATOR_MAILS_PER_DAY + 5; i++) await mailFeedback(env, `f${i}`, 'a@u.nus.edu', f, day);
+  assert.equal(email.sent.length, OPERATOR_MAILS_PER_DAY);
+  await mailFeedback(env, 'next', 'a@u.nus.edu', f, day + 86_400_000);
+  assert.equal(email.sent.length, OPERATOR_MAILS_PER_DAY + 1, 'a new day');
+});
+
+test('the pairing QR code opens the pair page in a browser, not an API error', async () => {
+  const { env } = setup();
+  env.ASSETS = { fetch: async (req) => new Response(`page for ${new URL(req.url).pathname}`, { headers: { 'content-type': 'text/html' } }) };
+  const res = await call(env, '/pair?code=ABC234');
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), 'page for /pair');
+  // POST is still the API.
+  assert.equal((await call(env, '/pair', { method: 'POST', body: { code: 'nope' } })).status, 400);
 });

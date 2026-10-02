@@ -26,9 +26,10 @@ export function json(body: unknown, status = 200, extra: Record<string, string> 
   });
 }
 
-export function jsonCached(body: unknown, maxAge: number): Response {
+/** `scope` is 'private' for anything behind a key or a session: no shared cache may hand it on. */
+export function jsonCached(body: unknown, maxAge: number, scope: 'public' | 'private' = 'public'): Response {
   return new Response(JSON.stringify(body), {
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': `public, max-age=${maxAge}`, ...CORS },
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': `${scope}, max-age=${maxAge}`, ...CORS },
   });
 }
 
@@ -61,8 +62,16 @@ export function coordsFrom(url: URL): { lat: number | null; lon: number | null }
 export function clientKey(req: Request): string {
   const ip = req.headers.get('cf-connecting-ip') ?? 'unknown';
   if (!ip.includes(':')) return ip;
-  const groups = ip.split('::')[0].split(':');
-  return `${groups.slice(0, 4).join(':')}::/64`;
+  // ::ffff:203.0.113.9 is an IPv4 address, keyed as one.
+  const v4 = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
+  if (v4) return v4[1];
+  // Expand '::' first: 2001:db8:5::1 and 2001:db8:5:0:a:b:c:d share a /64.
+  const [head, tail] = ip.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail !== undefined ? (tail ? tail.split(':') : []) : [];
+  const groups = tail !== undefined ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left;
+  const prefix = groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, ''));
+  return `${prefix.join(':')}::/64`;
 }
 
 /** fetch with a timeout whose error says what timed out. */

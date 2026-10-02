@@ -461,7 +461,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
-                if (e.status == 401) {
+                // A 401 for a token replaced meanwhile (signed in again) says nothing about the new one.
+                if (e.status == 401 && store.token != token) {
+                    _state.update { it.copy(loading = false) }
+                } else if (e.status == 401) {
                     store.clear()
                     Refresher.cancel(ctx)
                     redrawWidgets(ctx)

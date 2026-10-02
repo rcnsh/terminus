@@ -387,7 +387,20 @@ struct Api {
     static var siteHost: String { site.replacingOccurrences(of: "https://", with: "") }
     static var isBeta: Bool { site != stableSite }
     /// Override with TERMINUS_API_BASE=http://localhost:8787 for a local wrangler dev.
-    static let base = ProcessInfo.processInfo.environment["TERMINUS_API_BASE"] ?? site
+    static let base = devOverride("TERMINUS_API_BASE") ?? site
+
+    /// An environment override for local development: any URL in a debug
+    /// build, only this Mac (localhost, 127.0.0.1) in a release one, so the
+    /// launch environment can't send a real install's sign-in elsewhere.
+    static func devOverride(_ name: String) -> String? {
+        guard let value = ProcessInfo.processInfo.environment[name], !value.isEmpty else { return nil }
+        #if DEBUG
+        return value
+        #else
+        guard let host = URL(string: value)?.host?.lowercased(), host == "localhost" || host == "127.0.0.1" else { return nil }
+        return value
+        #endif
+    }
 
     let token: String?
 

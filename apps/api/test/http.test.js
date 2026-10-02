@@ -12,6 +12,10 @@ test('rate-limit keys: IPv4 as is, IPv6 by its /64', () => {
   assert.equal(clientKey(req('203.0.113.9')), '203.0.113.9');
   assert.equal(clientKey(req('2001:db8:1:2:aaaa:bbbb:cccc:dddd')), '2001:db8:1:2::/64');
   assert.equal(clientKey(req('2001:db8:1:2:ffff::1')), '2001:db8:1:2::/64', 'same /64, same key');
+  assert.equal(clientKey(req('2001:db8:5::1')), '2001:db8:5:0::/64', 'compressed inside the /64');
+  assert.equal(clientKey(req('2001:db8:5:0:a:b:c:d')), '2001:db8:5:0::/64');
+  assert.equal(clientKey(req('2001:DB8:0005:0::9')), '2001:db8:5:0::/64', 'case and leading zeros');
+  assert.equal(clientKey(req('::ffff:203.0.113.9')), '203.0.113.9', 'IPv4-mapped is IPv4');
   assert.equal(clientKey(req(null)), 'unknown');
 });
 

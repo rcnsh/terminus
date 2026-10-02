@@ -50,7 +50,7 @@ import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, indexGraph, rideStops } from './resolve.ts';
 import { CORRIDOR_M, type Fix, atStopOf, departedAt, detect, fixOf, mayDetect, onRoute } from './detect.ts';
-import { recordRide } from './ridetimes.ts';
+import { mayRecordRide, recordRide } from './ridetimes.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
 import { cardFor, nextPhaseAt } from './card.ts';
@@ -102,9 +102,27 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 
 const mailFailed = (e: unknown) => console.error('device email failed', e instanceof Error ? e.name : typeof e);
 
+/**
+ * A trip key a client sent: one of the profile's classes, or a trip home.
+ * The key becomes stored rows (signals, outcomes, choices), so anything
+ * else would let a script make as many as it likes.
+ */
+function knownTrip(profile: Profile, key: string): boolean {
+  if (/^home:(\d{1,4}|evening)$/.test(key) || /^gap-home:[A-Za-z0-9_-]{1,24}$/.test(key)) return true;
+  return [...profile.trips, ...profile.manual].some((t) => classKey(t) === key);
+}
+
 /** "Pixel 8": what the app calls itself, shown in emails and the device list. */
 function deviceName(body: Record<string, unknown> | null): string {
-  return typeof body?.name === 'string' ? body.name.trim().slice(0, 40) || 'Device' : 'Device';
+  if (typeof body?.name !== 'string') return 'Device';
+  // It goes into sign-in emails: a device's name, not a message. Letters,
+  // digits and a little punctuation; no links, no line breaks.
+  const name = body.name
+    .replace(/[^\p{L}\p{N} ()'_-]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+  return name || 'Device';
 }
 
 /** The client header, or the platform an app names in its body when it has no header. */
@@ -126,6 +144,8 @@ function sgtTime(ms: number): string {
 
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   if (!(req.headers.get('content-type') ?? '').includes('application/json')) return null;
+  // Refuse a big body before reading it, not after.
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return null;
   try {
     const text = await req.text();
     if (text.length > MAX_BODY_BYTES) return null;
@@ -134,6 +154,14 @@ async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   } catch {
     return null;
   }
+}
+
+/** A sign-in form: a token or two, never more than a few KB. Refused unread when bigger. */
+const MAX_FORM_BYTES = 4096;
+async function readForm(req: Request): Promise<URLSearchParams | null> {
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_FORM_BYTES) return null;
+  const text = await req.text().catch(() => null);
+  return text !== null && text.length <= MAX_FORM_BYTES ? new URLSearchParams(text) : null;
 }
 
 async function limited(env: Env, req: Request, scope: string): Promise<boolean> {
@@ -356,7 +384,11 @@ const ME_ROUTES: MeRoute[] = [
   {
     method: 'POST',
     path: '/me/import',
-    run: async ({ req, nowMs, deps, db, session }) => {
+    run: async ({ env, req, nowMs, deps, db, session }) => {
+      // Each import can fetch 15 modules from NUSMods: a few a minute per account, not 120.
+      if (env.RL_AUTH && !(await env.RL_AUTH.limit({ key: `import:${session.user.id}` })).success) {
+        return json({ error: 'too many attempts, try again in a minute' }, 429);
+      }
       const body = await readJson(req);
       const share = typeof body?.share === 'string' ? body.share.trim() : '';
       let parsed;
@@ -506,6 +538,7 @@ const ME_ROUTES: MeRoute[] = [
       const now = await planned(here, env, ctx, nowMs, deps, profile, day);
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
+      if (key !== now.trip.key && !knownTrip(profile, key)) return json({ error: 'no such trip today' }, 400);
       const current = key === now.trip.key;
       let followedDay: DayRecord | null = null;
       // After the planned bus has left, "On it" and "Missed it" are about that
@@ -544,7 +577,10 @@ const ME_ROUTES: MeRoute[] = [
             const onBus = prev?.kind === 'boarded' ? prev.boarded : now.trip.phase === 'riding' ? (now.trip.plan ?? undefined) : undefined;
             rec = { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) };
             // A ride seen from start to end: how long it really took (phase 8.2).
-            if (onBus?.departed && env.DB) ctx.waitUntil(recordRide(env.DB, deps.graph, onBus, nowMs));
+            if (onBus?.departed && env.DB) {
+              const rides = env.DB;
+              ctx.waitUntil(mayRecordRide(env, rides, session.user.id, onBus.svc, nowMs).then((ok) => (ok ? recordRide(rides, deps.graph, onBus, nowMs) : null)).catch(() => null));
+            }
           } else if (seen === 'boarded' && bus) {
             rec = {
               kind: 'boarded',
@@ -679,6 +715,7 @@ const ME_ROUTES: MeRoute[] = [
         return json({ error: "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo" }, 400);
       }
       const profile = await getProfile(db, session.user.id, deps.graph);
+      if (!knownTrip(profile, trip)) return json({ error: 'no such trip today' }, 400);
       const label = [...profile.trips, ...profile.manual].find((t) => classKey(t) === trip)?.label ?? null;
       await setPref(db, session.user.id, trip, pref as PrefKind, choice, label, nowMs);
       return json({ ok: true, choices: await listPrefs(db, session.user.id) });
@@ -756,9 +793,18 @@ export async function handleMe(
   deps: MeDeps,
 ): Promise<Response | null> {
   const path = url.pathname;
-  if (!(path.startsWith('/auth/') || path === '/pair' || path === '/pair/check' || path === '/me' || path.startsWith('/me/'))) return null;
+  // GET /pair is the page the pairing QR code opens (a phone without the
+  // app); only the POST is the API.
+  if (!(path.startsWith('/auth/') || (path === '/pair' && req.method === 'POST') || path === '/pair/check' || path === '/me' || path.startsWith('/me/'))) return null;
   const db = env.DB;
   if (!db) return json({ error: 'accounts are not configured' }, 503);
+  // Form posts that set or end the browser's session come from our own pages.
+  // Without this, another site could post a sign-in link it holds and sign
+  // the visitor in to its account, or sign them out. Apps send no such header.
+  const fetchSite = req.headers.get('sec-fetch-site');
+  if (req.method === 'POST' && (path === '/auth/verify' || path === '/auth/approve' || path === '/auth/logout') && fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+    return json({ error: 'that request came from another site' }, 403);
+  }
 
   /* ---------- sign-in ---------- */
 
@@ -786,7 +832,7 @@ export async function handleMe(
       return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     }
     try {
-      await requestLink(env, db, email, linkOrigin(url, env), nowMs);
+      await requestLink(env, db, email, linkOrigin(url, env), nowMs, body?.next === '/app/');
     } catch (err) {
       // The error text can carry the recipient: log its kind only.
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
@@ -822,10 +868,10 @@ export async function handleMe(
       if (!email) return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
       return html(page(m().pageSignIn, `<h1>${m().signInTitle}</h1>
 <p class="hint">${m().continueAs(escapeHtml(maskEmail(email)))}</p>
-<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit" class="btn accent">${m().signInButton}</button></form>`));
+<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}">${url.searchParams.get('next') === 'app' ? '<input type="hidden" name="next" value="app">' : ''}<button type="submit" class="btn accent">${m().signInButton}</button></form>`));
     }
     if (req.method === 'POST') {
-      const form = await req.formData().catch(() => null);
+      const form = await readForm(req);
       const t = form?.get('t');
       const done = typeof t === 'string' ? await redeemLink(db, t, nowMs, await browserAnon(db, req, nowMs)) : null;
       if (done?.removed) await clearTrip(env, done.removed);
@@ -833,9 +879,12 @@ export async function handleMe(
       if (!token) {
         return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
       }
+      // Only ever one of two places: the account page, or (by way of it, for
+      // first-time setup) the web app.
+      const location = form?.get('next') === 'app' ? '/account/?next=/app/' : '/account';
       return new Response(null, {
         status: 303,
-        headers: { location: '/account', 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' },
+        headers: { location, 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' },
       });
     }
   }
@@ -936,7 +985,7 @@ export async function handleMe(
     }
     if (req.method === 'POST') {
       if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429);
-      const form = await req.formData().catch(() => null);
+      const form = await readForm(req);
       const r = form?.get('r');
       const n = Number(form?.get('n'));
       const out = typeof r === 'string' ? await decide(db, r, Number.isInteger(n) ? n : null, nowMs) : 'expired';

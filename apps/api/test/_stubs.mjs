@@ -103,7 +103,7 @@ export function makeEnv(kv = makeKV(), ae = undefined) {
     NEXTBUS_HTD_API: 'test-htd',
     NEXTBUS_APP_API: 'test-app',
     // The public-route tests predate API keys; the key tests turn this off.
-    PUBLIC_API_OPEN: '1',
+    [Symbol.for('terminus.testOpen')]: true,
   };
 }
 
@@ -179,7 +179,17 @@ export function makeFetch({ byStop = {}, fail = false, reject = 0, rejectCode = 
       counts.shuttle++;
       if (fail) throw new TypeError('upstream unreachable');
       // Never answers; only an abort signal ends it.
-      if (hang) return new Promise((_, rej) => init.signal?.addEventListener('abort', () => rej(init.signal.reason)));
+      if (hang) {
+        return new Promise((_, rej) => {
+          // AbortSignal.timeout's timer doesn't hold the event loop open on
+          // Node 22, so the test would end before the abort: this one does.
+          const keep = setTimeout(() => {}, 30_000);
+          init.signal?.addEventListener('abort', () => {
+            clearTimeout(keep);
+            rej(init.signal.reason);
+          });
+        });
+      }
       const headers = new Headers(init.headers);
       const body = JSON.parse(init.body ?? '{}');
       requests.push({ url, method: init.method, headers, body });

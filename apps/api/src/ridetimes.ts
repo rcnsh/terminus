@@ -67,24 +67,52 @@ export async function recordRide(db: D1Database, graph: Graph, b: Boarded, arriv
   }
 }
 
+/** Accounts this new can't add rides: a few fresh ones can't skew everyone's times. */
+export const RIDE_MIN_ACCOUNT_AGE_MS = 3 * 86_400_000;
+
+/**
+ * Whether this account's ride on `svc` may be kept: an account a few days
+ * old, and one ride per service per hour. The rows hold no user, so the
+ * once-an-hour mark is a short-lived KV key instead.
+ */
+export async function mayRecordRide(env: Env, db: D1Database, userId: string, svc: string, nowMs: number): Promise<boolean> {
+  const user = await db.prepare('SELECT created FROM users WHERE id = ?').bind(userId).first<{ created: number }>();
+  if (!user || nowMs - user.created < RIDE_MIN_ACCOUNT_AGE_MS) return false;
+  const key = `ride:seen:${userId}:${svc}:${Math.floor(nowMs / 3_600_000)}`;
+  if (await env.KV.get(key).catch(() => null)) return false;
+  await env.KV.put(key, '1', { expirationTtl: 3_700 }).catch(() => {});
+  return true;
+}
+
+/** The middle value: a handful of made-up rides can't drag it far. */
+function median(xs: number[]): number {
+  const v = [...xs].sort((a, b) => a - b);
+  const mid = v.length >> 1;
+  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+}
+
 /** Seconds per stop from the rides kept: each service, and each hour with enough of its own. */
 export async function buildTable(db: D1Database, nowMs: number): Promise<HopTable> {
   const since = sgtDate(nowMs - RIDE_KEEP_DAYS * 86_400_000);
   const { results } = await db
-    .prepare('SELECT svc, hour, COUNT(*) AS n, SUM(seconds) AS s, SUM(hops) AS h FROM ride_times WHERE day >= ? GROUP BY svc, hour')
+    .prepare('SELECT svc, hour, seconds, hops FROM ride_times WHERE day >= ?')
     .bind(since)
-    .all<{ svc: string; hour: number; n: number; s: number; h: number }>();
+    .all<{ svc: string; hour: number; seconds: number; hops: number }>();
   const svcs: HopTable['svcs'] = {};
-  const bySvc = new Map<string, Array<{ hour: number; n: number; s: number; h: number }>>();
-  for (const r of results ?? []) bySvc.set(r.svc, [...(bySvc.get(r.svc) ?? []), r]);
+  // Seconds per stop of each ride, by service and by hour.
+  const bySvc = new Map<string, Map<number, number[]>>();
+  for (const r of results ?? []) {
+    const hours = bySvc.get(r.svc) ?? new Map<number, number[]>();
+    hours.set(r.hour, [...(hours.get(r.hour) ?? []), r.seconds / r.hops]);
+    bySvc.set(r.svc, hours);
+  }
   const clamp = (x: number) => Math.round(Math.min(CLAMP[1], Math.max(CLAMP[0], x)));
-  for (const [svc, rows] of bySvc) {
-    const n = rows.reduce((t, r) => t + r.n, 0);
-    if (n < MIN_RIDES) continue;
-    const s = rows.reduce((t, r) => t + r.s, 0) / rows.reduce((t, r) => t + r.h, 0);
+  for (const [svc, byHour] of bySvc) {
+    const all = [...byHour.values()].flat();
+    if (all.length < MIN_RIDES) continue;
     const hours: Record<string, number> = {};
-    for (const r of rows) if (r.n >= MIN_RIDES) hours[String(r.hour)] = clamp(r.s / r.h);
-    svcs[svc] = { n, s: clamp(s), hours };
+    for (const [hour, xs] of byHour) if (xs.length >= MIN_RIDES) hours[String(hour)] = clamp(median(xs));
+    svcs[svc] = { n: all.length, s: clamp(median(all)), hours };
   }
   return { made: new Date(nowMs).toISOString(), svcs };
 }

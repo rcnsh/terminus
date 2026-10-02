@@ -249,8 +249,9 @@ class LiveService : Service() {
                     .setContentText(catch)
                     .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(catch, answer.leaveNote, answer.goNowLine).joinToString("\n")))
                     .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "))
-                val leaveAt = answer.leaveAtMs!!
-                if (leaveAt > now) b.setWhen(leaveAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
+                // A class card can come without a leave time: no countdown then.
+                val leaveAt = answer.leaveAtMs
+                if (leaveAt != null && leaveAt > now) b.setWhen(leaveAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
                 else b.setShowWhen(false)
                 return b.build()
             }

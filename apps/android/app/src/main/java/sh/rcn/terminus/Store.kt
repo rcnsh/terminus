@@ -125,10 +125,27 @@ class Store(context: Context) {
         prefs.edit { putString(KEY_DEST_USE, Destinations.serialise(Destinations.note(destinationUses(), dest, now))) }
     }
 
+    /**
+     * A random value only this install knows, put on the app's own intents
+     * (widgets, shortcuts) so MainActivity can tell them from another app's:
+     * it's exported, so any app can start it.
+     */
+    val intentKey: String
+        get() = synchronized(Store) {
+            prefs.getString(KEY_INTENT, null) ?: java.util.UUID.randomUUID().toString().also { prefs.edit(commit = true) { putString(KEY_INTENT, it) } }
+        }
+
+    /** Signing out: the account's things go; the phone's language and the intent key stay. */
     fun clear() = synchronized(Store) {
-        prefs.edit(commit = true) { clear() }
+        val keep = listOf(KEY_LANG, KEY_INTENT).associateWith { prefs.getString(it, null) }
+        prefs.edit(commit = true) {
+            clear()
+            for ((k, v) in keep) if (v != null) putString(k, v)
+        }
         cached = null
         loaded = true
+        // The shortcuts named the old account's places.
+        runCatching { Shortcuts.update(app, emptyList()) }
     }
 
     private fun key(): SecretKey = synchronized(Store) {
@@ -164,6 +181,9 @@ class Store(context: Context) {
         const val KEY_LATEST = "latest-version"
         const val ALIAS = "terminus-token"
         const val KEY_TOKEN = "token"
+        const val KEY_INTENT = "intent-key"
+        /** Lang.kt's key, in the same file. */
+        const val KEY_LANG = "lang"
         const val KEY_ANSWER = "answer"
         const val KEY_FETCHED = "fetched"
         const val KEY_ERROR = "error"

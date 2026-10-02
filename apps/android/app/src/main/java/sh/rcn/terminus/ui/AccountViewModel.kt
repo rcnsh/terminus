@@ -271,7 +271,13 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 when (p.status) {
                     "pending" -> continue
-                    "approved" -> return@launch approved(p.token!!, p.email!!, p.outcome, onSignedIn)
+                    // Approved always comes with both; one without is an answer this version can't use.
+                    "approved" -> {
+                        val token = p.token
+                        val email = p.email
+                        if (token != null && email != null) return@launch approved(token, email, p.outcome, onSignedIn)
+                        break
+                    }
                     "denied" -> return@launch _state.update { it.copy(signIn = SignIn.Email, message = L.s(R.string.signin_cancelled)) }
                     else -> break
                 }

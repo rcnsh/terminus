@@ -131,7 +131,7 @@ async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknow
  * changes when a deploy ships a new scrape, same as the graph itself.
  */
 function handleCampus(): Response {
-  return jsonCached({ viewBox: CAMPUS_MAP.viewBox, stops: CAMPUS_MAP.stops, routes: CAMPUS_MAP.routes, destinations: DESTINATIONS, residences: RESIDENCE_LIST }, 3600);
+  return jsonCached({ viewBox: CAMPUS_MAP.viewBox, stops: CAMPUS_MAP.stops, routes: CAMPUS_MAP.routes, destinations: DESTINATIONS, residences: RESIDENCE_LIST }, 3600, 'private');
 }
 
 /**
@@ -321,7 +321,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return handleCampus();
         case '/stops/pairs':
           // Static like /campus: changes only with a new scrape.
-          return jsonCached(STOP_PAIRS, 3600);
+          return jsonCached(STOP_PAIRS, 3600, 'private');
         case '/arrivals':
           return await handleArrivals(url, env, ctx, nowMs);
         default:
