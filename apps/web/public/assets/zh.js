@@ -205,6 +205,7 @@ window.TERMINUS_ZH = {
  "Pick the stops nearest me": "选择离我最近的车站",
  "Picked {0}. Change it if you use a different stop.": "已选择 {0}。如果你用别的车站，可以修改。",
  "Picked {0}. Change them if you use a different stop.": "已选择 {0}。如果你用别的车站，可以修改。",
+ "Press Import to replace your timetable with this one.": "按“导入”用这个课表替换你现在的课表。",
  "Preview unavailable right now.": "现在无法预览。",
  "Privacy": "隐私",
  "Privacy · terminus": "隐私 · terminus",

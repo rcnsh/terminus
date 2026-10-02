@@ -613,6 +613,9 @@ final class AppModel {
                 day = try? await api.day()
             }
             return true
+        } catch let e as ApiError where e.status == 401 && TokenStore.read() != token {
+            // Signed in again while this was in flight: the new token stands.
+            return false
         } catch let e as ApiError where e.status == 401 {
             TokenStore.write(nil)
             clearLocal()
