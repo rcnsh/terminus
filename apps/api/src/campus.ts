@@ -83,10 +83,10 @@ export interface CampusMap {
  */
 export const ROUTE_COLORS: Record<string, string> = {
   A1: '#e53935', // red
-  A2: '#f2b705', // yellow
+  A2: '#d9a000', // yellow, deep enough for white text
   D1: '#ec4fa0', // pink
   D2: '#8e44c9', // purple
-  K: '#3db4f2', // light blue
+  K: '#2b9ad6', // light blue, deep enough for white text
   P: '#8a939c', // grey
   R1: '#f57c1f', // orange
   R2: '#34a853', // green

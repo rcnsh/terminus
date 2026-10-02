@@ -41,12 +41,7 @@ const lang = () => (window.i18n?.lang === 'zh' ? 'zh' : 'en');
 const styleUrl = () => `/map/style.json?theme=${dark() ? 'dark' : 'light'}&lang=${lang()}`;
 const colorOf = (svc) => campus?.routes[svc]?.color ?? '#8a939c';
 
-/** Dark text on the light colours (A2 yellow, K light blue), white on the rest. */
-function onColor(hex) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#1c1917' : '#ffffff';
-}
-const svcVars = (svc) => `--svc:${colorOf(svc)};--on-svc:${onColor(colorOf(svc))}`;
+const svcVars = (svc) => `--svc:${colorOf(svc)}`;
 
 async function getJSON(path) {
   const res = await fetch(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
@@ -237,20 +232,20 @@ function addLayers() {
   });
   map.addLayer({ id: 'me-halo', type: 'circle', source: 'me', paint: { 'circle-radius': 14, 'circle-color': '#2b7bf3', 'circle-opacity': 0.18 } });
   map.addLayer({ id: 'me', type: 'circle', source: 'me', paint: { 'circle-radius': 6.5, 'circle-color': '#2b7bf3', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5 } });
-  for (const [name, fill] of [['heading-light', '#ffffff'], ['heading-dark', '#1c1917']]) if (!map.hasImage(name)) map.addImage(name, arrow(fill), { pixelRatio: 2 });
+  if (!map.hasImage('heading')) map.addImage('heading', arrow('#ffffff'), { pixelRatio: 2 });
   map.addLayer({ id: 'buses', type: 'circle', source: 'buses', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 7, 17, 11], 'circle-color': ['get', 'color'], 'circle-stroke-color': paper, 'circle-stroke-width': 2.5 } });
   map.addLayer({
     id: 'bus-heading',
     type: 'symbol',
     source: 'buses',
     filter: ['==', ['get', 'moving'], true],
-    layout: { 'icon-image': ['case', ['==', ['get', 'on'], '#ffffff'], 'heading-light', 'heading-dark'], 'icon-rotate': ['get', 'heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.7, 17, 1] },
+    layout: { 'icon-image': 'heading', 'icon-rotate': ['get', 'heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.7, 17, 1] },
   });
   highlight();
   drawBuses([...shown.values()]);
 }
 
-/** A small arrow pointing up (north) before rotation, in the bus's text colour. */
+/** A small white arrow pointing up (north) before rotation. */
 function arrow(fill) {
   const size = 32;
   const c = document.createElement('canvas');
@@ -326,7 +321,7 @@ async function pollBuses() {
     if (!data.available) status(t('Live buses aren’t available right now.'));
     else if (!data.buses.length) status(t('No {0} buses running right now.', svc));
     else status(data.buses.length === 1 ? t('1 bus on {0}', svc) : t('{0} buses on {1}', data.buses.length, svc));
-    moveTo(data.buses.map((b) => ({ ...b, svc, color: colorOf(svc), on: onColor(colorOf(svc)) })));
+    moveTo(data.buses.map((b) => ({ ...b, svc, color: colorOf(svc) })));
   } catch (err) {
     if (err.message === 'signed out' || svc !== selected) return;
     status(navigator.onLine ? t('Live buses aren’t available right now.') : t('Live buses need a connection.'));
@@ -361,7 +356,7 @@ function drawBuses(buses) {
     type: 'FeatureCollection',
     features: buses.map((b) => ({
       type: 'Feature',
-      properties: { id: b.id, svc: b.svc, color: b.color, on: b.on, heading: b.heading ?? 0, moving: Boolean(b.moving && b.heading !== null) },
+      properties: { id: b.id, svc: b.svc, color: b.color, heading: b.heading ?? 0, moving: Boolean(b.moving && b.heading !== null) },
       geometry: { type: 'Point', coordinates: [b.lon, b.lat] },
     })),
   });

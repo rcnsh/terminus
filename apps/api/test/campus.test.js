@@ -172,9 +172,9 @@ test('food courts are in the search, each with both of its stops', () => {
 
 test('services wear the colours NUS paints them', () => {
   assert.equal(ROUTE_COLORS.A1, '#e53935', 'red');
-  assert.equal(ROUTE_COLORS.A2, '#f2b705', 'yellow');
+  assert.equal(ROUTE_COLORS.A2, '#d9a000', 'yellow');
   assert.equal(ROUTE_COLORS.D2, '#8e44c9', 'purple');
-  assert.equal(ROUTE_COLORS.K, '#3db4f2', 'light blue');
+  assert.equal(ROUTE_COLORS.K, '#2b9ad6', 'light blue');
   assert.equal(ROUTE_COLORS.R1, '#f57c1f', 'orange');
   assert.equal(ROUTE_COLORS.R2, '#34a853', 'green');
 });
