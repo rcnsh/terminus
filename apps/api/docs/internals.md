@@ -85,7 +85,11 @@ pnpm run deploy
 | `GET /next` | The answer. `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With neither it returns a "Set up" answer rather than inventing a destination. |
 | `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
-| `GET /campus` | Static stop/route geometry and destination search data. Cached hard. |
+| `GET /buses?svc=<service>` | One service's live buses for the map: position, heading, crowding and the next stop (from where the bus is along its route line). One upstream call per service per 10 s; no plates. |
+| `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, and destination search data. Cached hard. |
+| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. |
+| `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
+| `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
@@ -93,7 +97,7 @@ pnpm run deploy
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
 | `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. |
 
-`/next`, `/trip`, `/arrivals`, `/campus` and `/stops/pairs` need an API key
+`/next`, `/trip`, `/arrivals`, `/buses`, `/campus` and `/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`) or a signed-in session.
 
 ## Personalisation
@@ -446,6 +450,20 @@ the existing graph plus `KNOWN_ROUTES` in the script; a new service with an
 unlisted code needs adding there. A weekly GitHub Action runs the same scrape,
 but only once the repo has a GitHub remote and the six secrets it reads.
 
+**Route lines follow the roads.** `scripts/route_shapes.py` routes each
+service stop to stop along OpenStreetMap's drivable roads (one-way streets
+respected, each stop joined on the side the bus drives) into
+`data/shapes.json`; the weekly scrape runs it after the stop graph and
+`check_scraped.py` checks the result. Each shape records the stops it was
+made for: a route whose stops changed since is drawn as straight lines
+until the next run. The NUS feed has no route shapes of its own.
+
+**The street map is one file on R2.** `scripts/map-tiles.sh`, run by the
+**map tiles** workflow, cuts the campus (about 4 MB) from the Protomaps
+build of OpenStreetMap and uploads it, with Noto Sans glyphs and the light
+and dark icons, under `map/` in the downloads bucket. Twice a year is
+plenty; run it by hand once after a first deploy.
+
 **Failure degrades in public.** `quality` walks `live → scheduled → stale →
 ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-
 old answer honestly labelled beats a spinner, and beats an empty tile that
@@ -598,6 +616,8 @@ that failed because logging failed would be an absurd way to miss a bus.
 
 The Android widget and app ([apps/android](../../android)), the Mac menu bar app
 ([apps/macos](../../macos)) and the website ([apps/web](../../web)) all use `/me/next`.
+The Android app and the web app also have the campus map: `/campus`, `/buses`,
+`/arrivals` and `/map/*`.
 For local work, `node scripts/dev-stub.mjs` runs this Worker with a fake bus
 feed and a seeded test account.
 
@@ -612,7 +632,9 @@ src/auth.ts       Public token, lazy refresh, KV + in-memory memo
 src/config.ts     Cache TTLs and tuning constants
 src/calendar.ts   NUS teaching weeks and public holidays
 src/nusmods.ts    NUSMods share URL -> trips
-src/campus.ts     /campus map geometry and destination search
+src/campus.ts     /campus: stops, route lines and colours, destination search
+src/buses.ts      /buses: live buses placed on their route, next stop
+src/map.ts        /map/*: the street map file, its style, fonts and icons
 src/pairs.ts      /stops/pairs
 src/analytics.ts  Analytics Engine decision + arrival logging
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page

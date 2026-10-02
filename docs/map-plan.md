@@ -2,8 +2,8 @@
 
 A Map tab on Android and in the web app: a street map of campus with the
 bus routes on it, where tapping a stop shows what's coming and what you can
-do from there. Decided 2 October 2026; Phase 0 findings are added below as
-they come in.
+do from there. Decided 2 October 2026 and built the same day: all three
+phases are done (PR #7). Phase 0's findings are below.
 
 ## What it is
 
