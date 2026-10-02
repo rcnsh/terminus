@@ -136,16 +136,22 @@ jobs:
               await sleep(5000);
             }
           }
+          const run = (script) => call('POST', `/session/${s}/execute/sync`, { script, args: [] });
           const find = async (sel, using = 'css selector') => {
             for (let i = 0; i < 40; i++) {
               try { return Object.values(await call('POST', `/session/${s}/element`, { using, value: sel }))[0]; } catch { await sleep(500); }
             }
-            throw new Error(`not found: ${sel}`);
+            const seen = await run('return location.href + " :: " + document.body.innerText.slice(0, 300)').catch(() => '');
+            throw new Error(`not found: ${sel} (on ${seen})`);
           };
           const click = async (sel, using) => call('POST', `/session/${s}/element/${await find(sel, using)}/click`, {});
-          const run = (script) => call('POST', `/session/${s}/execute/sync`, { script, args: [] });
           await call('POST', `/session/${s}/url`, { url: 'http://localhost:8787/account/?next=/app/' });
-          await click('#no-email');
+          // Once the page's script has wired the button: tapped until setup shows.
+          await sleep(3000);
+          for (let i = 0; i < 5 && !(await run("return !!document.querySelector('#onboarding:not([hidden])')")); i++) {
+            await click('#no-email');
+            await sleep(2000);
+          }
           await click("//button[contains(., 'Skip setup')]", 'xpath');
           await find('#preview .big, #preview .detail');
           await sleep(2000);
@@ -167,7 +173,7 @@ jobs:
           console.log(`::notice::iOS Simulator: settings scroll kept at ${kept}`);
           EOF
           safaridriver -p 4444 &
-          sleep 3
+          sleep 10
           node sim.mjs
       - if: failure()
         run: xcrun simctl io "$UDID" screenshot failed.png || true
