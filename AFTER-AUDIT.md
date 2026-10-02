@@ -1,75 +1,35 @@
-# Back at the Mac: after the security audit (PR #2)
+# Back at the Mac
 
-What's left now that the audit fixes are on `main`. Nothing is live until
-step 3: `main` isn't deployed automatically. Delete this file once it's done.
+What's left after the security audit (PR #2) and the campus map, for when
+you're back at the Mac. Delete this file once it's done.
 
-Steps 1 to 4 also work on the Linux VPS set up by `scripts/vps-setup.sh`;
-only trying the apps on a phone and a Mac (step 5) needs those.
+Already done, from the VPS: production and the beta are migrated and
+deployed, and both have their street map on R2.
 
 ## 1. Get main
 
+`main`'s history was rewritten on 2 October (commits authored as you), so a
+plain `git pull` would try to merge the old history into the new. Check for
+local changes you want to keep first:
+
 ```sh
 cd ~/path/to/terminus
+git status                         # anything here is lost by the reset below
 git checkout main
-git pull
+git fetch origin
+git reset --hard origin/main
 pnpm install
-pnpm test          # optional: the API tests, as CI runs them
-pnpm lint          # optional: oxlint, as CI runs it
+pnpm test && pnpm lint             # optional: as CI runs them
 ```
 
-## 2. Sign in to Cloudflare (skip if already signed in)
-
-```sh
-cd apps/api
-pnpm exec cf auth login        # opens the browser
-```
-
-## 3. Production: migration first, then deploy
-
-**Done:** migration 0009 is applied on production and the Worker is deployed.
-
-The order matters. Until migration 0009 has run, the new code can't check the
-emailed sign-in code (the emailed link still works).
-
-```sh
-pnpm exec cf d1 migrations apply 27067356-8691-458f-bc69-fa5ca5bbc374
-pnpm run deploy                # `pnpm run deploy`, not `pnpm deploy` (pnpm's own command)
-```
-
-Check it:
-
-- `https://terminus.rcn.sh/pair?code=ABC234` shows the "Pair a device" page,
-  not `{"error":"sign in first"}`.
-- Sign in on the website with the emailed **code** once: that's the path
-  the migration is for.
-
-### The street map: done
-
-The map tiles workflow has put the map on R2. To refresh it (it also runs by
-itself on 1 January and 1 July), it works from your phone too: GitHub → Actions → **map tiles** → Run workflow.
-It puts the campus map, its fonts and its icons on R2 (a few minutes). Then
-`https://terminus.rcn.sh/map/campus.pmtiles` downloads a file of about 4 MB.
-It runs in the `release` environment, like the release workflow, so it
-uses the same Cloudflare token; if that environment asks for approval, approve
-it in the run.
-
-## 4. Beta (only if you use it)
-
-**Done:** migration applied, beta Worker deployed, and its street map uploaded.
-
-```sh
-pnpm exec cf d1 migrations apply d7f309ef-6e3a-457f-a106-154fa797b933
-pnpm run deploy:beta
-```
-
-## 5. Try the apps
+## 2. Try the apps
 
 CI built and tested both; these are for using them for real.
 
 Android (phone connected over USB):
 
 ```sh
-cd ../android
+cd apps/android
 ./gradlew :app:installStableDebug
 ```
 
@@ -77,41 +37,53 @@ cd ../android
   someone else.
 - Tap a widget's place button: it opens that place.
 - Sign out: the app keeps its language.
+- Map: tap a service. Its buses drive along their roads (a 15-second glide
+  each time the feed moves them), on their own side of two-way roads.
+- Map: tap near a stop, not right on its dot, or on its name: it opens.
+- Read through Settings and the notifications: the wording was rewritten.
 
 Mac:
 
 ```sh
-cd ../macos
+cd apps/macos
 swift test
-./build.sh install             # copies to /Applications and opens it
+./build.sh install                 # copies to /Applications and opens it
 ```
 
 - Switch tabs: the new one fills straight away, not after a minute or two.
+- Setup and pairing: the wording was rewritten.
 
-## 6. Release (when you want the app changes out)
+On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
 
-Bump the versions together first (Android versionName/versionCode, Mac
-CFBundleShortVersionString/CFBundleVersion), commit to `main`, then:
+- Now, Map and Settings fade into each other, with the bar along the bottom
+  staying put. Without the fade it still works; it just switches instantly.
+- The map, and the beta's at beta.terminus.rcn.sh/app/#map, shows streets.
+
+## 3. Release 2.1.0
+
+Bump the versions together (Android versionName/versionCode in
+`apps/android/app/build.gradle.kts`, Mac CFBundleShortVersionString/
+CFBundleVersion in `apps/macos/Support/Info.plist`) to 2.1.0 and commit to
+`main`. `RELEASE_NOTES.md` already has the 2.1.0 notes.
+
+First, check the release workflow, whose actions Dependabot moved to new
+major versions (PR #4) and CI doesn't run: GitHub → Actions → release → Run
+workflow, on `main`. It builds, signs and packages the Mac app and publishes
+nothing. Then:
 
 ```sh
-scripts/release.sh --dry-run   # tests and the APKs, uploads nothing
-scripts/release.sh             # uploads the APKs and pushes the tag
+scripts/release.sh --dry-run       # tests and the APKs, uploads nothing
+scripts/release.sh                 # uploads the APKs and pushes the tag
 ```
 
-From the map release (2.1.0) Android comes as three APKs, one per CPU type:
-`terminus-<v>.apk` (arm64, what the website serves), `-armv7` and `-x86_64`.
-The scripts build, upload and attach all three. `RELEASE_NOTES.md` already
-has the notes for 2.1.0; bump the versions to 2.1.0 to use them.
+Android comes as three APKs, one per CPU type: `terminus-2.1.0.apk` (arm64,
+what the website serves), `-armv7` and `-x86_64`; the scripts build, upload
+and attach all three. The workflow refuses a tag that isn't on `main`.
 
-The release workflow now refuses a tag that isn't on `main`, so release from
-`main`.
+This can also run on the VPS once the Android keystore and
+`~/.gradle/gradle.properties` are copied over (see `scripts/vps-setup.sh`).
 
-Its actions were bumped to new major versions (Dependabot, PR #4), which CI
-doesn't run. Before the real release, check them with a run that publishes
-nothing: GitHub → Actions → release → Run workflow, on `main`. It builds,
-signs and packages the Mac app and keeps the DMG as an artifact.
-
-## 7. Undecided: hardened runtime for the Mac app
+## 4. Undecided: hardened runtime for the Mac app
 
 Sign with `--options runtime` (in `apps/macos/build.sh` and
 `scripts/package-mac.sh`) plus an entitlements file with
@@ -123,3 +95,5 @@ when you want it.
 
 - GitHub → Settings → Code security: turn on Dependabot alerts and security
   updates. (`.github/dependabot.yml` already handles routine updates.)
+- Refresh the street map: GitHub → Actions → **map tiles** → Run workflow
+  (stable, beta or both). It also runs by itself on 1 January and 1 July.
