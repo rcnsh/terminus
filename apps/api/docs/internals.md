@@ -306,6 +306,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   900 px wide they sit side by side. The installed app on an iPhone, which has
   no browser swipe, goes back on a swipe from the left edge. "Notify me when
   to leave" is under Notifications.
+- **Now.** A search button at the end of the chips opens "Go somewhere
+  else" (account/search.js, over `/campus`'s destinations); a pick shows its
+  card under a chip of its own. "Is this wrong?" under the card sends it to
+  `/me/feedback` (account/preview.js `wireReport`), except for Nearby. A stop's
+  name in Nearby opens it on the map (`focusStop` in map.js).
 - **Theme.** Appearance chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
   page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`
