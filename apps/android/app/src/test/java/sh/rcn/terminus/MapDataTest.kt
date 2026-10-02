@@ -90,5 +90,13 @@ class MapDataTest {
         val local = JSONObject(MapFiles.localTiles(style, "/data/user/0/sh.rcn.terminus/files/map/campus.pmtiles"))
         assertEquals("pmtiles://file:///data/user/0/sh.rcn.terminus/files/map/campus.pmtiles", local.getJSONObject("sources").getJSONObject("protomaps").getString("url"))
     }
-}
 
+    @Test fun withoutTheMapFileOnlyTheBackgroundStays() {
+        val style = """{"version": 8, "glyphs": "g", "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://x/map/campus.pmtiles"}},
+            "layers": [{"id": "background", "type": "background"}, {"id": "roads", "type": "line", "source": "protomaps"}]}"""
+        val plain = JSONObject(MapFiles.withoutBaseMap(style))
+        assertEquals(0, plain.getJSONObject("sources").length())
+        assertEquals(1, plain.getJSONArray("layers").length())
+        assertEquals("g", plain.getString("glyphs"))
+    }
+}

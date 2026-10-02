@@ -14,7 +14,8 @@ import java.net.URL
  * theme and language used, and the whole campus map file (about 4 MB).
  * MapLibre doesn't cache PMTiles it streams, so the file is downloaded once,
  * checked weekly for a newer one, and read from storage
- * (`pmtiles://file://…`). Fonts and icons go through MapLibre's own cache.
+ * (`pmtiles://file://…`); until then the map is plain. Fonts and icons go
+ * through MapLibre's own cache.
  */
 object MapFiles {
     private const val TILES = "campus.pmtiles"
@@ -37,8 +38,11 @@ object MapFiles {
     }
 
     /**
-     * The style for [dark] and [zh], with the map file read from storage when
-     * it's there. Null with no connection and nothing kept.
+     * The style for [dark] and [zh]: the street map from the downloaded file,
+     * or, until it's downloaded, the routes and stops on a plain map. Never
+     * streamed: MapLibre Native fails the whole style when one fetch of a
+     * streamed map file fails, which would blank the routes too. Null with
+     * no connection and nothing kept.
      */
     suspend fun style(ctx: Context, dark: Boolean, zh: Boolean): String? = withContext(Dispatchers.IO) {
         val theme = if (dark) "dark" else "light"
@@ -48,8 +52,19 @@ object MapFiles {
             .getOrElse { runCatching { file.readText() }.getOrNull() }
             ?: return@withContext null
         val tiles = File(dir(ctx), TILES)
-        if (!tiles.exists()) return@withContext text
-        localTiles(text, tiles.absolutePath)
+        if (tiles.exists()) localTiles(text, tiles.absolutePath) else withoutBaseMap(text)
+    }
+
+    /** Whether the map file is on the phone. */
+    fun hasTiles(ctx: Context): Boolean = File(dir(ctx), TILES).exists()
+
+    /** The style with only its background: no map file, no street layers. */
+    fun withoutBaseMap(style: String): String {
+        val json = JSONObject(style)
+        json.put("sources", JSONObject())
+        val layers = json.optJSONArray("layers") ?: return style
+        json.put("layers", org.json.JSONArray((0 until layers.length()).map { layers.getJSONObject(it) }.filter { it.optString("type") == "background" }))
+        return json.toString()
     }
 
     /** The style with its map file read from [path] instead of the network. */

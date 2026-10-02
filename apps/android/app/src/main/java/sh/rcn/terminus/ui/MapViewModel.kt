@@ -92,8 +92,16 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update { it.copy(failed = true) }
                 }
             }
-            // The whole map file for offline, in the background.
-            viewModelScope.launch { MapFiles.keepTiles(ctx) }
+            // The whole map file for offline, in the background. The first
+            // time, the map is plain until it's here; then the streets appear.
+            viewModelScope.launch {
+                val had = MapFiles.hasTiles(ctx)
+                MapFiles.keepTiles(ctx)
+                val key = styleKey
+                if (!had && MapFiles.hasTiles(ctx) && key != null) {
+                    MapFiles.style(ctx, key.first, key.second)?.let { style -> _state.update { it.copy(style = style) } }
+                }
+            }
         }
     }
 

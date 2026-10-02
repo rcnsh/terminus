@@ -32,9 +32,18 @@ class MapShots {
 
     private val noop = MapActions({}, {}, {}, {}, { _, _ -> }, PlacesForMap({ null }, { false }, { _, _ -> }))
 
+    /** The map file into the app's files, as MapFiles keeps its download. */
+    private fun tiles(): String {
+        val file = java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "map/campus.pmtiles")
+        file.parentFile?.mkdirs()
+        InstrumentationRegistry.getInstrumentation().context.assets.open("campus.pmtiles").use { input -> file.outputStream().use { input.copyTo(it) } }
+        return file.absolutePath
+    }
+
     private fun shot(name: String, dark: Boolean, ui: (CampusMap, Set<String>) -> MapUi) {
         val (campus, core) = CampusMap.parse(JSONObject(asset("campus.json")))
-        val state = ui(campus, core).copy(campus = campus, core = core, style = asset(if (dark) "style-dark.json" else "style-light.json"))
+        val style = MapFiles.localTiles(asset(if (dark) "style-dark.json" else "style-light.json"), tiles())
+        val state = ui(campus, core).copy(campus = campus, core = core, style = style)
         rule.setContent {
             MaterialTheme(colorScheme = if (dark) BrandDark else BrandLight) {
                 Surface(color = MaterialTheme.colorScheme.background) { MapLayout(state, dark, noop) }
