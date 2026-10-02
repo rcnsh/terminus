@@ -15,8 +15,8 @@
 //   the pieces MapLibre asks for. So the campus map works offline after the
 //   first look. Live buses and arrivals are never kept.
 
-const SHELL = 'shell-v5';
-const DATA = 'data-v2';
+const SHELL = 'shell-v6';
+const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
 /** A kept map file older than this is checked for a newer one (they change twice a year). */
@@ -29,6 +29,7 @@ const SHELL_FILES = [
   '/assets/tabbar.css',
   '/account/dom.js',
   '/account/preview.js',
+  '/account/search.js',
   '/account/account.css',
   '/assets/site.css',
   '/assets/theme.js',
@@ -179,11 +180,12 @@ function forgetData() {
 async function networkFirst(req) {
   const generation = dataGeneration;
   const cache = await caches.open(DATA);
-  // One kept reply per route, place, clock style and language: not one per
-  // location, which would keep a reply for every few metres walked.
+  // One kept reply per route, place or stop asked for, clock style and
+  // language: not one per location, which would keep a reply for every few
+  // metres walked. A stop's card (`to`) never stands in for the plan's.
   const url = new URL(req.url);
   const keyed = new URLSearchParams();
-  for (const k of ['place', 'h12']) if (url.searchParams.get(k)) keyed.set(k, url.searchParams.get(k));
+  for (const k of ['place', 'to', 'h12']) if (url.searchParams.get(k)) keyed.set(k, url.searchParams.get(k));
   const lang = (req.headers.get('accept-language') ?? '').split(',')[0].trim().slice(0, 16);
   if (lang) keyed.set('lang', lang);
   const key = `${url.origin}${url.pathname}${keyed.size ? `?${keyed}` : ''}`;

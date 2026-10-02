@@ -133,7 +133,7 @@ async function keptCard(to) {
   q.set('lang', window.i18n?.header ?? 'en');
   try {
     // DATA in sw.js.
-    const res = await (await caches.open('data-v2')).match(`${location.origin}/me/next?${q}`);
+    const res = await (await caches.open('data-v3')).match(`${location.origin}/me/next?${q}`);
     return res ? await res.json() : null;
   } catch {
     return null;
