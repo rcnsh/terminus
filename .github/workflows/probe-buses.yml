@@ -1,0 +1,42 @@
+name: probe live-bus feed
+
+# Run by hand (Actions > probe live-bus feed > Run workflow) while buses run:
+# measures how often the feed moves a bus. The result is the run's summary.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long to poll"
+        default: "3"
+      services:
+        description: "Services, space-separated"
+        default: "A1 A2 D1 D2"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # Same guest-token flow and bus proxy as the Worker and the scraper.
+      - name: Probe
+        env:
+          NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
+          NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
+          NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
+          NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
+          NEXTBUS_PROXY_BASE: ${{ secrets.NEXTBUS_PROXY_BASE }}
+          NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
+          MINUTES: ${{ inputs.minutes }}
+          SERVICES: ${{ inputs.services }}
+        working-directory: apps/api/scripts
+        # SERVICES unquoted on purpose: one argument per service.
+        run: python3 probe_buses.py --minutes "$MINUTES" $SERVICES | tee -a "$GITHUB_STEP_SUMMARY"
