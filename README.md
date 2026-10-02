@@ -131,7 +131,8 @@ Sending) and the NUS feed configuration described in
 tag); pushing the tag runs
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which signs
 and packages the Mac app, publishes the appcast installed Macs update from,
-and publishes the release. The campus map's street map goes onto R2 with the
+and publishes the release. `scripts/release.sh` and deploys also run on a
+Linux VPS, set up by `scripts/vps-setup.sh`. The campus map's street map goes onto R2 with the
 **map tiles** workflow (or `scripts/map-tiles.sh`). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <br>

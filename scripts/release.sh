@@ -22,7 +22,8 @@ DRY=0
 VERSION=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' apps/android/app/build.gradle.kts)
 [ -n "$VERSION" ] || { echo "no versionName found"; exit 1; }
 case "$VERSION" in *-*) echo "$VERSION is a beta: release it with scripts/release-beta.sh"; exit 1 ;; esac
-MAC_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/macos/Support/Info.plist)
+# plistlib, not PlistBuddy, so this also runs on Linux (a VPS: scripts/vps-setup.sh).
+MAC_VERSION=$(python3 -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))["CFBundleShortVersionString"])' apps/macos/Support/Info.plist)
 [ "$MAC_VERSION" = "$VERSION" ] || { echo "Android is $VERSION but the Mac app is $MAC_VERSION; bump both"; exit 1; }
 grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || { echo "Android release key not configured (TERMINUS_KEYSTORE)"; exit 1; }
 if [ $DRY -eq 0 ] && git rev-parse "v$VERSION" >/dev/null 2>&1; then
@@ -48,7 +49,11 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 
 echo "== android"
-(cd apps/android && JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}" ./gradlew :app:assembleStableRelease :app:bundleStableRelease --console=plain -q)
+# Android Studio's Java on a Mac, unless JAVA_HOME says otherwise; elsewhere
+# the java on the PATH.
+STUDIO_JAVA="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+if [ -z "${JAVA_HOME:-}" ] && [ -d "$STUDIO_JAVA" ]; then export JAVA_HOME="$STUDIO_JAVA"; fi
+(cd apps/android && ./gradlew :app:assembleStableRelease :app:bundleStableRelease --console=plain -q)
 # One APK per CPU type: terminus-<v>.apk (arm64, nearly every phone, and the
 # file older apps and links know), -armv7 (older 32-bit phones), -x86_64.
 APKS=apps/android/app/build/outputs/apk/stable/release
