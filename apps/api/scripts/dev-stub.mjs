@@ -150,7 +150,7 @@ const TRIPS = makeDurableObjects(Trip, () => env);
 // Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
 const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
-env = { ...makeEnv(), PUBLIC_API_OPEN: undefined, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, HEALTH_TOKEN: 'dev', TRIPS, VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
+env = { ...makeEnv(), [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, HEALTH_TOKEN: 'dev', TRIPS, VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;

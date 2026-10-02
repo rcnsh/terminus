@@ -1027,3 +1027,16 @@ test('inside a residence, only its own stops are offered, walked by the paths (P
   const out = candidateStops(g, { lat: 1.2935, lon: 103.7838, originCode: null, to: 'UTOWN' }).map((c) => c.stop.code);
   assert.ok(out.includes('KR-MRT'));
 });
+
+test('a window that crosses midnight still runs after it, by yesterday\'s hours', async () => {
+  const { serviceEndsAt } = await import('../src/resolve.ts');
+  const graph = { ...realGraph, serviceHours: { X: { weekday: ['07:00', '01:00'], saturday: ['08:00', '23:00'], sunday: null } } };
+  const sgt = (d, h, m) => Date.UTC(2026, 7, d, h - 8, m); // August 2026, SGT
+  assert.equal(inService(graph, 'X', sgt(29, 0, 30)), true, 'Sat 00:30: Friday\'s service');
+  assert.equal(serviceEndsAt(graph, 'X', sgt(29, 0, 30)), sgt(29, 1, 0));
+  assert.equal(inService(graph, 'X', sgt(29, 1, 30)), false, 'Sat 01:30: ended, Saturday opens at 8');
+  assert.equal(inService(graph, 'X', sgt(28, 23, 30)), true, 'Fri 23:30');
+  assert.equal(serviceEndsAt(graph, 'X', sgt(28, 23, 30)), sgt(29, 1, 0), 'closes tomorrow');
+  assert.equal(inService(graph, 'X', sgt(31, 0, 30)), false, 'Mon 00:30: Sunday did not run');
+  assert.equal(inService(graph, 'X', sgt(31, 7, 30)), true, 'Mon 07:30');
+});

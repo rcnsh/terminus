@@ -26,9 +26,10 @@ export function json(body: unknown, status = 200, extra: Record<string, string> 
   });
 }
 
-export function jsonCached(body: unknown, maxAge: number): Response {
+/** `scope` is 'private' for anything behind a key or a session: no shared cache may hand it on. */
+export function jsonCached(body: unknown, maxAge: number, scope: 'public' | 'private' = 'public'): Response {
   return new Response(JSON.stringify(body), {
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': `public, max-age=${maxAge}`, ...CORS },
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': `${scope}, max-age=${maxAge}`, ...CORS },
   });
 }
 

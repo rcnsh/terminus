@@ -60,8 +60,6 @@ export interface Env {
   PUBLIC_ORIGIN?: string;
   /** The Analytics Engine dataset the dashboard queries. Unset: terminus. */
   AE_DATASET?: string;
-  /** Tests only: "1" lets anyone call the bus-answer routes without a key. */
-  PUBLIC_API_OPEN?: string;
 }
 
 /* ------------------------------------------------------------------ */

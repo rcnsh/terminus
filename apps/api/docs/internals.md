@@ -249,8 +249,16 @@ arrival live when the bus's plate is known), for a progress bar (phase 6). v1
 fields are unchanged.
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
   last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
-  again, once fewer than 23 days are left. Device tokens last until revoked,
-  or 90 days unused.
+  again, once fewer than 23 days are left. However much it's used, a web
+  session of an account with an email ends 180 days after sign-in (one with
+  no email keeps it: it has no other way back in). Device tokens last until
+  revoked, or 90 days unused.
+- Sign-in emails: one a minute and ten an hour per inbox, web and app
+  together. The emailed code's wrong guesses are counted on the link's row
+  (`magic_links.code_tries`, migration 0009), five at most.
+- `POST /auth/verify`, `/auth/approve` and `/auth/logout` are refused when
+  `Sec-Fetch-Site` says another site sent them, so no page elsewhere can sign
+  a visitor in to an account it holds a link for, or out of theirs.
 - The link in the email opens a page with a button, and only the button's
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.
@@ -289,7 +297,9 @@ page. It uses the same routes as the account page, with the session cookie.
   Android session keeps its FCM token. So the Trip object's nudges reach both,
   through `push.ts` and `webpush.ts`. Each push is VAPID-signed with
   `VAPID_PRIVATE_KEY` (a P-256 JWK; `scripts/vapid-key.mjs` makes one) and
-  its payload encrypted with aes128gcm, using WebCrypto only.
+  its payload encrypted with aes128gcm, using WebCrypto only. Only
+  subscriptions on browsers' push services are kept (FCM, Mozilla, Apple,
+  Windows): the Worker POSTs to the endpoint, so any other host is refused.
 - **Every day, not just when the app is open.** A Trip object only watches
   once a request asks it to. The Android app asks from its background
   refresh, but a Home Screen web app makes no requests unless it's opened. So
@@ -348,11 +358,14 @@ departure only a location at the stop now counts as missed. Analytics counts
 **Measured ride times (8.2, `ridetimes.ts`).** A ride detection saw start and
 end is one row in `ride_times` (migration 0008): service, stops, hops,
 seconds, hour and kind of day, plate. No user, device or location. Rides
-under 30 s or over 300 s a stop are dropped as mistakes. Taps never count:
+under 30 s or over 300 s a stop are dropped as mistakes, and so are rides
+from accounts under 3 days old and a second ride on the same service in the
+same hour from one account (a short-lived KV mark, so the rows still hold no
+user). Taps never count:
 they are minutes out either way. Once a day from 04:00 the cron prunes rows
 older than 120 days and writes seconds per stop to KV (`ride:hops`): per
 service with at least 10 rides, and per hour of the day with 10 of its own,
-clamped to 45 to 240 s. `answerFor` reads it (cached ten minutes per isolate)
+the median seconds per stop, clamped to 45 to 240 s. `answerFor` reads it (cached ten minutes per isolate)
 and passes `hopS` to the resolver, so a leg's `rideS` is measured where the
 table has the service and `RIDE.secondsPerHop` elsewhere.
 

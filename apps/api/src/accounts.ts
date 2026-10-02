@@ -20,6 +20,10 @@ export const ACCOUNT_TTL = {
   /** A web session used with less than this left is renewed for another
    *  webSessionMs, so a browser (or the installed web app) in use stays signed in. */
   webRenewBelowMs: 23 * 86_400_000,
+  /** However much it's used, a web session ends this long after sign-in and
+   *  the email link is needed again. Not for accounts with no email: they
+   *  would have no way back in. */
+  webSessionMaxMs: 180 * 86_400_000,
   pairCodeMs: 10 * 60_000,
   /** Wrong guesses before an emailed sign-in code stops working. */
   codeTries: 5,
@@ -140,12 +144,15 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
 
   const token = newToken();
   const tokenHash = await hashToken(token);
-  await db.batch([
+  // The cooldown checked and the link stored in one statement: two requests
+  // at once can't both pass the check above and both send an email.
+  const [, made] = await db.batch([
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
     db
-      .prepare('INSERT INTO magic_links (token_hash, email, created, expires) VALUES (?, ?, ?, ?)')
-      .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs),
+      .prepare('INSERT INTO magic_links (token_hash, email, created, expires) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM magic_links WHERE email = ? AND created > ?) RETURNING token_hash')
+      .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs, email, nowMs - ACCOUNT_TTL.linkCooldownMs),
   ]);
+  if (!made?.results?.length) return 'cooldown';
 
   // The same sign-in, as a code typed on the page that asked. University
   // filters (NUS's among them) hold back mail that is only a link; a code
@@ -436,14 +443,15 @@ export async function authenticate(
   const hash = await hashToken(token);
   const row = await db
     .prepare(
-      `SELECT s.kind, s.last_seen, s.expires, s.client, u.id, u.email
+      `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ?`,
     )
     .bind(hash)
-    .first<{ kind: 'web' | 'device'; last_seen: number; expires: number | null; client: string | null; id: string; email: string | null }>();
+    .first<{ kind: 'web' | 'device'; created: number; last_seen: number; expires: number | null; client: string | null; id: string; email: string | null }>();
   if (!row) return null;
   if (row.expires !== null && row.expires < nowMs) return null;
+  if (row.kind === 'web' && row.email !== null && nowMs - row.created > ACCOUNT_TTL.webSessionMaxMs) return null;
   // Paired devices lapse after 90 idle days (the cron deletes them too).
   if (row.kind === 'device' && nowMs - row.last_seen > DEVICE_IDLE_MS) return null;
 
