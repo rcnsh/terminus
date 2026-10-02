@@ -224,7 +224,7 @@ export function mergeServiceHours(
   base: Record<string, ServiceHours> | undefined,
   hand: Record<string, unknown> | undefined,
 ): Record<string, ServiceHours> {
-  const out: Record<string, ServiceHours> = { ...(base ?? {}) };
+  const out: Record<string, ServiceHours> = { ...base };
   for (const [svc, value] of Object.entries(hand ?? {})) {
     if (svc.startsWith('_') || !value || typeof value !== 'object') continue;
     const src = value as Record<string, unknown>;
@@ -328,7 +328,7 @@ export function resolveBerths(rows: Arrival[]): { usable: Arrival[]; ambiguousBe
   // Drop the run that TERMINATES here rather than preferring the one marked
   // -S: route P starts at a bare `KV` and ends at `KV-P-E`, so a start suffix
   // is not guaranteed but an end suffix is what makes a row unboardable.
-  const notEnding = rows.filter((a) => a.berth == null || !/-E$/.test(a.berth));
+  const notEnding = rows.filter((a) => a.berth == null || !a.berth.endsWith('-E'));
 
   // Every run terminates here and none departs. Show them, but do not pretend
   // to be confident about a bus that ends its journey as you reach it.

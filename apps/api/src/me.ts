@@ -547,7 +547,7 @@ const ME_ROUTES: MeRoute[] = [
       const gone = p?.board ? Date.parse(p.board) <= nowMs + 60_000 : false;
       const l = current
         ? gone && p
-          ? { ...(now.answer.leave ?? {}), svc: p.svc, stop: p.stop, board: p.board, arrive: p.arrive, off: p.off, stopCode: p.stopCode, offCode: p.alightCode }
+          ? { ...now.answer.leave, svc: p.svc, stop: p.stop, board: p.board, arrive: p.arrive, off: p.off, stopCode: p.stopCode, offCode: p.alightCode }
           : now.answer.leave
         : null;
       const label = current ? (now.answer.dest?.label ?? undefined) : classesOn(profile, nowMs).find((c) => classKey(c) === key)?.label;

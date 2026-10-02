@@ -43,7 +43,7 @@ async function setup(profile = PROFILE, { trips = true, feed = FEED } = {}) {
     if (cookie) headers.cookie = cookie;
     if (body !== undefined) headers['content-type'] = 'application/json';
     const ctx = makeCtx();
-    const res = await worker.fetch(new Request(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }), env, ctx);
+    const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env, ctx);
     await ctx.settle();
     return res;
   };

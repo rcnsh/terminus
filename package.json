@@ -4,7 +4,11 @@
   "packageManager": "pnpm@12.4.2",
   "scripts": {
     "test": "pnpm --filter @terminus/api test",
+    "lint": "oxlint --deny-warnings apps/api/src apps/api/test apps/api/scripts apps/web/public scripts",
     "check": "pnpm --filter @terminus/api check",
     "deploy": "pnpm --filter @terminus/api run deploy"
+  },
+  "devDependencies": {
+    "oxlint": "1.85.0"
   }
 }

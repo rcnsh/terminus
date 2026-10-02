@@ -302,7 +302,8 @@ export function makeDurableObjects(Class, env = {}) {
     }),
     /** Runs only the alarms that are due by `nowMs` (the dev stub's clock). */
     async fireDue(nowMs) {
-      for (const [name, at] of [...alarms.entries()]) {
+      // A copy: an alarm can set a new one while this runs.
+      for (const [name, at] of Array.from(alarms.entries())) {
         if (at > nowMs) continue;
         alarms.delete(name);
         await instance(name).alarm();
@@ -310,7 +311,7 @@ export function makeDurableObjects(Class, env = {}) {
       await Promise.all(pending.splice(0));
     },
     async fireAlarms() {
-      for (const name of [...alarms.keys()]) {
+      for (const name of Array.from(alarms.keys())) {
         alarms.delete(name);
         await instance(name).alarm();
       }

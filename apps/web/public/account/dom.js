@@ -13,7 +13,7 @@ export async function api(path, { method = 'GET', body } = {}) {
     method,
     // The API writes answers and errors in the page's language.
     headers: { 'accept-language': window.i18n?.header ?? 'en', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     credentials: 'same-origin',
   });
   const data = await res.json().catch(() => ({}));

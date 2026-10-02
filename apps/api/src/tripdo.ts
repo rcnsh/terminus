@@ -168,7 +168,7 @@ export class Trip {
   private async putPlan(date: string, key: string, plan: Boarded): Promise<DayRecord> {
     const day = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
     const next = today(day, date);
-    next.plans = { ...(next.plans ?? {}), [key]: plan };
+    next.plans = { ...next.plans, [key]: plan };
     await this.storage.put('day', next);
     return next;
   }

@@ -91,7 +91,8 @@
         return;
       }
     }
-    for (const c of [...node.childNodes]) walk(c);
+    // A copy: childNodes is live, and walk() replaces what it translates.
+    for (const c of Array.from(node.childNodes)) walk(c);
   }
 
   /** Translates what's on the page (or under `root`). A no-op in English. */
