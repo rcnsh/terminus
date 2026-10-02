@@ -65,6 +65,13 @@ function vapid(env: Env): Vapid | null {
 export const webPushEnabled = (env: Env) => vapid(env) !== null;
 export const vapidPublicKey = (env: Env) => vapid(env)?.publicKey ?? null;
 
+/**
+ * The push services browsers subscribe with. Anything else is refused: the
+ * Worker POSTs to a subscription's endpoint, signed with our VAPID key, so an
+ * open list would let any account aim those POSTs at any site.
+ */
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^android\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /^([a-z0-9-]+\.)*push\.apple\.com$/, /^([a-z0-9-]+\.)*notify\.windows\.com$/];
+
 /** A subscription from the browser, checked before it's kept. */
 export function parseSubscription(v: unknown): WebSubscription | null {
   const s = v as Partial<WebSubscription> | null;
@@ -75,12 +82,15 @@ export function parseSubscription(v: unknown): WebSubscription | null {
   } catch {
     return null;
   }
-  if (url.protocol !== 'https:') return null;
+  if (url.protocol !== 'https:' || url.port || url.username || url.password) return null;
+  if (!PUSH_HOSTS.some((h) => h.test(url.hostname))) return null;
   const p256dh = s.keys?.p256dh;
   const auth = s.keys?.auth;
   if (typeof p256dh !== 'string' || typeof auth !== 'string') return null;
   try {
-    if (fromB64url(p256dh).length !== 65 || fromB64url(auth).length !== 16) return null;
+    const key = fromB64url(p256dh);
+    // An uncompressed P-256 point: anything else fails every encryption later.
+    if (key.length !== 65 || key[0] !== 4 || fromB64url(auth).length !== 16) return null;
   } catch {
     return null;
   }
@@ -150,6 +160,9 @@ export async function sendWebPush(
       topic: 'card',
     },
     body,
+    // A push service answers; it never redirects. Nor does it take 5 s.
+    redirect: 'manual',
+    signal: AbortSignal.timeout(5_000),
   });
   if (res.status === 404 || res.status === 410) return 'gone';
   if (!res.ok) {

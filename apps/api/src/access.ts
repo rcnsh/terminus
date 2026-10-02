@@ -15,12 +15,12 @@ const TOUCH_MS = 10 * 60_000;
 
 export type Caller = { kind: 'key'; keyId: string; userId: string } | { kind: 'account'; userId: string } | { kind: 'open' };
 
-/** The key from `x-api-key`, or a bearer token that is one. */
-function keyFrom(req: Request): string | null {
+/** The key from `x-api-key`, or a bearer token that may be one. */
+function keyFrom(req: Request): { key: string; bearer: boolean } | null {
   const header = req.headers.get('x-api-key')?.trim();
-  if (header) return header;
+  if (header) return { key: header, bearer: false };
   const auth = req.headers.get('authorization');
-  if (auth?.startsWith(`Bearer ${KEY_PREFIX}`)) return auth.slice(7).trim();
+  if (auth?.startsWith(`Bearer ${KEY_PREFIX}`)) return { key: auth.slice(7).trim(), bearer: true };
   return null;
 }
 
@@ -29,11 +29,14 @@ export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: Exe
   if (env.PUBLIC_API_OPEN === '1') return { kind: 'open' };
   const db = env.DB;
   if (!db) return null;
-  const key = keyFrom(req);
-  if (key) {
-    const hash = await hashToken(key);
-    const row = await db.prepare('SELECT id, user_id, last_used FROM api_keys WHERE key_hash = ?').bind(hash).first<{ id: string; user_id: string; last_used: number | null }>();
-    if (!row) return null;
+  const found = keyFrom(req);
+  const row = found
+    ? await db.prepare('SELECT id, user_id, last_used FROM api_keys WHERE key_hash = ?').bind(await hashToken(found.key)).first<{ id: string; user_id: string; last_used: number | null }>()
+    : null;
+  // A bearer starting tk_ that is no key may still be a session: those are
+  // random base64url, and about 1 in 262,144 starts that way too.
+  if (found && !row && !found.bearer) return null;
+  if (row) {
     if (row.last_used === null || nowMs - row.last_used > TOUCH_MS) {
       const touch = db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').bind(nowMs, row.id).run();
       if (ctx) ctx.waitUntil(touch.catch(() => {}));

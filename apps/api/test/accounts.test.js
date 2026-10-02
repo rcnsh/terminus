@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { newPairCode, normalizePairCode } from '../src/accounts.ts';
+import { hashToken, newPairCode, normalizePairCode } from '../src/accounts.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import residencesJson from '../data/residences.json' with { type: 'json' };
 
@@ -486,6 +486,20 @@ function withNusmods(modules, { down = [] } = {}) {
 
 const LAB = { semesterData: [{ semester: 1, timetable: [{ lessonType: 'Laboratory', classNo: 'B1', day: 'Monday', startTime: '1000', endTime: '1200', venue: 'COM3-0120', weeks: [3, 4, 5] }] }] };
 
+test('import: limited per account, since each one fetches from NUSMods', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  withNusmods({ CS2030: LAB });
+  const keys = [];
+  const res = await call({ ...env, RL_AUTH: { limit: async ({ key }) => (keys.push(key), { success: !key.startsWith('import:') }) } }, '/me/import', {
+    method: 'POST',
+    cookie,
+    body: { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1' },
+  });
+  assert.equal(res.status, 429);
+  assert.ok(keys.some((k) => /^import:.+/.test(k)), 'keyed by account');
+});
+
 test('import: a NUSMods failure changes nothing and names the module', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
@@ -795,6 +809,17 @@ test('API keys: made on the account page, shown once, work anywhere, revocable',
 
   assert.equal((await call(env, `/me/keys/${made.id}`, { method: 'DELETE', cookie })).status, 200);
   assert.equal((await call(env, '/arrivals?stop=COM3', { key: made.key })).status, 401, 'revoked');
+});
+
+test('a session token that happens to start tk_ is still a session, not a missing key', async () => {
+  const { env, db } = setup();
+  delete env.PUBLIC_API_OPEN;
+  const { token } = await (await call(env, '/auth/anon', { method: 'POST', body: { name: 'Pixel' } })).json();
+  // Session tokens are random base64url: 1 in 262,144 starts this way.
+  const unlucky = `tk_${token.slice(3)}`;
+  db._db.prepare('UPDATE sessions SET token_hash = ? WHERE token_hash = ?').run(await hashToken(unlucky), await hashToken(token));
+  assert.equal((await call(env, '/arrivals?stop=COM3', { token: unlucky })).status, 200);
+  assert.equal((await call(env, '/arrivals?stop=COM3', { token: 'tk_nonsense' })).status, 401);
 });
 
 test('API keys: a name is required, five at most, and a phone cannot make them', async () => {
