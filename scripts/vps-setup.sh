@@ -42,8 +42,13 @@ SUDO=""
 [ "$(id -u)" -eq 0 ] || SUDO=sudo
 
 echo "== packages"
-$SUDO apt-get update -qq
-$SUDO apt-get install -y -qq git curl unzip xz-utils python3 openjdk-21-jdk-headless >/dev/null
+# Asks for the sudo password once, up front, while there's a terminal.
+[ -z "$SUDO" ] || sudo -v
+# Never waits on a prompt: some SSH apps give apt no proper terminal
+# ("select() returned error: Inappropriate ioctl for device").
+apt_get() { $SUDO env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o Dpkg::Use-Pty=0 "$@" </dev/null; }
+apt_get update -q >/dev/null || { echo "apt-get update failed; run it by hand to see why"; exit 1; }
+apt_get install -y -q git curl unzip xz-utils python3 openjdk-21-jdk-headless >/dev/null
 echo "git, curl, python3, java 21"
 
 PROFILE_LINES='
