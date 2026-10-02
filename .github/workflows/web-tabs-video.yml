@@ -177,12 +177,17 @@ jobs:
             await click('#no-email');
             await sleep(2500);
           }
+          console.log('::notice::step: setup shown');
           await click("//button[contains(., 'Skip setup')]", 'xpath');
+          await sleep(3000);
+          console.log('::notice::step: setup skipped');
+          await call('POST', `/session/${s}/url`, { url: 'http://localhost:8787/app/' });
           await find('.tabbar a[data-tab="map"]');
+          console.log('::notice::step: app open');
           await sleep(2000);
           const rec = spawn('xcrun', ['simctl', 'io', process.env.UDID, 'recordVideo', '--codec=h264', '--force', 'ios-simulator.mp4'], { stdio: 'inherit' });
           await sleep(3000);
-          const tab = async (n, ms) => { await click(`.tabbar a[data-tab="${n}"]`); await sleep(ms); };
+          const tab = async (n, ms) => { console.log(`step: ${n}`); await click(`.tabbar a[data-tab="${n}"]`); await sleep(ms); };
           await tab('map', 5000);
           await tab('settings', 3000);
           await run("window.scrollTo({ top: 900, behavior: 'smooth' })"); await sleep(2000);
