@@ -1,71 +1,32 @@
-# ONE-OFF (Phase 0 of docs/map-plan.md; delete after): which bus proxy
-# endpoints give a route's road shape. Runs only on pushes to this branch
-# that touch the probe, prints shapes of replies, never credentials.
-name: probe route shapes
+# ONE-OFF (Phase 1 of docs/map-plan.md; delete after): the first
+# data/shapes.json, since Overpass can't be reached from the build container.
+# Runs scripts/route_shapes.py and commits the result to this branch. The
+# weekly scrape keeps it up to date after that.
+name: first route shapes
 
 on:
   push:
     branches: [ccr-6bfb8175-pou0tm]
-    paths: [apps/api/scripts/probe_map.py, .github/workflows/probe.yml]
+    paths: [apps/api/scripts/route_shapes.py, .github/workflows/probe.yml]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  probe:
-    if: false # answered: the proxy has no route-shape endpoint
+  shapes:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Probe
-        env:
-          NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
-          NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
-          NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
-          NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
-          NEXTBUS_PROXY_BASE: ${{ secrets.NEXTBUS_PROXY_BASE }}
-          NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
-        run: python3 apps/api/scripts/probe_route_shapes.py
-
-  # Route shapes along OSM roads, and the size of the campus map file.
-  map:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - name: Route shapes along OSM roads
-        continue-on-error: true
-        run: cd apps/api && python3 scripts/probe_map.py; mkdir -p ../../probe-out; cp -r probe-out/. ../../probe-out/ 2>/dev/null || true
-      - name: Cut the campus map from the latest Protomaps build
-        if: always()
+      - run: python3 apps/api/scripts/route_shapes.py
+      - name: Commit to this branch
         run: |
-          mkdir -p probe-out
-          set -eu
-          url=$(curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest | python3 -c "import json,sys; print(next(a['browser_download_url'] for a in json.load(sys.stdin)['assets'] if 'Linux_x86_64' in a['name']))")
-          echo "pmtiles: $url"
-          curl -fsSL "$url" | tar xz pmtiles
-          build=""
-          for i in $(seq 0 14); do
-            d=$(date -u -d "-$i day" +%Y%m%d)
-            if curl -fsI "https://build.protomaps.com/$d.pmtiles" >/dev/null; then build=$d; break; fi
-          done
-          echo "latest build: $build"
-          ./pmtiles show "https://build.protomaps.com/$build.pmtiles" | head -20
-          # NUS and Botanic Gardens, every zoom the build has.
-          ./pmtiles extract "https://build.protomaps.com/$build.pmtiles" probe-out/nus.pmtiles --bbox=103.755,1.280,103.830,1.332
-          # All of Singapore, for comparison.
-          ./pmtiles extract "https://build.protomaps.com/$build.pmtiles" probe-out/sg.pmtiles --bbox=103.59,1.15,104.10,1.48 --maxzoom=15
-          ls -la probe-out
-          ./pmtiles show probe-out/nus.pmtiles | head -20
-          rm probe-out/sg.pmtiles
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: probe-map
-          path: probe-out
-          retention-days: 3
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/data/shapes.json
+          git diff --cached --quiet && exit 0
+          git commit -m "data: first route shapes"
+          git pull --rebase origin ccr-6bfb8175-pou0tm
+          git push origin HEAD:ccr-6bfb8175-pou0tm
