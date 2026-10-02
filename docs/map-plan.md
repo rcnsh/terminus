@@ -21,7 +21,17 @@ they come in.
   - bus routes drawn along their real roads in each service's colour;
   - stop names once zoomed in;
   - a dot for you, only when location is already allowed (the map never
-    asks for it).
+    asks for it);
+  - **a row of service pills along the top** (A1 · A2 · D1 · D2 · K · P ·
+    R1 · R2), like the chips on Now. Tapping one shows that service's line
+    and its **live buses**, and fades the other lines; tapping another
+    switches to it; tapping it again turns it off. One at a time. The buses
+    move every few seconds while a pill is on.
+  - Tapping a live bus shows a small card: the service, how full it is and
+    its next stop. No plate number.
+- **Service colours,** as on the buses: A1 red, A2 yellow, D1 pink, D2
+  purple, K light blue, P grey, R1 orange, R2 green. The API gives them, so
+  every app uses the same ones.
   - It opens on your nearest stop when location is allowed, otherwise on
     the whole campus.
 - **Tapping a stop** opens a sheet with:
@@ -67,14 +77,17 @@ they come in.
   `check_scraped.py`.
 - `/campus` gains:
   - route lines as GeoJSON;
-  - each stop's services.
+  - each stop's services;
+  - the services' new colours.
+- `/buses?svc=` gives a service's live buses: position, heading, crowding
+  and next stop (worked out from the route line), cached 10 s per service.
 - `/map/*` serves:
   - the PMTiles file from R2, by range and long-cached;
   - light and dark styles in the app's colours;
   - label fonts and icons.
-- `scripts/map-tiles.sh` builds and uploads the map file. It is run once
-  from the Mac (it needs the Cloudflare login), then a couple of times a
-  year.
+- `scripts/map-tiles.sh` builds and uploads the map file. The "map tiles"
+  workflow runs it: by hand once after this merges, then by itself on
+  1 January and 1 July.
 - The site's security policy gains only what MapLibre needs to run. All map
   requests stay on our own domain.
 
@@ -112,8 +125,8 @@ they come in.
 
 - Looking at the Android map on a real phone (CI builds and tests it, but
   can't look at it).
-- Running `scripts/map-tiles.sh` once from the Mac to put the map file on
-  R2.
+- Running the "map tiles" workflow once (Actions tab, Run workflow) after
+  Phase 1 is merged and deployed, to put the map file on R2.
 
 ## Phase 0 findings
 
@@ -139,7 +152,7 @@ they come in.
 ### 0.2 Route shapes
 
 - **Plan A is out.** The bus proxy has no route-shape endpoint: `check-point`, `checkpoint`, `route`, `routes`, `polyline`, `service-description` and the like all return 404.
-- The proxy does have `active-bus`: the live position, heading and crowding of each bus on a route. That could put moving buses on the map later, but it isn't in this plan.
+- The proxy does have `active-bus`: the live position, heading and crowding of each bus on a route. That's what the map's live buses use.
 - **Plan B:** route each service stop to stop along OpenStreetMap's drivable roads, respecting one-way streets and choosing the correct side of the road at each stop. Probed with a one-off workflow, since Overpass (OpenStreetMap's query service) can't be reached from the build container.
 - **Plan B works.** Every service was routed with no leg that detours oddly (more than 2.5× the straight line and 400 m longer), and every stop is within 45 m of its road:
 
@@ -150,8 +163,8 @@ they come in.
   | furthest stop from road | 34 m | 34 m | 45 m | 45 m | 18 m | 26 m | 26 m | 26 m |
 
   All eight together come to 82 KB of GeoJSON before simplifying; simplified, a few tens of KB.
-- **OpenStreetMap already has all eight services** as route relations ("NUS Svc A1" … "NUS Svc R2", network "NUS ISB"). The scrape will compare its own shapes with those and flag a service where they differ a lot, which catches a mapped road change or a route change.
-- **Not checked yet:** how the lines look on the map. Neither the probe's output nor the map file can be downloaded into the build container, so the first look is in Phase 2's screenshots.
+- **OpenStreetMap already has all eight services** as route relations ("NUS Svc A1" … "NUS Svc R2", network "NUS ISB"), hand-mapped and of unknown age. Routing our own from the stop order the feed gives keeps the lines matching the stops; the relations are a cross-check if a line ever looks wrong.
+- **Drawn without the street map** (it can't be downloaded into the build container), the lines follow the stops' order around campus with no stray loops. The first look over the map is in Phase 2's screenshots.
 
 ### 0.3 The map file
 
