@@ -90,7 +90,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun seen(): Pair<NextAnswer, Long>? {
         if (!store.paired) return null
         val (a, at) = store.lastAnswer() ?: return null
-        return if ((a.staleAtMs ?: Long.MAX_VALUE) > System.currentTimeMillis()) a to at else null
+        // Without a card's staleAt, 15 minutes: the server's own limit for an answer.
+        val until = a.card?.staleAtMs ?: (at + 15 * 60_000)
+        return if (until > System.currentTimeMillis()) a to at else null
     }
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
