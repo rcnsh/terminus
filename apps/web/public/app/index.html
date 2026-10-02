@@ -50,6 +50,20 @@
   <section class="card app-card">
     <div id="preview" class="widget" aria-live="polite"><div class="detail">Checking…</div></div>
     <div class="updated hint" id="updated"></div>
+    <!-- About the card above (account/preview.js wireReport); not for Nearby's list. -->
+    <div id="report-box">
+      <button type="button" class="link-btn report-open" id="report-open">Is this wrong?</button>
+      <form id="report" class="report" hidden>
+        <label for="report-note">What was wrong? <span class="hint">(optional)</span></label>
+        <textarea id="report-note" rows="3" maxlength="1000" placeholder="The D2 never came, the walk is longer than that…"></textarea>
+        <p class="hint" id="report-hint">This sends the answer above and your note, with your email address so you can get a reply.</p>
+        <div class="actions">
+          <button type="submit" class="btn small accent" id="report-send">Send</button>
+          <button type="button" class="btn small ghost" id="report-cancel">Cancel</button>
+        </div>
+      </form>
+      <p id="report-msg" class="hint" role="status"></p>
+    </div>
   </section>
 
   <section class="today" id="today" hidden>

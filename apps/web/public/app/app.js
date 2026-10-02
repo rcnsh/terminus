@@ -8,7 +8,7 @@
 // they were fetched, so the page can say it's showing old times.
 
 import { $, api, clock, el, t } from '/account/dom.js';
-import { show } from '/account/preview.js';
+import { show, wireReport } from '/account/preview.js';
 import { offlineNext } from '/app/offline.js';
 
 const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
@@ -199,6 +199,8 @@ function renderChips() {
         refresh();
       },
     });
+  // A report is about one answer; Nearby's list isn't one.
+  $('#report-box').hidden = target.kind === 'nearby';
   $('#chips').replaceChildren(
     chip(t('Next'), { kind: 'plan' }),
     ...places.map((p) => chip(p.label, { kind: 'place', key: p.key })),
@@ -561,6 +563,8 @@ async function start() {
   if (shared) history.replaceState(null, '', '/app/#settings');
   renderChips();
   setupPush();
+  wireReport();
+  if (me?.anonymous) $('#report-hint').textContent = t('This sends the answer above and your note. Add an email if you want a reply.');
   window.addEventListener('hashchange', showTab);
   document.addEventListener('go-to-stop', (e) => goToStop(e.detail));
   // A stop saved as a place on the map: its chip comes with the next card.
