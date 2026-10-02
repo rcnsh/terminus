@@ -11,7 +11,7 @@
 
 **Light or dark.** Settings › Appearance lets you choose light, dark, or follow your phone, browser or Mac, as before. The choice is for that device only.
 
-**Quicker to open.** The app and the web app show your last plan as soon as they open, then update it. A tab you've already looked at shows straight away while it refreshes.
+**Quicker to open.** The app and the web app show your last plan as soon as they open, then update it. Going back to Next or a favourite you've already looked at shows it straight away while it refreshes.
 
 **Services in their colours**, as on the buses: A1 red, A2 yellow, D1 pink, D2 purple, K light blue, P grey, R1 orange, R2 green.
 
