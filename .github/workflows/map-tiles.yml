@@ -1,7 +1,7 @@
 # The street map's files onto R2 (scripts/map-tiles.sh). Run by hand from the
 # Actions tab, or let it refresh itself twice a year for new buildings and
-# paths. Needs the CLOUDFLARE_API_TOKEN secret and CLOUDFLARE_ACCOUNT_ID
-# variable the release workflow uses.
+# paths. Uses the CLOUDFLARE_API_TOKEN secret and CLOUDFLARE_ACCOUNT_ID
+# variable the release workflow uses, from the same environment.
 name: map tiles
 
 on:
@@ -16,6 +16,9 @@ permissions:
 jobs:
   upload:
     runs-on: ubuntu-latest
+    # Where the release workflow's R2 token lives (an environment secret
+    # there; a repository secret is visible here too).
+    environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
