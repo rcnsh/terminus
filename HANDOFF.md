@@ -162,10 +162,25 @@ Language, Account), each with a line saying what's set, opening its page.
 - Not checked by eye from the cloud session: the Mac renders and the Android
   video (artifacts can't be downloaded here).
 
-### Step 4: polish
+### Step 4: polish (done, on main)
 
-Already-seen content draws instantly while it refreshes, headers stay
-consistent across tabs, and reduced motion turns slides into a fade.
+- **Seen content at once.** Android draws the plan it last showed on
+  opening, while it holds (`MainViewModel.seen()`); chips already kept
+  theirs. The web app draws a chip's card from this visit, or the plan the
+  service worker kept (`drawSeen()`/`keptCard()` in `app/app.js`, using
+  sw.js's cache key), marked "Updating…". The Mac lives in the menu bar and
+  has fetched long before the popover opens.
+- **One header.** Now, Settings and a settings page share one header row:
+  `TabHeader` on Android (Settings' Done button is gone), `--header-h` in
+  `app/app.css` on the web, where Settings' title takes the header's place.
+- **Reduced motion.** Web: tab and settings slides become fades. Mac: the
+  device tick fades in, the tab strip doesn't scroll. Android: no separate
+  setting; Remove animations makes Compose's animations instant.
+- **Theme.** Added on request: Settings › Appearance on all three apps,
+  this device only (`Theme.kt`, `assets/theme.js`, `Appearance.swift`).
+
+The redesign is done. Delete this file once the owner has read it, or keep
+"Other open items" below somewhere else.
 
 ## Other open items
 
