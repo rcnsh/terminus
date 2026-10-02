@@ -503,19 +503,21 @@ struct DevicesView: View {
 private struct AddedTick: View {
     let name: String
     @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(.white, .green)
-                .scaleEffect(shown ? 1 : 0.4)
+                // With reduced motion it fades in rather than springing.
+                .scaleEffect(shown || reduceMotion ? 1 : 0.4)
                 .opacity(shown ? 1 : 0)
             Text(L("%@ added", name)).font(.headline)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onAppear { withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { shown = true } }
+        .onAppear { withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.6)) { shown = true } }
         .accessibilityElement(children: .combine)
     }
 }

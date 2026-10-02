@@ -40,7 +40,7 @@ struct Tabs: View {
                     // A tab cut off at the edge fades out, so the row reads as more to scroll to.
                     .mask(LinearGradient(stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
                     .onAppear { proxy.scrollTo(current, anchor: .center) }
-                    .onChange(of: current) { _, tab in withAnimation { proxy.scrollTo(tab, anchor: .center) } }
+                    .onChange(of: current) { _, tab in withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(tab, anchor: .center) } }
             }
         }
         .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(.primary.opacity(0.05)))
