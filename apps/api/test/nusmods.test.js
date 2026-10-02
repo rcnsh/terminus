@@ -20,6 +20,15 @@ test('parseShareUrl expands short lesson codes and skips view state', () => {
   );
 });
 
+test('parseShareUrl reads special terms, and only takes NUSMods links', () => {
+  assert.equal(parseShareUrl('https://nusmods.com/timetable/sem-2/share?CS1010=LEC:1').semester, 2);
+  assert.equal(parseShareUrl('https://nusmods.com/timetable/st-i/share?CS1010=LEC:1').semester, 3);
+  assert.equal(parseShareUrl('https://nusmods.com/timetable/st-ii/share?CS1010=LEC:1').semester, 4);
+  for (const bad of ['javascript://nusmods.com/timetable/sem-1/share?CS1010=LEC:1', 'https://evil.example/timetable/sem-1/share?CS1010=LEC:1', 'http://nusmods.com/timetable/sem-1/share?CS1010=LEC:1']) {
+    assert.throws(() => parseShareUrl(bad), bad);
+  }
+});
+
 test('acadYear rolls at August (sem 1 starts then)', () => {
   assert.equal(acadYear(Date.UTC(2026, 7, 28), 1), '2026-2027', 'late August is a new AY');
   assert.equal(acadYear(Date.UTC(2026, 2, 1), 2), '2025-2026', 'March belongs to the AY that began last August');

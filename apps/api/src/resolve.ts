@@ -233,7 +233,8 @@ export function mergeServiceHours(
     for (const day of ['weekday', 'saturday', 'sunday'] as const) {
       if (!(day in src)) continue;
       const win = src[day];
-      if (win === null) {
+      // [null, null] is how the file says it too: closed at both ends.
+      if (win === null || (Array.isArray(win) && win.length === 2 && win[0] === null && win[1] === null)) {
         merged[day] = null; // an explicit "does not run"
         touched = true;
       } else if (
@@ -417,8 +418,11 @@ export function scoreOptions(
         quality = 'live';
         arrival = catchable;
       } else if (etas.length) {
-        // Every listed bus leaves before you can get there.
-        boardS = (etas[etas.length - 1].etaS as number) + headwayFor(graph, leg.svc);
+        // Every listed bus leaves before you can get there: the first one
+        // after the last listed, a headway apart, that you can reach.
+        const headway = headwayFor(graph, leg.svc);
+        boardS = (etas[etas.length - 1].etaS as number) + headway;
+        if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
         quality = 'scheduled';
       } else if (!inService(graph, leg.svc, nowMs)) {
         // The published hours are ours, not the feed's, so this holds even

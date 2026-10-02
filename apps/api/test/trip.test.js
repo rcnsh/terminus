@@ -1047,3 +1047,16 @@ test('/me/day follows the plan once its bus has left: the same leave-by, then on
   assert.equal(day.items[0].onBus?.svc, planned.leave.svc);
   assert.equal(day.items[0].leave, undefined);
 });
+
+test('choices are capped per account, the oldest dropped first', async () => {
+  const { MAX_PREFS } = await import('../src/outcomes.ts');
+  const { env, call, phone } = await setup();
+  for (let i = 0; i < MAX_PREFS + 5; i++) {
+    env.DB._db.prepare("INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) SELECT user_id, ?, 'quiet', NULL, ? FROM sessions LIMIT 1").run(`k${i}`, i);
+  }
+  await call('/me/choice', { method: 'POST', token: phone, body: { trip: 'newest', pref: 'quiet', choice: 'accept' } });
+  const rows = env.DB._db.prepare('SELECT trip_key FROM trip_prefs ORDER BY set_at').all().map((r) => r.trip_key);
+  assert.equal(rows.length, MAX_PREFS);
+  assert.equal(rows.at(-1), 'newest');
+  assert.ok(!rows.includes('k5'), 'the oldest are gone');
+});

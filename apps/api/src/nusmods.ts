@@ -65,8 +65,10 @@ export interface ShareUrl {
 export function parseShareUrl(input: string): ShareUrl {
   if (input.length > 2000) throw new Error('share link too long');
   const url = new URL(input);
-  const semMatch = /sem-([1-4])/.exec(url.pathname);
-  const semester = semMatch ? Number(semMatch[1]) : 1;
+  if (url.protocol !== 'https:' || !/^(www\.)?nusmods\.com$/.test(url.hostname)) throw new Error('not a NUSMods link');
+  // Special terms are st-i and st-ii in NUSMods' links: semesters 3 and 4.
+  const semMatch = /\/(?:sem-([1-4])|st-(i{1,2}))(?:\/|$)/.exec(url.pathname);
+  const semester = semMatch?.[1] ? Number(semMatch[1]) : semMatch?.[2] ? 2 + semMatch[2].length : 1;
 
   const selections: Selection[] = [];
   for (const [module, value] of url.searchParams) {
