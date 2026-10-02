@@ -366,6 +366,7 @@ window.TERMINUS_ZH = {
  "your last class": "上一节课",
  "{0} classes": "{0} 节课",
  "{0} classes already imported.": "已经导入了 {0} 节课。",
+ "1 class already imported.": "已经导入了 1 节课。",
  "{0} classes had a venue we couldn't place. Pick the nearest stop, or skip it:": "有 {0} 节课的地点我们无法确定。选择最近的车站，或跳过：",
  "{0} days": "{0} 天",
  "{0} from {1}": "在 {1} 搭 {0}",

@@ -130,7 +130,7 @@ export function runOnboarding(ctx) {
     input.setAttribute('aria-label', t('NUSMods share link'));
     const msg = el('p', { class: 'hint', role: 'status' });
     let imported = Boolean(ctx.profile.trips?.length);
-    if (imported) msg.textContent = t('{0} classes already imported.', ctx.profile.trips.length);
+    if (imported) msg.textContent = ctx.profile.trips.length === 1 ? t('1 class already imported.') : t('{0} classes already imported.', ctx.profile.trips.length);
     const doImport = async () => {
       const share = input.value.trim();
       if (!share) return;
