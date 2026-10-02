@@ -830,7 +830,7 @@ export async function handleMe(
       return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     }
     try {
-      await requestLink(env, db, email, linkOrigin(url, env), nowMs);
+      await requestLink(env, db, email, linkOrigin(url, env), nowMs, body?.next === '/app/');
     } catch (err) {
       // The error text can carry the recipient: log its kind only.
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
@@ -866,7 +866,7 @@ export async function handleMe(
       if (!email) return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
       return html(page(m().pageSignIn, `<h1>${m().signInTitle}</h1>
 <p class="hint">${m().continueAs(escapeHtml(maskEmail(email)))}</p>
-<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit" class="btn accent">${m().signInButton}</button></form>`));
+<form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}">${url.searchParams.get('next') === 'app' ? '<input type="hidden" name="next" value="app">' : ''}<button type="submit" class="btn accent">${m().signInButton}</button></form>`));
     }
     if (req.method === 'POST') {
       const form = await readForm(req);
@@ -877,9 +877,12 @@ export async function handleMe(
       if (!token) {
         return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
       }
+      // Only ever one of two places: the account page, or (by way of it, for
+      // first-time setup) the web app.
+      const location = form?.get('next') === 'app' ? '/account/?next=/app/' : '/account';
       return new Response(null, {
         status: 303,
-        headers: { location: '/account', 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' },
+        headers: { location, 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' },
       });
     }
   }

@@ -453,7 +453,8 @@ async function setupTurnstile() {
 }
 
 async function sendLink(email) {
-  return api('/auth/login', { method: 'POST', body: { email, turnstile: turnstileToken } });
+  // From the web app: the emailed link brings them back to it too.
+  return api('/auth/login', { method: 'POST', body: { email, turnstile: turnstileToken, ...(NEXT ? { next: NEXT } : {}) } });
 }
 
 function resetTurnstile() {

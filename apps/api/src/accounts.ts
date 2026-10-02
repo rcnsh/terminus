@@ -127,7 +127,7 @@ export type LinkOutcome = 'sent' | 'blocked' | 'cooldown';
  * blocklist are refused. The caller shows the same message for every
  * outcome, so the endpoint doesn't reveal who has an account or is blocked.
  */
-export async function requestLink(env: Env, db: D1Database, email: string, origin: string, nowMs: number): Promise<LinkOutcome> {
+export async function requestLink(env: Env, db: D1Database, email: string, origin: string, nowMs: number, toApp = false): Promise<LinkOutcome> {
   const inbox = inboxKey(email);
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
   if (blocked) return 'blocked';
@@ -162,7 +162,8 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   const codeKey = await signInCodeKey(email);
   const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs };
 
-  const link = `${origin}/auth/verify?t=${token}`;
+  // From the installed web app: the link goes back there, not to the account page.
+  const link = `${origin}/auth/verify?t=${token}${toApp ? '&next=app' : ''}`;
   try {
     if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');
     await env.KV.put(codeKey, JSON.stringify(pending), { expirationTtl: ACCOUNT_TTL.linkMs / 1000 });

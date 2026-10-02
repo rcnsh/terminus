@@ -53,7 +53,12 @@ async function load() {
     $('as-of').textContent = `The stats answered ${res.status}.`;
     return;
   }
-  render(await res.json());
+  try {
+    render(await res.json());
+  } catch (err) {
+    // A stats reply this page can't read (a field missing, say): say so, not a blank page.
+    $('as-of').textContent = `Couldn't show the stats: ${err.message}`;
+  }
 }
 
 function showUnlock(msg = '') {
