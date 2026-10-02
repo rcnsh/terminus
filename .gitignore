@@ -1,5 +1,9 @@
 node_modules/
 .dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
 .wrangler/
 dist/
 *.log
@@ -27,3 +31,11 @@ dev/
 
 # Firebase app config for push; kept out of git (see apps/android/README.md).
 apps/android/app/google-services.json
+
+# Signing keys and keystores, wherever they end up.
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+.DS_Store

@@ -31,7 +31,8 @@ jobs:
     runs-on: macos-latest
     env:
       PUBLISH: ${{ github.event_name == 'push' }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # The R2 token is only in the publish step's env: not in pnpm install's
+      # lifecycle scripts, the Swift build or third-party actions.
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       # SHA-1 of the terminus self-signed certificate (~/.terminus/mac-signing.p12).
       # Signing by hash rather than name, as the certificate isn't trusted.
@@ -52,6 +53,7 @@ jobs:
         id: v
         env:
           HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
+          HAS_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         run: |
           MAC=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/macos/Support/Info.plist)
           ANDROID=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' apps/android/app/build.gradle.kts)
@@ -59,7 +61,7 @@ jobs:
           if [ "$PUBLISH" = true ] && [ "$GITHUB_REF_NAME" != "v$MAC" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match version $MAC"; exit 1
           fi
-          if [ "$PUBLISH" = true ] && [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+          if [ "$PUBLISH" = true ] && [ "$HAS_CLOUDFLARE_TOKEN" != true ]; then
             echo "::error::the CLOUDFLARE_API_TOKEN secret is not set"; exit 1
           fi
           if [ "$PUBLISH" = true ] && [ "$HAS_SPARKLE_KEY" != true ]; then
@@ -102,13 +104,16 @@ jobs:
         if: env.PUBLISH == 'true'
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-        run: scripts/publish-mac.sh "${{ steps.v.outputs.version }}"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: scripts/publish-mac.sh "$VERSION"
 
       - name: GitHub release
         if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/github-release.sh "${{ steps.v.outputs.version }}"
+          VERSION: ${{ steps.v.outputs.version }}
+        run: scripts/github-release.sh "$VERSION"
 
       - name: Remove the signing keychain
         if: always()
