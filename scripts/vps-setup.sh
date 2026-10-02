@@ -18,7 +18,9 @@
 # and writes ~/.terminus/env (only you can read it) for the Cloudflare
 # token, loaded by ~/.profile.
 #
-# Then, from the Mac, copy the keys over (they never go on GitHub):
+# Then copy three files over once, sitting at the Mac (it pushes them to the
+# VPS; the VPS never reaches into the Mac, and after this the Mac isn't
+# needed for releases). They never go on GitHub:
 #   scp ~/.gradle/gradle.properties vps:.gradle/        # the TERMINUS_* lines
 #   scp <the keystore it names> vps:<the same path, or edit the line>
 #   scp apps/android/app/google-services.json vps:terminus/apps/android/app/
@@ -134,11 +136,11 @@ need() { echo "  - $1"; missing=1; }
 props="$HOME/.gradle/gradle.properties"
 if grep -q '^TERMINUS_KEYSTORE=' "$props" 2>/dev/null; then
   ks=$(sed -n 's/^TERMINUS_KEYSTORE=//p' "$props")
-  [ -f "$ks" ] || need "the Android keystore at $ks (named in $props): scp it from the Mac"
+  [ -f "$ks" ] || need "the Android keystore at $ks (named in $props): copy it over once from the Mac (see the top of this script)"
 else
-  need "the TERMINUS_* lines in $props: scp ~/.gradle/gradle.properties from the Mac"
+  need "the TERMINUS_* lines in $props: copy ~/.gradle/gradle.properties over once from the Mac (see the top of this script)"
 fi
-[ -f "$ROOT/apps/android/app/google-services.json" ] || need "apps/android/app/google-services.json (for push): scp it from the Mac"
+[ -f "$ROOT/apps/android/app/google-services.json" ] || need "apps/android/app/google-services.json (for push): copy it over once from the Mac (see the top of this script)"
 git config user.email >/dev/null || need "git config --global user.name and user.email (release.sh tags as you)"
 # A dry-run push of a new branch: checks write access without pushing.
 GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git push --dry-run -q origin HEAD:refs/heads/vps-setup-check >/dev/null 2>&1 ||
