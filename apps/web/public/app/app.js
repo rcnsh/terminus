@@ -68,12 +68,17 @@ async function here({ ask = false } = {}) {
   });
 }
 
+/** Counts refreshes: one that finishes after a newer one started (a chip tapped meanwhile) is dropped. */
+let generation = 0;
+
 async function refresh() {
-  if (target.kind === 'nearby') return refreshNearby();
+  const mine = ++generation;
+  if (target.kind === 'nearby') return refreshNearby(mine);
   try {
     const at = await here();
     const params = { ...(target.kind === 'place' ? { place: target.key } : {}), ...(at ?? {}) };
     const [next, day] = await Promise.all([get(`/me/next${query(params)}`), get(`/me/day${query()}`).catch(() => null)]);
+    if (mine !== generation) return;
     show(next.data);
     stale(next.cached);
     $('#updated').textContent = t('Updated {0}', clock(new Date(next.cached ?? Date.now()).toISOString()));
@@ -83,7 +88,7 @@ async function refresh() {
       renderChips();
     }
   } catch (err) {
-    if (err.message === 'signed out') return;
+    if (err.message === 'signed out' || mine !== generation) return;
     stale(Date.now());
     $('#offline').textContent = t('Offline, and nothing saved yet. It will update when you are back online.');
   }
@@ -112,16 +117,18 @@ function renderChips() {
 }
 
 /** Every bus at the stops around you, from the browser's location. */
-async function refreshNearby() {
+async function refreshNearby(mine) {
   const box = $('#preview');
   box.className = 'widget';
   const at = await here({ ask: true });
+  if (mine !== generation) return;
   if (!at) {
     box.replaceChildren(el('div', { class: 'detail', textContent: t('Allow location for this site to see the buses near you.') }));
     return;
   }
   try {
     const { data } = await get(`/me/nearby${query(at)}`);
+    if (mine !== generation) return;
     stale(null);
     $('#updated').textContent = t('Updated {0}', clock(new Date().toISOString()));
     if (!data.stops?.length) {
@@ -143,7 +150,7 @@ async function refreshNearby() {
       ),
     );
   } catch (err) {
-    if (err.message !== 'signed out') box.replaceChildren(el('div', { class: 'detail', textContent: t('Nearby needs a connection.') }));
+    if (err.message !== 'signed out' && mine === generation) box.replaceChildren(el('div', { class: 'detail', textContent: t('Nearby needs a connection.') }));
   }
 }
 

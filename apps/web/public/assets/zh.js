@@ -193,6 +193,7 @@ window.TERMINUS_ZH = {
  "One bus earlier": "提早一班",
  "One tap away in the app, on the widget and in the menu bar. Give one a usual time (the gym on Tuesdays at 6 pm) and it's planned like a class that day.": "在应用、小组件和菜单栏里一点就到。给它设个常去时间（比如每周二下午 6 点去健身房），那天就会像课一样为你安排。",
  "Ongoing": "进行中",
+ "Only use a code you made on your own account page. Someone else's would sign this device in to their account.": "只使用你在自己的账户页面上生成的代码。别人的代码会让这台设备登录到对方的账户。",
  "Open terminus from your Home Screen and sign in there once.": "从主屏幕打开 terminus，并在那里登录一次。",
  "Open the app": "打开应用",
  "Outside your day, the widget shows your next class instead of a bus. A class that starts early or runs late stretches the day to fit.": "在你的一天之外，小组件会显示你的下一节课，而不是巴士。早开始或晚结束的课会把一天延长。",

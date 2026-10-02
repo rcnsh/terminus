@@ -105,6 +105,23 @@ test('wrong emailed codes sent all at once still only get five tries', async () 
   assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 400);
 });
 
+test('signing in from the web app: the emailed link goes back to it, and nowhere else', async () => {
+  const { env, email } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED, next: '/app/' } });
+  const text = email.sent.at(-1).text;
+  assert.match(text, /\/auth\/verify\?t=[A-Za-z0-9_-]+&next=app/);
+  const t = email.lastToken();
+  assert.match(await (await call(env, `/auth/verify?t=${t}&next=app`)).text(), /name="next" value="app"/);
+  const res = await call(env, '/auth/verify', { method: 'POST', form: { t, next: 'app' } });
+  assert.equal(res.headers.get('location'), '/account/?next=/app/');
+
+  const { env: env2, email: email2 } = setup();
+  await call(env2, '/auth/login', { method: 'POST', body: { email: INVITED, next: 'https://evil.example/' } });
+  assert.doesNotMatch(email2.sent.at(-1).text, /next=/);
+  const other = await call(env2, '/auth/verify', { method: 'POST', form: { t: email2.lastToken(), next: 'https://evil.example/' } });
+  assert.equal(other.headers.get('location'), '/account');
+});
+
 test('another site cannot post a sign-in link or a sign-out', async () => {
   const { env, email } = setup();
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
