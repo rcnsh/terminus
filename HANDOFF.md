@@ -140,28 +140,27 @@ transitions are gone. Details are in `docs/internals.md` ("The web app").
 - WebDriver taps don't reach page handlers in Mobile Safari; the workflow
   clicks by script.
 
-### Step 3: Settings redesign on all three apps
+### Step 3: Settings redesign on all three apps (done, on main)
 
-A grouped list instead of one long page of cards, each row with a one-line
-summary, opening a sub-page that slides in:
+A list of groups (Your trips, Timetable, Favourites, Notifications, Devices,
+Language, Account), each with a line saying what's set, opening its page.
 
-- **Your trips:** your day, home stop, walking pace, trip history.
-- **Timetable:** import, your classes.
-- **Favourites**
-- **Notifications:** alerts, live notification, boarding detection (Android).
-- **Devices**
-- **Language**
-- **Account:** email, sign out, delete account; API keys on the web.
-
-Back works per platform: Android predictive back, browser history and swipe
-on the web, a back arrow on the Mac. The Mac also gets a settings layout like
-a standard macOS one, and a sliding highlight with a crossfade between its
-popover tabs (`Tabs.swift`). Reuse the existing strings so the Chinese
-carries over.
-
-- Android: `ui/Settings.kt` (461 lines).
-- Web: the account component from step 2.
-- Mac: `Sources/Terminus/`; check it with `TERMINUS_SNAPSHOT` renders on CI.
+- **Android** (`4232aa6`, `ui/Settings.kt`): `SettingsPage` enum; pages slide
+  in (`AnimatedContent`) and follow the back gesture (`PredictiveBackHandler`).
+  The notification switches moved here from Now.
+- **Web** (`240cdb0`, `account/settings.html` + `settings.js`): pages are in
+  the address (`#trips`, `#settings/trips`); on a phone they slide over the
+  list, from 900 px they sit side by side. "Notify me when to leave" moved
+  from Now to Notifications. Edge swipe back in the installed iPhone app.
+- **Mac** (`2af419a`, `SettingsWindow.swift`): a Settings window with a
+  sidebar and a back arrow; the menu keeps quick actions. The popover's tabs
+  already had a sliding highlight and a crossfade (`Tabs.swift`,
+  `MainView.swift`), so nothing changed there.
+- Evidence: the one-off **settings evidence** workflow (Android emulator
+  video, Mac renders). Remove it once the owner has looked. The Mac renders
+  need `macos-latest`: `macos-15`'s Swift rejects `LeaveNotifier.swift:52`.
+- Not checked by eye from the cloud session: the Mac renders and the Android
+  video (artifacts can't be downloaded here).
 
 ### Step 4: polish
 
