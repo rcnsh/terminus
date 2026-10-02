@@ -57,7 +57,9 @@ enum Lang {
     @MainActor static func relaunch() {
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { _, _ in
+        // Quit only once the new copy has started, or there'd be none.
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { app, _ in
+            guard app != nil else { return }
             DispatchQueue.main.async { NSApp.terminate(nil) }
         }
     }

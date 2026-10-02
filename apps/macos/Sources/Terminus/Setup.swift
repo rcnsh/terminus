@@ -368,7 +368,8 @@ struct HomeStep: View {
             } else {
                 Picker(L("Home stop"), selection: Binding(
                     get: { setup.homeStops.first ?? "" },
-                    set: { code in setup.setHomeStops([code] + setup.homeStops.dropFirst().filter { $0 != code }) }
+                    // "Choose a stop" clears the first one rather than saving a blank stop.
+                    set: { code in setup.setHomeStops((code.isEmpty ? [] : [code]) + setup.homeStops.dropFirst().filter { $0 != code }) }
                 )) {
                     Text(L("Choose a stop")).tag("")
                     ForEach(campus.stops, id: \.code) { Text($0.name).tag($0.code) }
@@ -417,7 +418,7 @@ struct TimetableStep: View {
             if !r.unresolved.isEmpty { Hint(L("No stop found for %@. Add those by hand on the account page.", r.unresolved.joined(separator: "; "))) }
             if !r.missing.isEmpty { Hint(L("NUSMods has no classes this semester for %@.", r.missing.joined(separator: ", "))) }
         } else if setup.importedClasses > 0 {
-            Hint(L("%@ classes imported.", "\(setup.importedClasses)"))
+            Hint(setup.importedClasses == 1 ? L("1 class imported.") : L("%@ classes imported.", "\(setup.importedClasses)"))
         }
     }
 }

@@ -143,7 +143,7 @@ struct FlowPills: View {
                 HStack(spacing: 5) {
                     // In the service's colour, as on the buses and the map.
                     if let c = r.color.flatMap(Color.init(hex:)) {
-                        Text(r.svc).font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                        Text(r.svc).font(.system(size: 11, weight: .bold)).foregroundStyle(inkOn(r.color ?? ""))
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c))
                     } else {

@@ -99,6 +99,8 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect(isNewer("2.0.0-beta.2", than: "2.0.0-beta"))
     #expect(!isNewer("2.0.0-beta", than: "2.0.0"))
     #expect(!isNewer("2.0.0-beta", than: "2.0.0-beta"))
+    #expect(!isNewer("", than: "2.1.0"))
+    #expect(isNewer("2.1.0", than: ""))
 }
 
 @Test func todaySaysTheBusYoureOnOrWhenToLeave() throws {

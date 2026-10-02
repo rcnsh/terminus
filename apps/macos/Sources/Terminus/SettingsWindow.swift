@@ -108,7 +108,8 @@ struct SettingsPaneView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let message = setup.message {
+            // Devices shows its own, beside the list.
+            if let message = setup.message, pane != .devices {
                 Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
             switch pane {

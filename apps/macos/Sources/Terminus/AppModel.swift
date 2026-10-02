@@ -208,6 +208,7 @@ final class AppModel {
     // MARK: pairing
 
     func pair(_ code: String) {
+        guard !pairing else { return }
         pairing = true
         pairError = nil
         Task {
@@ -348,7 +349,7 @@ final class AppModel {
 
     /// The code from the email, typed in: signs in straight away when it's right.
     func enterCode(_ code: String) {
-        guard let r = signInRequest else { return }
+        guard let r = signInRequest, !signingIn else { return }
         signingIn = true
         signInError = nil
         Task {
@@ -623,6 +624,8 @@ final class AppModel {
             let p = try await api.next(.plan, lat: lat, lon: lon)
             answers[.plan] = p
             places = p.places ?? []
+            // A favourite removed elsewhere leaves no tab to show it under.
+            if case .place(let key) = target, !places.contains(where: { $0.key == key }) { target = .plan }
             error = nil
             updated = Date()
             clock = Date()

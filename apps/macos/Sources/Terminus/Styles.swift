@@ -61,3 +61,16 @@ struct SectionLabel: View {
             .foregroundStyle(.secondary)
     }
 }
+
+/// White or near-black text on a service's colour, whichever reads better
+/// (WCAG contrast), as the web and Android pick it.
+func inkOn(_ hex: String) -> Color {
+    guard hex.count == 7, hex.hasPrefix("#"), let v = UInt32(hex.dropFirst(), radix: 16) else { return .white }
+    func lin(_ c: UInt32) -> Double {
+        let s = Double(c & 0xFF) / 255
+        return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+    }
+    let l = 0.2126 * lin(v >> 16) + 0.7152 * lin(v >> 8) + 0.0722 * lin(v)
+    // White has luminance 1; #1c1917 about 0.011.
+    return (1.05 / (l + 0.05)) >= ((l + 0.05) / 0.061) ? .white : Color(red: 0x1C / 255, green: 0x19 / 255, blue: 0x17 / 255)
+}

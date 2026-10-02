@@ -48,7 +48,7 @@ struct Header: View {
                             } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
                                 StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
                             } else {
-                                StatusLine(color: resting ? .brand : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : a?.isFree == true ? L("Nothing to catch") : a?.arrived == true ? L("You're at the stop") : status(a))
+                                StatusLine(color: resting ? .brand : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : a?.isFree == true ? L("Nothing to catch") : a?.arrived == true ? L("You're there") : status(a))
                             }
                         }
                     }

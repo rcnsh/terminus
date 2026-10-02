@@ -163,8 +163,9 @@ var usesHour12: Bool {
 /// "2.0.0" > "2.0.0-beta.2" > "2.0.0-beta" > "1.3.10".
 func isNewer(_ latest: String, than current: String) -> Bool {
     func split(_ v: String) -> (String, String?) {
+        // A blank version (a bad latest.json) splits into nothing.
         let p = v.split(separator: "-", maxSplits: 1).map(String.init)
-        return (p[0], p.count > 1 ? p[1] : nil)
+        return (p.first ?? "", p.count > 1 ? p[1] : nil)
     }
     let (an, ap) = split(latest), (bn, bp) = split(current)
     switch an.compare(bn, options: .numeric) {

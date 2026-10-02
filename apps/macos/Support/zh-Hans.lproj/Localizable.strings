@@ -9,6 +9,7 @@
 "%@ removed from today" = "已从今天移除 %@";
 "%@m" = "%@分";
 ", %@ min walk" = "，步行 %@ 分钟";
+"1 class imported." = "已导入 1 节课。";
 "400 m in about 4 min. A brisk pace." = "400 米约 4 分钟。步伐轻快。";
 "400 m in about 5 min. An average pace." = "400 米约 5 分钟。一般步速。";
 "400 m in about 6 min. A relaxed pace, or if you often carry a bag." = "400 米约 6 分钟。步伐从容，或经常背着包。";
@@ -40,6 +41,7 @@
 "Checking…" = "正在查询…";
 "Choose a stop" = "选择车站";
 "Clear search" = "清除搜索";
+"Code from the email" = "邮件中的代码";
 "Continue" = "继续";
 "Couldn't change the login item: %@" = "无法更改登录项：%@";
 "Couldn't get this Mac's location. Pick your stop instead." = "无法获取这台 Mac 的位置。请自己选择车站。";
@@ -55,7 +57,6 @@
 "Departures near you" = "你附近的发车";
 "Device" = "设备";
 "Devices" = "设备";
-"Devices…" = "设备…";
 "Done" = "完成";
 "Download" = "下载";
 "Email me a code" = "给我发验证码";
@@ -129,6 +130,7 @@
 "Pair" = "配对";
 "Pair this Mac" = "配对这台 Mac";
 "Pair with a code instead" = "改用代码配对";
+"Pairing code" = "配对代码";
 "Pairing…" = "正在配对…";
 "Paste your NUSMods share link. Each class goes to the stop nearest its room." = "粘贴你的 NUSMods 分享链接。每节课会对应离教室最近的车站。";
 "Pick the stop nearest me" = "选择离我最近的车站";
@@ -150,9 +152,8 @@
 "Sending…" = "正在发送…";
 "Sends the answer above and your note, with your email so you can get a reply." = "会发送上面的答案和你的说明，以及你的邮箱，方便回复你。";
 "Services ended" = "已停运";
-"Set up" = "设置";
+"Set up" = "开始设置";
 "Set up terminus" = "设置 terminus";
-"Set up…" = "设置…";
 "Settings" = "设置";
 "Sign in" = "登录";
 "Sign in with email instead" = "改用邮箱登录";
@@ -192,7 +193,7 @@
 "Where do you live?" = "你住在哪里？";
 "Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live." = "早上在哪里搭巴士、晚上回到哪里。只保存车站，绝不保存你住在哪里。";
 "Works once, for 10 minutes." = "只能用一次，有效 10 分钟。";
-"You're at the stop" = "你在车站";
+"You're there" = "已到达";
 "You're here" = "就在这里";
 "Your email, API keys, signing out everywhere and deleting your account are on the account page." = "邮箱、API 密钥、在所有设备上退出登录和删除账户都在账户页面上。";
 "Your timetable" = "你的课表";
