@@ -39,4 +39,8 @@ jobs:
           SERVICES: ${{ inputs.services }}
         working-directory: apps/api/scripts
         # SERVICES unquoted on purpose: one argument per service.
-        run: python3 probe_buses.py --minutes "$MINUTES" $SERVICES | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          python3 probe_buses.py --minutes "$MINUTES" $SERVICES > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          # Also as one annotation, readable through the API without the logs.
+          python3 -c 'import sys; t = sys.stdin.read().replace("%", "%25").replace("\r", "").replace("\n", "%0A"); print("::notice title=probe::" + t)' < report.md
