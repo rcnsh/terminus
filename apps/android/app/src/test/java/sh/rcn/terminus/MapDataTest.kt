@@ -85,6 +85,34 @@ class MapDataTest {
         assertEquals(2.0, half[1].lat, 1e-9)
     }
 
+    @Test fun busesGlideAlongTheirLineRoundACorner() {
+        // East, then north: an L with its corner at (103.001, 1.0).
+        val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))
+        val leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
+        fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 0.0, true, null, null, along = m) }
+        val was = at(leg - 50)
+        val now = at(leg + 50)
+        val half = glide(mapOf("b1" to was), listOf(now), 0.5f, path)[0]
+        assertEquals("at the corner, not cutting it", 1.0, half.lat, 1e-9)
+        assertEquals(103.001, half.lon, 1e-9)
+        val later = glide(mapOf("b1" to was), listOf(now), 0.75f, path)[0]
+        assertEquals("on the north leg", 103.001, later.lon, 1e-9)
+        assertEquals("pointing north", 0.0, later.heading!!, 1e-6)
+        // A line that isn't the API's (kept from before the route changed): straight.
+        val elsewhere = now.copy(lat = now.lat + 0.001)
+        assertNull(path.alongBy(was, elsewhere))
+        // Off its line: straight.
+        assertNull(path.alongBy(was.copy(along = null), now))
+    }
+
+    @Test fun busesSayHowFarAlongTheirLineTheyAre() {
+        val list = BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": [
+            {"id": "a", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "nextStop": null},
+            {"id": "b", "lat": 1.0, "lon": 103.0, "along": null, "heading": null, "moving": false, "crowd": null, "nextStop": null}]}"""))
+        assertEquals(812.5, list.buses[0].along!!, 1e-9)
+        assertNull(list.buses[1].along)
+    }
+
     @Test fun theStyleReadsTheMapFileFromStorage() {
         val style = """{"version": 8, "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://terminus.rcn.sh/map/campus.pmtiles"}}, "layers": []}"""
         val local = JSONObject(MapFiles.localTiles(style, "/data/user/0/sh.rcn.terminus/files/map/campus.pmtiles"))

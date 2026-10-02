@@ -18,6 +18,9 @@ const BUSES_MS = 10_000;
 const ARRIVALS_MS = 15_000;
 /** How long a bus takes to glide to its new position. */
 const GLIDE_MS = 1_200;
+/** Further than this along its line in one update (back from a hidden tab),
+ *  a bus glides straight instead. */
+const GLIDE_ALONG_MAX_M = 1_500;
 /** Further than this from campus, the map opens on campus, not on you. */
 const NEAR_CAMPUS_M = 3_000;
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts). */
@@ -357,23 +360,102 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && visible && selected) pollBuses();
 });
 
-/** Glides each bus from where it's drawn to where it is now. */
+/** Glides each bus from where it's drawn to where it is now: along its
+ *  route line when both ends are on it, so it follows the road round
+ *  corners; straight otherwise. */
 function moveTo(buses) {
-  const from = new Map([...shown].map(([id, b]) => [id, { lat: b.lat, lon: b.lon }]));
+  const from = shown;
   shown = new Map(buses.map((b) => [b.id, b]));
+  const moves = buses.map((b) => {
+    const f = from.get(b.id);
+    if (!f) return null;
+    const path = pathOf(campus?.routes[b.svc]?.line);
+    const d = path && alongBy(path, f, b);
+    return d == null ? { f } : { f, path, d };
+  });
   cancelAnimationFrame(glide);
   const start = performance.now();
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const step = (now) => {
     const k = reduce ? 1 : Math.min(1, (now - start) / GLIDE_MS);
     const ease = 1 - (1 - k) ** 3;
-    drawBuses(buses.map((b) => {
-      const f = from.get(b.id);
-      return f ? { ...b, lat: f.lat + (b.lat - f.lat) * ease, lon: f.lon + (b.lon - f.lon) * ease } : b;
+    drawBuses(buses.map((b, i) => {
+      const m = moves[i];
+      if (!m || k === 1) return b;
+      if (!m.path) return { ...b, lat: m.f.lat + (b.lat - m.f.lat) * ease, lon: m.f.lon + (b.lon - m.f.lon) * ease };
+      const at = pointAt(m.path, m.f.along + m.d * ease);
+      return { ...b, lat: at.lat, lon: at.lon, heading: m.d > 0 ? at.bearing : b.heading };
     }));
     if (k < 1) glide = requestAnimationFrame(step);
   };
   glide = requestAnimationFrame(step);
+}
+
+/* A route line measured as the API measures it (haversine, metres from its
+   start at each point), so a bus's `along` is a place on it. */
+
+const paths = new WeakMap();
+
+function pathOf(line) {
+  if (!line || line.length < 2) return null;
+  let p = paths.get(line);
+  if (!p) {
+    const cum = [0];
+    for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]));
+    const total = cum[cum.length - 1];
+    const [a, z] = [line[0], line[line.length - 1]];
+    p = { line, cum, total, closed: haversine(a[1], a[0], z[1], z[0]) < 5 };
+    paths.set(line, p);
+  }
+  return p;
+}
+
+/** Metres to glide along [path] from bus [f] to bus [b]; null to glide
+ *  straight (off the line, a line that isn't the API's, or a long way). */
+function alongBy(path, f, b) {
+  if (f.along == null || b.along == null || path.total <= 0) return null;
+  // A line kept from before the route changed: `along` isn't a place on it.
+  for (const x of [f, b]) {
+    const at = pointAt(path, x.along);
+    if (haversine(at.lat, at.lon, x.lat, x.lon) > 10) return null;
+  }
+  let d = b.along - f.along;
+  // Round a loop the short way, past its start.
+  if (path.closed) {
+    if (d < -path.total / 2) d += path.total;
+    else if (d > path.total / 2) d -= path.total;
+  }
+  return Math.abs(d) > GLIDE_ALONG_MAX_M ? null : d;
+}
+
+/** The point [m] metres along [path], and the road's direction there. */
+function pointAt(path, m) {
+  const { line, cum, total } = path;
+  m = path.closed ? ((m % total) + total) % total : Math.max(0, Math.min(total, m));
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= m) lo = mid; else hi = mid;
+  }
+  const [aLon, aLat] = line[lo];
+  const [bLon, bLat] = line[hi];
+  const seg = cum[hi] - cum[lo];
+  const t = seg > 0 ? (m - cum[lo]) / seg : 0;
+  return { lat: aLat + (bLat - aLat) * t, lon: aLon + (bLon - aLon) * t, bearing: bearing(aLat, aLon, bLat, bLon) };
+}
+
+/** As apps/api/src/geo.ts, so distances along a line match the API's. */
+function haversine(aLat, aLon, bLat, bLon) {
+  const r = Math.PI / 180;
+  const s = Math.sin(((bLat - aLat) * r) / 2) ** 2 + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.sin(((bLon - aLon) * r) / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+function bearing(aLat, aLon, bLat, bLon) {
+  const r = Math.PI / 180;
+  const y = Math.sin((bLon - aLon) * r) * Math.cos(bLat * r);
+  const x = Math.cos(aLat * r) * Math.sin(bLat * r) - Math.sin(aLat * r) * Math.cos(bLat * r) * Math.cos((bLon - aLon) * r);
+  return ((Math.atan2(y, x) / r) % 360 + 360) % 360;
 }
 
 function drawBuses(buses) {

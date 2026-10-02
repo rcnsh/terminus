@@ -2,6 +2,15 @@ package sh.rcn.terminus
 
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.asin
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * The Map tab's data: stops and routes from `/campus`, live buses from
@@ -16,6 +25,78 @@ data class MapStop(val code: String, val name: String, val lat: Double, val lon:
 data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>) {
     /** [west, south, east, north] of the line. */
     fun bounds(): DoubleArray = doubleArrayOf(line.minOf { it[0] }, line.minOf { it[1] }, line.maxOf { it[0] }, line.maxOf { it[1] })
+
+    /** The line measured for gliding buses along it. */
+    val path: RoutePath by lazy { RoutePath(line) }
+}
+
+/**
+ * A route line measured as the API measures it (haversine, metres from its
+ * start at each point), so a bus's `along` is a place on it.
+ */
+class RoutePath(private val line: List<DoubleArray>) {
+    private val cum = DoubleArray(line.size).also { c ->
+        for (i in 1 until line.size) c[i] = c[i - 1] + haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0])
+    }
+    val total: Double = cum.lastOrNull() ?: 0.0
+
+    /** Ends where it starts: a bus can glide on past the start. */
+    val closed: Boolean = line.size >= 2 && haversine(line.first()[1], line.first()[0], line.last()[1], line.last()[0]) < 5
+
+    /** The point [m] metres along, as (lat, lon, the road's bearing there). */
+    fun pointAt(m: Double): Triple<Double, Double, Double> {
+        val at = if (closed) ((m % total) + total) % total else m.coerceIn(0.0, total)
+        var lo = 0
+        var hi = cum.size - 1
+        while (hi - lo > 1) {
+            val mid = (lo + hi) / 2
+            if (cum[mid] <= at) lo = mid else hi = mid
+        }
+        val (aLon, aLat) = line[lo].let { it[0] to it[1] }
+        val (bLon, bLat) = line[hi].let { it[0] to it[1] }
+        val seg = cum[hi] - cum[lo]
+        val t = if (seg > 0) (at - cum[lo]) / seg else 0.0
+        return Triple(aLat + (bLat - aLat) * t, aLon + (bLon - aLon) * t, bearing(aLat, aLon, bLat, bLon))
+    }
+
+    /**
+     * Metres to glide along from bus [f] to bus [b]; null to glide straight:
+     * off the line, a line kept from before the route changed, or a long way.
+     */
+    fun alongBy(f: LiveBus, b: LiveBus): Double? {
+        val fa = f.along ?: return null
+        val ba = b.along ?: return null
+        if (line.size < 2 || total <= 0) return null
+        for ((m, bus) in listOf(fa to f, ba to b)) {
+            val (lat, lon) = pointAt(m)
+            if (haversine(lat, lon, bus.lat, bus.lon) > 10) return null
+        }
+        var d = ba - fa
+        // Round a loop the short way, past its start.
+        if (closed) {
+            if (d < -total / 2) d += total else if (d > total / 2) d -= total
+        }
+        return if (abs(d) > GLIDE_ALONG_MAX_M) null else d
+    }
+
+    companion object {
+        /** Further than this in one update (back from the background), glide straight. */
+        const val GLIDE_ALONG_MAX_M = 1_500.0
+
+        /** As apps/api/src/geo.ts. */
+        fun haversine(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
+            val r = PI / 180
+            val s = sin((bLat - aLat) * r / 2).pow(2) + cos(aLat * r) * cos(bLat * r) * sin((bLon - aLon) * r / 2).pow(2)
+            return 2 * 6_371_000 * asin(min(1.0, sqrt(s)))
+        }
+
+        fun bearing(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
+            val r = PI / 180
+            val y = sin((bLon - aLon) * r) * cos(bLat * r)
+            val x = cos(aLat * r) * sin(bLat * r) - sin(aLat * r) * cos(bLat * r) * cos((bLon - aLon) * r)
+            return ((atan2(y, x) / r) % 360 + 360) % 360
+        }
+    }
 }
 
 data class CampusMap(val stops: List<MapStop>, val routes: Map<String, MapRoute>) {
@@ -66,6 +147,8 @@ data class LiveBus(
     val moving: Boolean,
     val crowd: String?,
     val nextStop: String?,
+    /** Metres along its route line; null off it. */
+    val along: Double? = null,
 )
 
 /** One service's buses. [available] false: the feed couldn't be reached, which isn't "no buses". */
@@ -86,6 +169,7 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                         moving = b.optBoolean("moving"),
                         crowd = b.optString("crowd").takeIf { !b.isNull("crowd") && it.isNotEmpty() },
                         nextStop = b.optJSONObject("nextStop")?.optString("name")?.ifEmpty { null },
+                        along = if (b.isNull("along") || !b.has("along")) null else b.optDouble("along"),
                     )
                 },
             )
@@ -143,10 +227,20 @@ object MapGeoJson {
     private fun collection(features: List<JSONObject>) = JSONObject().put("type", "FeatureCollection").put("features", JSONArray(features)).toString()
 }
 
-/** Each bus where it is [k] (0..1) of the way from [from] to [to]; new buses appear where they are. */
-fun glide(from: Map<String, LiveBus>, to: List<LiveBus>, k: Float): List<LiveBus> = to.map { b ->
+/**
+ * Each bus where it is [k] (0..1) of the way from [from] to [to]: along
+ * [path] (its route line) when both ends are on it, so it follows the road
+ * round corners; straight otherwise. New buses appear where they are.
+ */
+fun glide(from: Map<String, LiveBus>, to: List<LiveBus>, k: Float, path: RoutePath? = null): List<LiveBus> = to.map { b ->
     val f = from[b.id] ?: return@map b
-    b.copy(lat = f.lat + (b.lat - f.lat) * k, lon = f.lon + (b.lon - f.lon) * k)
+    if (k >= 1f) return@map b
+    val d = path?.alongBy(f, b)
+    val fa = f.along
+    if (path == null || d == null || fa == null) return@map b.copy(lat = f.lat + (b.lat - f.lat) * k, lon = f.lon + (b.lon - f.lon) * k)
+    val m = fa + d * k
+    val (lat, lon, road) = path.pointAt(m)
+    b.copy(lat = lat, lon = lon, along = m, heading = if (d > 0) road else b.heading)
 }
 
 private fun JSONArray?.stringList(): List<String> = if (this == null) emptyList() else (0 until length()).map { getString(it) }

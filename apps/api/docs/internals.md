@@ -85,7 +85,7 @@ pnpm run deploy
 | `GET /next` | The answer. `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With neither it returns a "Set up" answer rather than inventing a destination. |
 | `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
-| `GET /buses?svc=<service>` | One service's live buses for the map: position and heading (snapped onto its route line when within 50 m of it), crowding and the next stop (from where the bus is along that line). One upstream call per service per 10 s; no plates. |
+| `GET /buses?svc=<service>` | One service's live buses for the map: position and heading (snapped onto its route line when within 50 m of it), crowding, the next stop (from where the bus is along that line) and `along`, its metres along the line, so the apps glide it along the road between updates. One upstream call per service per 10 s; no plates. |
 | `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, and destination search data. Cached hard. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |

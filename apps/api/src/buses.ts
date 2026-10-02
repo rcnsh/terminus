@@ -31,6 +31,9 @@ export interface LiveBus {
   id: string;
   lat: number;
   lon: number;
+  /** Metres along the service's route line (`/campus` routes[svc].line),
+   *  so a map can glide the bus along the road; null off its line. */
+  along: number | null;
   heading: number | null;
   moving: boolean;
   crowd: Crowd | null;
@@ -124,12 +127,14 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
       let nextStop: LiveBus['nextStop'] = null;
       let { lat, lon } = b;
       let heading = b.heading;
+      let along: number | null = null;
       if (shape) {
         const at = onLine(shape, b.lat, b.lon, b.speed > 0 ? b.heading : null);
         if (at) {
           // On the line, pointing along the road (when that's its way).
           lat = at.lat;
           lon = at.lon;
+          along = Math.round(at.along * 10) / 10;
           if (at.bearing != null && b.heading != null) heading = at.bearing;
           const k = nextStopIndex(shape, at.along, loop);
           if (k != null) {
@@ -142,6 +147,7 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
         id: await idFor(svc, b.plate),
         lat: Math.round(lat * 1e6) / 1e6,
         lon: Math.round(lon * 1e6) / 1e6,
+        along,
         heading: heading == null ? null : Math.round(heading),
         moving: b.speed > 0,
         crowd: b.crowd,

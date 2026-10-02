@@ -236,7 +236,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         k.snapTo(0f)
         k.animateTo(1f, tween(1_200))
     }
-    val gliding = glide(from, ui.buses, k.value)
+    val gliding = glide(from, ui.buses, k.value, ui.selected?.let { campus.routes[it]?.path })
     drawn[0] = gliding.associateBy { it.id }
     val color = ui.selected?.let { campus.routes[it]?.color } ?: 0xFF8A939CL
     val buses = MapGeoJson.buses(ui.selected.orEmpty(), color, gliding)
