@@ -55,6 +55,8 @@ it in the run.
 
 ## 4. Beta (only if you use it)
 
+**Done:** migration applied, beta Worker deployed, and its street map uploaded.
+
 ```sh
 pnpm exec cf d1 migrations apply d7f309ef-6e3a-457f-a106-154fa797b933
 pnpm run deploy:beta
