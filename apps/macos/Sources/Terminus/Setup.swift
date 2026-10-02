@@ -21,6 +21,9 @@ final class SetupModel {
 
     private var api: Api { Api(token: TokenStore.read()) }
 
+    /// After each save: the popover's favourites (its tabs) follow.
+    var onSaved: @MainActor () -> Void = {}
+
     init() {}
 
     #if DEBUG
@@ -70,6 +73,47 @@ final class SetupModel {
         }
     }
 
+    /// Favourites, as the profile keeps them: key, label, and the stop (or food court) they go to.
+    var places: [(key: String, label: String, to: String)] {
+        (profile?["places"] as? [[String: Any]] ?? []).compactMap { p in
+            guard let key = p["key"] as? String, let label = p["label"] as? String, let to = p["to"] as? String else { return nil }
+            return (key, label, to)
+        }
+    }
+
+    /// The account's limit (PROFILE_LIMITS.places in the API).
+    static let maxPlaces = 12
+
+    /**
+     A favourite from a search result, called what was picked, short, as it
+     reads on a button: a building or room by its code ("COM1"), anything
+     else by its name. One per stop. Returns the existing one's label if the
+     stop is already a favourite.
+     */
+    @discardableResult
+    func addPlace(_ d: Destination) -> String? {
+        let to = d.kind == "landmark" ? d.code : d.stopCode
+        if let same = places.first(where: { $0.to == to }) { return same.label }
+        let label = String((d.kind == "building" || d.kind == "room" ? d.code : d.label).prefix(24))
+        let slug = label.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        var key = String(slug.prefix(24)).isEmpty ? "place" : String(slug.prefix(24))
+        while places.contains(where: { $0.key == key }) { key = "\(key.prefix(21))-\(Int.random(in: 10...99))" }
+        edit {
+            var list = $0["places"] as? [[String: Any]] ?? []
+            list.append(["key": key, "label": label, "to": to])
+            $0["places"] = list
+        }
+        return nil
+    }
+
+    /// A favourite gone, with its usual times.
+    func removePlace(_ key: String) {
+        edit {
+            $0["places"] = ($0["places"] as? [[String: Any]] ?? []).filter { $0["key"] as? String != key }
+            $0["usual"] = ($0["usual"] as? [[String: Any]] ?? []).filter { $0["place"] as? String != key }
+        }
+    }
+
     func setHomeWalk(_ min: Int) { edit { $0["homeWalkMin"] = Swift.min(30, Swift.max(0, min)) } }
     func setPace(_ pace: String) { edit { $0["walkPace"] = pace } }
     func setFullBusMargin(_ on: Bool) { edit { $0["fullBusMargin"] = on } }
@@ -85,6 +129,7 @@ final class SetupModel {
             do {
                 profile = try object(await api.saveProfile(body))
                 message = nil
+                onSaved()
             } catch let e as ApiError {
                 profile = current
                 message = L("Not saved: %@", e.message)

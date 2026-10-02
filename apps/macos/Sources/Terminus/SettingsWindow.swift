@@ -83,6 +83,7 @@ struct SettingsWindow: View {
             going = false
         }
         .task {
+            setup.onSaved = { Task { _ = await app.refresh() } }
             await setup.load()
             await setup.loadDevices()
         }
@@ -152,16 +153,25 @@ struct SettingsPaneView: View {
     }
 
     @ViewBuilder private var favourites: some View {
-        if app.places.isEmpty {
+        Hint(L("Available in one tap from the menu bar, the phone app and its widget."))
+        if setup.places.isEmpty {
             Text(L("None yet")).foregroundStyle(.secondary)
-        } else {
-            ForEach(app.places, id: \.key) { p in
+        }
+        ForEach(setup.places, id: \.key) { p in
+            HStack {
                 Label(p.label, systemImage: "star.fill").labelStyle(.titleAndIcon)
+                Spacer()
+                Button(L("Remove")) { setup.removePlace(p.key) }
+                    .buttonStyle(.link)
+                    .accessibilityLabel(L("Remove %@", p.label))
             }
         }
-        Hint(L("Available in one tap from the menu bar. Add favourites, and the times you usually go, on the account page or in the phone app."))
+        if setup.places.count < SetupModel.maxPlaces {
+            FavouriteSearch(app: app, setup: setup)
+        }
+        Hint(L("The times you usually go somewhere are set on the account page or in the phone app."))
         Button(L("Open the account page")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#favourites")!) }
-            .padding(.top, 4)
+            .buttonStyle(.link)
     }
 
     @ViewBuilder private var account: some View {
@@ -177,5 +187,41 @@ struct SettingsPaneView: View {
             Button(L("Open the account page")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#account")!) }
             Button(L("Sign out of this Mac")) { app.unpair() }
         }
+    }
+}
+
+/// Adding a favourite: the same search as the popover's, a pick adds it.
+private struct FavouriteSearch: View {
+    @Bindable var app: AppModel
+    let setup: SetupModel
+    @State private var query = ""
+    @State private var note: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField(L("Add a stop, building or room"), text: $query)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: query) { _, _ in app.loadDestinations() }
+            let q = query.trimmingCharacters(in: .whitespaces)
+            if !q.isEmpty {
+                ForEach(Array(rankDestinations(app.destinations, q)), id: \.self) { d in
+                    Button {
+                        query = ""
+                        note = setup.addPlace(d).map { L("Already a favourite: %@", $0) }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(d.label)
+                            if d.label != d.code { Text(d.code).font(.caption).foregroundStyle(.secondary) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 3)
+                }
+            }
+            if let note { Hint(note) }
+        }
+        .padding(.top, 4)
     }
 }

@@ -95,7 +95,7 @@ enum Snapshots {
          "residences":[{"code":"PGPR","name":"Prince George's Park Residences","stops":["PGP"],"walkM":300},{"code":"RVRC","name":"Ridge View Residential College","stops":["COM3"],"walkM":420}]}
         """
         let campus = try! JSONDecoder().decode(Campus.self, from: Data(campusJSON.utf8))
-        let profile: [String: Any] = ["home": ["stops": ["PGP"]], "homeWalkMin": 4, "walkPace": "normal", "fullBusMargin": true, "trips": [[:], [:], [:]], "share": "https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1"]
+        let profile: [String: Any] = ["home": ["stops": ["PGP"]], "homeWalkMin": 4, "walkPace": "normal", "fullBusMargin": true, "trips": [[:], [:], [:]], "share": "https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1", "places": [["key": "mrt", "label": "KR MRT", "to": "KR-MRT"], ["key": "deck", "label": "The Deck", "to": "COM3"]]]
         let devices = [
             Device(id: "a", name: "MacBook Air", platform: "mac", lastSeen: Date().timeIntervalSince1970 * 1000, current: true),
             Device(id: "b", name: "Google Pixel 8", platform: "android", lastSeen: (Date().timeIntervalSince1970 - 7200) * 1000, current: false),

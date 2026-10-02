@@ -16,6 +16,7 @@
 "A reminder 5 minutes before you need to leave for class, and another when it's time to go." = "在需要出发去上课前 5 分钟提醒你，到出发时间时再提醒一次。";
 "Account" = "账户";
 "Add a device…" = "添加设备…";
+"Add a stop, building or room" = "添加车站、建筑或教室";
 "Add an email to your account first. Devices can only be added to an account with an email." = "请先为账户添加电子邮件。只有带电子邮件的账户才能添加设备。";
 "Add where you live and your timetable" = "添加你住在哪里和你的课表";
 "Allow" = "允许";
@@ -24,9 +25,10 @@
 "Allow terminus in System Settings → General → Login Items" = "请在“系统设置”→“通用”→“登录项”中允许 terminus";
 "Allow terminus in System Settings → Notifications" = "请在“系统设置”→“通知”中允许 terminus";
 "Allowed." = "已允许。";
+"Already a favourite: %@" = "已在收藏中：%@";
 "Also used for emails and on your other devices. Place and bus names stay in English, as on the signs." = "也用于电子邮件和你的其他设备。地点和巴士名称保持英文，与站牌一致。";
 "Appearance" = "外观";
-"Available in one tap from the menu bar. Add favourites, and the times you usually go, on the account page or in the phone app." = "在菜单栏中一键可用。在账户页面或手机应用中添加收藏和你常去的时间。";
+"Available in one tap from the menu bar, the phone app and its widget." = "在菜单栏、手机应用及其小组件中一键可用。";
 "Back" = "返回";
 "Both are optional. You can change them later in Settings." = "都是可选的，之后可以在“设置”里修改。";
 "Bus stop" = "巴士站";
@@ -110,7 +112,9 @@
 "Offline" = "离线";
 "Only on this Mac." = "仅限这台 Mac。";
 "Open the account page" = "打开账户页面";
+"Remove %@" = "移除%@";
 "Settings…" = "设置…";
+"The times you usually go somewhere are set on the account page or in the phone app." = "常去某处的时间在账户页面或手机应用中设置。";
 "Theme" = "主题";
 "Timetable" = "课表";
 "Updating times…" = "正在更新时间…";
