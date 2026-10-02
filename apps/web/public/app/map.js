@@ -12,8 +12,8 @@ import { $, api, el, t } from '/account/dom.js';
 
 const MAPLIBRE = '/vendor/maplibre-gl@6.11.2/';
 const PMTILES = '/vendor/pmtiles@4.5.0/pmtiles.mjs';
-/** Live buses refresh this often while a pill is on (the API caches 10 s). */
-const BUSES_MS = 10_000;
+/** Live buses refresh this often while a pill is on (the API caches 5 s). */
+const BUSES_MS = 5_000;
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
 const ARRIVALS_MS = 15_000;
 /** How long a bus takes to glide to its new position. */

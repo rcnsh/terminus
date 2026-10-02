@@ -80,7 +80,7 @@ phases are done (PR #7). Phase 0's findings are below.
   - each stop's services;
   - the services' new colours.
 - `/buses?svc=` gives a service's live buses: position, heading, crowding
-  and next stop (worked out from the route line), cached 10 s per service.
+  and next stop (worked out from the route line), cached 5 s per service.
 - `/map/*` serves:
   - the PMTiles file from R2, by range and long-cached;
   - light and dark styles in the app's colours;

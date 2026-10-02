@@ -125,13 +125,13 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     LaunchedEffect(dark, zh) { map.open(dark, zh) }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    // Live buses every 10 s while a pill is on and the app is in front (the API caches 10 s).
+    // Live buses every 5 s while a pill is on and the app is in front (the API caches 5 s).
     LaunchedEffect(ui.selected) {
         if (ui.selected == null) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
                 map.refreshBuses()
-                delay(10_000)
+                delay(5_000)
             }
         }
     }

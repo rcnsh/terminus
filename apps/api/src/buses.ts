@@ -7,6 +7,13 @@
  * nearest stretch of its line that runs the way it is heading, and the next
  * stop is the first one further along. A route with no shape for its current
  * stops, or a bus away from its line (parked at the depot), has no next stop.
+ *
+ * Many routes use the same road both ways (most of D1, D2 and K), so the
+ * two directions of the line are metres apart, and a standing bus has no
+ * heading to choose between them. Each bus's last place on its line is kept,
+ * and the next match is the one a bus could have driven to since: a little
+ * back for GPS error, or ahead at most at bus speed. The bus is still drawn
+ * where the feed puts it; this only decides its next stop.
  */
 
 import { shapeFor } from './campus.ts';
@@ -21,6 +28,24 @@ const ON_ROUTE_M = 50;
 const HEADING_SLACK_DEG = 60;
 /** Within this of a stop, the bus is at it: the next stop is the one after. */
 const AT_STOP_M = 15;
+/** A bus's last place on its line counts for this long. */
+const TRACK_MS = 120_000;
+/** How far a bus can go along its line between updates: back (GPS error),
+ *  and ahead, as metres plus metres a second (72 km/h, faster than a bus). */
+const TRACK_BACK_M = 50;
+const TRACK_AHEAD_M = 100;
+const TRACK_AHEAD_MS = 20;
+
+/** Each bus's last place on its line, by id. Per Worker instance: a fresh
+ *  one starts without, and matches by heading as before. */
+const lastPlace = new Map<string, { along: number; at: number }>();
+
+/** Where a bus was last placed, for [alongLine]. */
+export interface Prior {
+  along: number;
+  /** Seconds since. */
+  ageS: number;
+}
 
 export interface LiveBus {
   /** Stable while the bus runs, so a client can glide it between updates.
@@ -48,11 +73,22 @@ const angleBetween = (a: number, b: number) => {
 
 /**
  * Metres along the shape where the bus is, or null when it is off its line.
- * Exported for the tests.
+ * A stretch running the way the bus is heading beats one running the other
+ * way; then, with [prior], a place it could have driven to since beats one
+ * it couldn't (this decides for a standing bus, which has no heading); then
+ * the nearest. Heading first, so a wrong first match doesn't stick once the
+ * bus moves. Exported for the tests.
  */
-export function alongLine(shape: RouteShape, lat: number, lon: number, heading: number | null): number | null {
+export function alongLine(
+  shape: RouteShape,
+  lat: number,
+  lon: number,
+  heading: number | null,
+  prior: Prior | null = null,
+  loop = false,
+): number | null {
   const cosLat = Math.cos((lat * Math.PI) / 180);
-  let best: { d: number; along: number; fits: boolean } | null = null;
+  const found: { d: number; along: number; fits: boolean }[] = [];
   let walked = 0;
   for (let i = 0; i + 1 < shape.line.length; i++) {
     const [aLon, aLat] = shape.line[i];
@@ -66,12 +102,23 @@ export function alongLine(shape: RouteShape, lat: number, lon: number, heading: 
     const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
     const d = haversineM(lat, lon, aLat + (bLat - aLat) * t, aLon + (bLon - aLon) * t);
     const fits = heading == null || seg < 1 || angleBetween(heading, bearing(aLat, aLon, bLat, bLon)) <= HEADING_SLACK_DEG;
-    // A stretch running the right way beats a nearer one running the other
-    // way: the two sides of a road are metres apart.
-    if (d <= ON_ROUTE_M && (!best || (fits && !best.fits) || (fits === best.fits && d < best.d))) {
-      best = { d, along: walked + seg * t, fits };
-    }
+    if (d <= ON_ROUTE_M) found.push({ d, along: walked + seg * t, fits });
     walked += seg;
+  }
+  const total = walked;
+  const reachable = (along: number) => {
+    if (!prior) return false;
+    let gone = along - prior.along;
+    // A loop's bus can pass its start.
+    if (loop && total > 0 && gone < -total / 2) gone += total;
+    return gone >= -TRACK_BACK_M && gone <= TRACK_AHEAD_M + TRACK_AHEAD_MS * prior.ageS;
+  };
+  let best: { d: number; along: number; fits: boolean; reach: boolean } | null = null;
+  for (const c of found) {
+    const x = { ...c, reach: reachable(c.along) };
+    // The two sides of a road are metres apart: which way it's heading, then
+    // where it could be, decide before distance.
+    if (!best || (x.fits !== best.fits ? x.fits : x.reach !== best.reach ? x.reach : x.d < best.d)) best = x;
   }
   return best ? best.along : null;
 }
@@ -95,11 +142,17 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
   const shape = shapeFor(svc, seq);
   const loop = graph.loops?.[svc] ?? (seq.length > 2 && seq[0] === seq[seq.length - 1]);
   const names = new Map(graph.stops.map((s) => [s.code, s.name]));
+  const now = Date.now();
+  for (const [id, p] of lastPlace) if (now - p.at > TRACK_MS) lastPlace.delete(id);
   return Promise.all(
     raw.map(async (b) => {
+      const id = await idFor(svc, b.plate);
       let nextStop: LiveBus['nextStop'] = null;
       if (shape) {
-        const along = alongLine(shape, b.lat, b.lon, b.speed > 0 ? b.heading : null);
+        const last = lastPlace.get(id);
+        const prior = last && now - last.at < TRACK_MS ? { along: last.along, ageS: Math.max(0, now - last.at) / 1000 } : null;
+        const along = alongLine(shape, b.lat, b.lon, b.speed > 0 ? b.heading : null, prior, loop);
+        if (along != null) lastPlace.set(id, { along, at: now });
         const k = along == null ? null : nextStopIndex(shape, along, loop);
         if (k != null) {
           const code = shape.stops[k];
@@ -107,7 +160,7 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
         }
       }
       return {
-        id: await idFor(svc, b.plate),
+        id,
         lat: Math.round(b.lat * 1e6) / 1e6,
         lon: Math.round(b.lon * 1e6) / 1e6,
         heading: b.heading == null ? null : Math.round(b.heading),

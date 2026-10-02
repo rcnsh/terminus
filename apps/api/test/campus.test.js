@@ -6,7 +6,7 @@ import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor, SHAPES } from '../src/campus.ts';
-import { alongLine, nextStopIndex } from '../src/buses.ts';
+import { alongLine, nextStopIndex, placeBuses } from '../src/buses.ts';
 import { boardAt, indexGraph } from '../src/resolve.ts';
 
 const GRAPH = graphJson;
@@ -232,6 +232,51 @@ test('a live bus is placed on its line, and its next stop is the one ahead', () 
   assert.equal(shape.stops[nextStopIndex(shape, along, true)], shape.stops[k + 1]);
   // Far from the line: not on the route.
   assert.equal(alongLine(shape, lat + 0.01, lon, heading), null);
+});
+
+test('on a road its route uses both ways, a standing bus keeps its side; a moving one follows its heading', () => {
+  // Out east 500 m, then back west 8 m to the north: one road, both ways.
+  const east = 500 / (111_320 * Math.cos(1.3 * Math.PI / 180));
+  const north = 8 / 110_574;
+  const shape = { stops: ['A', 'B', 'C'], line: [[103.77, 1.3], [103.77 + east, 1.3], [103.77 + east, 1.3 + north], [103.77, 1.3 + north]], at: [0, 504, 1008] };
+  // 280 m along, eastbound, but GPS puts it 5 m north: nearer the westbound side.
+  const lon = 103.77 + east * 0.56, lat = 1.3 + 5 / 110_574;
+  const wrong = alongLine(shape, lat, lon, null);
+  assert.ok(wrong > 504, `with nothing to go on, the nearer side: ${wrong}`);
+  // It was at 270 m ten seconds ago: it's still eastbound.
+  const kept = alongLine(shape, lat, lon, null, { along: 270, ageS: 10 });
+  assert.ok(Math.abs(kept - 280) < 2, `standing, kept its side: ${kept}`);
+  // A wrong last place doesn't stick: moving east, its heading decides.
+  const moving = alongLine(shape, lat, lon, 90, { along: 730, ageS: 5 });
+  assert.ok(Math.abs(moving - 280) < 2, `moving east: ${moving}`);
+  // Too long ago to have stood still: a place it can't have reached doesn't count.
+  assert.ok(alongLine(shape, lat, lon, null, { along: 0, ageS: 1 }) > 504);
+});
+
+test('a live bus that stops on a two-way road keeps its next stop', async () => {
+  // A point on D2 with its own line running the other way within 15 m.
+  const shape = SHAPES.D2;
+  const m = (a, b) => Math.hypot((b[0] - a[0]) * 111_320 * Math.cos(a[1] * Math.PI / 180), (b[1] - a[1]) * 110_574);
+  const cum = [0];
+  for (let i = 1; i < shape.line.length; i++) cum.push(cum[i - 1] + m(shape.line[i - 1], shape.line[i]));
+  const graph = { stops: [], routes: { D2: shape.stops } };
+  let checked = 0;
+  for (let i = 0; i + 1 < shape.line.length && checked < 3; i++) {
+    const j = shape.line.findIndex((q, jj) => Math.abs(cum[jj] - cum[i]) > 400 && jj + 1 < shape.line.length && m(shape.line[i], q) > 6 && m(shape.line[i], q) < 15);
+    if (j < 0) continue;
+    const [a, b] = [shape.line[i], shape.line[i + 1]];
+    const heading = (Math.atan2((b[0] - a[0]) * Math.cos(a[1] * Math.PI / 180), b[1] - a[1]) * 180 / Math.PI + 360) % 360;
+    // Two thirds of the way across the road: nearer the other direction.
+    const lon = a[0] + (shape.line[j][0] - a[0]) * 0.67, lat = a[1] + (shape.line[j][1] - a[1]) * 0.67;
+    const raw = (plate, speed) => ({ plate, lat, lon, heading, speed, crowd: null });
+    const [driving] = await placeBuses(graph, 'D2', [raw(`T${i}`, 20)]);
+    const [stopped] = await placeBuses(graph, 'D2', [raw(`T${i}`, 0)]);
+    const [stranger] = await placeBuses(graph, 'D2', [raw(`U${i}`, 0)]);
+    if (!driving.nextStop || driving.nextStop.code === stranger.nextStop?.code) continue;
+    assert.equal(stopped.nextStop?.code, driving.nextStop.code, `stopped at line point ${i}`);
+    checked++;
+  }
+  assert.ok(checked > 0, 'found a two-way stretch of D2 to test on');
 });
 
 test('past its last stop, a loop starts again and a one-way route has ended', () => {
