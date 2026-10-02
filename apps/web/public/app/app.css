@@ -128,7 +128,7 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 .map-pills { width: 100%; margin: 0; padding-bottom: 2px; }
 .map-pills button { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
 .map-pills .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--svc); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.15); }
-.map-pills button[aria-pressed="true"] { background: var(--svc); border-color: var(--svc); color: var(--on-svc, #fff); }
+.map-pills button[aria-pressed="true"] { background: var(--svc); border-color: var(--svc); color: #fff; }
 .map-pills button[aria-pressed="true"] .dot { background: currentColor; box-shadow: none; }
 .map-status {
   padding: 6px 12px;
@@ -176,7 +176,7 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
   padding: 3px 8px;
   border-radius: 7px;
   background: var(--svc);
-  color: var(--on-svc, #fff);
+  color: #fff;
   font-weight: 700;
   font-size: 0.85rem;
   border: 0;
