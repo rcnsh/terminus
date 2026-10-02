@@ -94,7 +94,8 @@ export async function mailFeedback(env: Env, id: string, email: string, f: Feedb
   await env.EMAIL.send({
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: env.ALERT_EMAIL,
-    subject: `terminus feedback: ${f.kind === 'wrong' ? summarize(f.context) : f.note.slice(0, 60)}`,
+    // Their words, on one line: a subject is a header.
+    subject: `terminus feedback: ${f.kind === 'wrong' ? summarize(f.context) : f.note.slice(0, 60)}`.replace(/[\x00-\x1f\x7f]+/g, ' '),
     text,
   });
 }

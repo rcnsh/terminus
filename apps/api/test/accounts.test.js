@@ -96,6 +96,26 @@ test('opening the link does not spend it; the POST does, once', async () => {
   assert.equal(again.status, 400);
 });
 
+test('another site cannot post a sign-in link or a sign-out', async () => {
+  const { env, email } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const t = email.lastToken();
+  const post = async (path, site, body) => {
+    const ctx = makeCtx();
+    const headers = { 'content-type': 'application/x-www-form-urlencoded' };
+    if (site) headers['sec-fetch-site'] = site;
+    const res = await worker.fetch(new Request(BASE + path, { method: 'POST', headers, body }), env, ctx);
+    await ctx.settle();
+    return res;
+  };
+  for (const site of ['cross-site', 'same-site']) {
+    assert.equal((await post('/auth/verify', site, new URLSearchParams({ t }).toString())).status, 403, site);
+    assert.equal((await post('/auth/logout', site, '')).status, 403, site);
+  }
+  // The link is still good from our own page.
+  assert.equal((await post('/auth/verify', 'same-origin', new URLSearchParams({ t }).toString())).status, 303);
+});
+
 test('an expired link is refused', async () => {
   const { env, email, db } = setup();
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
