@@ -108,7 +108,7 @@ jobs:
           sudo safaridriver --enable
           open -a Simulator --args -CurrentDeviceUDID "$udid"
           # Safari opened once, so safaridriver finds it running.
-          xcrun simctl openurl "$udid" http://localhost:8787/
+          xcrun simctl openurl "$udid" http://localhost:8787/ || true
           sleep 15
       - name: Record
         run: |
