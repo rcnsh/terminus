@@ -106,19 +106,22 @@ they come in.
 
 - Material 3 bottom navigation; the settings screen becomes the Settings
   tab.
-- The Map tab with maplibre-compose and the stop sheet as a modal bottom
-  sheet.
-- The location dot through MapLibre's location component, only with
-  permission already granted.
-- An offline region for the campus area.
+- The Map tab with maplibre-compose (OpenGL runtime), the same pills, live
+  buses, bus card and stop sheet as the web.
+- Your dot from the app's own location helper, only with permission
+  already granted.
+- Offline: MapLibre doesn't cache PMTiles it streams, so the app downloads
+  the campus map file once (checked weekly) and reads it from storage
+  (`pmtiles://file://`); `/campus` and the style are kept beside it.
 - All new strings in English and Chinese.
 - Split APKs by CPU type:
-  - Gradle builds one APK per CPU type;
-  - `release.sh` and `github-release.sh` upload each;
-  - `latest.json` lists them;
-  - `/download/android` serves the arm64 build, which suits nearly every
-    phone, with links to the others;
-  - the in-app update check picks the build that matches the phone.
+  - Gradle builds one APK per CPU type: arm64, 32-bit ARM, x86_64 (the
+    types MapLibre ships);
+  - `release.sh`, `release-beta.sh` and `github-release.sh` upload each;
+  - `latest.json` lists them in `androidAbis`, and `android` stays the
+    arm64 one, so older apps and links keep working;
+  - `/download/android` serves arm64, `?abi=` the others;
+  - the in-app update button asks for its own CPU type.
   - Play Store installs are unaffected.
 
 ## Needs the owner
