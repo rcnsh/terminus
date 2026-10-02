@@ -102,6 +102,16 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 
 const mailFailed = (e: unknown) => console.error('device email failed', e instanceof Error ? e.name : typeof e);
 
+/**
+ * A trip key a client sent: one of the profile's classes, or a trip home.
+ * The key becomes stored rows (signals, outcomes, choices), so anything
+ * else would let a script make as many as it likes.
+ */
+function knownTrip(profile: Profile, key: string): boolean {
+  if (/^home:(\d{1,4}|evening)$/.test(key) || /^gap-home:[A-Za-z0-9_-]{1,24}$/.test(key)) return true;
+  return [...profile.trips, ...profile.manual].some((t) => classKey(t) === key);
+}
+
 /** "Pixel 8": what the app calls itself, shown in emails and the device list. */
 function deviceName(body: Record<string, unknown> | null): string {
   if (typeof body?.name !== 'string') return 'Device';
@@ -144,6 +154,14 @@ async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   } catch {
     return null;
   }
+}
+
+/** A sign-in form: a token or two, never more than a few KB. Refused unread when bigger. */
+const MAX_FORM_BYTES = 4096;
+async function readForm(req: Request): Promise<URLSearchParams | null> {
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_FORM_BYTES) return null;
+  const text = await req.text().catch(() => null);
+  return text !== null && text.length <= MAX_FORM_BYTES ? new URLSearchParams(text) : null;
 }
 
 async function limited(env: Env, req: Request, scope: string): Promise<boolean> {
@@ -520,6 +538,7 @@ const ME_ROUTES: MeRoute[] = [
       const now = await planned(here, env, ctx, nowMs, deps, profile, day);
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
+      if (key !== now.trip.key && !knownTrip(profile, key)) return json({ error: 'no such trip today' }, 400);
       const current = key === now.trip.key;
       let followedDay: DayRecord | null = null;
       // After the planned bus has left, "On it" and "Missed it" are about that
@@ -696,6 +715,7 @@ const ME_ROUTES: MeRoute[] = [
         return json({ error: "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo" }, 400);
       }
       const profile = await getProfile(db, session.user.id, deps.graph);
+      if (!knownTrip(profile, trip)) return json({ error: 'no such trip today' }, 400);
       const label = [...profile.trips, ...profile.manual].find((t) => classKey(t) === trip)?.label ?? null;
       await setPref(db, session.user.id, trip, pref as PrefKind, choice, label, nowMs);
       return json({ ok: true, choices: await listPrefs(db, session.user.id) });
@@ -849,7 +869,7 @@ export async function handleMe(
 <form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}"><button type="submit" class="btn accent">${m().signInButton}</button></form>`));
     }
     if (req.method === 'POST') {
-      const form = await req.formData().catch(() => null);
+      const form = await readForm(req);
       const t = form?.get('t');
       const done = typeof t === 'string' ? await redeemLink(db, t, nowMs, await browserAnon(db, req, nowMs)) : null;
       if (done?.removed) await clearTrip(env, done.removed);
@@ -960,7 +980,7 @@ export async function handleMe(
     }
     if (req.method === 'POST') {
       if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429);
-      const form = await req.formData().catch(() => null);
+      const form = await readForm(req);
       const r = form?.get('r');
       const n = Number(form?.get('n'));
       const out = typeof r === 'string' ? await decide(db, r, Number.isInteger(n) ? n : null, nowMs) : 'expired';

@@ -10,6 +10,8 @@ import { authenticate, hashToken, newToken } from './accounts.ts';
 
 export const KEY_PREFIX = 'tk_';
 export const MAX_KEYS = 5;
+/** Set on a test's env to open the keyed routes to anyone. */
+export const TEST_OPEN = Symbol.for('terminus.testOpen');
 /** Only write last_used this often. */
 const TOUCH_MS = 10 * 60_000;
 
@@ -25,8 +27,9 @@ function keyFrom(req: Request): { key: string; bearer: boolean } | null {
 }
 
 export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<Caller | null> {
-  // Tests only: the public-route tests predate keys.
-  if (env.PUBLIC_API_OPEN === '1') return { kind: 'open' };
+  // Tests only: the public-route tests predate keys. A symbol, so no
+  // deployed var or secret can ever set it.
+  if ((env as unknown as Record<symbol, unknown>)[TEST_OPEN] === true) return { kind: 'open' };
   const db = env.DB;
   if (!db) return null;
   const found = keyFrom(req);
@@ -66,15 +69,15 @@ export async function listKeys(db: D1Database, userId: string): Promise<KeyInfo[
 
 /** A new key, shown this once; only its hash is kept. Null at the limit. */
 export async function createKey(db: D1Database, userId: string, name: string, nowMs: number): Promise<(KeyInfo & { key: string }) | null> {
-  const count = await db.prepare('SELECT count(*) AS n FROM api_keys WHERE user_id = ?').bind(userId).first<{ n: number }>();
-  if ((count?.n ?? 0) >= MAX_KEYS) return null;
   const key = `${KEY_PREFIX}${newToken()}`;
   const id = crypto.randomUUID();
   const hint = key.slice(-4);
-  await db
-    .prepare('INSERT INTO api_keys (id, user_id, key_hash, name, hint, created) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(id, userId, await hashToken(key), name, hint, nowMs)
-    .run();
+  // Counted and inserted in one statement: two at once can't both be the fifth.
+  const made = await db
+    .prepare('INSERT INTO api_keys (id, user_id, key_hash, name, hint, created) SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM api_keys WHERE user_id = ?) < ? RETURNING id')
+    .bind(id, userId, await hashToken(key), name, hint, nowMs, userId, MAX_KEYS)
+    .first<{ id: string }>();
+  if (!made) return null;
   return { id, name, hint, created: nowMs, lastUsed: null, key };
 }
 

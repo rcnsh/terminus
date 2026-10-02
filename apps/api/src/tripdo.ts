@@ -20,6 +20,9 @@ import { nudgeUser, pushDevices } from './push.ts';
 import { GRAPH } from './graph.ts';
 import { answerFor, collectArrivals } from './answer.ts';
 
+/** Trip records one day keeps at most (see /signal). */
+export const MAX_DAY_TRIPS = 64;
+
 const DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
 
 /** Never wake again sooner than this after a wake. */
@@ -64,6 +67,9 @@ export class Trip {
     if (req.method === 'POST' && url.pathname === '/signal') {
       const body = (await req.json()) as { date: string; key: string; rec: TripRecord | null; deleteAt: number };
       const next = today(day, body.date);
+      // A day has a handful of trips; past this many a new one is refused,
+      // so the record stays far below a stored value's size limit.
+      if (body.rec && !(body.key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) return Response.json(next);
       if (body.rec) next.trips[body.key] = body.rec;
       else delete next.trips[body.key];
       await this.storage.put('day', next);

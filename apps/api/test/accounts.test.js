@@ -298,6 +298,18 @@ test('a web session in use renews itself; a fresh one is left alone', async () =
   assert.ok(expires > Date.now() + 29 * 86_400_000);
 });
 
+test('a web session in daily use still ends 180 days after sign-in, except with no email to sign in again', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const old = Date.now() - 181 * 86_400_000;
+  db.exec(`UPDATE sessions SET created = ${old}, expires = ${Date.now() + 20 * 86_400_000}`);
+  assert.equal((await call(env, '/me', { cookie })).status, 401);
+  // An account with no email keeps its browser: it has no other way in.
+  const anon = db._db.prepare('SELECT user_id FROM sessions').get().user_id;
+  db.exec(`UPDATE users SET email = NULL WHERE id = '${anon}'`);
+  assert.equal((await call(env, '/me', { cookie })).status, 200);
+});
+
 test('logout ends the session', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);
@@ -798,7 +810,7 @@ test('/me/next in your residence: "You\'re home" after the last class, leave-by 
 
 test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
   const { env, email } = setup();
-  delete env.PUBLIC_API_OPEN; // locked, as in production
+  delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
   for (const path of ['/next?lat=1.2966&lon=103.7764', '/trip?to=UTOWN&from=PGP', '/arrivals?stop=COM3', '/campus', '/stops/pairs']) {
     const res = await call(env, path);
     assert.equal(res.status, 401, path);
@@ -815,7 +827,7 @@ test('the bus answers need a key or an account; downloads, health and docs stay 
 
 test('API keys: made on the account page, shown once, work anywhere, revocable', async () => {
   const { env, db, email } = setup();
-  delete env.PUBLIC_API_OPEN;
+  delete env[Symbol.for('terminus.testOpen')];
   const cookie = await signIn(env, email);
   const made = await (await call(env, '/me/keys', { method: 'POST', cookie, body: { name: 'My script' } })).json();
   assert.match(made.key, /^tk_/);
@@ -842,7 +854,7 @@ test('API keys: made on the account page, shown once, work anywhere, revocable',
 
 test('a session token that happens to start tk_ is still a session, not a missing key', async () => {
   const { env, db } = setup();
-  delete env.PUBLIC_API_OPEN;
+  delete env[Symbol.for('terminus.testOpen')];
   const { token } = await (await call(env, '/auth/anon', { method: 'POST', body: { name: 'Pixel' } })).json();
   // Session tokens are random base64url: 1 in 262,144 starts this way.
   const unlucky = `tk_${token.slice(3)}`;
@@ -991,4 +1003,25 @@ test('an email that has an account already wins over a browser without one', asy
   const signedIn = res.headers.get('set-cookie').split(';')[0];
   assert.deepEqual((await (await call(env, '/me/profile', { cookie: signedIn })).json()).home, { stops: ['KR-MRT'] });
   assert.equal((await call(env, '/me', { cookie })).status, 401, 'the browser account is gone');
+});
+
+test('limits hold when requests arrive all at once: API keys and feedback', async () => {
+  const { env, db, email } = setup();
+  const cookie = await signIn(env, email);
+  await Promise.all(Array.from({ length: 12 }, (_, i) => call(env, '/me/keys', { method: 'POST', cookie, body: { name: `k${i}` } })));
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM api_keys').get().n, 5);
+  await Promise.all(Array.from({ length: 25 }, () => call(env, '/me/feedback', { method: 'POST', cookie, body: { note: 'x', platform: 'web' } })));
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 10);
+});
+
+test('feedback emails to the operator stop at fifty a day; the reports are still kept', async () => {
+  const { mailFeedback, OPERATOR_MAILS_PER_DAY } = await import('../src/feedback.ts');
+  const { env, email } = setup();
+  env.ALERT_EMAIL = 'ops@example.test';
+  const f = { kind: 'other', note: 'x', platform: 'web', appVersion: null, context: null };
+  const day = Date.UTC(2026, 9, 1, 2, 0, 0);
+  for (let i = 0; i < OPERATOR_MAILS_PER_DAY + 5; i++) await mailFeedback(env, `f${i}`, 'a@u.nus.edu', f, day);
+  assert.equal(email.sent.length, OPERATOR_MAILS_PER_DAY);
+  await mailFeedback(env, 'next', 'a@u.nus.edu', f, day + 86_400_000);
+  assert.equal(email.sent.length, OPERATOR_MAILS_PER_DAY + 1, 'a new day');
 });
