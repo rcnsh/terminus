@@ -20,22 +20,9 @@ struct Footer: View {
                 Label(L("Settings"), systemImage: "gearshape")
             } else if model.paired {
                 Menu {
-                    Toggle(model.misplaced ? L("Open at login (move to Applications first)") : L("Open at login"), isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
-                        .disabled(model.misplaced && !model.openAtLogin)
-                    Toggle(L("Notify me when to leave for class"), isOn: Binding(get: { model.leaveAlerts }, set: { model.setLeaveAlerts($0) }))
-                    Button(L("Set up…")) { open("setup") }
-                    Button(L("Devices…")) { open("devices") }
+                    Button(L("Settings…")) { open("settings") }
                     Button(L("Refresh now")) { Task { await model.refresh() } }
-                    Picker(L("Language"), selection: Binding(get: { Lang.pref }, set: { model.setLang($0) })) {
-                        Text(L("Follow this Mac")).tag("auto")
-                        Text(verbatim: "English").tag("en")
-                        Text(verbatim: "中文").tag("zh")
-                    }
                     Button(L("Report a wrong answer…")) { model.startReport() }
-                    Button(Updater.shared.running ? L("Check for updates…") : L("Check for updates (move to Applications first)")) {
-                        Updater.shared.checkNow()
-                    }
-                    .disabled(!Updater.shared.running)
                     Divider()
                     Button(L("Sign out of this Mac")) { model.unpair() }
                 } label: {

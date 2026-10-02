@@ -103,6 +103,12 @@ enum Snapshots {
         let app = AppModel(snapshot: true)
         var views: [(String, AnyView)] = (0..<4).map { ("setup-\($0 + 1)", AnyView(SetupView(app: app, setup: SetupModel(profile: profile, campus: campus), step: $0))) }
         views.append(("devices", AnyView(DevicesView(setup: SetupModel(profile: profile, campus: campus, devices: devices, pairCode: "K7QX4M")))))
+        // Settings' panes, as the window shows them beside its sidebar.
+        app.places = [Place(key: "mrt", label: "KR MRT"), Place(key: "deck", label: "The Deck")]
+        for pane in SettingsPane.allCases {
+            let setup = SetupModel(profile: profile, campus: campus, devices: devices)
+            views.append(("settings-\(pane.rawValue)", AnyView(SettingsPaneView(pane: pane, app: app, setup: setup).frame(width: 480, alignment: .leading).padding(24))))
+        }
         for (name, view) in views {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
                 let r = ImageRenderer(content: view.background(bg).environment(\.colorScheme, scheme))

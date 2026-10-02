@@ -274,7 +274,7 @@ struct SetupView: View {
     }
 }
 
-private struct StepTitle: View {
+struct StepTitle: View {
     let title: String
     let sub: String
     var body: some View {
@@ -286,14 +286,14 @@ private struct StepTitle: View {
     }
 }
 
-private struct Hint: View {
+struct Hint: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View { Text(text).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
 }
 
 /// Where do you live? A residence brings all its stops; off campus, pick one.
-private struct HomeStep: View {
+struct HomeStep: View {
     let setup: SetupModel
     let app: AppModel
     @State private var offCampus = false
@@ -351,7 +351,7 @@ private struct HomeStep: View {
     }
 }
 
-private struct TimetableStep: View {
+struct TimetableStep: View {
     let setup: SetupModel
     @State private var link = ""
 
@@ -377,7 +377,7 @@ private struct TimetableStep: View {
     }
 }
 
-private struct PaceStep: View {
+struct PaceStep: View {
     let setup: SetupModel
     private let paces = [
         ("slow", L("Slow"), L("400 m in about 6 min. A relaxed pace, or if you often carry a bag.")),

@@ -32,8 +32,7 @@ struct TerminusApp: App {
         Window(L("Set up terminus"), id: "setup") { SetupView(app: model).closesWhenSignedOut(model, id: "setup") }
             .windowResizability(.contentSize)
             .defaultPosition(.center)
-        Window(L("Devices"), id: "devices") { DevicesView().closesWhenSignedOut(model, id: "devices") }
-            .windowResizability(.contentSize)
+        Window(L("Settings"), id: "settings") { SettingsWindow(app: model).closesWhenSignedOut(model, id: "settings") }
             .defaultPosition(.center)
         #if DEBUG
         // The popover's content in a window (TERMINUS_OPEN=popover), for

@@ -12,7 +12,9 @@
 "400 m in about 4 min. A brisk pace." = "400 米约 4 分钟。步伐轻快。";
 "400 m in about 5 min. An average pace." = "400 米约 5 分钟。一般步速。";
 "400 m in about 6 min. A relaxed pace, or if you often carry a bag." = "400 米约 6 分钟。步伐从容，或经常背着包。";
+"A heads-up 5 minutes before you need to leave, so you don't have to keep checking." = "在你需要出发前 5 分钟提醒你，不用一直查看。";
 "A reminder 5 minutes before you need to leave for class, and another when it's time to go." = "在需要出发去上课前 5 分钟提醒你，到出发时间时再提醒一次。";
+"Account" = "账户";
 "Add a device…" = "添加设备…";
 "Add an email to your account first. Devices can only be added to an account with an email." = "请先为账户添加电子邮件。只有带电子邮件的账户才能添加设备。";
 "Add where you live and your timetable" = "添加你住在哪里和你的课表";
@@ -22,6 +24,8 @@
 "Allow terminus in System Settings → General → Login Items" = "请在“系统设置”→“通用”→“登录项”中允许 terminus";
 "Allow terminus in System Settings → Notifications" = "请在“系统设置”→“通知”中允许 terminus";
 "Allowed." = "已允许。";
+"Also used for emails and on your other devices. Place and bus names stay in English, as on the signs." = "也用于电子邮件和你的其他设备。地点和巴士名称保持英文，与站牌一致。";
+"Available in one tap from the menu bar. Add favourites, and the times you usually go, on the account page or in the phone app." = "在菜单栏中一键可用。在账户页面或手机应用中添加收藏和你常去的时间。";
 "Back" = "返回";
 "Both are optional. You can change them later in Settings." = "都是可选的，之后可以在“设置”里修改。";
 "Bus stop" = "巴士站";
@@ -42,6 +46,7 @@
 "Couldn't save that" = "无法保存";
 "Couldn't save the pairing on this Mac. Check that there's enough disk space, then pair again." = "无法在这台 Mac 上保存配对。请确认磁盘空间充足，然后重新配对。";
 "Couldn't save the sign-in on this Mac. Check that there's enough disk space, then try again." = "无法在这台 Mac 上保存登录信息。请确认磁盘空间充足，然后重试。";
+"Favourites" = "收藏";
 "Included in your departure time when your location isn't available." = "无法获取你的位置时，会计入出发时间。";
 "Departures near you" = "你附近的发车";
 "Device" = "设备";
@@ -87,6 +92,7 @@
 "No buses until your day starts" = "你的一天开始前不显示巴士";
 "No live data" = "没有实时数据";
 "No stop found for %@. Add those by hand on the account page." = "找不到 %@ 的车站。请在账户页面手动添加。";
+"None yet" = "暂无";
 "Normal" = "正常";
 "Not going today" = "今天不去";
 "Not saved: %@" = "没有保存：%@";
@@ -99,6 +105,9 @@
 "Off campus, or I'll pick a stop" = "校外，或我自己选车站";
 "Off hours" = "休息时间";
 "Offline" = "离线";
+"Open the account page" = "打开账户页面";
+"Settings…" = "设置…";
+"Timetable" = "课表";
 "Updating times…" = "正在更新时间…";
 "On the %@" = "在 %@ 上";
 "On the other device, open terminus and enter:" = "在另一台设备上打开 terminus，输入：";
@@ -176,7 +185,9 @@
 "Works once, for 10 minutes." = "只能用一次，有效 10 分钟。";
 "You're at the stop" = "你在车站";
 "You're here" = "就在这里";
+"Your email, API keys, signing out everywhere and deleting your account are on the account page." = "邮箱、API 密钥、在所有设备上退出登录和删除账户都在账户页面上。";
 "Your timetable" = "你的课表";
+"Your trips" = "你的行程";
 "arrive %@" = "%@ 到达";
 "ended" = "已停运";
 "in %@ min" = "%@ 分钟后";
