@@ -198,7 +198,8 @@ The redesign is done. Delete this file once the owner has read it, or keep
 ## Gotchas found on 2 October
 
 - **CI logs can't be downloaded** from a cloud session: the log blob host is
-  blocked. Use `gh api repos/rcnsh/terminus/actions/runs/<id>/jobs` for step
+  blocked. The GitHub MCP tool `get_job_logs` (with `return_content`) reads
+  them anyway, server-side; use that first. Use `gh api repos/rcnsh/terminus/actions/runs/<id>/jobs` for step
   results, and check-run annotations for output (`::notice::` in a workflow,
   then `gh api …/check-runs/<job id>/annotations`). Reproduce failures
   locally where you can.
