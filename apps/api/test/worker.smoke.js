@@ -218,7 +218,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
 
   const documented = Object.keys(spec.paths).sort();
   assert.deepEqual(documented, [
-    '/arrivals', '/auth/anon', '/auth/anon/web', '/auth/app/code', '/auth/app/merge', '/auth/app/poll', '/auth/app/start', '/auth/code', '/auth/login', '/campus', '/health',
+    '/arrivals', '/auth/anon', '/auth/anon/web', '/auth/app/code', '/auth/app/merge', '/auth/app/poll', '/auth/app/start', '/auth/code', '/auth/login', '/buses', '/campus', '/health',
     '/me/ask', '/me/choice', '/me/choices', '/me/day', '/me/feedback', '/me/history', '/me/import', '/me/keys', '/me/nearby', '/me/next', '/me/once', '/me/profile', '/me/push', '/me/push/key', '/me/signal', '/next', '/pair', '/pair/check', '/status.json', '/stops/pairs', '/trip',
   ]);
 
@@ -283,6 +283,59 @@ test('/arrivals on an unknown stop is a 400, not a fabricated empty board', asyn
   const { res } = await call('/arrivals?stop=narnia', { fetchImpl });
   assert.equal(res.status, 400);
   assert.equal(fetchImpl.counts.shuttle, 0);
+});
+
+// Two D2 buses: one on its route (placed by the test), one parked far from it.
+const D2_BUSES = [
+  { vehplate: 'PD123A', lat: 0, lon: 0, speed: 30, direction: 90, loadInfo: { occupancy: 0.9, crowdLevel: 'high', capacity: 88, ridership: 80 } },
+  { vehplate: 'PD999Z', lat: 1.3015, lng: 103.7605, speed: 0, direction: 10, loadInfo: { crowdLevel: 'low' } },
+];
+
+test('/buses places each bus on its route and never gives the plate', async () => {
+  const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D2;
+  // Put the first bus a third of the way along D2's line, heading along it.
+  const i = Math.floor(shape.line.length / 3);
+  const [aLon, aLat] = shape.line[i];
+  const [bLon, bLat] = shape.line[i + 1];
+  const heading = (Math.atan2((bLon - aLon) * Math.cos((aLat * Math.PI) / 180), bLat - aLat) * 180) / Math.PI;
+  const buses = [{ ...D2_BUSES[0], lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, direction: (heading + 360) % 360 }, D2_BUSES[1]];
+  const fetchImpl = makeFetch({ buses: { D2: buses } });
+  const cache = installGlobals(fetchImpl);
+  const { res } = await call('/buses?svc=d2', { fetchImpl, cache });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.svc, 'D2');
+  assert.equal(body.color, '#8e44c9');
+  assert.equal(body.available, true);
+  assert.equal(body.buses.length, 2);
+  const [on, parked] = body.buses;
+  assert.equal(on.crowd, 'high');
+  assert.equal(on.moving, true);
+  assert.ok(on.nextStop, 'a bus on its line has a next stop');
+  assert.ok(shape.stops.includes(on.nextStop.code));
+  assert.equal(parked.nextStop, null, 'a bus away from its line has none');
+  assert.equal(parked.moving, false);
+  assert.match(on.id, /^[0-9a-f]{12}$/);
+  assert.notEqual(on.id, parked.id);
+  assert.ok(!JSON.stringify(body).includes('PD123A'), 'the plate is not passed on');
+  assert.equal(fetchImpl.requests[0].body.route_code, 'D2');
+
+  // A second look within 10 s is served from the cache.
+  await call('/buses?svc=D2', { fetchImpl, cache });
+  assert.equal(fetchImpl.counts.shuttle, 1);
+});
+
+test('/buses: an unknown service is a 400; an unreachable feed is unavailable, not empty', async () => {
+  const none = makeFetch({});
+  const { res: bad } = await call('/buses?svc=Z9', { fetchImpl: none });
+  assert.equal(bad.status, 400);
+  assert.equal(none.counts.shuttle, 0);
+
+  const { res } = await call('/buses?svc=K', { fetchImpl: makeFetch({ fail: true }) });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.available, false);
+  assert.deepEqual(body.buses, []);
 });
 
 test('walking is offered end to end when it beats the bus', async () => {

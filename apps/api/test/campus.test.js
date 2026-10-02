@@ -5,7 +5,8 @@ import graphJson from './fixtures/graph.json' with { type: 'json' };
 import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
-import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS } from '../src/campus.ts';
+import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor, SHAPES } from '../src/campus.ts';
+import { alongLine, nextStopIndex } from '../src/buses.ts';
 import { boardAt, indexGraph } from '../src/resolve.ts';
 
 const GRAPH = graphJson;
@@ -167,4 +168,77 @@ test('food courts are in the search, each with both of its stops', () => {
   assert.ok(deck.aliases.includes('deck'));
   assert.deepEqual(dest.find((d) => d.code === 'TECHNO-EDGE').stops, ['IT', 'CLB']);
   assert.deepEqual(dest.find((d) => d.code === 'FRONTIER-FOOD').stops, ['S17', 'LT27']);
+});
+
+test('services wear the colours NUS paints them', () => {
+  assert.equal(ROUTE_COLORS.A1, '#e53935', 'red');
+  assert.equal(ROUTE_COLORS.A2, '#f2b705', 'yellow');
+  assert.equal(ROUTE_COLORS.D2, '#8e44c9', 'purple');
+  assert.equal(ROUTE_COLORS.K, '#3db4f2', 'light blue');
+  assert.equal(ROUTE_COLORS.R1, '#f57c1f', 'orange');
+  assert.equal(ROUTE_COLORS.R2, '#34a853', 'green');
+});
+
+test('every route is drawn along the roads, through its own stops', () => {
+  const map = buildCampusMap(realGraph);
+  const byCode = new Map(realGraph.stops.map((s) => [s.code, s]));
+  for (const [svc, seq] of Object.entries(realGraph.routes)) {
+    const r = map.routes[svc];
+    assert.equal(r.shaped, true, `${svc} has no road shape for its current stops: run scripts/route_shapes.py`);
+    assert.ok(r.line.length > seq.length, `${svc} line is too coarse`);
+    // Each stop is near the line (it joined the road there).
+    for (const code of seq) {
+      const st = byCode.get(code);
+      const near = Math.min(...r.line.map(([lon, lat]) => Math.hypot((lon - st.lon) * 111_320, (lat - st.lat) * 110_540)));
+      assert.ok(near < 70, `${svc}: ${code} is ${Math.round(near)} m from the line`);
+    }
+  }
+});
+
+test('a route whose stops changed since the shapes were made is drawn straight, not wrong', () => {
+  const seq = [...realGraph.routes.D2];
+  seq.splice(2, 1);
+  assert.equal(shapeFor('D2', seq), null);
+  const graph = { ...realGraph, routes: { ...realGraph.routes, D2: seq } };
+  const r = buildCampusMap(graph).routes.D2;
+  assert.equal(r.shaped, false);
+  assert.equal(r.line.length, seq.length);
+});
+
+test('each stop lists the services that call there', () => {
+  const map = buildCampusMap(realGraph);
+  const com3 = map.stops.find((s) => s.code === 'COM3');
+  assert.deepEqual(com3.services.sort(), ['D1', 'D2']);
+  for (const s of map.stops) assert.ok(s.services.length > 0, `${s.code} has no services`);
+});
+
+test('a live bus is placed on its line, and its next stop is the one ahead', () => {
+  const shape = SHAPES.A1;
+  // At the line's vertex for its 3rd stop, heading along the line: the next
+  // stop is the 4th.
+  const k = 2;
+  let walked = 0;
+  let idx = 0;
+  for (; idx + 1 < shape.line.length && walked + 1 < shape.at[k]; idx++) {
+    const [aLon, aLat] = shape.line[idx];
+    const [bLon, bLat] = shape.line[idx + 1];
+    walked += Math.hypot((bLon - aLon) * 111_320 * Math.cos(aLat * Math.PI / 180), (bLat - aLat) * 110_574);
+  }
+  const [lon, lat] = shape.line[idx];
+  const [nLon, nLat] = shape.line[idx + 1];
+  const heading = (Math.atan2((nLon - lon) * Math.cos(lat * Math.PI / 180), nLat - lat) * 180 / Math.PI + 360) % 360;
+  const along = alongLine(shape, lat, lon, heading);
+  assert.ok(along != null && Math.abs(along - shape.at[k]) < 20, `placed at ${along}, stop at ${shape.at[k]}`);
+  assert.equal(shape.stops[nextStopIndex(shape, along, true)], shape.stops[k + 1]);
+  // Far from the line: not on the route.
+  assert.equal(alongLine(shape, lat + 0.01, lon, heading), null);
+});
+
+test('past its last stop, a loop starts again and a one-way route has ended', () => {
+  const shape = { stops: ['A', 'B', 'C', 'A'], line: [], at: [0, 100, 200, 300] };
+  assert.equal(nextStopIndex(shape, 50, true), 1);
+  assert.equal(nextStopIndex(shape, 80, true), 1, 'not yet at B');
+  assert.equal(nextStopIndex(shape, 95, true), 2, 'at B (within a few metres): next is C');
+  assert.equal(nextStopIndex(shape, 299, true), 1, 'back at the start: next is B');
+  assert.equal(nextStopIndex({ ...shape, stops: ['A', 'B', 'C'], at: [0, 100, 200] }, 199, false), null);
 });

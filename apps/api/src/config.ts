@@ -9,6 +9,9 @@ export const TTL = {
   /** Edge cache freshness for a stop's arrivals. Every client inside this
    *  window sees the same answer and upstream sees one call. */
   arrivalsMs: 15_000,
+  /** The same for one service's live bus positions on the map. The feed
+   *  moves a bus every few seconds; the map glides between updates. */
+  busesMs: 10_000,
   /** How long a stale answer stays usable as a fallback. Beyond this the edge
    *  cache entry is allowed to expire and a dead upstream becomes an error. */
   staleMaxS: 300,

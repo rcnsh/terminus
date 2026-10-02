@@ -13,6 +13,7 @@ Exits 1 with the reasons when something looks off, so nothing is pushed.
 """
 
 import json
+import math
 import re
 import subprocess
 import sys
@@ -75,6 +76,41 @@ def check_stops(problems):
         dropped(list(routes), list(old.get("routes", {})), "routes", problems)
 
 
+def check_shapes(problems):
+    """Route lines: on campus, and each about as long as its stops imply.
+    A route missing here is fine (drawn straight); a wrong one is not."""
+    path = ROOT / DATA / "shapes.json"
+    if not path.exists():
+        return
+    if path.stat().st_size > MAX_SIZE:
+        problems.append(f"shapes.json is {path.stat().st_size} bytes")
+    routes = json.loads(path.read_text()).get("routes")
+    if not isinstance(routes, dict):
+        problems.append("shapes.json has no routes map")
+        return
+    for svc, r in routes.items():
+        line, at, seq = r.get("line"), r.get("at"), r.get("stops")
+        if not (isinstance(line, list) and len(line) >= 2 and isinstance(at, list) and isinstance(seq, list) and len(at) == len(seq)):
+            problems.append(f"shape {svc} is malformed")
+            continue
+        if any(not (LON[0] <= p[0] <= LON[1] and LAT[0] <= p[1] <= LAT[1]) for p in line):
+            problems.append(f"shape {svc} leaves campus")
+        if any(b < a for a, b in zip(at, at[1:])):
+            problems.append(f"shape {svc} goes backwards between stops")
+        # The distances along the line must match the line itself.
+        straight = sum(_metres(a, b) for a, b in zip(line, line[1:]))
+        if at[-1] and not (0.95 <= straight / at[-1] <= 1.05):
+            problems.append(f"shape {svc}: stops say {at[-1]} m, line is {round(straight)} m")
+    old = committed("shapes.json")
+    if old:
+        dropped(list(routes), list(old.get("routes", {})), "shapes", problems)
+
+
+def _metres(a, b):
+    lat = math.radians((a[1] + b[1]) / 2)
+    return math.hypot((b[0] - a[0]) * 111320 * math.cos(lat), (b[1] - a[1]) * 110540)
+
+
 def check_calendar(problems):
     path = ROOT / DATA / "calendar.json"
     if path.stat().st_size > MAX_SIZE:
@@ -99,6 +135,7 @@ def check_calendar(problems):
 def main():
     problems = []
     check_stops(problems)
+    check_shapes(problems)
     check_calendar(problems)
     if problems:
         print("The scraped data looks wrong, so it was not committed:", file=sys.stderr)
