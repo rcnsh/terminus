@@ -32,6 +32,15 @@ let deviceCount = null;
 /* ---------- helpers ---------- */
 
 const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+/** A time of day in this device's clock style ("9:00 AM" or "09:00"), for showing; hhmm is for time inputs. */
+const clockMin = (min) => new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
+/** "9:00–11:00 AM": the start's AM or PM left off when the end has the same. */
+function clockSpan(from, to) {
+  const a = clockMin(from);
+  const b = clockMin(to);
+  const suffix = (x) => x.match(/\s?[^\d\s:]+$/)?.[0] ?? '';
+  return suffix(a) && suffix(a) === suffix(b) ? `${a.slice(0, -suffix(a).length)}–${b}` : `${a}–${b}`;
+}
 const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : null);
 // A stop's name, or a food court's (favourites and classes can go to one).
 const stopName = (code) => stops.find((s) => s.code === code)?.name ?? destinations.find((d) => d.code === code)?.label ?? code;
@@ -194,6 +203,7 @@ function renderClasses() {
   $('#class-count').textContent = all.length ? `${all.length === 1 ? t('1 class') : t('{0} classes', all.length)}${term && profile.trips.length ? ` · ${term}` : ''}` : '';
   if (!all.length) {
     box.append(el('p', { class: 'hint', textContent: t('No classes yet. Import from NUSMods or add them by hand.') }));
+    foldImport();
     return;
   }
   for (const day of DAY_ORDER) {
@@ -201,37 +211,54 @@ function renderClasses() {
     if (!rows.length) continue;
     box.append(el('div', { class: 'day', textContent: DAYS[day] }));
     for (const { t, list } of rows) {
-      const time = t.endMin ? `${hhmm(t.arriveByMin)}–${hhmm(t.endMin)}` : hhmm(t.arriveByMin);
+      const time = t.endMin ? clockSpan(t.arriveByMin, t.endMin) : clockMin(t.arriveByMin);
       const weeks = Array.isArray(t.weeks) && t.weeks.length < 13 ? ` · ${tr('wk {0}–{1}', t.weeks[0], t.weeks.at(-1))}` : '';
+      const where = el('span', { class: 'where', textContent: `${time} · ${stopName(t.to)}` });
+      // Its name, then when and from which stop; opened, the stop to change and Remove.
       box.append(
         el(
-          'div',
+          'details',
           { class: 'cls' },
-          el('span', { class: 'time', textContent: time }),
-          el('span', { class: 'name', textContent: t.label + weeks, title: t.label }),
-          stopSelect(t.to, (v) => {
-            const at = findClass(list, t);
-            if (at < 0) return;
-            profile[list][at].to = v;
-            t.to = v;
-            save();
-          }),
-          el('button', {
-            type: 'button',
-            class: 'remove',
-            textContent: tr('Remove'),
-            'aria-label': tr('Remove {0}', t.label),
-            onclick: () => {
+          el(
+            'summary',
+            {},
+            el('span', { class: 'what' }, el('span', { class: 'name', textContent: t.label + weeks, title: t.label }), where),
+          ),
+          el(
+            'div',
+            { class: 'cls-edit' },
+            stopSelect(t.to, (v) => {
               const at = findClass(list, t);
-              if (at >= 0) profile[list].splice(at, 1);
-              renderClasses();
+              if (at < 0) return;
+              profile[list][at].to = v;
+              t.to = v;
+              where.textContent = `${time} · ${stopName(v)}`;
               save();
-            },
-          }),
+            }),
+            el('button', {
+              type: 'button',
+              class: 'remove',
+              textContent: tr('Remove'),
+              'aria-label': tr('Remove {0}', t.label),
+              onclick: () => {
+                const at = findClass(list, t);
+                if (at >= 0) profile[list].splice(at, 1);
+                renderClasses();
+                save();
+              },
+            }),
+          ),
         ),
       );
     }
   }
+  foldImport();
+}
+
+/** The import folds away under its heading once there are classes, unless it's needed now. */
+function foldImport() {
+  const classes = profile.trips.length + profile.manual.length;
+  $('#import-box').open = classes === 0 || !$('#reimport').hidden || Boolean($('#share').value && $('#import-msg').textContent);
 }
 
 function renderUnresolved(list) {
@@ -241,7 +268,7 @@ function renderUnresolved(list) {
   box.append(el('p', { class: 'warn-text', textContent: list.length === 1 ? t("1 class had a venue we couldn't place. Pick the nearest stop, or skip it:") : t("{0} classes had a venue we couldn't place. Pick the nearest stop, or skip it:", list.length) }));
   const ul = el('ul', { class: 'list' });
   for (const u of list) {
-    const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}${u.offCampus ? t(' (off campus)') : ''}` }));
+    const li = el('li', {}, el('span', { textContent: `${DAYS[u.day]} ${clockMin(u.arriveByMin)} · ${u.module} @ ${u.venue}${u.offCampus ? t(' (off campus)') : ''}` }));
     // The heading goes with the last one placed or skipped.
     const done = () => {
       li.remove();
@@ -301,12 +328,12 @@ function renderPlaces() {
         el(
           'span',
           { class: 'usual-time' },
-          `${DAYS[u.day]} ${hhmm(u.atMin)}`,
+          `${DAYS[u.day]} ${clockMin(u.atMin)}`,
           el('button', {
             type: 'button',
             class: 'remove',
             textContent: '×',
-            'aria-label': t('Remove {0}', `${DAYS[u.day]} ${hhmm(u.atMin)}`),
+            'aria-label': t('Remove {0}', `${DAYS[u.day]} ${clockMin(u.atMin)}`),
             onclick: () => {
               profile.usual = profile.usual.filter((x) => !(x.place === u.place && x.day === u.day && x.atMin === u.atMin));
               renderPlaces();
@@ -1036,6 +1063,7 @@ export async function reload() {
 /** A NUSMods link shared to the app: in the box, for the person to import. */
 export function offerImport(link) {
   if (shown !== 'timetable') openPage('timetable');
+  $('#import-box').open = true;
   $('#share').value = link;
   $('#share').scrollIntoView({ block: 'center' });
   // Never import straight from the URL: any page could link here and

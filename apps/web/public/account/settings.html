@@ -129,14 +129,6 @@
       </div>
       <div class="card">
         <p class="hint" id="class-count"></p>
-        <form id="import-form">
-          <label for="share">NUSMods share link</label>
-          <div class="row">
-            <input id="share" type="url" placeholder="https://nusmods.com/timetable/sem-1/share?…">
-            <button type="submit" class="btn">Import</button>
-          </div>
-          <p class="hint">In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester.</p>
-        </form>
         <p id="import-msg" class="hint" role="status"></p>
         <div id="unresolved"></div>
         <div id="classes" class="classes"></div>
@@ -157,6 +149,18 @@
           </form>
         </details>
       </div>
+      <!-- Needed once a semester: folded away while there are classes (settings.js foldImport). -->
+      <details class="card import-box" id="import-box">
+        <summary>Import from NUSMods</summary>
+        <form id="import-form">
+          <label for="share">NUSMods share link</label>
+          <div class="row">
+            <input id="share" type="url" placeholder="https://nusmods.com/timetable/sem-1/share?…">
+            <button type="submit" class="btn">Import</button>
+          </div>
+          <p class="hint">In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester.</p>
+        </form>
+      </details>
     </section>
 
     <section class="settings-page" data-page="favourites" aria-labelledby="page-favourites" hidden>
