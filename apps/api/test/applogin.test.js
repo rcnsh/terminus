@@ -399,3 +399,12 @@ test('app sign-in: the code keeps a device\'s setup just like the link', async (
   assert.equal(r.outcome, 'added-email');
   assert.deepEqual((await (await call(env, '/me/profile', { token: r.token })).json()).home, HOME.home);
 });
+
+test('app sign-in: wrong codes sent all at once still only get five tries', async () => {
+  const { env, email } = setup();
+  const s = await (await call(env, '/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } })).json();
+  const code = lastCode(email);
+  const wrong = code === '222222' ? '333333' : '222222';
+  await Promise.all(Array.from({ length: 20 }, () => call(env, '/auth/app/code', { method: 'POST', body: { ...s, code: wrong } })));
+  assert.equal((await (await call(env, '/auth/app/code', { method: 'POST', body: { ...s, code } })).json()).status, 'denied');
+});
