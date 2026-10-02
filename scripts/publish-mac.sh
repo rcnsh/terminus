@@ -35,6 +35,10 @@ if got != want:
     sys.exit(f'latest.json has android {got}, not {want}: run scripts/release.sh for {version} first')
 EOF
 r2 get "terminus-downloads/releases/$VERSION/terminus-$VERSION.apk" --file "$APK"
+# The other CPU types' APKs, for the GitHub release (from 2.1).
+for f in "terminus-$VERSION-armv7.apk" "terminus-$VERSION-x86_64.apk"; do
+  r2 get "terminus-downloads/releases/$VERSION/$f" --file "$OUT/$f" || rm -f "$OUT/$f"
+done
 
 r2 put "terminus-downloads/releases/$VERSION/terminus-$VERSION.dmg" --file "$DMG" --content-type application/x-apple-diskimage
 

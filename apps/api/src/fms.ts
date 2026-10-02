@@ -415,3 +415,132 @@ const memo = (reason: string, maxAgeS: number) =>
 
 /** One upstream fetch per stop per isolate, however many requests want it. */
 const inflight = new Map<string, Promise<StopArrivals>>();
+
+/* ------------------------------------------------------------------ */
+/* Live bus positions (active-bus)                                     */
+/* ------------------------------------------------------------------ */
+
+/** One bus as the feed reports it, before it is placed on its route. */
+export interface RawBus {
+  plate: string;
+  lat: number;
+  lon: number;
+  /** Degrees clockwise from north; null when the feed leaves it out. */
+  heading: number | null;
+  /** km/h, as reported; 0 when standing. */
+  speed: number;
+  crowd: Crowd | null;
+}
+
+export interface ActiveBuses {
+  svc: string;
+  buses: RawBus[];
+  fetchedAt: number;
+  stale: boolean;
+}
+
+/**
+ * active-bus's reply, tolerantly: {ActiveBusCount, TimeStamp, activebus: [
+ * {vehplate, lat, lng, speed, direction, loadInfo: {occupancy, crowdLevel,
+ * capacity, ridership}}]}. A bus without a position on Earth is dropped.
+ */
+export function normalizeBuses(data: unknown): RawBus[] {
+  const out: RawBus[] = [];
+  for (const raw of pickList(data, ['activebus', 'activeBus', 'ActiveBus', 'buses'])) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const plate = plateOf(field(item, 'vehplate', 'veh_plate', 'vehiclePlate', 'plate'));
+    const lat = Number(field(item, 'lat', 'latitude'));
+    const lon = Number(field(item, 'lng', 'lon', 'longitude'));
+    if (!plate || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) continue;
+    const dir = Number(field(item, 'direction', 'heading', 'bearing'));
+    const speed = Number(field(item, 'speed'));
+    const load = (item.loadInfo ?? {}) as Record<string, unknown>;
+    out.push({
+      plate,
+      lat,
+      lon,
+      heading: Number.isFinite(dir) && field(item, 'direction', 'heading', 'bearing') != null ? ((dir % 360) + 360) % 360 : null,
+      speed: Number.isFinite(speed) && speed > 0 ? speed : 0,
+      crowd: crowdFromLoad(load.capacity, load.ridership) ?? parseCrowd(load.crowdLevel),
+    });
+  }
+  return out;
+}
+
+/** One service's buses, with one re-mint on a rejection, as fetchArrivals. */
+export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Date.now()): Promise<ActiveBuses> {
+  if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
+  let session = await getSession(env, nowMs);
+  let body = await proxyCall(env, session, 'active-bus', { route_code: svc });
+  if (!proxyOk(body) && !NO_REMINT_CODES.has(String((body as ProxyBody | null)?.code))) {
+    session = await getSession(env, nowMs, { force: true });
+    body = await proxyCall(env, session, 'active-bus', { route_code: svc });
+  }
+  if (!proxyOk(body)) {
+    const b = body as ProxyBody | null;
+    throw new UpstreamRejected(String(b?.code ?? '?'), `active-bus rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
+  }
+  // No list at all is a changed payload, not "no buses running".
+  if (!hasList(body.data)) throw new Error('active-bus answered in an unknown shape (no bus list)');
+  return { svc, buses: normalizeBuses(body.data), fetchedAt: nowMs, stale: false };
+}
+
+/**
+ * One service's buses through the edge cache: one upstream call per service
+ * per TTL.busesMs however many people watch it. The same quiet-under-failure
+ * rules as getArrivals: a failed service waits failMemoS, the version
+ * breaker stops everything, and a stale answer beats none.
+ */
+export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, nowMs: number = Date.now()): Promise<ActiveBuses> {
+  const cache = caches.default;
+  const key = new Request(`${CACHE_BASE}/buses/${encodeURIComponent(svc)}`);
+  let cached: ActiveBuses | null = null;
+  const hit = await cache.match(key);
+  if (hit) {
+    try {
+      cached = (await hit.json()) as ActiveBuses;
+    } catch {
+      cached = null;
+    }
+  }
+  if (cached && nowMs - cached.fetchedAt < TTL.busesMs) return { ...cached, stale: false };
+  const stale = cached ? { ...cached, stale: true } : null;
+
+  const failed = new Request(`${CACHE_BASE}/failed-buses/${encodeURIComponent(svc)}`);
+  const quiet = (await cache.match(BREAKER)) ?? (await cache.match(failed));
+  if (quiet) {
+    if (stale) return stale;
+    throw new Error(`upstream recently failed: ${(await quiet.text()).slice(0, 120)}`);
+  }
+
+  let job = inflightBuses.get(svc);
+  if (!job) {
+    job = fetchActiveBuses(env, svc, nowMs)
+      .then(async (fresh) => {
+        await cache.put(key, new Response(JSON.stringify(fresh), {
+          headers: { 'content-type': 'application/json', 'cache-control': `max-age=${TTL.staleMaxS}` },
+        }));
+        return fresh;
+      })
+      .catch(async (err) => {
+        const reason = String((err as Error)?.message ?? err);
+        await cache.put(failed, memo(reason, TTL.failMemoS)).catch(() => {});
+        if (err instanceof UpstreamRejected && NO_REMINT_CODES.has(err.code)) {
+          await cache.put(BREAKER, memo(reason, TTL.breakerS)).catch(() => {});
+        }
+        throw err;
+      })
+      .finally(() => inflightBuses.delete(svc));
+    inflightBuses.set(svc, job);
+  }
+  ctx.waitUntil(job.catch(() => {}));
+  try {
+    return await job;
+  } catch (err) {
+    if (stale) return stale;
+    throw err;
+  }
+}
+
+const inflightBuses = new Map<string, Promise<ActiveBuses>>();

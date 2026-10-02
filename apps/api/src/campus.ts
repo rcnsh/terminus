@@ -16,11 +16,24 @@
 
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import roomsJson from '../data/rooms.json' with { type: 'json' };
+import shapesJson from '../data/shapes.json' with { type: 'json' };
 import { allLandmarks } from './landmarks.ts';
 import type { Graph, Stop } from './types.ts';
 
 const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
 const ROOMS = roomsJson as { rooms: Record<string, { name: string; stop: string; m: number }> };
+
+/** A service's path along the roads (scripts/route_shapes.py). */
+export interface RouteShape {
+  /** The stop sequence it was routed for. */
+  stops: string[];
+  /** [lon, lat] points, GeoJSON order. */
+  line: [number, number][];
+  /** Metres along `line` at each of `stops`. */
+  at: number[];
+}
+
+export const SHAPES = (shapesJson as unknown as { routes: Record<string, RouteShape> }).routes;
 
 /* ------------------------------------------------------------------ */
 /* Projection                                                          */
@@ -35,6 +48,8 @@ export interface ProjectedStop {
   y: number;
   lat: number;
   lon: number;
+  /** The services that stop here, in route order. */
+  services: string[];
   /** False for a small number of real stops that sit far off the dense
    *  campus cluster (P's excursion to Botanic Gardens MRT is the current
    *  case) -- scaling the map to fit them too would shrink the other ~30
@@ -48,6 +63,11 @@ export interface ProjectedRoute {
   seq: string[];
   loop: boolean;
   color: string;
+  /** The path to draw, [lon, lat] (GeoJSON LineString coordinates). */
+  line: [number, number][];
+  /** True when `line` follows the roads; false when it is straight lines
+   *  between stops, because the stops changed since the shapes were made. */
+  shaped: boolean;
 }
 
 export interface CampusMap {
@@ -57,20 +77,19 @@ export interface CampusMap {
 }
 
 /**
- * Categorical palette for the 8 services. Deliberately avoids the semantic
- * quality colors (--live green, --sched amber, --bad red) so a route line is
- * never mistaken for a live/stale indicator; --accent orange is kept for D2,
- * the route already used as the project's running example elsewhere.
+ * Each service's colour, as NUS paints it on the buses and stop signs (as
+ * students know them; D1 and P chosen to stay distinct). Every client takes
+ * these from /campus rather than keeping its own copy.
  */
 export const ROUTE_COLORS: Record<string, string> = {
-  A1: '#4f8fe8',
-  A2: '#a970e0',
-  D1: '#2fb6a8',
-  D2: '#ff7a1a',
-  K: '#e0568f',
-  P: '#6c7bdb',
-  R1: '#38b6ff',
-  R2: '#b5824a',
+  A1: '#e53935', // red
+  A2: '#d9a000', // yellow, deep enough for white text
+  D1: '#ec4fa0', // pink
+  D2: '#8e44c9', // purple
+  K: '#2b9ad6', // light blue, deep enough for white text
+  P: '#8a939c', // grey
+  R1: '#f57c1f', // orange
+  R2: '#34a853', // green
 };
 
 const VIEW_W = 1000;
@@ -134,9 +153,19 @@ export function buildCampusMap(graph: Graph): CampusMap {
     };
   }
 
+  const servicesAt = new Map<string, string[]>();
+  for (const [svc, seq] of Object.entries(graph.routes ?? {})) {
+    for (const code of seq) {
+      const list = servicesAt.get(code) ?? [];
+      if (!list.includes(svc)) list.push(svc);
+      servicesAt.set(code, list);
+    }
+  }
+  const byCode = new Map(stops.map((s) => [s.code, s]));
+
   const projected: ProjectedStop[] = stops.map((s) => {
     const { x, y } = project(s);
-    return { code: s.code, name: s.name, longName: s.name, opposite: s.opposite ?? null, x, y, lat: s.lat, lon: s.lon, core: isCore(s.code) };
+    return { code: s.code, name: s.name, longName: s.name, opposite: s.opposite ?? null, x, y, lat: s.lat, lon: s.lon, services: servicesAt.get(s.code) ?? [], core: isCore(s.code) };
   });
 
   const routes: Record<string, ProjectedRoute> = {};
@@ -146,14 +175,27 @@ export function buildCampusMap(graph: Graph): CampusMap {
     // a zero-length closing segment on top of a real one.
     const closes = seq.length > 2 && seq[0] === seq[seq.length - 1];
     const loop = graph.loops?.[svc] ?? closes;
+    const shape = shapeFor(svc, seq);
     routes[svc] = {
       seq: closes ? seq.slice(0, -1) : seq.slice(),
       loop,
       color: ROUTE_COLORS[svc] ?? '#8b98a6',
+      line: shape?.line ?? seq.flatMap((c) => {
+        const st = byCode.get(c);
+        return st ? [[st.lon, st.lat] as [number, number]] : [];
+      }),
+      shaped: Boolean(shape),
     };
   }
 
   return { viewBox: `0 0 ${VIEW_W} ${viewH}`, stops: projected, routes };
+}
+
+/** The road shape for a service, when it was made for the stops it runs now. */
+export function shapeFor(svc: string, seq: string[]): RouteShape | null {
+  const shape = SHAPES[svc];
+  if (!shape || shape.stops.length !== seq.length || shape.stops.some((c, i) => c !== seq[i])) return null;
+  return shape;
 }
 
 /* ------------------------------------------------------------------ */

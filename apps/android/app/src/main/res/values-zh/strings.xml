@@ -1,5 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="close">关闭</string>
+    <string name="crowd_filling">人渐多</string>
+    <string name="crowd_packed">很挤</string>
+    <string name="crowd_quiet">人少</string>
+    <string name="map_about">约 %1$s</string>
+    <string name="map_arriving">即将到站</string>
+    <string name="map_bus_stopped">停着</string>
+    <string name="map_bus_title">%1$s 巴士</string>
+    <string name="map_buses">%2$s 有 %1$d 辆巴士</string>
+    <string name="map_buses_unavailable">暂时看不到实时巴士。</string>
+    <string name="map_download_failed">街道地图还没下载。路线和车站照常显示。</string>
+    <string name="map_downloading">正在下载街道地图（约 4 MB）…</string>
+    <string name="map_finding_buses">正在查找 %1$s 巴士…</string>
+    <string name="map_go_there">去这里</string>
+    <string name="map_how_full">拥挤程度</string>
+    <string name="map_min">%1$d 分钟</string>
+    <string name="map_needs_connection">第一次打开地图需要联网。</string>
+    <string name="map_next_stop">下一站</string>
+    <string name="map_no_buses">%1$s 现在没有巴士在运行。</string>
+    <string name="map_no_buses_due">暂时没有巴士</string>
+    <string name="map_no_times">暂时没有时间</string>
+    <string name="map_not_on_route">现在不在路线上</string>
+    <string name="map_one_bus">%1$s 有 1 辆巴士</string>
+    <string name="map_places_full">地点已满</string>
+    <string name="map_recentre">回到校园</string>
+    <string name="map_save_place">存为地点</string>
+    <string name="map_saved_as">已存为 %1$s</string>
+    <string name="map_services_here">经过这里的路线</string>
+    <string name="map_times_need_connection">实时时间需要联网。</string>
+    <string name="map_walking_directions">步行路线</string>
+    <string name="tab_map">地图</string>
+    <string name="tab_now">现在</string>
     <string name="widget_name">下一班巴士</string>
     <string name="widget_places_name">下一班巴士 + 地点</string>
     <string name="widget_places_description">下一班巴士，加上收藏和附近发车的按钮</string>

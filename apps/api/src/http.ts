@@ -87,7 +87,8 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
 
 /**
  * Browser-facing hardening on every response. The CSP lists exactly what
- * the site loads: Turnstile, the QR library from cdnjs, Google Fonts. /docs
+ * the site loads: Turnstile, the QR library from cdnjs, Google Fonts, the
+ * map's workers. /docs
  * additionally loads Stoplight Elements from unpkg (pinned with SRI there).
  */
 const CSP_BASE = [
@@ -96,8 +97,10 @@ const CSP_BASE = [
   'frame-src https://challenges.cloudflare.com',
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",
   "connect-src 'self'",
+  // MapLibre draws the map in web workers it starts from blob: URLs.
+  "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'self'",

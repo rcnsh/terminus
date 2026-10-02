@@ -66,6 +66,10 @@ The same answer on your phone, your Mac and the web, in light or dark.
   </tr>
 </table>
 
+### And a map of campus
+
+On Android and the web: every bus route in its colour, on a quiet street map. Tap a service to see its line and its buses moving live; tap a stop for what's coming, the services that call there, and a way to go there. It works offline after the first look.
+
 ## Set up in two minutes
 
 **On Android:** install the app and tap **Get started**. It asks where you live, for your NUSMods timetable (paste the share link, or tap Share in NUSMods and pick terminus) and how fast you walk. No account or email needed; add an email later in Settings to keep your setup and use it on other devices.
@@ -93,7 +97,8 @@ That's it. It updates through the day and goes quiet in the evening.
 NUS shuttle feed ────────┐
 NUSMods timetables ──────┤
 NUS calendar, holidays ──┼──▶ Cloudflare Worker (apps/api)
-OpenStreetMap paths ─────┘          │
+OpenStreetMap paths ─────┤          │
+Protomaps street map ────┘          │
                                     ├──▶ Android widget
                                     ├──▶ Mac menu bar
                                     └──▶ Website
@@ -106,8 +111,9 @@ down the clock itself, so no screen ever shows a stale "4 min".
 | Path | What |
 | --- | --- |
 | [`apps/api`](apps/api) | Cloudflare Worker: the API, accounts (D1), the cron monitor, and the website. API docs at [/docs](https://terminus.rcn.sh/docs). |
-| [`apps/web`](apps/web) | Landing page, account page, privacy and pairing pages. Static files served by the Worker. |
-| [`apps/android`](apps/android) | Home-screen widgets (compact and with places) and a small app. |
+| [`apps/web`](apps/web) | Landing page, account page, the web app (Now and the campus map), privacy and pairing pages. Static files served by the Worker. |
+| [`apps/android`](apps/android) | Home-screen widgets (compact and with places) and the app: Now, the campus map, Settings. |
+| [`docs/map-plan.md`](docs/map-plan.md) | How the campus map was planned and built. |
 | [`apps/macos`](apps/macos) | Menu bar app. |
 
 ## Running it
@@ -121,14 +127,16 @@ node apps/api/scripts/dev-stub.mjs    # local API with fake buses on :8787
 Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Email
 Sending) and the NUS feed configuration described in
 [apps/api/docs/internals.md](apps/api/docs/internals.md). Releases start with
-`scripts/release.sh` (tests, the Android build, the tag); pushing the tag runs
+`scripts/release.sh` (tests, the Android build as one APK per CPU type, the
+tag); pushing the tag runs
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which signs
 and packages the Mac app, publishes the appcast installed Macs update from,
-and publishes the release. See [CONTRIBUTING.md](CONTRIBUTING.md).
+and publishes the release. The campus map's street map goes onto R2 with the
+**map tiles** workflow (or `scripts/map-tiles.sh`). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <br>
 
 <p align="center">
   <sub>An independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed.<br>
-  Walking routes use map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors. <a href="LICENSE">MIT licensed</a>.</sub>
+  Walking routes, bus route lines and the street map use map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, the street map through <a href="https://protomaps.com">Protomaps</a>. <a href="LICENSE">MIT licensed</a>.</sub>
 </p>

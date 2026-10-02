@@ -10,6 +10,9 @@
  *   - an in-memory database with a test account (you@u.nus.edu),
  *     three saved places, a class later today, and pairing codes TEST67, TEST78, TEST89
  *   - crowd history saying every bus at PGP is usually packed (the full-bus warning)
+ *   - live buses: three per service, driving round its route line
+ *   - the map's files from dev/map/ when it's there (fonts and icons:
+ *     scripts/map-tiles.sh --dry-run, then copy build/map to dev/map)
  *   - a fake NUSMods (every module has a lab, an online tutorial and an
  *     off-campus lecture; XX9999 is not offered; DOWN1000 fails)
  *
@@ -49,12 +52,42 @@ const servingStop = new Map();
 for (const [svc, seq] of Object.entries(graph.routes)) for (const code of new Set(seq)) servingStop.set(code, [...(servingStop.get(code) ?? []), svc]);
 
 const crowds = ['low', 'medium', 'high'];
+const shapes = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes;
+
+/** Three buses per service, a third of the route apart, at 20 km/h along its line. */
+function fakeBuses(svc) {
+  const shape = shapes[svc];
+  if (!shape) return [];
+  const pts = shape.line;
+  const seg = pts.slice(1).map((p, i) => Math.hypot((p[0] - pts[i][0]) * 111_320, (p[1] - pts[i][1]) * 110_540));
+  const total = seg.reduce((a, b) => a + b, 0);
+  return [0, 1, 2].map((n) => {
+    let at = ((stubNow() / 1000) * 5.5 + (n * total) / 3) % total;
+    let i = 0;
+    while (i < seg.length - 1 && at > seg[i]) at -= seg[i++];
+    const k = seg[i] ? at / seg[i] : 0;
+    const [a, b] = [pts[i], pts[i + 1]];
+    const heading = (Math.atan2((b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180), b[1] - a[1]) * 180) / Math.PI;
+    return {
+      vehplate: `PD${100 + n}${svc}`,
+      lat: a[1] + (b[1] - a[1]) * k,
+      lng: a[0] + (b[0] - a[0]) * k,
+      speed: n === 2 ? 0 : 20,
+      direction: (heading + 360) % 360,
+      loadInfo: { capacity: 88, ridership: [12, 50, 84][n] },
+    };
+  });
+}
 async function feed(input, init = {}) {
   const url = String(typeof input === 'string' ? input : input.url);
   if (url.includes('get-access-token')) {
     const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
     const jwt = `${b64({ alg: 'none' })}.${b64({ exp: Math.floor(realNow() / 1000) + 86400 })}.sig`;
     return Response.json({ code: '00000', msg: '', data: { token: jwt, userid: 'DEV', domain: 'PUBLIC', username: 'dev' } });
+  }
+  if (url.endsWith('/active-bus')) {
+    const svc = JSON.parse(init.body ?? '{}').route_code;
+    return Response.json({ code: '00000', msg: '', data: { ActiveBusCount: 3, TimeStamp: '', activebus: fakeBuses(svc) } });
   }
   if (url.includes('bus-proxy')) {
     const stop = JSON.parse(init.body ?? '{}').busstopname;
@@ -121,7 +154,7 @@ for (const svc of servingStop.get('PGP') ?? []) {
 
 // The website, standing in for the Workers ASSETS binding.
 const WEB = new URL('../../web/public/', import.meta.url).pathname;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.json': 'application/json' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml', '.json': 'application/json' };
 const ASSETS = {
   async fetch(req) {
     let p = decodeURIComponent(new URL(req.url).pathname);
@@ -139,6 +172,29 @@ const ASSETS = {
   },
 };
 
+// The map's files (fonts, icons, the map file if there is one) from dev/map/,
+// standing in for R2, byte ranges and all.
+const MAP_DIR = new URL('../../../dev/map/', import.meta.url).pathname;
+const DOWNLOADS = {
+  async get(key, opts = {}) {
+    if (!key.startsWith('map/')) return null;
+    const file = path.join(MAP_DIR, key.slice(4));
+    if (!file.startsWith(MAP_DIR)) return null;
+    let data;
+    try {
+      data = await readFile(file);
+    } catch {
+      return null;
+    }
+    const base = { size: data.length, httpEtag: `"${data.length}"` };
+    const r = opts.range instanceof Headers ? /bytes=(\d+)-(\d*)/.exec(opts.range.get('range') ?? '') : null;
+    if (!r) return { ...base, body: data };
+    const offset = Number(r[1]);
+    const end = r[2] ? Math.min(Number(r[2]), data.length - 1) : data.length - 1;
+    return { ...base, body: data.subarray(offset, end + 1), range: { offset, length: end - offset + 1 } };
+  },
+};
+
 // Locked like production: the bus answers need a key or a signed-in account.
 // The /admin dashboard opens with the token "dev" here.
 // Push (phase 3): the real Firebase project, when its service account is in
@@ -150,7 +206,7 @@ const TRIPS = makeDurableObjects(Trip, () => env);
 // Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
 const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
-env = { ...makeEnv(), [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, HEALTH_TOKEN: 'dev', TRIPS, VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
+env = { ...makeEnv(), [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, DOWNLOADS, HEALTH_TOKEN: 'dev', TRIPS, VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;
