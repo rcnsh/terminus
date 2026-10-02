@@ -6,6 +6,9 @@ serves the website in [`apps/web`](../web).
 
 - **Answers:** `/me/next` (the widget's one call) and `/me/nearby`, plus keyed
   `/next`, `/trip` and `/arrivals`. Docs at [terminus.rcn.sh/docs](https://terminus.rcn.sh/docs).
+- **The campus map:** `/campus` (stops, and routes along the roads), `/buses`
+  (a service's live buses) and `/map/*` (the street map, its style, fonts and
+  icons from R2).
 - **Accounts:** sign-in by emailed code or link, device pairing, profiles in D1.
 - **Cron:** every 15 minutes, checks the NUS feed is up and emails if it isn't.
 
@@ -39,5 +42,5 @@ folder is set in [`wrangler.config.ts`](wrangler.config.ts).
 | `test/` | Node's test runner. `golden.test.js` pins whole answers to `test/fixtures/answers` |
 | `data/` | Stops, routes, venues and walking paths, bundled into the Worker |
 | `migrations/` | D1 schema |
-| `scripts/` | Dev stub, and scrapers that rebuild `data/` |
+| `scripts/` | Dev stub, and scrapers that rebuild `data/` (`route_shapes.py` makes `data/shapes.json`, the routes along the roads) |
 | [`docs/`](docs) | [How it works](docs/internals.md) in depth, and the [analytics](docs/analytics.md) schema |

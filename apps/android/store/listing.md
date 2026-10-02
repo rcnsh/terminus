@@ -42,6 +42,7 @@ ANYWHERE ON CAMPUS
 • Search any building, stop or room. Places you look up keep a tab of their own until you remove them, and the newest one gets a button on the widget.
 • Favourites: pick a stop, building or room and it's saved. The stops your classes use come first.
 • Nearby: every bus at the stops around you, live. Wrong side of the road? One tap on the widget shows the stop across it.
+• The map: every route in its colour on a street map of campus. Pick a service to see its buses moving live; tap a stop for what's coming. Works offline after the first look.
 
 IT LEARNS, AND ASKS FIRST
 • Keep missing the bus to one class? It offers to leave one bus earlier for it.
@@ -55,7 +56,7 @@ ALSO
 
 PRIVATE BY DESIGN
 • No sign-up: the app makes an account of its own. Adding an email is optional, and only needed to use terminus on another device.
-• Your location is used to find the stops near you while you use the app or tap a widget button, and during a trip only if you turn on "Notice when I board". terminus keeps what it means (on the bus, missed it, there), never where you were.
+• Your location is used to find the stops near you and show where you are on the map while you use the app or tap a widget button, and during a trip only if you turn on "Notice when I board". terminus keeps what it means (on the bus, missed it, there), never where you were.
 • No ads, no tracking, no analytics SDK.
 • Delete your account and everything with it from Settings, or clear just your trip history. With an email added, export it all from the account page.
 
@@ -101,6 +102,7 @@ terminus 告诉你什么时候该出发去上下一节课，以及该搭哪一�
 • 搜索任何建筑、车站或教室。你查过的地点会保留自己的标签，直到你移除；最新的一个会出现在小组件的按钮上。
 • 收藏：选一个车站、建筑或教室就能保存。你上课用到的车站排在最前面。
 • 附近：你周围各个车站的所有巴士，实时显示。站错马路了？在小组件上点一下，就能看对面的车站。
+• 地图：校园街道地图上，每条路线用自己的颜色显示。选一条路线就能看它的巴士实时移动；点车站看即将到站的车。看过一次后离线也能用。
 
 它会学习，但先问你
 • 总是赶不上去某节课的车？它会提议那节课早一班出发。
@@ -114,7 +116,7 @@ terminus 告诉你什么时候该出发去上下一节课，以及该搭哪一�
 
 注重隐私
 • 不用注册：应用会自己创建一个账户。添加邮箱是可选的，只有想在其他设备上使用 terminus 时才需要。
-• 你使用应用或点小组件按钮时，会用位置找附近的车站；只有打开“上车时自动识别”后，行程中才会用到位置。terminus 只保留它代表的意思（已上车、错过了、已到达），从不保存你去过哪里。
+• 你使用应用或点小组件按钮时，会用位置找附近的车站、在地图上显示你的位置；只有打开“上车时自动识别”后，行程中才会用到位置。terminus 只保留它代表的意思（已上车、错过了、已到达），从不保存你去过哪里。
 • 没有广告、没有追踪、没有分析 SDK。
 • 可以在设置里删除你的账户和所有数据，或只清除行程记录。添加邮箱后，还可以在账户页面导出全部数据。
 

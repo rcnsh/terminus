@@ -86,9 +86,14 @@ Bump the versions together first (Android versionName/versionCode, Mac
 CFBundleShortVersionString/CFBundleVersion), commit to `main`, then:
 
 ```sh
-scripts/release.sh --dry-run   # tests and the APK, uploads nothing
-scripts/release.sh             # uploads the APK and pushes the tag
+scripts/release.sh --dry-run   # tests and the APKs, uploads nothing
+scripts/release.sh             # uploads the APKs and pushes the tag
 ```
+
+From the map release (2.1.0) Android comes as three APKs, one per CPU type:
+`terminus-<v>.apk` (arm64, what the website serves), `-armv7` and `-x86_64`.
+The scripts build, upload and attach all three. `RELEASE_NOTES.md` already
+has the notes for 2.1.0; bump the versions to 2.1.0 to use them.
 
 The release workflow now refuses a tag that isn't on `main`, so release from
 `main`.
