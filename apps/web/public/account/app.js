@@ -78,6 +78,12 @@ $('#code-form').addEventListener('submit', async (e) => {
   }
 });
 
+// The sixth letter or digit, typed or pasted, sends the code.
+$('#code-input').addEventListener('input', (e) => {
+  const clean = e.target.value.replace(/[^a-z0-9]/gi, '');
+  if (clean.length === 6 && !$('#code-form button').disabled) $('#code-form').requestSubmit();
+});
+
 $('#different').addEventListener('click', () => {
   $('#sent-step').hidden = true;
   $('#login-step').hidden = false;

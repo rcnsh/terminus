@@ -120,7 +120,13 @@ private fun Waiting(s: SignIn.Waiting, busy: Boolean, onCode: (String) -> Unit, 
     Text(stringResource(R.string.sent_code_to, s.email))
     OutlinedTextField(
         value = code,
-        onValueChange = { v -> code = v.filter { it.isLetterOrDigit() }.uppercase().take(6) },
+        onValueChange = { v ->
+            val clean = v.filter { it.isLetterOrDigit() }.uppercase().take(6)
+            // The sixth character, typed or pasted, sends it.
+            val full = clean.length == 6 && code.length < 6
+            code = clean
+            if (full && !busy) onCode(clean)
+        },
         label = { Text(stringResource(R.string.code_from_email)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),

@@ -84,6 +84,8 @@ struct Pair: View {
                 .onChange(of: emailCode) { _, v in
                     let clean = String(v.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
                     if clean != v { emailCode = clean }
+                    // The sixth character, typed or pasted, sends it.
+                    else if clean.count == 6 { model.enterCode(clean) }
                 }
                 .onSubmit { if emailCode.count == 6 { model.enterCode(emailCode) } }
             Button {
@@ -134,6 +136,8 @@ struct Pair: View {
                     .onChange(of: code) { _, v in
                         let clean = String(v.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
                         if clean != v { code = clean }
+                        // The sixth character, typed or pasted, pairs.
+                        else if clean.count == 6 { model.pair(clean) }
                     }
                     .onSubmit { if code.count == 6 { model.pair(code) } }
                 Button {

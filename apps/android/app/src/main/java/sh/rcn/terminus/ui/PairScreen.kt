@@ -43,7 +43,13 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit) {
         }
         OutlinedTextField(
             value = code,
-            onValueChange = { v -> code = v.filter { it.isLetterOrDigit() }.uppercase().take(6) },
+            onValueChange = { v ->
+                val clean = v.filter { it.isLetterOrDigit() }.uppercase().take(6)
+                // The sixth character, typed or pasted, pairs.
+                val full = clean.length == 6 && code.length < 6
+                code = clean
+                if (full && !state.pairing) onPair(clean)
+            },
             label = { Text(stringResource(R.string.pairing_code)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
