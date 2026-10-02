@@ -3,12 +3,13 @@ package sh.rcn.terminus
 import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONObject
-import org.junit.Rule
 import org.junit.Test
 import sh.rcn.terminus.ui.BrandDark
 import sh.rcn.terminus.ui.BrandLight
@@ -26,7 +27,6 @@ import java.io.ByteArrayOutputStream
  * screenshotted into logcat as small JPEGs for a look from outside.
  */
 class MapShots {
-    @get:Rule val rule = createComposeRule()
 
     private fun asset(name: String) = InstrumentationRegistry.getInstrumentation().context.assets.open(name).bufferedReader().use { it.readText() }
 
@@ -46,20 +46,24 @@ class MapShots {
         // and MapLibre then fails the whole style (the app's comes from its own site).
         val style = JSONObject(MapFiles.localTiles(asset(if (dark) "style-dark.json" else "style-light.json"), tiles())).apply { remove("sprite") }.toString()
         val state = ui(campus, core).copy(campus = campus, core = core, style = style)
-        rule.setContent {
-            MaterialTheme(colorScheme = if (dark) BrandDark else BrandLight) {
-                Surface(color = MaterialTheme.colorScheme.background) { MapLayout(state, dark, noop) }
+        // A plain activity, as the app runs: the map's work on the main thread.
+        val scenario = ActivityScenario.launch(ComponentActivity::class.java)
+        scenario.onActivity { activity ->
+            activity.setContent {
+                MaterialTheme(colorScheme = if (dark) BrandDark else BrandLight) {
+                    Surface(color = MaterialTheme.colorScheme.background) { MapLayout(state, dark, noop) }
+                }
             }
         }
         // Tiles, fonts and the camera settle.
         Thread.sleep(15_000)
-        rule.waitForIdle()
         val full = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         val small = Bitmap.createScaledBitmap(full, 360, full.height * 360 / full.width, true)
         val out = ByteArrayOutputStream()
         small.compress(Bitmap.CompressFormat.JPEG, 62, out)
         val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
         b64.chunked(3000).forEachIndexed { i, part -> Log.i("MAPSHOT", "$name $i ${(b64.length + 2999) / 3000} $part") }
+        scenario.close()
     }
 
     private val buses = listOf(
