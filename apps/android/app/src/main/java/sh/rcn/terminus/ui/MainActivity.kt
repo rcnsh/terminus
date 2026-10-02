@@ -5,48 +5,58 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import sh.rcn.terminus.Store
-import sh.rcn.terminus.nusmodsLink
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.rcn.terminus.BuildConfig
-import sh.rcn.terminus.Target
-import androidx.compose.ui.res.stringResource
-import sh.rcn.terminus.R
 import sh.rcn.terminus.Lang
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.ui.res.painterResource
+import sh.rcn.terminus.R
+import sh.rcn.terminus.Store
+import sh.rcn.terminus.Target
+import sh.rcn.terminus.nusmodsLink
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
@@ -273,38 +283,51 @@ private fun Tabs(
     ) { inner ->
         // Back from Map or Settings goes to Now, as from any other tab bar.
         BackHandler(enabled = tab != Tab.Now) { onTab(Tab.Now); vm.load(restart = true) }
-        when (tab) {
-            Tab.Map -> Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
-                // The account's places, for "Save as place" on a stop.
-                LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
-                MapScreen(
-                    map,
-                    onGoThere = { code, name ->
-                        vm.select(Target.Code(code, name))
-                        onTab(Tab.Now)
-                    },
-                    places = PlacesForMap(
-                        savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
-                        full = { (acct.profile?.places?.size ?: 0) >= MAX_PLACES },
-                        save = { code, name -> account.edit { it.addPlace(name, code) } },
-                    ),
-                )
-            }
-            else -> Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding().padding(horizontal = 16.dp)) {
-                if (tab == Tab.Settings) {
-                    SettingsScreen(
-                        acct, account, vm,
-                        onAddEmail = onAddEmail,
-                        onSignedOut = onSignedOut,
-                        onClose = { onTab(Tab.Now); vm.load(restart = true) },
-                    )
-                } else {
-                    MainScreen(state, vm)
+        // Switching tabs fades through (out, then in with a slight zoom), and
+        // each tab keeps its saved state while it's away: where Now and
+        // Settings were scrolled to, where the map was looking.
+        val saved = rememberSaveableStateHolder()
+        AnimatedContent(targetState = tab, transitionSpec = { fadeThrough() }, label = "tab") { t ->
+            saved.SaveableStateProvider(t.name) {
+                when (t) {
+                    Tab.Map -> Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
+                        // The account's places, for "Save as place" on a stop.
+                        LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                        MapScreen(
+                            map,
+                            onGoThere = { code, name ->
+                                vm.select(Target.Code(code, name))
+                                onTab(Tab.Now)
+                            },
+                            places = PlacesForMap(
+                                savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
+                                full = { (acct.profile?.places?.size ?: 0) >= MAX_PLACES },
+                                save = { code, name -> account.edit { it.addPlace(name, code) } },
+                            ),
+                        )
+                    }
+                    else -> Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding().padding(horizontal = 16.dp)) {
+                        if (t == Tab.Settings) {
+                            SettingsScreen(
+                                acct, account, vm,
+                                onAddEmail = onAddEmail,
+                                onSignedOut = onSignedOut,
+                                onClose = { onTab(Tab.Now); vm.load(restart = true) },
+                            )
+                        } else {
+                            MainScreen(state, vm)
+                        }
+                    }
                 }
             }
         }
     }
 }
+
+/** Material's fade through, between tabs: the old one fades out quickly, the new one fades in with a slight zoom. */
+private fun fadeThrough(): ContentTransform =
+    (fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) + scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.92f))
+        .togetherWith(fadeOut(tween(90, easing = FastOutLinearInEasing)))
 
 /** The account's limit on saved places (PROFILE_LIMITS.places in the API). */
 private const val MAX_PLACES = 12

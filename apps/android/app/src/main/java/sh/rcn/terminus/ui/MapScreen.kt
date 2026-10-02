@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
@@ -87,8 +88,11 @@ import org.maplibre.compose.interaction.MapInteractions
 import org.maplibre.compose.layers.CircleLayer
 import org.maplibre.compose.layers.LineLayer
 import org.maplibre.compose.layers.SymbolLayer
+import org.maplibre.compose.map.AndroidRenderMode
 import org.maplibre.compose.map.CameraConstraints
+import org.maplibre.compose.map.MapUiOptions
 import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.map.renderMode
 import org.maplibre.compose.map.rememberMapState
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.overlay.include
@@ -347,8 +351,13 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         )
     }
 
-    // First view: your nearest stop when you're on campus, otherwise the whole campus.
+    // First view: your nearest stop when you're on campus, otherwise the whole
+    // campus. Once only: back on the tab, the map is where you left it (the
+    // camera is saved state, kept by the tabs).
+    var framed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state) {
+        if (framed) return@LaunchedEffect
+        framed = true
         val core = campus.coreBounds(ui.core)
         state.fitCameraToBounds(BoundingBox(west = core[0], south = core[1], east = core[2], north = core[3]), fitPadding = DpPadding(left = 24.dp, top = 96.dp, right = 24.dp, bottom = 24.dp))
         val at = sh.rcn.terminus.Locator.lastKnown(ctx) ?: return@LaunchedEffect
@@ -363,8 +372,11 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         val core = campus.coreBounds(ui.core)
         state.animateCameraToBounds(BoundingBox(west = core[0], south = core[1], east = core[2], north = core[3]), fitPadding = DpPadding(left = 24.dp, top = 96.dp, right = 24.dp, bottom = 24.dp), animation = CameraAnimation.Ease())
     }
-    // A pill: its whole line in view.
+    // A pill: its whole line in view, when it's chosen (not again on coming back to the tab).
+    var framedLine by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(selected) {
+        if (selected == framedLine) return@LaunchedEffect
+        framedLine = selected
         val r = selected?.let { campus.routes[it] } ?: return@LaunchedEffect
         val b = r.bounds()
         state.animateCameraToBounds(BoundingBox(west = b[0], south = b[1], east = b[2], north = b[3]), fitPadding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp), animation = CameraAnimation.Ease())
@@ -374,6 +386,8 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         state = state,
         modifier = Modifier.fillMaxSize(),
         cameraConstraints = CameraConstraints(minZoom = 13.0, maxZoom = 19.0, boundingBox = PAN_LIMIT),
+        // A TextureView, not a SurfaceView: the map fades with the tab around it.
+        uiOptions = MapUiOptions { renderMode = AndroidRenderMode.Texture },
         interactions = MapInteractions {
             camera {
                 rotate { enabled = false }
