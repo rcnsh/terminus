@@ -670,6 +670,8 @@ test('on the bus you said you were on, reaching your stop: there; an older app\'
 
 test('a ride seen from start to end is measured, with no user or location in it', async () => {
   const t = await setup();
+  // Rides only count from accounts a few days old.
+  t.env.DB._db.prepare('UPDATE users SET created = ?').run(FROZEN_NOW - 4 * 86_400_000);
   const { plan, board } = await waitingAtStop(t);
   t.clock(board + 30_000);
   const riding = await (await t.signal(t.phone, { kind: 'location', ...onTheWay(plan), speed: 8 })).json();
@@ -1059,4 +1061,16 @@ test('choices are capped per account, the oldest dropped first', async () => {
   assert.equal(rows.length, MAX_PREFS);
   assert.equal(rows.at(-1), 'newest');
   assert.ok(!rows.includes('k5'), 'the oldest are gone');
+});
+
+test('rides from a brand-new account are not counted, nor two on one service in an hour', async () => {
+  const { mayRecordRide } = await import('../src/ridetimes.ts');
+  const t = await setup();
+  const db = t.env.DB;
+  const userId = db._db.prepare('SELECT id FROM users LIMIT 1').get().id;
+  assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW), false, 'a new account');
+  db._db.prepare('UPDATE users SET created = ?').run(FROZEN_NOW - 4 * 86_400_000);
+  assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW), true);
+  assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW + 60_000), false, 'once an hour');
+  assert.equal(await mayRecordRide(t.env, db, userId, 'A1', FROZEN_NOW + 60_000), true, 'per service');
 });

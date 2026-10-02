@@ -136,6 +136,7 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   // Per inbox too, so +tags and dots cannot mail one person over and over.
   const coolKey = `mail:${await hashToken(inbox)}`;
   if (await env.KV.get(coolKey).catch(() => null)) return 'cooldown';
+  if (!(await takeMailBudget(env, inbox, nowMs))) return 'cooldown';
 
   const token = newToken();
   const tokenHash = await hashToken(token);
@@ -152,7 +153,7 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   // either one spends both.
   const code = newPairCode();
   const codeKey = await signInCodeKey(email);
-  const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs, n: 0 };
+  const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs };
 
   const link = `${origin}/auth/verify?t=${token}`;
   try {
@@ -275,12 +276,27 @@ export async function removeAnonymous(db: D1Database, anonId: string, intoUserId
 
 
 /** A sign-in code waiting in KV: hashes of the code and of its link's token,
- *  when it expires, and how many wrong guesses it has had. */
+ *  and when it expires. Wrong guesses are counted on the link's D1 row. */
 interface PendingCode {
   c: string;
   t: string;
   e: number;
-  n: number;
+}
+
+/** Emails one inbox may be sent an hour, on top of the one-a-minute cooldown. */
+export const MAILS_PER_HOUR = 10;
+
+/**
+ * Takes one of the inbox's emails for this hour; false when they're spent.
+ * A soft cap (KV is not atomic): it stops someone mailing a person all day,
+ * a minute at a time, which the cooldown alone allows.
+ */
+export async function takeMailBudget(env: Env, inbox: string, nowMs: number): Promise<boolean> {
+  const key = `mailhour:${await hashToken(inbox)}:${Math.floor(nowMs / 3_600_000)}`;
+  const n = Number((await env.KV.get(key).catch(() => null)) ?? 0);
+  if (n >= MAILS_PER_HOUR) return false;
+  await env.KV.put(key, String(n + 1), { expirationTtl: 3_700 }).catch(() => {});
+  return true;
 }
 
 async function signInCodeKey(email: string): Promise<string> {
@@ -298,12 +314,18 @@ export async function redeemCode(env: Env, db: D1Database, email: string, code: 
   const key = await signInCodeKey(email);
   const pending = await env.KV.get<PendingCode>(key, 'json').catch(() => null);
   if (!pending || pending.e < nowMs) return null;
+  // Spend a try on the link's row before checking, in one statement: KV's
+  // read-then-write let guesses sent all at once past the limit.
+  const spent = await db
+    .prepare('UPDATE magic_links SET code_tries = code_tries + 1 WHERE token_hash = ? AND code_tries < ? AND expires >= ? RETURNING code_tries')
+    .bind(pending.t, ACCOUNT_TTL.codeTries, nowMs)
+    .first<{ code_tries: number }>();
+  if (!spent) {
+    await env.KV.delete(key).catch(() => {});
+    return null;
+  }
   if ((await hashToken(code)) !== pending.c) {
-    const n = pending.n + 1;
-    const ttlS = Math.floor((pending.e - nowMs) / 1000);
-    // KV's shortest TTL is 60 s; a code closer to expiry than that just dies.
-    if (n >= ACCOUNT_TTL.codeTries || ttlS < 60) await env.KV.delete(key).catch(() => {});
-    else await env.KV.put(key, JSON.stringify({ ...pending, n }), { expirationTtl: ttlS }).catch(() => {});
+    if (spent.code_tries >= ACCOUNT_TTL.codeTries) await env.KV.delete(key).catch(() => {});
     return null;
   }
   await env.KV.delete(key).catch(() => {});

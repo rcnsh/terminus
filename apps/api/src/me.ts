@@ -50,7 +50,7 @@ import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
 import { boardAt, indexGraph, rideStops } from './resolve.ts';
 import { CORRIDOR_M, type Fix, atStopOf, departedAt, detect, fixOf, mayDetect, onRoute } from './detect.ts';
-import { recordRide } from './ridetimes.ts';
+import { mayRecordRide, recordRide } from './ridetimes.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
 import { cardFor, nextPhaseAt } from './card.ts';
@@ -104,7 +104,15 @@ const mailFailed = (e: unknown) => console.error('device email failed', e instan
 
 /** "Pixel 8": what the app calls itself, shown in emails and the device list. */
 function deviceName(body: Record<string, unknown> | null): string {
-  return typeof body?.name === 'string' ? body.name.trim().slice(0, 40) || 'Device' : 'Device';
+  if (typeof body?.name !== 'string') return 'Device';
+  // It goes into sign-in emails: a device's name, not a message. Letters,
+  // digits and a little punctuation; no links, no line breaks.
+  const name = body.name
+    .replace(/[^\p{L}\p{N} ()'_-]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+  return name || 'Device';
 }
 
 /** The client header, or the platform an app names in its body when it has no header. */
@@ -550,7 +558,10 @@ const ME_ROUTES: MeRoute[] = [
             const onBus = prev?.kind === 'boarded' ? prev.boarded : now.trip.phase === 'riding' ? (now.trip.plan ?? undefined) : undefined;
             rec = { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) };
             // A ride seen from start to end: how long it really took (phase 8.2).
-            if (onBus?.departed && env.DB) ctx.waitUntil(recordRide(env.DB, deps.graph, onBus, nowMs));
+            if (onBus?.departed && env.DB) {
+              const rides = env.DB;
+              ctx.waitUntil(mayRecordRide(env, rides, session.user.id, onBus.svc, nowMs).then((ok) => (ok ? recordRide(rides, deps.graph, onBus, nowMs) : null)).catch(() => null));
+            }
           } else if (seen === 'boarded' && bus) {
             rec = {
               kind: 'boarded',

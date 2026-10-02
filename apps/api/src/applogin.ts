@@ -23,7 +23,7 @@
 
 import type { Env } from './types.ts';
 import { mailName } from './site.ts';
-import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
+import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, takeMailBudget, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
 
 export { hasSetup } from './accounts.ts';
 import { m } from './i18n.ts';
@@ -71,6 +71,8 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
     .first();
   if (recent || (await env.KV.get(coolKey).catch(() => null))) return 'cooldown';
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
+  // A blocked address is sent nothing, so it spends nothing.
+  if (!blocked && !(await takeMailBudget(env, inbox, nowMs))) return 'cooldown';
 
   const id = crypto.randomUUID();
   const poll = newToken();
@@ -81,8 +83,6 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
   const expires = nowMs + LOGIN_TTL.requestMs;
   await db.batch([
     db.prepare('DELETE FROM login_requests WHERE expires < ?').bind(nowMs),
-    // One pending request per address: the newest one wins.
-    db.prepare("UPDATE login_requests SET status = 'denied' WHERE email = ? AND status IN ('pending', 'approved')").bind(email),
     db
       .prepare(
         `INSERT INTO login_requests (id, email, poll_hash, link_hash, code_hash, match, device_name, platform, anon_user_id, status, created, expires)

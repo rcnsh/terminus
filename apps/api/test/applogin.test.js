@@ -408,3 +408,21 @@ test('app sign-in: wrong codes sent all at once still only get five tries', asyn
   await Promise.all(Array.from({ length: 20 }, () => call(env, '/auth/app/code', { method: 'POST', body: { ...s, code: wrong } })));
   assert.equal((await (await call(env, '/auth/app/code', { method: 'POST', body: { ...s, code } })).json()).status, 'denied');
 });
+
+test('app sign-in: the device name in the email is a name, not a message', async () => {
+  const { env, email } = setup();
+  await call(env, '/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel\nVisit https://evil.example/x now' } });
+  const text = email.sent.at(-1).text;
+  assert.doesNotMatch(text, /evil\.example|https:\/\/evil/);
+  assert.match(text, /Pixel Visit https evil example x/);
+});
+
+test('one inbox is sent at most ten sign-in emails an hour', async () => {
+  const { takeMailBudget, MAILS_PER_HOUR } = await import('../src/accounts.ts');
+  const { env } = setup();
+  const hour = Date.UTC(2026, 9, 1, 3, 0, 0);
+  for (let i = 0; i < MAILS_PER_HOUR; i++) assert.equal(await takeMailBudget(env, 'a@u.nus.edu', hour + i * 60_000), true);
+  assert.equal(await takeMailBudget(env, 'a@u.nus.edu', hour + 30 * 60_000), false);
+  assert.equal(await takeMailBudget(env, 'b@u.nus.edu', hour), true, 'per inbox');
+  assert.equal(await takeMailBudget(env, 'a@u.nus.edu', hour + 3_600_000), true, 'the next hour');
+});
