@@ -44,52 +44,55 @@ enum OfflineDay {
         return nil
     }
 
-    /// What it was for, the headline, and how: worded as the Today list words them.
+    /// What it's for, the headline, and how: worded as the Today list words
+    /// them. Always an estimate (it was planned a while ago), so always "~";
+    /// the class's start time is there so a "Leave now" after it has started
+    /// reads as late, and a trip home says from when.
     struct Lines {
-        let head: String?
+        let head: String
         let big: String
         let how: String?
     }
 
     static func lines(_ p: Pick) -> Lines {
         let item = p.item
-        if p.step == .home { return Lines(head: nil, big: item.title, how: nil) }
+        let start = parseISODate(item.startsAt).map(campusTime) ?? ""
+        if p.step == .home { return Lines(head: start, big: item.title, how: nil) }
         let leave = item.leave
         let at = leave.flatMap { parseISODate($0.at) }
         let big: String
         if p.step == .leaveBy, let at {
-            big = L("Leave by %@", leave?.estimated == true ? L("~%@", campusTime(at)) : campusTime(at))
+            big = L("Leave by %@", L("~%@", campusTime(at)))
         } else {
             big = L("Leave now")
         }
         let how = leave.map { l in l.svc.map { L("%@ from %@", $0, l.stop ?? item.fromName ?? "") } ?? L("walk") }
-        return Lines(head: item.label, big: big, how: how)
+        // Capitalised: on a line of its own, not after "Leave by …" as in Today.
+        return Lines(head: "\(item.label) · \(L("starts %@", start))", big: big, how: how.map { $0.prefix(1).uppercased() + $0.dropFirst() })
     }
 
     /// The menu bar's text: as for a class plan ("Leave 09:36", "Leave now"); the plain icon for a trip home.
     static func menuTitle(_ p: Pick) -> String? {
         switch p.step {
-        case .leaveBy: return p.item.leave.flatMap { parseISODate($0.at) }.map { L("Leave %@", campusTime($0)) }
+        case .leaveBy: return p.item.leave.flatMap { parseISODate($0.at) }.map { L("Leave %@", L("~%@", campusTime($0))) }
         case .leaveNow: return L("Leave now")
         case .home: return nil
         }
     }
 }
 
-/// The popover's card while offline: how to get to the plan's next thing.
+/// The popover's card while offline: how to get to the plan's next class.
+/// The header already says Offline and when to leave; a trip home has no card.
 struct OfflineDetail: View {
     let pick: OfflineDay.Pick
 
     var body: some View {
-        let lines = OfflineDay.lines(pick)
-        VStack(alignment: .leading, spacing: 8) {
-            if let how = lines.how {
-                Label(how, systemImage: pick.item.leave?.svc == nil ? "figure.walk" : "bus.fill").fontWeight(.semibold)
-            }
-            Label(L("Offline"), systemImage: "wifi.slash").foregroundStyle(.secondary)
+        if let how = OfflineDay.lines(pick).how {
+            Label(how, systemImage: pick.item.leave?.svc == nil ? "figure.walk" : "bus.fill")
+                .fontWeight(.semibold)
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .card()
         }
-        .font(.callout)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card()
     }
 }

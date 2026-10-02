@@ -10,6 +10,8 @@ body.app { padding-bottom: env(safe-area-inset-bottom); }
 .app-card .widget .chips { display: none; }
 .app-card .updated { margin-top: 12px; font-size: 0.8rem; }
 body.is-offline .app-card .widget { opacity: 0.6; }
+/* The day plan's next thing, offline: still the thing to do, so not dimmed (the banner says offline). */
+body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 
 .app-chips { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-bottom: -4px; }
 .app-chips::-webkit-scrollbar { display: none; }

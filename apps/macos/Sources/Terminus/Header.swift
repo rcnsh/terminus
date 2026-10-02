@@ -16,7 +16,7 @@ struct Header: View {
                 tint: .brand
             )
             VStack(alignment: .leading, spacing: 3) {
-                Text(offline.map { p in [L("Offline"), OfflineDay.lines(p).head].compactMap { $0 }.joined(separator: " · ") } ?? heading(a))
+                Text(offline.map { OfflineDay.lines($0).head } ?? heading(a))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
