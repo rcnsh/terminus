@@ -81,10 +81,8 @@ On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
 Bump the versions together (Android versionName/versionCode in
 `apps/android/app/build.gradle.kts`, Mac CFBundleShortVersionString/
 CFBundleVersion in `apps/macos/Support/Info.plist`) to 2.1.0 and commit to
-`main`. `RELEASE_NOTES.md` has the 2.1.0 notes for the map and the audit,
-but not yet the redesign (tab motion, the new Settings, Appearance, the
-notification switches moving to Settings): add those first, or ask Claude
-to.
+`main`. `RELEASE_NOTES.md` has the 2.1.0 notes: the map, the new Settings,
+Appearance and the rest. Read them over before releasing.
 
 First, check the release workflow, whose actions Dependabot moved to new
 major versions (PR #4) and CI doesn't run: GitHub → Actions → release → Run
