@@ -7,7 +7,7 @@
 
 **Settings, reorganised.** Settings is now a short list (Your trips, Timetable, Favourites, Notifications, Devices, Language, Appearance and Account), each with a line saying what's set. Tap one to open its page. On Android the back gesture closes it, and the page follows your finger as you swipe. On the web, the browser's Back button closes it, and on a wide screen the list and the page sit side by side. On the Mac, **Settings…** in the menu opens a Settings window with the groups down the side.
 
-**Notifications have moved.** On Android, the switches for leave alerts, the live notification and noticing when you board are now in Settings, under Notifications. In the web app, **Notify me when to leave** is there too.
+**Notifications have moved.** On Android, the switches for leave alerts, the live notification and noticing when you board are now in Settings, under Notifications. In the web app, **Notify me when to leave** is there too. The leave-by notification has a **Not going** button, which takes that class off today without opening the app.
 
 **Light or dark.** Settings › Appearance lets you choose light, dark, or follow your phone, browser or Mac, as before. The choice is for that device only.
 
