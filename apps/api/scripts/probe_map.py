@@ -16,6 +16,7 @@ import heapq
 import json
 import math
 import pathlib
+import time
 import urllib.parse
 import urllib.request
 
@@ -29,11 +30,24 @@ SNAP_M = 60
 SNAP_COST = 3.0  # each metre a stop sits off the road counts this much
 
 
+MIRRORS = [OVERPASS, "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter"]
+
+
 def fetch(query: str) -> dict:
+    """The public Overpass servers are often busy (504, 429): each mirror, a few times."""
     body = urllib.parse.urlencode({"data": query}).encode()
-    req = urllib.request.Request(OVERPASS, data=body, headers={"User-Agent": "terminus-map-probe"})
-    with urllib.request.urlopen(req, timeout=180) as res:
-        return json.loads(res.read())
+    last = None
+    for attempt in range(3):
+        for url in MIRRORS:
+            req = urllib.request.Request(url, data=body, headers={"User-Agent": "terminus-map-probe"})
+            try:
+                with urllib.request.urlopen(req, timeout=180) as res:
+                    return json.loads(res.read())
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+                print(f"  {url}: {exc}")
+        time.sleep(20 * (attempt + 1))
+    raise SystemExit(f"Overpass unreachable: {last}")
 
 
 def haversine(a, b):

@@ -39,9 +39,12 @@ jobs:
         with:
           python-version: "3.12"
       - name: Route shapes along OSM roads
-        run: cd apps/api && python3 scripts/probe_map.py && mv probe-out ../../probe-out
+        continue-on-error: true
+        run: cd apps/api && python3 scripts/probe_map.py; mkdir -p ../../probe-out; cp -r probe-out/. ../../probe-out/ 2>/dev/null || true
       - name: Cut the campus map from the latest Protomaps build
+        if: always()
         run: |
+          mkdir -p probe-out
           set -eu
           url=$(curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest | python3 -c "import json,sys; print(next(a['browser_download_url'] for a in json.load(sys.stdin)['assets'] if 'Linux_x86_64' in a['name']))")
           echo "pmtiles: $url"
@@ -61,6 +64,7 @@ jobs:
           ./pmtiles show probe-out/nus.pmtiles | head -20
           rm probe-out/sg.pmtiles
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
           name: probe-map
           path: probe-out
