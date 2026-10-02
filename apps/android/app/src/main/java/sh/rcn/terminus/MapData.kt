@@ -237,7 +237,8 @@ fun glide(from: Map<String, LiveBus>, to: List<LiveBus>, k: Float, path: RoutePa
     if (k >= 1f) return@map b
     val d = path?.alongBy(f, b)
     val fa = f.along
-    if (path == null || d == null || fa == null) return@map b.copy(lat = f.lat + (b.lat - f.lat) * k, lon = f.lon + (b.lon - f.lon) * k)
+    // Mid-glide straight, it's off the line: the next glide goes straight too.
+    if (path == null || d == null || fa == null) return@map b.copy(lat = f.lat + (b.lat - f.lat) * k, lon = f.lon + (b.lon - f.lon) * k, along = null)
     val m = fa + d * k
     val (lat, lon, road) = path.pointAt(m)
     b.copy(lat = lat, lon = lon, along = m, heading = if (d > 0) road else b.heading)

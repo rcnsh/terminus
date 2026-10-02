@@ -58,7 +58,7 @@ data class MapUi(
 
 /**
  * The Map tab. The screen drives the polling (only while it's on screen):
- * [refreshBuses] every 10 s while a pill is on, [refreshBoard] every 15 s
+ * [refreshBuses] every 5 s while a pill is on, [refreshBoard] every 15 s
  * while a stop's sheet is open, [locate] now and then.
  */
 class MapViewModel(app: Application) : AndroidViewModel(app) {

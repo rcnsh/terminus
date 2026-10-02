@@ -3,6 +3,7 @@ package sh.rcn.terminus.ui
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -109,6 +110,9 @@ private val PAN_LIMIT = BoundingBox(west = 103.735, south = 1.26, east = 103.85,
 /** Further than this from campus (in degrees, about 3 km), the map opens on campus, not on you. */
 private const val NEAR_CAMPUS_DEG = 0.027
 
+/** Live buses refresh this often while a pill is on (the API caches 5 s); each glide lasts as long. */
+private const val BUSES_MS = 5_000L
+
 private fun Long.color() = Color(this.toInt())
 
 /**
@@ -125,13 +129,13 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     LaunchedEffect(dark, zh) { map.open(dark, zh) }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    // Live buses every 10 s while a pill is on and the app is in front (the API caches 10 s).
+    // Live buses every 5 s while a pill is on and the app is in front (the API caches 5 s).
     LaunchedEffect(ui.selected) {
         if (ui.selected == null) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
                 map.refreshBuses()
-                delay(10_000)
+                delay(BUSES_MS)
             }
         }
     }
@@ -226,15 +230,16 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val routes = remember(campus) { MapGeoJson.routes(campus) }
     val stops = remember(campus) { MapGeoJson.stops(campus) }
 
-    // Buses glide to each new position instead of jumping: from where each
-    // was drawn last (a plain holder, not state, so drawing doesn't redraw).
+    // Buses glide to each new position instead of jumping, at a steady pace
+    // that lasts until the next one, so they keep moving: from where each
+    // is drawn now (a plain holder, not state, so drawing doesn't redraw).
     val drawn = remember { arrayOf<Map<String, LiveBus>>(emptyMap()) }
     val k = remember { Animatable(1f) }
     var from by remember { mutableStateOf<Map<String, LiveBus>>(emptyMap()) }
     LaunchedEffect(ui.buses) {
         from = drawn[0]
         k.snapTo(0f)
-        k.animateTo(1f, tween(1_200))
+        k.animateTo(1f, tween(BUSES_MS.toInt(), easing = LinearEasing))
     }
     val gliding = glide(from, ui.buses, k.value, ui.selected?.let { campus.routes[it]?.path })
     drawn[0] = gliding.associateBy { it.id }

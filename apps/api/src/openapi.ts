@@ -236,7 +236,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Live buses on one service',
           description:
-            'Where each bus on a service is now, how full it is and the stop it reaches next. Positions come from the live feed through a 10-second cache per service. A bus on its route is placed on the route line, with `heading` along the road, so it never shows beside its line from GPS drift. `nextStop` is worked out from the bus\'s position and heading along its route, and is null for a bus away from its route (such as one parked at the depot). Bus plates are not given; `id` stays the same for a bus while it runs, so a map can move it smoothly between updates.',
+            'Where each bus on a service is now, how full it is and the stop it reaches next. Positions come from the live feed through a 5-second cache per service. A bus on its route is placed on the route line, with `heading` along the road, so it never shows beside its line from GPS drift. `nextStop` is worked out from the bus\'s position and heading along its route, and is null for a bus away from its route (such as one parked at the depot). Bus plates are not given; `id` stays the same for a bus while it runs, so a map can move it smoothly between updates.',
           operationId: 'getBuses',
           parameters: [
             { name: 'svc', in: 'query', required: true, description: 'Service code, case-insensitive.', schema: { type: 'string' }, example: 'D2' },

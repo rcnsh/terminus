@@ -12,12 +12,13 @@ import { $, api, el, t } from '/account/dom.js';
 
 const MAPLIBRE = '/vendor/maplibre-gl@6.11.2/';
 const PMTILES = '/vendor/pmtiles@4.5.0/pmtiles.mjs';
-/** Live buses refresh this often while a pill is on (the API caches 10 s). */
-const BUSES_MS = 10_000;
+/** Live buses refresh this often while a pill is on (the API caches 5 s). */
+const BUSES_MS = 5_000;
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
 const ARRIVALS_MS = 15_000;
-/** How long a bus takes to glide to its new position. */
-const GLIDE_MS = 1_200;
+/** How long a bus takes to glide to its new position: until the next one,
+ *  so it keeps moving instead of sliding and then waiting. */
+const GLIDE_MS = BUSES_MS;
 /** Further than this along its line in one update (back from a hidden tab),
  *  a bus glides straight instead. */
 const GLIDE_ALONG_MAX_M = 1_500;
@@ -35,8 +36,10 @@ let selected = null;
 let busTimer = null;
 let sheetTimer = null;
 let watchId = null;
-/** Each bus as drawn now, by id, for gliding to the next position. */
+/** Each bus as it last came from the API, by id (for its card). */
 let shown = new Map();
+/** Each bus where it's drawn right now, mid-glide, to glide on from. */
+let drawn = new Map();
 let glide = null;
 
 const dark = () => window.matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light';
@@ -270,7 +273,7 @@ function addLayers() {
     layout: { 'icon-image': 'heading', 'icon-rotate': ['get', 'heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.7, 17, 1] },
   });
   highlight();
-  drawBuses([...shown.values()]);
+  drawBuses([...drawn.values()]);
 }
 
 /** A small white arrow pointing up (north) before rotation. */
@@ -323,7 +326,9 @@ function renderPills() {
 function choose(svc) {
   selected = svc;
   clearTimeout(busTimer);
+  cancelAnimationFrame(glide);
   shown = new Map();
+  drawn = new Map();
   drawBuses([]);
   renderPills();
   highlight();
@@ -364,7 +369,7 @@ document.addEventListener('visibilitychange', () => {
  *  route line when both ends are on it, so it follows the road round
  *  corners; straight otherwise. */
 function moveTo(buses) {
-  const from = shown;
+  const from = drawn;
   shown = new Map(buses.map((b) => [b.id, b]));
   const moves = buses.map((b) => {
     const f = from.get(b.id);
@@ -377,15 +382,19 @@ function moveTo(buses) {
   const start = performance.now();
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const step = (now) => {
+    // Steady, not eased: one glide runs into the next.
     const k = reduce ? 1 : Math.min(1, (now - start) / GLIDE_MS);
-    const ease = 1 - (1 - k) ** 3;
-    drawBuses(buses.map((b, i) => {
+    const frame = buses.map((b, i) => {
       const m = moves[i];
       if (!m || k === 1) return b;
-      if (!m.path) return { ...b, lat: m.f.lat + (b.lat - m.f.lat) * ease, lon: m.f.lon + (b.lon - m.f.lon) * ease };
-      const at = pointAt(m.path, m.f.along + m.d * ease);
-      return { ...b, lat: at.lat, lon: at.lon, heading: m.d > 0 ? at.bearing : b.heading };
-    }));
+      // Mid-glide straight, it's off the line: the next glide goes straight too.
+      if (!m.path) return { ...b, along: null, lat: m.f.lat + (b.lat - m.f.lat) * k, lon: m.f.lon + (b.lon - m.f.lon) * k };
+      const along = m.f.along + m.d * k;
+      const at = pointAt(m.path, along);
+      return { ...b, along: m.path.closed ? ((along % m.path.total) + m.path.total) % m.path.total : along, lat: at.lat, lon: at.lon, heading: m.d > 0 ? at.bearing : b.heading };
+    });
+    drawn = new Map(frame.map((b) => [b.id, b]));
+    drawBuses(frame);
     if (k < 1) glide = requestAnimationFrame(step);
   };
   glide = requestAnimationFrame(step);
