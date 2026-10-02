@@ -86,11 +86,6 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
         blocked = !hasLocation && activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
         vm.load()
     }
-    // "Alarms & reminders" is allowed in system settings; check again on return.
-    var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
-    LaunchedEffect(Unit) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { exact = LeaveAlerts.canBeExact(ctx) }
-    }
     val openSettings = { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))) }
 
     // Keep the answer fresh while the app is on screen; the API's own cache
@@ -213,27 +208,6 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
         }
 
         Spacer(Modifier.height(16.dp))
-        NotifyToggle(
-            stringResource(R.string.notify_leave),
-            stringResource(R.string.notify_leave_hint),
-            state.leaveAlerts, vm::setLeaveAlerts, openSettings,
-        )
-        NotifyToggle(
-            stringResource(R.string.live_notification),
-            stringResource(R.string.live_notification_hint),
-            state.liveUpdates, vm::setLiveUpdates, openSettings,
-        )
-        DetectToggle(state.detectTrips, vm::setDetectTrips, openSettings)
-        if ((state.leaveAlerts || state.liveUpdates) && !exact) {
-            Text(
-                stringResource(R.string.exact_off),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) { Text(stringResource(R.string.allow_exact)) }
-        }
-
-        Spacer(Modifier.height(16.dp))
         Search(state, vm)
         Spacer(Modifier.height(24.dp))
     }
@@ -288,7 +262,7 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
  * location. Needs notifications and precise location, asked for on the way to on.
  */
 @Composable
-private fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit) {
+internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit) {
     val ctx = LocalContext.current
     var refused by rememberSaveable { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->

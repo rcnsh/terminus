@@ -2,8 +2,19 @@ package sh.rcn.terminus.ui
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +32,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -29,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,20 +51,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.set
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.Campus
 import sh.rcn.terminus.Destination
+import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Device
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.SavedPlace
@@ -65,10 +87,24 @@ import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.L
+import kotlin.coroutines.cancellation.CancellationException
+
+/** Settings' pages, in the order the list shows them. */
+internal enum class SettingsPage(val title: Int) {
+    Trips(R.string.heading_your_trips),
+    Timetable(R.string.heading_timetable),
+    Favourites(R.string.heading_favourites),
+    Notifications(R.string.notifications),
+    Devices(R.string.heading_devices),
+    Language(R.string.heading_language),
+    Account(R.string.heading_account),
+}
 
 /**
  * Everything the account page has, so the website is optional for daily
- * use: account and devices, timetable, your day, getting around, places.
+ * use: a list of groups, each with a line saying what's set, opening a page
+ * that slides in. Back (and the back gesture, which the page follows) returns
+ * to the list.
  */
 @Composable
 internal fun SettingsScreen(
@@ -79,50 +115,227 @@ internal fun SettingsScreen(
     onSignedOut: () -> Unit,
     onClose: () -> Unit,
 ) {
-    BackHandler(onBack = onClose)
     LaunchedEffect(Unit) { account.refresh() }
     LaunchedEffect(state.email) { if (state.email != null) account.loadDevices() }
     LaunchedEffect(Unit) { account.loadChoices() }
+    LaunchedEffect(Unit) { account.loadCampus() }
+
+    var open by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
+    // A NUSMods link shared into the app: straight to Timetable, to import it.
+    LaunchedEffect(state.sharedLink) { if (state.sharedLink != null) open = SettingsPage.Timetable }
+    // How far a back gesture has gone, for the page to follow it. Kept after
+    // the gesture completes, so the page slides away from where it was let go.
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(open) { if (open != null) backProgress = 0f }
+    BackHandler(enabled = open == null, onBack = onClose)
+    PredictiveBackHandler(enabled = open != null) { events ->
+        try {
+            events.collect { backProgress = it.progress }
+            open = null
+        } catch (e: CancellationException) {
+            backProgress = 0f
+            throw e
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
-        }
         state.message?.let {
-            Card(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(it, modifier = Modifier.weight(1f))
                     TextButton(onClick = account::clearMessage) { Text(stringResource(R.string.ok)) }
                 }
             }
         }
-        val profile = state.profile
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            AccountSection(state, account, main, onAddEmail, onSignedOut)
-            LanguagePicker(account)
-            if (profile == null) {
-                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        AnimatedContent(
+            targetState = open,
+            transitionSpec = {
+                if (targetState != null) {
+                    (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(300)))
+                        .togetherWith(slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 4 } + fadeOut(tween(200)))
+                } else {
+                    (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 4 } + fadeIn(tween(300)))
+                        .togetherWith(slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(200)))
+                }
+            },
+            modifier = Modifier.weight(1f),
+            label = "settings page",
+        ) { page ->
+            if (page == null) {
+                SettingsList(state, main, onClose) { open = it }
             } else {
-                Heading(stringResource(R.string.heading_timetable))
-                var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
-                TimetableImport(state, account, link) { link = it }
-                Classes(profile, state.campus, account)
-
-                Heading(stringResource(R.string.heading_your_day))
-                state.campus?.let { HomePicker(profile, it, account) }
-                DayHours(profile, account)
-
-                Heading(stringResource(R.string.heading_getting_around))
-                PacePicker(profile, account)
-                TripChoices(state, account)
-                TripHistory(state, account)
-
-                Heading(stringResource(R.string.heading_favourites))
-                Favourites(profile, state.campus, account)
+                Column(
+                    Modifier.fillMaxSize().graphicsLayer {
+                        // Following the back gesture: the page shrinks a little and moves towards the edge.
+                        val scale = 1f - backProgress * 0.1f
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = backProgress * size.width * 0.15f
+                        alpha = 1f - backProgress * 0.3f
+                    },
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { open = null }) {
+                            Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
+                        }
+                        Text(stringResource(page.title), style = MaterialTheme.typography.titleLarge)
+                    }
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
+                        Spacer(Modifier.height(32.dp))
+                    }
+                }
             }
-            Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+/** The groups, each with a line saying what's set now. */
+@Composable
+private fun SettingsList(state: AccountState, main: MainViewModel, onClose: () -> Unit, onOpen: (SettingsPage) -> Unit) {
+    val ctx = LocalContext.current
+    val ui by main.state.collectAsStateWithLifecycle()
+    val profile = state.profile
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            for (page in SettingsPage.entries) {
+                val summary = when (page) {
+                    SettingsPage.Trips -> profile?.let {
+                        val home = it.homeStops.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
+                        listOf(home ?: stringResource(R.string.no_home_stop), stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))).joinToString(" · ")
+                    }
+                    SettingsPage.Timetable -> profile?.let {
+                        when (val n = it.trips.size + it.manual.size) {
+                            0 -> stringResource(R.string.no_classes_yet)
+                            1 -> stringResource(R.string.one_class)
+                            else -> stringResource(R.string.n_classes, n)
+                        }
+                    }
+                    SettingsPage.Favourites -> profile?.let { p -> p.places.joinToString(", ") { it.label }.ifEmpty { stringResource(R.string.none_yet) } }
+                    SettingsPage.Notifications -> listOfNotNull(
+                        if (ui.leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
+                        if (ui.liveUpdates) stringResource(R.string.short_live) else null,
+                        if (ui.detectTrips) stringResource(R.string.short_detect) else null,
+                    ).joinToString(", ").ifEmpty { stringResource(R.string.all_off) }
+                    SettingsPage.Devices -> when {
+                        state.email == null -> stringResource(R.string.devices_need_email)
+                        else -> state.devices?.let { if (it.size == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, it.size) }
+                    }
+                    SettingsPage.Language -> when (Lang.pref(ctx)) {
+                        Lang.EN -> "English"
+                        Lang.ZH -> "中文"
+                        else -> stringResource(R.string.follow_device)
+                    }
+                    SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
+                }
+                Row(
+                    Modifier.fillMaxWidth().clickable { onOpen(page) }.padding(vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(page.title), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            summary.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+private fun paceName(pace: String) = when (pace) {
+    "slow" -> R.string.pace_slow
+    "fast" -> R.string.pace_fast
+    else -> R.string.pace_normal
+}
+
+/** One group's settings: the same controls as the single page had, in the same order. */
+@Composable
+private fun SettingsPageContent(
+    page: SettingsPage,
+    state: AccountState,
+    account: AccountViewModel,
+    main: MainViewModel,
+    onAddEmail: () -> Unit,
+    onSignedOut: () -> Unit,
+) {
+    val profile = state.profile
+    val needsProfile = page in setOf(SettingsPage.Trips, SettingsPage.Timetable, SettingsPage.Favourites)
+    if (needsProfile && profile == null) {
+        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+    when (page) {
+        SettingsPage.Trips -> {
+            if (profile == null) return
+            Heading(stringResource(R.string.heading_your_day))
+            state.campus?.let { HomePicker(profile, it, account) }
+            DayHours(profile, account)
+            Heading(stringResource(R.string.heading_getting_around))
+            PacePicker(profile, account)
+            TripChoices(state, account)
+            TripHistory(state, account)
+        }
+        SettingsPage.Timetable -> {
+            if (profile == null) return
+            var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
+            TimetableImport(state, account, link) { link = it }
+            Classes(profile, state.campus, account)
+        }
+        SettingsPage.Favourites -> if (profile != null) Favourites(profile, state.campus, account)
+        SettingsPage.Notifications -> NotificationSettings(main)
+        SettingsPage.Devices -> {
+            if (state.email == null) {
+                Hint(stringResource(R.string.not_signed_in_hint))
+                Button(onClick = onAddEmail, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.add_email)) }
+            } else {
+                Devices(state, account, onSignedOut)
+            }
+        }
+        SettingsPage.Language -> LanguagePicker(account)
+        SettingsPage.Account -> AccountSection(state, account, main, onAddEmail, onSignedOut)
+    }
+}
+
+/**
+ * Leave alerts, the live notification and noticing when you board: on this
+ * phone only. Exact alarms are asked for when either notification is on.
+ */
+@Composable
+private fun NotificationSettings(main: MainViewModel) {
+    val ctx = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val ui by main.state.collectAsStateWithLifecycle()
+    // "Alarms & reminders" is allowed in system settings; check again on return.
+    var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
+    LaunchedEffect(Unit) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { exact = LeaveAlerts.canBeExact(ctx) }
+    }
+    val openSettings = { ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))) }
+    NotifyToggle(
+        stringResource(R.string.notify_leave),
+        stringResource(R.string.notify_leave_hint),
+        ui.leaveAlerts, main::setLeaveAlerts, openSettings,
+    )
+    NotifyToggle(
+        stringResource(R.string.live_notification),
+        stringResource(R.string.live_notification_hint),
+        ui.liveUpdates, main::setLiveUpdates, openSettings,
+    )
+    DetectToggle(ui.detectTrips, main::setDetectTrips, openSettings)
+    if ((ui.leaveAlerts || ui.liveUpdates) && !exact) {
+        Hint(stringResource(R.string.exact_off))
+        TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) { Text(stringResource(R.string.allow_exact)) }
     }
 }
 
@@ -194,7 +407,6 @@ private fun TripHistory(state: AccountState, account: AccountViewModel) {
 private fun AccountSection(state: AccountState, account: AccountViewModel, main: MainViewModel, onAddEmail: () -> Unit, onSignedOut: () -> Unit) {
     val ctx = LocalContext.current
     var confirm by remember { mutableStateOf<String?>(null) }
-    Heading(stringResource(R.string.heading_account))
     if (state.email == null) {
         Text(stringResource(R.string.not_signed_in))
         Hint(stringResource(R.string.not_signed_in_hint))
@@ -202,7 +414,6 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
         TextButton(onClick = { confirm = "delete" }) { Text(stringResource(R.string.delete_account)) }
     } else {
         Text(stringResource(R.string.signed_in_as, state.email))
-        Devices(state, account, onSignedOut)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
             TextButton(onClick = { confirm = "signout" }) { Text(stringResource(R.string.sign_out_phone)) }
             TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }) { Text(stringResource(R.string.account_page)) }
@@ -231,7 +442,6 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
 private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut: () -> Unit) {
     val ctx = LocalContext.current
     var removing by remember { mutableStateOf<Device?>(null) }
-    Heading(stringResource(R.string.heading_devices))
     val devices = state.devices
     if (devices == null) {
         CircularProgressIndicator(Modifier.size(20.dp))
@@ -449,7 +659,6 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
 @Composable
 internal fun LanguagePicker(account: AccountViewModel) {
     val ctx = LocalContext.current
-    Heading(stringResource(R.string.heading_language))
     Choice(
         stringResource(R.string.language),
         listOf(Lang.AUTO to stringResource(R.string.follow_device), Lang.EN to "English", Lang.ZH to "中文"),

@@ -164,6 +164,9 @@
     <string name="is_this_wrong">这不对？</string>
     <string name="language">语言</string>
     <string name="language_hint">也用于你的 Mac、网页和电子邮件。地点和巴士名称保持英文，与站牌一致。</string>
+    <string name="all_off">全部关闭</string>
+    <string name="devices_need_email">添加邮箱后可在其他设备上使用</string>
+    <string name="heading_your_trips">你的行程</string>
     <string name="just_now">刚刚</string>
     <string name="keep_account">保留账户的设置</string>
     <string name="later">稍后再说</string>
@@ -188,6 +191,7 @@
     <string name="monday">星期一</string>
     <string name="monday_short">周一</string>
     <string name="n_classes">%1$d 节课</string>
+    <string name="n_devices">%1$d 台设备</string>
     <string name="n_hours">%1$s 小时</string>
     <string name="n_imported">已导入 %1$d 节课。</string>
     <string name="n_min">%1$d 分钟</string>
@@ -197,11 +201,14 @@
     <string name="next_where_off">下一站：%1$s，在这里下车</string>
     <string name="no_answer_yet">还没有答案</string>
     <string name="no_buses_due">暂时没有巴士</string>
+    <string name="no_classes_yet">还没有课程</string>
+    <string name="no_home_stop">尚未设置家附近的车站</string>
     <string name="no_live_data">没有实时数据</string>
     <string name="no_location">无法获取你的位置。请自己选择车站。</string>
     <string name="no_reminders">不提醒</string>
     <string name="no_stop_for">找不到 %1$s 的车站。请在“设置”的“课表”里手动添加。</string>
     <string name="no_stops_near">附近没有车站</string>
+    <string name="none_yet">暂无</string>
     <string name="not_going_today">今天不去</string>
     <string name="not_saved">没有保存：%1$s</string>
     <string name="not_signed_in">未登录</string>
@@ -228,6 +235,7 @@
     <string name="on_the">在 %1$s 上</string>
     <string name="one_bus_earlier">提早一班</string>
     <string name="one_class">1 节课</string>
+    <string name="one_device">1 台设备</string>
     <string name="one_imported">已导入 1 节课。</string>
     <string name="open_settings">打开设置</string>
     <string name="open_settings_location">打开设置以允许定位</string>
@@ -241,6 +249,7 @@
     <string name="pace_normal_hint">400 米约 5 分钟。一般步速。</string>
     <string name="pace_slow">慢</string>
     <string name="pace_slow_hint">400 米约 6 分钟。步伐从容，或经常背着包。</string>
+    <string name="pace_summary">步速：%1$s</string>
     <string name="packed">考虑巴士很挤的情况</string>
     <string name="packed_hint">如果你要等的巴士在那个车站和时间经常满员，就提早一班。</string>
     <string name="pair">配对</string>
@@ -288,6 +297,9 @@
     <string name="sending">正在发送…</string>
     <string name="sent_code_to">我们已向 %1$s 发送验证码。在这里输入：</string>
     <string name="settings">设置</string>
+    <string name="short_detect">上车识别</string>
+    <string name="short_leave_alerts">出发提醒</string>
+    <string name="short_live">实时通知</string>
     <string name="shortcut_bus_to">去 %1$s 的巴士</string>
     <string name="shortcut_nearby">附近的巴士</string>
     <string name="shortcut_next_class">下一节课</string>
