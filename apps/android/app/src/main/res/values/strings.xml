@@ -214,7 +214,7 @@
     <string name="pair">Pair</string>
     <string name="pair_instead">Pair with a code instead</string>
     <string name="pair_intro">Pair this phone with your account. On a phone that\'s signed in, go to Settings, then Add a device; or on %1$s/account, choose Pair a device. Then enter the 6-character code here, or scan the QR code with your camera.</string>
-    <string name="pair_phone_text">This link pairs this phone with %1$s. Only continue if that\'s your account.</string>
+    <string name="pair_phone_text">This link pairs this phone with %1$s. Only continue if you made this code on your own account page: someone else\'s would send your trips and location to their account.</string>
     <string name="pair_phone_title">Pair this phone?</string>
     <string name="pair_share_text">Pair terminus with this link, or enter code %1$s: %2$s</string>
     <string name="pairing">Pairing…</string>

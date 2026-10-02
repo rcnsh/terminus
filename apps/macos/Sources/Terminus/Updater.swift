@@ -49,9 +49,9 @@ final class Updater: NSObject, SPUUpdaterDelegate {
 
     // MARK: SPUUpdaterDelegate (Sparkle calls these on the main thread)
 
-    /// TERMINUS_APPCAST points a test build at another feed.
+    /// TERMINUS_APPCAST points a test build at another feed (only one on this Mac in a release build).
     nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
-        ProcessInfo.processInfo.environment["TERMINUS_APPCAST"]
+        Api.devOverride("TERMINUS_APPCAST")
     }
 
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {

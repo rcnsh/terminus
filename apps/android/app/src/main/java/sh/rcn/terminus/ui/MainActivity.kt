@@ -96,11 +96,18 @@ class MainActivity : ComponentActivity() {
             "place" -> data.lastPathSegment?.let { vm.select(Target.SavedPlace(it)) }
             "nearby" -> vm.showNearby()
             // A stop or place looked up, from the widget showing it.
-            "to" -> data.lastPathSegment?.let { vm.select(Target.Code(it, data.getQueryParameter("label") ?: it)) }
+            // Only from this app's own widgets: another app could otherwise add
+            // places with names of its choosing (the activity is exported).
+            "to" -> if (intent.getStringExtra(EXTRA_KEY) == Store(this).intentKey) {
+                data.lastPathSegment?.let { vm.select(Target.Code(it, (data.getQueryParameter("label") ?: it).take(MAX_LABEL))) }
+            }
         }
     }
 
     companion object {
+        private const val EXTRA_KEY = "sh.rcn.terminus.KEY"
+        private const val MAX_LABEL = 40
+
         /** Distinct URIs, so each shortcut gets its own intent. */
         fun intentFor(ctx: Context, place: String? = null, nearby: Boolean = false, to: String? = null, label: String? = null): Intent =
             Intent(ctx, MainActivity::class.java).apply {
@@ -111,6 +118,7 @@ class MainActivity : ComponentActivity() {
                     else -> "terminus://plan".toUri()
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_KEY, Store(ctx).intentKey)
             }
     }
 }
