@@ -89,6 +89,25 @@ and take screenshots for UI changes. The admin dashboard token is `dev`.
 Street-map tiles are absent unless you put a map in `dev/map/`; routes and
 stops still draw.
 
+- Polling pages never reach "network idle" in Playwright: wait for a URL or
+  an element instead.
+- The container has Chromium only (`/opt/pw-browsers/chromium`), no WebKit;
+  don't run `playwright install`. For Safari, use a one-off workflow
+  (Playwright WebKit on Linux, or an iOS Simulator on a macOS runner).
+
+### Working from a cloud session
+
+- **CI logs** can't be downloaded from the container (the log host is
+  blocked). Read them with the GitHub tool `get_job_logs`
+  (`return_content: true`); step results are in `gh api
+  repos/rcnsh/terminus/actions/runs/<id>/jobs`.
+- **Artifacts** can't be downloaded either; the owner opens them on GitHub.
+  For evidence of a UI change in the apps, a one-off workflow can record an
+  emulator (`adb shell screenrecord`) or render the Mac's snapshots
+  (`TERMINUS_SNAPSHOT=<dir> swift run`, on `macos-latest`). Remove it once
+  it's been watched.
+- **Android strings** need apostrophes escaped (`\'`).
+
 ## Repo map
 
 ```
