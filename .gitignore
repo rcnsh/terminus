@@ -14,6 +14,8 @@ __pycache__/
 dev/
 
 # Impeccable build-review scratch (screenshots), not source
+# Screenshots dropped in the web root by a test run; real images live under assets/.
+/apps/web/public/*.png
 
 # Local output of the impeccable design plugin (screenshots, hook cache).
 .impeccable/
