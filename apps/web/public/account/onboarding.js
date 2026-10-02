@@ -20,7 +20,6 @@ export function runOnboarding(ctx) {
   const { el, api } = ctx;
   const root = document.querySelector('#onboarding');
   const steps = [welcome, timetable, home, travel, apps];
-  let i = 0;
 
   return new Promise((done) => {
     const finish = async () => {
@@ -76,9 +75,9 @@ export function runOnboarding(ctx) {
 
     const go = (n, dir) => {
       const card = root.querySelector('.ob-card');
-      if (!card || reduced()) return show((i = n), dir);
+      if (!card || reduced()) return show(n, dir);
       card.classList.add(dir > 0 ? 'ob-out-fwd' : 'ob-out-back');
-      setTimeout(() => show((i = n), dir), 160);
+      setTimeout(() => show(n, dir), 160);
     };
 
     root.hidden = false;

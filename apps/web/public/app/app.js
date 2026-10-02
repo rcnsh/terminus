@@ -76,7 +76,7 @@ async function refresh() {
   if (target.kind === 'nearby') return refreshNearby(mine);
   try {
     const at = await here();
-    const params = { ...(target.kind === 'place' ? { place: target.key } : {}), ...(at ?? {}) };
+    const params = { ...(target.kind === 'place' ? { place: target.key } : {}), ...at };
     const [next, day] = await Promise.all([get(`/me/next${query(params)}`), get(`/me/day${query()}`).catch(() => null)]);
     if (mine !== generation) return;
     show(next.data);

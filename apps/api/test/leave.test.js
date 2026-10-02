@@ -107,7 +107,7 @@ test('walking: only a class gives a leave time', () => {
 });
 
 test('homeWalkMin: defaults to 5, 0 to 30 whole minutes', () => {
-  const ok = (c) => true;
+  const ok = () => true;
   assert.equal(DEFAULT_PROFILE.homeWalkMin, 5);
   assert.equal(parseProfile({}, ok).profile.homeWalkMin, 5);
   assert.equal(parseProfile({ homeWalkMin: 0 }, ok).profile.homeWalkMin, 0);

@@ -36,7 +36,7 @@ async function call(env, path, { method = 'GET', body, token, form, cookie, key 
   if (token) headers.authorization = `Bearer ${token}`;
   if (cookie) headers.cookie = cookie;
   const ctx = makeCtx();
-  const res = await worker.fetch(new Request(BASE + path, { method, headers, body: payload }), env, ctx);
+  const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(payload === undefined ? {} : { body: payload }) }), env, ctx);
   await ctx.settle();
   return res;
 }
@@ -1014,7 +1014,7 @@ test('an email that has an account already wins over a browser without one', asy
   const cookie = (await call(env, '/auth/anon/web', { method: 'POST', body: {} })).headers.get('set-cookie').split(';')[0];
   await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGP'] }, places: [], trips: [], manual: [] } });
   // A minute later, as far as the one-email-a-minute rule goes.
-  for (const k of [...env.KV._map.keys()]) if (k.startsWith('mail:')) env.KV._map.delete(k);
+  for (const k of env.KV._map.keys()) if (k.startsWith('mail:')) env.KV._map.delete(k);
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
   const res = await call(env, '/auth/verify', { method: 'POST', form: { t: email.lastToken() }, cookie });
   const signedIn = res.headers.get('set-cookie').split(';')[0];
