@@ -78,10 +78,8 @@ On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
 
 ## 3. Release 2.1.0
 
-Bump the versions together (Android versionName/versionCode in
-`apps/android/app/build.gradle.kts`, Mac CFBundleShortVersionString/
-CFBundleVersion in `apps/macos/Support/Info.plist`) to 2.1.0 and commit to
-`main`. `RELEASE_NOTES.md` has the 2.1.0 notes: the map, the new Settings,
+The versions are bumped to 2.1.0 (build 44) on `main`, Android and Mac
+together. `RELEASE_NOTES.md` has the 2.1.0 notes: the map, the new Settings,
 Appearance and the rest. Read them over before releasing.
 
 First, check the release workflow, whose actions Dependabot moved to new
