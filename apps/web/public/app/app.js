@@ -7,6 +7,7 @@
 
 import { $, api, clock, el, t } from '/account/dom.js';
 import { show } from '/account/preview.js';
+import { offlineNext } from '/app/offline.js';
 
 const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
 /** The answer refreshes this often while the app is on screen (the API caches 15 s). */
@@ -77,12 +78,26 @@ async function refresh() {
   try {
     const at = await here();
     const params = { ...(target.kind === 'place' ? { place: target.key } : {}), ...at };
-    const [next, day] = await Promise.all([get(`/me/next${query(params)}`), get(`/me/day${query()}`).catch(() => null)]);
+    const [nextR, dayR] = await Promise.allSettled([get(`/me/next${query(params)}`), get(`/me/day${query()}`)]);
     if (mine !== generation) return;
+    if (nextR.status === 'rejected' && nextR.reason?.message === 'signed out') return;
+    const next = nextR.status === 'fulfilled' ? nextR.value : null;
+    const day = dayR.status === 'fulfilled' ? dayR.value : null;
+    if (day) renderDay(day.data);
+    // Offline with an answer gone stale (or none kept): the next thing on the
+    // day plan the service worker kept, with its leave-by from then.
+    const offline = !next || next.cached !== null;
+    const fallback = offline && target.kind === 'plan' && (!next || isStale(next.data)) ? offlineNext(day?.data, Date.now()) : null;
+    if (fallback) {
+      showOffline(fallback);
+      stale(day.cached ?? Date.now());
+      $('#updated').textContent = '';
+      return;
+    }
+    if (!next) throw nextR.reason;
     show(next.data);
     stale(next.cached);
     $('#updated').textContent = t('Updated {0}', clock(new Date(next.cached ?? Date.now()).toISOString()));
-    if (day) renderDay(day.data);
     if (JSON.stringify(next.data.places ?? []) !== JSON.stringify(places)) {
       places = next.data.places ?? [];
       renderChips();
@@ -92,6 +107,27 @@ async function refresh() {
     stale(Date.now());
     $('#offline').textContent = t('Offline, and nothing saved yet. It will update when you are back online.');
   }
+}
+
+/** Past the card's staleAt: its bus has gone, the plan has moved on, or it's old. */
+const isStale = (a) => Boolean(a.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
+
+/** The offline card: the day plan's next item, worded as the Today list words it. */
+function showOffline({ item, step }) {
+  const box = $('#preview');
+  box.className = 'widget';
+  const l = item.leave;
+  const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
+  if (step === 'home') {
+    box.replaceChildren(el('div', { class: 'big', textContent: t('Home, from {0}', item.fromName ?? t('your last class')) }));
+    return;
+  }
+  const big = step === 'leaveBy' ? t('Leave by {0}', l.estimated ? t('~{0}', clock(l.at)) : clock(l.at)) : t('Leave now');
+  box.replaceChildren(
+    el('div', { class: 'where', textContent: t('Next class · {0}', item.label) }),
+    el('div', { class: 'big', textContent: big }),
+    how ? el('div', { class: 'detail', textContent: how }) : '',
+  );
 }
 
 /** Next, each saved place, and Nearby: the phone app's chips. */
