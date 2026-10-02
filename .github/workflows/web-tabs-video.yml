@@ -104,12 +104,12 @@ jobs:
           echo "UDID=$udid" >> "$GITHUB_ENV"
           xcrun simctl boot "$udid"
           xcrun simctl bootstatus "$udid"
-          # Safari's Remote Automation switch (Settings > Safari > Advanced).
-          xcrun simctl spawn "$udid" defaults write com.apple.mobilesafari RemoteAutomationEnabled -bool YES || true
-          xcrun simctl spawn "$udid" defaults write com.apple.mobilesafari WebKitRemoteAutomationEnabled -bool YES || true
+          # Simulators from iOS 14 always allow remote automation; the Mac needs it on.
           sudo safaridriver --enable
           open -a Simulator --args -CurrentDeviceUDID "$udid"
-          sleep 10
+          # Safari opened once, so safaridriver finds it running.
+          xcrun simctl openurl "$udid" http://localhost:8787/
+          sleep 15
       - name: Record
         run: |
           cat > sim.mjs <<'EOF'
@@ -125,7 +125,17 @@ jobs:
             return j.value;
           };
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-          const { sessionId: s } = await call('POST', '/session', { capabilities: { alwaysMatch: { browserName: 'safari', platformName: 'iOS', 'safari:useSimulator': true, 'safari:deviceUDID': process.env.UDID } } });
+          // The first try often times out on CI runners (actions/runner-images#1453).
+          let s;
+          for (let i = 1; !s; i++) {
+            try {
+              ({ sessionId: s } = await call('POST', '/session', { capabilities: { alwaysMatch: { browserName: 'safari', platformName: 'iOS', 'safari:useSimulator': true, 'safari:deviceUDID': process.env.UDID } } }));
+            } catch (e) {
+              console.log(`::warning::session try ${i}: ${e.message}`);
+              if (i === 5) throw e;
+              await sleep(5000);
+            }
+          }
           const find = async (sel, using = 'css selector') => {
             for (let i = 0; i < 40; i++) {
               try { return Object.values(await call('POST', `/session/${s}/element`, { using, value: sel }))[0]; } catch { await sleep(500); }
