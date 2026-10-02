@@ -25,8 +25,9 @@ phases are done (PR #7). Phase 0's findings are below.
   - **a row of service pills along the top** (A1 · A2 · D1 · D2 · K · P ·
     R1 · R2), like the chips on Now. Tapping one shows that service's line
     and its **live buses**, and fades the other lines; tapping another
-    switches to it; tapping it again turns it off. One at a time. The buses
-    move every few seconds while a pill is on.
+    switches to it; tapping it again turns it off. One at a time. While a
+    pill is on, the buses drive along their roads: NUS's feed moves each bus
+    every 15–20 s, and the map glides it along its line in between.
   - Tapping a live bus shows a small card: the service, how full it is and
     its next stop. No plate number.
 - **Service colours,** as on the buses: A1 red, A2 yellow, D1 pink, D2
@@ -128,8 +129,8 @@ phases are done (PR #7). Phase 0's findings are below.
 
 - Looking at the Android map on a real phone (CI builds and tests it, but
   can't look at it).
-- Running the "map tiles" workflow once (Actions tab, Run workflow) after
-  Phase 1 is merged and deployed, to put the map file on R2.
+- ~~Running the "map tiles" workflow once after Phase 1 is deployed.~~
+  Done: the map file is on R2.
 
 ## Phase 0 findings
 

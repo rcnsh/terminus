@@ -3,6 +3,9 @@
 What's left now that the audit fixes are on `main`. Nothing is live until
 step 3: `main` isn't deployed automatically. Delete this file once it's done.
 
+Steps 1 to 4 also work on the Linux VPS set up by `scripts/vps-setup.sh`;
+only trying the apps on a phone and a Mac (step 5) needs those.
+
 ## 1. Get main
 
 ```sh
@@ -38,9 +41,10 @@ Check it:
 - Sign in on the website with the emailed **code** once: that's the path
   the migration is for.
 
-### The street map (once the map work is merged and deployed)
+### The street map: done
 
-Works from your phone too: GitHub → Actions → **map tiles** → Run workflow.
+The map tiles workflow has put the map on R2. To refresh it (it also runs by
+itself on 1 January and 1 July), it works from your phone too: GitHub → Actions → **map tiles** → Run workflow.
 It puts the campus map, its fonts and its icons on R2 (a few minutes). Then
 `https://terminus.rcn.sh/map/campus.pmtiles` downloads a file of about 4 MB.
 It runs in the `release` environment, like the release workflow, so it

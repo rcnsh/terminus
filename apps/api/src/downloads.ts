@@ -1,5 +1,6 @@
 /**
- * App downloads, served from R2 so the repo can stay private.
+ * App downloads, served from R2 on our own domain, so a download link stays
+ * the same from one release to the next.
  *
  * scripts/release.sh uploads the APK and the release workflow the Mac DMG,
  * each under its version, and each rewrites latest.json, which names the

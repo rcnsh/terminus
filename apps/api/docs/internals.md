@@ -21,9 +21,11 @@ tool would all consume the same `label` and `detail`. The moment a client starts
 formatting for itself, four interfaces begin to drift apart and there are four
 places to fix every bug.
 
-**This repo is the API only.** `GET /` serves its documentation; clients are
-separate. The OpenAPI spec lives in [src/openapi.ts](../src/openapi.ts) and a test
-fails if a route and the spec drift apart.
+This document is about the API. The clients (Android, Mac, the website) are
+the other folders in `apps/`; the Worker serves the website too, so `GET /` is
+the landing page and `GET /docs` the API documentation. The OpenAPI spec lives
+in [src/openapi.ts](../src/openapi.ts) and a test fails if a route and the spec
+drift apart.
 
 ---
 
@@ -90,6 +92,7 @@ pnpm run deploy
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
+| `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
@@ -438,17 +441,22 @@ cache entry is keyed on the **resolved stop code**, not the request URL —
 `getLastKnownLocation` jitters the coordinates on every call and the tile
 appends a cache-buster, so a URL-keyed cache would never hit.
 
-**KV holds only auth tokens.** Never the arrivals —
-KV writes are rate-limited and propagation is eventual, which is wrong for
-15-second data.
+**KV holds small, slow-changing state, never the arrivals.** The guest token
+and device id, the `config:appVersion` override, the monitor's view of the
+feed and its incidents, measured ride times (`ride:hops`) and a few
+short-lived marks. KV writes are rate-limited and propagation is eventual,
+which is wrong for 15-second data: arrivals and live buses live in the edge
+cache.
 
 **The stop graph is static and bundled.** Stop locations, route order and
 operating hours change a few times a year. `pnpm scrape` rebuilds
 `data/stops.json` from the bus proxy's `bus-stops` and `pickup-point` calls.
 The proxy has no `ServiceDescription`, so the route codes to fetch come from
 the existing graph plus `KNOWN_ROUTES` in the script; a new service with an
-unlisted code needs adding there. A weekly GitHub Action runs the same scrape,
-but only once the repo has a GitHub remote and the six secrets it reads.
+unlisted code needs adding there. The **scrape stop graph** workflow
+(`.github/workflows/scrape.yml`) runs the same scrape every Monday with the
+feed secrets, tests the result and commits it to `main`; a deploy then puts
+it live.
 
 **Route lines follow the roads.** `scripts/route_shapes.py` routes each
 service stop to stop along OpenStreetMap's drivable roads (one-way streets
@@ -585,8 +593,9 @@ only secrets. Everything else in `.dev.vars.example` is a URL or a version.
 
 Every answer writes one decision row, plus one row per timed arrival, to a
 Workers Analytics Engine dataset. Two purposes: checking whether the direction
-algorithm is actually right, which nothing else measures, and collecting the
-inter-stop travel times phase 2 needs — `plate` is the join key. Queries and
+algorithm is actually right, which nothing else measures, and inter-stop
+travel times from the feed's own predictions (`plate` is the join key), a
+cross-check on the ride times detection measures (8.2). Queries and
 the schema contract are in [docs/analytics.md](analytics.md).
 
 Logging is a no-op without the binding and swallows its own errors. An answer
@@ -608,9 +617,11 @@ that failed because logging failed would be an absurd way to miss a bus.
   different berth convention, `resolveBerths()` will fall through to the
   ambiguous branch and cap confidence, which is the safe direction to fail —
   but it wants a second terminus in the fixtures to confirm.
-- The fixtures come from `bus.hewliyang.com`'s proxy, not the FMS directly.
-  The rows are passthrough; the envelope is his. Replace them with raw
-  `ShuttleService` bodies once you have the capture.
+- Most stop fixtures come from `bus.hewliyang.com`'s proxy, not the feed
+  directly: the rows are passthrough, the envelope is his. One raw ConnectX
+  `ShuttleService` body (`connectx-ShuttleService-COM3.json`) confirms the
+  rows. There's no capture of the current bus proxy's reply yet; `normalize()`
+  is tested on both shapes it replaced.
 
 ## Clients
 
@@ -647,6 +658,26 @@ src/me.ts         /auth, /pair and /me routes
 src/next.ts       /me/next's answer: the plan, free days, riding, the trip's phase
 src/day.ts        /me/day, today's timeline
 src/trip.ts       Trip phases, and the per-user Durable Object with today's signals
+src/tripdo.ts     The Trip object's wakes and push
+src/answer.ts     The answer engine: stops near you, their arrivals, the best bus
+src/card.ts       The card every client shows, worded once
+src/leave.ts      When to set off; src/clock.ts clock times and lateness
+src/plan.ts       Which bus a trip is about: one plan for every device
+src/detect.ts     What a location says about the trip (phase 8.1)
+src/outcomes.ts   What happened to each planned trip, and what it suggests
+src/ridetimes.ts  Measured ride times (phase 8.2)
+src/crowd.ts      Full buses: a packed bus can pass a stop
+src/walk.ts       Walking along campus paths (data/walks.json)
+src/graph.ts      The stop graph, with hand-kept fixes
+src/geo.ts        Distance (a leaf module)
+src/residences.ts, src/landmarks.ts  Halls and named places served by several stops
+src/push.ts       FCM to Android; src/webpush.ts Web Push to the web app
+src/monitor.ts    The cron: feed health, incidents, housekeeping, arming trips
+src/appversion.ts Finding the new uNivUS version when NUS refuses the old one
+src/downloads.ts  /download/*: app files and the Mac appcast from R2
+src/admin.ts      /admin/stats; src/feedback.ts "Is this wrong?" reports
+src/i18n.ts       Every server string in English and Chinese
+src/site.ts       Which Worker this is: stable or beta
 migrations/       D1 schema
 ```
 

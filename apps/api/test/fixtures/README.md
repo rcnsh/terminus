@@ -1,6 +1,19 @@
 # Fixtures
 
-Real responses, captured 2026-08-27 ~19:55 SGT from `bus.hewliyang.com/api/stop/<CODE>`.
+- `stop-*.json`: real stop responses, captured 2026-08-27 ~19:55 SGT from
+  `bus.hewliyang.com/api/stop/<CODE>` (below).
+- `connectx-ShuttleService-COM3.json`: a raw ConnectX `ShuttleService` body
+  for COM3 (2026-08-28), the shape the bus proxy's `data` still carries.
+- `buswidget-init.json`: the retired ConnectX token hop's reply, tokens
+  redacted.
+- `graph.json`: a frozen stop graph, so tests don't move when the weekly
+  scrape changes `data/stops.json`.
+- `answers/`: golden answers (`UPDATE_GOLDEN=1 pnpm test` rewrites them),
+  read by the Android and Mac tests too; `answers/zh/` the Chinese.
+- `offline-day.json`: what each app shows offline from a kept day plan, for
+  the API, Android and Mac tests.
+
+## The stop captures
 
 **Provenance caveat:** that endpoint is `hewliyang/nus-nextbus-web`'s own
 SvelteKit server route, not the ConnectX FMS directly. The outer envelope
@@ -9,7 +22,8 @@ passthrough -- `arrivalTime`, `nextArrivalTime`, `arrivalTime_veh_plate`,
 `arrivalTime_capacity`, `busStopCode` are FMS field names.
 
 So: trust the rows, treat the envelope as one of several `normalize()` must
-handle. Replace these with raw `ShuttleService` bodies once the capture exists.
+handle. The raw ConnectX body above confirms the rows; a capture of the
+current bus proxy's reply would be better still.
 
 ## What they establish
 

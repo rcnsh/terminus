@@ -10,7 +10,8 @@ export const TTL = {
    *  window sees the same answer and upstream sees one call. */
   arrivalsMs: 15_000,
   /** The same for one service's live bus positions on the map. The feed
-   *  moves a bus every few seconds; the map glides between updates. */
+   *  moves a bus every 15-20 s (scripts/probe_buses.py); polling at 5 s sees
+   *  each move within 5 s, and the map glides between them. */
   busesMs: 5_000,
   /** How long a stale answer stays usable as a fallback. Beyond this the edge
    *  cache entry is allowed to expire and a dead upstream becomes an error. */

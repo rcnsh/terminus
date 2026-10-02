@@ -2,8 +2,8 @@
 
 `pnpm exec cf analytics_engine sql query --file query.sql`, or the GraphQL API.
 
-Dataset: `terminus`. Positional schema lives in `src/analytics.ts` — it is
-the query contract, so it is append-only.
+Dataset: `terminus` (the beta's is `terminus_beta`). Positional schema lives
+in `src/analytics.ts` — it is the query contract, so it is append-only.
 
 ## Is the direction algorithm right?
 
@@ -30,9 +30,11 @@ GROUP BY stop, svc ORDER BY n DESC
 
 ## Is `RIDE.secondsPerHop` any good?
 
-It is currently 95, and it is a guess that the whole ranking inherits. The
-walk comparison fires more often than expected on the real graph, which is
-either correct (this campus is walkable) or a sign the constant is too high.
+It is 95, a guess, and it is what the ranking uses wherever measured ride
+times don't cover a service and hour yet (detected rides, `src/ridetimes.ts`;
+see internals.md, phase 8.2). The walk comparison fires more often than
+expected on the real graph, which is either correct (this campus is walkable)
+or a sign the constant is too high.
 
 Segment times come from `arrival` rows: one vehicle, seen at two stops, at two
 times. `blob6` is the plate and it is the join key.
@@ -48,10 +50,8 @@ ORDER BY plate, timestamp
 For a plate seen at stop A then stop B, the travel time A→B is roughly
 `(timestamp_B + eta_B) - (timestamp_A + eta_A)` — each row predicts an absolute
 arrival instant, and the difference between two of them is a segment time.
-Bucket by hour of day and you have the table phase 2 wants.
-
-This needs weeks of calendar time, which is why it collects from day one even
-though nothing reads it yet.
+Bucket by hour of day and you have a table to check the measured ride times
+against. Nothing in the Worker reads it.
 
 ## Crowding
 
