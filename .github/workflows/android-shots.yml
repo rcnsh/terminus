@@ -20,16 +20,16 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      # Protomaps keeps a week of daily builds: point the test at the newest.
-      - name: Newest Protomaps build
+      # The campus map file, as the app keeps it: cut from the newest
+      # Protomaps build, copied into the app's files by the test.
+      - name: Campus map file
         run: |
+          curl -fsSL https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Linux_x86_64.tar.gz | tar xz pmtiles
           for i in 0 1 2 3 4 5 6 7 8 9 10; do
             d=$(date -u -d "-$i day" +%Y%m%d)
             if curl -fsI "https://build.protomaps.com/$d.pmtiles" >/dev/null; then build=$d; break; fi
           done
-          echo "build $build"
-          curl -sI "https://build.protomaps.com/20261001.pmtiles" | head -1
-          sed -i "s/20261001\.pmtiles/$build.pmtiles/" apps/android/app/src/androidTest/assets/style-*.json
+          ./pmtiles extract "https://build.protomaps.com/$build.pmtiles" apps/android/app/src/androidTest/assets/campus.pmtiles --bbox=103.755,1.280,103.830,1.332
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
