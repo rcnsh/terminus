@@ -274,9 +274,32 @@ test('a live bus that stops on a two-way road keeps its next stop', async () => 
     const [stranger] = await placeBuses(graph, 'D2', [raw(`U${i}`, 0)]);
     if (!driving.nextStop || driving.nextStop.code === stranger.nextStop?.code) continue;
     assert.equal(stopped.nextStop?.code, driving.nextStop.code, `stopped at line point ${i}`);
+    assert.ok(m([stopped.lon, stopped.lat], [driving.lon, driving.lat]) < 1, 'drawn on the same side, not the other');
     checked++;
   }
   assert.ok(checked > 0, 'found a two-way stretch of D2 to test on');
+});
+
+test('a live bus is drawn on its line, pointing along the road; one far off stays where it is', async () => {
+  const shape = SHAPES.A1;
+  const m = (a, b) => Math.hypot((b[0] - a[0]) * 111_320 * Math.cos(a[1] * Math.PI / 180), (b[1] - a[1]) * 110_574);
+  // The longest stretch of the line, and a point 40 m to one side of its middle.
+  let i = 0;
+  for (let j = 1; j + 1 < shape.line.length; j++) if (m(shape.line[j], shape.line[j + 1]) > m(shape.line[i], shape.line[i + 1])) i = j;
+  const [a, b] = [shape.line[i], shape.line[i + 1]];
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const len = m(a, b);
+  const nx = -(b[1] - a[1]) * 110_574 / len, ny = (b[0] - a[0]) * 111_320 * Math.cos(a[1] * Math.PI / 180) / len;
+  const off = [mid[0] + (nx * 40) / (111_320 * Math.cos(mid[1] * Math.PI / 180)), mid[1] + (ny * 40) / 110_574];
+  const road = (Math.atan2((b[0] - a[0]) * Math.cos(a[1] * Math.PI / 180), b[1] - a[1]) * 180 / Math.PI + 360) % 360;
+  const graph = { stops: [], routes: { A1: shape.stops } };
+  const raw = (plate, lon, lat) => ({ plate, lat, lon, heading: (road + 30) % 360, speed: 20, crowd: null });
+  const [bus] = await placeBuses(graph, 'A1', [raw('P1', off[0], off[1])]);
+  assert.ok(m([bus.lon, bus.lat], mid) < 2, `drawn ${m([bus.lon, bus.lat], mid)} m from the line`);
+  assert.equal(bus.heading, Math.round(road));
+  const [far] = await placeBuses(graph, 'A1', [raw('P2', mid[0], mid[1] + 0.01)]);
+  assert.equal(far.lat, Math.round((mid[1] + 0.01) * 1e6) / 1e6, 'off its route: where it is');
+  assert.equal(far.nextStop, null);
 });
 
 test('past its last stop, a loop starts again and a one-way route has ended', () => {

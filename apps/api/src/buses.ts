@@ -12,8 +12,12 @@
  * two directions of the line are metres apart, and a standing bus has no
  * heading to choose between them. Each bus's last place on its line is kept,
  * and the next match is the one a bus could have driven to since: a little
- * back for GPS error, or ahead at most at bus speed. The bus is still drawn
- * where the feed puts it; this only decides its next stop.
+ * back for GPS error, or ahead at most at bus speed.
+ *
+ * The bus is drawn at that place on its line, pointing along the road, so
+ * GPS drift doesn't put it beside its route (or in a building); a bus
+ * further than ON_ROUTE_M off its line (the depot, a detour) is drawn
+ * where the feed puts it.
  */
 
 import { shapeFor } from './campus.ts';
@@ -87,8 +91,29 @@ export function alongLine(
   prior: Prior | null = null,
   loop = false,
 ): number | null {
+  return placeOnLine(shape, lat, lon, heading, prior, loop)?.along ?? null;
+}
+
+/** Where a bus is on its line: metres along, the point, and the road's bearing there. */
+export interface Place {
+  along: number;
+  lat: number;
+  lon: number;
+  /** The way the line runs there; null when no stretch runs the way the bus is heading. */
+  bearing: number | null;
+}
+
+/** As [alongLine], with the point on the line. Exported for the tests. */
+export function placeOnLine(
+  shape: RouteShape,
+  lat: number,
+  lon: number,
+  heading: number | null,
+  prior: Prior | null = null,
+  loop = false,
+): Place | null {
   const cosLat = Math.cos((lat * Math.PI) / 180);
-  const found: { d: number; along: number; fits: boolean }[] = [];
+  const found: (Place & { d: number; fits: boolean })[] = [];
   let walked = 0;
   for (let i = 0; i + 1 < shape.line.length; i++) {
     const [aLon, aLat] = shape.line[i];
@@ -102,7 +127,16 @@ export function alongLine(
     const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
     const d = haversineM(lat, lon, aLat + (bLat - aLat) * t, aLon + (bLon - aLon) * t);
     const fits = heading == null || seg < 1 || angleBetween(heading, bearing(aLat, aLon, bLat, bLon)) <= HEADING_SLACK_DEG;
-    if (d <= ON_ROUTE_M) found.push({ d, along: walked + seg * t, fits });
+    if (d <= ON_ROUTE_M) {
+      found.push({
+        d,
+        fits,
+        along: walked + seg * t,
+        lat: aLat + (bLat - aLat) * t,
+        lon: aLon + (bLon - aLon) * t,
+        bearing: fits && seg >= 1 ? bearing(aLat, aLon, bLat, bLon) : null,
+      });
+    }
     walked += seg;
   }
   const total = walked;
@@ -113,14 +147,14 @@ export function alongLine(
     if (loop && total > 0 && gone < -total / 2) gone += total;
     return gone >= -TRACK_BACK_M && gone <= TRACK_AHEAD_M + TRACK_AHEAD_MS * prior.ageS;
   };
-  let best: { d: number; along: number; fits: boolean; reach: boolean } | null = null;
+  let best: (Place & { d: number; fits: boolean; reach: boolean }) | null = null;
   for (const c of found) {
     const x = { ...c, reach: reachable(c.along) };
     // The two sides of a road are metres apart: which way it's heading, then
     // where it could be, decide before distance.
     if (!best || (x.fits !== best.fits ? x.fits : x.reach !== best.reach ? x.reach : x.d < best.d)) best = x;
   }
-  return best ? best.along : null;
+  return best && { along: best.along, lat: best.lat, lon: best.lon, bearing: best.bearing };
 }
 
 /** The stop the bus reaches next, as an index into shape.stops. */
@@ -148,12 +182,19 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
     raw.map(async (b) => {
       const id = await idFor(svc, b.plate);
       let nextStop: LiveBus['nextStop'] = null;
+      let { lat, lon, heading } = b;
       if (shape) {
         const last = lastPlace.get(id);
         const prior = last && now - last.at < TRACK_MS ? { along: last.along, ageS: Math.max(0, now - last.at) / 1000 } : null;
-        const along = alongLine(shape, b.lat, b.lon, b.speed > 0 ? b.heading : null, prior, loop);
-        if (along != null) lastPlace.set(id, { along, at: now });
-        const k = along == null ? null : nextStopIndex(shape, along, loop);
+        const place = placeOnLine(shape, b.lat, b.lon, b.speed > 0 ? b.heading : null, prior, loop);
+        if (place) {
+          lastPlace.set(id, { along: place.along, at: now });
+          // On its line, pointing along the road.
+          lat = place.lat;
+          lon = place.lon;
+          if (heading != null && place.bearing != null) heading = place.bearing;
+        }
+        const k = place == null ? null : nextStopIndex(shape, place.along, loop);
         if (k != null) {
           const code = shape.stops[k];
           nextStop = { code, name: names.get(code) ?? code };
@@ -161,9 +202,9 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
       }
       return {
         id,
-        lat: Math.round(b.lat * 1e6) / 1e6,
-        lon: Math.round(b.lon * 1e6) / 1e6,
-        heading: b.heading == null ? null : Math.round(b.heading),
+        lat: Math.round(lat * 1e6) / 1e6,
+        lon: Math.round(lon * 1e6) / 1e6,
+        heading: heading == null ? null : Math.round(heading),
         moving: b.speed > 0,
         crowd: b.crowd,
         nextStop,
