@@ -100,9 +100,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) { Wordmark(MaterialTheme.typography.titleLarge) }
-        }
+        TabHeader { Wordmark(MaterialTheme.typography.titleLarge) }
 
         state.update?.let { v ->
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {

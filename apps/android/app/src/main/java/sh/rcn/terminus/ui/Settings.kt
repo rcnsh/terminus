@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -164,7 +165,7 @@ internal fun SettingsScreen(
             label = "settings page",
         ) { page ->
             if (page == null) {
-                SettingsList(state, main, onClose) { open = it }
+                SettingsList(state, main) { open = it }
             } else {
                 Column(
                     Modifier.fillMaxSize().graphicsLayer {
@@ -176,11 +177,12 @@ internal fun SettingsScreen(
                         alpha = 1f - backProgress * 0.3f
                     },
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { open = null }) {
+                    TabHeader {
+                        // The arrow sits in the margin, so the title lines up with the list's.
+                        IconButton(onClick = { open = null }, modifier = Modifier.offset(x = (-12).dp)) {
                             Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
                         }
-                        Text(stringResource(page.title), style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(page.title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.offset(x = (-12).dp))
                     }
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                         SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
@@ -194,15 +196,12 @@ internal fun SettingsScreen(
 
 /** The groups, each with a line saying what's set now. */
 @Composable
-private fun SettingsList(state: AccountState, main: MainViewModel, onClose: () -> Unit, onOpen: (SettingsPage) -> Unit) {
+private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (SettingsPage) -> Unit) {
     val ctx = LocalContext.current
     val ui by main.state.collectAsStateWithLifecycle()
     val profile = state.profile
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = onClose) { Text(stringResource(R.string.done)) }
-        }
+        TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             for (page in SettingsPage.entries) {
                 val summary = when (page) {

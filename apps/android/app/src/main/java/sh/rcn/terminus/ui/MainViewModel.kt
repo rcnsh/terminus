@@ -78,8 +78,20 @@ data class PendingPair(val code: String, val account: String)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(
-        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first),
+        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first)
+            .let { s -> seen()?.let { (a, at) -> s.copy(answers = mapOf(Target.Plan to a), fetchedAt = at) } ?: s },
     )
+
+    /**
+     * The last plan this phone was shown, while it still holds (before its
+     * staleAt): drawn at once on opening the app, then refreshed, rather than
+     * an empty card until the first answer arrives.
+     */
+    private fun seen(): Pair<NextAnswer, Long>? {
+        if (!store.paired) return null
+        val (a, at) = store.lastAnswer() ?: return null
+        return if ((a.staleAtMs ?: Long.MAX_VALUE) > System.currentTimeMillis()) a to at else null
+    }
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
 
