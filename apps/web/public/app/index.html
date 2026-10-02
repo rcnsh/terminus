@@ -26,12 +26,9 @@
 <body class="app">
 <header class="wrap nav">
   <a class="brand" href="/app/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
-  <nav class="nav-links">
-    <a class="btn small ghost" href="/account/">Settings</a>
-  </nav>
 </header>
 
-<main class="wrap app-main">
+<main class="wrap app-main" id="tab-now">
   <!-- iPhone Safari only, until installed or dismissed: iOS never offers it itself. -->
   <section id="install" class="card install" hidden>
     <h2>Add terminus to your Home Screen</h2>
@@ -67,5 +64,30 @@
     <ol id="today-list" class="today-list"></ol>
   </section>
 </main>
+
+<!-- The map (app/map.js), loaded the first time it's opened. -->
+<section id="tab-map" class="map-tab" hidden>
+  <div id="map" class="map" role="region" aria-label="Campus map"></div>
+  <div class="map-top">
+    <nav id="map-pills" class="app-chips map-pills" aria-label="Show a service and its buses"></nav>
+    <div id="map-status" class="map-status" role="status" hidden></div>
+  </div>
+  <section id="map-sheet" class="map-sheet" hidden aria-live="polite"></section>
+</section>
+
+<nav class="tabbar" aria-label="terminus">
+  <a href="#now" data-tab="now" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+    <span>Now</span>
+  </a>
+  <a href="#map" data-tab="map">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/></svg>
+    <span>Map</span>
+  </a>
+  <a href="/account/">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    <span>Settings</span>
+  </a>
+</nav>
 </body>
 </html>

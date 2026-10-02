@@ -95,8 +95,8 @@ they come in.
 
 - Bottom bar in `/app/`: Now and Map within the page, Settings opens
   `/account/`.
-- The Map tab with MapLibre GL JS (from cdnjs, already allowed) and the
-  stop sheet.
+- The Map tab with MapLibre GL JS (served from our own domain,
+  `scripts/vendor-map.sh`) and the stop sheet.
 - Offline: the service worker keeps the style, fonts and the campus area's
   tiles.
 - Screenshots in a headless browser: light, dark, English, Chinese, online
