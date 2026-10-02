@@ -7,7 +7,7 @@
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
-import { $, api, clock, el, t } from '/account/dom.js';
+import { $, api, clock, el, inkOn, t } from '/account/dom.js';
 import { show, wireReport } from '/account/preview.js';
 import { attachSearch } from '/account/search.js';
 import { offlineNext } from '/app/offline.js';
@@ -109,7 +109,8 @@ async function refresh() {
   } catch (err) {
     if (err.message === 'signed out' || mine !== generation) return;
     stale(Date.now());
-    $('#offline').textContent = t("You're offline and nothing has been saved yet. This will update when you're back online.");
+    // Online but no answer (the server busy, an error): not "offline".
+    $('#offline').textContent = navigator.onLine ? t("Couldn't update. Trying again soon.") : t("You're offline and nothing has been saved yet. This will update when you're back online.");
   }
 }
 
@@ -250,7 +251,10 @@ async function toggleSearch() {
       onPick: goSomewhere,
     });
     $('#where').addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') toggleSearch();
+      if (e.key === 'Escape') {
+        toggleSearch();
+        $('.chip-search')?.focus();
+      }
     });
   }
   // After attachSearch, which moves the box into its own wrapper (and out of focus).
@@ -375,6 +379,9 @@ function openSettings() {
       shared = null;
       await mod.renderLists();
     } catch (err) {
+      // "Notify me when to leave" back where it's kept, before the box is emptied, for the next try.
+      const notify = box.querySelector('#notify');
+      if (notify) $('#notify-home').append(notify);
       if (err.message !== 'signed out') box.replaceChildren(el('p', { class: 'hint', textContent: t('Settings need a connection.') }));
     } finally {
       settingsLoading = null;
@@ -448,8 +455,9 @@ async function refreshNearby(mine) {
                   'div',
                   { class: 'nearby-row' },
                   // In the service's colour, as on the buses and the map.
-                  el('span', { class: 'svc-tag', style: b.color ? `--svc:${b.color}` : '', textContent: b.svc }),
-                  el('span', { textContent: b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', Math.round(b.etaS / 60))) : t('{0} min', Math.round(b.etaS / 60)) }),
+                  el('span', { class: 'svc-tag', style: b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : '', textContent: b.svc }),
+                  // No time (scheduled with none to give, or no data): a dash, as on Android and the Mac.
+                  el('span', { textContent: b.etaS == null ? '–' : b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', Math.round(b.etaS / 60))) : t('{0} min', Math.round(b.etaS / 60)) }),
                 ),
               )
             : [el('div', { class: 'detail', textContent: s.available ? t('No buses due') : t('No times right now') })]),
@@ -496,8 +504,11 @@ async function removeFromToday(it, li) {
   try {
     show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: 'skipped', trip: it.key } }));
   } catch {
-    hide();
-    $('#offline').textContent = t("Couldn't remove that. Check your connection.");
+    // Said where it was done, in the undo bar, which the refresh below leaves alone.
+    bar.replaceChildren(el('span', { textContent: t("Couldn't remove that. Check your connection.") }));
+    bar.hidden = false;
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(hide, 6_000);
   }
   refresh();
 }

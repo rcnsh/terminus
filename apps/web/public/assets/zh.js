@@ -429,5 +429,8 @@ window.TERMINUS_ZH = {
  "Updating…": "正在更新…",
  "Go somewhere else": "去别的地方",
  "Import from NUSMods": "从 NUSMods 导入",
- "{0} on the map": "在地图上查看{0}"
+ "{0} on the map": "在地图上查看 {0}",
+ "Undo for {0}": "撤销{0}的设置",
+ "The end time must be after the start time": "结束时间必须晚于开始时间",
+ "Couldn't update. Trying again soon.": "无法更新，稍后会再试。"
 };

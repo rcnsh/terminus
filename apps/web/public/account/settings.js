@@ -68,7 +68,8 @@ function resolveWhere(input) {
   const t = input.value.trim();
   const lower = t.toLowerCase();
   const hit = destinations.find((d) => d.code.toLowerCase() === lower || d.label.toLowerCase() === lower);
-  if (hit) return hit.stopCode;
+  // A food court or other landmark goes to itself (its stops are the router's to pick).
+  if (hit) return hit.kind === 'landmark' ? hit.code : hit.stopCode;
   const code = t.toUpperCase();
   return stops.some((s) => s.code === code) ? code : null;
 }
@@ -376,6 +377,7 @@ function renderPlaces() {
             type: 'button',
             class: 'remove',
             textContent: t('Remove'),
+            'aria-label': t('Remove {0}', p.label),
             onclick: () => {
               profile.places = profile.places.filter((x) => x.key !== p.key);
               profile.usual = profile.usual.filter((u) => u.place !== p.key);
@@ -406,6 +408,7 @@ async function renderDevices() {
           type: 'button',
           class: 'remove',
           textContent: t('Remove'),
+          'aria-label': t('Remove {0}', d.name ?? t('Device')),
           onclick: async () => {
             await api(`/me/devices/${d.id}`, { method: 'DELETE' });
             renderDevices();
@@ -506,6 +509,7 @@ async function renderChoices() {
           type: 'button',
           class: 'btn small ghost',
           textContent: t('Undo'),
+          'aria-label': t('Undo for {0}', c.label ?? t('A class no longer in your timetable')),
           onclick: async () => {
             await api('/me/choice', { method: 'POST', body: { trip: c.trip, pref: c.pref, choice: 'undo' } });
             renderChoices();
@@ -581,6 +585,12 @@ function wire() {
     }
     const start = toMin(f.get('start'));
     const end = toMin(f.get('end'));
+    // An end before the start was dropped without a word; say so instead.
+    if (end != null && end <= start) {
+      e.target.end.setCustomValidity(t('The end time must be after the start time'));
+      e.target.end.reportValidity();
+      return;
+    }
     profile.manual.push({ day: Number(f.get('day')), arriveByMin: start, ...(end && end > start ? { endMin: end } : {}), to, label: f.get('label').trim(), venue: '' });
     e.target.reset();
     delete e.target.where.dataset.stop;
@@ -604,6 +614,7 @@ function wire() {
   for (const form of ['#manual-form', '#place-form']) {
     $(form).where.addEventListener('input', (e) => e.target.setCustomValidity(''));
   }
+  $('#manual-form').end.addEventListener('input', (e) => e.target.setCustomValidity(''));
 
   $('#gap').addEventListener('change', (e) => {
     const v = Number(e.target.value);
@@ -655,7 +666,6 @@ function wire() {
     renderChoices();
     changed();
   });
-  document.addEventListener('trip-choices', renderChoices);
 
   $('#home-walk').addEventListener('change', (e) => {
     const v = Number(e.target.value);
@@ -790,6 +800,8 @@ const wide = window.matchMedia('(min-width: 900px)');
 let shown;
 /** Where the list was scrolled to, for coming back to it. */
 let listScroll = 0;
+/** The page-wide listeners are in place. */
+let listening = false;
 /** Opened from the list here, so Back is the browser's. */
 let pushed = false;
 /** Slides under way, finished at once by the next change. */
@@ -993,8 +1005,13 @@ export async function mountSettings(into, { me: account, inApp = false, notify =
     rowNode(p).addEventListener('click', () => (shown === p ? null : openPage(p)));
     pageNode(p).querySelector('.page-back').addEventListener('click', closePage);
   }
-  window.addEventListener('hashchange', showPage);
-  wide.addEventListener('change', showPage);
+  // Once per page, however many times Settings is drawn (a retry after a failed load).
+  if (!listening) {
+    listening = true;
+    window.addEventListener('hashchange', showPage);
+    wide.addEventListener('change', showPage);
+    document.addEventListener('trip-choices', renderChoices);
+  }
 
   if (me.anonymous === true) {
     // Signing out would leave no way back in, so it's Add an email instead.

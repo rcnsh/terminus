@@ -44,3 +44,17 @@ export function el(tag, props = {}, ...children) {
 
 // Campus time, like the apps: class times from the server are Singapore time.
 export const clock = (iso) => new Date(iso).toLocaleTimeString(locale() ?? [], { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' });
+
+/**
+ * Text that reads on a service's colour: white or near-black, whichever
+ * contrasts more (WCAG luminance). The yellow A2 or blue K need dark text.
+ */
+export function inkOn(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex ?? '');
+  if (!m) return '#fff';
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const n = parseInt(m[1], 16);
+  const lum = 0.2126 * lin(((n >> 16) & 255) / 255) + 0.7152 * lin(((n >> 8) & 255) / 255) + 0.0722 * lin((n & 255) / 255);
+  // Contrast with white (luminance 1) against with #1c1917 (about 0.011).
+  return (1.05 / (lum + 0.05)) >= (lum + 0.05) / 0.061 ? '#fff' : '#1c1917';
+}

@@ -94,7 +94,8 @@ $('#different').addEventListener('click', () => {
 $('#resend').addEventListener('click', () => {
   $('#sent-step').hidden = true;
   $('#login-step').hidden = false;
-  $('#login-msg').textContent = t('Complete the check below, then send again.');
+  // Only when there's a check to do (none where Turnstile isn't set up).
+  $('#login-msg').textContent = document.querySelector('#turnstile-box iframe') ? t('Complete the check below, then send again.') : '';
 });
 
 // Without an email: the same account an app starts with, kept by this browser.

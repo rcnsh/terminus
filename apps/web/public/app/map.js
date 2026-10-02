@@ -8,7 +8,7 @@
 // icons (/map/*), routes and stops (/campus), buses (/buses), arrivals
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
-import { $, api, el, t } from '/account/dom.js';
+import { $, api, el, inkOn, t } from '/account/dom.js';
 
 const MAPLIBRE = '/vendor/maplibre-gl@6.11.2/';
 const PMTILES = '/vendor/pmtiles@4.5.0/pmtiles.mjs';
@@ -55,7 +55,7 @@ const lang = () => (window.i18n?.lang === 'zh' ? 'zh' : 'en');
 const styleUrl = () => `/map/style.json?theme=${dark() ? 'dark' : 'light'}&lang=${lang()}`;
 const colorOf = (svc) => campus?.routes[svc]?.color ?? '#8a939c';
 
-const svcVars = (svc) => `--svc:${colorOf(svc)}`;
+const svcVars = (svc) => `--svc:${colorOf(svc)};--svc-ink:${inkOn(colorOf(svc))}`;
 
 async function getJSON(path) {
   const res = await fetch(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
@@ -103,8 +103,9 @@ export function focusStop(code) {
   const stop = campus?.stops.find((s) => s.code === code);
   if (!map || !stop) return;
   const go = () => {
-    map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), 17), duration: 600 });
     openStop(code);
+    // Centred in what the sheet leaves uncovered, not under it.
+    map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), 17), padding: { top: 70, bottom: $('#map-sheet').offsetHeight + 20 }, duration: 600 });
   };
   if (map.loaded()) go();
   else map.once('load', go);
@@ -380,7 +381,8 @@ async function pollBuses() {
     if (err.message === 'signed out' || svc !== selected) return;
     status(navigator.onLine ? t('Live buses aren’t available right now.') : t('Live buses need a connection.'));
   }
-  if (document.visibilityState === 'visible') busTimer = setTimeout(pollBuses, BUSES_MS);
+  // Not again once the map's tab is hidden (hideMap) while this one was on its way.
+  if (visible && document.visibilityState === 'visible') busTimer = setTimeout(pollBuses, BUSES_MS);
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && visible && selected) pollBuses();
@@ -654,7 +656,8 @@ let profile = null;
 
 async function markSaved(stop, button) {
   try {
-    profile ??= await api('/me/profile');
+    // Fresh each time: a favourite may have been added or removed in Settings since.
+    profile = await api('/me/profile');
   } catch {
     return;
   }

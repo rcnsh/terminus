@@ -217,7 +217,7 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
 .beta { display: inline-block; margin-left: 8px; padding: 3px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 0.7rem; letter-spacing: 0.06em; vertical-align: 1px; }
 
 /* The widget preview's states, mirroring the apps. */
-.widget.old .big, .widget.old .detail { color: var(--faint); }
+.widget.old .big, .widget.old .detail { color: var(--muted); }
 .widget .rest { display: flex; align-items: center; gap: 10px; }
 .widget .rest svg { color: var(--accent); flex: none; }
 .widget .note { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }

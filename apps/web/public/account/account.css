@@ -64,6 +64,8 @@
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.tight input { width: 7.5rem; }
+/* "12:00 AM" needs the room; "12:00 A" was cut off at phone widths. */
+.row.tight input[type="time"] { width: auto; min-width: 9.5rem; }
 .row.tight span { color: var(--muted); font-size: 0.9rem; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 8px 0 10px; }
 @media (max-width: 560px) {
