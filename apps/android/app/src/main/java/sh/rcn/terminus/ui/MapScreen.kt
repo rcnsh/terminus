@@ -168,7 +168,7 @@ internal class MapActions(
     val places: PlacesForMap,
 )
 
-/** The map and everything over it, from [ui] alone (the screenshot test draws it with no network). */
+/** The map and everything over it, from [ui] alone. */
 @Composable
 internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
     val campus = ui.campus
