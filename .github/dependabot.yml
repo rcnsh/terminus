@@ -1,0 +1,22 @@
+# Keeps the pinned GitHub Actions (by commit SHA) and the npm dev
+# dependencies current: a PR when there's something new, a week at a time.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        patterns: ["*"]
+    # Let a new release sit a few days first: a compromised version is
+    # usually caught and pulled within that.
+    cooldown:
+      default-days: 5

@@ -28,7 +28,13 @@ concurrency:
 
 jobs:
   mac:
+    # Run by hand only from main: a branch could change what runs with the
+    # signing key. Tags are checked against main below.
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     runs-on: macos-latest
+    # The signing key, the Sparkle key and the R2 token live in this
+    # environment, which waits for a reviewer's approval before the job runs.
+    environment: release
     env:
       PUBLISH: ${{ github.event_name == 'push' }}
       # The R2 token is only in the publish step's env: not in pnpm install's
@@ -38,12 +44,12 @@ jobs:
       # Signing by hash rather than name, as the certificate isn't trusted.
       SIGN_IDENTITY: C4EE234DA75ED3CD7699A31394C276801F93C4A9
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # The release notes list the commits since the previous tag.
           fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: pnpm
@@ -60,6 +66,12 @@ jobs:
           [ "$MAC" = "$ANDROID" ] || { echo "::error::Mac is $MAC but Android is $ANDROID"; exit 1; }
           if [ "$PUBLISH" = true ] && [ "$GITHUB_REF_NAME" != "v$MAC" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match version $MAC"; exit 1
+          fi
+          # Only release what's on main: a tag on another branch is refused.
+          if [ "$PUBLISH" = true ]; then
+            git fetch --no-tags origin main
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+              echo "::error::tag $GITHUB_REF_NAME is not on main"; exit 1; }
           fi
           if [ "$PUBLISH" = true ] && [ "$HAS_CLOUDFLARE_TOKEN" != true ]; then
             echo "::error::the CLOUDFLARE_API_TOKEN secret is not set"; exit 1
@@ -95,7 +107,7 @@ jobs:
 
       - name: Keep the DMG
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: terminus-${{ steps.v.outputs.version }}-dmg
           path: build/release/${{ steps.v.outputs.version }}/terminus-${{ steps.v.outputs.version }}.dmg
