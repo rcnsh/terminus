@@ -6,8 +6,9 @@
 // - /me, /me/next and /me/day go to the network first. The last good reply
 //   is kept, and served when the network is down, marked with
 //   x-terminus-cached (when it was fetched) so the page can say so.
-// - Signing out, deleting the account, or a 401 empties the kept replies:
-//   they belong to one account and must not outlive it.
+// - Signing in or out, deleting the account, or a 401 empties the kept
+//   replies: they belong to one account and must not outlive it, or reach
+//   the next one to sign in on this browser.
 
 const SHELL = 'shell-v3';
 const DATA = 'data-v1';
@@ -26,8 +27,12 @@ const SHELL_FILES = [
   '/assets/icons/icon-192.png',
 ];
 const DATA_PATHS = new Set(['/me', '/me/next', '/me/day']);
+// Each changes whose account this browser is signed in to.
 const SIGN_OUT = [
   ['POST', '/auth/logout'],
+  ['POST', '/auth/code'],
+  ['POST', '/auth/verify'],
+  ['POST', '/auth/anon/web'],
   ['DELETE', '/me/sessions'],
   ['DELETE', '/me'],
 ];
@@ -70,6 +75,11 @@ async function networkFirst(req) {
   const key = `${url.origin}${url.pathname}${place ? `?place=${encodeURIComponent(place)}` : ''}`;
   try {
     const res = await fetch(req);
+    // A server error is as good as no network: the kept reply beats an error.
+    if (res.status >= 500) {
+      const kept = await cache.match(key);
+      if (kept) return kept;
+    }
     if (res.status === 401) await caches.delete(DATA);
     else if (res.ok) {
       const body = await res.clone().arrayBuffer();
