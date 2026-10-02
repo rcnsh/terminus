@@ -54,6 +54,17 @@ class Store(context: Context) {
         runCatching { Shortcuts.update(app, NextAnswer.parse(json).places) }
     }
 
+    /** Today's plan (/me/day) as last fetched, for when the phone is offline (OfflineDay). */
+    fun saveDay(json: JSONObject, fetchedAtMs: Long) {
+        prefs.edit { putString(KEY_DAY, json.toString()).putLong(KEY_DAY_AT, fetchedAtMs) }
+    }
+
+    fun lastDay(): Pair<DayPlan, Long>? {
+        val raw = prefs.getString(KEY_DAY, null) ?: return null
+        val day = runCatching { DayPlan.parse(JSONObject(raw)) }.getOrNull() ?: return null
+        return day to prefs.getLong(KEY_DAY_AT, 0)
+    }
+
     fun lastAnswer(): Pair<NextAnswer, Long>? {
         val raw = prefs.getString(KEY_ANSWER, null) ?: return null
         val answer = runCatching { NextAnswer.parse(JSONObject(raw)) }.getOrNull() ?: return null
@@ -182,6 +193,8 @@ class Store(context: Context) {
         const val ALIAS = "terminus-token"
         const val KEY_TOKEN = "token"
         const val KEY_INTENT = "intent-key"
+        const val KEY_DAY = "day"
+        const val KEY_DAY_AT = "day-fetched"
         /** Lang.kt's key, in the same file. */
         const val KEY_LANG = "lang"
         const val KEY_ANSWER = "answer"

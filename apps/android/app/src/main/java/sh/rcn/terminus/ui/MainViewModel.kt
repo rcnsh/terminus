@@ -78,7 +78,7 @@ data class PendingPair(val code: String, val account: String)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(
-        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app)),
+        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first),
     )
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
@@ -348,7 +348,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val token = store.token ?: return
         if (dayJob?.isActive == true) return
         dayJob = viewModelScope.launch {
-            runCatching { Api(token, hour12 = hour12(getApplication())).day() }.onSuccess { d -> _state.update { it.copy(day = d) } }
+            runCatching { Api(token, hour12 = hour12(getApplication())).dayJson() }.onSuccess { json ->
+                // Kept for when the phone goes offline (OfflineDay).
+                store.saveDay(json, System.currentTimeMillis())
+                _state.update { it.copy(day = DayPlan.parse(json)) }
+            }
         }
     }
 

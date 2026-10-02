@@ -28,6 +28,7 @@ import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NextAnswer
+import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.Push
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
@@ -53,6 +54,8 @@ object Refresher {
     private const val NOW = "terminus-refresh-now"
     /** Never refresh more often than this from the schedule, whatever the answer says. */
     private const val MIN_GAP_MS = 60_000L
+    /** The day plan kept for offline is fetched again after this long. */
+    private const val DAY_MAX_AGE_MS = 60 * 60_000L
 
     /** Fetch the planned answer, cache it, and redraw every widget. */
     suspend fun refresh(ctx: Context, fast: Boolean = false) {
@@ -68,9 +71,16 @@ object Refresher {
         // Without one, the API follows the timetable and the trip's state.
         val loc = Locator.lastKnown(ctx)
         try {
-            val json = Api(token, fast, hour12(ctx)).nextJson(Target.Plan, loc?.latitude, loc?.longitude)
+            val api = Api(token, fast, hour12(ctx))
+            val json = api.nextJson(Target.Plan, loc?.latitude, loc?.longitude)
             val now = System.currentTimeMillis()
             store.saveAnswer(json, now)
+            // Today's plan, kept for when the phone goes offline (OfflineDay):
+            // when the one kept is another day's or an hour old.
+            val kept = store.lastDay()
+            if (kept == null || kept.first.date != OfflineDay.sgtDate(now) || now - kept.second > DAY_MAX_AGE_MS) {
+                runCatching { store.saveDay(api.dayJson(), now) }
+            }
             store.lastError = null
             scheduleNext(ctx, NextAnswer.parse(json), now)
             // Signed in with no push address sent yet (a new session, or a new Firebase token).
@@ -84,6 +94,7 @@ object Refresher {
                 cancel(ctx)
             } else {
                 armFromCache(ctx, store)
+                armOfflineRedraw(ctx, store)
             }
             store.lastError = if (e.status == 401) L.s(R.string.device_removed) else e.message
         } catch (e: ParseError) {
@@ -91,6 +102,7 @@ object Refresher {
         } catch (e: Exception) {
             store.lastError = L.s(R.string.offline)
             armFromCache(ctx, store)
+            armOfflineRedraw(ctx, store)
         }
         // Widgets showing a place or Nearby (phase 8.3) keep counting down too.
         runCatching { WidgetModes.refreshChosen(ctx) }
@@ -101,6 +113,24 @@ object Refresher {
     private fun armFromCache(ctx: Context, store: Store) {
         store.lastAnswer()?.let { (answer, _) -> LeaveAlerts.arm(ctx, answer) }
     }
+
+    /**
+     * Offline, refreshes wait for a network, so nothing would redraw the
+     * widget as its offline line moves on ("Leave by" to "Leave now", then
+     * the next class). An alarm that only redraws, at the next such moment.
+     */
+    fun armOfflineRedraw(ctx: Context, store: Store) {
+        if (widgetCount(ctx) == 0) return
+        val at = OfflineDay.nextChangeAt(store.lastDay()?.first, System.currentTimeMillis()) ?: return
+        ctx.getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at + 1_000, redrawIntent(ctx))
+    }
+
+    private fun redrawIntent(ctx: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            ctx, 1,
+            Intent(ctx, RefreshReceiver::class.java).setAction(ACTION_REDRAW),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     /** Anything on screen, or on the lock screen, that needs this chain. */
     fun active(ctx: Context): Boolean = widgetCount(ctx) > 0 || Store(ctx).let { (it.leaveAlerts || it.liveUpdates) && it.paired }
@@ -157,6 +187,7 @@ object Refresher {
     fun cancel(ctx: Context) {
         WorkManager.getInstance(ctx).cancelUniqueWork(WORK)
         ctx.getSystemService(AlarmManager::class.java)?.cancel(alarmIntent(ctx))
+        ctx.getSystemService(AlarmManager::class.java)?.cancel(redrawIntent(ctx))
         LeaveAlerts.cancel(ctx)
         LiveService.stop(ctx)
     }
@@ -182,6 +213,7 @@ object Refresher {
         )
 
     const val ACTION_REFRESH = "sh.rcn.terminus.REFRESH"
+    const val ACTION_REDRAW = "sh.rcn.terminus.REDRAW"
 }
 
 class RefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
@@ -207,6 +239,19 @@ class RefreshReceiver : BroadcastReceiver() {
                 if (Refresher.active(context)) {
                     Refresher.refreshSoon(context)
                     Refresher.schedule(context)
+                }
+            }
+            Refresher.ACTION_REDRAW -> {
+                // Offline: the widget's day-plan line moves on; then the next such moment.
+                val pending = goAsync()
+                CoroutineScope(Dispatchers.Default).launch {
+                    try {
+                        redrawWidgets(context)
+                        val store = Store(context)
+                        if (store.lastError != null) Refresher.armOfflineRedraw(context, store)
+                    } finally {
+                        pending.finish()
+                    }
                 }
             }
             Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_LOCALE_CHANGED -> {
