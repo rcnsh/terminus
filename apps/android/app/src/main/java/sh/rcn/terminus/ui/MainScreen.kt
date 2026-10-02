@@ -31,6 +31,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -52,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -131,26 +134,34 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
         // places added from "Go somewhere else" (each with an X); the row
         // scrolls, and the edge fades while there's more.
         val chips = rememberScrollState()
-        Row(Modifier.fadeEnd(chips).horizontalScroll(chips), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !state.showNearby && state.target == Target.Plan, onClick = { vm.select(Target.Plan) }, label = { Text(stringResource(R.string.chip_next)) })
-            FilterChip(selected = state.showNearby, onClick = vm::showNearby, label = { Text(stringResource(R.string.chip_nearby)) })
-            for (p in state.places) {
-                FilterChip(
-                    selected = !state.showNearby && state.target == Target.SavedPlace(p.key),
-                    onClick = { vm.select(Target.SavedPlace(p.key)) },
-                    label = { Text(p.label) },
-                )
+        var searching by rememberSaveable { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).fadeEnd(chips).horizontalScroll(chips), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !state.showNearby && state.target == Target.Plan, onClick = { vm.select(Target.Plan) }, label = { Text(stringResource(R.string.chip_next)) })
+                FilterChip(selected = state.showNearby, onClick = vm::showNearby, label = { Text(stringResource(R.string.chip_nearby)) })
+                for (p in state.places) {
+                    FilterChip(
+                        selected = !state.showNearby && state.target == Target.SavedPlace(p.key),
+                        onClick = { vm.select(Target.SavedPlace(p.key)) },
+                        label = { Text(p.label) },
+                    )
+                }
+                for (d in state.added) {
+                    val code = d.id.removePrefix("stop:")
+                    AddedChip(
+                        label = d.label,
+                        selected = !state.showNearby && (state.target as? Target.Code)?.code == code,
+                        onClick = { vm.select(Target.Code(code, d.label)) },
+                        onRemove = { vm.removeAdded(d) },
+                    )
+                }
             }
-            for (d in state.added) {
-                val code = d.id.removePrefix("stop:")
-                AddedChip(
-                    label = d.label,
-                    selected = !state.showNearby && (state.target as? Target.Code)?.code == code,
-                    onClick = { vm.select(Target.Code(code, d.label)) },
-                    onRemove = { vm.removeAdded(d) },
-                )
+            // Go somewhere else: the search opens under the chips.
+            IconButton(onClick = { searching = !searching }) {
+                Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.go_somewhere_else))
             }
         }
+        if (searching) Search(state, vm) { searching = false }
         Spacer(Modifier.height(12.dp))
 
         // A minimum height keeps the chips and search from jumping as views
@@ -205,8 +216,6 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        Spacer(Modifier.height(16.dp))
-        Search(state, vm)
         Spacer(Modifier.height(24.dp))
     }
 }
