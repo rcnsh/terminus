@@ -43,7 +43,8 @@ Installed copies update themselves with [Sparkle](https://sparkle-project.org)
 `/download/appcast.xml`, download a new version in the background and install
 it when the popover is closed. An update installs only if its DMG is signed
 with the update key (`SUPublicEDKey` in `Support/Info.plist`) and the app with
-the terminus certificate. `TERMINUS_APPCAST=<url>` points a build at a test feed.
+the terminus certificate. `TERMINUS_APPCAST=<url>` points a build at a test feed. A release build only takes
+this and `TERMINUS_API_BASE` when they point at this Mac (localhost or 127.0.0.1).
 
 `./build.sh` signs with that certificate too if it's in your keychain, and
 ad-hoc otherwise. An ad-hoc build is a new identity every time, so macOS asks
