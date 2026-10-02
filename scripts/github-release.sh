@@ -1,7 +1,8 @@
 #!/bin/sh
-# Publish a GitHub release for a tagged version, with the APK and the Mac DMG
-# attached, the hand-written highlights in RELEASE_NOTES.md (when it's for
-# this version) and the commits since the previous tag. The release workflow
+# Publish a GitHub release for a tagged version, with the APKs (one per CPU
+# type from 2.1) and the Mac DMG attached, the hand-written highlights in
+# RELEASE_NOTES.md (when it's for this version) and the commits since the
+# previous tag. The release workflow
 # runs it once both files are in build/release/<version>; run again, it
 # re-uploads the files to the existing release.
 #
@@ -39,9 +40,14 @@ if [ "${2:-}" = "--notes" ]; then cat "$NOTES"; exit 0; fi
 TITLE="terminus $(python3 scripts/release-notes.py --title "$VERSION")"
 PRE=""
 case "$VERSION" in *-*) PRE="--prerelease" ;; esac
+# The other CPU types' APKs, when this version has them.
+set -- "$APK"
+for f in "$DIR/terminus-$VERSION-armv7.apk" "$DIR/terminus-$VERSION-x86_64.apk"; do
+  if [ -f "$f" ]; then set -- "$@" "$f"; fi
+done
 if gh release view "$TAG" >/dev/null 2>&1; then
-  gh release upload "$TAG" "$APK" "$MAC" --clobber
+  gh release upload "$TAG" "$@" "$MAC" --clobber
   gh release edit "$TAG" --title "$TITLE" --notes-file "$NOTES" $PRE
 else
-  gh release create "$TAG" "$APK" "$MAC" --verify-tag --title "$TITLE" --notes-file "$NOTES" $PRE
+  gh release create "$TAG" "$@" "$MAC" --verify-tag --title "$TITLE" --notes-file "$NOTES" $PRE
 fi

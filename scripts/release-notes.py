@@ -88,15 +88,24 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
                 out.append(f'## What changed\n\n{body}\n')
 
     a, m = os.path.basename(apk), os.path.basename(mac)
+    # From 2.1, one APK per CPU type beside the main (arm64) one.
+    here = os.path.dirname(apk)
+    others = [(kind, os.path.basename(p)) for kind, p in (
+        ('older 32-bit phones', apk.replace('.apk', '-armv7.apk')),
+        ('x86_64 (emulators)', apk.replace('.apk', '-x86_64.apk')),
+    ) if os.path.exists(p)]
     dl = f'{REPO}/releases/download/{tag}'
     name = 'terminus beta' if beta else 'terminus'
     keeps = ('It installs beside terminus, and installing over an older beta keeps everything.' if beta
              else 'Installing over an older version keeps everything.')
+    other_rows = ''.join(f'| Android, {kind} | [`{x}`]({dl}/{x}) | Android 12 or later |\n' for kind, x in others)
+    other_sums = ''.join(f'| `{x}` | `{sha(os.path.join(here, x))}` |\n' for _, x in others)
     out.append(
         '## Install\n\n'
         '| | Download | Runs on |\n'
         '| :-- | :-- | :-- |\n'
         f'| **Android** | [`{a}`]({dl}/{a}) | Android 12 or later |\n'
+        f'{other_rows}'
         f'| **Mac** | [`{m}`]({dl}/{m}) | macOS 14 or later, Apple silicon |\n\n'
         f'- **Android:** open the APK and allow your browser to install apps when asked. Then open {name} and tap '
         f'**Get started**, or sign in if you already have an account. {keeps}\n'
@@ -106,6 +115,7 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
         '| File | SHA-256 |\n'
         '| :-- | :-- |\n'
         f'| `{a}` | `{sha(apk)}` |\n'
+        f'{other_sums}'
         f'| `{m}` | `{sha(mac)}` |\n\n'
         '</details>'
     )
