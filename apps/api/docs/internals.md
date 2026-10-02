@@ -510,7 +510,10 @@ plenty; run it by hand once after a first deploy.
 **Failure degrades in public.** `quality` walks `live → scheduled → stale →
 ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-
 old answer honestly labelled beats a spinner, and beats an empty tile that
-reads as "no buses".
+reads as "no buses". Only a real arrival becomes `stale`; a headway guess
+from an old answer stays `scheduled`. Arrival times count from when they were
+fetched, so a bus that has left since then (by the walk to it) is never
+offered as catchable.
 
 ## What the feed actually looks like
 

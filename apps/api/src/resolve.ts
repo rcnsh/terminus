@@ -382,7 +382,8 @@ export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: Sto
     } else {
       quality = 'scheduled';
     }
-    if (sa?.stale && quality !== 'unknown') quality = 'stale';
+    // Only a real arrival goes stale; a guess stays a guess.
+    if (sa?.stale && quality === 'live') quality = 'stale';
 
     out.push({ svc, etaS, quality, ambiguousBerth });
   }
@@ -424,7 +425,11 @@ export function scoreOptions(
         .filter((a) => a.etaS != null)
         .sort((a, b) => (a.etaS as number) - (b.etaS as number));
 
-      const earliest = c.walkS + WALK.boardBufferS;
+      // Times here count from when the arrivals were fetched (departsAt is
+      // fetchedAt + boardS), so the walk counts from then too: a bus that
+      // left while a cached or stale answer aged can't be caught.
+      const ageS = Math.max(0, (nowMs - (sa?.fetchedAt ?? nowMs)) / 1000);
+      const earliest = c.walkS + WALK.boardBufferS + ageS;
       // A missing entry means we never reached the feed -- not that no bus is
       // coming. Those are different answers and must not collapse into one.
       const available = sa !== undefined && sa.available !== false;
@@ -461,7 +466,9 @@ export function scoreOptions(
         quality = 'scheduled';
       }
 
-      if (sa?.stale && quality !== 'unknown') quality = 'stale';
+      // Only a real arrival goes stale; a headway guess stays a guess, never
+      // ranked or worded as measured.
+      if (sa?.stale && quality === 'live') quality = 'stale';
 
       const rideS = legRideS(leg);
       out.push({

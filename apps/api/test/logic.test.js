@@ -112,6 +112,25 @@ test('when every listed bus leaves too soon, the guess is a bus you can still re
   assert.ok(best.boardS >= 1200, `boards at ${best.boardS}s, before the walk is done`);
 });
 
+test('a bus that left while the answer aged is not offered as catchable', () => {
+  const input = { lat: OPPKRMRT.lat, lon: OPPKRMRT.lon, to: 'UTOWN', originCode: null };
+  const cands = candidateStops(PAIR_GRAPH, input).map((c) => ({ ...c, walkS: 0 }));
+  // Fetched four minutes ago (now stale), when the bus was two minutes out.
+  const old = arrivalsFor(Object.fromEntries([sa('KRMRT', [{ svc: 'NORTH', etaS: 120, crowd: null, plate: null }], NOW - 240_000, true)]));
+  const [best] = scoreOptions(PAIR_GRAPH, cands, old, NOW);
+  assert.notEqual(best.quality, 'stale', 'the bus has gone; only a guess is left');
+  assert.ok(best.fetchedAt + best.boardS * 1000 >= NOW, 'never a departure in the past');
+});
+
+test('a headway guess from a stale stop stays a guess, not "stale" (measured)', () => {
+  const input = { lat: OPPKRMRT.lat, lon: OPPKRMRT.lon, to: 'UTOWN', originCode: null };
+  const cands = candidateStops(PAIR_GRAPH, input);
+  // The feed's last answer for this stop is old, and had no NORTH bus in it.
+  const old = arrivalsFor(Object.fromEntries([sa('KRMRT', [], NOW - 120_000, true)]));
+  const [best] = scoreOptions(PAIR_GRAPH, cands, old, NOW);
+  assert.equal(best.quality, 'scheduled');
+});
+
 test('on a loop route both sides reach UTown, but the wrong side loses on cost', () => {
   const input = { lat: KR_OPP.lat, lon: KR_OPP.lon, to: 'UTOWN', originCode: null };
   const cands = candidateStops(GRAPH, input);
