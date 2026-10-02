@@ -190,9 +190,9 @@ function fadeIn(node) {
 }
 const fadeOut = (node) => node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
 
-/** Now, Map or Settings, from the address (#map, #settings), so Back and a reload keep the tab. */
+/** Now, Map or Settings, from the address (#map, #settings, #settings/trips), so Back and a reload keep the tab. */
 async function showTab() {
-  const next = TABS.find((n) => location.hash === `#${n}`) ?? 'now';
+  const next = location.hash === '#map' ? 'map' : location.hash.startsWith('#settings') ? 'settings' : 'now';
   if (next === tab) return;
   const from = tab;
   tab = next;
@@ -250,7 +250,9 @@ function openSettings() {
     try {
       me ??= (await get('/me')).data;
       const mod = await import('/account/settings.js');
-      await mod.mountSettings(box, { me, inApp: true });
+      // "Notify me when to leave" goes in Settings, under Notifications, where this browser can do it.
+      const notify = pushable && !(iPhone && !standalone) ? $('#notify') : null;
+      await mod.mountSettings(box, { me, inApp: true, notify });
       settings = mod;
       if (shared) mod.offerImport(shared);
       shared = null;

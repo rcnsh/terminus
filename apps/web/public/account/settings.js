@@ -23,6 +23,10 @@ let root = null;
 const $ = (sel) => root.querySelector(sel);
 /** Called after anything changes that the answer depends on (the account page redraws its preview). */
 let changed = () => {};
+/** /me: who's signed in, for Account's line in the list. */
+let me = null;
+/** Devices paired, for their line in the list; null until loaded. */
+let deviceCount = null;
 
 
 /* ---------- helpers ---------- */
@@ -80,6 +84,7 @@ function save() {
     try {
       profile = await api('/me/profile', { method: 'PUT', body: profile });
       toast(t('Saved'));
+      renderSummaries();
       changed();
     } catch (err) {
       toast(t('Not saved. {0}', err.message));
@@ -382,6 +387,8 @@ async function renderDevices() {
       ),
     );
   }
+  deviceCount = devices.length;
+  renderSummaries();
   return devices.length;
 }
 
@@ -735,20 +742,194 @@ function wire() {
   });
 }
 
+/* ---------- pages ---------- */
+
+const PAGES = ['trips', 'timetable', 'favourites', 'notifications', 'devices', 'language', 'account'];
+/** The addresses: the list's (#settings in the web app, none on the account page) and a page's prefix. */
+let listHash = '';
+let pageHash = '#';
+/** Wide enough for the list and a page side by side (as in account.css). */
+const wide = window.matchMedia('(min-width: 900px)');
+/** The page on screen (null: the list); undefined before the first draw. */
+let shown;
+/** Where the list was scrolled to, for coming back to it. */
+let listScroll = 0;
+/** Opened from the list here, so Back is the browser's. */
+let pushed = false;
+/** Slides under way, finished at once by the next change. */
+let sliding = [];
+/** How far a swipe back had moved the page when it was let go, in px. */
+let swipedTo = 0;
+
+const pageNode = (p) => root.querySelector(`.settings-page[data-page="${p}"]`);
+const rowNode = (p) => root.querySelector(`.settings-row[data-page="${p}"]`);
+
+/** The page the address names, if it's one that's shown here. */
+function pageInAddress() {
+  const p = location.hash.startsWith(pageHash) ? location.hash.slice(pageHash.length) : '';
+  return PAGES.includes(p) && !rowNode(p).hidden ? p : null;
+}
+
+/** What each group has set, a line under its name in the list. */
+function renderSummaries() {
+  if (!root || !profile) return;
+  const sum = (p, text) => {
+    root.querySelector(`[data-sum="${p}"]`).textContent = text;
+  };
+  const pace = { slow: t('Slow'), normal: t('Normal'), fast: t('Fast') }[profile.walkPace ?? 'normal'] ?? t('Normal');
+  const home = profile.home?.stops?.[0];
+  sum('trips', `${home ? stopName(home) : t('No home stop yet')} · ${t('{0} pace', pace)}`);
+  const classes = profile.trips.length + profile.manual.length;
+  sum('timetable', me?.needsReimport && !$('#reimport').hidden ? t('Re-import needed') : classes === 0 ? t('No classes yet') : classes === 1 ? t('1 class') : t('{0} classes', classes));
+  sum('favourites', profile.places.map((p) => p.label).join(', ') || t('None yet'));
+  const notify = $('#notify-on');
+  sum('notifications', notify?.dataset.on ? t('On for this device') : t('Off'));
+  sum('devices', me?.anonymous ? t('Add an email to use other devices') : deviceCount === null ? '' : deviceCount === 1 ? t('1 device') : t('{0} devices', deviceCount));
+  sum('language', { en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'));
+  sum('account', me?.email ?? t('No email'));
+}
+
+/**
+ * Shows the page the address names, or the list. On a phone one replaces
+ * the other, sliding in from the side (a fade with reduced motion); side by
+ * side, a page is always open, the first until another is chosen.
+ */
+function showPage() {
+  // Somewhere else in the web app (Now, Map): settings stay as they are.
+  if (listHash && !location.hash.startsWith(listHash)) return;
+  const page = pageInAddress() ?? (wide.matches ? 'trips' : null);
+  if (page === shown) return;
+  for (const a of sliding) a.finish();
+  sliding = [];
+  const prev = shown;
+  const from = window.scrollY;
+  shown = page;
+  renderSummaries();
+  root.firstElementChild.classList.toggle('page-open', page !== null);
+  for (const p of PAGES) {
+    pageNode(p).hidden = p !== page;
+    if (p === page) rowNode(p).setAttribute('aria-current', 'page');
+    else rowNode(p).removeAttribute('aria-current');
+  }
+  if (prev === undefined || wide.matches) return;
+  if (page) listScroll = from;
+  const to = page ? 0 : listScroll;
+  window.scrollTo(0, to);
+  // Drawn only when Settings is on screen (not while the web app shows another tab).
+  if (root.closest('[hidden]') || document.visibilityState !== 'visible') return;
+  const list = $('.settings-side');
+  slide(page ? list : pageNode(prev), page ? pageNode(page) : list, Boolean(page), to - from);
+  if (page) $(`#page-${page}`).focus({ preventScroll: true });
+  else rowNode(prev).focus({ preventScroll: true });
+}
+
+/** The old view slides away under the new one; `shift` keeps the old one where it was on screen. */
+function slide(out, into, forward, shift) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const timing = { duration: reduce ? 150 : 300, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+  out.classList.add('leaving');
+  out.hidden = false;
+  out.style.top = `${shift}px`;
+  const gone = forward ? 'translateX(-25%)' : 'translateX(100%)';
+  const from = !forward && swipedTo ? `translateX(${swipedTo}px)` : 'none';
+  swipedTo = 0;
+  const outFrames = reduce ? [{ opacity: 1 }, { opacity: 0 }] : [{ transform: from, opacity: 1 }, { transform: gone, opacity: forward ? 0 : 1 }];
+  const inFrames = reduce ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: forward ? 'translateX(100%)' : 'translateX(-25%)', opacity: forward ? 1 : 0 }, { transform: 'none', opacity: 1 }];
+  const a = out.animate(outFrames, timing);
+  const b = into.animate(inFrames, timing);
+  sliding = [a, b];
+  a.finished
+    .catch(() => {})
+    .finally(() => {
+      out.classList.remove('leaving');
+      out.style.top = '';
+      if (out.classList.contains('settings-page') && out.dataset.page !== shown) out.hidden = true;
+    });
+}
+
+/** Opens a page from the list, as a new entry in the browser's history. */
+function openPage(p) {
+  pushed = true;
+  location.hash = pageHash + p;
+}
+
+/** Back to the list: the browser's Back when the page was opened here, so history stays in step. */
+function closePage() {
+  if (pushed) {
+    pushed = false;
+    history.back();
+  } else if (listHash) {
+    location.hash = listHash;
+  } else {
+    history.pushState(null, '', location.pathname + location.search);
+    showPage();
+  }
+}
+
+/**
+ * Swiping from the left edge goes back, in the installed app on an iPhone:
+ * it has no browser swipe of its own. The page follows the finger.
+ */
+function wireSwipe() {
+  if (navigator.standalone !== true) return;
+  let start = null;
+  root.addEventListener('touchstart', (e) => {
+    const page = shown && !wide.matches ? pageNode(shown) : null;
+    const tch = e.touches[0];
+    start = page && e.touches.length === 1 && tch.clientX < 24 ? { x: tch.clientX, y: tch.clientY, page, dx: 0 } : null;
+  }, { passive: true });
+  root.addEventListener('touchmove', (e) => {
+    if (!start) return;
+    const tch = e.touches[0];
+    const dx = Math.max(0, tch.clientX - start.x);
+    if (start.dx === 0 && Math.abs(tch.clientY - start.y) > dx) {
+      start = null;
+      return;
+    }
+    start.dx = dx;
+    start.page.style.transform = `translateX(${dx}px)`;
+  }, { passive: true });
+  const end = () => {
+    if (!start) return;
+    const { page, dx } = start;
+    start = null;
+    page.style.transform = '';
+    if (dx > window.innerWidth / 3) {
+      swipedTo = dx;
+      closePage();
+    } else if (dx > 0) {
+      page.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+    }
+  };
+  root.addEventListener('touchend', end);
+  root.addEventListener('touchcancel', end);
+}
+
 /* ---------- drawing ---------- */
 
 /**
- * Draws settings into `into` for the signed-in account `me` (from /me), and
- * loads what they show. `inApp`: in the web app, which shows the answer on
- * Now (so no preview here) and has no header (so Sign out is here).
- * `onChange` runs after anything the answer depends on changes.
+ * Draws settings into `into` for the signed-in account `account` (from /me),
+ * and loads what they show. `inApp`: in the web app, which shows the answer
+ * on Now (so no preview here), has no header (so Sign out is here), and keeps
+ * its tab in the address (#settings, #settings/trips). `notify`: the app's
+ * "Notify me when to leave", for the Notifications page. `onChange` runs
+ * after anything the answer depends on changes.
  */
-export async function mountSettings(into, { me, inApp = false, onChange = () => {} }) {
+export async function mountSettings(into, { me: account, inApp = false, notify = null, onChange = () => {} }) {
   const res = await fetch('/account/settings.html', { credentials: 'same-origin' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   into.innerHTML = await res.text();
   root = into;
+  me = account;
   changed = onChange;
+  if (inApp) {
+    listHash = '#settings';
+    pageHash = '#settings/';
+  }
+  if (notify) {
+    $('#notify-slot').append(notify);
+    rowNode('notifications').hidden = false;
+  }
   if (inApp) {
     $('.side-preview').remove();
     $('#who-row').hidden = false;
@@ -764,6 +945,13 @@ export async function mountSettings(into, { me, inApp = false, onChange = () => 
   }
   window.i18n?.translate(root);
   wire();
+  wireSwipe();
+  for (const p of PAGES) {
+    rowNode(p).addEventListener('click', () => (shown === p ? null : openPage(p)));
+    pageNode(p).querySelector('.page-back').addEventListener('click', closePage);
+  }
+  window.addEventListener('hashchange', showPage);
+  wide.addEventListener('change', showPage);
 
   if (me.anonymous === true) {
     // Signing out would leave no way back in, so it's Add an email instead.
@@ -810,6 +998,8 @@ export function render() {
   renderClasses();
   renderHome();
   renderPlaces();
+  showPage();
+  renderSummaries();
 }
 
 /** The lists the server keeps apart from the profile. */
@@ -829,6 +1019,7 @@ export async function reload() {
 
 /** A NUSMods link shared to the app: in the box, for the person to import. */
 export function offerImport(link) {
+  if (shown !== 'timetable') openPage('timetable');
   $('#share').value = link;
   $('#share').scrollIntoView({ block: 'center' });
   // Never import straight from the URL: any page could link here and

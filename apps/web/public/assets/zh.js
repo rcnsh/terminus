@@ -409,5 +409,17 @@ window.TERMINUS_ZH = {
  "Map": "地图",
  "Campus map": "校园地图",
  "Show a service and its buses": "显示一条路线和它的巴士",
- "Back to campus": "回到校园"
+ "Back to campus": "回到校园",
+ "Your trips": "你的行程",
+ "Notifications": "通知",
+ "No home stop yet": "尚未设置家附近的车站",
+ "{0} pace": "步速：{0}",
+ "Re-import needed": "需要重新导入",
+ "No classes yet": "还没有课程",
+ "None yet": "暂无",
+ "On for this device": "此设备已开启",
+ "Off": "关闭",
+ "Add an email to use other devices": "添加邮箱后可在其他设备上使用",
+ "1 device": "1 台设备",
+ "{0} devices": "{0} 台设备"
 };

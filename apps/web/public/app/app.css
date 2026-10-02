@@ -170,6 +170,4 @@ button.svc-tag { cursor: pointer; }
 
 /* Settings (account/settings.js): the account page's, under the app's header. */
 .settings-tab { padding-bottom: 32px; }
-/* No preview above it here, so Devices stays below the rest on a phone. */
-.settings-tab .side { order: 0; }
 body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); }

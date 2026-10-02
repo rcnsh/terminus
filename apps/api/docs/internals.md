@@ -297,6 +297,14 @@ Settings. It uses the same routes as the account page, with the session cookie.
   Settings opens, without the preview (Now has the card) and with Sign out or
   Add an email in Account. It reloads the profile each time it's opened again,
   since a stop may have been saved as a place on the map.
+- **Settings' pages.** A list of groups (Your trips, Timetable, Favourites,
+  Notifications in the app, Devices, Language, Account), each with a line
+  saying what's set, opening its page. The page is in the address (`#trips`
+  on the account page, `#settings/trips` in the app), so the browser's Back
+  returns to the list. On a phone the page slides in over the list; from
+  900 px wide they sit side by side. The installed app on an iPhone, which has
+  no browser swipe, goes back on a swipe from the left edge. "Notify me when
+  to leave" is under Notifications.
 
 - **Install.** `/manifest.webmanifest` has `start_url` `/app/`, the icons in
   `assets/icons` (drawn by `apps/android/store/render.swift`), and a share

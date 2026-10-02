@@ -51,14 +51,6 @@
     <div class="updated hint" id="updated"></div>
   </section>
 
-  <section id="notify" class="card notify" hidden>
-    <div>
-      <strong>Notify me when to leave</strong>
-      <p class="hint" id="notify-text">A reminder before it's time to leave, then updates on your bus as your trip goes on.</p>
-    </div>
-    <button type="button" class="btn small accent" id="notify-on">Turn on</button>
-  </section>
-
   <section class="today" id="today" hidden>
     <h2 class="label">Today</h2>
     <div id="today-undo" class="today-undo" role="status" hidden></div>
@@ -78,6 +70,16 @@
 
 <!-- Settings (account/settings.js), drawn the first time it's opened. -->
 <section id="tab-settings" class="wrap settings-tab" hidden></section>
+<!-- Kept here until Settings is drawn, then shown under Notifications. -->
+<div hidden>
+  <section id="notify" class="card notify" hidden>
+    <div>
+      <strong>Notify me when to leave</strong>
+      <p class="hint" id="notify-text">A reminder before it's time to leave, then updates on your bus as your trip goes on.</p>
+    </div>
+    <button type="button" class="btn small accent" id="notify-on">Turn on</button>
+  </section>
+</div>
 
 <nav class="tabbar" aria-label="terminus">
   <a href="#now" data-tab="now" aria-current="page">
