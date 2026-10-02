@@ -1,0 +1,30 @@
+# ONE-OFF (Phase 0 of docs/map-plan.md; delete after): which bus proxy
+# endpoints give a route's road shape. Runs only on pushes to this branch
+# that touch the probe, prints shapes of replies, never credentials.
+name: probe route shapes
+
+on:
+  push:
+    branches: [ccr-6bfb8175-pou0tm]
+    paths: [apps/api/scripts/probe_route_shapes.py, .github/workflows/probe.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Probe
+        env:
+          NEXTBUS_AUTH_BASE: ${{ secrets.NEXTBUS_AUTH_BASE }}
+          NEXTBUS_APP_VERSION: ${{ secrets.NEXTBUS_APP_VERSION }}
+          NEXTBUS_HTD_API: ${{ secrets.NEXTBUS_HTD_API }}
+          NEXTBUS_APP_API: ${{ secrets.NEXTBUS_APP_API }}
+          NEXTBUS_PROXY_BASE: ${{ secrets.NEXTBUS_PROXY_BASE }}
+          NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
+        run: python3 apps/api/scripts/probe_route_shapes.py
