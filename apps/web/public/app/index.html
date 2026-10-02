@@ -46,6 +46,10 @@
   <section id="offline" class="offline" hidden>You're offline. Showing the last update.</section>
 
   <nav id="chips" class="app-chips" aria-label="Where to"></nav>
+  <!-- Go somewhere else: opened by the search button at the end of the chips. -->
+  <div id="where-box" class="where-box" hidden>
+    <input id="where" type="search" placeholder="Stop, building or room" aria-label="Go somewhere else" autocomplete="off" enterkeyhint="go">
+  </div>
 
   <section class="card app-card">
     <div id="preview" class="widget" aria-live="polite"><div class="detail">Checking…</div></div>

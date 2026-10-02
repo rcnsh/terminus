@@ -9,6 +9,7 @@
 
 import { $, api, clock, el, t } from '/account/dom.js';
 import { show, wireReport } from '/account/preview.js';
+import { attachSearch } from '/account/search.js';
 import { offlineNext } from '/app/offline.js';
 
 const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
@@ -205,9 +206,75 @@ function renderChips() {
     chip(t('Next'), { kind: 'plan' }),
     ...places.map((p) => chip(p.label, { kind: 'place', key: p.key })),
     chip(t('Nearby'), { kind: 'nearby' }),
-    // A stop picked on the map (Go there), until another chip is tapped.
+    // A stop picked on the map (Go there) or in the search, until another chip is tapped.
     target.kind === 'stop' ? chip(target.label, target) : '',
+    el(
+      'button',
+      {
+        type: 'button',
+        class: 'chip-search',
+        'aria-label': t('Go somewhere else'),
+        'aria-expanded': String(!$('#where-box').hidden),
+        onclick: toggleSearch,
+      },
+      searchIcon(),
+    ),
   );
+}
+
+function searchIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
+  return svg;
+}
+
+/* ---------- go somewhere else ---------- */
+
+/** Every stop, building, room and place, from /campus: loaded the first time the search opens. */
+let destinations = null;
+let search = null;
+
+/** The search under the chips: opens focused, and closes again on a second tap. */
+async function toggleSearch() {
+  const box = $('#where-box');
+  box.hidden = !box.hidden;
+  $('.chip-search')?.setAttribute('aria-expanded', String(!box.hidden));
+  if (box.hidden) return;
+  if (!search) {
+    search = attachSearch($('#where'), {
+      source: () => destinations ?? [],
+      suggestions: () => [],
+      stopName: (code) => destinations?.find((d) => d.kind === 'stop' && d.code === code)?.label ?? code,
+      onPick: goSomewhere,
+    });
+    $('#where').addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') toggleSearch();
+    });
+  }
+  // After attachSearch, which moves the box into its own wrapper (and out of focus).
+  $('#where').focus();
+  if (!destinations) {
+    try {
+      destinations = (await get('/campus')).data.destinations ?? [];
+      // Typed before the list arrived: search again with it.
+      if ($('#where').value) $('#where').dispatchEvent(new Event('input'));
+    } catch {
+      destinations = null;
+    }
+  }
+}
+
+/** A search result: its card, under a chip of its own, as a stop picked on the map. */
+function goSomewhere(d) {
+  search.clear();
+  $('#where-box').hidden = true;
+  // A stop or a place is called by its name; a building or room by its code, as on its door.
+  target = { kind: 'stop', to: d.code, label: d.kind === 'stop' || d.kind === 'landmark' ? d.label : d.code };
+  renderChips();
+  drawSeen();
+  refresh();
 }
 
 /* ---------- tabs ---------- */

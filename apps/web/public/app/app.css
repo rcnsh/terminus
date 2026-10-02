@@ -27,6 +27,11 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
   cursor: pointer;
 }
 .app-chips button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+/* The search button at the end of the chips, and the search it opens. */
+.app-chips .chip-search { display: grid; place-items: center; padding: 7px 10px; color: var(--muted); }
+.app-chips .chip-search[aria-expanded="true"] { color: var(--ink); border-color: var(--ink); }
+.chip-search svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.where-box input { width: 100%; }
 
 .nearby-stop + .nearby-stop { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .nearby-stop header { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; margin-bottom: 6px; }
