@@ -1,32 +1,20 @@
-# ONE-OFF (Phase 1 of docs/map-plan.md; delete after): the first
-# data/shapes.json, since Overpass can't be reached from the build container.
-# Runs scripts/route_shapes.py and commits the result to this branch. The
-# weekly scrape keeps it up to date after that.
-name: first route shapes
+# ONE-OFF (Phase 1 of docs/map-plan.md; delete after): a dry run of
+# scripts/map-tiles.sh, since the Protomaps build can't be reached from the
+# build container. Builds the map files and uploads nothing.
+name: map tiles dry run
 
 on:
   push:
     branches: [ccr-6bfb8175-pou0tm]
-    paths: [apps/api/scripts/route_shapes.py, .github/workflows/probe.yml]
+    paths: [scripts/map-tiles.sh, .github/workflows/probe.yml]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  shapes:
+  dry-run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - run: python3 apps/api/scripts/route_shapes.py
-      - name: Commit to this branch
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/api/data/shapes.json
-          git diff --cached --quiet && exit 0
-          git commit -m "data: first route shapes"
-          git pull --rebase origin ccr-6bfb8175-pou0tm
-          git push origin HEAD:ccr-6bfb8175-pou0tm
+      - run: scripts/map-tiles.sh --dry-run
+      - run: ls -la build/map build/map/sprites/v4 && du -sh build/map/fonts/*
