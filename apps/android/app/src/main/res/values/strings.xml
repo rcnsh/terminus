@@ -1,5 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="close">Close</string>
+    <string name="crowd_filling">Filling</string>
+    <string name="crowd_packed">Packed</string>
+    <string name="crowd_quiet">Quiet</string>
+    <string name="map_about">~%1$s</string>
+    <string name="map_arriving">Arriving</string>
+    <string name="map_bus_stopped">Stopped</string>
+    <string name="map_bus_title">%1$s bus</string>
+    <string name="map_buses">%1$d buses on %2$s</string>
+    <string name="map_buses_unavailable">Live buses aren’t available right now.</string>
+    <string name="map_finding_buses">Finding %1$s buses…</string>
+    <string name="map_go_there">Go there</string>
+    <string name="map_how_full">How full</string>
+    <string name="map_min">%1$d min</string>
+    <string name="map_needs_connection">The map needs a connection the first time.</string>
+    <string name="map_next_stop">Next stop</string>
+    <string name="map_no_buses">No %1$s buses running right now.</string>
+    <string name="map_no_buses_due">No buses due</string>
+    <string name="map_no_times">No times right now</string>
+    <string name="map_not_on_route">Not on its route right now</string>
+    <string name="map_one_bus">1 bus on %1$s</string>
+    <string name="map_places_full">Places are full</string>
+    <string name="map_save_place">Save as place</string>
+    <string name="map_saved_as">Saved as %1$s</string>
+    <string name="map_services_here">Services here</string>
+    <string name="map_times_need_connection">Live times need a connection.</string>
+    <string name="map_walking_directions">Walking directions</string>
+    <string name="tab_map">Map</string>
+    <string name="tab_now">Now</string>
     <string name="widget_name">Next bus</string>
     <string name="widget_places_name">Next bus + places</string>
     <string name="widget_places_description">The next bus, plus buttons for your favourites and nearby departures</string>

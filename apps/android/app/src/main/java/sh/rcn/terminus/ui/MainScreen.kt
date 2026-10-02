@@ -73,7 +73,7 @@ import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
 
 @Composable
-internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit) {
+internal fun MainScreen(state: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
@@ -107,7 +107,6 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onSettings: () -> Uni
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { Wordmark(MaterialTheme.typography.titleLarge) }
-            TextButton(onClick = onSettings) { Text(stringResource(R.string.settings)) }
         }
 
         state.update?.let { v ->

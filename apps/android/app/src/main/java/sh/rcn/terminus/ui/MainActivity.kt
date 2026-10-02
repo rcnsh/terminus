@@ -40,10 +40,18 @@ import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Lang
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.res.painterResource
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
     private val account: AccountViewModel by viewModels()
+    private val map: MapViewModel by viewModels()
 
     // Android 12 has no per-app language: the chosen one is applied here (Lang).
     override fun attachBaseContext(base: Context) = super.attachBaseContext(Lang.wrap(base))
@@ -56,7 +64,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
         sh.rcn.terminus.Push.register(this)
-        setContent { TerminusTheme { App(vm, account) } }
+        setContent { TerminusTheme { App(vm, account, map) } }
     }
 
     override fun onResume() {
@@ -132,28 +140,37 @@ private fun TerminusTheme(content: @Composable () -> Unit) {
     }
 }
 
-/** Which screen is up, apart from the answer. */
-private enum class Screen { Main, Settings, SignIn, Pair }
+/** Which screen is up, apart from the tabs. */
+private enum class Screen { Main, SignIn, Pair }
+
+/** The bottom bar's tabs, once set up. */
+private enum class Tab { Now, Map, Settings }
 
 @Composable
-private fun App(vm: MainViewModel, account: AccountViewModel) {
+private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val acct by account.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val store = remember { Store(ctx) }
     var screen by rememberSaveable { mutableStateOf(Screen.Main) }
+    var tab by rememberSaveable { mutableStateOf(Tab.Now) }
     var setup by rememberSaveable { mutableStateOf(store.needsSetup) }
     val signedIn = {
         setup = store.needsSetup
         screen = Screen.Main
+        tab = Tab.Now
         vm.signedIn()
     }
     val signedOut = {
         account.reset()
         setup = false
         screen = Screen.Main
+        tab = Tab.Now
     }
-    Column(
+    // Signed in and set up: Now · Map · Settings along the bottom.
+    if (state.paired && !setup && screen == Screen.Main) {
+        Tabs(tab, { tab = it }, vm, account, map, acct, onAddEmail = { account.beginSignIn(); screen = Screen.SignIn }, onSignedOut = signedOut)
+    } else Column(
         Modifier
             .fillMaxSize()
             .safeDrawingPadding()
@@ -162,14 +179,14 @@ private fun App(vm: MainViewModel, account: AccountViewModel) {
     ) {
         when {
             screen == Screen.SignIn -> {
-                BackHandler { account.cancelSignIn(); screen = if (state.paired) Screen.Settings else Screen.Main }
+                BackHandler { account.cancelSignIn(); screen = Screen.Main }
                 SignInScreen(
                     acct,
                     adding = state.paired,
                     onSend = { account.sendSignIn(it, signedIn) },
                     onCode = { account.enterCode(it, signedIn) },
                     onChoose = { keepPhone -> account.choose(keepPhone, signedIn) },
-                    onCancel = { account.cancelSignIn(); screen = if (state.paired) Screen.Settings else Screen.Main },
+                    onCancel = { account.cancelSignIn(); screen = Screen.Main },
                 )
             }
             !state.paired && screen == Screen.Pair -> {
@@ -184,14 +201,7 @@ private fun App(vm: MainViewModel, account: AccountViewModel) {
                 onPair = { screen = Screen.Pair },
                 onLang = { pref -> Lang.set(ctx, pref); recreateOn12(ctx) },
             )
-            setup -> OnboardingScreen(acct, account, vm) { setup = false; vm.load(restart = true) }
-            screen == Screen.Settings -> SettingsScreen(
-                acct, account, vm,
-                onAddEmail = { account.beginSignIn(); screen = Screen.SignIn },
-                onSignedOut = signedOut,
-                onClose = { screen = Screen.Main; vm.load(restart = true) },
-            )
-            else -> MainScreen(state, vm, onSettings = { screen = Screen.Settings })
+            else -> OnboardingScreen(acct, account, vm) { setup = false; vm.load(restart = true) }
         }
     }
     // A language chosen here or on another device: Android 13+ redraws in it by itself.
@@ -208,7 +218,7 @@ private fun App(vm: MainViewModel, account: AccountViewModel) {
                 onDismissRequest = account::dismissShared,
                 title = { Text(stringResource(R.string.import_timetable_title)) },
                 text = { Text(stringResource(R.string.import_timetable_text)) },
-                confirmButton = { TextButton(onClick = { account.import(link); screen = Screen.Settings }) { Text(stringResource(R.string.import_action)) } },
+                confirmButton = { TextButton(onClick = { account.import(link); tab = Tab.Settings }) { Text(stringResource(R.string.import_action)) } },
                 dismissButton = { TextButton(onClick = account::dismissShared) { Text(stringResource(R.string.cancel)) } },
             )
         }
@@ -223,6 +233,81 @@ private fun App(vm: MainViewModel, account: AccountViewModel) {
         )
     }
 }
+
+/**
+ * Now · Map · Settings. Now and Settings sit inside the safe area; the map
+ * runs under the status bar, with its pills below it.
+ */
+@Composable
+private fun Tabs(
+    tab: Tab,
+    onTab: (Tab) -> Unit,
+    vm: MainViewModel,
+    account: AccountViewModel,
+    map: MapViewModel,
+    acct: AccountState,
+    onAddEmail: () -> Unit,
+    onSignedOut: () -> Unit,
+) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                for ((t, label, icon) in listOf(
+                    Triple(Tab.Now, R.string.tab_now, R.drawable.ic_tab_now),
+                    Triple(Tab.Map, R.string.tab_map, R.drawable.ic_tab_map),
+                    Triple(Tab.Settings, R.string.settings, R.drawable.ic_tab_settings),
+                )) {
+                    NavigationBarItem(
+                        selected = tab == t,
+                        onClick = {
+                            if (t == Tab.Now && tab != Tab.Now) vm.load(restart = true)
+                            onTab(t)
+                        },
+                        icon = { Icon(painterResource(icon), contentDescription = null) },
+                        label = { Text(stringResource(label)) },
+                    )
+                }
+            }
+        },
+    ) { inner ->
+        // Back from Map or Settings goes to Now, as from any other tab bar.
+        BackHandler(enabled = tab != Tab.Now) { onTab(Tab.Now); vm.load(restart = true) }
+        when (tab) {
+            Tab.Map -> Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
+                // The account's places, for "Save as place" on a stop.
+                LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                MapScreen(
+                    map,
+                    onGoThere = { code, name ->
+                        vm.select(Target.Code(code, name))
+                        onTab(Tab.Now)
+                    },
+                    places = PlacesForMap(
+                        savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
+                        full = { (acct.profile?.places?.size ?: 0) >= MAX_PLACES },
+                        save = { code, name -> account.edit { it.addPlace(name, code) } },
+                    ),
+                )
+            }
+            else -> Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding().padding(horizontal = 16.dp)) {
+                if (tab == Tab.Settings) {
+                    SettingsScreen(
+                        acct, account, vm,
+                        onAddEmail = onAddEmail,
+                        onSignedOut = onSignedOut,
+                        onClose = { onTab(Tab.Now); vm.load(restart = true) },
+                    )
+                } else {
+                    MainScreen(state, vm)
+                }
+            }
+        }
+    }
+}
+
+/** The account's limit on saved places (PROFILE_LIMITS.places in the API). */
+private const val MAX_PLACES = 12
 
 /** Android 12 has no per-app language: the activity starts again in the chosen one (Lang.wrap). */
 private fun recreateOn12(ctx: Context) {
