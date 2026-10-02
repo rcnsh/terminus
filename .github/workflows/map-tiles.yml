@@ -6,6 +6,12 @@ name: map tiles
 
 on:
   workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which site's bucket: stable, beta or both"
+        type: choice
+        options: [both, stable, beta]
+        default: both
   schedule:
     # 04:13 UTC on 1 January and 1 July.
     - cron: "13 4 1 1,7 *"
@@ -31,4 +37,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # The schedule has no inputs: both sites.
+          CHANNEL: ${{ inputs.channel || 'both' }}
         run: scripts/map-tiles.sh

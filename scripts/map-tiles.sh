@@ -5,8 +5,12 @@
 #   fonts/           Noto Sans label glyphs (Regular, Medium, Italic)
 #   sprites/v4/      the light and dark map icons
 #
-#   scripts/map-tiles.sh --dry-run   # build into ./build/map, upload nothing
-#   scripts/map-tiles.sh             # build and upload
+#   scripts/map-tiles.sh --dry-run          # build into ./build/map, upload nothing
+#   scripts/map-tiles.sh                    # build and upload, for terminus.rcn.sh
+#   CHANNEL=beta scripts/map-tiles.sh       # the same for beta.terminus.rcn.sh
+#   CHANNEL=both scripts/map-tiles.sh       # both
+#
+# Each site reads the map from its own downloads bucket (cloudflare.config.ts).
 #
 # Runs from the "map tiles" workflow (Actions tab, Run workflow), or from a
 # Mac signed in to Cloudflare. A couple of times a year is plenty: it only
@@ -17,7 +21,12 @@ set -eu
 cd "$(dirname "$0")/.."
 DRY=0
 [ "${1:-}" = "--dry-run" ] && DRY=1
-BUCKET=terminus-downloads
+case "${CHANNEL:-stable}" in
+  stable) BUCKETS=terminus-downloads ;;
+  beta) BUCKETS=terminus-beta-downloads ;;
+  both) BUCKETS="terminus-downloads terminus-beta-downloads" ;;
+  *) echo "CHANNEL is stable, beta or both, not $CHANNEL"; exit 1 ;;
+esac
 # Must match MAP_BOUNDS in apps/api/src/map.ts.
 BBOX=103.755,1.280,103.830,1.332
 PMTILES_VERSION=1.31.2
@@ -74,13 +83,16 @@ fi
 # slashes in the key, which R2 needs literal. It's installed in apps/api, so
 # run from there, as release.sh does. Eight at a time.
 cd apps/api
-export OUT BUCKET
-find "$OUT/fonts" "$OUT/sprites" -type f -print0 |
-  xargs -0 -P 8 -I{} sh -c '
-    file="$1"; key="map/${file#"$OUT"/}"
-    case "$file" in *.pbf) t=application/x-protobuf ;; *.png) t=image/png ;; *) t=application/json ;; esac
-    pnpm exec wrangler r2 object put "$BUCKET/$key" --file "$file" --content-type "$t" --remote >/dev/null || { echo "failed: $key"; exit 255; }
-  ' _ {}
-# The tiles last, once everything they need is there.
-pnpm exec wrangler r2 object put "$BUCKET/map/campus.pmtiles" --file "$OUT/campus.pmtiles" --content-type application/vnd.pmtiles --remote >/dev/null
-echo "uploaded the map (build $build, $size bytes) and its fonts and icons"
+export OUT
+for BUCKET in $BUCKETS; do
+  export BUCKET
+  find "$OUT/fonts" "$OUT/sprites" -type f -print0 |
+    xargs -0 -P 8 -I{} sh -c '
+      file="$1"; key="map/${file#"$OUT"/}"
+      case "$file" in *.pbf) t=application/x-protobuf ;; *.png) t=image/png ;; *) t=application/json ;; esac
+      pnpm exec wrangler r2 object put "$BUCKET/$key" --file "$file" --content-type "$t" --remote >/dev/null || { echo "failed: $key"; exit 255; }
+    ' _ {}
+  # The tiles last, once everything they need is there.
+  pnpm exec wrangler r2 object put "$BUCKET/map/campus.pmtiles" --file "$OUT/campus.pmtiles" --content-type application/vnd.pmtiles --remote >/dev/null
+  echo "uploaded the map (build $build, $size bytes) and its fonts and icons to $BUCKET"
+done

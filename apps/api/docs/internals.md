@@ -469,7 +469,8 @@ until the next run. The NUS feed has no route shapes of its own.
 **The street map is one file on R2.** `scripts/map-tiles.sh`, run by the
 **map tiles** workflow, cuts the campus (about 4 MB) from the Protomaps
 build of OpenStreetMap and uploads it, with Noto Sans glyphs and the light
-and dark icons, under `map/` in the downloads bucket. Twice a year is
+and dark icons, under `map/` in each site's downloads bucket (stable and
+beta have their own; the workflow does both by default). Twice a year is
 plenty; run it by hand once after a first deploy.
 
 **Failure degrades in public.** `quality` walks `live → scheduled → stale →

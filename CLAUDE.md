@@ -188,8 +188,9 @@ docs/map-plan.md      How the campus map was planned and built
     when its position changes (web `map.js` `moveTo`; Android `Glides`).
   - Plates are never sent; `id` is a hash.
 - **Map.** `/campus` returns stops and route lines. The street map is a
-  PMTiles extract on R2 (`terminus-downloads`), uploaded by the `map tiles`
-  workflow or `scripts/map-tiles.sh`. The style is Protomaps basemaps without
+  PMTiles extract on R2, in each site's own downloads bucket
+  (`terminus-downloads`, `terminus-beta-downloads`), uploaded by the
+  `map tiles` workflow or `scripts/map-tiles.sh` (`CHANNEL=stable|beta|both`). The style is Protomaps basemaps without
   points of interest, with every URL on our own domain.
 
 ## English and Chinese
