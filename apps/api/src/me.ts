@@ -793,7 +793,9 @@ export async function handleMe(
   deps: MeDeps,
 ): Promise<Response | null> {
   const path = url.pathname;
-  if (!(path.startsWith('/auth/') || path === '/pair' || path === '/pair/check' || path === '/me' || path.startsWith('/me/'))) return null;
+  // GET /pair is the page the pairing QR code opens (a phone without the
+  // app); only the POST is the API.
+  if (!(path.startsWith('/auth/') || (path === '/pair' && req.method === 'POST') || path === '/pair/check' || path === '/me' || path.startsWith('/me/'))) return null;
   const db = env.DB;
   if (!db) return json({ error: 'accounts are not configured' }, 503);
   // Form posts that set or end the browser's session come from our own pages.

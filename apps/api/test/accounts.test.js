@@ -1042,3 +1042,13 @@ test('feedback emails to the operator stop at fifty a day; the reports are still
   await mailFeedback(env, 'next', 'a@u.nus.edu', f, day + 86_400_000);
   assert.equal(email.sent.length, OPERATOR_MAILS_PER_DAY + 1, 'a new day');
 });
+
+test('the pairing QR code opens the pair page in a browser, not an API error', async () => {
+  const { env } = setup();
+  env.ASSETS = { fetch: async (req) => new Response(`page for ${new URL(req.url).pathname}`, { headers: { 'content-type': 'text/html' } }) };
+  const res = await call(env, '/pair?code=ABC234');
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), 'page for /pair');
+  // POST is still the API.
+  assert.equal((await call(env, '/pair', { method: 'POST', body: { code: 'nope' } })).status, 400);
+});
