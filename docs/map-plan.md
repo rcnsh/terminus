@@ -141,11 +141,31 @@ they come in.
 - **Plan A is out.** The bus proxy has no route-shape endpoint: `check-point`, `checkpoint`, `route`, `routes`, `polyline`, `service-description` and the like all return 404.
 - The proxy does have `active-bus`: the live position, heading and crowding of each bus on a route. That could put moving buses on the map later, but it isn't in this plan.
 - **Plan B:** route each service stop to stop along OpenStreetMap's drivable roads, respecting one-way streets and choosing the correct side of the road at each stop. Probed with a one-off workflow, since Overpass (OpenStreetMap's query service) can't be reached from the build container.
+- **Plan B works.** Every service was routed with no leg that detours oddly (more than 2.5× the straight line and 400 m longer), and every stop is within 45 m of its road:
+
+  | | A1 | A2 | D1 | D2 | K | P | R1 | R2 |
+  |---|---|---|---|---|---|---|---|---|
+  | by road | 4.6 km | 5.5 km | 4.8 km | 7.4 km | 6.5 km | 18.4 km | 3.8 km | 3.8 km |
+  | × straight lines | 1.21 | 1.25 | 1.28 | 1.24 | 1.18 | 1.37 | 1.19 | 1.24 |
+  | furthest stop from road | 34 m | 34 m | 45 m | 45 m | 18 m | 26 m | 26 m | 26 m |
+
+  All eight together come to 82 KB of GeoJSON before simplifying; simplified, a few tens of KB.
+- **OpenStreetMap already has all eight services** as route relations ("NUS Svc A1" … "NUS Svc R2", network "NUS ISB"). The scrape will compare its own shapes with those and flag a service where they differ a lot, which catches a mapped road change or a route change.
+- **Not checked yet:** how the lines look on the map. Neither the probe's output nor the map file can be downloaded into the build container, so the first look is in Phase 2's screenshots.
 
 ### 0.3 The map file
 
 - The Worker serves R2 files today without range support. R2's `get(key, { range: request.headers })` handles it, so serving `206` partial responses is a small addition.
 - The Protomaps build server can't be reached from the build container; the file is cut in the one-off workflow.
+- **Cut from the 1 October 2026 build** (OpenStreetMap as of that morning) with `pmtiles extract`, which reads only the parts it needs (about 4 MB fetched):
+
+  | area | zoom | size |
+  |---|---|---|
+  | campus and Botanic Gardens (103.755–103.830 E, 1.280–1.332 N) | 0–15 | **4.3 MB** (74 tiles) |
+  | all of Singapore | 0–15 | 27 MB |
+
+- **Decision:** the campus file, at every zoom up to 15. MapLibre draws past 15 from the same tiles (overzoom), so streets stay sharp when zoomed in close. 4.3 MB fits easily on R2, in the web app's offline cache and in Android's offline region.
+- Outside the box the map is blank. P (to the Botanic Gardens) is inside it.
 
 ### 0.4 Fonts and icons
 
