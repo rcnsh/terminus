@@ -5,8 +5,11 @@
  * The feed gives a position and a heading, not a stop. The next stop comes
  * from the route's road shape (data/shapes.json): the bus is placed on the
  * nearest stretch of its line that runs the way it is heading, and the next
- * stop is the first one further along. A route with no shape for its current
- * stops, or a bus away from its line (parked at the depot), has no next stop.
+ * stop is the first one further along. The bus is drawn at that place too,
+ * pointing along the road, so it stays on its line rather than wherever GPS
+ * drift puts it. A route with no shape for its current stops, or a bus away
+ * from its line (parked at the depot), keeps its own position and has no
+ * next stop.
  */
 
 import { shapeFor } from './campus.ts';
@@ -46,13 +49,27 @@ const angleBetween = (a: number, b: number) => {
   return d > 180 ? 360 - d : d;
 };
 
+/** Where on its line a bus is: metres along, the point, and the road's direction there. */
+export interface OnLine {
+  along: number;
+  lat: number;
+  lon: number;
+  /** The direction of the stretch of road, when it runs the way the bus is heading. */
+  bearing: number | null;
+}
+
 /**
  * Metres along the shape where the bus is, or null when it is off its line.
  * Exported for the tests.
  */
 export function alongLine(shape: RouteShape, lat: number, lon: number, heading: number | null): number | null {
+  return onLine(shape, lat, lon, heading)?.along ?? null;
+}
+
+/** The bus placed on its line, or null when it is off it. Exported for the tests. */
+export function onLine(shape: RouteShape, lat: number, lon: number, heading: number | null): OnLine | null {
   const cosLat = Math.cos((lat * Math.PI) / 180);
-  let best: { d: number; along: number; fits: boolean } | null = null;
+  let best: (OnLine & { d: number; fits: boolean }) | null = null;
   let walked = 0;
   for (let i = 0; i + 1 < shape.line.length; i++) {
     const [aLon, aLat] = shape.line[i];
@@ -69,11 +86,18 @@ export function alongLine(shape: RouteShape, lat: number, lon: number, heading: 
     // A stretch running the right way beats a nearer one running the other
     // way: the two sides of a road are metres apart.
     if (d <= ON_ROUTE_M && (!best || (fits && !best.fits) || (fits === best.fits && d < best.d))) {
-      best = { d, along: walked + seg * t, fits };
+      best = {
+        d,
+        fits,
+        along: walked + seg * t,
+        lat: aLat + (bLat - aLat) * t,
+        lon: aLon + (bLon - aLon) * t,
+        bearing: fits && seg >= 1 ? bearing(aLat, aLon, bLat, bLon) : null,
+      };
     }
     walked += seg;
   }
-  return best ? best.along : null;
+  return best && { along: best.along, lat: best.lat, lon: best.lon, bearing: best.bearing };
 }
 
 /** The stop the bus reaches next, as an index into shape.stops. */
@@ -98,19 +122,27 @@ export async function placeBuses(graph: Graph, svc: string, raw: RawBus[]): Prom
   return Promise.all(
     raw.map(async (b) => {
       let nextStop: LiveBus['nextStop'] = null;
+      let { lat, lon } = b;
+      let heading = b.heading;
       if (shape) {
-        const along = alongLine(shape, b.lat, b.lon, b.speed > 0 ? b.heading : null);
-        const k = along == null ? null : nextStopIndex(shape, along, loop);
-        if (k != null) {
-          const code = shape.stops[k];
-          nextStop = { code, name: names.get(code) ?? code };
+        const at = onLine(shape, b.lat, b.lon, b.speed > 0 ? b.heading : null);
+        if (at) {
+          // On the line, pointing along the road (when that's its way).
+          lat = at.lat;
+          lon = at.lon;
+          if (at.bearing != null && b.heading != null) heading = at.bearing;
+          const k = nextStopIndex(shape, at.along, loop);
+          if (k != null) {
+            const code = shape.stops[k];
+            nextStop = { code, name: names.get(code) ?? code };
+          }
         }
       }
       return {
         id: await idFor(svc, b.plate),
-        lat: Math.round(b.lat * 1e6) / 1e6,
-        lon: Math.round(b.lon * 1e6) / 1e6,
-        heading: b.heading == null ? null : Math.round(b.heading),
+        lat: Math.round(lat * 1e6) / 1e6,
+        lon: Math.round(lon * 1e6) / 1e6,
+        heading: heading == null ? null : Math.round(heading),
         moving: b.speed > 0,
         crowd: b.crowd,
         nextStop,

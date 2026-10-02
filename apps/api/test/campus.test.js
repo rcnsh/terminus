@@ -6,7 +6,7 @@ import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor, SHAPES } from '../src/campus.ts';
-import { alongLine, nextStopIndex } from '../src/buses.ts';
+import { alongLine, nextStopIndex, placeBuses } from '../src/buses.ts';
 import { boardAt, indexGraph } from '../src/resolve.ts';
 
 const GRAPH = graphJson;
@@ -232,6 +232,28 @@ test('a live bus is placed on its line, and its next stop is the one ahead', () 
   assert.equal(shape.stops[nextStopIndex(shape, along, true)], shape.stops[k + 1]);
   // Far from the line: not on the route.
   assert.equal(alongLine(shape, lat + 0.01, lon, heading), null);
+});
+
+test('a live bus is drawn on its line, pointing along the road; one far away stays put', async () => {
+  const shape = SHAPES.A1;
+  const metres = (a, b) => Math.hypot((b[0] - a[0]) * 111_320 * Math.cos(a[1] * Math.PI / 180), (b[1] - a[1]) * 110_574);
+  // The longest stretch of the line, and a point 20 m to one side of its middle.
+  let i = 0;
+  for (let j = 1; j + 1 < shape.line.length; j++) if (metres(shape.line[j], shape.line[j + 1]) > metres(shape.line[i], shape.line[i + 1])) i = j;
+  const [a, b] = [shape.line[i], shape.line[i + 1]];
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const len = metres(a, b);
+  const nx = -(b[1] - a[1]) * 110_574 / len, ny = (b[0] - a[0]) * 111_320 * Math.cos(a[1] * Math.PI / 180) / len;
+  const off = [mid[0] + (nx * 20) / (111_320 * Math.cos(mid[1] * Math.PI / 180)), mid[1] + (ny * 20) / 110_574];
+  const road = (Math.atan2((b[0] - a[0]) * Math.cos(a[1] * Math.PI / 180), b[1] - a[1]) * 180 / Math.PI + 360) % 360;
+  const graph = { stops: [], routes: { A1: shape.stops } };
+  const raw = (lon, lat) => ({ plate: 'X', lat, lon, heading: (road + 30) % 360, speed: 20, crowd: null });
+  const [bus] = await placeBuses(graph, 'A1', [raw(off[0], off[1])]);
+  assert.ok(metres([bus.lon, bus.lat], mid) < 2, `drawn ${metres([bus.lon, bus.lat], mid)} m from the line`);
+  assert.equal(bus.heading, Math.round(road));
+  const [far] = await placeBuses(graph, 'A1', [raw(mid[0], mid[1] + 0.01)]);
+  assert.equal(far.lat, Math.round((mid[1] + 0.01) * 1e6) / 1e6, 'off its route: where it is');
+  assert.equal(far.nextStop, null);
 });
 
 test('past its last stop, a loop starts again and a one-way route has ended', () => {
