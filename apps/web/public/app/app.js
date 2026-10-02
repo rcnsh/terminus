@@ -167,25 +167,38 @@ function renderChips() {
 /* ---------- tabs ---------- */
 
 let mapModule = null;
-let tab = 'now';
+/** Now or Map; null until the first draw. */
+let tab = null;
 
 /** Now or Map, from the address (#map), so Back and a reload keep the tab. */
 async function showTab() {
   const next = location.hash === '#map' ? 'map' : 'now';
   if (next === tab && (next === 'now' || mapModule)) return;
+  const first = tab === null;
   tab = next;
-  for (const a of document.querySelectorAll('.tabbar a[data-tab]')) {
-    if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
-    else a.removeAttribute('aria-current');
-  }
-  document.body.classList.toggle('on-map', tab === 'map');
-  $('#tab-map').hidden = tab !== 'map';
-  if (tab === 'map') {
-    mapModule ??= await import('/app/map.js');
+  const swap = () => {
+    for (const a of document.querySelectorAll('.tabbar a[data-tab]')) {
+      if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    }
+    document.body.classList.toggle('on-map', tab === 'map');
+    $('#tab-map').hidden = tab !== 'map';
+    if (tab === 'map') mapModule?.showMap();
+    else {
+      mapModule?.hideMap();
+      // start() refreshes once it has drawn the first tab.
+      if (!first) refresh();
+    }
+  };
+  // The same fade as going to Settings (assets/tabbar.css): the bar stays, the
+  // page under it fades. Not on the first draw, nor where it isn't supported.
+  const fade = !first && document.startViewTransition && document.visibilityState === 'visible' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (fade) await document.startViewTransition(swap).updateCallbackDone.catch(() => {});
+  else swap();
+  // The map's code on its first opening, after the fade: the tab shows at once.
+  if (tab === 'map' && !mapModule) {
+    mapModule = await import('/app/map.js');
     if (tab === 'map') mapModule.showMap();
-  } else {
-    mapModule?.hideMap();
-    refresh();
   }
 }
 

@@ -76,36 +76,6 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 
 /* ---------- tabs: Now · Map · Settings ---------- */
 
-:root { --tabbar-h: 60px; }
-body.app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
-.tabbar {
-  position: fixed;
-  inset: auto 0 0 0;
-  z-index: 20;
-  display: flex;
-  justify-content: center;
-  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
-  background: var(--surface);
-  border-top: 1px solid var(--line);
-}
-.tabbar a {
-  flex: 1;
-  max-width: 160px;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 3px;
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-.tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.tabbar a[aria-current="page"] { color: var(--ink); }
-.tabbar a[aria-current="page"] svg { stroke-width: 2.2; color: var(--accent); }
-.tabbar a:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 10px; }
-
 /* ---------- the map ---------- */
 
 /* Full screen above the tab bar; the header steps aside for it. */

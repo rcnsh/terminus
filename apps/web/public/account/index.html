@@ -15,6 +15,8 @@
 <script src="/assets/zh.js"></script>
 <script src="/assets/i18n.js"></script>
 <link rel="stylesheet" href="/account/account.css">
+<link rel="stylesheet" href="/assets/tabbar.css">
+<script src="/account/in-app.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" integrity="sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1" crossorigin="anonymous" defer></script>
 <script type="module" src="/account/app.js"></script>
 </head>
@@ -23,7 +25,7 @@
   <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
   <nav class="nav-links" id="who" hidden>
     <span class="hint hide-sm" id="email"></span>
-    <a class="btn small accent" href="/app/">Open the app</a>
+    <a class="btn small accent open-app" href="/app/">Open the app</a>
     <button type="button" class="btn small ghost" id="add-email" hidden>Add an email</button>
     <button type="button" class="btn small ghost" id="logout">Sign out</button>
   </nav>
@@ -249,5 +251,19 @@
     <nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/status">Status</a><a href="/docs">API</a></nav>
   </div>
 </footer>
+<nav class="tabbar account-tabbar" aria-label="terminus">
+  <a href="/app/#now">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+    <span>Now</span>
+  </a>
+  <a href="/app/#map">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/></svg>
+    <span>Map</span>
+  </a>
+  <a href="/account/?in=app" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    <span>Settings</span>
+  </a>
+</nav>
 </body>
 </html>
