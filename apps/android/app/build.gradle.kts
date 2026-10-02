@@ -13,6 +13,7 @@ android {
         targetSdk = 37
         versionCode = 43
         versionName = "2.0.4"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // Two apps from one source: stable (sh.rcn.terminus, Google Play and the
@@ -143,6 +144,11 @@ dependencies {
     runtimeOnly(libs.maplibre.compose.runtime)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
+    debugImplementation(libs.compose.ui.test.manifest)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
 }

@@ -155,12 +155,27 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
         }
     }
     BackHandler(enabled = ui.sheet != null) { map.closeSheet() }
+    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places))
+}
 
+/** What the map's taps do. */
+internal class MapActions(
+    val choose: (String?) -> Unit,
+    val openStop: (String) -> Unit,
+    val openBus: (String) -> Unit,
+    val closeSheet: () -> Unit,
+    val goThere: (code: String, name: String) -> Unit,
+    val places: PlacesForMap,
+)
+
+/** The map and everything over it, from [ui] alone (the screenshot test draws it with no network). */
+@Composable
+internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
     val campus = ui.campus
     val style = ui.style
     Box(Modifier.fillMaxSize()) {
         when {
-            campus != null && style != null -> CampusMapView(ui, campus, style, dark, map)
+            campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions)
             ui.failed -> Text(
                 stringResource(R.string.map_needs_connection),
                 modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -170,14 +185,14 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
         }
         if (campus != null) {
             Column(Modifier.statusBarsPadding().padding(top = 8.dp)) {
-                Pills(campus, ui.selected, map::choose)
+                Pills(campus, ui.selected, actions.choose)
                 ui.busStatus?.let { BusStatusLine(it, ui.selected.orEmpty()) }
             }
             ui.sheet?.let { sheet ->
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                     when (sheet) {
-                        is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, map, onGoThere, places) }
-                        is MapSheet.Bus -> ui.buses.firstOrNull { it.id == sheet.id }?.let { BusSheet(it, ui.selected.orEmpty(), map::closeSheet) }
+                        is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, actions) }
+                        is MapSheet.Bus -> ui.buses.firstOrNull { it.id == sheet.id }?.let { BusSheet(it, ui.selected.orEmpty(), actions.closeSheet) }
                     }
                 }
             }
@@ -186,7 +201,7 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
 }
 
 @Composable
-private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boolean, map: MapViewModel) {
+private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boolean, actions: MapActions) {
     val ctx = LocalContext.current
     val ink = if (dark) Color(0xFFF2EFEB) else Color(0xFF1C1917)
     val paper = if (dark) Color(0xFF1A1816) else Color.White
@@ -259,7 +274,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             strokeOpacity = switch(condition(onRoute, const(1f)), fallback = const(0.35f)),
             hitPadding = 12.dp,
             onClick = { features ->
-                features.firstOrNull()?.properties?.get("code")?.toString()?.trim('"')?.let(map::openStop)
+                features.firstOrNull()?.properties?.get("code")?.toString()?.trim('"')?.let(actions.openStop)
                 ClickResult.Consume
             },
         )
@@ -290,7 +305,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             strokeWidth = const(2.5.dp),
             hitPadding = 8.dp,
             onClick = { features ->
-                features.firstOrNull()?.properties?.get("id")?.toString()?.trim('"')?.let(map::openBus)
+                features.firstOrNull()?.properties?.get("id")?.toString()?.trim('"')?.let(actions.openBus)
                 ClickResult.Consume
             },
         )
@@ -336,7 +351,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 // A tap anywhere closes the sheet; a tap on a stop or bus then opens its own.
                 click {
                     onEvent {
-                        map.closeSheet()
+                        actions.closeSheet()
                         ClickResult.Pass
                     }
                 }
@@ -452,9 +467,10 @@ private fun SheetRow(label: String, value: String) {
 internal class PlacesForMap(val savedAs: (code: String) -> String?, val full: () -> Boolean, val save: (code: String, name: String) -> Unit)
 
 @Composable
-private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, map: MapViewModel, onGoThere: (String, String) -> Unit, places: PlacesForMap) {
+private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapActions) {
+    val places = actions.places
     val ctx = LocalContext.current
-    SheetSurface(stop.name, null, map::closeSheet) {
+    SheetSurface(stop.name, null, actions.closeSheet) {
         val board = ui.board
         when {
             ui.boardFailed -> Text(stringResource(R.string.map_times_need_connection), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -481,10 +497,10 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, map: MapViewM
         }
         Text(stringResource(R.string.map_services_here), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (svc in stop.services) SvcTag(svc, campus.routes[svc]?.color?.color() ?: Color.Gray) { if (ui.selected != svc) map.choose(svc) }
+            for (svc in stop.services) SvcTag(svc, campus.routes[svc]?.color?.color() ?: Color.Gray) { if (ui.selected != svc) actions.choose(svc) }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onGoThere(stop.code, stop.name) }) { Text(stringResource(R.string.map_go_there)) }
+            Button(onClick = { actions.goThere(stop.code, stop.name) }) { Text(stringResource(R.string.map_go_there)) }
             OutlinedButton(onClick = {
                 val uri = "https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lon}&travelmode=walking".toUri()
                 runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
