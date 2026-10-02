@@ -64,8 +64,12 @@ echo "api tests and typecheck pass"
 echo "== android"
 (cd apps/android && JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}" \
   ./gradlew :app:assembleBetaRelease -PbetaVersion="$VERSION" -PbetaCode="$BUILD" --console=plain -q)
+# One APK per CPU type, as scripts/release.sh.
+APKS=apps/android/app/build/outputs/apk/beta/release
 APK="$OUT/terminus-$VERSION.apk"
-cp apps/android/app/build/outputs/apk/beta/release/app-beta-release.apk "$APK"
+cp "$APKS/app-beta-arm64-v8a-release.apk" "$APK"
+cp "$APKS/app-beta-armeabi-v7a-release.apk" "$OUT/terminus-$VERSION-armv7.apk"
+cp "$APKS/app-beta-x86_64-release.apk" "$OUT/terminus-$VERSION-x86_64.apk"
 
 echo "== mac"
 CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" scripts/package-mac.sh
@@ -80,10 +84,12 @@ import datetime, hashlib, json, os, sys
 version, apk, dmg = sys.argv[1:]
 def entry(path):
     return {'file': f'releases/{version}/{os.path.basename(path)}', 'sha256': hashlib.sha256(open(path, 'rb').read()).hexdigest(), 'size': os.path.getsize(path)}
+abis = {'arm64-v8a': apk, 'armeabi-v7a': apk.replace('.apk', '-armv7.apk'), 'x86_64': apk.replace('.apk', '-x86_64.apk')}
 print(json.dumps({
     'version': version,
     'released': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
     'android': entry(apk),
+    'androidAbis': {abi: entry(p) for abi, p in abis.items()},
     'mac': entry(dmg),
 }, indent=2))
 EOF
@@ -100,7 +106,9 @@ echo "== beta Worker"
 echo "== upload"
 # Wrangler, not `cf r2 objects put`: cf percent-encodes the slashes in the key.
 r2() { (cd "$ROOT/apps/api" && pnpm exec wrangler r2 object put "$BUCKET/$1" --file "$2" --content-type "$3" --remote); }
-r2 "releases/$VERSION/terminus-$VERSION.apk" "$APK" application/vnd.android.package-archive
+for f in "terminus-$VERSION.apk" "terminus-$VERSION-armv7.apk" "terminus-$VERSION-x86_64.apk"; do
+  r2 "releases/$VERSION/$f" "$OUT/$f" application/vnd.android.package-archive
+done
 r2 "releases/$VERSION/terminus-$VERSION.dmg" "$DMG" application/x-apple-diskimage
 r2 appcast.xml "$OUT/appcast.xml" "application/xml; charset=utf-8"
 # latest.json last, so /download/* never points at a file that isn't there yet.

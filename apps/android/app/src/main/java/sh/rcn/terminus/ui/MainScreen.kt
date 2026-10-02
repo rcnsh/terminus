@@ -113,7 +113,8 @@ internal fun MainScreen(state: UiState, vm: MainViewModel) {
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
-                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/download/android".toUri())) }) { Text(stringResource(R.string.update)) }
+                    // The APK built for this phone's CPU (the site falls back to arm64).
+                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}".toUri())) }) { Text(stringResource(R.string.update)) }
                 }
             }
         }

@@ -49,8 +49,13 @@ mkdir -p "$OUT"
 
 echo "== android"
 (cd apps/android && JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}" ./gradlew :app:assembleStableRelease :app:bundleStableRelease --console=plain -q)
+# One APK per CPU type: terminus-<v>.apk (arm64, nearly every phone, and the
+# file older apps and links know), -armv7 (older 32-bit phones), -x86_64.
+APKS=apps/android/app/build/outputs/apk/stable/release
 APK="$OUT/terminus-$VERSION.apk"
-cp apps/android/app/build/outputs/apk/stable/release/app-stable-release.apk "$APK"
+cp "$APKS/app-stable-arm64-v8a-release.apk" "$APK"
+cp "$APKS/app-stable-armeabi-v7a-release.apk" "$OUT/terminus-$VERSION-armv7.apk"
+cp "$APKS/app-stable-x86_64-release.apk" "$OUT/terminus-$VERSION-x86_64.apk"
 # The same build as an app bundle, the format Google Play takes. Not
 # published anywhere: upload it in Play Console.
 cp apps/android/app/build/outputs/bundle/stableRelease/app-stable-release.aab "$OUT/terminus-$VERSION.aab"
@@ -59,14 +64,17 @@ echo "Play bundle: $OUT/terminus-$VERSION.aab"
 # latest.json gets the new APK, but keeps the current Mac download and
 # top-level version: the apps offer an update when that version changes, so
 # it only moves once the release workflow has published the Mac app too.
-sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
-size() { stat -f%z "$1"; }
 curl -fsS https://terminus.rcn.sh/download/latest.json -o "$OUT/latest.before.json"
-python3 - "$OUT/latest.before.json" "releases/$VERSION/terminus-$VERSION.apk" "$(sha "$APK")" "$(size "$APK")" > "$OUT/latest.json" <<'EOF'
-import json, sys
-path, file, sha256, size = sys.argv[1:]
+python3 - "$OUT/latest.before.json" "$VERSION" "$OUT" > "$OUT/latest.json" <<'EOF'
+import hashlib, json, os, sys
+path, version, out = sys.argv[1:]
 latest = json.load(open(path))
-latest['android'] = {'file': file, 'sha256': sha256, 'size': int(size)}
+def entry(name):
+    p = os.path.join(out, name)
+    return {'file': f'releases/{version}/{name}', 'sha256': hashlib.sha256(open(p, 'rb').read()).hexdigest(), 'size': os.path.getsize(p)}
+abis = {'arm64-v8a': f'terminus-{version}.apk', 'armeabi-v7a': f'terminus-{version}-armv7.apk', 'x86_64': f'terminus-{version}-x86_64.apk'}
+latest['androidAbis'] = {abi: entry(name) for abi, name in abis.items()}
+latest['android'] = latest['androidAbis']['arm64-v8a']
 print(json.dumps(latest, indent=2))
 EOF
 cat "$OUT/latest.json"
@@ -80,7 +88,9 @@ echo "== upload"
 cd apps/api
 # Wrangler, not `cf r2 objects put`: cf 1.0.0-beta.5 percent-encodes the
 # slashes in the key, which R2 needs literal.
-pnpm exec wrangler r2 object put "terminus-downloads/releases/$VERSION/terminus-$VERSION.apk" --file "$APK" --content-type application/vnd.android.package-archive --remote
+for f in "terminus-$VERSION.apk" "terminus-$VERSION-armv7.apk" "terminus-$VERSION-x86_64.apk"; do
+  pnpm exec wrangler r2 object put "terminus-downloads/releases/$VERSION/$f" --file "$OUT/$f" --content-type application/vnd.android.package-archive --remote
+done
 # latest.json last, so /download/* never points at a file that isn't there yet.
 pnpm exec wrangler r2 object put "terminus-downloads/latest.json" --file "$OUT/latest.json" --content-type application/json --remote
 cd "$ROOT"

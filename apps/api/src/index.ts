@@ -314,7 +314,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
           return json({ error: 'too many requests for this key, slow down' }, 429, { 'retry-after': '60' });
         }
       }
-      const dl = await handleDownload(url.pathname, env);
+      const dl = await handleDownload(url.pathname, env, url);
       if (dl) return dl;
       // The street map: open like the website, and served from R2 or built.
       const map = await handleMap(req, url, env);

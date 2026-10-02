@@ -654,6 +654,25 @@ test('downloads serve whatever latest.json points at', async () => {
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
   }));
+  // One APK per CPU type from 2.1: the arm64 one unless the app asks for its own.
+  put('releases/1.0.1/terminus-1.0.1.apk', 'ARM64');
+  put('releases/1.0.1/terminus-1.0.1-armv7.apk', 'ARMV7');
+  put('latest.json', JSON.stringify({
+    version: '1.0.1', released: '2026-10-01',
+    android: { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
+    androidAbis: {
+      'arm64-v8a': { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
+      'armeabi-v7a': { file: 'releases/1.0.1/terminus-1.0.1-armv7.apk', sha256: 'a7', size: 5 },
+    },
+    mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
+  }));
+  assert.equal(await (await get('/download/android')).text(), 'ARM64');
+  assert.equal(await (await get('/download/android?abi=armeabi-v7a')).text(), 'ARMV7');
+  assert.equal(await (await get('/download/android?abi=x86_64')).text(), 'ARM64', 'a type not built: the arm64 one');
+  assert.equal(await (await get('/download/android?abi=__proto__')).text(), 'ARM64');
+  assert.equal(await (await get('/download/releases/1.0.1/terminus-1.0.1-armv7.apk')).text(), 'ARMV7');
+  assert.equal((await get('/download/releases/1.0.1/terminus-1.0.1-mips.apk')).status, 404);
+
   const dmg = await get('/download/mac');
   assert.equal(dmg.headers.get('content-type'), 'application/x-apple-diskimage');
   assert.match(dmg.headers.get('content-disposition'), /terminus-1\.0\.1\.dmg/);
