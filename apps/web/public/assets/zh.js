@@ -407,5 +407,6 @@ window.TERMINUS_ZH = {
  "Now": "现在",
  "Map": "地图",
  "Campus map": "校园地图",
- "Show a service and its buses": "显示一条路线和它的巴士"
+ "Show a service and its buses": "显示一条路线和它的巴士",
+ "Back to campus": "回到校园"
 };

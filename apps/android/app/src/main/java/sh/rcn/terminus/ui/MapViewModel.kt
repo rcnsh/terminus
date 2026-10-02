@@ -50,6 +50,10 @@ data class MapUi(
     val boardFailed: Boolean = false,
     /** Where the phone is, only with location already allowed. */
     val me: Pair<Double, Double>? = null,
+    /** The street map file is downloading (the first open): the map is plain until it's here. */
+    val downloading: Boolean = false,
+    /** The download failed: routes and stops only, until the next try. */
+    val downloadFailed: Boolean = false,
 )
 
 /**
@@ -96,9 +100,12 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
             // time, the map is plain until it's here; then the streets appear.
             viewModelScope.launch {
                 val had = MapFiles.hasTiles(ctx)
+                if (!had) _state.update { it.copy(downloading = true, downloadFailed = false) }
                 MapFiles.keepTiles(ctx)
+                val got = MapFiles.hasTiles(ctx)
+                _state.update { it.copy(downloading = false, downloadFailed = !got) }
                 val key = styleKey
-                if (!had && MapFiles.hasTiles(ctx) && key != null) {
+                if (!had && got && key != null) {
                     MapFiles.style(ctx, key.first, key.second)?.let { style -> _state.update { it.copy(style = style) } }
                 }
             }

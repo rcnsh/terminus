@@ -10,6 +10,8 @@
     <string name="map_bus_title">%1$s bus</string>
     <string name="map_buses">%1$d buses on %2$s</string>
     <string name="map_buses_unavailable">Live buses aren’t available right now.</string>
+    <string name="map_download_failed">Street map not downloaded yet. Routes and stops still work.</string>
+    <string name="map_downloading">Downloading the street map (about 4 MB)…</string>
     <string name="map_finding_buses">Finding %1$s buses…</string>
     <string name="map_go_there">Go there</string>
     <string name="map_how_full">How full</string>
@@ -22,6 +24,7 @@
     <string name="map_not_on_route">Not on its route right now</string>
     <string name="map_one_bus">1 bus on %1$s</string>
     <string name="map_places_full">Places are full</string>
+    <string name="map_recentre">Back to campus</string>
     <string name="map_save_place">Save as place</string>
     <string name="map_saved_as">Saved as %1$s</string>
     <string name="map_services_here">Services here</string>
