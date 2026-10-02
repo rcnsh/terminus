@@ -131,8 +131,9 @@ Web Animations in `app/app.js` `showTab()`; `in-app.js` and the view
 transitions are gone. Details are in `docs/internals.md` ("The web app").
 
 - Checked in Chromium (this container), Playwright WebKit with an iPhone
-  profile and Mobile Safari on an iOS Simulator, through the one-off
-  **web tabs video** workflow. Remove it once the owner has watched it.
+  profile and Mobile Safari on an iOS Simulator, through a one-off
+  **web tabs video** workflow (removed after the owner watched it; see
+  `git log -- .github/workflows/web-tabs-video.yml` to bring it back).
 - In the Simulator, opening the Map tab ended the WebDriver session (most
   likely the simulator's WebGL), so that run leaves the map out. WebKit on
   Linux draws it fine. Worth a look on a real iPhone when one is at hand.
