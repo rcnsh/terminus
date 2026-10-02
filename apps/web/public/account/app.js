@@ -161,7 +161,6 @@ async function start() {
     throw err;
   }
   $('#email').textContent = me.email ?? t('No email');
-  $('#who').hidden = false;
   anonymous = me.anonymous === true;
   if (anonymous) {
     // Signing out would leave no way back in, so it's Add an email instead.
@@ -169,13 +168,15 @@ async function start() {
     $('#add-email').hidden = false;
   }
 
-  await mountSettings($('#app'), { me, onChange: renderPreview });
+  await mountSettings($('#app'), { me, onChange: renderPreview, onAddEmail: () => $('#add-email').click(), onSignOut: () => $('#logout').click() });
 
-  // First sign-in: set up before the settings appear.
+  // First sign-in: set up before the settings appear, and before the
+  // header's buttons, which would only distract from it.
   if (me.onboarding === 'full') {
     await runOnboarding(onboardingCtx);
     render();
   }
+  $('#who').hidden = false;
 
   // From the web app to add an email: straight to the sign-in card.
   if (ADD && anonymous) {

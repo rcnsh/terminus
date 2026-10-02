@@ -917,15 +917,24 @@ function wireSwipe() {
 
 /* ---------- drawing ---------- */
 
+async function signOut() {
+  await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  location.reload();
+}
+
+/** The account page's sign-in card, then back to the web app. */
+const addEmailFromApp = () => location.assign('/account/?add=1&next=/app/');
+
 /**
  * Draws settings into `into` for the signed-in account `account` (from /me),
  * and loads what they show. `inApp`: in the web app, which shows the answer
  * on Now (so no preview here), has no header (so Sign out is here), and keeps
  * its tab in the address (#settings, #settings/trips). `notify`: the app's
  * "Notify me when to leave", for the Notifications page. `onChange` runs
- * after anything the answer depends on changes.
+ * after anything the answer depends on changes; `onAddEmail` and
+ * `onSignOut` are Account's buttons (by default, the web app's).
  */
-export async function mountSettings(into, { me: account, inApp = false, notify = null, onChange = () => {} }) {
+export async function mountSettings(into, { me: account, inApp = false, notify = null, onChange = () => {}, onAddEmail = addEmailFromApp, onSignOut = signOut }) {
   const res = await fetch('/account/settings.html', { credentials: 'same-origin' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   into.innerHTML = await res.text();
@@ -940,19 +949,16 @@ export async function mountSettings(into, { me: account, inApp = false, notify =
     $('#notify-slot').append(notify);
     rowNode('notifications').hidden = false;
   }
-  if (inApp) {
-    $('.side-preview').remove();
-    $('#who-row').hidden = false;
-    $('#who-email').textContent = me.email ?? t('No email');
-    $('#who-add-email').hidden = me.anonymous !== true;
-    $('#who-logout').hidden = me.anonymous === true;
-    $('#who-logout').addEventListener('click', async () => {
-      await api('/auth/logout', { method: 'POST' }).catch(() => {});
-      location.reload();
-    });
-    // The account page's sign-in card, then back to the app.
-    $('#who-add-email').addEventListener('click', () => location.assign('/account/?add=1&next=/app/'));
-  }
+  if (inApp) $('.side-preview').remove();
+  // Who's signed in, with Sign out or Add an email: the web app has no header
+  // for them, and on a phone the account page's header has no room.
+  $('#who-row').hidden = false;
+  $('#who-row').classList.toggle('narrow-only', !inApp);
+  $('#who-email').textContent = me.email ?? t('No email');
+  $('#who-add-email').hidden = me.anonymous !== true;
+  $('#who-logout').hidden = me.anonymous === true;
+  $('#who-logout').addEventListener('click', onSignOut);
+  $('#who-add-email').addEventListener('click', onAddEmail);
   window.i18n?.translate(root);
   wire();
   wireSwipe();
