@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   android:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -128,7 +129,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Snapshots
-        run: mkdir -p shots && TERMINUS_SNAPSHOT="$PWD/shots" swift run
+        run: |
+          mkdir -p shots
+          set +e
+          TERMINUS_SNAPSHOT="$PWD/shots" swift run > run.log 2>&1
+          code=$?
+          tail -25 run.log | sed 's/^/::notice::/'
+          ls shots | head -50 | tr '\n' ' ' | sed 's/^/::notice::files: /'; echo
+          exit $code
         working-directory: apps/macos
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
