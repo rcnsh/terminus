@@ -38,7 +38,7 @@ async function call(env, path, { method = 'GET', body, token, form, cookie, head
   if (token) headers.authorization = `Bearer ${token}`;
   if (cookie) headers.cookie = cookie;
   const ctx = makeCtx();
-  const res = await worker.fetch(new Request(BASE + path, { method, headers, body: payload }), env, ctx);
+  const res = await worker.fetch(new Request(BASE + path, { method, headers, ...(payload === undefined ? {} : { body: payload }) }), env, ctx);
   await ctx.settle();
   return res;
 }

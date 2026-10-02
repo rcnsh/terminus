@@ -14,6 +14,7 @@ NUS's bus feed on everyone's behalf:
 ```bash
 pnpm install
 pnpm test                                 # API tests: no network, no keys
+pnpm lint                                 # oxlint: API, website and scripts; warnings fail CI
 node apps/api/scripts/dev-stub.mjs        # local API with fake buses
 ```
 
