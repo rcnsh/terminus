@@ -26,6 +26,8 @@ pnpm exec cf auth login        # opens the browser
 
 ## 3. Production: migration first, then deploy
 
+**Done:** migration 0009 is applied on production and the Worker is deployed.
+
 The order matters. Until migration 0009 has run, the new code can't check the
 emailed sign-in code (the emailed link still works).
 
