@@ -3,3 +3,7 @@ packages:
 allowBuilds:
   esbuild: true
   workerd: true
+
+# Don't install a dependency version published less than three days ago
+# (in minutes): a compromised release is usually caught and pulled by then.
+minimumReleaseAge: 4320

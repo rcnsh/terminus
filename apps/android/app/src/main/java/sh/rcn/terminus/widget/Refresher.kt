@@ -76,6 +76,9 @@ object Refresher {
             // Signed in with no push address sent yet (a new session, or a new Firebase token).
             if (store.pushToken == null) Push.register(ctx)
         } catch (e: ApiError) {
+            // Only the token this request was sent with is dead: one stored
+            // since (signed in again meanwhile) stays.
+            if (e.status == 401 && store.token != token) return
             if (e.status == 401) {
                 store.token = null
                 cancel(ctx)

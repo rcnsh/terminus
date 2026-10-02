@@ -112,7 +112,13 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
         } catch {
           sub = null;
         }
-        const out = sub ? await sendWebPush(env, sub, { kind: 'card', phase: nudge.phase, ask: nudge.ask, urgent: nudge.urgent }, { urgent: nudge.urgent, nowMs }) : 'gone';
+        // One browser's failure (a key that won't import, a service that hangs) mustn't stop the rest.
+        const out = sub
+          ? await sendWebPush(env, sub, { kind: 'card', phase: nudge.phase, ask: nudge.ask, urgent: nudge.urgent }, { urgent: nudge.urgent, nowMs }).catch((err) => {
+              console.error('web push', String(err));
+              return 'failed' as const;
+            })
+          : 'gone';
         if (out === 'sent') sent++;
         else if (out === 'gone') await env.DB.prepare('UPDATE sessions SET push_token = NULL WHERE token_hash = ?').bind(r.token_hash).run();
         continue;

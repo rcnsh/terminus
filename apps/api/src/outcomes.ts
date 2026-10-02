@@ -68,6 +68,9 @@ export async function clearOutcome(db: D1Database, userId: string, key: string, 
   await db.prepare('DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND day = ?').bind(userId, key, sgtDate(nowMs)).run();
 }
 
+/** More than any timetable has trips: the trip key comes from the client, so the rows are capped. */
+export const MAX_PREFS = 200;
+
 /** Accepts or turns down a suggestion, or undoes an accepted one. */
 export async function setPref(db: D1Database, userId: string, key: string, pref: PrefKind, choice: 'accept' | 'dismiss' | 'undo', label: string | null, nowMs: number): Promise<void> {
   const stmts = [db.prepare("DELETE FROM trip_prefs WHERE user_id = ? AND trip_key = ? AND pref IN (?, 'no-' || ?)").bind(userId, key, pref, pref)];
@@ -80,6 +83,14 @@ export async function setPref(db: D1Database, userId: string, key: string, pref:
   }
   // Accepting "leave earlier" starts the count again, so it isn't suggested twice.
   if (choice !== 'undo') stmts.push(db.prepare("DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND outcome = ?").bind(userId, key, pref === 'earlier' ? 'missed' : 'skipped'));
+  // The oldest go first past the cap.
+  if (choice !== 'undo') {
+    stmts.push(
+      db
+        .prepare('DELETE FROM trip_prefs WHERE user_id = ? AND rowid IN (SELECT rowid FROM trip_prefs WHERE user_id = ? ORDER BY set_at DESC, rowid DESC LIMIT -1 OFFSET ?)')
+        .bind(userId, userId, MAX_PREFS),
+    );
+  }
   await db.batch(stmts);
 }
 

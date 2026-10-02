@@ -584,9 +584,20 @@ final class AppModel {
             }
             return true
         }
-        guard !refreshing else { return true }
+        // One in flight already (say, one a tab switch just cancelled): run
+        // again once it's done, or the new tab would wait out the whole delay.
+        guard !refreshing else {
+            rerun = true
+            return true
+        }
         refreshing = true
-        defer { refreshing = false }
+        defer {
+            refreshing = false
+            if rerun {
+                rerun = false
+                Task { await self.refresh() }
+            }
+        }
         log.debug("refreshing against \(Api.base, privacy: .public)")
         let api = Api(token: token)
         if !langSynced { Task { await syncLang(api) } }
@@ -613,6 +624,9 @@ final class AppModel {
                 day = try? await api.day()
             }
             return true
+        } catch let e as ApiError where e.status == 401 && TokenStore.read() != token {
+            // Signed in again while this was in flight: the new token stands.
+            return false
         } catch let e as ApiError where e.status == 401 {
             TokenStore.write(nil)
             clearLocal()
@@ -637,6 +651,8 @@ final class AppModel {
     }
 
     private var refreshing = false
+    /// A refresh was asked for while one was running.
+    private var rerun = false
 
     private func observeSleep() {
         let ws = NSWorkspace.shared.notificationCenter

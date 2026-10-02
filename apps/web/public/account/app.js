@@ -453,7 +453,8 @@ async function setupTurnstile() {
 }
 
 async function sendLink(email) {
-  return api('/auth/login', { method: 'POST', body: { email, turnstile: turnstileToken } });
+  // From the web app: the emailed link brings them back to it too.
+  return api('/auth/login', { method: 'POST', body: { email, turnstile: turnstileToken, ...(NEXT ? { next: NEXT } : {}) } });
 }
 
 function resetTurnstile() {
@@ -767,7 +768,17 @@ $('#locate').addEventListener('click', () => {
 
 let pairPoll = null;
 $('#pair').addEventListener('click', async () => {
-  const { code, expires } = await api('/me/pair-code', { method: 'POST' });
+  let code, expires;
+  try {
+    ({ code, expires } = await api('/me/pair-code', { method: 'POST' }));
+  } catch (err) {
+    clearInterval(pairPoll);
+    $('#pairing').hidden = false;
+    $('#qr').replaceChildren();
+    $('#pair-code').textContent = '';
+    $('#pair-hint').textContent = err.message;
+    return;
+  }
   const link = `${location.origin}/pair?code=${code}`;
   $('#pairing').hidden = false;
   if (window.qrcode) {
@@ -908,7 +919,9 @@ async function start() {
     $('#share').value = shared;
     history.replaceState(null, '', location.pathname);
     $('#share').scrollIntoView({ block: 'center' });
-    await runImport(shared);
+    // Never import straight from the URL: any page could link here and
+    // replace a signed-in person's timetable. They press Import themselves.
+    $('#import-msg').textContent = t('Press Import to replace your timetable with this one.');
   }
   wireReport();
   await Promise.all([renderDevices(), renderKeys(), renderPreview(), renderChoices()]);

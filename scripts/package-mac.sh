@@ -30,8 +30,12 @@ else
 fi
 DMG="$OUT/terminus-$VERSION.dmg"
 mkdir -p "$OUT"
-KC_ARGS=""
-[ -n "${SIGN_KEYCHAIN:-}" ] && KC_ARGS="--keychain $SIGN_KEYCHAIN"
+# A release that's published must be signed with the terminus certificate:
+# an ad-hoc signature would break updates and permissions on every Mac.
+if [ "${PUBLISH:-}" = true ] && [ -z "${SIGN_IDENTITY:-}" ]; then
+  echo "SIGN_IDENTITY is not set; refusing to package a release to publish" >&2
+  exit 1
+fi
 
 echo "== mac $VERSION ($CHANNEL)"
 (cd apps/macos && ./build.sh >/dev/null)
@@ -50,8 +54,7 @@ for try in 1 2 3; do
   [ "$try" = 3 ] && exit 1
   sleep 5
 done
-# shellcheck disable=SC2086
-codesign --force --sign "${SIGN_IDENTITY:--}" $KC_ARGS "$DMG"
+codesign --force --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$DMG"
 codesign --verify "$DMG"
 hdiutil verify -quiet "$DMG"
 echo "built $DMG ($(stat -f%z "$DMG") bytes)"

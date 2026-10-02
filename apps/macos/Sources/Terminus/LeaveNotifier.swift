@@ -57,7 +57,9 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func openSettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=sh.rcn.terminus")!)
+        // This build's own id: the beta is a different app with its own settings.
+        let id = Bundle.main.bundleIdentifier ?? "sh.rcn.terminus"
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(id)")!)
     }
 
     func turnOff() {

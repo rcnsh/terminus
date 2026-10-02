@@ -129,7 +129,7 @@ function site(mode: string | undefined) {
 				RL_ANON: bindings.rateLimit({
 					namespace: s.rl.anon,
 					simple: {
-						limit: 30,
+						limit: 120,
 						period: 60,
 					},
 				}),

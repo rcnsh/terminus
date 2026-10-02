@@ -233,7 +233,8 @@ export function mergeServiceHours(
     for (const day of ['weekday', 'saturday', 'sunday'] as const) {
       if (!(day in src)) continue;
       const win = src[day];
-      if (win === null) {
+      // [null, null] is how the file says it too: closed at both ends.
+      if (win === null || (Array.isArray(win) && win.length === 2 && win[0] === null && win[1] === null)) {
         merged[day] = null; // an explicit "does not run"
         touched = true;
       } else if (
@@ -252,47 +253,68 @@ export function mergeServiceHours(
   return out;
 }
 
+/** The window `hours` gives the SGT day `ms` falls on: Sunday hours on public holidays. */
+function windowOn(hours: ServiceHours, ms: number): ServiceHours['weekday'] | undefined {
+  const { day } = sgt(ms);
+  // NUS runs the Sunday timetable on public holidays. Without this a holiday
+  // morning gets a headway guess for services that are not running.
+  const sunday = day === 0 || termDay(ms).holiday !== null;
+  return sunday ? hours.sunday : day === 6 ? hours.saturday : hours.weekday;
+}
+
+/** A window's open and close in minutes, or null when it isn't a usable window. */
+function parseWindow(win: ServiceHours['weekday'] | undefined): { open: number; close: number } | null {
+  if (!win) return null;
+  const open = hhmmToMin(win[0]);
+  const close = hhmmToMin(win[1]);
+  return open === null || close === null ? null : { open, close };
+}
+
+/**
+ * Minutes into today that yesterday's window still runs, when it crosses
+ * midnight (Fri 07:00 -> 01:00 runs until 01:00 on Saturday). 0 otherwise.
+ */
+function yesterdayRunsUntil(hours: ServiceHours, nowMs: number): number {
+  const y = parseWindow(windowOn(hours, nowMs - 86_400_000));
+  return y && y.close < y.open ? y.close : 0;
+}
+
 /** Is `svc` inside its published operating window right now (SGT)? */
 export function inService(graph: Graph, svc: string, nowMs: number): boolean {
   const hours: ServiceHours | undefined = graph.serviceHours?.[svc];
   if (!hours) return true; // unknown hours: assume running, let the feed decide
-  const { day, minutes } = sgt(nowMs);
-  // NUS runs the Sunday timetable on public holidays. Without this a holiday
-  // morning gets a headway guess for services that are not running.
-  const sunday = day === 0 || termDay(nowMs).holiday !== null;
-  const win = sunday ? hours.sunday : day === 6 ? hours.saturday : hours.weekday;
+  const { minutes } = sgt(nowMs);
+  // Just past midnight: still yesterday's service, by yesterday's hours.
+  if (minutes < yesterdayRunsUntil(hours, nowMs)) return true;
+  const win = windowOn(hours, nowMs);
   if (win === null) return false; // explicitly does not run today
   if (!win) return true; // hours unknown: assume running, let the feed decide
-  const open = hhmmToMin(win[0]);
-  const close = hhmmToMin(win[1]);
+  const w = parseWindow(win);
   // An unparseable window is unknown, NOT "ended all day". Getting this
   // backwards would turn a half-filled template into a Worker that reports no
   // buses ever, which is a far worse failure than reporting them at 3am.
-  if (open === null || close === null) return true;
-  // Windows that cross midnight (e.g. 07:00 -> 01:00).
-  return close >= open ? minutes >= open && minutes < close : minutes >= open || minutes < close;
+  if (!w) return true;
+  // A window that crosses midnight runs from its open to the end of today;
+  // the rest belongs to tomorrow (above).
+  return w.close >= w.open ? minutes >= w.open && minutes < w.close : minutes >= w.open;
 }
 
 /**
- * When `svc` stops running today (SGT), epoch ms: the close of its published
- * window. Null when the hours are unknown or it isn't running now. A window
+ * When `svc` stops running (SGT), epoch ms: the close of the window it's in
+ * now. Null when the hours are unknown or it isn't running now. A window
  * that crosses midnight closes tomorrow.
  */
 export function serviceEndsAt(graph: Graph, svc: string, nowMs: number): number | null {
   if (!inService(graph, svc, nowMs)) return null;
   const hours: ServiceHours | undefined = graph.serviceHours?.[svc];
   if (!hours) return null;
-  const { day, minutes } = sgt(nowMs);
-  const sunday = day === 0 || termDay(nowMs).holiday !== null;
-  const win = sunday ? hours.sunday : day === 6 ? hours.saturday : hours.weekday;
-  if (!win) return null;
-  const open = hhmmToMin(win[0]);
-  const close = hhmmToMin(win[1]);
-  if (open === null || close === null) return null;
+  const { minutes } = sgt(nowMs);
   const midnight = nowMs - (minutes * 60_000 + (nowMs % 60_000));
-  // Past midnight in a window that crosses it: it closes later today.
-  const closeDay = close >= open || minutes >= open ? (close >= open ? 0 : 1) : 0;
-  return midnight + (closeDay * 1440 + close) * 60_000;
+  const tail = yesterdayRunsUntil(hours, nowMs);
+  if (minutes < tail) return midnight + tail * 60_000;
+  const w = parseWindow(windowOn(hours, nowMs));
+  if (!w) return null;
+  return midnight + ((w.close >= w.open ? 0 : 1440) + w.close) * 60_000;
 }
 
 /**
@@ -417,8 +439,11 @@ export function scoreOptions(
         quality = 'live';
         arrival = catchable;
       } else if (etas.length) {
-        // Every listed bus leaves before you can get there.
-        boardS = (etas[etas.length - 1].etaS as number) + headwayFor(graph, leg.svc);
+        // Every listed bus leaves before you can get there: the first one
+        // after the last listed, a headway apart, that you can reach.
+        const headway = headwayFor(graph, leg.svc);
+        boardS = (etas[etas.length - 1].etaS as number) + headway;
+        if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
         quality = 'scheduled';
       } else if (!inService(graph, leg.svc, nowMs)) {
         // The published hours are ours, not the feed's, so this holds even

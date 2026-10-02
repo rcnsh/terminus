@@ -6,11 +6,12 @@
 // - /me, /me/next and /me/day go to the network first. The last good reply
 //   is kept, and served when the network is down, marked with
 //   x-terminus-cached (when it was fetched) so the page can say so.
-// - Signing out, deleting the account, or a 401 empties the kept replies:
-//   they belong to one account and must not outlive it.
+// - Signing in or out, deleting the account, or a 401 empties the kept
+//   replies: they belong to one account and must not outlive it, or reach
+//   the next one to sign in on this browser.
 
 const SHELL = 'shell-v3';
-const DATA = 'data-v1';
+const DATA = 'data-v2';
 const SHELL_FILES = [
   '/app/',
   '/app/app.js',
@@ -26,8 +27,12 @@ const SHELL_FILES = [
   '/assets/icons/icon-192.png',
 ];
 const DATA_PATHS = new Set(['/me', '/me/next', '/me/day']);
+// Each changes whose account this browser is signed in to.
 const SIGN_OUT = [
   ['POST', '/auth/logout'],
+  ['POST', '/auth/code'],
+  ['POST', '/auth/verify'],
+  ['POST', '/auth/anon/web'],
   ['DELETE', '/me/sessions'],
   ['DELETE', '/me'],
 ];
@@ -51,7 +56,9 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (SIGN_OUT.some(([m, p]) => req.method === m && url.pathname === p)) {
-    event.respondWith(fetch(req).finally(() => caches.delete(DATA)));
+    // Now as well as after: a reply already on its way must not be kept.
+    forgetData();
+    event.respondWith(fetch(req).finally(forgetData));
     return;
   }
   if (req.method !== 'GET') return;
@@ -62,20 +69,38 @@ self.addEventListener('fetch', (event) => {
   if (SHELL_FILES.includes(url.pathname)) event.respondWith(shellFile(req, url.pathname));
 });
 
+/** Bumped whenever the kept replies are emptied: a reply fetched before that is not kept. */
+let dataGeneration = 0;
+function forgetData() {
+  dataGeneration++;
+  return caches.delete(DATA);
+}
+
 async function networkFirst(req) {
+  const generation = dataGeneration;
   const cache = await caches.open(DATA);
-  // One kept reply per route and place: not one per location or clock style.
+  // One kept reply per route, place, clock style and language: not one per
+  // location, which would keep a reply for every few metres walked.
   const url = new URL(req.url);
-  const place = url.searchParams.get('place');
-  const key = `${url.origin}${url.pathname}${place ? `?place=${encodeURIComponent(place)}` : ''}`;
+  const keyed = new URLSearchParams();
+  for (const k of ['place', 'h12']) if (url.searchParams.get(k)) keyed.set(k, url.searchParams.get(k));
+  const lang = (req.headers.get('accept-language') ?? '').split(',')[0].trim().slice(0, 16);
+  if (lang) keyed.set('lang', lang);
+  const key = `${url.origin}${url.pathname}${keyed.size ? `?${keyed}` : ''}`;
   try {
     const res = await fetch(req);
-    if (res.status === 401) await caches.delete(DATA);
+    // A server error is as good as no network: the kept reply beats an error.
+    if (res.status >= 500) {
+      const kept = await cache.match(key);
+      if (kept) return kept;
+    }
+    if (res.status === 401) await forgetData();
     else if (res.ok) {
       const body = await res.clone().arrayBuffer();
       const headers = new Headers(res.headers);
       headers.set('x-terminus-cached', String(Date.now()));
-      await cache.put(key, new Response(body, { status: 200, headers }));
+      // Checked last, after every wait: a sign-out meanwhile wins.
+      if (generation === dataGeneration) await cache.put(key, new Response(body, { status: 200, headers }));
     }
     return res;
   } catch (err) {

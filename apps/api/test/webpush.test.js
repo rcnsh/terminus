@@ -14,7 +14,7 @@ import { nudgeUser } from '../src/push.ts';
 import { b64url, fromB64url } from '../src/webpush.ts';
 
 const BASE = 'https://bus.example.test';
-const ENDPOINT = 'https://push.example.test/send/abc123';
+const ENDPOINT = 'https://web.push.apple.com/send/abc123';
 const enc = new TextEncoder();
 
 async function vapidKey() {
@@ -59,7 +59,7 @@ async function setup() {
   const base = makeFetch();
   const fetchImpl = async (input, init) => {
     const url = typeof input === 'string' ? input : input.url;
-    if (url.startsWith('https://push.example.test/')) {
+    if (url.startsWith('https://web.push.apple.com/')) {
       pushes.push({ url, headers: new Headers(init.headers), body: new Uint8Array(init.body) });
       return new Response(null, { status: status.code });
     }
@@ -95,7 +95,7 @@ test('the web app gets the public key, subscribes, and a nudge arrives signed an
 
   const b = await browser();
   assert.equal((await call('/me/push', { method: 'POST', cookie, body: { subscription: b.subscription } })).status, 200);
-  assert.match(await pushToken(), /^web:\{"endpoint":"https:\/\/push\.example\.test/);
+  assert.match(await pushToken(), /^web:\{"endpoint":"https:\/\/web\.push\.apple\.com/);
 
   const sent = await nudgeUser(env, userId, { phase: 'due', ask: false, urgent: true, remind: true }, Date.now());
   assert.equal(sent, 1);
@@ -111,7 +111,7 @@ test('the web app gets the public key, subscribes, and a nudge arrives signed an
   assert.equal(k, key);
   const [h, c, s] = t.split('.');
   const claims = JSON.parse(new TextDecoder().decode(fromB64url(c)));
-  assert.equal(claims.aud, 'https://push.example.test');
+  assert.equal(claims.aud, 'https://web.push.apple.com');
   assert.ok(claims.exp > Date.now() / 1000 && claims.sub.startsWith('https://'));
   const pub = await crypto.subtle.importKey('raw', fromB64url(key), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
   assert.ok(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pub, fromB64url(s), enc.encode(`${h}.${c}`)));
@@ -136,6 +136,13 @@ test('a subscription the push service has dropped is forgotten', async () => {
 test('a bad subscription is refused, and without a VAPID key web push says it is off', async () => {
   const { env, call, cookie } = await setup();
   const bad = [{ endpoint: 'http://push.example.test/x', keys: { p256dh: 'AA', auth: 'AA' } }, { endpoint: ENDPOINT }, 'nope'];
+  const real = (await browser()).subscription;
+  // Only browsers' push services: the Worker POSTs to whatever is kept here.
+  for (const endpoint of ['https://evil.example/x', 'https://web.push.apple.com.evil.example/x', 'https://web.push.apple.com:8443/x', 'https://u:p@web.push.apple.com/x']) {
+    bad.push({ ...real, endpoint });
+  }
+  // Not a P-256 point: it would fail at every push.
+  bad.push({ ...real, keys: { ...real.keys, p256dh: b64url(new Uint8Array(65)) } });
   for (const subscription of bad) assert.equal((await call('/me/push', { method: 'POST', cookie, body: { subscription } })).status, 400);
   delete env.VAPID_PRIVATE_KEY;
   assert.equal((await call('/me/push/key', { cookie })).status, 503);

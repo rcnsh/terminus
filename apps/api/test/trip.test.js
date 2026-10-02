@@ -460,7 +460,7 @@ test('clearing the trip history forgets the outcomes and drops the suggestion, b
   const { env, call, phone, next } = await setup();
   for (let d = 1; d <= 5; d++) seed(env, `${d}:600:UTOWN`, d, 'none');
   for (const d of [7, 14, 21]) seed(env, FIRST, d, 'missed');
-  await call('/me/choice', { method: 'POST', token: phone, body: { trip: 'x', pref: 'quiet', choice: 'accept' } });
+  await call('/me/choice', { method: 'POST', token: phone, body: { trip: SECOND, pref: 'quiet', choice: 'accept' } });
   let r = await (await call('/me/choices', { token: phone })).json();
   assert.equal(r.history, 8);
 
@@ -469,7 +469,7 @@ test('clearing the trip history forgets the outcomes and drops the suggestion, b
   assert.deepEqual(await res.json(), { ok: true, cleared: 8 });
   r = await (await call('/me/choices', { token: phone })).json();
   assert.equal(r.history, 0);
-  assert.deepEqual(r.choices.map((c) => [c.trip, c.pref]), [['x', 'quiet']], 'choices stay');
+  assert.deepEqual(r.choices.map((c) => [c.trip, c.pref]), [[SECOND, 'quiet']], 'choices stay');
   const a = await next(phone);
   assert.equal(a.card.askMuted, false);
   assert.equal(a.card.suggestion, null);
@@ -670,6 +670,8 @@ test('on the bus you said you were on, reaching your stop: there; an older app\'
 
 test('a ride seen from start to end is measured, with no user or location in it', async () => {
   const t = await setup();
+  // Rides only count from accounts a few days old.
+  t.env.DB._db.prepare('UPDATE users SET created = ?').run(FROZEN_NOW - 4 * 86_400_000);
   const { plan, board } = await waitingAtStop(t);
   t.clock(board + 30_000);
   const riding = await (await t.signal(t.phone, { kind: 'location', ...onTheWay(plan), speed: 8 })).json();
@@ -1046,4 +1048,53 @@ test('/me/day follows the plan once its bus has left: the same leave-by, then on
   day = await (await call('/me/day', { token: phone })).json();
   assert.equal(day.items[0].onBus?.svc, planned.leave.svc);
   assert.equal(day.items[0].leave, undefined);
+});
+
+test('choices are capped per account, the oldest dropped first', async () => {
+  const { MAX_PREFS } = await import('../src/outcomes.ts');
+  const { env, call, phone } = await setup();
+  for (let i = 0; i < MAX_PREFS + 5; i++) {
+    env.DB._db.prepare("INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) SELECT user_id, ?, 'quiet', NULL, ? FROM sessions LIMIT 1").run(`k${i}`, i);
+  }
+  await call('/me/choice', { method: 'POST', token: phone, body: { trip: FIRST, pref: 'quiet', choice: 'accept' } });
+  const rows = env.DB._db.prepare('SELECT trip_key FROM trip_prefs ORDER BY set_at').all().map((r) => r.trip_key);
+  assert.equal(rows.length, MAX_PREFS);
+  assert.equal(rows.at(-1), FIRST);
+  assert.ok(!rows.includes('k5'), 'the oldest are gone');
+});
+
+test('rides from a brand-new account are not counted, nor two on one service in an hour', async () => {
+  const { mayRecordRide } = await import('../src/ridetimes.ts');
+  const t = await setup();
+  const db = t.env.DB;
+  const userId = db._db.prepare('SELECT id FROM users LIMIT 1').get().id;
+  assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW), false, 'a new account');
+  db._db.prepare('UPDATE users SET created = ?').run(FROZEN_NOW - 4 * 86_400_000);
+  assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW), true);
+  assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW + 60_000), false, 'once an hour');
+  assert.equal(await mayRecordRide(t.env, db, userId, 'A1', FROZEN_NOW + 60_000), true, 'per service');
+});
+
+test('a trip key that is no class of yours and no trip home is refused', async () => {
+  const { call, phone } = await setup();
+  for (const trip of ['x', '9:9:NOWHERE', `${'a'.repeat(70)}`]) {
+    assert.equal((await call('/me/choice', { method: 'POST', token: phone, body: { trip, pref: 'quiet', choice: 'accept' } })).status, 400, trip);
+    assert.equal((await call('/me/signal', { method: 'POST', token: phone, body: { kind: 'skipped', trip } })).status, 400, trip);
+  }
+  assert.equal((await call('/me/choice', { method: 'POST', token: phone, body: { trip: FIRST, pref: 'quiet', choice: 'accept' } })).status, 200);
+  assert.equal((await call('/me/signal', { method: 'POST', token: phone, body: { kind: 'skipped', trip: 'home:660' } })).status, 200);
+});
+
+test('a day keeps at most so many trip records', async () => {
+  const { MAX_DAY_TRIPS } = await import('../src/tripdo.ts');
+  const { phone, signal, TRIPS } = await setup();
+  await signal(phone, { kind: 'skipped', trip: FIRST });
+  const inst = [...TRIPS.instances.values()][0];
+  const day = await inst.storage.get('day');
+  for (let i = 0; i < MAX_DAY_TRIPS; i++) day.trips[`home:${i}`] = { kind: 'skipped', at: 0 };
+  await inst.storage.put('day', day);
+  await signal(phone, { kind: 'skipped', trip: SECOND });
+  const after = await inst.storage.get('day');
+  assert.equal(Object.keys(after.trips).length, MAX_DAY_TRIPS + 1, 'nothing new past the cap');
+  assert.equal(after.trips[SECOND], undefined);
 });

@@ -48,6 +48,14 @@ test('seconds per stop by service and by hour, each only with enough rides', asy
   assert.equal(hopSecondsFor(null, FROZEN_NOW), undefined);
 });
 
+test('the table takes the median: a few made-up rides cannot drag it', async () => {
+  const db = makeD1();
+  for (let i = 0; i < MIN_RIDES; i++) await recordRide(db, GRAPH, ride(FROZEN_NOW - i * 86_400_000), FROZEN_NOW - i * 86_400_000 + HOPS * 100_000);
+  // Four rides as slow as the sanity check lets through.
+  for (let i = 0; i < 4; i++) await recordRide(db, GRAPH, ride(FROZEN_NOW - (20 + i) * 86_400_000), FROZEN_NOW - (20 + i) * 86_400_000 + HOPS * 299_000);
+  assert.equal((await buildTable(db, FROZEN_NOW)).svcs.D2.s, 100);
+});
+
 test('the cron makes the table once a day and prunes rides older than it keeps', async () => {
   const env = { ...makeEnv(), DB: makeD1() };
   await recordRide(env.DB, GRAPH, ride(FROZEN_NOW - 200 * 86_400_000), FROZEN_NOW - 200 * 86_400_000 + HOPS * 100_000);

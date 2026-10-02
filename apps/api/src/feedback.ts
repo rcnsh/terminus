@@ -51,17 +51,17 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
 
 /** Stores the report; false when the account has sent its day's worth. */
 export async function saveFeedback(db: D1Database, userId: string, f: FeedbackInput, nowMs: number): Promise<string | null> {
-  const recent = await db
-    .prepare('SELECT COUNT(*) AS n FROM feedback WHERE user_id = ? AND created > ?')
-    .bind(userId, nowMs - 86_400_000)
-    .first<{ n: number }>();
-  if ((recent?.n ?? 0) >= FEEDBACK_LIMITS.perDay) return null;
   const id = crypto.randomUUID();
-  await db
-    .prepare('INSERT INTO feedback (id, user_id, created, kind, note, platform, app_version, context) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, userId, nowMs, f.kind, f.note, f.platform, f.appVersion, f.context)
-    .run();
-  return id;
+  // Counted and inserted in one statement, so reports sent at once can't all
+  // see the count from before the others.
+  const saved = await db
+    .prepare(
+      `INSERT INTO feedback (id, user_id, created, kind, note, platform, app_version, context)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM feedback WHERE user_id = ? AND created > ?) < ? RETURNING id`,
+    )
+    .bind(id, userId, nowMs, f.kind, f.note, f.platform, f.appVersion, f.context, userId, nowMs - 86_400_000, FEEDBACK_LIMITS.perDay)
+    .first<{ id: string }>();
+  return saved ? id : null;
 }
 
 /** One line about the answer, for the email subject and the dashboard. */
@@ -77,9 +77,17 @@ export function summarize(context: string | null): string {
   }
 }
 
+/** Feedback emails to the operator a day, across everyone; past it, reports are only on the dashboard. */
+export const OPERATOR_MAILS_PER_DAY = 50;
+
 /** Emails the operator. The reporter's address is included so you can reply. */
 export async function mailFeedback(env: Env, id: string, email: string, f: FeedbackInput, nowMs: number): Promise<void> {
   if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL) return;
+  // A soft cap (KV is not atomic): new accounts are cheap, the inbox is not.
+  const sentKey = `feedback:mailed:${new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10)}`;
+  const sent = Number((await env.KV.get(sentKey).catch(() => null)) ?? 0);
+  if (sent >= OPERATOR_MAILS_PER_DAY) return;
+  await env.KV.put(sentKey, String(sent + 1), { expirationTtl: 2 * 86_400 }).catch(() => {});
   const text = [
     `${f.kind === 'wrong' ? 'A wrong answer' : 'Feedback'} from ${email} on ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}, ${new Date(nowMs).toISOString()}.`,
     '',
@@ -94,7 +102,8 @@ export async function mailFeedback(env: Env, id: string, email: string, f: Feedb
   await env.EMAIL.send({
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: env.ALERT_EMAIL,
-    subject: `terminus feedback: ${f.kind === 'wrong' ? summarize(f.context) : f.note.slice(0, 60)}`,
+    // Their words, on one line: a subject is a header.
+    subject: `terminus feedback: ${f.kind === 'wrong' ? summarize(f.context) : f.note.slice(0, 60)}`.replace(/[\x00-\x1f\x7f]+/g, ' '),
     text,
   });
 }

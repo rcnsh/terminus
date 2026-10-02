@@ -23,7 +23,7 @@
 
 import type { Env } from './types.ts';
 import { mailName } from './site.ts';
-import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
+import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, takeMailBudget, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
 
 export { hasSetup } from './accounts.ts';
 import { m } from './i18n.ts';
@@ -71,6 +71,8 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
     .first();
   if (recent || (await env.KV.get(coolKey).catch(() => null))) return 'cooldown';
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
+  // A blocked address is sent nothing, so it spends nothing.
+  if (!blocked && !(await takeMailBudget(env, inbox, nowMs))) return 'cooldown';
 
   const id = crypto.randomUUID();
   const poll = newToken();
@@ -81,8 +83,6 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
   const expires = nowMs + LOGIN_TTL.requestMs;
   await db.batch([
     db.prepare('DELETE FROM login_requests WHERE expires < ?').bind(nowMs),
-    // One pending request per address: the newest one wins.
-    db.prepare("UPDATE login_requests SET status = 'denied' WHERE email = ? AND status IN ('pending', 'approved')").bind(email),
     db
       .prepare(
         `INSERT INTO login_requests (id, email, poll_hash, link_hash, code_hash, match, device_name, platform, anon_user_id, status, created, expires)
@@ -148,16 +148,20 @@ export async function enterCode(db: D1Database, id: string, poll: string, code: 
   if (row.status === 'denied') return 'denied';
   // A blocked address was never sent a code: every guess is simply wrong.
   if (row.status !== 'pending' && row.status !== 'blocked') return 'expired';
+  // Spend the try before checking the code, in one statement: guesses sent
+  // all at once can't each see the count from before the others.
+  const spent = await db
+    .prepare("UPDATE login_requests SET code_tries = code_tries + 1 WHERE id = ? AND code_tries < ? AND status IN ('pending', 'blocked') RETURNING code_tries")
+    .bind(id, LOGIN_TTL.codeTries)
+    .first<{ code_tries: number }>();
+  if (!spent) return 'denied';
   if (row.status === 'pending' && (await hashToken(code)) === row.code_hash) {
     const ok = await db.prepare("UPDATE login_requests SET status = 'approved' WHERE id = ? AND status = 'pending' RETURNING id").bind(id).first();
     return ok ? 'approved' : 'expired';
   }
-  const dead = row.code_tries + 1 >= LOGIN_TTL.codeTries;
-  await db
-    .prepare(`UPDATE login_requests SET code_tries = code_tries + 1${dead ? ", status = 'denied'" : ''} WHERE id = ?`)
-    .bind(id)
-    .run();
-  return dead ? 'denied' : 'wrong';
+  if (spent.code_tries < LOGIN_TTL.codeTries) return 'wrong';
+  await db.prepare("UPDATE login_requests SET status = 'denied' WHERE id = ? AND status IN ('pending', 'blocked')").bind(id).run();
+  return 'denied';
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);

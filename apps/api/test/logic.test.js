@@ -103,6 +103,15 @@ test('standing on Opp Kent Ridge MRT heading to UTown returns the FURTHER stop',
   // ...even though the wrong-side bus is arriving four minutes sooner.
 });
 
+test('when every listed bus leaves too soon, the guess is a bus you can still reach', () => {
+  const input = { lat: OPPKRMRT.lat, lon: OPPKRMRT.lon, to: 'UTOWN', originCode: null };
+  // Twenty minutes' walk to the stop; the one bus listed is in two.
+  const cands = candidateStops(PAIR_GRAPH, input).map((c) => ({ ...c, walkS: 1200 }));
+  const [best] = scoreOptions(PAIR_GRAPH, cands, arrivalsFor(Object.fromEntries([sa('KRMRT', [{ svc: 'NORTH', etaS: 120, crowd: null, plate: null }])])), NOW);
+  assert.equal(best.quality, 'scheduled');
+  assert.ok(best.boardS >= 1200, `boards at ${best.boardS}s, before the walk is done`);
+});
+
 test('on a loop route both sides reach UTown, but the wrong side loses on cost', () => {
   const input = { lat: KR_OPP.lat, lon: KR_OPP.lon, to: 'UTOWN', originCode: null };
   const cands = candidateStops(GRAPH, input);
@@ -929,6 +938,14 @@ test('mergeServiceHours only lets well-formed entries win', () => {
   assert.equal(merged.K?.weekday, undefined, 'a malformed window is simply not set');
   assert.deepEqual(merged.R1.weekday, ['07:15', '19:45']);
   assert.ok(!('_help' in merged) && !('_routes' in merged), 'doc keys are not services');
+  assert.equal(mergeServiceHours({}, { P: { sunday: [null, null] } }).P.sunday, null, '[null, null] does not run either');
+});
+
+test('services that do not run at weekends are not offered then', () => {
+  const graph = { ...realGraph, serviceHours: mergeServiceHours({}, serviceHoursJson) };
+  const sunday = Date.UTC(2026, 7, 30, 2, 0, 0); // Sun 10:00 SGT
+  for (const svc of ['K', 'P', 'R1', 'R2']) assert.equal(inService(graph, svc, sunday), false, svc);
+  assert.equal(inService(graph, 'D2', sunday), true);
 });
 
 test('a filled window actually gates the ended rung', () => {
@@ -1009,4 +1026,17 @@ test('inside a residence, only its own stops are offered, walked by the paths (P
   // Outside every residence nothing changes.
   const out = candidateStops(g, { lat: 1.2935, lon: 103.7838, originCode: null, to: 'UTOWN' }).map((c) => c.stop.code);
   assert.ok(out.includes('KR-MRT'));
+});
+
+test('a window that crosses midnight still runs after it, by yesterday\'s hours', async () => {
+  const { serviceEndsAt } = await import('../src/resolve.ts');
+  const graph = { ...realGraph, serviceHours: { X: { weekday: ['07:00', '01:00'], saturday: ['08:00', '23:00'], sunday: null } } };
+  const sgt = (d, h, m) => Date.UTC(2026, 7, d, h - 8, m); // August 2026, SGT
+  assert.equal(inService(graph, 'X', sgt(29, 0, 30)), true, 'Sat 00:30: Friday\'s service');
+  assert.equal(serviceEndsAt(graph, 'X', sgt(29, 0, 30)), sgt(29, 1, 0));
+  assert.equal(inService(graph, 'X', sgt(29, 1, 30)), false, 'Sat 01:30: ended, Saturday opens at 8');
+  assert.equal(inService(graph, 'X', sgt(28, 23, 30)), true, 'Fri 23:30');
+  assert.equal(serviceEndsAt(graph, 'X', sgt(28, 23, 30)), sgt(29, 1, 0), 'closes tomorrow');
+  assert.equal(inService(graph, 'X', sgt(31, 0, 30)), false, 'Mon 00:30: Sunday did not run');
+  assert.equal(inService(graph, 'X', sgt(31, 7, 30)), true, 'Mon 07:30');
 });

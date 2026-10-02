@@ -20,6 +20,10 @@ export const ACCOUNT_TTL = {
   /** A web session used with less than this left is renewed for another
    *  webSessionMs, so a browser (or the installed web app) in use stays signed in. */
   webRenewBelowMs: 23 * 86_400_000,
+  /** However much it's used, a web session ends this long after sign-in and
+   *  the email link is needed again. Not for accounts with no email: they
+   *  would have no way back in. */
+  webSessionMaxMs: 180 * 86_400_000,
   pairCodeMs: 10 * 60_000,
   /** Wrong guesses before an emailed sign-in code stops working. */
   codeTries: 5,
@@ -123,7 +127,7 @@ export type LinkOutcome = 'sent' | 'blocked' | 'cooldown';
  * blocklist are refused. The caller shows the same message for every
  * outcome, so the endpoint doesn't reveal who has an account or is blocked.
  */
-export async function requestLink(env: Env, db: D1Database, email: string, origin: string, nowMs: number): Promise<LinkOutcome> {
+export async function requestLink(env: Env, db: D1Database, email: string, origin: string, nowMs: number, toApp = false): Promise<LinkOutcome> {
   const inbox = inboxKey(email);
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
   if (blocked) return 'blocked';
@@ -136,15 +140,19 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   // Per inbox too, so +tags and dots cannot mail one person over and over.
   const coolKey = `mail:${await hashToken(inbox)}`;
   if (await env.KV.get(coolKey).catch(() => null)) return 'cooldown';
+  if (!(await takeMailBudget(env, inbox, nowMs))) return 'cooldown';
 
   const token = newToken();
   const tokenHash = await hashToken(token);
-  await db.batch([
+  // The cooldown checked and the link stored in one statement: two requests
+  // at once can't both pass the check above and both send an email.
+  const [, made] = await db.batch([
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
     db
-      .prepare('INSERT INTO magic_links (token_hash, email, created, expires) VALUES (?, ?, ?, ?)')
-      .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs),
+      .prepare('INSERT INTO magic_links (token_hash, email, created, expires) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM magic_links WHERE email = ? AND created > ?) RETURNING token_hash')
+      .bind(tokenHash, email, nowMs, nowMs + ACCOUNT_TTL.linkMs, email, nowMs - ACCOUNT_TTL.linkCooldownMs),
   ]);
+  if (!made?.results?.length) return 'cooldown';
 
   // The same sign-in, as a code typed on the page that asked. University
   // filters (NUS's among them) hold back mail that is only a link; a code
@@ -152,9 +160,10 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   // either one spends both.
   const code = newPairCode();
   const codeKey = await signInCodeKey(email);
-  const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs, n: 0 };
+  const pending: PendingCode = { c: await hashToken(code), t: tokenHash, e: nowMs + ACCOUNT_TTL.linkMs };
 
-  const link = `${origin}/auth/verify?t=${token}`;
+  // From the installed web app: the link goes back there, not to the account page.
+  const link = `${origin}/auth/verify?t=${token}${toApp ? '&next=app' : ''}`;
   try {
     if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');
     await env.KV.put(codeKey, JSON.stringify(pending), { expirationTtl: ACCOUNT_TTL.linkMs / 1000 });
@@ -275,12 +284,27 @@ export async function removeAnonymous(db: D1Database, anonId: string, intoUserId
 
 
 /** A sign-in code waiting in KV: hashes of the code and of its link's token,
- *  when it expires, and how many wrong guesses it has had. */
+ *  and when it expires. Wrong guesses are counted on the link's D1 row. */
 interface PendingCode {
   c: string;
   t: string;
   e: number;
-  n: number;
+}
+
+/** Emails one inbox may be sent an hour, on top of the one-a-minute cooldown. */
+export const MAILS_PER_HOUR = 10;
+
+/**
+ * Takes one of the inbox's emails for this hour; false when they're spent.
+ * A soft cap (KV is not atomic): it stops someone mailing a person all day,
+ * a minute at a time, which the cooldown alone allows.
+ */
+export async function takeMailBudget(env: Env, inbox: string, nowMs: number): Promise<boolean> {
+  const key = `mailhour:${await hashToken(inbox)}:${Math.floor(nowMs / 3_600_000)}`;
+  const n = Number((await env.KV.get(key).catch(() => null)) ?? 0);
+  if (n >= MAILS_PER_HOUR) return false;
+  await env.KV.put(key, String(n + 1), { expirationTtl: 3_700 }).catch(() => {});
+  return true;
 }
 
 async function signInCodeKey(email: string): Promise<string> {
@@ -298,12 +322,18 @@ export async function redeemCode(env: Env, db: D1Database, email: string, code: 
   const key = await signInCodeKey(email);
   const pending = await env.KV.get<PendingCode>(key, 'json').catch(() => null);
   if (!pending || pending.e < nowMs) return null;
+  // Spend a try on the link's row before checking, in one statement: KV's
+  // read-then-write let guesses sent all at once past the limit.
+  const spent = await db
+    .prepare('UPDATE magic_links SET code_tries = code_tries + 1 WHERE token_hash = ? AND code_tries < ? AND expires >= ? RETURNING code_tries')
+    .bind(pending.t, ACCOUNT_TTL.codeTries, nowMs)
+    .first<{ code_tries: number }>();
+  if (!spent) {
+    await env.KV.delete(key).catch(() => {});
+    return null;
+  }
   if ((await hashToken(code)) !== pending.c) {
-    const n = pending.n + 1;
-    const ttlS = Math.floor((pending.e - nowMs) / 1000);
-    // KV's shortest TTL is 60 s; a code closer to expiry than that just dies.
-    if (n >= ACCOUNT_TTL.codeTries || ttlS < 60) await env.KV.delete(key).catch(() => {});
-    else await env.KV.put(key, JSON.stringify({ ...pending, n }), { expirationTtl: ttlS }).catch(() => {});
+    if (spent.code_tries >= ACCOUNT_TTL.codeTries) await env.KV.delete(key).catch(() => {});
     return null;
   }
   await env.KV.delete(key).catch(() => {});
@@ -414,14 +444,15 @@ export async function authenticate(
   const hash = await hashToken(token);
   const row = await db
     .prepare(
-      `SELECT s.kind, s.last_seen, s.expires, s.client, u.id, u.email
+      `SELECT s.kind, s.created, s.last_seen, s.expires, s.client, u.id, u.email
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ?`,
     )
     .bind(hash)
-    .first<{ kind: 'web' | 'device'; last_seen: number; expires: number | null; client: string | null; id: string; email: string | null }>();
+    .first<{ kind: 'web' | 'device'; created: number; last_seen: number; expires: number | null; client: string | null; id: string; email: string | null }>();
   if (!row) return null;
   if (row.expires !== null && row.expires < nowMs) return null;
+  if (row.kind === 'web' && row.email !== null && nowMs - row.created > ACCOUNT_TTL.webSessionMaxMs) return null;
   // Paired devices lapse after 90 idle days (the cron deletes them too).
   if (row.kind === 'device' && nowMs - row.last_seen > DEVICE_IDLE_MS) return null;
 
