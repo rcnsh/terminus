@@ -766,7 +766,10 @@ Clients keep each bus moving along the line: from where it's drawn they
 catch up with the moving estimate over 5 s, and a bus that's ahead of a
 new answer waits rather than reversing. Between two places on the line
 they only move along it: one that can't be reached along it (over 1.5 km,
-or behind by more than 60 m) jumps. A straight glide is only for a bus
+or behind by more than 60 m) jumps, and so does one more than 100 m ahead
+of where it's drawn, rather than race along the road to catch up. After
+15 s without an answer (the screen was off, the app in the background),
+every bus jumps to where it is now. A straight glide is only for a bus
 coming onto or leaving its line, a short way. An answer without `speed`
 (an older server) glides to `along` over 15 s, as before.
 
