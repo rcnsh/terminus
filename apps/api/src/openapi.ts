@@ -1712,36 +1712,45 @@ export const DOCS_PAGE = `<!doctype html>
   <link rel="stylesheet" href="${ELEMENTS}/styles.min.css" integrity="sha384-NzdOiocfnINlXfuCXi4OpL/xvdbgLiKaLHQ07Z+IwhVaxHqLShn5rVD5OHt/LYgz" crossorigin="anonymous">
   <script src="/assets/docs.js"></script>
   <style>
-    /* The page never scrolls; only the docs inside it do, so a phone's
-       rubber-band scroll can't move our bar out from above Elements' fixed
-       mobile bar, or leave uncovered page below the docs. Its height is the
-       part of the screen the browser really shows, measured by
-       /assets/docs.js (--seen): Chrome on Android sizes 100vh, and even
-       100dvh on a fixed box, as if its bars were hidden, which put the end
-       of the docs under its toolbar. dvh is the fallback without the script. */
+    /* On a wide screen the page never scrolls; only the docs inside it do,
+       beside their menu. */
     html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; }
-    body { position: fixed; top: 0; left: 0; right: 0; height: 100%; height: 100dvh; height: var(--seen, 100dvh); display: flex; flex-direction: column; }
+    body { position: fixed; top: 0; left: 0; right: 0; height: 100%; height: 100dvh; display: flex; flex-direction: column; }
     .bar { flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; border-bottom: 1px solid #e7e5e2; font: 500 14px/1 system-ui, -apple-system, sans-serif; background: #fafaf9; }
     .bar a { color: #1c1917; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
     .bar b { color: #c2410c; font-weight: inherit; }
     .bar .back { color: #6b6560; padding: 12px 0; }
     elements-api { display: block; flex: 1; min-height: 0; }
-    /* Below Elements' breakpoint the sidebar becomes a drawer (layout="responsive").
-       Inputs under 16px make iOS Safari zoom in on focus and stay zoomed. */
+    /* Below Elements' breakpoint the sidebar becomes a drawer (layout="responsive"). */
     @media (max-width: 767px) {
+      /* On a phone the page itself scrolls, as any page does. Only then does
+         the browser move its bars out of the way and let the end of the page
+         scroll clear of its toolbar: a page that never scrolls, with the
+         docs scrolling inside it, left their last lines under Chrome's
+         toolbar however it was sized, because the toolbar lies over the
+         page rather than shrinking it. */
+      html, body { height: auto; overflow: visible; }
+      /* Our bar and Elements' (48 + 60 px) stay over the top of the page:
+         what Elements scrolls into view, on picking a menu entry, stops
+         below them. */
+      html { scroll-padding-top: 108px; }
+      body { position: static; display: block; height: auto; padding-top: 48px; }
+      .bar { position: fixed; top: 0; left: 0; right: 0; z-index: 21; }
+      elements-api .sl-overflow-y-auto.sl-flex-1 { overflow: visible; padding-top: 6px; padding-bottom: 16px; }
+      /* Inputs under 16px make iOS Safari zoom in on focus and stay zoomed. */
       elements-api input, elements-api select, elements-api textarea { font-size: 16px !important; }
       /* Elements' fixed mobile bar has no z-index, so sticky schema headings
          (z-index 10) slide over it while scrolling; and no top, so it sat
          wherever the page flow put it. It goes right under our 48px bar. */
       elements-api .TopNav--mosaic { z-index: 20; top: 48px; }
       elements-api .sl-drawer-container > .sl-fixed { z-index: 30; }
-      /* The menu drawer is fixed and 100vh tall (sl-h-screen): the same
-         measured height as the page, so every entry is reachable, with room
-         after the last. */
-      elements-api .sl-drawer { box-sizing: border-box; height: 100dvh; height: var(--seen, 100dvh); padding-bottom: 16px; }
-      /* A little room past the last line, and above the title under the
-         mobile bar. */
-      elements-api .sl-overflow-y-auto.sl-flex-1 { padding-top: 6px; padding-bottom: 16px; }
+      /* The menu is a drawer of its own, fixed and 100vh tall (sl-h-screen),
+         which Chrome counts as if its toolbar were hidden. It scrolls inside
+         itself, so the toolbar never moves out of its way: room after the
+         last entry as tall as the browser's bars (large minus small
+         viewport) and the phone's own bar, plus a little, brings every entry
+         clear of them. */
+      elements-api .sl-drawer { box-sizing: border-box; padding-bottom: 16px; padding-bottom: calc(100lvh - 100svh + env(safe-area-inset-bottom, 0px) + 16px); }
     }
   </style>
 </head>
