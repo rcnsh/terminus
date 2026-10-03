@@ -9,10 +9,11 @@ recently, what's left, and where to look. Delete it once it's out of date.
 1. `CLAUDE.md`: the rules. The server writes every answer, NUS's feed is
    never loaded harder, every string is in English and Chinese, and no
    secrets or model names go anywhere.
-2. `AFTER-AUDIT.md`: the owner's to-do list for their Mac session.
+2. `ON-MACOS.md`: the owner's to-do list for their Mac session, in two
+   parts: what Claude can do there, and what only the owner can do.
    - It covers trying the apps, retaking screenshots and releasing 2.1.0.
-   - It also lists the decisions still open (§6) and two Cloudflare
-     dashboard settings (§8).
+   - It also lists the decisions still open (Y7) and the Cloudflare
+     dashboard settings (Y5).
    - It's the best list of what's left.
 3. `RELEASE_NOTES.md`: the 2.1.0 notes, as users will read them.
 4. `apps/api/docs/internals.md`: how everything works, in depth.
@@ -25,7 +26,7 @@ recently, what's left, and where to look. Delete it once it's out of date.
 
 - **Versions.** `main` is at 2.1.0 (Android `versionCode` 44, Mac build
   44). It is not released yet. The release waits for the owner, who needs
-  their Mac and signing keys (`AFTER-AUDIT.md` §3). Agents never tag or
+  their Mac and signing keys (`ON-MACOS.md` C6, C7 and Y4). Agents never tag or
   release by hand.
 - **Deployed.** Both sites (terminus.rcn.sh and the beta) run `598ba46`.
   - Two later commits are on `main` but not yet deployed, unless the owner
@@ -96,7 +97,7 @@ Use `git show` on each for the details.
 
 ## What's left
 
-- **The owner's Mac session** (`AFTER-AUDIT.md` §1–3):
+- **The owner's Mac session** (`ON-MACOS.md`):
   - try the Android and Mac apps;
   - retake the app screenshots: `assets/shots/app-*.webp` and
     `mac-*.webp`;
@@ -105,15 +106,15 @@ Use `git show` on each for the details.
 
   Agents can help with the scripts, but the signing keys are on the
   owner's machines.
-- **Dashboard settings for the owner** (`AFTER-AUDIT.md` §8): a billing
+- **Dashboard settings for the owner** (`ON-MACOS.md` Y5): a billing
   alert and a WAF rate-limit rule.
-- **Open decisions** (`AFTER-AUDIT.md` §6). Ask the owner before starting
+- **Open decisions** (`ON-MACOS.md` Y7). Ask the owner before starting
   any of them:
   - Turnstile on an app's first start, against scripted sign-ups;
   - which wording should move to the server, and why the apps differ;
   - Mac polish;
   - Android caching.
-- **Hardened runtime** for the Mac app (§4) is undecided.
+- **Hardened runtime** for the Mac app (`ON-MACOS.md` Y7) is undecided.
 - **The semester reminder** can't be tried for real until January.
 
 ## Working in this repo
