@@ -31,6 +31,13 @@ node apps/api/scripts/dev-stub.mjs        # local API with fake buses
   `TERMINUS_API_BASE=http://localhost:8787` points it at the dev server, and
   `TERMINUS_SNAPSHOT=<dir>` on a debug build renders every state to PNGs.
 
+## Sending a change
+
+Work on a branch (from a fork if you don't have write access) and open a
+pull request against `main`. Commit under your own name. If an agent such
+as Claude Code writes your commits, it follows [CLAUDE.md](CLAUDE.md),
+which tells it to use your git identity and never anyone else's.
+
 ## English and Chinese
 
 Everything a user reads is in English and Simplified Chinese. Every new

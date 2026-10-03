@@ -22,6 +22,8 @@ dev/
 
 # Local Claude Code preview config
 .claude/
+# Personal agent instructions (identity, how you push): never shared
+CLAUDE.local.md
 
 # Release builds (scripts/release.sh)
 /build/

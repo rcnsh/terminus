@@ -335,17 +335,21 @@ docs/map-plan.md      How the campus map was planned and built
 
 ## Git and GitHub conventions
 
-- **Identity.** Commit as the repo owner, author and committer both:
-  ```bash
-  git config user.name jacob
-  git config user.email 49075095+rcnsh@users.noreply.github.com
-  git config commit.gpgsign false
-  ```
-  Don't add `Co-Authored-By` lines, session links or "Generated with" lines
-  to commit messages or PR descriptions.
-- **Branches.** The owner usually wants work pushed straight to `main`, with
-  no PR, unless they ask for one. If you were given a working branch, keep
-  it pointing at the same commit as `main`.
+- **Identity.** Commit as the person you're working for, with the git
+  identity their own setup already gives you. Never set `user.name` or
+  `user.email`, in any config, to someone else's, the owner's included:
+  every contributor's agent reads this file, so a name here would sign
+  their work as someone else. If no identity is set, ask the person whose
+  session it is. Don't add `Co-Authored-By` lines, session links or
+  "Generated with" lines to commit messages or PR descriptions.
+- **Branches.** Work on a branch and open a pull request against `main`;
+  without write access, from a fork. Only the owner pushes to `main`, and
+  says so in their own instructions (see below). If you were given a
+  working branch, use it.
+- **The owner's own setup** (their identity, pushing straight to `main`)
+  lives outside the repo: in `CLAUDE.local.md` or `~/.claude/CLAUDE.md` on
+  their machines, and in their cloud environment's settings. Follow it when
+  it's there; it's never checked in (`CLAUDE.local.md` is gitignored).
 - **Commit messages.** The subject is a short plain-English summary of the
   change as a user or developer would notice it, for example
   "Map stops easier to tap on a phone" or
