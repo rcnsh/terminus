@@ -15,7 +15,7 @@
 //   the pieces MapLibre asks for. So the campus map works offline after the
 //   first look. Live buses and arrivals are never kept.
 
-const SHELL = 'shell-v7';
+const SHELL = 'shell-v8';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -82,14 +82,38 @@ self.addEventListener('fetch', (event) => {
   }
   if (req.method !== 'GET') return;
   if (DATA_PATHS.has(url.pathname)) {
-    event.respondWith(networkFirst(req));
+    event.respondWith(networkFirst(req, event));
     return;
   }
-  if (SHELL_FILES.includes(url.pathname)) event.respondWith(shellFile(req, url.pathname));
+  if (SHELL_FILES.includes(url.pathname)) event.respondWith(shellFile(req, url.pathname, event));
   else if (url.pathname === TILES) event.respondWith(tiles(req, event));
   else if (url.pathname.startsWith('/vendor/') || url.pathname.startsWith('/map/fonts/') || url.pathname.startsWith('/map/sprites/')) event.respondWith(cacheFirst(req));
-  else if (url.pathname === '/app/map.js' || url.pathname === '/campus' || url.pathname === '/map/style.json') event.respondWith(networkThenKept(req));
+  else if (url.pathname === '/app/map.js' || url.pathname === '/campus' || url.pathname === '/map/style.json') event.respondWith(networkThenKept(req, event));
 });
+
+/** On a slow connection, how long to wait for the network before using the
+ *  kept copy. The network's answer still updates the copy when it comes. */
+const SLOW_MS = 4_000;
+
+/**
+ * [network]'s reply, or, when it takes longer than SLOW_MS (or fails), the
+ * copy [kept] finds, if there is one. The network carries on in [event]'s
+ * lifetime, so a late reply is still kept for next time.
+ */
+async function soonest(network, kept, event) {
+  event?.waitUntil(network.catch(() => {}));
+  let timer;
+  const slow = new Promise((ok) => {
+    timer = setTimeout(ok, SLOW_MS, 'slow');
+  });
+  const first = await Promise.race([network.then((res) => ({ res }), (err) => ({ err })), slow]);
+  clearTimeout(timer);
+  if (first !== 'slow' && first.res) return first.res;
+  const copy = await kept();
+  if (copy) return copy;
+  // Nothing kept: wait for the network after all (or its error).
+  return network;
+}
 
 /* ---------- the map ---------- */
 
@@ -104,17 +128,14 @@ async function cacheFirst(req) {
 }
 
 /** The newest from the network, the kept copy without one. */
-async function networkThenKept(req) {
+async function networkThenKept(req, event) {
   const cache = await caches.open(MAP);
-  try {
+  const network = (async () => {
     const res = await fetch(req);
     if (res.ok) await cache.put(req, res.clone());
     return res;
-  } catch (err) {
-    const kept = await cache.match(req);
-    if (kept) return kept;
-    throw err;
-  }
+  })();
+  return soonest(network, () => cache.match(req), event);
 }
 
 /** The kept map file, read once per worker. */
@@ -183,7 +204,7 @@ function forgetData() {
   return caches.delete(DATA);
 }
 
-async function networkFirst(req) {
+async function networkFirst(req, event) {
   const generation = dataGeneration;
   const cache = await caches.open(DATA);
   // One kept reply per route, place or stop asked for, clock style and
@@ -195,7 +216,7 @@ async function networkFirst(req) {
   const lang = (req.headers.get('accept-language') ?? '').split(',')[0].trim().slice(0, 16);
   if (lang) keyed.set('lang', lang);
   const key = `${url.origin}${url.pathname}${keyed.size ? `?${keyed}` : ''}`;
-  try {
+  const network = (async () => {
     const res = await fetch(req);
     // A server error is as good as no network: the kept reply beats an error.
     if (res.status >= 500) {
@@ -211,22 +232,19 @@ async function networkFirst(req) {
       if (generation === dataGeneration) await cache.put(key, new Response(body, { status: 200, headers }));
     }
     return res;
-  } catch (err) {
-    const kept = await cache.match(key);
-    if (kept) return kept;
-    throw err;
-  }
+  })();
+  // A signed-out device has nothing kept, so it always waits for the network.
+  return soonest(network, () => (generation === dataGeneration ? cache.match(key) : null), event);
 }
 
-async function shellFile(req, path) {
+async function shellFile(req, path, event) {
   const cache = await caches.open(SHELL);
-  try {
+  const network = (async () => {
     const res = await fetch(req);
     if (res.ok) await cache.put(path, res.clone());
     return res;
-  } catch {
-    return (await cache.match(path)) ?? Response.error();
-  }
+  })();
+  return soonest(network, () => cache.match(path), event).catch(() => Response.error());
 }
 
 // ---------- push (phase 5) ----------

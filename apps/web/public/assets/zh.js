@@ -188,6 +188,7 @@ window.TERMINUS_ZH = {
  "You're offline and nothing has been saved yet. This will update when you're back online.": "你已离线，且尚未保存任何内容。恢复联网后会自动更新。",
  "You're offline. Showing the last update.": "你已离线。显示的是上次更新的内容。",
  "You're offline. Showing the update from {0}.": "你已离线。显示的是 {0} 的更新内容。",
+ "Slow connection. Showing the update from {0}.": "网络较慢。显示的是 {0} 的更新内容。",
  "Updating times…": "正在更新时间…",
  "On a Mac, open the terminus menu bar app and type the code.": "在 Mac 上，打开 terminus 菜单栏应用并输入代码。",
  "If you live on campus, this fills in your stops so the app doesn't direct you home when you're already there.": "如果你住在校内，这会自动填写你的车站，你已经在宿舍时，应用就不会再引导你回家。",

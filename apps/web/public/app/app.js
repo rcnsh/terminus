@@ -80,8 +80,16 @@ async function get(path) {
 
 /** The banner for a card fetched at `cachedAt` by the service worker, or none for a live one. */
 function stale(cachedAt) {
-  banner.set(cachedAt === null ? null : t("You're offline. Showing the update from {0}.", clock(new Date(cachedAt).toISOString())));
+  if (cachedAt === null) return void banner.set(null);
+  const at = clock(new Date(cachedAt).toISOString());
+  // Online, the kept copy means the network was too slow (sw.js): try again soon.
+  if (navigator.onLine) {
+    banner.set(t('Slow connection. Showing the update from {0}.', at));
+    clearTimeout(slowRetry);
+    slowRetry = setTimeout(refresh, 8_000);
+  } else banner.set(t("You're offline. Showing the update from {0}.", at));
 }
+let slowRetry = null;
 
 /** A query string: the 12-hour style, and the other params given. */
 function query(params = {}) {
