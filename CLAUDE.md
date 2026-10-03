@@ -147,7 +147,7 @@ apps/api/
   migrations/         D1 schema, numbered NNNN_name.sql
   scripts/            dev-stub.mjs; scrapers (scrape_stops.py, route_shapes.py,
                       fetch_calendar.py, walk_routes.py, check_scraped.py);
-                      probe_buses.py (feed update-rate probe)
+                      probe_buses.py (feed update-rate probe); record_buses.mjs (checks /buses on a live site)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
   test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
@@ -180,7 +180,8 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
                       publish-mac.sh, appcast.py, release-notes.py, map-tiles.sh,
                       vendor-map.sh, vendor-preact.sh, vps-setup.sh
 .github/workflows/    ci.yml, release.yml (tag-driven), scrape.yml (weekly data),
-                      map-tiles.yml, probe-buses.yml (manual feed probe)
+                      map-tiles.yml, probe-buses.yml (manual feed probe),
+                      record-buses.yml (manual: no bus switches sides after a deploy)
 docs/map-plan.md      How the campus map was planned and built
 ```
 

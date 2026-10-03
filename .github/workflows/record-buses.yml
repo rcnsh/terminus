@@ -1,0 +1,43 @@
+name: record live buses
+
+# Run by hand after a deploy: records what /buses shows the map for a few
+# minutes, with a throwaway anonymous account, and checks no bus switches to
+# the other side of the road or jumps (apps/api/scripts/record_buses.mjs).
+# The report is the run's summary, and an annotation. Needs no secrets.
+on:
+  workflow_dispatch:
+    inputs:
+      site:
+        description: "Which site"
+        type: choice
+        options: [https://terminus.rcn.sh, https://beta.terminus.rcn.sh]
+        default: https://terminus.rcn.sh
+      minutes:
+        description: "How long to record"
+        default: "10"
+      services:
+        description: "Services, space-separated"
+        default: "A1 A2 D1 D2"
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Record and check
+        env:
+          SITE: ${{ inputs.site }}
+          MINUTES: ${{ inputs.minutes }}
+          SERVICES: ${{ inputs.services }}
+        # SERVICES unquoted on purpose: one argument per service.
+        run: |
+          node apps/api/scripts/record_buses.mjs --site "$SITE" --minutes "$MINUTES" $SERVICES > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          python3 -c 'import sys; t = sys.stdin.read().replace("%", "%25").replace("\r", "").replace("\n", "%0A"); print("::notice title=buses::" + t)' < report.md
