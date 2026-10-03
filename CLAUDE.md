@@ -243,6 +243,10 @@ docs/map-plan.md      How the campus map was planned and built
 - **Mac:** `L("English %@", value)`, with the Chinese in
   `Support/zh-Hans.lproj/Localizable.strings`.
 - Place and service names (KR MRT, COM3, D2) stay English in both.
+- One glossary for all of it, at the top of `src/i18n.ts` (class 课, stop
+  车站, favourite 收藏, packed 很挤, email address 邮箱, …), with a space
+  between Chinese and Latin letters or digits. Change a word everywhere or
+  nowhere.
 
 ## Tests
 

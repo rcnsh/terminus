@@ -14,8 +14,10 @@
  * Glossary: leave 出发, board/catch 搭, get off 下车, stop 车站, bus 巴士,
  * walk 步行, timetable 课表, class 课, favourite 收藏, Today 今天,
  * Nearby 附近, widget 小组件, Settings 设置, sign in 登录, device 设备,
- * packed 很挤, estimate 估计, live 实时. A space between Chinese and Latin
- * letters or digits ("9:41 的 D2"), full-width punctuation in Chinese.
+ * packed 很挤, estimate 估计, live 实时, an email address 邮箱 ("添加邮箱"),
+ * an email sent 电子邮件. A space between Chinese and Latin letters or digits
+ * ("9:41 的 D2"), full-width punctuation in Chinese. The website and the
+ * apps follow the same glossary.
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';

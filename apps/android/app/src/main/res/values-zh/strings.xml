@@ -23,7 +23,7 @@
     <string name="map_no_times">暂时没有时间</string>
     <string name="map_not_on_route">现在不在路线上</string>
     <string name="map_one_bus">%1$s 有 1 辆巴士</string>
-    <string name="map_places_full">已达到收藏地点上限</string>
+    <string name="map_places_full">已达到收藏上限</string>
     <string name="map_recentre">回到校园</string>
     <string name="map_save_place">存为地点</string>
     <string name="map_saved_as">已存为 %1$s</string>
@@ -54,7 +54,7 @@
     <string name="account_page">账户页面</string>
     <string name="account_page_hint">API 密钥、在所有设备上退出登录和删除账户都在账户页面。</string>
     <string name="add">添加</string>
-    <string name="add_by_hand">手动添加课程或安排</string>
+    <string name="add_by_hand">手动添加课或其他安排</string>
     <string name="add_device">添加设备</string>
     <string name="add_device_hint">你的 Mac 或另一部手机。每当添加或移除设备时，你都会收到电子邮件。</string>
     <string name="add_email">添加你的邮箱</string>
@@ -92,7 +92,7 @@
     <string name="class_gone">已不在你课表里的课</string>
     <string name="clear">清除</string>
     <string name="clear_history">清除行程记录</string>
-    <string name="clear_history_text">这会清除你的行程记录。你的课程设置不会改变。</string>
+    <string name="clear_history_text">这会清除你的行程记录。你为各节课做的设置不会改变。</string>
     <string name="clear_history_title">清除行程记录？</string>
     <string name="code_from_email">邮件里的验证码</string>
     <string name="code_wait_hint">你完成后，这部手机会自动登录。如果一分钟后仍未收到邮件，请检查垃圾邮件。验证码 15 分钟后失效。</string>
@@ -102,9 +102,9 @@
     <string name="day_hours_hint">在这段时间以外，小组件会显示你的下一节课，而不是巴士。更早开始或更晚结束的课会自动延长这段时间。</string>
     <string name="delete">删除</string>
     <string name="delete_account">删除这个账户</string>
-    <string name="delete_account_text">你的课表和设置将被立即删除，应用会重置。由于账户没有电子邮件，删除后无法恢复。</string>
+    <string name="delete_account_text">你的课表和设置将被立即删除，应用会重置。由于账户未绑定邮箱，删除后无法恢复。</string>
     <string name="delete_account_title">删除这个账户？</string>
-    <string name="detect">上车时自动识别</string>
+    <string name="detect">自动检测上车</string>
     <string name="detect_hint">行程中，实时通知会使用你的位置判断你是否已上车、错过巴士或已到达，并在你的所有设备上同步行程。它会在行程中你打开 terminus，或点按其通知或小组件时开始。只保存判断结果，从不保存你的位置。</string>
     <string name="detect_needs">这需要 terminus 获得精确位置和通知权限。</string>
     <string name="device_removed">设备已移除。请在应用里重新配对。</string>
@@ -171,7 +171,7 @@
     <string name="heading_your_trips">你的行程</string>
     <string name="just_now">刚刚</string>
     <string name="keep_account">保留账户的设置</string>
-    <string name="later">稍后再说</string>
+    <string name="later">稍后设置</string>
     <string name="leave_by">%1$s 前出发</string>
     <string name="leave_now">现在出发</string>
     <string name="leaves_in_min_s">%1$d 分 %2$d 秒后开</string>
@@ -187,7 +187,7 @@
     <string name="long_gap_short">空档较长</string>
     <string name="min_walk">步行 %1$d 分钟</string>
     <string name="min_walk_comma">，步行 %1$d 分钟</string>
-    <string name="mode_show">显示%1$s</string>
+    <string name="mode_show">显示 %1$s</string>
     <string name="mode_showing">%1$s，正在显示。点按两下打开 terminus。</string>
     <string name="module_at_venue">%1$s（在 %2$s）</string>
     <string name="monday">星期一</string>
@@ -203,7 +203,7 @@
     <string name="next_where_off">下一站：%1$s，在这里下车</string>
     <string name="no_answer_yet">还没有答案</string>
     <string name="no_buses_due">暂时没有巴士</string>
-    <string name="no_classes_yet">还没有课程</string>
+    <string name="no_classes_yet">还没有课</string>
     <string name="no_home_stop">尚未设置家附近的车站</string>
     <string name="no_live_data">没有实时数据</string>
     <string name="no_location">无法获取你的位置。请自己选择车站。</string>
@@ -214,7 +214,7 @@
     <string name="not_going_today">今天不去</string>
     <string name="not_saved">没有保存：%1$s</string>
     <string name="not_signed_in">未登录</string>
-    <string name="not_signed_in_hint">你的设置只保存在这部手机上。添加电子邮件后，即使手机遗失也能保留设置，并可在 Mac 或网页上使用 terminus。</string>
+    <string name="not_signed_in_hint">你的设置只保存在这部手机上。添加邮箱后，即使手机遗失也能保留设置，并可在 Mac 或网页上使用 terminus。</string>
     <string name="nothing_yet">暂时没有</string>
     <string name="notifications">通知</string>
     <string name="notifications_off">terminus 的通知已关闭。</string>
@@ -235,7 +235,7 @@
     <string name="on_">已开启。</string>
     <string name="on_mac_enter">在你的 Mac 上打开 terminus，输入：</string>
     <string name="on_the">在 %1$s 上</string>
-    <string name="on_the_map">在地图上查看%1$s</string>
+    <string name="on_the_map">在地图上查看 %1$s</string>
     <string name="one_bus_earlier">提早一班</string>
     <string name="one_class">1 节课</string>
     <string name="one_device">1 台设备</string>
@@ -290,7 +290,7 @@
     <string name="request_expired">请求已过期。请重新发送。</string>
     <string name="residence_stops">%1$s 的车站：%2$s。你已经在宿舍时，terminus 不会再引导你回家。</string>
     <string name="rest_hint_none">在你的一天开始前不显示巴士。仍可点按“附近”查看。</string>
-    <string name="rest_hint_places">在你的一天开始前不显示巴士。仍可点按收藏地点或“附近”查看。</string>
+    <string name="rest_hint_places">在你的一天开始前不显示巴士。仍可点按收藏或“附近”查看。</string>
     <string name="room_code">教室 %1$s</string>
     <string name="saturday">星期六</string>
     <string name="saturday_short">周六</string>

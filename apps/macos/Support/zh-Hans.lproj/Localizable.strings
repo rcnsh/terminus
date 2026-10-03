@@ -18,7 +18,7 @@
 "Account" = "账户";
 "Add a device…" = "添加设备…";
 "Add a stop, building or room" = "添加车站、建筑或教室";
-"Add an email to your account first. Devices can only be added to an account with an email." = "请先为账户添加电子邮件。只有带电子邮件的账户才能添加设备。";
+"Add an email to your account first. Devices can only be added to an account with an email." = "请先为账户添加邮箱。只有绑定了邮箱的账户才能添加设备。";
 "Add where you live and your timetable" = "添加你住在哪里和你的课表";
 "Allow" = "允许";
 "Allow for packed buses" = "考虑巴士很挤的情况";
@@ -113,7 +113,7 @@
 "Offline" = "离线";
 "Only on this Mac." = "仅限这台 Mac。";
 "Open the account page" = "打开账户页面";
-"Remove %@" = "移除%@";
+"Remove %@" = "移除 %@";
 "Settings…" = "设置…";
 "Theme" = "主题";
 "Timetable" = "课表";
@@ -184,7 +184,7 @@
 "Update" = "更新";
 "Update terminus to continue" = "请更新 terminus 以继续使用";
 "Updated" = "已更新";
-"Use the email you set up terminus with. We'll send you a code to enter here." = "请使用你设置 terminus 时的电子邮件。我们会发送一个验证码，请在此输入。";
+"Use the email you set up terminus with. We'll send you a code to enter here." = "请使用你设置 terminus 时用的邮箱。我们会发送一个验证码，请在此输入。";
 "Walk from home to your stop: %@ min" = "从家步行到车站：%@ 分钟";
 "Walks follow the real paths on campus. Your pace sets how long they take." = "步行按校园里真实的路线计算。你的步速决定要走多久。";
 "We sent a code to %@. Type it here:" = "我们已向 %@ 发送验证码。在这里输入：";
