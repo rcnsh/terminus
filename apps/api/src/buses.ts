@@ -115,9 +115,10 @@ export interface Motion {
 }
 
 export interface LiveBus {
-  /** Stable while the bus runs, so a client can glide it between updates.
-   *  Not the plate. */
+  /** Stable while the bus runs, so a client can glide it between updates. */
   id: string;
+  /** Its number plate, as on the bus (PD726D). */
+  plate: string;
   lat: number;
   lon: number;
   /** Metres along the service's route line (`/campus` routes[svc].line),
@@ -452,6 +453,7 @@ export async function placeBuses(
       }
       return {
         id,
+        plate: b.plate,
         lat: round(lat, 1e6)!,
         lon: round(lon, 1e6)!,
         along: round(along, 10),

@@ -236,7 +236,8 @@ docs/map-plan.md      How the campus map was planned and built
     straight across.
   - `test/fixtures/bus-trace.jsonl` is a real feed trace (the probe
     workflow with `trace`); `buses.test.js` replays it.
-  - Plates are never sent; `id` is a hash.
+  - Each bus comes with its number plate (`plate`, shown on its card on
+    the map); `id` is a hash, stable while it runs.
 - **Map.** `/campus` returns stops and route lines. The street map is a
   PMTiles extract on R2, in each site's own downloads bucket
   (`terminus-downloads`, `terminus-beta-downloads`), uploaded by the

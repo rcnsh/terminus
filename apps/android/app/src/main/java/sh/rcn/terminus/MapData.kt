@@ -150,7 +150,7 @@ fun parseColor(hex: String?): Long {
     return if (h != null && h.length == 6 && h.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) 0xFF000000L or h.toLong(16) else 0xFF8A939CL
 }
 
-/** A bus on the map, as `/buses` gives it: no plate, an id stable while it runs. */
+/** A bus on the map, as `/buses` gives it: an id stable while it runs, and its number plate. */
 data class LiveBus(
     val id: String,
     val lat: Double,
@@ -165,6 +165,8 @@ data class LiveBus(
     val speed: Double? = null,
     /** Metres along its line it isn't shown past before the next answer. */
     val until: Double? = null,
+    /** Its number plate (PD726D); null from an older API. */
+    val plate: String? = null,
 ) {
     /** Metres it may go on along its line before the next answer. */
     val onFor: Double get() = if (speed != null && speed > 0 && until != null && along != null) max(0.0, until - along) else 0.0
@@ -191,6 +193,7 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                         along = b.number("along"),
                         speed = b.number("speed"),
                         until = b.number("until"),
+                        plate = b.optString("plate").takeIf { !b.isNull("plate") && it.isNotEmpty() },
                     )
                 },
             )

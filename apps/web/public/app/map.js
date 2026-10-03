@@ -626,7 +626,7 @@ function BusSheet({ id, box }) {
   }, [b]);
   if (!b) return null;
   return html`
-    <${Frame} title=${t('{0} bus', b.svc)} sub=${b.moving ? null : t('Stopped')} box=${box}>
+    <${Frame} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.moving ? null : t('Stopped')} box=${box}>
       <div class="sheet-rows">
         <div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop?.name ?? t('Not on its route right now')}</span></div>
         ${b.crowd && html`<div class="sheet-row"><span>${t('How full')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}

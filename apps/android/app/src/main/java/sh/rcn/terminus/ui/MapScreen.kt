@@ -3,6 +3,7 @@ package sh.rcn.terminus.ui
 import android.content.Intent
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -50,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -491,7 +494,7 @@ internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, content: @Composable () -> Unit) {
+private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge: String? = null, content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
@@ -501,7 +504,16 @@ private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, conte
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleLarge)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(title, style = MaterialTheme.typography.titleLarge)
+                        // A bus's number plate by its name, like the plate on the bus.
+                        badge?.let {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(shape = RoundedCornerShape(5.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = Color.Transparent) {
+                                Text(it, modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp), style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
                     sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
                 IconButton(onClick = onClose) {
@@ -523,7 +535,7 @@ private fun crowdWord(c: String?): String? = when (c) {
 
 @Composable
 private fun BusSheet(bus: LiveBus, svc: String, onClose: () -> Unit) {
-    SheetSurface(stringResource(R.string.map_bus_title, svc), if (bus.moving) null else stringResource(R.string.map_bus_stopped), onClose) {
+    SheetSurface(stringResource(R.string.map_bus_title, svc), if (bus.moving) null else stringResource(R.string.map_bus_stopped), onClose, badge = bus.plate) {
         SheetRow(stringResource(R.string.map_next_stop), bus.nextStop ?: stringResource(R.string.map_not_on_route))
         crowdWord(bus.crowd)?.let { SheetRow(stringResource(R.string.map_how_full), it) }
     }

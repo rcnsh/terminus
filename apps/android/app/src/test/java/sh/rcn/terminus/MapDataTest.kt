@@ -177,11 +177,13 @@ class MapDataTest {
 
     @Test fun busesSayHowFastTheyAreGoing() {
         val list = BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": [
-            {"id": "a", "lat": 1.0, "lon": 103.0, "along": 812.5, "speed": 6.7, "until": 990.0, "heading": 90, "moving": true, "crowd": null, "nextStop": null},
+            {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "speed": 6.7, "until": 990.0, "heading": 90, "moving": true, "crowd": null, "nextStop": null},
             {"id": "b", "lat": 1.0, "lon": 103.0, "along": null, "heading": null, "moving": false, "crowd": null, "nextStop": null}]}"""))
         assertEquals(6.7, list.buses[0].speed!!, 1e-9)
         assertEquals(990.0, list.buses[0].until!!, 1e-9)
         assertNull("an older API: no speed", list.buses[1].speed)
+        assertEquals("PD726D", list.buses[0].plate)
+        assertNull("an older API: no plate", list.buses[1].plate)
     }
 
     @Test fun busesSayHowFarAlongTheirLineTheyAre() {
