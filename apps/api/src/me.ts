@@ -40,7 +40,7 @@ import {
   PLATFORMS,
 } from './accounts.ts';
 import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
-import { hour12, planned, resolveTo } from './next.ts';
+import { type Planned, hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, isHomeKey, loadDay, markFollowed, savePlan, saveSignal, sgtDate, watchTrip } from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
@@ -321,6 +321,63 @@ async function plateOnBoard(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Bo
   if (!b.stopCode || !b.alightCode) return {};
   const stops = rideStops(indexGraph(deps.graph), b.svc, b.stopCode, b.alightCode);
   return plateAt(env, ctx, deps, stops?.[1], b.svc, nowMs);
+}
+
+/**
+ * What a location means for the trip in progress, as a record to save, or
+ * undefined when it says nothing new (detect.ts decides; this builds the
+ * record). A ride seen from start to end is measured on the way.
+ */
+async function recordFromFix(x: {
+  env: Env;
+  ctx: ExecutionContext;
+  deps: MeDeps;
+  userId: string;
+  now: Planned;
+  prev: TripRecord | undefined;
+  label: string | undefined;
+  fix: Fix;
+  homeStops: string[];
+  nowMs: number;
+}): Promise<TripRecord | undefined> {
+  const { env, ctx, deps, now, prev, label, fix, nowMs } = x;
+  // The bus it's about: the plan; after a miss at the stop, whichever
+  // bus from that stop to the same place this fix is on the road of.
+  const bus: Boarded | null = prev?.kind === 'missed' && prev.atStop ? nextBusFrom(deps.graph, now.trip.plan ?? null, fix, nowMs) : (now.trip.plan ?? null);
+  const seen = detect({ phase: now.trip.phase, rec: prev, bus, arrivedHere: Boolean(now.answer.arrived), fix, homeStops: x.homeStops, graph: deps.graph, nowMs });
+  if (seen === 'arrived') {
+    const onBus = prev?.kind === 'boarded' ? prev.boarded : now.trip.phase === 'riding' ? (now.trip.plan ?? undefined) : undefined;
+    // A ride seen from start to end: how long it really took (phase 8.2).
+    if (onBus?.departed && env.DB) {
+      const rides = env.DB;
+      ctx.waitUntil(mayRecordRide(env, rides, x.userId, onBus.svc, nowMs).then((ok) => (ok ? recordRide(rides, deps.graph, onBus, nowMs) : null)).catch(() => null));
+    }
+    return { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) };
+  }
+  if (seen === 'boarded' && bus) {
+    return {
+      kind: 'boarded',
+      at: nowMs,
+      label,
+      detected: true,
+      boarded: { ...bus, departed: new Date(departedAt(deps.graph, bus, fix, nowMs)).toISOString(), ...(await plateOnBoard(env, ctx, deps, bus, nowMs)) },
+    };
+  }
+  if (seen === 'missed' && (bus || prev?.boarded)) {
+    // The bus it's about: the plan, or the one you were taken to be on.
+    const about = prev?.kind === 'boarded' && prev.boarded ? prev.boarded : bus!;
+    return { kind: 'missed', at: nowMs, label, detected: true, missed: about.board, ...(atStopOf(deps.graph, about, fix) ? { atStop: true } : {}) };
+  }
+  if (prev?.kind === 'missed' && prev.detected && !prev.atStop && atStopOf(deps.graph, now.trip.plan ?? null, fix)) {
+    // Missed it at home, and now at the stop: the next bus can be noticed too.
+    return { ...prev, atStop: true };
+  }
+  if (now.trip.phase === 'waiting' && mayDetect(prev) && prev?.kind !== 'boarded' && !(prev?.kind === 'waiting' && nowMs - prev.at < WAITING_REFRESH_MS)) {
+    // At the stop: what makes a fast fix later count as the bus.
+    // Written again only now and then: the phone sends a fix every 20 s.
+    return { kind: 'waiting', at: nowMs, label };
+  }
+  return undefined;
 }
 
 /** Everything that needs a session, by method and path. */
@@ -607,50 +664,12 @@ export const ME_ROUTES: MeRoute[] = [
         case 'location': {
           // Only what the location means is kept, never the location (detect.ts).
           const fix = fixOf(body);
-          const prev = current ? day?.trips[key] : undefined;
           // Being followed: the card stops asking what happened. Noted once a minute at most.
           if (fix && current && !(day?.followed && nowMs - day.followed < 60_000)) {
             const marked = await markFollowed(env, session.user.id, nowMs).catch(() => null);
             if (marked) followedDay = marked;
           }
-          if (!current || !fix) {
-            rec = undefined;
-            break;
-          }
-          // The bus it's about: the plan; after a miss at the stop, whichever
-          // bus from that stop to the same place this fix is on the road of.
-          const bus: Boarded | null = prev?.kind === 'missed' && prev.atStop ? nextBusFrom(deps.graph, now.trip.plan ?? null, fix, nowMs) : (now.trip.plan ?? null);
-          const seen = detect({ phase: now.trip.phase, rec: prev, bus, arrivedHere: Boolean(now.answer.arrived), fix, homeStops: profile.home?.stops ?? [], graph: deps.graph, nowMs });
-          if (seen === 'arrived') {
-            const onBus = prev?.kind === 'boarded' ? prev.boarded : now.trip.phase === 'riding' ? (now.trip.plan ?? undefined) : undefined;
-            rec = { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) };
-            // A ride seen from start to end: how long it really took (phase 8.2).
-            if (onBus?.departed && env.DB) {
-              const rides = env.DB;
-              ctx.waitUntil(mayRecordRide(env, rides, session.user.id, onBus.svc, nowMs).then((ok) => (ok ? recordRide(rides, deps.graph, onBus, nowMs) : null)).catch(() => null));
-            }
-          } else if (seen === 'boarded' && bus) {
-            rec = {
-              kind: 'boarded',
-              at: nowMs,
-              label,
-              detected: true,
-              boarded: { ...bus, departed: new Date(departedAt(deps.graph, bus, fix, nowMs)).toISOString(), ...(await plateOnBoard(env, ctx, deps, bus, nowMs)) },
-            };
-          } else if (seen === 'missed' && (bus || prev?.boarded)) {
-            // The bus it's about: the plan, or the one you were taken to be on.
-            const about = prev?.kind === 'boarded' && prev.boarded ? prev.boarded : bus!;
-            rec = { kind: 'missed', at: nowMs, label, detected: true, missed: about.board, ...(atStopOf(deps.graph, about, fix) ? { atStop: true } : {}) };
-          } else if (prev?.kind === 'missed' && prev.detected && !prev.atStop && atStopOf(deps.graph, now.trip.plan ?? null, fix)) {
-            // Missed it at home, and now at the stop: the next bus can be noticed too.
-            rec = { ...prev, atStop: true };
-          } else if (now.trip.phase === 'waiting' && mayDetect(prev) && prev?.kind !== 'boarded' && !(prev?.kind === 'waiting' && nowMs - prev.at < WAITING_REFRESH_MS)) {
-            // At the stop: what makes a fast fix later count as the bus.
-            // Written again only now and then: the phone sends a fix every 20 s.
-            rec = { kind: 'waiting', at: nowMs, label };
-          } else {
-            rec = undefined;
-          }
+          rec = current && fix ? await recordFromFix({ env, ctx, deps, userId: session.user.id, now, prev: day?.trips[key], label, fix, homeStops: profile.home?.stops ?? [], nowMs }) : undefined;
           break;
         }
         case 'boarded':
