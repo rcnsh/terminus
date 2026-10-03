@@ -1,18 +1,23 @@
 // The installed web app (phase 5): the answer card and today, the way the
-// phone app shows them, the campus map (app/map.js) and settings (the
+// phone app shows them, the campus map (app/map.js) and Settings (the
 // account page's, account/settings.js). A bar along the bottom switches
 // between them, fading through as the phone app does.
+//
+// What's on screen lives in stores at the top (what the card is for, the
+// card, today, …); the functions under them fetch and set them, and the
+// components at the bottom draw them.
 //
 // The service worker (/sw.js) answers /me/next and /me/day from its cache
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
-import { $, api, clock, el, inkOn, t } from '/account/dom.js';
-import { show, wireReport } from '/account/preview.js';
-import { attachSearch } from '/account/search.js';
+import { Icon, Rich, html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
+import { api, clock, inkOn, t } from '/account/dom.js';
+import { Card, HOUR12, Message, Report, isStale, signal } from '/account/preview.js';
+import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile } from '/account/profile.js';
+import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
 
-const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
 /** The answer refreshes this often while the app is on screen (the API caches 15 s). */
 const REFRESH_MS = 30_000;
 
@@ -20,9 +25,44 @@ const standalone = window.matchMedia('(display-mode: standalone)').matches || na
 // iPadOS says it's a Mac; one with a touch screen is an iPad.
 const iPhone = !/Android/.test(navigator.userAgent) && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-/** What the card shows: the plan, a saved place (its key), a stop picked on the map, or the buses nearby. */
-let target = { kind: 'plan' };
-let places = [];
+/* ---------- what's on screen ---------- */
+
+/** What the card is for: the plan, a saved place (its key), a stop picked on the map or in the search, or the buses nearby. */
+const target = store({ kind: 'plan' });
+/** The saved places, for their chips: from the last answer, and from the profile as Settings or the map change it. */
+const places = store([]);
+profile.subscribe((p) => p && places.set(p.places.map(({ key, label }) => ({ key, label }))));
+/**
+ * The card: an answer (`a`), "Checking…" or another line (`text`), the
+ * offline plan (`offline`), or Nearby's stops (`nearby`).
+ */
+const card = store({ text: t('Checking…') });
+/** "Updated 9:41", or "Updating…" while a card already seen is shown again. */
+const updated = store('');
+/** The banner above the chips when the card isn't live (offline, or no answer), else null. */
+const banner = store(null);
+/** Today, from /me/day. */
+const day = store(null);
+/** Taken off today here, by key, with the refresh that started after it: hidden until one comes back. */
+const removed = store(new Map());
+/** The bar above Today after taking something off it: its words, and Undo if there's one. */
+const undo = store(null);
+/** The search under the chips is open. */
+const searching = store(false);
+/** /me, once fetched: who's signed in. */
+const me = store(null);
+/** Now, Map or Settings; null until the first draw. */
+const tab = store(null);
+/** app/map.js, once the map has been opened. */
+const mapModule = store(null);
+/** A stop to open on the map once it's on screen (a stop tapped in Nearby). */
+const stopToShow = store(null);
+/** Settings: account/settings.js once loaded, or why not. */
+const settings = store({ status: 'idle', mod: null });
+/** A NUSMods link shared to the app, for Settings to offer to import. */
+let shared = null;
+
+/* ---------- fetching ---------- */
 
 /** GET a JSON route; `cached` is when the service worker's copy was fetched, if that's what came back. */
 async function get(path) {
@@ -38,10 +78,9 @@ async function get(path) {
   return { data: await res.json(), cached: cached ? Number(cached) : null };
 }
 
+/** The banner for a card fetched at `cachedAt` by the service worker, or none for a live one. */
 function stale(cachedAt) {
-  $('#offline').hidden = cachedAt === null;
-  if (cachedAt !== null) $('#offline').textContent = t("You're offline. Showing the update from {0}.", clock(new Date(cachedAt).toISOString()));
-  document.body.classList.toggle('is-offline', cachedAt !== null);
+  banner.set(cachedAt === null ? null : t("You're offline. Showing the update from {0}.", clock(new Date(cachedAt).toISOString())));
 }
 
 /** A query string: the 12-hour style, and the other params given. */
@@ -77,46 +116,44 @@ let generation = 0;
 
 async function refresh() {
   const mine = ++generation;
-  if (target.kind === 'nearby') return refreshNearby(mine);
+  const to = target.get();
+  if (to.kind === 'nearby') return refreshNearby(mine);
   try {
     const at = await here();
-    const params = { ...(target.kind === 'place' ? { place: target.key } : target.kind === 'stop' ? { to: target.to } : {}), ...at };
+    const params = { ...(to.kind === 'place' ? { place: to.key } : to.kind === 'stop' ? { to: to.to } : {}), ...at };
     // Today gets the location too: its next class is planned from here, as the card is.
     const [nextR, dayR] = await Promise.allSettled([get(`/me/next${query(params)}`), get(`/me/day${query(at ?? {})}`)]);
     if (mine !== generation) return;
     if (nextR.status === 'rejected' && nextR.reason?.message === 'signed out') return;
     const next = nextR.status === 'fulfilled' ? nextR.value : null;
-    const day = dayR.status === 'fulfilled' ? dayR.value : null;
-    if (day) renderDay(day.data);
+    const plan = dayR.status === 'fulfilled' ? dayR.value : null;
+    if (plan) {
+      day.set(plan.data);
+      // What was taken off before this refresh started is gone from it now.
+      removed.set((m) => new Map([...m].filter(([, at]) => at >= mine)));
+    }
     // Offline with an answer gone stale (or none kept): the next thing on the
     // day plan the service worker kept, with its leave-by from then.
     const offline = !next || next.cached !== null;
-    const fallback = offline && target.kind === 'plan' && (!next || isStale(next.data)) ? offlineNext(day?.data, Date.now()) : null;
+    const fallback = offline && to.kind === 'plan' && (!next || isStale(next.data)) ? offlineNext(plan?.data, Date.now()) : null;
     if (fallback) {
-      showOffline(fallback);
-      stale(day.cached ?? Date.now());
-      $('#updated').textContent = '';
+      card.set({ offline: fallback });
+      stale(plan.cached ?? Date.now());
+      updated.set('');
       return;
     }
     if (!next) throw nextR.reason;
-    show(next.data);
-    seen.set(seenKey(target), next.data);
+    card.set({ a: next.data });
+    seen.set(seenKey(to), next.data);
     stale(next.cached);
-    $('#updated').textContent = t('Updated {0}', clock(new Date(next.cached ?? Date.now()).toISOString()));
-    if (JSON.stringify(next.data.places ?? []) !== JSON.stringify(places)) {
-      places = next.data.places ?? [];
-      renderChips();
-    }
+    updated.set(t('Updated {0}', clock(new Date(next.cached ?? Date.now()).toISOString())));
+    if (JSON.stringify(next.data.places ?? []) !== JSON.stringify(places.get())) places.set(next.data.places ?? []);
   } catch (err) {
     if (err.message === 'signed out' || mine !== generation) return;
-    stale(Date.now());
     // Online but no answer (the server busy, an error): not "offline".
-    $('#offline').textContent = navigator.onLine ? t("Couldn't update. Trying again soon.") : t("You're offline and nothing has been saved yet. This will update when you're back online.");
+    banner.set(navigator.onLine ? t("Couldn't update. Trying again soon.") : t("You're offline and nothing has been saved yet. This will update when you're back online."));
   }
 }
-
-/** Past the card's staleAt: its bus has gone, the plan has moved on, or it's old. */
-const isStale = (a) => Boolean(a.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
 
 /** Each card drawn this visit, by what it was for: shown again at once when its chip is tapped, while it refreshes. */
 const seen = new Map();
@@ -144,155 +181,123 @@ async function keptCard(to) {
 
 /** Before the answer arrives: the card already seen for this target if it still holds, else "Checking…". */
 async function drawSeen() {
-  const to = target;
+  const to = target.get();
   const known = seen.get(seenKey(to)) ?? (await keptCard(to));
-  if (to !== target) return;
+  if (to !== target.get()) return;
   if (known && !isStale(known)) {
-    show(known);
-    $('#updated').textContent = t('Updating…');
+    card.set({ a: known });
+    updated.set(t('Updating…'));
   } else {
-    $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
-    $('#updated').textContent = '';
+    card.set({ text: t('Checking…') });
+    updated.set('');
   }
 }
 
-/**
- * The offline card: the day plan's next item, worded as the Today list words
- * it. Always an estimate (it was planned a while ago), so always "~"; the
- * class's start time is there so a "Leave now" after it has started reads
- * as late, and a trip home says from when.
- */
-function showOffline({ item, step }) {
-  const box = $('#preview');
-  box.className = 'widget offline-plan';
-  if (step === 'home') {
-    box.replaceChildren(
-      el('div', { class: 'where', textContent: clock(item.startsAt) }),
-      el('div', { class: 'big', textContent: t('Home, from {0}', item.fromName ?? t('your last class')) }),
-    );
-    return;
+/** Shows the card for `to` (a chip tapped, a search result, Go there on the map). */
+function choose(to) {
+  target.set(to);
+  if (to.kind === 'nearby') {
+    card.set({ text: t('Checking…') });
+    updated.set('');
+  } else {
+    drawSeen();
   }
-  const l = item.leave;
-  const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
-  const big = step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now');
-  box.replaceChildren(
-    el('div', { class: 'where', textContent: `${t('Next class · {0}', item.label)} · ${t('starts {0}', clock(item.startsAt))}` }),
-    el('div', { class: 'big', textContent: big }),
-    // Capitalised: on a line of its own, not after "Leave by …" as in Today.
-    how ? el('div', { class: 'detail', textContent: how.charAt(0).toUpperCase() + how.slice(1) }) : '',
-  );
-}
-
-/** Next, each saved place, and Nearby: the phone app's chips. */
-function renderChips() {
-  const chip = (label, to) =>
-    el('button', {
-      type: 'button',
-      textContent: label,
-      'aria-pressed': String(JSON.stringify(to) === JSON.stringify(target)),
-      onclick: () => {
-        target = to;
-        renderChips();
-        if (to.kind === 'nearby') {
-          $('#preview').replaceChildren(el('div', { class: 'detail', textContent: t('Checking…') }));
-          $('#updated').textContent = '';
-        } else {
-          drawSeen();
-        }
-        refresh();
-      },
-    });
-  // A report is about one answer; Nearby's list isn't one.
-  $('#report-box').hidden = target.kind === 'nearby';
-  $('#chips').replaceChildren(
-    chip(t('Next'), { kind: 'plan' }),
-    ...places.map((p) => chip(p.label, { kind: 'place', key: p.key })),
-    chip(t('Nearby'), { kind: 'nearby' }),
-    // A stop picked on the map (Go there) or in the search, until another chip is tapped.
-    target.kind === 'stop' ? chip(target.label, target) : '',
-    el(
-      'button',
-      {
-        type: 'button',
-        class: 'chip-search',
-        'aria-label': t('Go somewhere else'),
-        'aria-expanded': String(!$('#where-box').hidden),
-        onclick: toggleSearch,
-      },
-      searchIcon(),
-    ),
-  );
-}
-
-function searchIcon() {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
-  return svg;
-}
-
-/* ---------- go somewhere else ---------- */
-
-/** Every stop, building, room and place, from /campus: loaded the first time the search opens. */
-let destinations = null;
-let search = null;
-
-/** The search under the chips: opens focused, and closes again on a second tap. */
-async function toggleSearch() {
-  const box = $('#where-box');
-  box.hidden = !box.hidden;
-  $('.chip-search')?.setAttribute('aria-expanded', String(!box.hidden));
-  if (box.hidden) return;
-  if (!search) {
-    search = attachSearch($('#where'), {
-      source: () => destinations ?? [],
-      suggestions: () => [],
-      stopName: (code) => destinations?.find((d) => d.kind === 'stop' && d.code === code)?.label ?? code,
-      onPick: goSomewhere,
-    });
-    $('#where').addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        toggleSearch();
-        $('.chip-search')?.focus();
-      }
-    });
-  }
-  // After attachSearch, which moves the box into its own wrapper (and out of focus).
-  $('#where').focus();
-  if (!destinations) {
-    try {
-      destinations = (await get('/campus')).data.destinations ?? [];
-      // Typed before the list arrived: search again with it.
-      if ($('#where').value) $('#where').dispatchEvent(new Event('input'));
-    } catch {
-      destinations = null;
-    }
-  }
+  refresh();
 }
 
 /** A search result: its card, under a chip of its own, as a stop picked on the map. */
 function goSomewhere(d) {
-  search.clear();
-  $('#where-box').hidden = true;
+  searching.set(false);
   // A stop or a place is called by its name; a building or room by its code, as on its door.
-  target = { kind: 'stop', to: d.code, label: d.kind === 'stop' || d.kind === 'landmark' ? d.label : d.code };
-  renderChips();
+  choose({ kind: 'stop', to: d.code, label: d.kind === 'stop' || d.kind === 'landmark' ? d.label : d.code });
+}
+
+/** Go there, from a stop on the map: Now, with the card for that stop. */
+function goToStop({ code, name, place }) {
+  // A saved place already has its chip: that one, not a second.
+  target.set(place ? { kind: 'place', key: place } : { kind: 'stop', to: code, label: name });
   drawSeen();
+  if (location.hash === '#map') history.pushState(null, '', '#now');
+  showTab();
+}
+
+/** Every bus at the stops around you, from the browser's location. */
+async function refreshNearby(mine) {
+  const at = await here({ ask: true });
+  if (mine !== generation) return;
+  if (!at) return card.set({ text: t('Allow location for this site to see the buses near you.') });
+  try {
+    const { data } = await get(`/me/nearby${query(at)}`);
+    if (mine !== generation) return;
+    stale(null);
+    updated.set(t('Updated {0}', clock(new Date().toISOString())));
+    card.set(data.stops?.length ? { nearby: data.stops } : { text: t('No campus bus stops near you.') });
+  } catch (err) {
+    if (err.message !== 'signed out' && mine === generation) card.set({ text: t('Nearby needs a connection.') });
+  }
+}
+
+/** An answer from a card's button or Undo: shown, then everything fetched again so Today and its offline copy follow. */
+function answered(a) {
+  card.set({ a });
+  refresh();
+}
+
+/**
+ * Taking an entry off today (× on the row): a timetabled class, one you
+ * added, or the trip home. Gone at once, with Undo for a few seconds.
+ */
+let undoTimer = null;
+function showUndo(value) {
+  undo.set(value);
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => undo.set(null), 6_000);
+}
+
+async function removeFromToday(it) {
+  removed.set((m) => new Map(m).set(it.key, generation + 1));
+  const name = it.kind === 'home' ? t('The trip home') : it.label.split(' @ ')[0];
+  showUndo({
+    text: t('{0} removed from today', name),
+    undo: async () => {
+      undo.set(null);
+      removed.set((m) => {
+        const next = new Map(m);
+        next.delete(it.key);
+        return next;
+      });
+      try {
+        card.set({ a: await signal({ kind: 'reset', trip: it.key }) });
+      } finally {
+        refresh();
+      }
+    },
+  });
+  try {
+    card.set({ a: await signal({ kind: 'skipped', trip: it.key }) });
+  } catch {
+    // Said where it was done, in the undo bar, which the refresh below leaves alone.
+    showUndo({ text: t("Couldn't remove that. Check your connection.") });
+    removed.set((m) => {
+      const next = new Map(m);
+      next.delete(it.key);
+      return next;
+    });
+  }
   refresh();
 }
 
 /* ---------- tabs ---------- */
 
 const TABS = ['now', 'map', 'settings'];
-const view = (name) => $(`#tab-${name}`);
-let mapModule = null;
-/** Now, Map or Settings; null until the first draw. */
-let tab = null;
+/** Each tab's section, set as they're drawn. */
+const views = {};
 /** Counts switches: a fade that finishes after a newer tap is left to that one. */
 let switches = 0;
 /** Where Now and Settings were scrolled to, for coming back. */
 const scrolled = {};
+
+const tabInAddress = () => (location.hash === '#map' ? 'map' : location.hash.startsWith('#settings') ? 'settings' : 'now');
 
 /**
  * Material's fade through, as on the phone: the old tab fades out quickly,
@@ -307,42 +312,36 @@ function fadeIn(node) {
 }
 const fadeOut = (node) => node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
 
-/** Now, Map or Settings, from the address (#map, #settings, #settings/trips), so Back and a reload keep the tab. */
+/**
+ * Now, Map or Settings, from the address (#map, #settings, #settings/trips),
+ * so Back and a reload keep the tab. The sections are shown and hidden here,
+ * not by Preact, so the fade can swap them between its two halves.
+ */
 async function showTab() {
-  const next = location.hash === '#map' ? 'map' : location.hash.startsWith('#settings') ? 'settings' : 'now';
-  if (next === tab) return;
-  const from = tab;
-  tab = next;
+  const next = tabInAddress();
+  const from = tab.get();
+  if (next === from) return;
   const mine = ++switches;
-  for (const a of document.querySelectorAll('.tabbar a[data-tab]')) {
-    if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
-    else a.removeAttribute('aria-current');
-  }
   const animate = from !== null && document.visibilityState === 'visible';
   if (from !== null) scrolled[from] = window.scrollY;
   if (animate) {
-    const out = fadeOut(view(from));
+    const out = fadeOut(views[from]);
     await out.finished.catch(() => {});
     // Tapped again meanwhile: that switch draws its own tab.
     if (mine !== switches) return out.cancel();
-    for (const n of TABS) view(n).hidden = n !== tab;
+    for (const n of TABS) views[n].hidden = n !== next;
     out.cancel();
   }
-  for (const n of TABS) view(n).hidden = n !== tab;
-  document.body.classList.toggle('on-map', tab === 'map');
-  document.body.classList.toggle('on-settings', tab === 'settings');
-  if (from === 'map') mapModule?.hideMap();
-  window.scrollTo(0, scrolled[tab] ?? 0);
-  if (animate) fadeIn(view(tab));
-  if (tab === 'map') {
+  for (const n of TABS) views[n].hidden = n !== next;
+  tab.set(next);
+  document.body.classList.toggle('on-map', next === 'map');
+  document.body.classList.toggle('on-settings', next === 'settings');
+  window.scrollTo(0, scrolled[next] ?? 0);
+  if (animate) fadeIn(views[next]);
+  if (next === 'map') {
     // The map's code on its first opening, after the fade: the tab shows at once.
-    mapModule ??= await import('/app/map.js');
-    if (tab === 'map') {
-      await mapModule.showMap();
-      if (stopToShow) mapModule.focusStop(stopToShow);
-      stopToShow = null;
-    }
-  } else if (tab === 'settings') {
+    if (!mapModule.get()) mapModule.set(await import('/app/map.js'));
+  } else if (next === 'settings') {
     openSettings();
   } else if (from !== null) {
     // start() refreshes once it has drawn the first tab.
@@ -350,44 +349,27 @@ async function showTab() {
   }
 }
 
-/** /me, as start() got it: who's signed in, for Settings. */
-let me = null;
-/** account/settings.js once Settings is drawn, and the drawing while it's under way. */
-let settings = null;
-let settingsLoading = null;
-/** A NUSMods link shared to the app, for Settings to offer to import. */
-let shared = null;
-
 /** Settings the first time (the account page's, without its preview), and fresh from the account after. */
-function openSettings() {
-  if (settings) {
-    settings.reload().catch(() => {});
-    if (shared) settings.offerImport(shared);
+async function openSettings() {
+  const s = settings.get();
+  if (s.status === 'ready') {
+    reloadProfile().catch(() => {});
+    lists.set((n) => n + 1);
+    if (shared) s.mod.offerImport(shared);
     shared = null;
     return;
   }
-  settingsLoading ??= (async () => {
-    const box = $('#tab-settings');
-    box.replaceChildren(el('p', { class: 'hint', textContent: t('Loading…') }));
-    try {
-      me ??= (await get('/me')).data;
-      const mod = await import('/account/settings.js');
-      // "Notify me when to leave" goes in Settings, under Notifications, where this browser can do it.
-      const notify = pushable && !(iPhone && !standalone) ? $('#notify') : null;
-      await mod.mountSettings(box, { me, inApp: true, notify });
-      settings = mod;
-      if (shared) mod.offerImport(shared);
-      shared = null;
-      await mod.renderLists();
-    } catch (err) {
-      // "Notify me when to leave" back where it's kept, before the box is emptied, for the next try.
-      const notify = box.querySelector('#notify');
-      if (notify) $('#notify-home').append(notify);
-      if (err.message !== 'signed out') box.replaceChildren(el('p', { class: 'hint', textContent: t('Settings need a connection.') }));
-    } finally {
-      settingsLoading = null;
-    }
-  })();
+  if (s.status === 'loading') return;
+  settings.set({ status: 'loading', mod: null });
+  try {
+    if (!me.get()) me.set((await get('/me')).data);
+    const [mod] = await Promise.all([import('/account/settings.js'), loadProfile(), loadCampus()]);
+    settings.set({ status: 'ready', mod });
+    if (shared) mod.offerImport(shared);
+    shared = null;
+  } catch (err) {
+    settings.set({ status: err.message === 'signed out' ? 'idle' : 'failed', mod: null });
+  }
 }
 
 /** A NUSMods link shared to the installed app (the manifest's share_target), if this is one. */
@@ -397,174 +379,13 @@ function sharedLink() {
   return text.match(/https:\/\/nusmods\.com\/timetable\/\S+/)?.[0] ?? null;
 }
 
-/** Go there, from a stop on the map: Now, with the card for that stop. */
-function goToStop({ code, name, place }) {
-  // A saved place already has its chip: that one, not a second.
-  target = place ? { kind: 'place', key: place } : { kind: 'stop', to: code, label: name };
-  renderChips();
-  drawSeen();
-  if (location.hash === '#map') history.pushState(null, '', '#now');
-  showTab();
-}
-
-/** A stop tapped in Nearby, for the map to open once it's on screen. */
-let stopToShow = null;
-
-/** Every bus at the stops around you, from the browser's location. */
-async function refreshNearby(mine) {
-  const box = $('#preview');
-  box.className = 'widget';
-  const at = await here({ ask: true });
-  if (mine !== generation) return;
-  if (!at) {
-    box.replaceChildren(el('div', { class: 'detail', textContent: t('Allow location for this site to see the buses near you.') }));
-    return;
-  }
-  try {
-    const { data } = await get(`/me/nearby${query(at)}`);
-    if (mine !== generation) return;
-    stale(null);
-    $('#updated').textContent = t('Updated {0}', clock(new Date().toISOString()));
-    if (!data.stops?.length) {
-      box.replaceChildren(el('div', { class: 'detail', textContent: t('No campus bus stops near you.') }));
-      return;
-    }
-    box.replaceChildren(
-      ...data.stops.map((s) =>
-        el(
-          'section',
-          { class: 'nearby-stop' },
-          el(
-            'header',
-            {},
-            // The stop's name opens it on the map, with its services and what's coming.
-            el('button', {
-              type: 'button',
-              class: 'linkish',
-              textContent: s.stop.name,
-              'aria-label': t('{0} on the map', s.stop.name),
-              onclick: () => {
-                stopToShow = s.stop.code;
-                location.hash = '#map';
-              },
-            }),
-            el('span', { textContent: t('{0} min walk', Math.max(1, Math.round(s.walkS / 60))) }),
-          ),
-          ...(s.board.length
-            ? s.board.map((b) =>
-                el(
-                  'div',
-                  { class: 'nearby-row' },
-                  // In the service's colour, as on the buses and the map.
-                  el('span', { class: 'svc-tag', style: b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : '', textContent: b.svc }),
-                  // No time (scheduled with none to give, or no data): a dash, as on Android and the Mac.
-                  el('span', { textContent: b.etaS == null ? '–' : b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', Math.round(b.etaS / 60))) : t('{0} min', Math.round(b.etaS / 60)) }),
-                ),
-              )
-            : [el('div', { class: 'detail', textContent: s.available ? t('No buses due') : t('No times right now') })]),
-        ),
-      ),
-    );
-  } catch (err) {
-    if (err.message !== 'signed out' && mine === generation) box.replaceChildren(el('div', { class: 'detail', textContent: t('Nearby needs a connection.') }));
-  }
-}
-
-/**
- * Taking an entry off today (× on the row): a timetabled class, one you
- * added, or the trip home. Gone at once, with Undo for a few seconds.
- */
-let undoTimer = null;
-async function removeFromToday(it, li) {
-  li.remove();
-  const name = it.kind === 'home' ? t('The trip home') : it.label.split(' @ ')[0];
-  const bar = $('#today-undo');
-  const hide = () => {
-    bar.hidden = true;
-    clearTimeout(undoTimer);
-  };
-  bar.replaceChildren(
-    el('span', { textContent: t('{0} removed from today', name) }),
-    el('button', {
-      type: 'button',
-      class: 'linkish',
-      textContent: t('Undo'),
-      onclick: async () => {
-        hide();
-        try {
-          show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: 'reset', trip: it.key } }));
-        } finally {
-          refresh();
-        }
-      },
-    }),
-  );
-  bar.hidden = false;
-  clearTimeout(undoTimer);
-  undoTimer = setTimeout(hide, 6_000);
-  try {
-    show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: 'skipped', trip: it.key } }));
-  } catch {
-    // Said where it was done, in the undo bar, which the refresh below leaves alone.
-    bar.replaceChildren(el('span', { textContent: t("Couldn't remove that. Check your connection.") }));
-    bar.hidden = false;
-    clearTimeout(undoTimer);
-    undoTimer = setTimeout(hide, 6_000);
-  }
-  refresh();
-}
-
-/** Today, from /me/day: each class with when to leave and how, and the trips home. */
-function renderDay(day) {
-  const items = day.items ?? [];
-  $('#today').hidden = items.length === 0 && $('#today-undo').hidden;
-  $('#today-list').replaceChildren(
-    ...items.map((it) => {
-      const title = it.kind === 'home' ? t('Home, from {0}', it.fromName ?? t('your last class')) : it.label;
-      let sub = null;
-      if (it.status === 'skipped') sub = t('Not going today');
-      else if (it.onBus) sub = [t('On the {0}', it.onBus.svc), it.onBus.off ? t('off at {0}', it.onBus.off) : null, it.onBus.arrive ? t('arrive {0}', clock(it.onBus.arrive)) : null].filter(Boolean).join(' · ');
-      else if (it.status !== 'done' && it.leave?.at) {
-        const how = it.leave.svc ? t('{0} from {1}', it.leave.svc, it.leave.stop ?? it.fromName) : t('walk');
-        sub = [t('Leave by {0}', it.leave.estimated ? t('~{0}', clock(it.leave.at)) : clock(it.leave.at)), how, it.timing?.status === 'late' ? it.timing.text : null].filter(Boolean).join(' · ');
-      }
-      const li = el(
-        'li',
-        { class: `today-item ${it.status}` },
-        el('span', { class: 'at', textContent: clock(it.startsAt) }),
-        el('span', { class: 'what' }, el('span', { class: 'title', textContent: title }), sub ? el('span', { class: 'sub', textContent: sub }) : ''),
-      );
-      if (it.removable) {
-        li.append(el('button', { type: 'button', class: 'remove-today', textContent: '×', 'aria-label': t('Remove {0} from today', title), onclick: () => removeFromToday(it, li) }));
-      }
-      return li;
-    }),
-  );
-}
-
-function installHint() {
-  let dismissed = false;
-  try {
-    dismissed = localStorage.getItem('install-dismissed') === '1';
-  } catch {
-    // Storage blocked: show it, and just don't remember the dismissal.
-  }
-  // Only Safari can add to the Home Screen on iOS; other iOS browsers can't be helped here.
-  const safari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
-  $('#install').hidden = !(iPhone && safari && !standalone && !dismissed);
-  $('#install-dismiss').addEventListener('click', () => {
-    $('#install').hidden = true;
-    try {
-      localStorage.setItem('install-dismissed', '1');
-    } catch {
-      // Not remembered; it shows again next time.
-    }
-  });
-}
-
 /* ---------- push ---------- */
 
 const pushable = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const OFF = t("A reminder before it's time to leave, then updates on your bus as your trip goes on.");
+const ON = t('On for this device. Notifications follow your trip, as on your other devices.');
+/** "Notify me when to leave": whether it's on, what it says, and whether it has a button. */
+const push = store({ on: false, text: OFF, button: true });
 
 function b64urlBytes(s) {
   const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4));
@@ -596,29 +417,14 @@ async function unsubscribe() {
 }
 
 /**
- * "Notify me when to leave". On iPhone push only works from the Home Screen,
- * so in Safari the install card says so instead. Once allowed, every open
- * re-sends the subscription: it belongs to this sign-in, and a browser can
- * replace it at any time.
+ * On iPhone push only works from the Home Screen, so in Safari the install
+ * card says so instead. Once allowed, every open re-sends the subscription:
+ * it belongs to this sign-in, and a browser can replace it at any time.
  */
 async function setupPush() {
-  const box = $('#notify');
   if (!pushable || (iPhone && !standalone)) return;
   const perm = Notification.permission;
-  const render = (on, text) => {
-    box.hidden = false;
-    $('#notify-text').textContent = text;
-    $('#notify-on').textContent = on ? t('Turn off') : t('Turn on');
-    $('#notify-on').className = `btn small ${on ? 'ghost' : 'accent'}`;
-    $('#notify-on').dataset.on = on ? '1' : '';
-  };
-  const OFF = t("A reminder before it's time to leave, then updates on your bus as your trip goes on.");
-  const ON = t('On for this device. Notifications follow your trip, as on your other devices.');
-  if (perm === 'denied') {
-    render(false, t('Notifications are blocked for this site. Allow them in your browser settings to turn this on.'));
-    $('#notify-on').hidden = true;
-    return;
-  }
+  if (perm === 'denied') return push.set({ on: false, text: t('Notifications are blocked for this site. Allow them in your browser settings to turn this on.'), button: false });
   let on = false;
   if (perm === 'granted') {
     try {
@@ -631,60 +437,371 @@ async function setupPush() {
       on = false;
     }
   }
-  render(on, on ? ON : OFF);
-  $('#notify-on').onclick = async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    try {
-      if (btn.dataset.on) {
-        await unsubscribe();
-        render(false, OFF);
-      } else if ((await Notification.requestPermission()) === 'granted') {
-        await subscribe();
-        render(true, ON);
-      } else {
-        render(false, t('Notifications are blocked. To turn them on, allow notifications for this site in your browser settings.'));
-      }
-    } catch (err) {
-      render(false, t("Couldn't turn on notifications. {0}", err.message));
-    } finally {
-      btn.disabled = false;
+  push.set({ on, text: on ? ON : OFF, button: true });
+}
+
+async function togglePush() {
+  try {
+    if (push.get().on) {
+      await unsubscribe();
+      push.set({ on: false, text: OFF, button: true });
+    } else if ((await Notification.requestPermission()) === 'granted') {
+      await subscribe();
+      push.set({ on: true, text: ON, button: true });
+    } else {
+      push.set({ on: false, text: t('Notifications are blocked. To turn them on, allow notifications for this site in your browser settings.'), button: true });
     }
-  };
+  } catch (err) {
+    push.set({ on: false, text: t("Couldn't turn on notifications. {0}", err.message), button: true });
+  }
+}
+
+/* ---------- drawing ---------- */
+
+const SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
+
+/** "Notify me when to leave", in Settings under Notifications, where this browser can do it. */
+function Notify() {
+  const s = useStore(push);
+  const busy = useRef(false);
+  return html`
+    <section class="card notify">
+      <div>
+        <strong>${t('Notify me when to leave')}</strong>
+        <p class="hint">${s.text}</p>
+      </div>
+      ${s.button &&
+      html`<button
+        type="button"
+        class=${`btn small ${s.on ? 'ghost' : 'accent'}`}
+        onClick=${async (e) => {
+          if (busy.current) return;
+          busy.current = true;
+          e.currentTarget.disabled = true;
+          const btn = e.currentTarget;
+          await togglePush();
+          busy.current = false;
+          btn.disabled = false;
+        }}
+      >${s.on ? t('Turn off') : t('Turn on')}</button>`}
+    </section>
+  `;
+}
+
+/** iPhone Safari only, until installed or dismissed: iOS never offers it itself. */
+function InstallHint() {
+  const shown = useRef(null);
+  const hidden = useStore(installDismissed);
+  if (shown.current === null) {
+    let dismissed = false;
+    try {
+      dismissed = localStorage.getItem('install-dismissed') === '1';
+    } catch {
+      // Storage blocked: show it, and just don't remember the dismissal.
+    }
+    // Only Safari can add to the Home Screen on iOS; other iOS browsers can't be helped here.
+    const safari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+    shown.current = iPhone && safari && !standalone && !dismissed;
+  }
+  if (!shown.current || hidden) return null;
+  const share = '<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>';
+  return html`
+    <section class="card install">
+      <h2>${t('Add terminus to your Home Screen')}</h2>
+      <ol class="install-steps">
+        <li>${t('Tap')} <span class="ios-share" aria-label=${t('the Share button')}><${Icon} paths=${share} size="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></span> ${t('at the bottom of Safari.')}</li>
+        <li><${Rich} text=${t('Choose <strong>Add to Home Screen</strong>.')} /></li>
+        <li>${t('Open terminus from your Home Screen and sign in there once.')}</li>
+      </ol>
+      <p class="hint">${t('From the Home Screen it opens like an app, keeps working offline, and can tell you when to leave.')}</p>
+      <button
+        type="button"
+        class="btn small ghost"
+        onClick=${() => {
+          installDismissed.set(true);
+          try {
+            localStorage.setItem('install-dismissed', '1');
+          } catch {
+            // Not remembered; it shows again next time.
+          }
+        }}
+      >${t('Not now')}</button>
+    </section>
+  `;
+}
+const installDismissed = store(false);
+
+/** Next, each saved place, and Nearby: the phone app's chips, then the search button. */
+function Chips() {
+  const to = useStore(target);
+  const list = useStore(places);
+  const open = useStore(searching);
+  const chip = (label, value) => html`
+    <button type="button" aria-pressed=${String(JSON.stringify(value) === JSON.stringify(to))} onClick=${() => choose(value)}>${label}</button>
+  `;
+  return html`
+    <nav class="app-chips" aria-label=${t('Where to')}>
+      ${chip(t('Next'), { kind: 'plan' })}
+      ${list.map((p) => chip(p.label, { kind: 'place', key: p.key }))}
+      ${chip(t('Nearby'), { kind: 'nearby' })}
+      ${to.kind === 'stop' && chip(to.label, to)}
+      <button type="button" class="chip-search" aria-label=${t('Go somewhere else')} aria-expanded=${String(open)} onClick=${() => searching.set(!open)}>
+        <${Icon} paths=${SEARCH} />
+      </button>
+    </nav>
+  `;
+}
+
+/** Go somewhere else: the search under the chips, opened focused by the search button. */
+function Where() {
+  const open = useStore(searching);
+  const c = useStore(campus);
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    box.current?.focus();
+    // Every stop, building, room and place, the first time it opens.
+    loadCampus().catch(() => {});
+  }, [open]);
+  if (!open) return null;
+  const destinations = c?.destinations ?? [];
+  return html`
+    <div class="where-box">
+      <${SearchBox}
+        type="search"
+        placeholder=${t('Stop, building or room')}
+        aria-label=${t('Go somewhere else')}
+        enterkeyhint="go"
+        ctl=${box}
+        source=${() => destinations}
+        stopName=${(code) => destinations.find((d) => d.kind === 'stop' && d.code === code)?.label ?? code}
+        onPick=${goSomewhere}
+        onKeyDown=${(e) => {
+          if (e.key !== 'Escape') return;
+          searching.set(false);
+          document.querySelector('.chip-search')?.focus();
+        }}
+      />
+    </div>
+  `;
+}
+
+/**
+ * The offline card: the day plan's next item, worded as the Today list words
+ * it. Always an estimate (it was planned a while ago), so always "~"; the
+ * class's start time is there so a "Leave now" after it has started reads
+ * as late, and a trip home says from when.
+ */
+function OfflineCard({ item, step }) {
+  if (step === 'home') {
+    return html`
+      <div class="widget offline-plan" aria-live="polite">
+        <div class="where">${clock(item.startsAt)}</div>
+        <div class="big">${t('Home, from {0}', item.fromName ?? t('your last class'))}</div>
+      </div>
+    `;
+  }
+  const l = item.leave;
+  const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
+  return html`
+    <div class="widget offline-plan" aria-live="polite">
+      <div class="where">${`${t('Next class · {0}', item.label)} · ${t('starts {0}', clock(item.startsAt))}`}</div>
+      <div class="big">${step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now')}</div>
+      ${how && html`<div class="detail">${how.charAt(0).toUpperCase() + how.slice(1)}</div>`}
+    </div>
+  `;
+}
+
+const mins = (s) => Math.round(s / 60);
+
+/** Nearby: each stop around you with what's coming, its name opening it on the map. */
+function NearbyCard({ stops }) {
+  return html`
+    <div class="widget" aria-live="polite">
+      ${stops.map(
+        (s) => html`
+          <section class="nearby-stop" key=${s.stop.code}>
+            <header>
+              <button
+                type="button"
+                class="linkish"
+                aria-label=${t('{0} on the map', s.stop.name)}
+                onClick=${() => {
+                  stopToShow.set(s.stop.code);
+                  location.hash = '#map';
+                }}
+              >${s.stop.name}</button>
+              <span>${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
+            </header>
+            ${s.board.length
+              ? s.board.map(
+                  (b) => html`
+                    <div class="nearby-row" key=${b.svc}>
+                      <span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}>${b.svc}</span>
+                      <span>${b.etaS == null ? '–' : b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS))}</span>
+                    </div>
+                  `,
+                )
+              : html`<div class="detail">${s.available ? t('No buses due') : t('No times right now')}</div>`}
+          </section>
+        `,
+      )}
+    </div>
+  `;
+}
+
+function CardArea() {
+  const c = useStore(card);
+  const to = useStore(target);
+  const when = useStore(updated);
+  const who = useStore(me);
+  const body = c.a ? html`<${Card} a=${c.a} onAnswer=${answered} onChoice=${refresh} />` : c.offline ? html`<${OfflineCard} ...${c.offline} />` : c.nearby ? html`<${NearbyCard} stops=${c.nearby} />` : html`<${Message} text=${c.text} />`;
+  return html`
+    <section class="card app-card">
+      ${body}
+      <div class="updated hint">${when}</div>
+      ${to.kind !== 'nearby' && html`<${Report} answer=${c.a ?? null} anonymous=${who?.anonymous === true} />`}
+    </section>
+  `;
+}
+
+/** Today, from /me/day: each class with when to leave and how, and the trips home. */
+function Today() {
+  const plan = useStore(day);
+  const gone = useStore(removed);
+  const bar = useStore(undo);
+  const items = (plan?.items ?? []).filter((it) => !gone.has(it.key));
+  if (!items.length && !bar) return null;
+  return html`
+    <section class="today">
+      <h2 class="label">${t('Today')}</h2>
+      <div class="today-undo" role="status" hidden=${!bar}>
+        ${bar && html`<span>${bar.text}</span>`}
+        ${bar?.undo && html`<button type="button" class="linkish" onClick=${bar.undo}>${t('Undo')}</button>`}
+      </div>
+      <ol class="today-list">
+        ${items.map((it) => {
+          const title = it.kind === 'home' ? t('Home, from {0}', it.fromName ?? t('your last class')) : it.label;
+          let sub = null;
+          if (it.status === 'skipped') sub = t('Not going today');
+          else if (it.onBus) sub = [t('On the {0}', it.onBus.svc), it.onBus.off ? t('off at {0}', it.onBus.off) : null, it.onBus.arrive ? t('arrive {0}', clock(it.onBus.arrive)) : null].filter(Boolean).join(' · ');
+          else if (it.status !== 'done' && it.leave?.at) {
+            const how = it.leave.svc ? t('{0} from {1}', it.leave.svc, it.leave.stop ?? it.fromName) : t('walk');
+            sub = [t('Leave by {0}', it.leave.estimated ? t('~{0}', clock(it.leave.at)) : clock(it.leave.at)), how, it.timing?.status === 'late' ? it.timing.text : null].filter(Boolean).join(' · ');
+          }
+          return html`
+            <li class=${`today-item ${it.status}`} key=${it.key}>
+              <span class="at">${clock(it.startsAt)}</span>
+              <span class="what"><span class="title">${title}</span>${sub && html`<span class="sub">${sub}</span>`}</span>
+              ${it.removable && html`<button type="button" class="remove-today" aria-label=${t('Remove {0} from today', title)} onClick=${() => removeFromToday(it)}>×</button>`}
+            </li>
+          `;
+        })}
+      </ol>
+    </section>
+  `;
+}
+
+function Banner() {
+  const text = useStore(banner);
+  useEffect(() => {
+    document.body.classList.toggle('is-offline', text !== null);
+  }, [text]);
+  return html`<section class="offline" hidden=${text === null}>${text}</section>`;
+}
+
+function MapArea() {
+  const mod = useStore(mapModule);
+  const now = useStore(tab);
+  const focus = useStore(stopToShow);
+  if (!mod) return null;
+  return html`<${mod.MapTab} visible=${now === 'map'} focus=${focus} onFocused=${() => stopToShow.set(null)} onGoTo=${goToStop} onSaved=${refresh} />`;
+}
+
+function SettingsArea() {
+  const s = useStore(settings);
+  const who = useStore(me);
+  const notify = useStore(push);
+  if (s.status === 'failed') return html`<p class="hint">${t('Settings need a connection.')}</p>`;
+  if (s.status !== 'ready') return html`<p class="hint">${t('Loading…')}</p>`;
+  const Settings = s.mod.Settings;
+  // "Notify me when to leave" in Settings, under Notifications, where this browser can do it.
+  const canNotify = pushable && !(iPhone && !standalone);
+  return html`<${Settings} me=${who} inApp Notify=${canNotify ? Notify : null} notifyOn=${notify.on} />`;
+}
+
+const TABBAR = [
+  { id: 'now', href: '#now', label: () => t('Now'), icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>' },
+  { id: 'map', href: '#map', label: () => t('Map'), icon: '<path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/>' },
+  {
+    id: 'settings',
+    href: '#settings',
+    label: () => t('Settings'),
+    icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
+  },
+];
+
+function TabBar() {
+  const now = useStore(tab) ?? tabInAddress();
+  return html`
+    <nav class="tabbar" aria-label="terminus">
+      ${TABBAR.map(
+        (x) => html`
+          <a href=${x.href} data-tab=${x.id} key=${x.id} aria-current=${now === x.id ? 'page' : undefined}>
+            <${Icon} paths=${x.icon} />
+            <span>${x.label()}</span>
+          </a>
+        `,
+      )}
+    </nav>
+  `;
+}
+
+/** The three tabs, shown and hidden by showTab() after the first draw (see there). */
+function App() {
+  const first = useRef(tabInAddress()).current;
+  const keep = (name) => (node) => node && (views[name] = node);
+  return html`
+    <main class="wrap app-main" id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
+      <${InstallHint} />
+      <${Banner} />
+      <${Chips} />
+      <${Where} />
+      <${CardArea} />
+      <${Today} />
+    </main>
+    <section id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><${MapArea} /></section>
+    <section id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></section>
+    <${TabBar} />
+    <${Toast} />
+  `;
 }
 
 async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   // A tap on a notification with the app already open: show the new card.
   navigator.serviceWorker?.addEventListener('message', (e) => e.data?.kind === 'refresh' && refresh());
-  installHint();
+  render(html`<${App} />`, document.getElementById('root'));
   // /me first: it renews the session, so the installed app stays signed in.
   // Offline it comes from the cache like everything else, or not at all.
   try {
-    me = (await get('/me')).data;
+    me.set((await get('/me')).data);
   } catch (err) {
     if (err.message === 'signed out') return;
   }
   // Shared from NUSMods: Settings, with the link ready to import.
   shared = sharedLink();
   if (shared) history.replaceState(null, '', '/app/#settings');
-  renderChips();
   setupPush();
-  wireReport();
-  if (me?.anonymous) $('#report-hint').textContent = t('This sends the answer above and your note. Add an email if you want a reply.');
   window.addEventListener('hashchange', showTab);
-  document.addEventListener('go-to-stop', (e) => goToStop(e.detail));
-  // A stop saved as a place on the map: its chip comes with the next card.
-  document.addEventListener('places-changed', refresh);
   showTab();
   // The plan from last time while this one loads, if it still holds.
   await drawSeen();
   await refresh();
-  const nowShown = () => document.visibilityState === 'visible' && tab === 'now';
+  const nowShown = () => document.visibilityState === 'visible' && tab.get() === 'now';
   setInterval(() => nowShown() && refresh(), REFRESH_MS);
   document.addEventListener('visibilitychange', () => nowShown() && refresh());
   window.addEventListener('online', refresh);
-  document.addEventListener('trip-signal', refresh);
 }
 
 start();

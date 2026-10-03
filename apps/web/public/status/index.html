@@ -39,13 +39,8 @@
 
 <main class="wrap narrow">
   <h1>Status</h1>
-  <div class="card now" id="now" aria-live="polite">
-    <span class="dot off" id="dot"></span>
-    <div><strong id="headline">Checking…</strong><p class="hint" id="detail"></p></div>
-  </div>
-
-  <h2>Recent outages</h2>
-  <div class="card"><ul class="incidents" id="incidents"><li class="hint">Loading…</li></ul></div>
+  <!-- Whether the live feed is working, and recent outages: drawn by status.js. -->
+  <div id="status"></div>
 
   <p class="hint" style="margin-top:24px">terminus checks NUS's shuttle feed every 15 minutes. When the feed is down, the apps show estimated times based on the timetable and label them as estimates. Outages are on NUS's side; terminus works around them until the feed is back.</p>
 </main>
@@ -56,6 +51,6 @@
     <nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/docs">API</a><a href="/account">Account</a></nav>
   </div>
 </footer>
-<script src="/status/status.js" defer></script>
+<script type="module" src="/status/status.js"></script>
 </body>
 </html>

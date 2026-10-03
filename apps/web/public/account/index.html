@@ -21,62 +21,12 @@
 <body>
 <header class="wrap nav">
   <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
-  <nav class="nav-links" id="who" hidden>
-    <span class="hint hide-sm" id="email"></span>
-    <a class="btn small accent open-app" href="/app/">Open the app</a>
-    <button type="button" class="btn small ghost" id="add-email" hidden>Add an email</button>
-    <button type="button" class="btn small ghost" id="logout">Sign out</button>
-  </nav>
+  <!-- Who's signed in, the app and Sign out (app.js). -->
+  <nav class="nav-links" id="who"></nav>
 </header>
 
-<main class="wrap">
-  <!-- Signed out -->
-  <section id="signin" class="signin" hidden>
-    <div class="card signin-card">
-      <div id="login-step">
-        <img class="signin-mark" src="/assets/mark.svg" alt="">
-        <h1>Sign in to terminus</h1>
-        <p class="hint">Enter your email and we'll send you a code. No password, and the same code creates an account if you're new.</p>
-        <form id="login-form">
-          <label for="login-email">Email</label>
-          <input id="login-email" type="email" autocomplete="email" placeholder="you@u.nus.edu" required>
-          <div id="turnstile-box" class="turnstile"></div>
-          <button type="submit" class="btn accent wide">Email me a sign-in code</button>
-        </form>
-        <p id="login-msg" class="form-error" role="alert"></p>
-        <div id="no-email-box">
-          <p class="signin-or"><span>or</span></p>
-          <button type="button" class="btn ghost wide" id="no-email">Use terminus without an email</button>
-          <p class="hint small">Your setup stays in this browser. Add an email any time to use it on your other devices, or to keep it if this browser's data is cleared.</p>
-        </div>
-        <button type="button" class="btn ghost wide" id="cancel-add" hidden>Cancel</button>
-      </div>
-
-      <div id="sent-step" hidden>
-        <div class="sent-icon" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
-        </div>
-        <h1>Check your inbox</h1>
-        <p class="hint">We sent a code to <strong id="sent-to"></strong>. Type it here, or open the link in the same email on this device. Both work once, for 15 minutes.</p>
-        <form id="code-form">
-          <label for="code-input">Code</label>
-          <input id="code-input" class="code-input" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="7" placeholder="K7QX4M" required>
-          <button type="submit" class="btn accent wide">Sign in</button>
-        </form>
-        <p id="code-msg" class="form-error" role="alert"></p>
-        <p class="hint small">No email after a minute? Check spam, or <button type="button" class="link-btn" id="resend">send another</button>.</p>
-        <button type="button" class="btn ghost wide" id="different">Use a different email</button>
-      </div>
-    </div>
-    <p class="hint center">By continuing you agree to the <a href="/privacy">privacy policy</a>.</p>
-  </section>
-
-  <!-- First sign-in: setup, one step at a time. Filled in by onboarding.js. -->
-  <section id="onboarding" class="onboard" hidden aria-live="polite"></section>
-
-  <!-- Signed in: settings.html, drawn by settings.js -->
-  <div id="app" hidden></div>
-</main>
+<!-- Sign-in, first-time setup, then Settings: drawn by app.js. -->
+<main class="wrap" id="root"></main>
 
 <footer class="foot">
   <div class="wrap">

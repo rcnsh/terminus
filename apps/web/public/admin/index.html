@@ -16,64 +16,15 @@
 <body>
 <header class="wrap nav">
   <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
-  <nav class="nav-links">
-    <button type="button" class="btn small ghost" id="refresh" hidden>Refresh</button>
-    <button type="button" class="btn small ghost" id="lock" hidden>Lock</button>
-  </nav>
+  <!-- Refresh and Lock, once unlocked (admin.js). -->
+  <nav class="nav-links" id="admin-nav"></nav>
 </header>
 
 <main class="wrap">
   <h1>Dashboard</h1>
-
-  <form id="unlock" class="card unlock" hidden>
-    <label for="token">Operator token</label>
-    <p class="hint">The <code>HEALTH_TOKEN</code> secret. Kept in this tab only, until you close it.</p>
-    <div class="row">
-      <input id="token" type="password" autocomplete="off" required>
-      <button type="submit" class="btn accent">Open</button>
-    </div>
-    <p id="unlock-msg" class="hint" role="status"></p>
-  </form>
-
-  <div id="dash" hidden>
-    <p class="hint" id="as-of"></p>
-
-    <section class="tiles" id="tiles"></section>
-    <section class="tiles" id="apps"></section>
-
-    <div class="grid">
-      <section class="card">
-        <h2>Sign-ups, last 30 days</h2>
-        <div id="signups"></div>
-      </section>
-      <section class="card">
-        <h2>Devices</h2>
-        <table id="devices"><thead><tr><th>App</th><th>Paired</th><th>Used this week</th></tr></thead><tbody></tbody></table>
-        <p class="hint" id="keys"></p>
-        <h2>App versions this week</h2>
-        <ul class="list" id="clients"></ul>
-      </section>
-    </div>
-
-    <div class="grid">
-      <section class="card">
-        <h2>Answers, last 14 days</h2>
-        <div id="analytics"></div>
-      </section>
-      <section class="card">
-        <h2>NUS feed</h2>
-        <p id="feed"></p>
-        <ul class="list" id="incidents"></ul>
-        <p class="hint"><a href="/status">Public status page</a></p>
-      </section>
-    </div>
-
-    <section class="card">
-      <h2>Reports <span class="hint" id="fb-count"></span></h2>
-      <ul class="list reports" id="reports"></ul>
-    </section>
-  </div>
+  <!-- The token form, or the stats: drawn by admin.js. -->
+  <div id="admin"></div>
 </main>
-<script src="/admin/admin.js" defer></script>
+<script type="module" src="/admin/admin.js"></script>
 </body>
 </html>

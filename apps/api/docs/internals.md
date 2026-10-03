@@ -298,17 +298,31 @@ Email Sending in the dashboard.
 card, chips for saved places and Nearby, and Today; the campus map; and
 Settings. It uses the same routes as the account page, with the session cookie.
 
+- **How the pages are built.** Preact components with htm templates
+  (`assets/ui.js`, Preact vendored by `scripts/vendor-preact.sh`), loaded as
+  written: no build step, so the service worker keeps exact files and the
+  API's tests import the plain modules (`search.js`, `offline.js`). htm needs
+  no `eval`, so the CSP stays `script-src 'self'`. State several parts share
+  is a `store()`: the profile and `/campus` (`account/profile.js`), and in
+  the app what the card is for, the card, Today and the push switch (top of
+  `app/app.js`). The tabs are shown and hidden by the fade itself, not by
+  Preact, so it can swap them between its halves; MapLibre is driven
+  directly inside the Map tab's effects.
+
 - **Tabs.** Now, Map and Settings are three views of one page (`#map`,
   `#settings` in the address, so Back and a reload keep the tab). Switching
   fades through as the Android app does (Web Animations: out in 90 ms, in
   over 210 ms from a 0.92 zoom; a plain short fade with reduced motion), and
   Now and Settings come back where they were scrolled to.
-- **Settings** is the account page's own: `account/settings.html` drawn by
-  `account/settings.js` (`mountSettings`). The account page draws it after
-  sign-in and setup, with its widget preview; the app draws it the first time
-  Settings opens, without the preview (Now has the card) and with Sign out or
-  Add an email in Account. It reloads the profile each time it's opened again,
-  since a stop may have been saved as a place on the map.
+- **Settings** is the account page's own: the `Settings` component in
+  `account/settings.js`, its pages in `account/settings-pages.js`. The
+  account page draws it after sign-in and setup, with its widget preview; the
+  app draws it the first time Settings opens, without the preview (Now has the
+  card) and with Sign out or Add an email in Account. Both read and change one
+  copy of the profile (`account/profile.js`), which the map's "Save as place"
+  changes too, so a place saved on the map is in Settings at once. It's
+  fetched afresh each time Settings opens again (it may have changed on
+  another device), unless a change here is still waiting to be saved.
 - **Settings' pages.** A list of groups (Your trips, Timetable, Favourites,
   Notifications in the app, Devices, Language, Appearance, Account), each with a line
   saying what's set, opening its page. The page is in the address (`#trips`
@@ -318,10 +332,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   no browser swipe, goes back on a swipe from the left edge. "Notify me when
   to leave" is under Notifications.
 - **Now.** A search button at the end of the chips opens "Go somewhere
-  else" (account/search.js, over `/campus`'s destinations); a pick shows its
-  card under a chip of its own. "Is this wrong?" under the card sends it to
-  `/me/feedback` (account/preview.js `wireReport`), except for Nearby. A stop's
-  name in Nearby opens it on the map (`focusStop` in map.js).
+  else" (account/search-box.js, ranked by search.js, over `/campus`'s
+  destinations); a pick shows its card under a chip of its own. "Is this
+  wrong?" under the card sends it to `/me/feedback` (account/preview.js
+  `Report`), except for Nearby. A stop's name in Nearby opens it on the map
+  (MapTab's `focus` in map.js).
 - **Theme.** Appearance chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
   page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`

@@ -16,7 +16,7 @@ Clients are thin:
 | Client | Path | Stack |
 | --- | --- | --- |
 | API + website host | `apps/api` | TypeScript on Cloudflare Workers (D1, KV, R2, Durable Objects, Analytics Engine, Email) |
-| Website + web app | `apps/web/public` | Plain HTML/CSS/JS, **no build step**, served by the Worker |
+| Website + web app | `apps/web/public` | Preact + htm (vendored), CSS, **no build step**, served by the Worker |
 | Android app + widgets | `apps/android` | Kotlin, Jetpack Compose, Glance, maplibre-compose |
 | Mac menu bar app | `apps/macos` | SwiftUI, Sparkle updates |
 
@@ -145,12 +145,16 @@ apps/api/
   docs/internals.md        How everything works, in depth; docs/analytics.md
 apps/web/public/
   index.html          Landing page
-  account/            Sign-in, onboarding; settings.js + settings.html (the settings,
-                      shared with the app); dom.js has $, el, t, api
+  account/            The account page (app.js): sign-in, onboarding.js, settings.js +
+                      settings-pages.js (Settings, shared with the app), preview.js (the
+                      card), profile.js (the profile and /campus, shared), search.js
+                      (ranking, tested) + search-box.js; dom.js has t, api, clock
   app/                Installed web app: app.js (Now, tabs), map.js (campus map), offline.js
   admin/, status/, pair/, privacy/
-  assets/             site.css (shared colours/type), i18n.js, zh.js (Chinese), shots/
-  vendor/             MapLibre GL + PMTiles: copied by scripts/vendor-map.sh, never hand-edited, not linted
+  assets/             ui.js (Preact, hooks, htm, stores), site.css (shared colours/type),
+                      i18n.js, zh.js (Chinese), theme.js, landing.js, shots/
+  vendor/             Preact + htm (scripts/vendor-preact.sh), MapLibre GL + PMTiles
+                      (scripts/vendor-map.sh): never hand-edited, not linted
   sw.js               Service worker: offline app shell and map
 apps/android/app/src/main/java/sh/rcn/terminus/
   Api.kt              API client and answer types
@@ -164,7 +168,7 @@ apps/macos/
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings
 scripts/              release.sh, release-beta.sh, github-release.sh, package-mac.sh,
                       publish-mac.sh, appcast.py, release-notes.py, map-tiles.sh,
-                      vendor-map.sh, vps-setup.sh
+                      vendor-map.sh, vendor-preact.sh, vps-setup.sh
 .github/workflows/    ci.yml, release.yml (tag-driven), scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe)
 docs/map-plan.md      How the campus map was planned and built
@@ -218,9 +222,12 @@ docs/map-plan.md      How the campus map was planned and built
 - **API:** use `m()` from `src/i18n.ts`. Errors stay English in the code
   (`json({ error: '...' })`) and get an entry in `ERRORS_ZH`. The Chinese
   goldens in `test/fixtures/answers/zh` are checked word for word.
-- **Website:** use `t('English {0}', value)`. The Chinese, keyed by the
-  English, goes in `apps/web/public/assets/zh.js`; `web-i18n.test.js`
-  checks it.
+- **Website:** use `t('English {0}', value)`, in templates too
+  (`${t('Go there')}`, never bare words). The Chinese, keyed by the English,
+  goes in `apps/web/public/assets/zh.js`; `web-i18n.test.js` checks it, and
+  fails on English written straight into an `html` template. A sentence
+  with a link inside uses `Rich`; one with a node in a blank (an email in
+  bold, a button) uses `Fill` with `t('… {0} …', MARK)`.
 - **Android:** `res/values/strings.xml` plus `res/values-zh/strings.xml`.
   Lint fails on a missing translation.
 - **Mac:** `L("English %@", value)`, with the Chinese in
@@ -285,9 +292,13 @@ docs/map-plan.md      How the campus map was planned and built
   "your stop"), not internals.
 - **TypeScript:** ES modules, `.ts` import specifiers, single quotes,
   numeric separators (`15_000`), small pure functions exported for tests.
-- **Website:** no frameworks, no bundler. DOM helpers come from
-  `/account/dom.js`. External code only goes in `vendor/`, via its script.
-  The CSP is in `src/http.ts`; new origins need adding there.
+- **Website:** Preact components with htm templates, imported from
+  `/assets/ui.js`; no bundler, no build step, so a page loads the files as
+  written. What several components share (the profile, what the card is
+  for) lives in a `store()` read with `useStore()`, not copied into each.
+  MapLibre is driven directly, inside the Map tab's effects. Every word goes
+  through `t()` (see below). External code only goes in `vendor/`, via its
+  script. The CSP is in `src/http.ts`; new origins need adding there.
 - **Kotlin:** keep logic that can be tested on the JVM out of composables
   (see `MapData.kt`).
 

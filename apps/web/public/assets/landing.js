@@ -1,23 +1,48 @@
-// The page's language (i18n.js).
-const t = (en, ...a) => (window.i18n ? window.i18n.t(en, ...a) : en);
+// The landing page: the page itself is plain HTML (it should read without
+// any script); this adds the live parts. The version next to the download
+// buttons, Account for someone signed in, and the light | dark comparisons
+// are small Preact components drawn into the page. The install steps' and
+// the download menu's placement are behaviours on the page's own markup,
+// so they stay plain functions.
 
-// The current version next to the download buttons, from the release manifest.
-fetch('/download/latest.json')
-  .then((r) => (r.ok ? r.json() : null))
-  .then((l) => {
-    if (!l?.version) return;
-    const v = ` ${t('Version {0}.', l.version)}`;
-    document.getElementById('version').textContent = v;
-    document.getElementById('dl-version').textContent = v;
-  })
-  .catch(() => {});
+import { html, render, useEffect, useRef, useState } from '/assets/ui.js';
+import { t } from '/account/dom.js';
 
-// Signed in already: the header says Account, not Sign in.
-fetch('/me', { credentials: 'same-origin' })
-  .then((r) => {
-    if (r.ok) document.getElementById('account-link').textContent = t('Account');
-  })
-  .catch(() => {});
+const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** " Version 2.1.0.": the current release, from its manifest. */
+function Version() {
+  const [v, setV] = useState('');
+  useEffect(() => {
+    fetch('/download/latest.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((l) => l?.version && setV(` ${t('Version {0}.', l.version)}`))
+      .catch(() => {});
+  }, []);
+  return v;
+}
+for (const id of ['version', 'dl-version']) {
+  const box = document.getElementById(id);
+  if (box) render(html`<${Version} />`, box);
+}
+
+/** The header's Sign in, or Account when signed in already. */
+function AccountLink() {
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    fetch('/me', { credentials: 'same-origin' })
+      .then((r) => r.ok && setSignedIn(true))
+      .catch(() => {});
+  }, []);
+  return signedIn ? t('Account') : t('Sign in');
+}
+{
+  const link = document.getElementById('account-link');
+  if (link) {
+    link.replaceChildren();
+    render(html`<${AccountLink} />`, link);
+  }
+}
 
 // The hero's text is centred beside the phone, so opening "How to install"
 // would re-centre it and shove the heading and buttons up, and the taller row
@@ -104,78 +129,106 @@ twoColumns.addEventListener('change', () => {
 
 // Light | dark split images: a handle on each, drag or arrow keys to move the
 // seam; on first view it sweeps in from all-light, unless motion is reduced.
-const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-for (const split of document.querySelectorAll('[data-split]')) {
-  const seam = document.createElement('div');
-  seam.className = 'seam';
-  const knob = document.createElement('div');
-  knob.className = 'knob';
-  knob.tabIndex = 0;
-  knob.setAttribute('role', 'slider');
-  knob.setAttribute('aria-label', t('Compare light and dark'));
-  knob.setAttribute('aria-valuemin', '0');
-  knob.setAttribute('aria-valuemax', '100');
-  knob.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>';
-  const light = document.createElement('span');
-  light.className = 'tag l';
-  light.textContent = t('Light');
-  const dark = document.createElement('span');
-  dark.className = 'tag d';
-  dark.textContent = t('Dark');
-  split.append(seam, light, dark, knob);
-
+function Split({ split }) {
+  const knob = useRef(null);
+  const [x, setX] = useState(null);
   // The seam leans by --tilt, so it has to pass that far beyond either edge
   // before the image is all light or all dark. The drag stays one to one and
   // horizontal: dragging a little past the phone's edge gets you there.
   const tilt = () => parseFloat(getComputedStyle(split).getPropertyValue('--tilt')) || 0;
-  const set = (pct) => {
-    const lean = tilt();
-    const x = Math.max(-lean, Math.min(100 + lean, pct));
-    split.style.setProperty('--x', `${x}%`);
-    const full = x >= 100 + lean ? 'light' : x <= -lean ? 'dark' : '';
-    if (full) split.dataset.full = full;
-    else delete split.dataset.full;
-    const dark = Math.round(((100 + lean - x) / (100 + 2 * lean)) * 100);
-    knob.setAttribute('aria-valuenow', String(100 - dark));
-    knob.setAttribute('aria-valuetext', full ? (full === 'light' ? t('all light') : t('all dark')) : t('{0}% dark', dark));
-  };
   // Where the seam rests: the middle, or where the interesting part is.
   const rest = Number(split.dataset.x) || 50;
-  set(rest);
-
-  // The seam is slanted: put it under the pointer at the pointer's height.
-  const fromPointer = (e) => {
-    const r = split.getBoundingClientRect();
-    const y = (e.clientY - r.top) / r.height;
-    set(((e.clientX - r.left) / r.width) * 100 - tilt() * (1 - 2 * y));
+  const set = (pct) => {
+    const lean = tilt();
+    const next = Math.max(-lean, Math.min(100 + lean, pct));
+    split.style.setProperty('--x', `${next}%`);
+    const full = next >= 100 + lean ? 'light' : next <= -lean ? 'dark' : '';
+    if (full) split.dataset.full = full;
+    else delete split.dataset.full;
+    setX(next);
   };
-  split.addEventListener('pointerdown', (e) => {
-    split.classList.remove('sweep');
-    split.classList.add('dragging');
-    split.setPointerCapture(e.pointerId);
-    fromPointer(e);
-  });
-  split.addEventListener('pointermove', (e) => split.classList.contains('dragging') && fromPointer(e));
-  for (const end of ['pointerup', 'pointercancel']) split.addEventListener(end, () => split.classList.remove('dragging'));
-  knob.addEventListener('keydown', (e) => {
-    const now = parseFloat(split.style.getPropertyValue('--x')) || rest;
-    const step = { ArrowLeft: -5, ArrowRight: 5, Home: -200, End: 200 }[e.key];
-    if (step === undefined) return;
-    e.preventDefault();
-    split.classList.remove('sweep');
-    set(now + step);
-  });
 
-  // Without @property support the sweep is a jump, which is fine.
-  if (!still && 'IntersectionObserver' in window) {
-    set(100 + tilt());
-    const io = new IntersectionObserver((entries) => {
-      if (!entries[0].isIntersecting) return;
-      io.disconnect();
-      split.classList.add('sweep');
-      requestAnimationFrame(() => set(rest));
-      split.addEventListener('transitionend', () => split.classList.remove('sweep'), { once: true });
-    }, { threshold: 0.45 });
-    io.observe(split);
-  }
+  useEffect(() => {
+    set(rest);
+    // The seam is slanted: put it under the pointer at the pointer's height.
+    const fromPointer = (e) => {
+      const r = split.getBoundingClientRect();
+      const y = (e.clientY - r.top) / r.height;
+      set(((e.clientX - r.left) / r.width) * 100 - tilt() * (1 - 2 * y));
+    };
+    const down = (e) => {
+      split.classList.remove('sweep');
+      split.classList.add('dragging');
+      split.setPointerCapture(e.pointerId);
+      fromPointer(e);
+    };
+    const move = (e) => split.classList.contains('dragging') && fromPointer(e);
+    const up = () => split.classList.remove('dragging');
+    split.addEventListener('pointerdown', down);
+    split.addEventListener('pointermove', move);
+    split.addEventListener('pointerup', up);
+    split.addEventListener('pointercancel', up);
+    // Without @property support the sweep is a jump, which is fine.
+    let io = null;
+    if (!still && 'IntersectionObserver' in window) {
+      set(100 + tilt());
+      io = new IntersectionObserver(
+        (entries) => {
+          if (!entries[0].isIntersecting) return;
+          io.disconnect();
+          split.classList.add('sweep');
+          requestAnimationFrame(() => set(rest));
+          split.addEventListener('transitionend', () => split.classList.remove('sweep'), { once: true });
+        },
+        { threshold: 0.45 },
+      );
+      io.observe(split);
+    }
+    return () => {
+      io?.disconnect();
+      split.removeEventListener('pointerdown', down);
+      split.removeEventListener('pointermove', move);
+      split.removeEventListener('pointerup', up);
+      split.removeEventListener('pointercancel', up);
+    };
+  }, []);
+
+  const lean = x === null ? 0 : tilt();
+  const full = x === null ? '' : x >= 100 + lean ? 'light' : x <= -lean ? 'dark' : '';
+  const dark = x === null ? 50 : Math.round(((100 + lean - x) / (100 + 2 * lean)) * 100);
+  return html`
+    <div class="seam"></div>
+    <span class="tag l">${t('Light')}</span>
+    <span class="tag d">${t('Dark')}</span>
+    <div
+      class="knob"
+      ref=${knob}
+      tabindex="0"
+      role="slider"
+      aria-label=${t('Compare light and dark')}
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow=${String(100 - dark)}
+      aria-valuetext=${full ? (full === 'light' ? t('all light') : t('all dark')) : t('{0}% dark', dark)}
+      onKeyDown=${(e) => {
+        const now = parseFloat(split.style.getPropertyValue('--x')) || rest;
+        const step = { ArrowLeft: -5, ArrowRight: 5, Home: -200, End: 200 }[e.key];
+        if (step === undefined) return;
+        e.preventDefault();
+        split.classList.remove('sweep');
+        set(now + step);
+      }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" /></svg>
+    </div>
+  `;
+}
+
+for (const split of document.querySelectorAll('[data-split]')) {
+  // Its own box, laid out as if its parts were the picture's (display: contents),
+  // so the picture itself stays as the page has it.
+  const ui = document.createElement('div');
+  ui.style.display = 'contents';
+  split.append(ui);
+  render(html`<${Split} split=${split} />`, ui);
 }

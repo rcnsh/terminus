@@ -6,8 +6,9 @@ the second audit's fixes (2 October), for when you're back at the Mac.
 Delete this file once it's done.
 
 Already done, from the VPS: production and the beta are migrated and
-deployed, and both have their street map on R2. The redesign and the second
-audit's fixes aren't deployed yet: from the VPS, `git fetch origin && git reset --hard origin/main &&
+deployed, and both have their street map on R2. The redesign, the second
+audit's fixes and the website's move to Preact aren't deployed to production
+yet (the beta has all but the Preact move): from the VPS, `git fetch origin && git reset --hard origin/main &&
 pnpm install`, then in `apps/api`, `pnpm run deploy` and `pnpm run deploy:beta`.
 
 ## 1. Get main
@@ -84,6 +85,11 @@ On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
 - The map, and the beta's at beta.terminus.rcn.sh/app/#map, shows streets.
 - Open the app once, then turn on airplane mode and open it again: it
   starts and shows the kept plan (it stayed on "Checking…" before the fix).
+- The website is now built with Preact (3 October). It should look and work
+  as before. Worth a run through on the beta first (`pnpm run deploy:beta`):
+  sign in, first-time setup with a new account, every Settings page, Now,
+  Nearby, the map's stops and buses, and Save as place showing in Settings
+  straight away. Then the landing page, status page and dashboard.
 
 ## 3. Release 2.1.0
 

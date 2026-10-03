@@ -19,8 +19,22 @@ function zh() {
 }
 
 // The privacy policy has a page of its own in Chinese (privacy/zh/), checked below.
-const PAGES = ['index.html', 'account/index.html', 'account/settings.html', 'app/index.html', 'pair/index.html', 'status/index.html'];
-const SCRIPTS = ['account/app.js', 'account/settings.js', 'account/onboarding.js', 'account/preview.js', 'account/search.js', 'app/app.js', 'app/map.js', 'assets/landing.js', 'status/status.js'];
+const PAGES = ['index.html', 'account/index.html', 'app/index.html', 'pair/index.html', 'status/index.html'];
+const SCRIPTS = [
+  'account/app.js',
+  'account/settings.js',
+  'account/settings-pages.js',
+  'account/onboarding.js',
+  'account/preview.js',
+  'account/profile.js',
+  'account/search.js',
+  'account/search-box.js',
+  'app/app.js',
+  'app/map.js',
+  'assets/landing.js',
+  'status/status.js',
+  'pair/pair.js',
+];
 
 // Names and codes that read the same in Chinese.
 const SAME = /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.rcn\.sh\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;
@@ -54,6 +68,75 @@ test('every bit of text on the pages is translated', () => {
     }
     const title = /<title>([^<]+)<\/title>/.exec(read(page))?.[1];
     if (title && !(title in dict)) missing.push(`${page}: <title> ${title}`);
+  }
+  assert.deepEqual(missing, []);
+});
+
+/** Skips a quoted string or a comment starting at `i` in `src`; returns where it ends, or `i` if there's none. */
+function skipQuoted(src, i) {
+  const c = src[i];
+  if (c === "'" || c === '"') {
+    for (let j = i + 1; j < src.length; j++) {
+      if (src[j] === '\\') j++;
+      else if (src[j] === c) return j + 1;
+    }
+  }
+  if (c === '/' && src[i + 1] === '/') return src.indexOf('\n', i) + 1 || src.length;
+  if (c === '/' && src[i + 1] === '*') return src.indexOf('*/', i + 2) + 2;
+  if (c === '`') return readTemplate(src, i + 1).end;
+  return i;
+}
+
+/** The template literal whose text starts at `i`: its own text (each ${…} as \uE000) and where it ends. */
+function readTemplate(src, i) {
+  let text = '';
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '\\') {
+      text += src[i + 1];
+      i += 2;
+    } else if (c === '`') {
+      return { text, end: i + 1 };
+    } else if (c === '$' && src[i + 1] === '{') {
+      text += '\uE000';
+      i += 2;
+      for (let depth = 1; depth > 0 && i < src.length; ) {
+        const skipped = skipQuoted(src, i);
+        if (skipped !== i) {
+          i = skipped;
+          continue;
+        }
+        if (src[i] === '{') depth++;
+        else if (src[i] === '}') depth--;
+        i++;
+      }
+    } else {
+      text += c;
+      i++;
+    }
+  }
+  return { text, end: i };
+}
+
+/** Every html`…` template in `src` (nested ones too), as its text alone. */
+function templates(src) {
+  const out = [];
+  for (let i = src.indexOf('html`'); i !== -1; i = src.indexOf('html`', i + 1)) out.push(readTemplate(src, i + 5).text);
+  return out;
+}
+
+test('templates have no words of their own: every one goes through t()', () => {
+  const missing = [];
+  for (const f of SCRIPTS) {
+    for (const text of templates(read(f))) {
+      // \uE000 marks an expression; \uE001, a tag.
+      const attrs = [...text.matchAll(/\s(?:placeholder|aria-label|title|alt)="([^"\uE000]+)"/g)].map((m) => m[1]);
+      const words = text.replace(/<[^>]*>/g, '\uE001').split(/[\uE000\uE001]/).map((x) => x.replace(/\s+/g, ' ').trim());
+      for (const s of [...words, ...attrs]) {
+        if (!s || SAME.test(s) || !/[A-Za-z]{2,}/.test(s)) continue;
+        missing.push(`${f}: ${s}`);
+      }
+    }
   }
   assert.deepEqual(missing, []);
 });

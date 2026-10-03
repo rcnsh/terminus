@@ -1,147 +1,13 @@
-// Account page: signing in, first-time setup, then settings (settings.js).
-// Same origin as the API, so the session cookie just works.
+// The account page: signing in, first-time setup (onboarding.js), then
+// Settings (settings.js) with "Your widget right now" beside it. Same origin
+// as the API, so the session cookie just works.
 
-import { runOnboarding } from './onboarding.js';
-import { $, api, el, t } from './dom.js';
-import { renderPreview, wireReport } from './preview.js';
-import { mountSettings, offerImport, onboardingCtx, render, renderLists } from './settings.js';
-
-/* ---------- sign in ---------- */
-
-let turnstileToken = null;
-/** Using terminus without an email (this browser's account). */
-let anonymous = false;
-
-async function setupTurnstile() {
-  const { turnstileSiteKey } = await api('/auth/config').catch(() => ({}));
-  if (!turnstileSiteKey) return;
-  await new Promise((resolve, reject) => {
-    const s = el('script', { src: 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', onload: resolve, onerror: reject });
-    document.head.append(s);
-  });
-  window.turnstile.render('#turnstile-box', {
-    sitekey: turnstileSiteKey,
-    callback: (t) => (turnstileToken = t),
-    'expired-callback': () => (turnstileToken = null),
-  });
-}
-
-async function sendLink(email) {
-  // From the web app: the emailed link brings them back to it too.
-  return api('/auth/login', { method: 'POST', body: { email, turnstile: turnstileToken, ...(NEXT ? { next: NEXT } : {}) } });
-}
-
-function resetTurnstile() {
-  turnstileToken = null;
-  if (typeof window.turnstile?.reset === 'function') window.turnstile.reset('#turnstile-box');
-}
-
-$('#login-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const err = $('#login-msg');
-  const btn = e.target.querySelector('button');
-  const email = $('#login-email').value.trim();
-  err.textContent = '';
-  btn.disabled = true;
-  btn.textContent = t('Sending…');
-  try {
-    await sendLink(email);
-    $('#sent-to').textContent = email;
-    $('#code-input').value = '';
-    $('#code-msg').textContent = '';
-    $('#login-step').hidden = true;
-    $('#sent-step').hidden = false;
-    $('#code-input').focus();
-  } catch (e2) {
-    err.textContent = e2.message;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = anonymous ? t('Email me a code') : t('Email me a sign-in code');
-    resetTurnstile();
-  }
-});
-
-$('#code-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const err = $('#code-msg');
-  const btn = e.target.querySelector('button');
-  err.textContent = '';
-  btn.disabled = true;
-  try {
-    await api('/auth/code', { method: 'POST', body: { email: $('#sent-to').textContent, code: $('#code-input').value } });
-    // The session cookie is set; start over as signed in.
-    location.reload();
-  } catch (e2) {
-    err.textContent = e2.message;
-    btn.disabled = false;
-    $('#code-input').select();
-  }
-});
-
-// The sixth letter or digit, typed or pasted, sends the code.
-$('#code-input').addEventListener('input', (e) => {
-  const clean = e.target.value.replace(/[^a-z0-9]/gi, '');
-  if (clean.length === 6 && !$('#code-form button').disabled) $('#code-form').requestSubmit();
-});
-
-$('#different').addEventListener('click', () => {
-  $('#sent-step').hidden = true;
-  $('#login-step').hidden = false;
-  $('#login-email').select();
-});
-
-// Resending needs a fresh Turnstile pass, so it goes back to the form.
-$('#resend').addEventListener('click', () => {
-  $('#sent-step').hidden = true;
-  $('#login-step').hidden = false;
-  // Only when there's a check to do (none where Turnstile isn't set up).
-  $('#login-msg').textContent = document.querySelector('#turnstile-box iframe') ? t('Complete the check below, then send again.') : '';
-});
-
-// Without an email: the same account an app starts with, kept by this browser.
-$('#no-email').addEventListener('click', async (e) => {
-  const err = $('#login-msg');
-  err.textContent = '';
-  e.target.disabled = true;
-  try {
-    await api('/auth/anon/web', { method: 'POST', body: { turnstile: turnstileToken } });
-    // The session cookie is set; start over, which sets up first.
-    location.reload();
-  } catch (e2) {
-    err.textContent = e2.message;
-    e.target.disabled = false;
-    resetTurnstile();
-  }
-});
-
-// Adding an email to it later: the sign-in card, which keeps this setup
-// when the email is new (or switches to the email's account if it has one).
-$('#add-email').addEventListener('click', async () => {
-  $('#login-step h1').textContent = t('Add an email');
-  $('#login-step .hint').textContent = t("We'll send you a code. Your settings are kept. If this email already has an account, you'll be switched to it.");
-  $('#login-form button').textContent = t('Email me a code');
-  $('#no-email-box').hidden = true;
-  $('#cancel-add').hidden = false;
-  $('#app').hidden = true;
-  $('#signin').hidden = false;
-  window.scrollTo(0, 0);
-  if (!turnstileToken && !document.querySelector('#turnstile-box iframe')) await setupTurnstile().catch(() => {});
-  $('#login-email').focus();
-});
-
-$('#cancel-add').addEventListener('click', () => {
-  // Came from the web app to add it: back there.
-  if (NEXT) return location.assign(NEXT);
-  $('#signin').hidden = true;
-  $('#app').hidden = false;
-});
-
-$('#logout').addEventListener('click', async () => {
-  await api('/auth/logout', { method: 'POST' }).catch(() => {});
-  location.reload();
-});
-
-/* ---------- start ---------- */
+import { Fill, MARK, Rich, html, render, store, useEffect, useInterval, useRef, useState, useStore } from '../assets/ui.js';
+import { api, t } from './dom.js';
+import { Onboarding } from './onboarding.js';
+import { Card, HOUR12, Message, Report } from './preview.js';
+import { Toast, loadCampus, loadProfile, saves } from './profile.js';
+import { Settings, offerImport } from './settings.js';
 
 const params = new URLSearchParams(location.search);
 /** Where to go after signing in: only the web app, never an arbitrary URL. */
@@ -155,58 +21,322 @@ function sharedLink() {
   return text.match(/https:\/\/nusmods\.com\/timetable\/\S+/)?.[0] ?? null;
 }
 
+/**
+ * What the page shows: `loading`, `signin`, `onboarding`, `settings` or
+ * `error`; `me` once signed in (from /me); `adding` while an anonymous
+ * account adds an email (the sign-in card, over Settings).
+ */
+const page = store({ view: 'loading', me: null, adding: false, error: null });
+const set = (patch) => page.set((s) => ({ ...s, ...patch }));
+
+async function signOut() {
+  await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  location.reload();
+}
+
+const startAdding = () => {
+  set({ adding: true });
+  window.scrollTo(0, 0);
+};
+
+/* ---------- signing in ---------- */
+
+/** Cloudflare Turnstile, when the server has a site key: its check goes under the email box. */
+function useTurnstile(box) {
+  const token = useRef(null);
+  const widget = useRef(null);
+  const [present, setPresent] = useState(false);
+  useEffect(() => {
+    let gone = false;
+    (async () => {
+      const { turnstileSiteKey } = await api('/auth/config').catch(() => ({}));
+      if (!turnstileSiteKey || gone) return;
+      if (!window.turnstile) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.append(s);
+        }).catch(() => {});
+      }
+      if (gone || !window.turnstile || !box.current) return;
+      widget.current = window.turnstile.render(box.current, {
+        sitekey: turnstileSiteKey,
+        callback: (v) => (token.current = v),
+        'expired-callback': () => (token.current = null),
+      });
+      setPresent(true);
+    })();
+    return () => {
+      gone = true;
+    };
+  }, []);
+  const reset = () => {
+    token.current = null;
+    if (widget.current != null) window.turnstile?.reset(widget.current);
+  };
+  return { token, reset, present };
+}
+
+function SignIn({ adding }) {
+  const box = useRef(null);
+  const turnstile = useTurnstile(box);
+  const [step, setStep] = useState('login');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const codeBox = useRef(null);
+  const emailBox = useRef(null);
+  const sendLabel = adding ? t('Email me a code') : t('Email me a sign-in code');
+
+  useEffect(() => {
+    (step === 'sent' ? codeBox : emailBox).current?.focus();
+  }, [step]);
+
+  const send = async (e) => {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      // From the web app: the emailed link brings them back to it too.
+      await api('/auth/login', { method: 'POST', body: { email: email.trim(), turnstile: turnstile.token.current, ...(NEXT ? { next: NEXT } : {}) } });
+      setCode('');
+      setCodeError('');
+      setStep('sent');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+      turnstile.reset();
+    }
+  };
+
+  const verify = async (value = code) => {
+    setCodeError('');
+    setBusy(true);
+    try {
+      await api('/auth/code', { method: 'POST', body: { email: email.trim(), code: value } });
+      // The session cookie is set; start over as signed in.
+      location.reload();
+    } catch (err) {
+      setCodeError(err.message);
+      setBusy(false);
+      codeBox.current?.select();
+    }
+  };
+
+  // Without an email: the same account an app starts with, kept by this browser.
+  const noEmail = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      await api('/auth/anon/web', { method: 'POST', body: { turnstile: turnstile.token.current } });
+      // The session cookie is set; start over, which sets up first.
+      location.reload();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+      turnstile.reset();
+    }
+  };
+
+  return html`
+    <section class="signin">
+      <div class="card signin-card">
+        <div hidden=${step !== 'login'}>
+          <img class="signin-mark" src="/assets/mark.svg" alt="" />
+          <h1>${adding ? t('Add an email') : t('Sign in to terminus')}</h1>
+          <p class="hint">
+            ${adding
+              ? t("We'll send you a code. Your settings are kept. If this email already has an account, you'll be switched to it.")
+              : t("Enter your email and we'll send you a code. No password, and the same code creates an account if you're new.")}
+          </p>
+          <form onSubmit=${send}>
+            <label for="login-email">${t('Email')}</label>
+            <input id="login-email" ref=${emailBox} type="email" autocomplete="email" placeholder="you@u.nus.edu" required value=${email} onInput=${(e) => setEmail(e.currentTarget.value)} />
+            <div class="turnstile" ref=${box}></div>
+            <button type="submit" class="btn accent wide" disabled=${busy}>${busy ? t('Sending…') : sendLabel}</button>
+          </form>
+          <p class="form-error" role="alert">${error}</p>
+          ${!adding &&
+          html`<div>
+            <p class="signin-or"><span>${t('or')}</span></p>
+            <button type="button" class="btn ghost wide" disabled=${busy} onClick=${noEmail}>${t('Use terminus without an email')}</button>
+            <p class="hint small">${t("Your setup stays in this browser. Add an email any time to use it on your other devices, or to keep it if this browser's data is cleared.")}</p>
+          </div>`}
+          ${adding &&
+          html`<button
+            type="button"
+            class="btn ghost wide"
+            onClick=${() => {
+              // Came from the web app to add it: back there.
+              if (NEXT) return location.assign(NEXT);
+              set({ adding: false });
+            }}
+          >${t('Cancel')}</button>`}
+        </div>
+
+        <div id="sent-step" hidden=${step !== 'sent'}>
+          <div class="sent-icon" aria-hidden="true">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+          </div>
+          <h1>${t('Check your inbox')}</h1>
+          <p class="hint"><${Fill} text=${t('We sent a code to {0}. Type it here, or open the link in the same email on this device. Both work once, for 15 minutes.', MARK)} parts=${[html`<strong>${email}</strong>`]} /></p>
+          <form
+            onSubmit=${(e) => {
+              e.preventDefault();
+              verify();
+            }}
+          >
+            <label for="code-input">${t('Code')}</label>
+            <input
+              id="code-input"
+              ref=${codeBox}
+              class="code-input"
+              autocomplete="one-time-code"
+              autocapitalize="characters"
+              spellcheck="false"
+              maxlength="7"
+              placeholder="K7QX4M"
+              required
+              value=${code}
+              onInput=${(e) => {
+                const v = e.currentTarget.value;
+                setCode(v);
+                // The sixth letter or digit, typed or pasted, sends the code.
+                if (v.replace(/[^a-z0-9]/gi, '').length === 6 && !busy) verify(v);
+              }}
+            />
+            <button type="submit" class="btn accent wide" disabled=${busy}>${t('Sign in')}</button>
+          </form>
+          <p class="form-error" role="alert">${codeError}</p>
+          <p class="hint small">
+            <${Fill}
+              text=${t('No email after a minute? Check spam, or {0}.', MARK)}
+              parts=${[
+                html`<button
+                  type="button"
+                  class="link-btn"
+                  onClick=${() => {
+                    // Resending needs a fresh Turnstile pass, so it goes back to the form,
+                    // saying so only when there's a check to do.
+                    setStep('login');
+                    setError(turnstile.present ? t('Complete the check below, then send again.') : '');
+                  }}
+                >${t('send another')}</button>`,
+              ]}
+            />
+          </p>
+          <button
+            type="button"
+            class="btn ghost wide"
+            onClick=${() => {
+              setStep('login');
+              requestAnimationFrame(() => emailBox.current?.select());
+            }}
+          >${t('Use a different email')}</button>
+        </div>
+      </div>
+      <${Rich} as="p" class="hint center" text=${t('By continuing you agree to the <a href="/privacy">privacy policy</a>.')} />
+    </section>
+  `;
+}
+
+/* ---------- signed in ---------- */
+
+/** "Your widget right now": /me/next as the widget shows it, so changes in Settings show up. */
+function Preview({ me }) {
+  const [a, setA] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const saved = useStore(saves);
+  const load = async () => {
+    try {
+      setA(await api(`/me/next${HOUR12 ? '?h12=1' : ''}`));
+      setFailed(false);
+    } catch {
+      setA(null);
+      setFailed(true);
+    }
+  };
+  useEffect(() => {
+    load();
+  }, [saved]);
+  useInterval(() => document.visibilityState === 'visible' && load(), 60_000);
+  return html`
+    <section class="side-preview">
+      <p class="eyebrow">${t('Your widget right now')}</p>
+      ${a
+        ? html`<${Card} a=${a} onAnswer=${setA} onChoice=${load} chips />`
+        : failed
+          ? html`<${Message} text=${t('Preview unavailable right now.')}><button type="button" class="link-btn" onClick=${load}>${t('Try again')}</button><//>`
+          : html`<${Message} text="…" />`}
+      <${Report} answer=${a} anonymous=${me.anonymous === true} />
+    </section>
+  `;
+}
+
+/** The header's right side: who's signed in, the app, and Sign out or Add an email. */
+function Who() {
+  const { view, me } = useStore(page);
+  if (view !== 'settings' || !me) return null;
+  return html`
+    <span class="hint hide-sm">${me.email ?? t('No email')}</span>
+    <a class="btn small accent open-app" href="/app/">${t('Open the app')}</a>
+    ${me.anonymous === true
+      ? html`<button type="button" class="btn small ghost" id="add-email" onClick=${startAdding}>${t('Add an email')}</button>`
+      : html`<button type="button" class="btn small ghost" id="logout" onClick=${signOut}>${t('Sign out')}</button>`}
+  `;
+}
+
+function AccountPage() {
+  const { view, me, adding, error } = useStore(page);
+  if (view === 'loading') return null;
+  if (view === 'error') return html`<p class="hint">${t('Something went wrong. {0}', error)}</p>`;
+  if (view === 'signin') return html`<${SignIn} adding=${false} />`;
+  if (view === 'onboarding') return html`<${Onboarding} onDone=${afterSetup} />`;
+  return html`
+    ${adding && html`<${SignIn} adding=${true} />`}
+    <div id="app" hidden=${adding}>
+      <${Settings} me=${me} side=${html`<${Preview} me=${me} />`} onAddEmail=${startAdding} onSignOut=${signOut} />
+    </div>
+    <${Toast} />
+  `;
+}
+
+/** After first-time setup (or straight after sign-in): where the person was going. */
+function afterSetup() {
+  const { me } = page.get();
+  // From the web app to add an email: straight to the sign-in card.
+  if (ADD && me.anonymous === true) return set({ view: 'settings', adding: true });
+  const shared = sharedLink();
+  // Signed in from the web app: back to it.
+  if (NEXT && !shared) return location.replace(NEXT);
+  set({ view: 'settings' });
+  if (shared) {
+    history.replaceState(null, '', location.pathname);
+    offerImport(shared);
+  }
+}
+
 async function start() {
   let me;
   try {
     me = await api('/me');
   } catch (err) {
-    if (err.status === 401) {
-      $('#signin').hidden = false;
-      await setupTurnstile().catch(() => {});
-      return;
-    }
+    if (err.status === 401) return set({ view: 'signin' });
     throw err;
   }
-  $('#email').textContent = me.email ?? t('No email');
-  anonymous = me.anonymous === true;
-  if (anonymous) {
-    // Signing out would leave no way back in, so it's Add an email instead.
-    $('#logout').hidden = true;
-    $('#add-email').hidden = false;
-  }
-
-  await mountSettings($('#app'), { me, onChange: renderPreview, onAddEmail: () => $('#add-email').click(), onSignOut: () => $('#logout').click() });
-
-  // First sign-in: set up before the settings appear, and before the
-  // header's buttons, which would only distract from it.
-  if (me.onboarding === 'full') {
-    await runOnboarding(onboardingCtx);
-    render();
-  }
-  $('#who').hidden = false;
-
-  // From the web app to add an email: straight to the sign-in card.
-  if (ADD && anonymous) {
-    $('#add-email').click();
-    return;
-  }
-  // Signed in from the web app: back to it (after first-time setup, above).
-  if (NEXT && !sharedLink()) {
-    location.replace(NEXT);
-    return;
-  }
-
-  $('#app').hidden = false;
-  const shared = sharedLink();
-  if (shared) {
-    history.replaceState(null, '', location.pathname);
-    offerImport(shared);
-  }
-  wireReport();
-  await Promise.all([renderLists(), renderPreview()]);
-  setInterval(() => document.visibilityState === 'visible' && renderPreview(), 60_000);
+  await Promise.all([loadProfile(), loadCampus()]);
+  set({ me });
+  // First sign-in: set up before Settings appears, and before the header's
+  // buttons, which would only distract from it.
+  if (me.onboarding === 'full') return set({ view: 'onboarding' });
+  afterSetup();
 }
 
-start().catch((err) => {
-  document.querySelector('main').append(el('p', { class: 'hint', textContent: t('Something went wrong. {0}', err.message) }));
-});
+render(html`<${AccountPage} />`, document.getElementById('root'));
+render(html`<${Who} />`, document.getElementById('who'));
+start().catch((err) => set({ view: 'error', error: err.message }));

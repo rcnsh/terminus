@@ -18,10 +18,10 @@ function shellFiles() {
   return new Set([...list.matchAll(/'([^']+)'/g)].map((m) => m[1]));
 }
 
-/** Static imports (not import()), resolved to site paths. */
+/** Static imports (not import()), resolved to site paths: ours, and the vendored modules' minified ones. */
 function importsOf(file) {
   const src = read(file);
-  return [...src.matchAll(/^import\s[^;]*?from\s+'([^']+)';/gm)].map((m) => (m[1].startsWith('/') ? m[1] : path.posix.join(path.posix.dirname(file), m[1])));
+  return [...src.matchAll(/(?:^|[;\s])import\s*(?:[\w$*{}\s,]+?\s*from\s*)?(['"])([^'"]+)\1/gm)].map((m) => (m[2].startsWith('/') ? m[2] : path.posix.join(path.posix.dirname(file), m[2])));
 }
 
 test('every module the web app loads at startup is kept for offline', () => {

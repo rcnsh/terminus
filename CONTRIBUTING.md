@@ -20,8 +20,9 @@ node apps/api/scripts/dev-stub.mjs        # local API with fake buses
 
 - **API** (`apps/api`): TypeScript on Cloudflare Workers. Tests run on Node's
   built-in runner; D1 is emulated with `node:sqlite`.
-- **Website** (`apps/web/public`): static HTML, CSS and JS served by the Worker.
-  Third-party code for the map is in `vendor/`, refreshed only with
+- **Website** (`apps/web/public`): HTML pages and Preact components (htm
+  templates, no build step) served by the Worker. Third-party code is in
+  `vendor/`, refreshed only with `scripts/vendor-preact.sh` and
   `scripts/vendor-map.sh`; lint skips it.
 - **Android** (`apps/android`): Kotlin, Compose and Glance. Point a debug build
   at the dev server with `./gradlew installStableDebug -PapiBase=http://localhost:8787`

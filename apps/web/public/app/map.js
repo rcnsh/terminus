@@ -3,12 +3,19 @@
 // its live buses; a stop shows what's coming, the services that call there,
 // and ways to go there. Loaded the first time the tab is opened.
 //
+// MapLibre draws the map itself, so it's driven from here as it always was:
+// the map, its layers and the buses' glides are plain functions below. What
+// sits on top of it (the pills, the status line, the sheet for a stop or a
+// bus) is drawn by Preact from the stores they share.
+//
 // Everything comes from our own domain: MapLibre and the PMTiles reader
 // (vendor/, scripts/vendor-map.sh), the map file and its style, fonts and
 // icons (/map/*), routes and stops (/campus), buses (/buses), arrivals
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
-import { $, api, el, inkOn, t } from '/account/dom.js';
+import { html, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '/assets/ui.js';
+import { inkOn, t } from '/account/dom.js';
+import { loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 
 // "@" spelled %40: Cloudflare's static assets redirect the "@" form to it,
 // which cost a round trip per file.
@@ -36,27 +43,35 @@ const NEAR_CAMPUS_M = 3_000;
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts). */
 const BOUNDS = [[103.755, 1.28], [103.83, 1.332]];
 
+/* ---------- what's on screen ---------- */
+
+/** /campus, once loaded. */
+const campusData = store(null);
+/** The service whose pill is on, or null. */
+const selected = store(null);
+/** The line under the pills ("2 buses on A1"), or null. */
+const status = store(null);
+/** The open sheet: { stop: code } or { bus: id }, or null. */
+const sheet = store(null);
+/** Each bus as it last came from the API, by id (for its sheet). */
+const shown = store(new Map());
+
 let ml = null;
 let map = null;
-let campus = null;
 let visible = false;
-/** The service whose pill is on, or null. */
-let selected = null;
 let busTimer = null;
-let sheetTimer = null;
 let watchId = null;
-/** Each bus as it last came from the API, by id (for its card). */
-let shown = new Map();
 /** Each bus's glide, by id: from where it was drawn to where it is now. */
 let glides = new Map();
 let glide = null;
+/** The whole-campus view, for the button back to it. */
+let fit = null;
 
 /** Dark as the page is: the theme chosen in Settings, or the device's (assets/theme.js). */
 const dark = () => window.theme?.dark() ?? window.matchMedia('(prefers-color-scheme: dark)').matches;
 const lang = () => (window.i18n?.lang === 'zh' ? 'zh' : 'en');
 const styleUrl = () => `/map/style.json?theme=${dark() ? 'dark' : 'light'}&lang=${lang()}`;
-const colorOf = (svc) => campus?.routes[svc]?.color ?? '#8a939c';
-
+const colorOf = (svc) => campusData.get()?.routes[svc]?.color ?? '#8a939c';
 const svcVars = (svc) => `--svc:${colorOf(svc)};--svc-ink:${inkOn(colorOf(svc))}`;
 
 async function getJSON(path) {
@@ -82,64 +97,22 @@ async function allowed() {
   return state === 'granted';
 }
 
-/* ---------- opening ---------- */
+/* ---------- the map ---------- */
 
-/** Shows the map, building it the first time. */
-export async function showMap() {
-  visible = true;
-  if (map) {
-    map.resize();
-    resume();
-    return;
-  }
-  try {
-    await build();
-  } catch (err) {
-    if (err.message === 'signed out') return;
-    $('#map').replaceChildren(el('p', { class: 'map-empty hint', textContent: t('The map needs a connection the first time.') }));
-  }
-}
-
-/** A stop opened from elsewhere (a stop in Nearby, on Now): centred, with its sheet open. */
-export function focusStop(code) {
-  const stop = campus?.stops.find((s) => s.code === code);
-  if (!map || !stop) return;
-  const go = () => {
-    openStop(code);
-    // Centred in what the sheet leaves uncovered, not under it.
-    map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), 17), padding: { top: 70, bottom: $('#map-sheet').offsetHeight + 20 }, duration: 600 });
-  };
-  if (map.loaded()) go();
-  else map.once('load', go);
-}
-
-/** Stops everything that runs while the map is on screen. */
-export function hideMap() {
-  visible = false;
-  clearTimeout(busTimer);
-  clearTimeout(sheetTimer);
-  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  watchId = null;
-}
-
-function resume() {
-  if (selected) pollBuses();
-  followMe();
-  if (sheetRefresh) sheetRefresh();
-}
-
-async function build() {
-  const css = el('link', { rel: 'stylesheet', href: `${MAPLIBRE}maplibre-gl.css` });
+async function build(container) {
+  const css = document.createElement('link');
+  css.rel = 'stylesheet';
+  css.href = `${MAPLIBRE}maplibre-gl.css`;
   document.head.append(css);
-  const [maplibre, { Protocol }, data] = await Promise.all([import(`${MAPLIBRE}maplibre-gl.mjs`), import(PMTILES), getJSON('/campus')]);
+  const [maplibre, { Protocol }, data] = await Promise.all([import(`${MAPLIBRE}maplibre-gl.mjs`), import(PMTILES), loadCampus()]);
   ml = maplibre;
-  campus = data;
+  campusData.set(data);
   ml.addProtocol('pmtiles', new Protocol({ metadata: true }).tile);
 
-  const core = campus.stops.filter((s) => s.core);
-  const fit = boundsOf(core.map((s) => [s.lon, s.lat]));
+  const core = data.stops.filter((s) => s.core);
+  fit = boundsOf(core.map((s) => [s.lon, s.lat]));
   map = new ml.Map({
-    container: 'map',
+    container,
     style: styleUrl(),
     bounds: fit,
     fitBoundsOptions: { padding: { top: 70, bottom: 30, left: 30, right: 30 } },
@@ -161,18 +134,17 @@ async function build() {
   map.addControl(
     {
       onAdd() {
-        this.box = el(
-          'div',
-          { class: 'maplibregl-ctrl maplibregl-ctrl-group' },
-          el('button', {
-            type: 'button',
-            class: 'map-recentre',
-            title: t('Back to campus'),
-            'aria-label': t('Back to campus'),
-            innerHTML: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>',
-            onclick: () => map.fitBounds(fit, { padding: { top: 70, bottom: 30, left: 30, right: 30 }, duration: 600 }),
-          }),
-        );
+        this.box = document.createElement('div');
+        this.box.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'map-recentre';
+        b.title = t('Back to campus');
+        b.setAttribute('aria-label', t('Back to campus'));
+        // A constant, never data.
+        b.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>';
+        b.onclick = () => map.fitBounds(fit, { padding: { top: 70, bottom: 30, left: 30, right: 30 }, duration: 600 });
+        this.box.append(b);
         return this.box;
       },
       onRemove() {
@@ -190,7 +162,6 @@ async function build() {
     map.on('mouseenter', layer, () => (map.getCanvas().style.cursor = 'pointer'));
     map.on('mouseleave', layer, () => (map.getCanvas().style.cursor = ''));
   }
-  renderPills();
   startOnMe();
   followMe();
 }
@@ -208,7 +179,7 @@ async function startOnMe() {
     (p) => {
       const { latitude: lat, longitude: lon } = p.coords;
       let best = null;
-      for (const s of campus.stops) {
+      for (const s of campusData.get().stops) {
         const d = metres(lat, lon, s.lat, s.lon);
         if (!best || d < best.d) best = { s, d };
       }
@@ -229,11 +200,27 @@ async function followMe() {
   );
 }
 
+/** Stops everything that runs while the map is on screen. */
+function hide() {
+  visible = false;
+  clearTimeout(busTimer);
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null;
+}
+
+function resume() {
+  visible = true;
+  map.resize();
+  if (selected.get()) pollBuses();
+  followMe();
+}
+
 /* ---------- layers ---------- */
 
 const empty = { type: 'FeatureCollection', features: [] };
 
 function addLayers() {
+  const campus = campusData.get();
   const ink = dark() ? '#f2efeb' : '#1c1917';
   const paper = dark() ? '#1a1816' : '#ffffff';
   map.addSource('routes', {
@@ -320,74 +307,55 @@ function arrow(fill) {
 /** The chosen service stands out; the rest step back. */
 function highlight() {
   if (!map?.getLayer('routes')) return;
-  map.setFilter('route-on', ['==', ['get', 'svc'], selected ?? '']);
-  map.setPaintProperty('routes', 'line-opacity', selected ? 0.18 : 0.9);
-  map.setPaintProperty('route-casing', 'line-opacity', selected ? 0.3 : 0.9);
+  const svc = selected.get();
+  map.setFilter('route-on', ['==', ['get', 'svc'], svc ?? '']);
+  map.setPaintProperty('routes', 'line-opacity', svc ? 0.18 : 0.9);
+  map.setPaintProperty('route-casing', 'line-opacity', svc ? 0.3 : 0.9);
   // services is " A1 D2 ": spaces round each, so K never matches inside another code.
-  const on = selected ? ['in', ` ${selected} `, ['get', 'services']] : true;
-  map.setPaintProperty('stops', 'circle-opacity', selected ? ['case', on, 1, 0.35] : 1);
-  map.setPaintProperty('stops', 'circle-stroke-opacity', selected ? ['case', on, 1, 0.35] : 1);
-  map.setPaintProperty('stop-names', 'text-opacity', selected ? ['case', on, 1, 0.4] : 1);
+  const on = svc ? ['in', ` ${svc} `, ['get', 'services']] : true;
+  map.setPaintProperty('stops', 'circle-opacity', svc ? ['case', on, 1, 0.35] : 1);
+  map.setPaintProperty('stops', 'circle-stroke-opacity', svc ? ['case', on, 1, 0.35] : 1);
+  map.setPaintProperty('stop-names', 'text-opacity', svc ? ['case', on, 1, 0.4] : 1);
 }
 
-/* ---------- pills and live buses ---------- */
-
-function renderPills() {
-  const order = Object.keys(campus.routes).sort();
-  $('#map-pills').replaceChildren(
-    ...order.map((svc) =>
-      el(
-        'button',
-        { type: 'button', style: svcVars(svc), 'aria-pressed': String(svc === selected), 'aria-label': t('{0}: show its line and live buses', svc), onclick: () => choose(svc === selected ? null : svc) },
-        el('span', { class: 'dot' }),
-        svc,
-      ),
-    ),
-  );
-}
+/* ---------- live buses ---------- */
 
 /** One service at a time: its line and buses, or none. */
 function choose(svc) {
-  selected = svc;
+  selected.set(svc);
   clearTimeout(busTimer);
   cancelAnimationFrame(glide);
-  shown = new Map();
+  shown.set(new Map());
   glides = new Map();
   drawBuses([]);
-  renderPills();
   highlight();
-  status(null);
+  status.set(null);
   if (!svc) return;
-  map.fitBounds(boundsOf(campus.routes[svc].line), { padding: { top: 80, bottom: 40, left: 40, right: 40 }, maxZoom: 16.5, duration: 600 });
-  status(t('Finding {0} buses…', svc));
+  map.fitBounds(boundsOf(campusData.get().routes[svc].line), { padding: { top: 80, bottom: 40, left: 40, right: 40 }, maxZoom: 16.5, duration: 600 });
+  status.set(t('Finding {0} buses…', svc));
   pollBuses();
-}
-
-function status(text) {
-  $('#map-status').hidden = !text;
-  $('#map-status').textContent = text ?? '';
 }
 
 async function pollBuses() {
   clearTimeout(busTimer);
-  const svc = selected;
+  const svc = selected.get();
   if (!svc || !visible) return;
   try {
     const data = await getJSON(`/buses?svc=${encodeURIComponent(svc)}`);
-    if (svc !== selected) return;
-    if (!data.available) status(t('Live buses aren’t available right now.'));
-    else if (!data.buses.length) status(t('No {0} buses running right now.', svc));
-    else status(data.buses.length === 1 ? t('1 bus on {0}', svc) : t('{0} buses on {1}', data.buses.length, svc));
+    if (svc !== selected.get()) return;
+    if (!data.available) status.set(t('Live buses aren’t available right now.'));
+    else if (!data.buses.length) status.set(t('No {0} buses running right now.', svc));
+    else status.set(data.buses.length === 1 ? t('1 bus on {0}', svc) : t('{0} buses on {1}', data.buses.length, svc));
     moveTo(data.buses.map((b) => ({ ...b, svc, color: colorOf(svc) })));
   } catch (err) {
-    if (err.message === 'signed out' || svc !== selected) return;
-    status(navigator.onLine ? t('Live buses aren’t available right now.') : t('Live buses need a connection.'));
+    if (err.message === 'signed out' || svc !== selected.get()) return;
+    status.set(navigator.onLine ? t('Live buses aren’t available right now.') : t('Live buses need a connection.'));
   }
-  // Not again once the map's tab is hidden (hideMap) while this one was on its way.
+  // Not again once the map's tab is hidden while this one was on its way.
   if (visible && document.visibilityState === 'visible') busTimer = setTimeout(pollBuses, BUSES_MS);
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && visible && selected) pollBuses();
+  if (document.visibilityState === 'visible' && visible && selected.get()) pollBuses();
 });
 
 /**
@@ -400,8 +368,8 @@ document.addEventListener('visibilitychange', () => {
 function moveTo(buses) {
   const now = performance.now();
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const path = pathOf(campus?.routes[selected]?.line);
-  shown = new Map(buses.map((b) => [b.id, b]));
+  const path = pathOf(campusData.get()?.routes[selected.get()]?.line);
+  shown.set(new Map(buses.map((b) => [b.id, b])));
   const next = new Map();
   for (const b of buses) {
     const g = glides.get(b.id);
@@ -410,9 +378,9 @@ function moveTo(buses) {
   }
   glides = next;
   cancelAnimationFrame(glide);
-  const step = (t) => {
-    drawBuses(frameAt(t));
-    if ([...glides.values()].some((g) => g.from && t - g.start < GLIDE_MS)) glide = requestAnimationFrame(step);
+  const step = (ms) => {
+    drawBuses(frameAt(ms));
+    if ([...glides.values()].some((g) => g.from && ms - g.start < GLIDE_MS)) glide = requestAnimationFrame(step);
   };
   glide = requestAnimationFrame(step);
 }
@@ -485,16 +453,18 @@ function alongBy(path, f, b) {
 function pointAt(path, m) {
   const { line, cum, total } = path;
   m = path.closed ? ((m % total) + total) % total : Math.max(0, Math.min(total, m));
-  let lo = 0, hi = cum.length - 1;
+  let lo = 0,
+    hi = cum.length - 1;
   while (hi - lo > 1) {
     const mid = (lo + hi) >> 1;
-    if (cum[mid] <= m) lo = mid; else hi = mid;
+    if (cum[mid] <= m) lo = mid;
+    else hi = mid;
   }
   const [aLon, aLat] = line[lo];
   const [bLon, bLat] = line[hi];
   const seg = cum[hi] - cum[lo];
-  const t = seg > 0 ? (m - cum[lo]) / seg : 0;
-  return { lat: aLat + (bLat - aLat) * t, lon: aLon + (bLon - aLon) * t, bearing: bearing(aLat, aLon, bLat, bLon) };
+  const k = seg > 0 ? (m - cum[lo]) / seg : 0;
+  return { lat: aLat + (bLat - aLat) * k, lon: aLon + (bLon - aLon) * k, bearing: bearing(aLat, aLon, bLat, bLon) };
 }
 
 /** As apps/api/src/geo.ts, so distances along a line match the API's. */
@@ -508,7 +478,7 @@ function bearing(aLat, aLon, bLat, bLon) {
   const r = Math.PI / 180;
   const y = Math.sin((bLon - aLon) * r) * Math.cos(bLat * r);
   const x = Math.cos(aLat * r) * Math.sin(bLat * r) - Math.sin(aLat * r) * Math.cos(bLat * r) * Math.cos((bLon - aLon) * r);
-  return ((Math.atan2(y, x) / r) % 360 + 360) % 360;
+  return (((Math.atan2(y, x) / r) % 360) + 360) % 360;
 }
 
 function drawBuses(buses) {
@@ -522,10 +492,7 @@ function drawBuses(buses) {
   });
 }
 
-/* ---------- the sheet: a stop or a bus ---------- */
-
-/** Re-renders the open sheet's live part; null when no sheet is open. */
-let sheetRefresh = null;
+/* ---------- taps ---------- */
 
 /** How far from a stop or bus a tap still picks it, in pixels: about a
  *  fingertip on a touch screen, less with a mouse. */
@@ -548,144 +515,212 @@ function onClick(e) {
     const [name] = map.queryRenderedFeatures(around(4), { layers: ['stop-names'] });
     if (name) best = { f: name };
   }
-  if (!best) return closeSheet();
-  if (best.f.layer.id === 'buses') openBus(best.f.properties.id);
-  else openStop(best.f.properties.code);
-}
-
-function closeSheet() {
-  clearTimeout(sheetTimer);
-  sheetRefresh = null;
-  $('#map-sheet').hidden = true;
-}
-
-function sheet(title, sub, ...body) {
-  const box = $('#map-sheet');
-  box.replaceChildren(
-    el('div', { class: 'sheet-head' }, el('div', {}, el('h2', { textContent: title }), sub ? el('p', { class: 'hint', textContent: sub }) : ''), el('button', { type: 'button', class: 'sheet-close', textContent: '×', 'aria-label': t('Close'), onclick: closeSheet })),
-    ...body,
-  );
-  box.hidden = false;
-}
-
-const crowdWord = (c) => ({ low: t('Quiet'), medium: t('Filling'), high: t('Packed') })[c] ?? null;
-const svcTag = (svc, onclick) => el(onclick ? 'button' : 'span', { class: 'svc-tag', style: svcVars(svc), textContent: svc, ...(onclick ? { type: 'button', onclick, 'aria-label': t('Show {0} on the map', svc) } : {}) });
-
-function openBus(id) {
-  clearTimeout(sheetTimer);
-  const render = () => {
-    const b = shown.get(id);
-    if (!b) return closeSheet();
-    sheet(
-      t('{0} bus', b.svc),
-      b.moving ? null : t('Stopped'),
-      el(
-        'div',
-        { class: 'sheet-rows' },
-        el('div', { class: 'sheet-row' }, el('span', { textContent: t('Next stop') }), el('span', { class: 'when', textContent: b.nextStop?.name ?? t('Not on its route right now') })),
-        b.crowd ? el('div', { class: 'sheet-row' }, el('span', { textContent: t('How full') }), el('span', { class: 'when', textContent: crowdWord(b.crowd) })) : '',
-      ),
-    );
-  };
-  render();
-  // Follows the bus's own updates (pollBuses) while open.
-  sheetRefresh = () => {
-    render();
-    sheetTimer = setTimeout(sheetRefresh, BUSES_MS);
-  };
-  sheetTimer = setTimeout(sheetRefresh, BUSES_MS);
-}
-
-function openStop(code) {
-  clearTimeout(sheetTimer);
-  const stop = campus.stops.find((s) => s.code === code);
-  if (!stop) return;
-  const rows = el('div', { class: 'sheet-rows' }, el('div', { class: 'hint', textContent: t('Checking…') }));
-  const save = el('button', { type: 'button', class: 'btn small ghost', textContent: t('Save as place'), onclick: () => saveAsPlace(stop, save) });
-  sheet(
-    stop.name,
-    null,
-    rows,
-    el('p', { class: 'sheet-label', textContent: t('Services here') }),
-    el('div', { class: 'svc-tags' }, ...stop.services.map((svc) => svcTag(svc, () => choose(svc)))),
-    el(
-      'div',
-      { class: 'sheet-actions' },
-      el('button', { type: 'button', class: 'btn small accent', textContent: t('Go there'), onclick: () => document.dispatchEvent(new CustomEvent('go-to-stop', { detail: { code: stop.code, name: stop.name, place: profile?.places.find((p) => p.to === stop.code)?.key ?? null } })) }),
-      el('a', { class: 'btn small ghost', href: directions(stop), target: '_blank', rel: 'noopener', textContent: t('Walking directions') }),
-      save,
-    ),
-  );
-  markSaved(stop, save);
-  sheetRefresh = async () => {
-    clearTimeout(sheetTimer);
-    try {
-      const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}`);
-      if (sheetRefresh === null) return;
-      const board = data.available ? data.board.filter((b) => b.etaS !== null) : [];
-      rows.replaceChildren(
-        ...(board.length
-          ? board.map((b) =>
-              el(
-                'div',
-                { class: 'sheet-row' },
-                svcTag(b.svc),
-                el('span', { class: 'when' }, b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', Math.round(b.etaS / 60))) : t('{0} min', Math.round(b.etaS / 60)), b.crowd ? el('span', { class: 'crowd', textContent: crowdWord(b.crowd) }) : ''),
-              ),
-            )
-          : [el('div', { class: 'hint', textContent: data.available ? t('No buses due') : t('No times right now') })]),
-      );
-    } catch (err) {
-      if (err.message === 'signed out') return;
-      rows.replaceChildren(el('div', { class: 'hint', textContent: navigator.onLine ? t('No times right now') : t('Live times need a connection.') }));
-    }
-    if (sheetRefresh && visible) sheetTimer = setTimeout(sheetRefresh, ARRIVALS_MS);
-  };
-  sheetRefresh();
+  if (!best) return sheet.set(null);
+  sheet.set(best.f.layer.id === 'buses' ? { bus: best.f.properties.id } : { stop: best.f.properties.code });
 }
 
 /** Walking directions in the phone's maps app: Apple Maps on Apple devices, Google Maps elsewhere. */
 function directions(s) {
   const apple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
-  return apple
-    ? `https://maps.apple.com/?daddr=${s.lat},${s.lon}&dirflg=w`
-    : `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=walking`;
+  return apple ? `https://maps.apple.com/?daddr=${s.lat},${s.lon}&dirflg=w` : `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=walking`;
 }
 
-/* ---------- saving a stop as a place ---------- */
+/* ---------- drawing ---------- */
 
-let profile = null;
+const crowdWord = (c) => ({ low: t('Quiet'), medium: t('Filling'), high: t('Packed') })[c] ?? null;
+const mins = (s) => Math.round(s / 60);
+const when = (b) => (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
 
-async function markSaved(stop, button) {
-  try {
-    // Fresh each time: a favourite may have been added or removed in Settings since.
-    profile = await api('/me/profile');
-  } catch {
-    return;
-  }
-  const same = profile.places.find((p) => p.to === stop.code);
-  if (same) {
-    button.textContent = t('Saved as {0}', same.label);
-    button.disabled = true;
-  }
+function SvcTag({ svc, onClick }) {
+  return onClick
+    ? html`<button type="button" class="svc-tag" style=${svcVars(svc)} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`
+    : html`<span class="svc-tag" style=${svcVars(svc)}>${svc}</span>`;
 }
 
-/** Adds the stop to the places (chips and widget), named as it's called. */
-async function saveAsPlace(stop, button) {
-  button.disabled = true;
-  try {
-    profile = await api('/me/profile');
-    if (!profile.places.some((p) => p.to === stop.code)) {
-      const label = stop.name.slice(0, 24);
-      let key = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'place';
-      while (profile.places.some((p) => p.key === key)) key = `${key.slice(0, 21)}-${Math.floor(Math.random() * 90 + 10)}`;
-      profile.places.push({ key, label, to: stop.code });
-      profile = await api('/me/profile', { method: 'PUT', body: profile });
-      document.dispatchEvent(new CustomEvent('places-changed'));
+function Pills() {
+  const campus = useStore(campusData);
+  const svc = useStore(selected);
+  if (!campus) return null;
+  return html`
+    <nav class="app-chips map-pills" aria-label=${t('Show a service and its buses')}>
+      ${Object.keys(campus.routes)
+        .sort()
+        .map(
+          (s) => html`
+            <button type="button" key=${s} style=${svcVars(s)} aria-pressed=${String(s === svc)} aria-label=${t('{0}: show its line and live buses', s)} onClick=${() => choose(s === svc ? null : s)}>
+              <span class="dot"></span>${s}
+            </button>
+          `,
+        )}
+    </nav>
+  `;
+}
+
+function Status() {
+  const text = useStore(status);
+  return html`<div class="map-status" role="status" hidden=${!text}>${text ?? ''}</div>`;
+}
+
+/** The sheet's frame: the title, a line under it, and Close. */
+function Frame({ title, sub, children, box }) {
+  return html`
+    <section class="map-sheet" aria-live="polite" ref=${box}>
+      <div class="sheet-head">
+        <div><h2>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
+        <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => sheet.set(null)}>×</button>
+      </div>
+      ${children}
+    </section>
+  `;
+}
+
+/** A bus: where it's going next and how full it is, following its updates while open. */
+function BusSheet({ id, box }) {
+  const buses = useStore(shown);
+  const b = buses.get(id);
+  useEffect(() => {
+    if (!b) sheet.set(null);
+  }, [b]);
+  if (!b) return null;
+  return html`
+    <${Frame} title=${t('{0} bus', b.svc)} sub=${b.moving ? null : t('Stopped')} box=${box}>
+      <div class="sheet-rows">
+        <div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop?.name ?? t('Not on its route right now')}</span></div>
+        ${b.crowd && html`<div class="sheet-row"><span>${t('How full')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}
+      </div>
+    <//>
+  `;
+}
+
+/** A stop: what's coming (refreshed while open), its services, and ways to go there. */
+function StopSheet({ code, box, onGoTo, onSaved, active }) {
+  const campus = useStore(campusData);
+  const p = useStore(profile);
+  const stop = campus?.stops.find((s) => s.code === code);
+  const [board, setBoard] = useState(null);
+  const [saveMsg, setSaveMsg] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  // Fresh each time: a favourite may have been added or removed elsewhere since.
+  useEffect(() => {
+    setSaveMsg(null);
+    reloadProfile().catch(() => {});
+  }, [code]);
+
+  useEffect(() => {
+    setBoard(null);
+    if (!active) return;
+    let timer = null;
+    let gone = false;
+    const load = async () => {
+      try {
+        const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}`);
+        if (gone) return;
+        const list = data.available ? data.board.filter((b) => b.etaS !== null) : [];
+        setBoard(list.length ? { list } : { text: data.available ? t('No buses due') : t('No times right now') });
+      } catch (err) {
+        if (gone || err.message === 'signed out') return;
+        setBoard({ text: navigator.onLine ? t('No times right now') : t('Live times need a connection.') });
+      }
+      if (!gone) timer = setTimeout(load, ARRIVALS_MS);
+    };
+    load();
+    return () => {
+      gone = true;
+      clearTimeout(timer);
+    };
+  }, [code, active]);
+
+  if (!stop) return null;
+  const same = p?.places.find((x) => x.to === stop.code);
+  // Adds the stop to the places (chips and widget), named as it's called.
+  const save = async () => {
+    setSaving(true);
+    try {
+      if (!profile.get()) await reloadProfile();
+      await saveNow((x) => withPlace(x, stop.code, stop.name));
+      onSaved?.();
+    } catch (err) {
+      setSaveMsg(err.status === 400 ? t("You've reached the limit of saved places. Remove one in Settings to add another.") : t('Not saved. {0}', err.message));
+    } finally {
+      setSaving(false);
     }
-    markSaved(stop, button);
-  } catch (err) {
-    button.disabled = false;
-    button.textContent = err.status === 400 ? t("You've reached the limit of saved places. Remove one in Settings to add another.") : t('Not saved. {0}', err.message);
-  }
+  };
+  return html`
+    <${Frame} title=${stop.name} box=${box}>
+      <div class="sheet-rows">
+        ${!board && html`<div class="hint">${t('Checking…')}</div>`}
+        ${board?.text && html`<div class="hint">${board.text}</div>`}
+        ${board?.list?.map(
+          (b) => html`
+            <div class="sheet-row" key=${`${b.svc}-${b.etaS}`}>
+              <${SvcTag} svc=${b.svc} />
+              <span class="when">${when(b)}${b.crowd && html`<span class="crowd">${crowdWord(b.crowd)}</span>`}</span>
+            </div>
+          `,
+        )}
+      </div>
+      <p class="sheet-label">${t('Services here')}</p>
+      <div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>
+      <div class="sheet-actions">
+        <button type="button" class="btn small accent" onClick=${() => onGoTo({ code: stop.code, name: stop.name, place: same?.key ?? null })}>${t('Go there')}</button>
+        <a class="btn small ghost" href=${directions(stop)} target="_blank" rel="noopener">${t('Walking directions')}</a>
+        <button type="button" class="btn small ghost" disabled=${Boolean(same) || saving} onClick=${save}>${same ? t('Saved as {0}', same.label) : (saveMsg ?? t('Save as place'))}</button>
+      </div>
+    <//>
+  `;
+}
+
+/**
+ * The Map tab. `visible`: its tab is on screen (the map pauses otherwise).
+ * `focus`: a stop to open, centred above its sheet (from Nearby); `onFocused`
+ * says it's done. `onGoTo` takes Go there to Now; `onSaved` follows a stop
+ * saved as a place.
+ */
+export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
+  const container = useRef(null);
+  const sheetBox = useRef(null);
+  const open = useStore(sheet);
+  const [state, setState] = useState(map ? 'ready' : 'idle');
+
+  // Built the first time it's on screen, paused while another tab is.
+  useEffect(() => {
+    if (!on) return hide();
+    if (map) return resume();
+    visible = true;
+    setState('loading');
+    build(container.current)
+      .then(() => setState('ready'))
+      .catch((err) => setState(err.message === 'signed out' ? 'idle' : 'failed'));
+  }, [on]);
+
+  // A stop opened from elsewhere: its sheet, then the map centred in what the sheet leaves uncovered.
+  useEffect(() => {
+    if (!focus || state !== 'ready') return;
+    sheet.set({ stop: focus });
+    onFocused?.();
+  }, [focus, state]);
+  const centring = useRef(null);
+  if (focus && state === 'ready') centring.current = focus;
+  useLayoutEffect(() => {
+    const code = centring.current;
+    const stop = code && campusData.get()?.stops.find((s) => s.code === code);
+    if (!stop || open?.stop !== code) return;
+    centring.current = null;
+    const go = () => map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), 17), padding: { top: 70, bottom: (sheetBox.current?.offsetHeight ?? 0) + 20 }, duration: 600 });
+    if (map.loaded()) go();
+    else map.once('load', go);
+  }, [open]);
+
+  return html`
+    <div id="map" class="map" role="region" aria-label=${t('Campus map')} ref=${container}>
+      ${state === 'failed' && html`<p class="map-empty hint">${t('The map needs a connection the first time.')}</p>`}
+    </div>
+    <div class="map-top">
+      <${Pills} />
+      <${Status} />
+    </div>
+    ${open?.stop && html`<${StopSheet} code=${open.stop} box=${sheetBox} onGoTo=${onGoTo} onSaved=${onSaved} active=${on} />`}
+    ${open?.bus && html`<${BusSheet} id=${open.bus} box=${sheetBox} />`}
+  `;
 }

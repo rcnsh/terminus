@@ -1,14 +1,17 @@
-// "Your widget right now": /me/next rendered the way the widget shows it.
-// Every line comes from the server's card (apps/api/src/card.ts).
+// The answer card: /me/next drawn the way the widget shows it, on the account
+// page ("Your widget right now") and on the web app's Now. Every line comes
+// from the server's card (apps/api/src/card.ts); this only lays them out.
 
-import { $, api, clock, el, t } from './dom.js';
+import { Icon, Rich, html, useEffect, useRef, useState } from '../assets/ui.js';
+import { api, clock, t } from './dom.js';
+import { lists } from './profile.js';
 
-const MOON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+const MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/>';
 /** This browser shows 12-hour times: ask for the card in that style. */
-const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
+export const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
 
-/** Dim once the server's staleAt passes: the bus has left, the plan moved on, or it's 15 minutes old. */
-const isOld = (a) => Boolean(a.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
+/** Past the card's staleAt: its bus has gone, the plan has moved on, or it's 15 minutes old. */
+export const isStale = (a) => Boolean(a?.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
 
 /** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts);
  *  at the stop, the bus to wait for ("D2 at 9:41"), as it is. */
@@ -17,205 +20,239 @@ const leaveHead = (a) => (a.card.phase !== 'waiting' && Date.now() >= Date.parse
 /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
 const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
 
+/** Sends a card's button (Not going, Undo, …) and returns the answer that comes back. */
+export const signal = (body) => api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body });
+
 /**
  * A class: when to leave is the headline, the bus that goes with it and when
  * it gets you there underneath, and the next bus as "or go now". Same lines
  * as the apps, because they all come from the server's card.
  */
-function classPlan(a) {
+function ClassPlan({ a }) {
   const c = a.card;
   const late = c.late ? ' late' : '';
-  return [
-    el('div', { class: 'where', textContent: `${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}` }),
-    el('div', { class: `big${late}`, textContent: leaveHead(a) }),
-    el('div', { class: `catch${late}`, textContent: c.catch }),
-    c.arrive ? el('div', { class: `arrive${late}`, textContent: c.arrive }) : null,
-    c.note ? el('div', { class: 'crowd-note', textContent: c.note }) : null,
-    c.estimate ? el('div', { class: 'note', textContent: c.estimate }) : null,
-    c.goNow ? el('div', { class: 'go-now', textContent: c.goNow }) : null,
-  ].filter(Boolean);
+  return html`
+    <div class="where">${`${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}`}</div>
+    <div class=${`big${late}`}>${leaveHead(a)}</div>
+    <div class=${`catch${late}`}>${c.catch}</div>
+    ${c.arrive && html`<div class=${`arrive${late}`}>${c.arrive}</div>`}
+    ${c.note && html`<div class="crowd-note">${c.note}</div>`}
+    ${c.estimate && html`<div class="note">${c.estimate}</div>`}
+    ${c.goNow && html`<div class="go-now">${c.goNow}</div>`}
+  `;
 }
 
-/** The answer on screen, sent with an "Is this wrong?" report. */
-let shown = null;
+/** Where the trip is (the same phase the phone and the Mac show) and a last-bus warning. */
+function Phase({ a }) {
+  const c = a.card ?? {};
+  return html`
+    ${c.phaseText && html`<div class="phase">${c.phaseText}</div>`}
+    ${c.warning && html`<div class="warning">${c.warning}</div>`}
+  `;
+}
+
+/** A button that's disabled while what it started is under way, and again if that fails. */
+function Busy({ onClick, class: cls, children, ...props }) {
+  const [busy, setBusy] = useState(false);
+  return html`
+    <button
+      type="button"
+      class=${cls}
+      disabled=${busy}
+      onClick=${async () => {
+        setBusy(true);
+        try {
+          await onClick();
+        } catch {
+          // Left for another try.
+        } finally {
+          setBusy(false);
+        }
+      }}
+      ...${props}
+    >${children}</button>
+  `;
+}
 
 /**
- * Where the trip is (the same phase the phone and the Mac show), a last-bus
- * warning, and the server's buttons. A click sends the signal and redraws
- * with the answer that comes back.
+ * The server's buttons, plans only (Not going, Not on campus today, Undo):
+ * nothing asks what happened. A tap sends the signal; `onAnswer` gets the
+ * answer that comes back.
  */
-function phaseParts(a) {
-  const c = a.card ?? {};
-  const parts = [];
-  if (c.phaseText) parts.push(el('div', { class: 'phase', textContent: c.phaseText }));
-  if (c.warning) parts.push(el('div', { class: 'warning', textContent: c.warning }));
-  return parts;
-}
-
-function actions(a) {
-  // Plans only (Not going, Not on campus today, undo): nothing asks what happened.
+function Actions({ a, onAnswer, onChoice }) {
   const list = a.card?.actions ?? [];
-  if (!list.length) return suggestion(a);
-  const buttons = el(
-    'div',
-    { class: 'actions' },
-    ...list.map((x, i) =>
-      el('button', {
-        type: 'button',
-        class: `btn small ${i === 0 && x.id !== 'skipped' && x.id !== 'reset' ? 'accent' : 'ghost'}`,
-        textContent: x.label,
-        onclick: async (e) => {
-          e.target.disabled = true;
-          try {
-            show(await api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body: { kind: x.id, trip: x.trip } }));
-            // The web app fetches again, so today's list and its offline copy follow.
-            document.dispatchEvent(new CustomEvent('trip-signal'));
-          } catch {
-            e.target.disabled = false;
-          }
-        },
-      }),
-    ),
-  );
-  return el('div', {}, buttons, suggestion(a) ?? '');
+  return html`
+    ${list.length > 0 &&
+    html`<div class="actions">
+      ${list.map(
+        (x, i) => html`<${Busy}
+          key=${x.id}
+          class=${`btn small ${i === 0 && x.id !== 'skipped' && x.id !== 'reset' ? 'accent' : 'ghost'}`}
+          onClick=${async () => onAnswer(await signal({ kind: x.id, trip: x.trip }))}
+        >${x.label}<//>`,
+      )}
+    </div>`}
+    <${Suggestion} a=${a} onChoice=${onChoice} />
+  `;
 }
 
 /** "Leave one bus earlier for CS2030?": what terminus has learned, offered, never applied by itself. */
-function suggestion(a) {
+function Suggestion({ a, onChoice }) {
   const s = a.card?.suggestion ?? null;
   if (!s) return null;
-  const choose = (choice) => async (e) => {
-    e.target.disabled = true;
-    try {
-      await api('/me/choice', { method: 'POST', body: { id: s.id, choice } });
-      document.dispatchEvent(new CustomEvent('trip-choices'));
-      renderPreview();
-    } catch {
-      e.target.disabled = false;
-    }
+  const choose = (choice) => async () => {
+    await api('/me/choice', { method: 'POST', body: { id: s.id, choice } });
+    // Settings lists the choices made.
+    lists.set((n) => n + 1);
+    onChoice?.();
   };
-  return el(
-    'div',
-    { class: 'suggestion' },
-    el('div', { textContent: s.text }),
-    el(
-      'div',
-      { class: 'actions' },
-      el('button', { type: 'button', class: 'btn small accent', textContent: s.accept, onclick: choose('accept') }),
-      el('button', { type: 'button', class: 'btn small ghost', textContent: s.dismiss, onclick: choose('dismiss') }),
-    ),
-  );
+  return html`
+    <div class="suggestion">
+      <div>${s.text}</div>
+      <div class="actions">
+        <${Busy} class="btn small accent" onClick=${choose('accept')}>${s.accept}<//>
+        <${Busy} class="btn small ghost" onClick=${choose('dismiss')}>${s.dismiss}<//>
+      </div>
+    </div>
+  `;
 }
 
-/** Renders /me/next the way the widget does, so settings changes show up. */
-export async function renderPreview() {
-  const box = $('#preview');
-  let a;
-  try {
-    a = await api(`/me/next${HOUR12 ? '?h12=1' : ''}`);
-  } catch {
-    shown = null;
-    box.replaceChildren(
-      el('div', { class: 'detail', textContent: t('Preview unavailable right now.') }),
-      el('button', { type: 'button', class: 'link-btn', textContent: t('Try again'), onclick: renderPreview }),
-    );
-    return;
-  }
-  show(a);
-}
+/** The large Android widget's row: Timetable and Nearby, then the usual places, as many as fit. */
+const Chips = ({ a }) => html`
+  <div class="chips">${[t('Timetable'), t('Nearby'), ...(a.places ?? []).slice(0, 2).map((p) => p.label)].map((x) => html`<span>${x}</span>`)}</div>
+`;
 
-/** Draws an answer (from /me/next, a signal, or the web app's cache) into #preview. */
-export function show(a) {
-  const box = $('#preview');
-  shown = a;
-  // The large Android widget's row: Timetable and Nearby, then the usual places, as many as fit.
-  const chips = el('div', { class: 'chips' }, ...[t('Timetable'), t('Nearby'), ...(a.places ?? []).slice(0, 2).map((p) => p.label)].map((x) => el('span', { textContent: x })));
+/**
+ * The card for answer `a` (from /me/next or a signal). `onAnswer` gets the
+ * answer after a button; `onChoice` runs after a suggestion is answered.
+ * `chips`: the widget's row of buttons under it (the account page's preview).
+ */
+export function Card({ a, onAnswer, onChoice, chips = false }) {
+  const actions = html`<${Actions} a=${a} onAnswer=${onAnswer} onChoice=${onChoice} />`;
+  const row = chips && html`<${Chips} a=${a} />`;
   if (a.mode === 'rest') {
-    const head = el('div', { class: 'rest' });
-    head.innerHTML = MOON; // a constant, never data
-    head.append(el('div', { class: 'big', textContent: a.label }));
-    box.className = 'widget';
-    // replaceChildren prints a null as the text "null".
-    box.replaceChildren(head, el('div', { class: 'detail', textContent: a.detail }), actions(a) ?? '', chips);
-    return;
+    return html`
+      <div class="widget" aria-live="polite">
+        <div class="rest"><${Icon} paths=${MOON} size="22" /><div class="big">${a.label}</div></div>
+        <div class="detail">${a.detail}</div>
+        ${actions}${row}
+      </div>
+    `;
   }
   if (a.mode === 'free') {
-    // No classes today: said plainly, with no bus to mistake for advice.
-    box.className = 'widget';
-    // "Undo" when the class just taken off was the day's last, and "Back on campus".
-    box.replaceChildren(el('div', { class: 'big', textContent: a.label }), el('div', { class: 'detail', textContent: a.detail }), actions(a) ?? '', chips);
-    return;
+    // No classes today: said plainly, with no bus to mistake for advice. "Undo"
+    // when the class just taken off was the day's last, and "Back on campus".
+    return html`
+      <div class="widget" aria-live="polite">
+        <div class="big">${a.label}</div>
+        <div class="detail">${a.detail}</div>
+        ${actions}${row}
+      </div>
+    `;
   }
-  if (a.card?.kind === 'class' && !isOld(a)) {
-    box.className = 'widget';
-    box.replaceChildren(...phaseParts(a), ...classPlan(a), actions(a) ?? '', chips);
-    return;
+  const old = isStale(a);
+  if (a.card?.kind === 'class' && !old) {
+    return html`<div class="widget" aria-live="polite"><${Phase} a=${a} /><${ClassPlan} a=${a} />${actions}${row}</div>`;
   }
   const where =
-    a.mode === 'nearby' ? t('Nearby') : a.dest?.why === 'class' ? t('Next class · {0}', a.dest.label) : a.dest?.why === 'gap-home' ? t('Long gap · {0}', a.dest.label) : a.dest?.label ?? t('Next bus');
-  // Show a departure as a clock time, the way the widget does, so it can't go stale.
+    a.mode === 'nearby' ? t('Nearby') : a.dest?.why === 'class' ? t('Next class · {0}', a.dest.label) : a.dest?.why === 'gap-home' ? t('Long gap · {0}', a.dest.label) : (a.dest?.label ?? t('Next bus'));
+  // A departure as a clock time, the way the widget shows it, so it can't go stale.
   const svc = a.label.split(' · ')[0];
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const big = timed ? `${svc} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label;
-  const old = isOld(a);
   // The crowd only when the detail line doesn't already say it ("· packed ·").
   const crowd = a.card?.crowd && !a.detail?.toLowerCase().includes(a.card.crowd.toLowerCase()) ? a.card.crowd : null;
   const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');
-  box.className = old ? 'widget old' : 'widget';
-  box.replaceChildren(
-    ...[
-      ...phaseParts(a),
-      el('div', { class: 'where', textContent: where }),
-      el('div', { class: 'big', textContent: big }),
-      el('div', { class: 'detail', textContent: old ? t('Updating times…') : a.detail }),
-      a.leave && a.card && !old ? el('div', { class: 'leave', textContent: leaveText(a) }) : null,
-      // On the bus the detail already ends with it ("arrive ~9:52 · ~4 min late").
-      a.timing && !old && !a.detail?.includes(a.timing.text) ? el('span', { class: `ontime ${a.timing.status}`, textContent: a.timing.text }) : null,
-      notes ? el('div', { class: 'note', textContent: notes }) : null,
-      actions(a),
-      chips,
-    ].filter(Boolean),
-  );
+  return html`
+    <div class=${old ? 'widget old' : 'widget'} aria-live="polite">
+      <${Phase} a=${a} />
+      <div class="where">${where}</div>
+      <div class="big">${big}</div>
+      <div class="detail">${old ? t('Updating times…') : a.detail}</div>
+      ${a.leave && a.card && !old && html`<div class="leave">${leaveText(a)}</div>`}
+      ${a.timing && !old && !a.detail?.includes(a.timing.text) && html`<span class=${`ontime ${a.timing.status}`}>${a.timing.text}</span>`}
+      ${notes && html`<div class="note">${notes}</div>`}
+      ${actions}${row}
+    </div>
+  `;
 }
 
+/** A card with just a line in it: "Checking…", or why there's no answer. */
+export const Message = ({ text, children, cls = 'widget' }) => html`
+  <div class=${cls} aria-live="polite"><div class="detail">${text}</div>${children}</div>
+`;
 
-/** "Is this wrong?": sends the answer on screen, with an optional note. */
-export function wireReport() {
-  const form = $('#report');
-  const open = $('#report-open');
-  const msg = $('#report-msg');
-  // The preview refreshes every minute; report the answer the user saw when they opened the form.
-  let reported = null;
-  const close = () => {
-    form.hidden = true;
-    open.hidden = false;
-    $('#report-note').value = '';
-  };
-  open.addEventListener('click', () => {
-    reported = shown;
-    msg.textContent = '';
-    form.hidden = false;
-    open.hidden = true;
-    $('#report-note').focus();
-  });
-  $('#report-cancel').addEventListener('click', close);
-  form.addEventListener('submit', async (e) => {
+/**
+ * "Is this wrong?": sends the answer on screen (`answer`, as it was when the
+ * form was opened: the card refreshes meanwhile) with an optional note.
+ */
+export function Report({ answer, anonymous = false }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [msg, setMsg] = useState('');
+  const [sending, setSending] = useState(false);
+  const [reported, setReported] = useState(null);
+  const box = useRef(null);
+  useEffect(() => {
+    if (open) box.current?.focus();
+  }, [open]);
+  const hint = anonymous
+    ? t('This sends the answer above and your note. Add an email if you want a reply.')
+    : t('This sends the answer above and your note, with your email address so you can get a reply.');
+  const send = async (e) => {
     e.preventDefault();
-    const note = $('#report-note').value.trim();
-    if (!reported && !note) {
-      msg.textContent = t('Please describe the problem. The preview has no answer to attach.');
+    if (!reported && !note.trim()) {
+      setMsg(t('Please describe the problem. The preview has no answer to attach.'));
       return;
     }
-    const send = $('#report-send');
-    send.disabled = true;
+    setSending(true);
     try {
-      await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note, platform: 'web', context: reported ?? undefined } });
-      close();
-      msg.textContent = t('Thanks for the report. It helps us improve terminus.');
+      await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note: note.trim(), platform: 'web', context: reported ?? undefined } });
+      setOpen(false);
+      setNote('');
+      setMsg(t('Thanks for the report. It helps us improve terminus.'));
     } catch (err) {
-      msg.textContent = err.message;
+      setMsg(err.message);
     } finally {
-      send.disabled = false;
+      setSending(false);
     }
-  });
+  };
+  return html`
+    ${!open &&
+    html`<button
+      type="button"
+      class="link-btn report-open"
+      onClick=${() => {
+        setReported(answer);
+        setMsg('');
+        setOpen(true);
+      }}
+    >${t('Is this wrong?')}</button>`}
+    ${open &&
+    html`<form class="report" onSubmit=${send}>
+      <label for="report-note"><${Rich} text=${t('What was wrong? <span class="hint">(optional)</span>')} /></label>
+      <textarea
+        id="report-note"
+        rows="3"
+        maxlength="1000"
+        placeholder=${t('The D2 never came, the walk is longer than that…')}
+        value=${note}
+        onInput=${(e) => setNote(e.currentTarget.value)}
+        ref=${box}
+      ></textarea>
+      <p class="hint">${hint}</p>
+      <div class="actions">
+        <button type="submit" class="btn small accent" disabled=${sending}>${t('Send')}</button>
+        <button
+          type="button"
+          class="btn small ghost"
+          onClick=${() => {
+            setOpen(false);
+            setNote('');
+          }}
+        >${t('Cancel')}</button>
+      </div>
+    </form>`}
+    <p class="hint" role="status">${msg}</p>
+  `;
 }

@@ -1,21 +1,15 @@
 // The operator dashboard: /admin/stats, with the HEALTH_TOKEN kept in this
-// tab's sessionStorage only.
+// tab's sessionStorage only. English only: it's for the operator.
 
-const $ = (id) => document.getElementById(id);
+import { html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
+
 const KEY = 'terminus-operator-token';
 const TZ = { timeZone: 'Asia/Singapore' };
 const when = (iso) => new Date(iso).toLocaleString('en-SG', { ...TZ, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const fmt = (n) => Number(n ?? 0).toLocaleString('en-SG');
 
-function el(tag, props = {}, ...children) {
-  const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (k === 'class') node.className = v;
-    else node[k] = v;
-  }
-  for (const c of children) if (c != null) node.append(c);
-  return node;
-}
+/** The stats once unlocked, or the token form (with why), or a line saying what went wrong. */
+const view = store({ locked: false, msg: '', stats: null, note: '' });
 
 function token() {
   try {
@@ -38,153 +32,52 @@ let memory = null;
 
 async function load() {
   const t = memory ?? token();
-  if (!t) return showUnlock();
+  if (!t) return view.set({ locked: true, msg: '', stats: null, note: '' });
   const res = await fetch('/admin/stats', { headers: { 'x-health-token': t }, cache: 'no-store' }).catch(() => null);
-  if (!res) {
-    $('as-of').textContent = "Couldn't reach terminus.";
-    return;
-  }
+  if (!res) return view.set((v) => ({ ...v, note: "Couldn't reach terminus." }));
   if (res.status === 404) {
     remember(null);
     memory = null;
-    return showUnlock('That token was not accepted.');
+    return view.set({ locked: true, msg: 'That token was not accepted.', stats: null, note: '' });
   }
-  if (!res.ok) {
-    $('as-of').textContent = `The stats answered ${res.status}.`;
-    return;
-  }
+  if (!res.ok) return view.set((v) => ({ ...v, note: `The stats answered ${res.status}.` }));
   try {
-    render(await res.json());
+    view.set({ locked: false, msg: '', stats: await res.json(), note: '' });
   } catch (err) {
-    // A stats reply this page can't read (a field missing, say): say so, not a blank page.
-    $('as-of').textContent = `Couldn't show the stats: ${err.message}`;
+    // A stats reply this page can't read: say so, not a blank page.
+    view.set((v) => ({ ...v, note: `Couldn't show the stats: ${err.message}` }));
   }
 }
 
-function showUnlock(msg = '') {
-  $('dash').hidden = true;
-  $('refresh').hidden = $('lock').hidden = true;
-  $('unlock').hidden = false;
-  $('unlock-msg').textContent = msg;
-  $('token').focus();
+function lock() {
+  remember(null);
+  memory = null;
+  view.set({ locked: true, msg: '', stats: null, note: '' });
 }
 
-function tile(n, k) {
-  return el('div', { class: 'tile' }, el('div', { class: 'n', textContent: n }), el('div', { class: 'k', textContent: k }));
-}
+const Tile = ({ n, k }) => html`<div class="tile"><div class="n">${n}</div><div class="k">${k}</div></div>`;
 
 /** Bars for [{label, n}], with the first and last label underneath. */
-function bars(rows, cls = '') {
+function Bars({ rows, cls = '' }) {
   const max = Math.max(1, ...rows.map((r) => r.n));
-  const box = el('div', { class: 'bars' });
-  for (const r of rows) {
-    const b = el('div', { class: `bar ${cls}`, title: `${r.label}: ${fmt(r.n)}` });
-    b.style.height = `${Math.max(2, (r.n / max) * 100)}%`;
-    box.append(b);
-  }
-  const foot = el('div', { class: 'bars-foot' }, el('span', { textContent: rows[0]?.label ?? '' }), el('span', { textContent: rows.at(-1)?.label ?? '' }));
-  return [box, foot];
+  return html`
+    <div class="bars">${rows.map((r) => html`<div class=${`bar ${cls}`} title=${`${r.label}: ${fmt(r.n)}`} style=${{ height: `${Math.max(2, (r.n / max) * 100)}%` }}></div>`)}</div>
+    <div class="bars-foot"><span>${rows[0]?.label ?? ''}</span><span>${rows.at(-1)?.label ?? ''}</span></div>
+  `;
 }
 
 /** Every Singapore day from `days` ago to today, so quiet days show as gaps. */
 function lastDays(days) {
   const out = [];
-  for (let i = days - 1; i >= 0; i--) {
-    out.push(new Date(Date.now() - i * 86_400_000).toLocaleDateString('en-CA', TZ));
-  }
+  for (let i = days - 1; i >= 0; i--) out.push(new Date(Date.now() - i * 86_400_000).toLocaleDateString('en-CA', TZ));
   return out;
 }
 
-function render(s) {
-  $('unlock').hidden = true;
-  $('dash').hidden = false;
-  $('refresh').hidden = $('lock').hidden = false;
-  $('as-of').textContent = `As of ${when(s.now)} (Singapore time).`;
-
-  const a = s.accounts ?? {};
-  const pct = (n) => (a.total ? ` (${Math.round((n / a.total) * 100)}%)` : '');
-  $('tiles').replaceChildren(
-    tile(fmt(a.total), 'accounts'),
-    tile(fmt(a.active1d), 'active today'),
-    tile(fmt(a.active7d), 'active this week'),
-    tile(fmt(a.new7d), `new this week · ${fmt(a.new30d)} this month`),
-    tile(fmt(a.withTimetable), `with a timetable${pct(a.withTimetable)}`),
-    tile(fmt(a.withHome), `with home stops${pct(a.withHome)}`),
-    tile(fmt(a.anonymous), `without an email${pct(a.anonymous)}`),
-  );
-
-  // Accounts in the apps: installs, how many finished setup, how many added an email.
-  const ap = s.apps ?? {};
-  const of = (n, d) => (d ? ` (${Math.round((n / d) * 100)}%)` : '');
-  $('apps').replaceChildren(
-    tile(fmt(ap.installs30d), 'app installs this month'),
-    tile(fmt(ap.onboarded30d), `finished setup${of(ap.onboarded30d, ap.installs30d)}`),
-    tile(fmt(ap.addedEmail30d), `added an email this month · ${fmt(ap.addedEmail)} ever`),
-  );
-  $('clients').replaceChildren(
-    ...(s.clients ?? []).map((c) => el('li', {}, el('code', { textContent: c.client }), ` · ${fmt(c.n)}`)),
-  );
-  if (!s.clients?.length) $('clients').append(el('li', { class: 'hint', textContent: 'No app has sent its version yet.' }));
-
-  const byDay = new Map((s.signups ?? []).map((r) => [r.day, r.n]));
-  $('signups').replaceChildren(...bars(lastDays(30).map((d) => ({ label: d.slice(5), n: byDay.get(d) ?? 0 }))));
-
-  const names = { android: 'Android', mac: 'Mac', ios: 'iPhone', unknown: 'Not seen since pairing' };
-  $('devices').tBodies[0].replaceChildren(
-    ...(s.devices ?? []).map((d) => el('tr', {}, el('td', { textContent: names[d.platform] ?? d.platform }), el('td', { textContent: fmt(d.total) }), el('td', { textContent: fmt(d.active7) }))),
-  );
-  if (!s.devices?.length) $('devices').tBodies[0].append(el('tr', {}, el('td', { colSpan: 3, class: 'hint', textContent: 'No paired devices yet.' })));
-  $('keys').textContent = s.apiKeys ? `API keys: ${fmt(s.apiKeys.total)}, ${fmt(s.apiKeys.used7d)} used this week. Web sessions this week: ${fmt(a.webSessions7d)}.` : '';
-
-  renderAnalytics(s.analytics);
-
-  if (s.feed) {
-    $('feed').replaceChildren(
-      el('strong', { class: s.feed.up ? 'good' : 'bad', textContent: s.feed.up ? 'Up' : 'Down' }),
-      ` since ${when(s.feed.since)}; last checked ${when(s.feed.checkedAt)}.`,
-    );
-  } else {
-    $('feed').textContent = 'No checks recorded yet.';
-  }
-  $('incidents').replaceChildren(
-    ...(s.incidents ?? []).map((i) =>
-      el('li', { textContent: `${when(i.start)} → ${i.end ? when(i.end) : 'ongoing'} · ${i.cause === 'version' ? 'new uNivUS version' : 'feed failed'}` }),
-    ),
-  );
-
-  const fb = s.feedback ?? { latest: [], last7d: 0 };
-  $('fb-count').textContent = `· ${fmt(fb.last7d)} this week`;
-  $('reports').replaceChildren(
-    ...fb.latest.map((f) =>
-      el(
-        'li',
-        {},
-        el('div', { class: 'meta', textContent: `${when(f.created)} · ${f.email ?? 'no email'} · ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}` }),
-        el('div', { class: 'note', textContent: f.note || '(no note)' }),
-        el('div', { class: 'meta', textContent: `Answer: ${f.answer}` }),
-        f.context ? el('details', {}, el('summary', { textContent: 'The answer they saw' }), el('pre', { textContent: JSON.stringify(f.context, null, 2) })) : null,
-      ),
-    ),
-  );
-  if (!fb.latest.length) $('reports').append(el('li', { class: 'hint', textContent: 'No reports yet.' }));
-}
-
-function renderAnalytics(an) {
-  const box = $('analytics');
+function Analytics({ an }) {
   if (!an) {
-    box.replaceChildren(
-      el('p', {
-        class: 'hint',
-        textContent:
-          'Not connected. Set the ANALYTICS_TOKEN secret (an API token with Account Analytics: Read) and CF_ACCOUNT_ID to see answers, their quality and errors per day.',
-      }),
-    );
-    return;
+    return html`<p class="hint">Not connected. Set the ANALYTICS_TOKEN secret (an API token with Account Analytics: Read) and CF_ACCOUNT_ID to see answers, their quality and errors per day.</p>`;
   }
-  if (an.error) {
-    box.replaceChildren(el('p', { class: 'bad', textContent: `Analytics Engine: ${an.error}` }));
-    return;
-  }
+  if (an.error) return html`<p class="bad">${`Analytics Engine: ${an.error}`}</p>`;
   const days = lastDays(14);
   const per = (kind) => {
     const m = new Map(an.daily.filter((r) => r.kind === kind).map((r) => [String(r.day).slice(0, 10), Number(r.n)]));
@@ -193,31 +86,152 @@ function renderAnalytics(an) {
   const answers = per('answer');
   const errors = per('error');
   const total = (rows) => rows.reduce((t, r) => t + r.n, 0);
-  const quality = el('table', {}, el('thead', {}, el('tr', {}, el('th', { textContent: 'Quality, this week' }), el('th', { textContent: 'Answers' }))));
-  quality.append(el('tbody', {}, ...an.quality.map((q) => el('tr', {}, el('td', { textContent: q.quality || '—' }), el('td', { textContent: fmt(q.n) })))));
-  const errs = el('table', {}, el('thead', {}, el('tr', {}, el('th', { textContent: 'Errors by route, this week' }), el('th', { textContent: 'Count' }))));
-  errs.append(el('tbody', {}, ...(an.errors.length ? an.errors.map((e) => el('tr', {}, el('td', {}, el('code', { textContent: e.route })), el('td', { textContent: fmt(e.n) }))) : [el('tr', {}, el('td', { colSpan: 2, class: 'hint', textContent: 'None.' }))])));
-  box.replaceChildren(
-    el('p', { class: 'hint', textContent: `${fmt(total(answers))} answers, ${fmt(total(errors))} errors.` }),
-    ...bars(answers),
-    el('p', { class: 'hint', textContent: 'Errors' }),
-    ...bars(errors, 'error'),
-    el('div', { class: 'split' }, quality, errs),
-  );
+  return html`
+    <p class="hint">${`${fmt(total(answers))} answers, ${fmt(total(errors))} errors.`}</p>
+    <${Bars} rows=${answers} />
+    <p class="hint">Errors</p>
+    <${Bars} rows=${errors} cls="error" />
+    <div class="split">
+      <table>
+        <thead><tr><th>Quality, this week</th><th>Answers</th></tr></thead>
+        <tbody>${an.quality.map((q) => html`<tr><td>${q.quality || '—'}</td><td>${fmt(q.n)}</td></tr>`)}</tbody>
+      </table>
+      <table>
+        <thead><tr><th>Errors by route, this week</th><th>Count</th></tr></thead>
+        <tbody>
+          ${an.errors.length ? an.errors.map((e) => html`<tr><td><code>${e.route}</code></td><td>${fmt(e.n)}</td></tr>`) : html`<tr><td colspan="2" class="hint">None.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
-$('unlock').addEventListener('submit', (e) => {
-  e.preventDefault();
-  memory = $('token').value.trim();
-  remember(memory);
-  $('token').value = '';
-  load();
-});
-$('refresh').addEventListener('click', load);
-$('lock').addEventListener('click', () => {
-  remember(null);
-  memory = null;
-  showUnlock();
-});
+function Dashboard({ s, note }) {
+  const a = s.accounts ?? {};
+  const pct = (n) => (a.total ? ` (${Math.round((n / a.total) * 100)}%)` : '');
+  // Accounts in the apps: installs, how many finished setup, how many added an email.
+  const ap = s.apps ?? {};
+  const of = (n, d) => (d ? ` (${Math.round((n / d) * 100)}%)` : '');
+  const byDay = new Map((s.signups ?? []).map((r) => [r.day, r.n]));
+  const names = { android: 'Android', mac: 'Mac', ios: 'iPhone', unknown: 'Not seen since pairing' };
+  const fb = s.feedback ?? { latest: [], last7d: 0 };
+  return html`
+    <p class="hint">${note || `As of ${when(s.now)} (Singapore time).`}</p>
+    <section class="tiles">
+      <${Tile} n=${fmt(a.total)} k="accounts" />
+      <${Tile} n=${fmt(a.active1d)} k="active today" />
+      <${Tile} n=${fmt(a.active7d)} k="active this week" />
+      <${Tile} n=${fmt(a.new7d)} k=${`new this week · ${fmt(a.new30d)} this month`} />
+      <${Tile} n=${fmt(a.withTimetable)} k=${`with a timetable${pct(a.withTimetable)}`} />
+      <${Tile} n=${fmt(a.withHome)} k=${`with home stops${pct(a.withHome)}`} />
+      <${Tile} n=${fmt(a.anonymous)} k=${`without an email${pct(a.anonymous)}`} />
+    </section>
+    <section class="tiles">
+      <${Tile} n=${fmt(ap.installs30d)} k="app installs this month" />
+      <${Tile} n=${fmt(ap.onboarded30d)} k=${`finished setup${of(ap.onboarded30d, ap.installs30d)}`} />
+      <${Tile} n=${fmt(ap.addedEmail30d)} k=${`added an email this month · ${fmt(ap.addedEmail)} ever`} />
+    </section>
+    <div class="grid">
+      <section class="card">
+        <h2>Sign-ups, last 30 days</h2>
+        <${Bars} rows=${lastDays(30).map((d) => ({ label: d.slice(5), n: byDay.get(d) ?? 0 }))} />
+      </section>
+      <section class="card">
+        <h2>Devices</h2>
+        <table>
+          <thead><tr><th>App</th><th>Paired</th><th>Used this week</th></tr></thead>
+          <tbody>
+            ${s.devices?.length
+              ? s.devices.map((d) => html`<tr><td>${names[d.platform] ?? d.platform}</td><td>${fmt(d.total)}</td><td>${fmt(d.active7)}</td></tr>`)
+              : html`<tr><td colspan="3" class="hint">No paired devices yet.</td></tr>`}
+          </tbody>
+        </table>
+        <p class="hint">${s.apiKeys ? `API keys: ${fmt(s.apiKeys.total)}, ${fmt(s.apiKeys.used7d)} used this week. Web sessions this week: ${fmt(a.webSessions7d)}.` : ''}</p>
+        <h2>App versions this week</h2>
+        <ul class="list">
+          ${s.clients?.length ? s.clients.map((c) => html`<li><code>${c.client}</code>${` · ${fmt(c.n)}`}</li>`) : html`<li class="hint">No app has sent its version yet.</li>`}
+        </ul>
+      </section>
+    </div>
+    <div class="grid">
+      <section class="card">
+        <h2>Answers, last 14 days</h2>
+        <${Analytics} an=${s.analytics} />
+      </section>
+      <section class="card">
+        <h2>NUS feed</h2>
+        <p>
+          ${s.feed
+            ? html`<strong class=${s.feed.up ? 'good' : 'bad'}>${s.feed.up ? 'Up' : 'Down'}</strong>${` since ${when(s.feed.since)}; last checked ${when(s.feed.checkedAt)}.`}`
+            : 'No checks recorded yet.'}
+        </p>
+        <ul class="list">
+          ${(s.incidents ?? []).map((i) => html`<li>${`${when(i.start)} → ${i.end ? when(i.end) : 'ongoing'} · ${i.cause === 'version' ? 'new uNivUS version' : 'feed failed'}`}</li>`)}
+        </ul>
+        <p class="hint"><a href="/status">Public status page</a></p>
+      </section>
+    </div>
+    <section class="card">
+      <h2>Reports <span class="hint">${`· ${fmt(fb.last7d)} this week`}</span></h2>
+      <ul class="list reports">
+        ${fb.latest.length
+          ? fb.latest.map(
+              (f) => html`
+                <li>
+                  <div class="meta">${`${when(f.created)} · ${f.email ?? 'no email'} · ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}`}</div>
+                  <div class="note">${f.note || '(no note)'}</div>
+                  <div class="meta">${`Answer: ${f.answer}`}</div>
+                  ${f.context && html`<details><summary>The answer they saw</summary><pre>${JSON.stringify(f.context, null, 2)}</pre></details>`}
+                </li>
+              `,
+            )
+          : html`<li class="hint">No reports yet.</li>`}
+      </ul>
+    </section>
+  `;
+}
 
+function Unlock({ msg }) {
+  const box = useRef(null);
+  useEffect(() => box.current?.focus(), []);
+  return html`
+    <form
+      class="card unlock"
+      onSubmit=${(e) => {
+        e.preventDefault();
+        memory = box.current.value.trim();
+        remember(memory);
+        box.current.value = '';
+        load();
+      }}
+    >
+      <label for="token">Operator token</label>
+      <p class="hint">The <code>HEALTH_TOKEN</code> secret. Kept in this tab only, until you close it.</p>
+      <div class="row">
+        <input id="token" ref=${box} type="password" autocomplete="off" required />
+        <button type="submit" class="btn accent">Open</button>
+      </div>
+      <p class="hint" role="status">${msg}</p>
+    </form>
+  `;
+}
+
+function Admin() {
+  const v = useStore(view);
+  if (v.locked) return html`<${Unlock} msg=${v.msg} />`;
+  if (!v.stats) return html`<p class="hint">${v.note}</p>`;
+  return html`<${Dashboard} s=${v.stats} note=${v.note} />`;
+}
+
+function Nav() {
+  const v = useStore(view);
+  if (!v.stats) return null;
+  return html`
+    <button type="button" class="btn small ghost" onClick=${load}>Refresh</button>
+    <button type="button" class="btn small ghost" onClick=${lock}>Lock</button>
+  `;
+}
+
+render(html`<${Admin} />`, document.getElementById('admin'));
+render(html`<${Nav} />`, document.getElementById('admin-nav'));
 load();
