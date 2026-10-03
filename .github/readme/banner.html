@@ -6,11 +6,17 @@
 -->
 <html lang="en">
 <head>
+<script>if (location.hash === '#og') document.documentElement.classList.add('og');</script>
 <meta charset="utf-8">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="../../apps/web/public/assets/site.css">
 <style>
   html, body { margin: 0; width: 1280px; height: 580px; overflow: hidden; background: var(--bg); }
+  /* banner.html#og: the same banner as the site's link preview image
+     (apps/web/public/assets/og.png), 1280x672 for the 1.91:1 previews use,
+     with the banner at the bottom so the phone still runs off the edge. */
+  html.og, html.og body { height: 672px; }
+  html.og .banner { margin-top: 92px; }
   .banner {
     position: relative; width: 1280px; height: 580px; box-sizing: border-box; padding: 0 88px;
     display: grid; grid-template-columns: 1fr 340px; gap: 56px; align-items: center; overflow: hidden;

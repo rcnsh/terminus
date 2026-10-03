@@ -970,3 +970,32 @@ test('files served without the Worker get the same headers from _headers', async
     assert.equal(files.filter((f) => f.endsWith('.html')).length, 0, `no pages in ${dir}/`);
   }
 });
+
+test('search engines get robots.txt and a sitemap of real pages; the beta asks not to be crawled', async () => {
+  const { readFileSync, existsSync } = await import('node:fs');
+  const robots = await (await call('/robots.txt')).res.text();
+  assert.match(robots, /^User-agent: \*$/m);
+  assert.match(robots, /^Sitemap: https:\/\/terminus\.rcn\.sh\/sitemap\.xml$/m);
+  assert.doesNotMatch(robots, /^Disallow: \/$/m, 'the stable site is open to search');
+  const { res } = await call('/sitemap.xml');
+  assert.equal(res.status, 200);
+  const locs = [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);
+  assert.ok(locs.includes('/'));
+  for (const path of locs) {
+    if (path === '/docs') continue;
+    // Each page is a file the site serves, and one that wants to be indexed.
+    const file = new URL(`../../web/public${path}index.html`, import.meta.url);
+    assert.ok(existsSync(file), `${path} is a page`);
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /name="robots" content="noindex/, `${path} doesn't say noindex`);
+  }
+  // The link preview image the landing page names is there.
+  const landing = readFileSync(new URL('../../web/public/index.html', import.meta.url), 'utf8');
+  const og = landing.match(/property="og:image" content="https:\/\/terminus\.rcn\.sh(\/[^"]+)"/)?.[1];
+  assert.ok(og && existsSync(new URL(`../../web/public${og}`, import.meta.url)), `og:image ${og} exists`);
+
+  const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' };
+  assert.match(await (await call('/robots.txt', { env: beta })).res.text(), /^Disallow: \/$/m);
+  assert.equal((await call('/sitemap.xml', { env: beta })).res.status, 404);
+  assert.equal((await call('/docs', { env: beta })).res.headers.get('x-robots-tag'), 'noindex');
+  assert.equal((await call('/docs')).res.headers.get('x-robots-tag'), null);
+});

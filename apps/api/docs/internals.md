@@ -856,6 +856,7 @@ src/pairs.ts      /stops/pairs
 src/analytics.ts  Analytics Engine decision + arrival logging
 src/openapi.ts    OpenAPI 3.1 spec and the Elements docs page
 src/http.ts       JSON responses, query parsing
+src/seo.ts        robots.txt and the sitemap; the beta asks not to be crawled
 src/accounts.ts   Sign-in codes and links, sessions, anonymous accounts, pairing codes (D1)
 src/applogin.ts   App sign-in approved from the email
 src/access.ts     API keys, and who may call the keyed routes
