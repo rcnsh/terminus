@@ -201,15 +201,17 @@ internal fun ClassPlan(answer: NextAnswer) {
     }
     // The bus to catch, and underneath when it gets you there. The stop is
     // named here, so no separate "board at" or general detail line below.
-    val tone = if (late) MaterialTheme.colorScheme.error else goodColor()
-    answer.catchHow?.let { Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = tone) }
-    answer.catchArrive?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = tone) }
-    answer.leaveNote?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary) }
-    answer.card?.estimate?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+    // One colour for "go" (the countdown above); red only when it's late.
+    val error = MaterialTheme.colorScheme.error
+    answer.catchHow?.let { Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = if (late) error else MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp)) }
+    answer.catchArrive?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = if (late) error else muted) }
+    // A packed bus and an estimate are small print, not more headlines.
+    listOfNotNull(answer.leaveNote, answer.card?.estimate).takeIf { it.isNotEmpty() }?.let {
+        Text(it.joinToString(" "), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp))
+    }
     answer.goNowLine?.let {
         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-        Text(it, style = MaterialTheme.typography.bodyMedium)
-        Countdown(answer)
+        Text(it, style = MaterialTheme.typography.bodyMedium, color = muted)
     }
     answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 6.dp)) }
 }

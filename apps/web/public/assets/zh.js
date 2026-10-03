@@ -437,5 +437,7 @@ window.TERMINUS_ZH = {
  "Couldn't update. Trying again soon.": "无法更新，稍后会再试。",
  "Leaves in {0} min {1} s": "{0} 分 {1} 秒后开",
  "Leaves in {0} s": "{0} 秒后开",
- "Left {0} min ago · updating": "{0} 分钟前已开走 · 正在更新"
+ "Left {0} min ago · updating": "{0} 分钟前已开走 · 正在更新",
+ "in {0} min": "{0} 分钟后",
+ "in {0} min {1} s": "{0} 分 {1} 秒后"
 };

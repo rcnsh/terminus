@@ -43,21 +43,39 @@ function Countdown({ at }) {
 export const signal = (body) => api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body });
 
 /**
- * A class: when to leave is the headline, the bus that goes with it and when
- * it gets you there underneath, and the next bus as "or go now". Same lines
- * as the apps, because they all come from the server's card.
+ * "Leave by 6:36" and, under it, the one countdown on the card ("in 8 min"),
+ * ticking every second so the headline turns into "Leave now" on time.
+ */
+function LeaveBy({ a, late }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [a.leave.at]);
+  // At the stop the headline is the bus and its time: nothing to count down to.
+  const left = a.card.phase === 'waiting' ? 0 : Math.floor((Date.parse(a.leave.at) - now) / 1000);
+  return html`
+    <div class=${`big${late}`}>${leaveHead(a)}</div>
+    ${left > 0 && html`<div class="countdown">${left >= 120 ? t('in {0} min', Math.round(left / 60)) : t('in {0} min {1} s', Math.floor(left / 60), left % 60)}</div>`}
+  `;
+}
+
+/**
+ * A class: when to leave is the headline with one countdown under it, then
+ * the bus that goes with it and when it gets you there, and everything else
+ * (a packed bus, an estimate, "or go now") quietly underneath. Same lines as
+ * the apps, because they all come from the server's card.
  */
 function ClassPlan({ a }) {
   const c = a.card;
   const late = c.late ? ' late' : '';
   return html`
     <div class="where">${`${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}`}</div>
-    <div class=${`big${late}`}>${leaveHead(a)}</div>
+    <${LeaveBy} a=${a} late=${late} />
     <div class=${`catch${late}`}>${c.catch}</div>
     ${c.arrive && html`<div class=${`arrive${late}`}>${c.arrive}</div>`}
-    ${c.note && html`<div class="crowd-note">${c.note}</div>`}
-    ${c.estimate && html`<div class="note">${c.estimate}</div>`}
-    ${c.goNow && html`<div class="go-now">${c.goNow}${a.departsAt && a.quality !== 'unknown' && html`<${Countdown} at=${a.departsAt} />`}</div>`}
+    ${(c.note || c.estimate) && html`<div class="small-print">${[c.note, c.estimate].filter(Boolean).join(' ')}</div>`}
+    ${c.goNow && html`<div class="go-now">${c.goNow}</div>`}
   `;
 }
 

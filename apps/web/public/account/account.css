@@ -78,11 +78,13 @@
 label[for="home-walk"] { margin-top: 14px; }
 
 /* Preview: when to set off. A class leads with it; the next bus sits below a rule. */
-.widget .catch { margin-top: 6px; font-weight: 600; color: var(--good-ink); }
-.widget .arrive { color: var(--good-ink); font-size: 0.9rem; }
+/* A class: one colour for "go" (the countdown), ink for the bus, grey for the
+   rest. Red only when the plan arrives late. */
+.widget .catch { margin-top: 8px; font-weight: 600; color: var(--ink); }
+.widget .arrive { color: var(--muted); font-size: 0.9rem; }
 .widget .catch.late, .widget .arrive.late, .widget .big.late { color: var(--bad-ink); }
-.widget .crowd-note { margin-top: 6px; font-size: 0.85rem; color: var(--warn-ink); }
-.widget .go-now { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.widget .small-print { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
+.widget .go-now { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 0.9rem; color: var(--muted); }
 .widget .countdown { margin-top: 2px; font-weight: 600; font-size: 0.9rem; font-variant-numeric: tabular-nums; color: var(--accent); }
 .widget .countdown.gone { color: var(--muted); }
 .widget .leave { margin-top: 8px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }

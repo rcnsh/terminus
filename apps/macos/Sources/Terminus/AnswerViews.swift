@@ -21,12 +21,12 @@ struct AnswerDetail: View {
                 } else if a.isClassPlan {
                     // Each arrival next to the bus it belongs to.
                     // The bus to catch (it names the stop), then when it gets you there.
-                    let tone = a.leaveLate ? Color.red : Color.good
-                    if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(tone) }
-                    if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(tone) }
-                    if let note = a.card?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(Color.warn) }
+                    // One colour for "go" (the countdown in the header); red only when it's late.
+                    if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.red : Color.primary) }
+                    if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(a.leaveLate ? Color.red : Color.secondary) }
+                    if let note = a.card?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(.secondary) }
                     if let e = a.card?.estimate { Row(icon: "info.circle", text: e).foregroundStyle(.secondary) }
-                    if let g = a.goNowLine { Row(icon: "bus", text: g) }
+                    if let g = a.goNowLine { Row(icon: "bus", text: g).foregroundStyle(.secondary) }
                 } else {
                 Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                 if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
