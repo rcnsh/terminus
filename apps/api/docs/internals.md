@@ -16,8 +16,8 @@ GET /next  ->  { "label": "D2 · 4 min",
 ```
 
 The server returns a pre-rendered string; clients render it without computing
-anything. A Quick Settings tile, a web page, a notification and (later) an MCP
-tool would all consume the same `label` and `detail`. The moment a client starts
+anything. The widget, the menu bar, a web page and a notification all show the same
+`label` and `detail`. The moment a client starts
 formatting for itself, four interfaces begin to drift apart and there are four
 places to fix every bug.
 
@@ -28,12 +28,6 @@ in [src/openapi.ts](../src/openapi.ts) and a test fails if a route and the spec
 drift apart.
 
 ---
-
-## Reachability
-
-Resolved. The token host and the bus proxy both answer from Cloudflare's edge and
-from mobile data off campus, so no on-campus box is needed. `GET /health?probe=1`
-reports live auth state from wherever the Worker is running.
 
 ## Quick start
 
@@ -232,7 +226,7 @@ an alarm deletes everything at the next Singapore midnight. Deleting an
 account empties it at once (`clearTrip`), and so does signing an anonymous
 account into another one.
 
-### Tap to confirm, and push (phase 3)
+### One plan, and push
 
 - **One plan, everywhere** ([src/plan.ts](../src/plan.ts)). The Worker saves the bus a trip is for in the
   day's record (`DayRecord.plans`): from the moment the trip is due, or
@@ -256,22 +250,19 @@ account into another one.
 - **A missed class is not where you are.** One whose last record is `missed`
   isn't where the next trip is planned from (`DayState.missed`), on the card
   or in Today: without a location, from the class before or from home.
-- **Nothing is asked.** terminus used to ask "On the 9:41 D2?" at the
-  departure and offer On the D2 · Missed it · I'm there; it doesn't any more,
-  and the card has no question in it (the apps can still send those signals).
-  The app should be invisible: three minutes
+- **Nothing is asked.** The card has no question in it (the apps can still
+  send `boarded`, `missed` and `arrived` signals). Three minutes
   after the departure the phase is taken as `riding` (`TripView.assumed`),
   and the phone's location corrects it: at the boarding stop, or standing
   still off the bus's road, makes it `missed` (detect.ts); in your residence
   ends a trip home, and at the destination ends the trip (`reached`, recorded
   as `arrived` for every device). Nothing is recorded for an assumption.
-- **The ride from the feed.** "On it" records the plate of the bus due at the
-  boarding stop within five minutes; while riding, the same plate in the
+- **The ride from the feed.** Boarding records the plate of the bus due at
+  the boarding stop within five minutes; while riding, the same plate in the
   alighting stop's arrivals gives the arrival (quality `live`). Without a
-  plate, the estimate from the tap, marked `~`.
+  plate, the arrival is an estimate, marked `~`.
 - **Outcomes** ([src/outcomes.ts](../src/outcomes.ts), `trip_outcomes`, 35
-  days): what detection saw (boarded, missed, arrived) and "Not going". Older
-  `none` rows (a question nobody answered) are ignored;
+  days): what detection saw (boarded, missed, arrived) and "Not going";
   three misses of one class in 30 days suggest a bus earlier (`ArriveBy.oneEarlier`);
   three skips in a row offer to stop reminders (`card.remind: false`). Choices
   are `trip_prefs`; a turned-down suggestion waits 30 days.
@@ -309,7 +300,7 @@ Card v2 adds `phase`, `phaseText`, `glance` (12 characters, for a menu bar
 or a tile), `line` (one line, for a notification), `actions`, `warning` and
 `nextChangeAt` (when the card changes by itself). While riding, `ride` lists
 the stops from boarding to getting off, with the board and arrival times (the
-arrival live when the bus's plate is known), for a progress bar (phase 6). v1
+arrival live when the bus's plate is known), for a progress bar. v1
 fields are unchanged. `notice` is a line above the answer while the monitor
 has NUS's feed down ("NUS's live bus times have been down since 9:14 AM"),
 on an answer that is an estimate or has no time (the feed may be back
@@ -341,7 +332,7 @@ Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and terminus.rcn.sh onboarded under Email Service >
 Email Sending in the dashboard.
 
-### The web app (phase 5)
+### The web app
 
 `/app/` is terminus as an installable web app, meant for iPhones: the answer
 card, chips for saved places and Nearby, and Today; the campus map; and
@@ -464,9 +455,9 @@ Settings. It uses the same routes as the account page, with the session cookie.
   `trips:armed` does. A tap opens the timetable settings on the web, and the
   app on Android. The Mac app has no push, so it isn't told.
 
-### Every trip, detected (phase 8)
+### Every trip, detected
 
-**Detection (8.1, `detect.ts`).** During a trip the Android app sends
+**Detection (`detect.ts`).** During a trip the Android app sends
 `POST /me/signal` `{kind: 'location', lat, lon, speed, acc}` about every
 20 seconds, from the live notification's foreground service. Each fix is
 judged and dropped; only what it means is kept on the trip record, marked
@@ -500,7 +491,7 @@ cards offer only plans ("Not going", "Not on campus today"). A `waiting` record 
 departure only a location at the stop now counts as missed. Analytics counts
 `detected:<kind>` signals separately from taps.
 
-**Measured ride times (8.2, `ridetimes.ts`).** A ride detection saw start and
+**Measured ride times (`ridetimes.ts`).** A ride detection saw start and
 end is one row in `ride_times` (migration 0008): service, stops, hops,
 seconds, hour and kind of day, plate. No user, device or location. Rides
 under 30 s or over 300 s a stop are dropped as mistakes, and so are rides
@@ -532,7 +523,7 @@ one entered by hand, a usual time or a one-off trip is skipped for today only
 next class from where you are. Skipped entries aren't listed; a skipped trip
 home isn't an outcome.
 
-**More than class trips (8.3).** Today's trips are `classesOn(profile)`:
+**More than class trips.** Today's trips are `classesOn(profile)`:
 the imported and hand-entered classes, plus two kinds that are planned the
 same way (leave-by, push, detection, "Not going"):
 
@@ -746,7 +737,7 @@ Every answer writes one decision row, plus one row per timed arrival, to a
 Workers Analytics Engine dataset. Two purposes: checking whether the direction
 algorithm is actually right, which nothing else measures, and inter-stop
 travel times from the feed's own predictions (`plate` is the join key), a
-cross-check on the ride times detection measures (8.2). Queries and
+cross-check on the ride times detection measures. Queries and
 the schema contract are in [docs/analytics.md](analytics.md).
 
 Logging is a no-op without the binding and swallows its own errors. An answer
@@ -758,7 +749,7 @@ that failed because logging failed would be an absurd way to miss a bus.
   error. It separates a 2-hop ride from a 14-hop ride, which is the case that
   matters; it does not reliably separate 4 hops from 5. `stop.confidence`
   reports which situation you are in — below ~0.6, the answer is a coin flip
-  dressed up as a number. Measured ride times (phase 8.2) replace it per
+  dressed up as a number. Measured ride times replace it per
   service and hour once enough rides have been detected; until then, and for
   services nobody rides with detection on, it is still the guess.
 - `quality: 'scheduled'` has no timetable behind it. It means "inside operating
@@ -816,10 +807,8 @@ where the feed puts it, with no `along` and no next stop.
 The tracks live in the edge cache with the placed answer, keyed by service
 (`trackedBuses`). Each feed update is placed once per data centre, and every
 Worker instance there returns that answer and places the next update from
-those tracks. Before this they were kept in each instance's memory, and a
-request landing on another instance placed a standing bus afresh: a 12-minute
-recording showed about 14 side switches on D1, D2 and A2, nearly all as a
-bus stopped.
+those tracks. Kept in each instance's memory instead, a request landing on
+another instance would place a standing bus afresh, often on the wrong side.
 
 The feed gives a new position for a bus every 15-20 s (the reply's own
 time stamp changes that often, for every bus at once, however often it's
@@ -832,9 +821,8 @@ carries `speed` and `until`, so a map keeps it moving between answers
 (`along + speed × seconds`, up to `until`), and each answer moves the
 cached placement on to the time it's asked (`trackedBuses`). Replaying
 `test/fixtures/bus-trace.jsonl`, the map is 28 m from the bus on average,
-against 38 m showing each reading as it comes and about 97 m gliding 15 s
-to each reading, as the apps did before. The next stop stays the one after
-the reading. The older NextBus API (`nnextbus.nus.edu.sg`) still answers,
+against 38 m showing each reading as it comes. The next stop stays the one
+after the reading. The older NextBus API (`nnextbus.nus.edu.sg`) still answers,
 behind a password NUS hasn't given us, and almost certainly reads the
 same 20-second positions.
 
@@ -881,9 +869,9 @@ src/answer.ts     The answer engine: stops near you, their arrivals, the best bu
 src/card.ts       The card every client shows, worded once
 src/leave.ts      When to set off; src/clock.ts clock times and lateness
 src/plan.ts       Which bus a trip is about: one plan for every device
-src/detect.ts     What a location says about the trip (phase 8.1)
+src/detect.ts     What a location says about the trip
 src/outcomes.ts   What happened to each planned trip, and what it suggests
-src/ridetimes.ts  Measured ride times (phase 8.2)
+src/ridetimes.ts  Measured ride times
 src/crowd.ts      Full buses: a packed bus can pass a stop
 src/walk.ts       Walking along campus paths (data/walks.json)
 src/graph.ts      The stop graph, with hand-kept fixes

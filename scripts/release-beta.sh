@@ -35,7 +35,7 @@ BETA_D1=$(sed -n '/^const BETA = {/,/^};/s/.*d1: "\(.*\)".*/\1/p' apps/api/cloud
 grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || { echo "Android release key not configured (TERMINUS_KEYSTORE)"; exit 1; }
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || { echo "no Sparkle key at $SPARKLE_KEY"; exit 1; }
-# What's released must be what's committed (untracked files, like PLAN.md, don't count).
+# What's released must be what's committed (untracked files don't count).
 if [ $DRY -eq 0 ] && [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "uncommitted changes; commit them before releasing"; exit 1
 fi
