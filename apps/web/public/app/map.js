@@ -361,7 +361,7 @@ document.addEventListener('visibilitychange', () => {
 /**
  * Starts a glide for each bus whose position changed, from where it's drawn
  * to where it is: along its route line when both ends are on it, so it
- * follows the road round corners; straight across a short way otherwise. A
+ * follows the road round corners; straight only onto or off its line. A
  * bus whose position hasn't changed keeps gliding: the API answers every
  * few seconds, the feed moves a bus every 15–20.
  */
@@ -389,13 +389,19 @@ function frameAt(now) {
   return [...glides.values()].map((g) => positionAt(g, now));
 }
 
-/** A glide for bus [b] from [from] (where it's drawn), or none: it jumps. */
+/**
+ * A glide for bus [b] from [from] (where it's drawn), or none: it jumps. On
+ * its line at both ends, it only ever moves along the line: a bus that
+ * can't glide along it (the other side of the road, a long way) jumps
+ * rather than cut across. Straight only onto or off its line, a short way.
+ */
 function glideFrom(from, b, path, now) {
   const d = path && alongBy(path, from, b);
   if (d != null) {
     if (d < -HOLD_BACK_M) return { from: null, to: b };
     return { from, to: b, start: now, path, d: Math.max(0, d) };
   }
+  if (from.along != null && b.along != null) return { from: null, to: b };
   if (haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return { from: null, to: b };
   return { from, to: b, start: now, path: null, d: null };
 }

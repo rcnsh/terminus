@@ -211,15 +211,25 @@ docs/map-plan.md      How the campus map was planned and built
   cron deletes anonymous accounts unused for 60 days.
 - **Live buses (`/buses`, `src/buses.ts`).** NUS's feed moves a bus about
   every 15–20 s (measured with the `probe live-bus feed` workflow).
-  - Each bus is matched to the nearest stretch of its route line that runs
-    the way it's heading.
   - Many routes use the same road both ways, so the two directions of the
-    line are metres apart. Each bus's last place is kept per isolate
-    (`lastPlace`, 120 s), so a standing bus keeps its own side.
+    line are metres apart (often on the same points) and GPS can't choose.
+    Each bus has a **track**, its last place along the line. A new position
+    counts only where the bus could have driven to since, so its next stop
+    only moves forward and it keeps its side (`follow`). With no track, its
+    heading, then the stop it's standing at, then distance decide. The track
+    gives way after two moving fixes heading the other way.
+  - Tracks are kept in the edge cache with the placed buses
+    (`trackedBuses`), so every instance answers the same. Placing is a pure
+    function of the update, its time and the tracks.
   - Within 50 m of its line, a bus is drawn **on** the line, with
-    `along` = metres along it.
+    `along` = metres along it, never moving back. A short jump off the line
+    (under 30 s) holds it at its last place.
   - Clients poll every 5 s and glide each bus along its line for 15 s, only
     when its position changes (web `map.js` `moveTo`; Android `Glides`).
+    Between two places on the line they glide along it or jump, never
+    straight across.
+  - `test/fixtures/bus-trace.jsonl` is a real feed trace (the probe
+    workflow with `trace`); `buses.test.js` replays it.
   - Plates are never sent; `id` is a hash.
 - **Map.** `/campus` returns stops and route lines. The street map is a
   PMTiles extract on R2, in each site's own downloads bucket

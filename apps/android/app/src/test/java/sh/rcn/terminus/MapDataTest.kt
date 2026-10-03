@@ -128,6 +128,22 @@ class MapDataTest {
         assertNull(path.alongBy(at(0.0).copy(along = null), at(50.0)))
     }
 
+    @Test fun busesNeverCutAcrossTheRoadBetweenTheTwoSidesOfTheirLine() {
+        // Out east about 2.2 km, then back west 8 m north: one road, both ways.
+        val east = 0.02
+        val north = 8 / 110_574.0
+        val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.0 + east, 1.0), doubleArrayOf(103.0 + east, 1.0 + north), doubleArrayOf(103.0, 1.0 + north)))
+        val out = RoutePath.haversine(1.0, 103.0, 1.0, 103.0 + east)
+        fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 0.0, true, null, null, along = m) }
+        val g = Glides(ms = 1_000)
+        g.update(listOf(at(280.0)), path, 0)
+        // The other side, 8 m away but kilometres along the route: it jumps there.
+        val across = at(out + 8 + (out - 280.0))
+        g.update(listOf(across), path, 0)
+        assertEquals(across.lat, g.at(500)[0].lat, 1e-12)
+        assertFalse(g.moving(500))
+    }
+
     @Test fun busesSayHowFarAlongTheirLineTheyAre() {
         val list = BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": [
             {"id": "a", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "nextStop": null},

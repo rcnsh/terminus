@@ -707,6 +707,50 @@ The Android app and the web app also have the campus map: `/campus`, `/buses`,
 For local work, `node scripts/dev-stub.mjs` runs this Worker with a fake bus
 feed and a seeded test account.
 
+### Live buses on the map
+
+`/buses` places each bus on its route line (`src/buses.ts`). The feed gives
+a position, a speed and a heading, every 15–20 s per bus; the line is the
+route's road shape from `data/shapes.json`, with each stop's distance along
+it.
+
+The hard part is the side of the road. Most of D1, D2 and K, and parts of
+the others, use one road both ways, and the two directions of the line are
+0–12 m apart, often drawn on the very same points. A bus's GPS can't tell
+them apart, and a bus drawn on the wrong side shows the wrong next stop,
+kilometres round the route.
+
+So each bus has a track: where along the line it was last placed, and when.
+A bus drives forward along its route, so a new position counts only where
+the bus could have driven to since (from 50 m back, for GPS error, to
+100 m + 20 m/s ahead), and the other side of the road is never one of
+them. Among those places, a stretch running the way it's heading comes
+first, then the least distance driven. A position a little behind the
+track leaves the bus where it was, so `along` never goes back.
+
+A bus with no track (just appeared, or nobody watched the service for ten
+minutes) is placed by its heading when moving; standing, by the stop it's
+at, if it's clearly nearer one stop than its twin across the road; otherwise
+on the nearer side. A track that started wrong gives way when the bus is
+seen moving the other way twice in a row; one odd heading doesn't move it.
+A tracked bus that strays more than 50 m off its line for under 30 s (a GPS
+jump) stays at its last place; longer (the depot, a detour), it's drawn
+where the feed puts it, with no `along` and no next stop.
+
+The tracks live in the edge cache with the placed answer, keyed by service
+(`trackedBuses`). Each feed update is placed once per data centre, and every
+Worker instance there returns that answer and places the next update from
+those tracks. Before this they were kept in each instance's memory, and a
+request landing on another instance placed a standing bus afresh: a 12-minute
+recording showed about 14 side switches on D1, D2 and A2, nearly all as a
+bus stopped.
+
+Clients glide each bus along the line from where it's drawn to its new
+`along` over 15 s. Between two places on the line they only move along it:
+one that can't be reached along it (over 1.5 km, or behind by more than
+60 m) jumps. A straight glide is only for a bus coming onto or leaving its
+line, a short way.
+
 ## Layout
 
 ```

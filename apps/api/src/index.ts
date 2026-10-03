@@ -17,7 +17,7 @@ import { fmsConfigured, getArrivals, getBuses } from './fms.ts';
 import { shortStop } from './format.ts';
 import { boardAt, indexGraph } from './resolve.ts';
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
-import { placeBuses } from './buses.ts';
+import { trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
 import { adminStats, isOperator } from './admin.ts';
 import { analyticsEnabled, logError } from './analytics.ts';
@@ -177,7 +177,7 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   return json({
     svc,
     color: ROUTE_COLORS[svc] ?? null,
-    buses: live ? await placeBuses(GRAPH, svc, live.buses) : [],
+    buses: live ? await trackedBuses(GRAPH, svc, live, ctx) : [],
     asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
     available: Boolean(live),
     stale: Boolean(live?.stale),

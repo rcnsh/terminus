@@ -244,8 +244,9 @@ object MapGeoJson {
  * bus every 15-20 s, so a glide lasts [ms] at a steady pace and the bus keeps
  * driving instead of jumping and waiting; one whose position hasn't changed
  * since the last update keeps gliding. Along its route line when both ends
- * are on it, so it follows the road round corners; straight across a short
- * way otherwise; a long way off its line, it jumps. Times are any one clock.
+ * are on it, so it follows the road round corners, and never straight
+ * between two places on it; straight only onto or off its line, a short
+ * way. Times are any one clock.
  */
 class Glides(private val ms: Long = GLIDE_MS) {
     private class Glide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double?)
@@ -276,6 +277,8 @@ class Glides(private val ms: Long = GLIDE_MS) {
             // Put back a little (GPS error), it stays where it's drawn; a long way back, it jumps.
             return if (d < -HOLD_BACK_M) Glide(null, b, now, null, null) else Glide(from, b, now, path, max(0.0, d))
         }
+        // On its line at both ends but not along it (the other side of the road, a long way): it jumps, never cuts across.
+        if (from.along != null && b.along != null) return Glide(null, b, now, null, null)
         if (RoutePath.haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return Glide(null, b, now, null, null)
         return Glide(from, b, now, null, null)
     }
