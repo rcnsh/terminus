@@ -1736,7 +1736,12 @@ export const DOCS_PAGE = `<!doctype html>
       html { scroll-padding-top: 108px; }
       body { position: static; display: block; height: auto; padding-top: 48px; }
       .bar { position: fixed; top: 0; left: 0; right: 0; z-index: 21; }
-      elements-api .sl-overflow-y-auto.sl-flex-1 { overflow: visible; padding-top: 6px; padding-bottom: 16px; }
+      elements-api .sl-overflow-y-auto.sl-flex-1 { overflow: visible; padding-top: 6px; padding-bottom: 0; }
+      /* Elements leaves 64 px under the docs, and 40 more under the
+         overview, for a box that scrolls inside a tall screen. Here the
+         page ends under the reader's thumb: a short gap is enough. */
+      elements-api .sl-overflow-y-auto.sl-flex-1 > .sl-py-16 { padding-bottom: 16px; }
+      elements-api .sl-overflow-y-auto.sl-flex-1 > .sl-py-16 > .HttpService { margin-bottom: 0; }
       /* Inputs under 16px make iOS Safari zoom in on focus and stay zoomed. */
       elements-api input, elements-api select, elements-api textarea { font-size: 16px !important; }
       /* Elements' fixed mobile bar has no z-index, so sticky schema headings
