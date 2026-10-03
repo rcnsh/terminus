@@ -323,7 +323,7 @@ async function plateOnBoard(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Bo
 }
 
 /** Everything that needs a session, by method and path. */
-const ME_ROUTES: MeRoute[] = [
+export const ME_ROUTES: MeRoute[] = [
   {
     method: 'DELETE',
     path: '/me',

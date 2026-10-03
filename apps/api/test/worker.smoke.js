@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
+import { ME_ROUTES } from '../src/me.ts';
 
 const BASE = 'https://bus.example.test';
 const ARRIVALS_KEY = (code) => `https://terminus.internal/arrivals/${code}`;
@@ -216,18 +217,29 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   assert.equal(spec.openapi, '3.1.0');
   assert.equal(spec.servers[0].url, BASE, 'try-it requests go to whoever serves the docs');
 
-  const documented = Object.keys(spec.paths).sort();
-  assert.deepEqual(documented, [
-    '/arrivals', '/auth/anon', '/auth/anon/web', '/auth/app/code', '/auth/app/merge', '/auth/app/poll', '/auth/app/start', '/auth/code', '/auth/login', '/buses', '/campus', '/health',
-    '/me/choice', '/me/choices', '/me/day', '/me/feedback', '/me/history', '/me/import', '/me/keys', '/me/nearby', '/me/next', '/me/once', '/me/profile', '/me/push', '/me/push/key', '/me/signal', '/next', '/pair', '/pair/check', '/status.json', '/stops/pairs', '/trip',
-  ]);
+  // Every method on every path, with path parameters as `*`: the account
+  // routes from their own table, the rest by hand.
+  const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+  const documented = Object.entries(spec.paths)
+    .flatMap(([path, item]) => METHODS.filter((m) => item[m]).map((m) => `${m.toUpperCase()} ${path.replace(/\{\w+\}/g, '*')}`))
+    .sort();
+  const routed = [
+    ...ME_ROUTES.map((r) => `${r.method} ${r.path.endsWith('/') ? r.path + '*' : r.path}`),
+    ...['/next', '/trip', '/arrivals', '/buses', '/campus', '/stops/pairs', '/health', '/status.json', '/admin/stats', '/docs', '/openapi.json'].map((p) => `GET ${p}`),
+    ...['/auth/config', '/auth/verify', '/auth/approve'].map((p) => `GET ${p}`),
+    ...['/auth/login', '/auth/code', '/auth/verify', '/auth/anon', '/auth/anon/web', '/auth/app/start', '/auth/app/poll', '/auth/app/code', '/auth/app/merge', '/auth/approve', '/auth/logout', '/pair', '/pair/check'].map((p) => `POST ${p}`),
+    ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),
+    ...['/download/latest.json', '/download/android', '/download/mac', '/download/appcast.xml', '/download/releases/*/*'].map((p) => `GET ${p}`),
+  ].sort();
+  assert.deepEqual(documented, routed);
 
   // Every documented public GET answers with its required params filled from
   // the spec's own examples -- a renamed route or param shows up here, not in
   // prod. Account routes are exercised in accounts.test.js.
   for (const [path, item] of Object.entries(spec.paths)) {
     // Account routes have their own security; `security: []` means open (health).
-    if (!item.get || item.get.security?.length) continue;
+    // The map and downloads need R2, and are tested on their own.
+    if (!item.get || item.get.security?.length || path.includes('{') || !['Answers', 'Stops', 'Service'].includes(item.get.tags[0])) continue;
     const q = new URLSearchParams();
     // `from` is only conditionally required (no location), so fill it too.
     for (const p of item.get.parameters ?? []) if (p.required || p.name === 'from') q.set(p.name, String(p.example));

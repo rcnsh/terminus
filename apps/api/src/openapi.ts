@@ -1,6 +1,6 @@
 /**
  * OpenAPI 3.1 description of this API. Served at /openapi.json and rendered
- * at / by Stoplight Elements.
+ * at /docs by Stoplight Elements.
  *
  * Kept by hand, next to the code it describes. test/worker.smoke.js asserts
  * every documented path answers (no 404s) and every route is documented, so
@@ -98,6 +98,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
       { name: 'Stops', description: 'Per-stop arrivals and static campus data.' },
       { name: 'Service', description: 'Health and configuration.' },
       { name: 'Account', description: 'Sign in on the account page, or pair a device with a code from it.' },
+      { name: 'Map', description: 'The campus street map, for MapLibre. Open, like the website.' },
+      { name: 'Downloads', description: 'The apps, and what their update checks read.' },
     ],
     paths: {
       '/next': {
@@ -923,12 +925,358 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           },
         },
       },
+      '/me': {
+        get: {
+          tags: ['Account'],
+          summary: 'Who you are signed in as',
+          description:
+            'The first thing every page and app asks. `kind` is how this request signed in: a browser (`web`) or an app (`device`). `needsReimport` (with `reimportReason`) says the timetable is from an old term or semester. ' +
+            '`onboarding` is the first-time setup step to show, or null. In a browser it also keeps the session going.',
+          operationId: 'me',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: {
+            '200': ok({
+              type: 'object',
+              properties: {
+                email: { type: ['string', 'null'] },
+                anonymous: { type: 'boolean', description: 'No email yet: an app’s first launch, or "Use terminus without an email".' },
+                kind: { type: 'string', enum: ['web', 'device'] },
+                needsReimport: { type: 'boolean' },
+                reimportReason: { type: ['string', 'null'] },
+                term: { type: ['string', 'null'], example: 'Sem 1 2026/27' },
+                onboarding: { type: ['string', 'null'] },
+              },
+            }),
+            '401': errorResponse('No valid session.'),
+          },
+        },
+        delete: {
+          tags: ['Account'],
+          summary: 'Delete the account',
+          description:
+            'Deletes the account and everything kept for it, and signs out every device. From the account page; an account without an email (which has no account page) can delete itself from its app.',
+          operationId: 'deleteMe',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: {
+            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
+            '401': errorResponse('No valid session.'),
+            '403': errorResponse('An account with an email: delete it from the account page.'),
+          },
+        },
+      },
+      '/me/export': {
+        get: {
+          tags: ['Account'],
+          summary: 'Download your data',
+          description: 'Everything kept for the account, as a JSON file: the profile, devices, API keys (names only), feedback and trip outcomes.',
+          operationId: 'meExport',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: { '200': ok({ type: 'object' }), '401': errorResponse('No valid session.') },
+        },
+      },
+      '/me/sessions': {
+        delete: {
+          tags: ['Account'],
+          summary: 'Sign out everywhere',
+          description: 'Ends every browser session and removes every device, this browser included. From the account page only.',
+          operationId: 'endSessions',
+          security: [{ cookie: [] }],
+          responses: {
+            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, ended: { type: 'integer', description: 'How many sessions and devices were signed out.' } } }),
+            '401': errorResponse('No valid session.'),
+            '403': errorResponse('Not from the account page.'),
+          },
+        },
+      },
+      '/me/pair-code': {
+        post: {
+          tags: ['Account'],
+          summary: 'Make a pairing code',
+          description: 'A 6-character code for `/pair`, shown on the account page with its QR code. It works once, for 10 minutes. Needs an account with an email.',
+          operationId: 'pairCode',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: {
+            '200': ok({ type: 'object', properties: { code: { type: 'string', example: 'K7QX4M' }, expires: { type: 'integer', description: 'Epoch milliseconds.' } } }),
+            '401': errorResponse('No valid session.'),
+            '403': errorResponse('The account has no email.'),
+          },
+        },
+      },
+      '/me/keys/{id}': {
+        delete: {
+          tags: ['Account'],
+          summary: 'Revoke an API key',
+          description: 'From the account page only. The key stops working at once.',
+          operationId: 'revokeKey',
+          security: [{ cookie: [] }],
+          parameters: [{ name: 'id', in: 'path', required: true, description: 'The `id` from `GET /me/keys`.', schema: { type: 'string' } }],
+          responses: {
+            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
+            '403': errorResponse('Not from the account page.'),
+            '404': errorResponse('No such key.'),
+          },
+        },
+      },
+      '/me/devices': {
+        get: {
+          tags: ['Account'],
+          summary: 'Your devices',
+          description: 'The apps signed in to the account. `current` is the device asking.',
+          operationId: 'listDevices',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: {
+            '200': ok({
+              type: 'object',
+              properties: {
+                devices: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      name: { type: ['string', 'null'] },
+                      platform: { type: ['string', 'null'], example: 'android' },
+                      created: { type: 'integer' },
+                      lastSeen: { type: 'integer' },
+                      current: { type: 'boolean' },
+                    },
+                  },
+                },
+              },
+            }),
+            '401': errorResponse('No valid session.'),
+          },
+        },
+      },
+      '/me/devices/{id}': {
+        delete: {
+          tags: ['Account'],
+          summary: 'Remove a device',
+          description: 'Signs the device out, and emails the account’s owner to say so. Needs an account with an email.',
+          operationId: 'removeDevice',
+          security: [{ bearer: [] }, { cookie: [] }],
+          parameters: [{ name: 'id', in: 'path', required: true, description: 'The `id` from `GET /me/devices`.', schema: { type: 'string' } }],
+          responses: {
+            '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
+            '403': errorResponse('The account has no email.'),
+            '404': errorResponse('No such device.'),
+          },
+        },
+      },
+      '/auth/config': {
+        get: {
+          tags: ['Account'],
+          summary: 'What the sign-in form needs',
+          description: 'The Turnstile site key when the human check is on, or null.',
+          operationId: 'authConfig',
+          security: [],
+          responses: { '200': ok({ type: 'object', properties: { turnstileSiteKey: { type: ['string', 'null'] } } }) },
+        },
+      },
+      '/auth/verify': {
+        get: {
+          tags: ['Account'],
+          summary: 'The sign-in link',
+          description:
+            'Where the link in the `/auth/login` email goes. An HTML page naming the account, with a button that posts the form below; opening the link spends nothing, because mail scanners open every link.',
+          operationId: 'verifyPage',
+          security: [],
+          parameters: [{ name: 't', in: 'query', required: true, description: 'The token from the email.', schema: { type: 'string' } }],
+          responses: { '200': { description: 'The sign-in page.', content: { 'text/html': {} } }, '400': { description: 'The link has expired or was used.', content: { 'text/html': {} } } },
+        },
+        post: {
+          tags: ['Account'],
+          summary: 'Sign in with the link',
+          description: 'The page’s form. Spends the token, sets the web session cookie and goes to the account page. Only from the site’s own pages.',
+          operationId: 'verify',
+          security: [],
+          requestBody: { required: true, content: { 'application/x-www-form-urlencoded': { schema: { type: 'object', required: ['t'], properties: { t: { type: 'string' }, next: { type: 'string', enum: ['app'] } } } } } },
+          responses: {
+            '303': { description: 'Signed in: on to the account page.' },
+            '400': { description: 'The link has expired or was used.', content: { 'text/html': {} } },
+            '403': errorResponse('The form was posted from another site.'),
+          },
+        },
+      },
+      '/auth/approve': {
+        get: {
+          tags: ['Account'],
+          summary: 'Approve an app’s sign-in',
+          description: 'Where the link in the `/auth/app/start` email goes. An HTML page asking for the number the app shows, and a "This wasn’t me" button.',
+          operationId: 'approvePage',
+          security: [],
+          parameters: [{ name: 'r', in: 'query', required: true, description: 'The request from the email.', schema: { type: 'string' } }],
+          responses: { '200': { description: 'The approval page.', content: { 'text/html': {} } }, '400': { description: 'The request has expired.', content: { 'text/html': {} } } },
+        },
+        post: {
+          tags: ['Account'],
+          summary: 'Pick the number',
+          description: 'The page’s form: the right number approves the app’s sign-in (its next `/auth/app/poll` gets the token); a wrong one, or `none`, cancels it. Only from the site’s own pages.',
+          operationId: 'approve',
+          security: [],
+          requestBody: { required: true, content: { 'application/x-www-form-urlencoded': { schema: { type: 'object', required: ['r', 'n'], properties: { r: { type: 'string' }, n: { type: 'string', description: 'The number picked, or `none`.' } } } } } },
+          responses: {
+            '200': { description: 'Approved, or cancelled with `none`.', content: { 'text/html': {} } },
+            '400': { description: 'The wrong number (the sign-in is cancelled), or the request has expired.', content: { 'text/html': {} } },
+            '403': errorResponse('The form was posted from another site.'),
+          },
+        },
+      },
+      '/auth/logout': {
+        post: {
+          tags: ['Account'],
+          summary: 'Sign out',
+          description: 'Ends this session (a browser’s, or a device token) and clears the cookie.',
+          operationId: 'logout',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }), '403': errorResponse('The form was posted from another site.') },
+        },
+      },
+      '/docs': {
+        get: {
+          tags: ['Service'],
+          summary: 'This documentation',
+          description: 'The HTML page that renders `/openapi.json`.',
+          operationId: 'docs',
+          security: [],
+          responses: { '200': { description: 'The documentation page.', content: { 'text/html': {} } } },
+        },
+      },
+      '/openapi.json': {
+        get: {
+          tags: ['Service'],
+          summary: 'This description',
+          description: 'The OpenAPI 3.1 description of the API, with `servers` set to the site that served it.',
+          operationId: 'openapi',
+          security: [],
+          responses: { '200': ok({ type: 'object' }) },
+        },
+      },
+      '/admin/stats': {
+        get: {
+          tags: ['Service'],
+          summary: 'The operator dashboard’s data',
+          description: 'Counts of accounts, devices and feedback, the feed’s state and recent incidents, and (when configured) answers and errors per day. Answers 404 without the operator token.',
+          operationId: 'adminStats',
+          security: [{ operator: [] }],
+          responses: { '200': ok({ type: 'object' }), '404': errorResponse('No operator token, or the wrong one.') },
+        },
+      },
+      '/map/style.json': {
+        get: {
+          tags: ['Map'],
+          summary: 'The street map’s style',
+          description: 'A MapLibre style: the Protomaps light or dark map without its points of interest, with every URL on this site. Open, like the website.',
+          operationId: 'mapStyle',
+          security: [],
+          parameters: [
+            { name: 'theme', in: 'query', schema: { type: 'string', enum: ['light', 'dark'], default: 'light' } },
+            { name: 'lang', in: 'query', description: 'Street and place names in English or Chinese.', schema: { type: 'string', enum: ['en', 'zh'], default: 'en' } },
+          ],
+          responses: { '200': ok({ type: 'object' }) },
+        },
+      },
+      '/map/campus.pmtiles': {
+        get: {
+          tags: ['Map'],
+          summary: 'The street map',
+          description: 'A PMTiles extract around NUS. Read in parts with `Range` requests, as the PMTiles library does.',
+          operationId: 'mapTiles',
+          security: [],
+          responses: {
+            '200': { description: 'The whole file.', content: { 'application/vnd.pmtiles': {} } },
+            '206': { description: 'The range asked for.', content: { 'application/vnd.pmtiles': {} } },
+            '404': errorResponse('No street map uploaded yet.'),
+          },
+        },
+      },
+      '/map/fonts/{fontstack}/{range}.pbf': {
+        get: {
+          tags: ['Map'],
+          summary: 'Map fonts',
+          description: 'Glyphs for the map’s labels, as the style’s `glyphs` URL asks for them.',
+          operationId: 'mapFont',
+          security: [],
+          parameters: [
+            { name: 'fontstack', in: 'path', required: true, schema: { type: 'string', enum: ['Noto Sans Regular', 'Noto Sans Medium', 'Noto Sans Italic'] } },
+            { name: 'range', in: 'path', required: true, schema: { type: 'string' }, example: '0-255' },
+          ],
+          responses: { '200': { description: 'The glyphs.', content: { 'application/x-protobuf': {} } }, '404': errorResponse('No such font or range.') },
+        },
+      },
+      '/map/sprites/v4/{sprite}': {
+        get: {
+          tags: ['Map'],
+          summary: 'Map icons',
+          description: 'The style’s sprite sheet and its index.',
+          operationId: 'mapSprite',
+          security: [],
+          parameters: [{ name: 'sprite', in: 'path', required: true, schema: { type: 'string', enum: ['light.json', 'light.png', 'light@2x.json', 'light@2x.png', 'dark.json', 'dark.png', 'dark@2x.json', 'dark@2x.png'] } }],
+          responses: { '200': { description: 'The sheet or its index.', content: { 'image/png': {}, 'application/json': {} } }, '404': errorResponse('Not uploaded.') },
+        },
+      },
+      '/download/latest.json': {
+        get: {
+          tags: ['Downloads'],
+          summary: 'The latest release',
+          description: 'The version, and the file and SHA-256 of each app, as the apps’ update checks read it.',
+          operationId: 'latest',
+          security: [],
+          responses: { '200': ok({ type: 'object' }), '404': errorResponse('No release yet.'), '503': errorResponse('Downloads are not set up.') },
+        },
+      },
+      '/download/android': {
+        get: {
+          tags: ['Downloads'],
+          summary: 'The Android app',
+          description: 'The latest APK. The SHA-256 is in the `x-sha256` header.',
+          operationId: 'downloadAndroid',
+          security: [],
+          parameters: [{ name: 'abi', in: 'query', description: 'A CPU type other than arm64.', schema: { type: 'string', enum: ['armeabi-v7a', 'x86_64'] } }],
+          responses: { '200': { description: 'The APK.', content: { 'application/vnd.android.package-archive': {} } }, '404': errorResponse('No release yet.') },
+        },
+      },
+      '/download/mac': {
+        get: {
+          tags: ['Downloads'],
+          summary: 'The Mac app',
+          description: 'The latest disk image. The SHA-256 is in the `x-sha256` header.',
+          operationId: 'downloadMac',
+          security: [],
+          responses: { '200': { description: 'The disk image.', content: { 'application/x-apple-diskimage': {} } }, '404': errorResponse('No release yet.') },
+        },
+      },
+      '/download/appcast.xml': {
+        get: {
+          tags: ['Downloads'],
+          summary: 'The Mac app’s update feed',
+          description: 'The Sparkle appcast the Mac app checks for updates.',
+          operationId: 'appcast',
+          security: [],
+          responses: { '200': { description: 'The feed.', content: { 'application/xml': {} } }, '404': errorResponse('No release yet.') },
+        },
+      },
+      '/download/releases/{version}/{file}': {
+        get: {
+          tags: ['Downloads'],
+          summary: 'A release’s file',
+          description: 'Any release’s APKs, disk image or zip, by version: `terminus-<version>.apk` (also `-armv7`, `-x86_64`), `.dmg` or `.zip`.',
+          operationId: 'releaseFile',
+          security: [],
+          parameters: [
+            { name: 'version', in: 'path', required: true, schema: { type: 'string' }, example: '2.0.4' },
+            { name: 'file', in: 'path', required: true, schema: { type: 'string' }, example: 'terminus-2.0.4.apk' },
+          ],
+          responses: { '200': { description: 'The file.' }, '404': errorResponse('No such file.') },
+        },
+      },
     },
     components: {
       securitySchemes: {
         apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key', description: 'A key from the account page (API keys). Starts with `tk_`.' },
         bearer: { type: 'http', scheme: 'bearer', description: 'An API key, or a device token from `/pair`.' },
         cookie: { type: 'apiKey', in: 'cookie', name: '__Host-tm_s', description: 'Set by signing in on the account page.' },
+        operator: { type: 'apiKey', in: 'header', name: 'x-health-token', description: 'The operator token (HEALTH_TOKEN), for the dashboard.' },
       },
       schemas: {
         Quality: quality,
