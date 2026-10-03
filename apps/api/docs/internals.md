@@ -745,11 +745,30 @@ request landing on another instance placed a standing bus afresh: a 12-minute
 recording showed about 14 side switches on D1, D2 and A2, nearly all as a
 bus stopped.
 
-Clients glide each bus along the line from where it's drawn to its new
-`along` over 15 s. Between two places on the line they only move along it:
-one that can't be reached along it (over 1.5 km, or behind by more than
-60 m) jumps. A straight glide is only for a bus coming onto or leaving its
-line, a short way.
+The feed gives a new position for a bus every 15-20 s (the reply's own
+time stamp changes that often, for every bus at once, however often it's
+asked), so the map shows each bus where it's estimated to be now
+(`motion`): on from its reading at 0.8 of the speed the feed gives, for
+at most 25 s after the reading, and never past the next stop after it.
+It never goes back from how it was last shown: a reading that says the
+bus went slower leaves it where it is until it catches up. Each bus
+carries `speed` and `until`, so a map keeps it moving between answers
+(`along + speed × seconds`, up to `until`), and each answer moves the
+cached placement on to the time it's asked (`trackedBuses`). Replaying
+`test/fixtures/bus-trace.jsonl`, the map is 28 m from the bus on average,
+against 38 m showing each reading as it comes and about 97 m gliding 15 s
+to each reading, as the apps did before. The next stop stays the one after
+the reading. The older NextBus API (`nnextbus.nus.edu.sg`) still answers,
+behind a password NUS hasn't given us, and almost certainly reads the
+same 20-second positions.
+
+Clients keep each bus moving along the line: from where it's drawn they
+catch up with the moving estimate over 5 s, and a bus that's ahead of a
+new answer waits rather than reversing. Between two places on the line
+they only move along it: one that can't be reached along it (over 1.5 km,
+or behind by more than 60 m) jumps. A straight glide is only for a bus
+coming onto or leaving its line, a short way. An answer without `speed`
+(an older server) glides to `along` over 15 s, as before.
 
 ## Layout
 

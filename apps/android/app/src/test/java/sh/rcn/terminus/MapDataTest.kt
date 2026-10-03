@@ -144,6 +144,40 @@ class MapDataTest {
         assertFalse(g.moving(500))
     }
 
+    @Test fun busesKeepMovingBetweenAnswersAndWaitRatherThanReverse() {
+        // A straight line east, about 1.1 km.
+        val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.01, 1.0)))
+        fun at(m: Double, speed: Double, until: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, null, along = m, speed = speed, until = until) }
+        val g = Glides(catchMs = 1_000)
+        g.update(listOf(at(100.0, 10.0, 150.0)), path, 0)
+        assertEquals("going on at its speed", 120.0, g.at(2_000)[0].along!!, 1e-6)
+        assertEquals("not past where the answer says", 150.0, g.at(9_000)[0].along!!, 1e-6)
+        assertTrue(g.moving(4_000))
+        assertFalse(g.moving(6_000))
+        // The next answer is behind where it's drawn (it went slower): it waits, then goes on.
+        g.update(listOf(at(130.0, 10.0, 300.0)), path, 9_000)
+        assertEquals(150.0, g.at(10_000)[0].along!!, 1e-6)
+        assertEquals(160.0, g.at(12_000)[0].along!!, 1e-6)
+        // An answer ahead: it catches up over catchMs, then goes on with it.
+        g.update(listOf(at(200.0, 10.0, 400.0)), path, 12_000)
+        assertEquals("halfway to where it now is (205 m)", 182.5, g.at(12_500)[0].along!!, 1e-6)
+        assertEquals(220.0, g.at(14_000)[0].along!!, 1e-6)
+        // From an older API, with no speed: it glides there over 15 s, as before.
+        val old = Glides()
+        old.update(listOf(at(0.0, 0.0, 0.0).copy(speed = null, until = null)), path, 0)
+        old.update(listOf(at(150.0, 0.0, 0.0).copy(speed = null, until = null)), path, 0)
+        assertEquals(75.0, old.at(7_500)[0].along!!, 1e-6)
+    }
+
+    @Test fun busesSayHowFastTheyAreGoing() {
+        val list = BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": [
+            {"id": "a", "lat": 1.0, "lon": 103.0, "along": 812.5, "speed": 6.7, "until": 990.0, "heading": 90, "moving": true, "crowd": null, "nextStop": null},
+            {"id": "b", "lat": 1.0, "lon": 103.0, "along": null, "heading": null, "moving": false, "crowd": null, "nextStop": null}]}"""))
+        assertEquals(6.7, list.buses[0].speed!!, 1e-9)
+        assertEquals(990.0, list.buses[0].until!!, 1e-9)
+        assertNull("an older API: no speed", list.buses[1].speed)
+    }
+
     @Test fun busesSayHowFarAlongTheirLineTheyAre() {
         val list = BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": [
             {"id": "a", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "nextStop": null},

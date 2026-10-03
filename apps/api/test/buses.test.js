@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SHAPES } from '../src/campus.ts';
-import { alongLine, follow, nextStopIndex, placeBuses, trackedBuses } from '../src/buses.ts';
+import { alongLine, follow, motion, nextStopIndex, placeBuses, trackedBuses } from '../src/buses.ts';
 import { makeCache } from './_stubs.mjs';
 
 const M_LAT = 110_574;
@@ -141,7 +141,9 @@ test('a live bus that stops on a two-way stretch of D2 keeps its next stop', asy
     const [d, s, x] = [driving.buses[0], stopped.buses[0], stranger.buses[0]];
     if (!d.nextStop || d.nextStop.code === x.nextStop?.code) continue;
     assert.equal(s.nextStop?.code, d.nextStop.code, `stopped at line point ${i}`);
-    assert.ok(metres([s.lon, s.lat], [d.lon, d.lat]) < 1, 'drawn on the same side, not the other');
+    // Shown on from where it was driving (as fast as it was going), not across the road.
+    const on = s.along - d.along;
+    assert.ok(on >= 0 && on < 100, `drawn on along the same side, not the other: ${on} m on`);
     checked++;
   }
   assert.ok(checked > 0, 'found a two-way stretch of D2 to test on');
@@ -171,6 +173,26 @@ test('a live bus is drawn on its line, pointing along the road; one far off stay
   assert.equal(far.along, null);
 });
 
+test('between readings a bus is shown going on, never past its next stop and never back', () => {
+  const { shape } = twoWay();
+  // Stops at 0, 508 and 1008 m. A reading at 300 m, 10 s ago, at 36 km/h.
+  const fresh = { ...track(300, 0), lat: 0, lon: 0 };
+  const go = motion(shape, fresh, 36, 10_000, false);
+  assert.ok(Math.abs(go.along - 380) < 0.01, `10 s at 8 m/s (0.8 of 10): ${go.along}`);
+  assert.ok(Math.abs(go.speed - 8) < 0.01);
+  assert.equal(go.until, 500, '25 s on at most');
+  assert.equal(motion(shape, fresh, 36, 60_000, false).along, 500, 'and no more however long it has been');
+  assert.equal(motion(shape, { ...fresh, along: 450 }, 36, 20_000, false).until, 508, 'never past its next stop');
+  // A slower reading: it doesn't go back from how it was shown.
+  const slower = motion(shape, { ...track(390, 15_000), shown: go }, 0, 15_000, true);
+  assert.ok(Math.abs(slower.along - 420) < 0.01, `kept where it was shown: ${slower.along}`);
+  assert.equal(slower.speed, 0);
+  // On another track (put right onto the other side), the old showing doesn't count.
+  assert.equal(motion(shape, { ...track(700, 15_000), shown: go }, 0, 15_000, false).along, 700);
+  // Held where it was (off its line for a moment): not moving.
+  assert.equal(motion(shape, { ...fresh, held: true }, 36, 10_000, false).speed, 0);
+});
+
 test('tracks are shared through the edge cache: every instance draws a bus the same way', async () => {
   globalThis.caches = { default: makeCache() };
   const pending = [];
@@ -180,11 +202,13 @@ test('tracks are shared through the edge cache: every instance draws a bus the s
   // Driving along D2's 40th stretch, then standing two thirds across the road.
   const [a, b] = [shape.line[40], shape.line[41]];
   const raw = (speed, lat, lon) => [{ plate: 'SHARED', lat, lon, heading: bearingOf(a, b), speed, crowd: null }];
-  const first = await trackedBuses(graph, 'D2', { buses: raw(20, a[1], a[0]), fetchedAt: 1_000 }, ctx);
+  const first = await trackedBuses(graph, 'D2', { buses: raw(20, a[1], a[0]), fetchedAt: 1_000 }, ctx, 1_000);
   await Promise.all(pending);
-  assert.deepEqual(await trackedBuses(graph, 'D2', { buses: raw(0, 0, 0), fetchedAt: 1_000 }, ctx), first, 'the same update: the same answer, placed once');
-  const later = await trackedBuses(graph, 'D2', { buses: raw(0, a[1], a[0]), fetchedAt: 16_000 }, ctx);
-  assert.equal(later[0].along, first[0].along, 'the next update is placed from the kept track');
+  assert.deepEqual(await trackedBuses(graph, 'D2', { buses: raw(0, 0, 0), fetchedAt: 1_000 }, ctx, 1_000), first, 'the same update: the same answer, placed once');
+  const on = await trackedBuses(graph, 'D2', { buses: raw(0, 0, 0), fetchedAt: 1_000 }, ctx, 4_000);
+  assert.ok(Math.abs(on[0].along - first[0].along - first[0].speed * 3) < 0.2, 'asked 3 s later: moved on as its speed says');
+  const later = await trackedBuses(graph, 'D2', { buses: raw(0, a[1], a[0]), fetchedAt: 16_000 }, ctx, 16_000);
+  assert.ok(later[0].along >= first[0].along, 'the next update is placed from the kept track, not back');
 });
 
 test('past its last stop, a loop starts again and a one-way route has ended', () => {
@@ -196,7 +220,7 @@ test('past its last stop, a loop starts again and a one-way route has ended', ()
   assert.equal(nextStopIndex({ ...shape, stops: ['A', 'B', 'C'], at: [0, 100, 200] }, 199, false), null);
 });
 
-test('replaying 15 minutes of the real feed, no bus changes side or goes back', async () => {
+test('replaying 15 minutes of the real feed: no bus changes side, and the map keeps up with it', async () => {
   // test/fixtures/bus-trace.jsonl: A1, A2, D1 and D2 on Saturday 3 October
   // 2026 at 1 pm, every 5 s (the probe workflow with `trace`). Before
   // tracks, the same readings switched a bus between sides 6 times on one
@@ -211,33 +235,53 @@ test('replaying 15 minutes of the real feed, no bus changes side or goes back', 
     polls.get(key).raw.push({ plate: r.bus, lat: r.lat, lon: r.lng, heading: r.direction, speed: r.speed, crowd: null });
   }
   const tracks = {};
-  /** Each bus's distinct places along its line, with when each was first given. */
+  /** Each bus at each poll: where its reading is along the line, and where it's shown. */
   const seen = new Map();
-  const away = [];
   for (const p of [...polls.values()].sort((a, b) => a.t - b.t)) {
     const placed = await placeBuses(graph, p.svc, p.raw, p.t * 1000, tracks[p.svc] ?? {});
     tracks[p.svc] = placed.tracks;
     placed.buses.forEach((b, i) => {
       const key = `${p.svc} ${b.id}`;
+      const track = placed.tracks[b.id];
       const list = seen.get(key) ?? [];
-      if (!list.length || list[list.length - 1].along !== b.along) list.push({ t: p.t, along: b.along });
+      list.push({ t: p.t, reading: b.along == null ? null : track.along, shown: b.along, fix: `${p.raw[i].lat},${p.raw[i].lon}` });
       seen.set(key, list);
-      if (b.along != null) away.push(metres([b.lon, b.lat], [p.raw[i].lon, p.raw[i].lat]));
     });
   }
   const wrong = [];
+  const shownOff = [];
+  const readingOff = [];
   for (const [key, list] of seen) {
     const total = SHAPES[key.split(' ')[0]].at.at(-1);
-    for (let i = 1; i < list.length; i++) {
-      const [a, b] = [list[i - 1], list[i]];
-      if (a.along == null || b.along == null) continue;
-      let gone = b.along - a.along;
+    // Each new reading's place, with when it was first given (null: off its
+    // line, which starts it afresh).
+    const readings = list.filter((x, i) => i === 0 || x.fix !== list[i - 1].fix || (x.reading == null) !== (list[i - 1].reading == null));
+    for (let i = 1; i < readings.length; i++) {
+      const [a, b] = [readings[i - 1], readings[i]];
+      if (a.reading == null || b.reading == null) continue;
+      let gone = b.reading - a.reading;
       if (gone < -total / 2) gone += total;
       // Back more than GPS error, or further than a bus can drive: the other side.
-      if (gone < -60 || gone > 100 + 20 * (b.t - a.t)) wrong.push(`${key} at ${b.t} s: ${a.along} → ${b.along}`);
+      if (gone < -60 || gone > 100 + 20 * (b.t - a.t)) wrong.push(`${key} at ${b.t} s: ${a.reading} → ${b.reading}`);
+      // Between two readings, take the bus to drive steadily from one to the
+      // next, and see how far the map is from it: shown, or at its reading.
+      if (gone < 0 || gone > 1_500 || i + 1 >= readings.length) continue;
+      const c = readings[i + 1];
+      if (c.reading == null) continue;
+      const ahead = c.reading - b.reading;
+      if (ahead < 0 || ahead > 1_500) continue;
+      for (const q of list) {
+        if (q.t < b.t || q.t >= c.t || q.shown == null) continue;
+        const truth = b.reading + (ahead * (q.t - b.t)) / (c.t - b.t);
+        shownOff.push(Math.abs(q.shown - truth));
+        readingOff.push(Math.abs(b.reading - truth));
+      }
     }
   }
   assert.deepEqual(wrong, []);
-  away.sort((a, b) => a - b);
-  assert.ok(away[Math.floor(away.length / 2)] < 10, `drawn near where the feed puts it: median ${away[Math.floor(away.length / 2)]} m`);
+  const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const median = (xs) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
+  assert.ok(shownOff.length > 1_000, `compared ${shownOff.length} places`);
+  assert.ok(mean(shownOff) < mean(readingOff) * 0.95, `mean: shown ${mean(shownOff)} m off, the reading ${mean(readingOff)} m`);
+  assert.ok(median(shownOff) < median(readingOff) * 0.75, `median: shown ${median(shownOff)} m off, the reading ${median(readingOff)} m`);
 });

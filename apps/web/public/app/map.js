@@ -25,9 +25,11 @@ const PMTILES = '/vendor/pmtiles%404.5.0/pmtiles.mjs';
 const BUSES_MS = 5_000;
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
 const ARRIVALS_MS = 15_000;
-/** How long a bus takes to glide to a new position: about as long as the
- *  feed holds one (it moves a bus every 15–20 s), so a bus keeps driving
- *  instead of jumping and then waiting. */
+/** How long a bus takes to catch up with a new answer, which says where it
+ *  is now and how fast it's going (speed, until): about one answer. */
+const CATCH_MS = 5_000;
+/** From an answer without a speed (an older API), how long a bus takes to
+ *  glide to its new position: about as long as the feed holds one. */
 const GLIDE_MS = 15_000;
 /** Further than this along its line in one update (back from a hidden tab),
  *  a bus doesn't glide along it. */
@@ -361,9 +363,10 @@ document.addEventListener('visibilitychange', () => {
 /**
  * Starts a glide for each bus whose position changed, from where it's drawn
  * to where it is: along its route line when both ends are on it, so it
- * follows the road round corners; straight only onto or off its line. A
- * bus whose position hasn't changed keeps gliding: the API answers every
- * few seconds, the feed moves a bus every 15–20.
+ * follows the road round corners; straight only onto or off its line. The
+ * API says where each bus is estimated to be now and how fast it's going,
+ * so a bus keeps moving between answers, up to the place the answer says
+ * it doesn't pass. A bus whose position hasn't changed keeps going.
  */
 function moveTo(buses) {
   const now = performance.now();
@@ -374,48 +377,70 @@ function moveTo(buses) {
   for (const b of buses) {
     const g = glides.get(b.id);
     if (g && g.to.lat === b.lat && g.to.lon === b.lon) next.set(b.id, { ...g, to: b });
-    else next.set(b.id, g && !reduce ? glideFrom(positionAt(g, now), b, path, now) : { from: null, to: b });
+    else if (reduce) next.set(b.id, { from: null, to: b, start: now, path: null });
+    else next.set(b.id, glideFrom(g ? positionAt(g, now) : null, b, path, now));
   }
   glides = next;
   cancelAnimationFrame(glide);
   const step = (ms) => {
     drawBuses(frameAt(ms));
-    if ([...glides.values()].some((g) => g.from && ms - g.start < GLIDE_MS)) glide = requestAnimationFrame(step);
+    if ([...glides.values()].some((g) => moving(g, ms))) glide = requestAnimationFrame(step);
   };
   glide = requestAnimationFrame(step);
 }
+
+/** Whether glide [g]'s bus is still on its way at [now]. */
+function moving(g, now) {
+  if (g.from && now - g.start < (g.to.speed == null ? GLIDE_MS : CATCH_MS)) return true;
+  return Boolean(g.path && g.to.speed > 0 && (g.to.speed * (now - g.start)) / 1000 < onFor(g.to));
+}
+
+/** Metres an answer's bus may go on along its line before the next answer. */
+const onFor = (b) => (b.speed > 0 && b.until != null && b.along != null ? Math.max(0, b.until - b.along) : 0);
 
 function frameAt(now) {
   return [...glides.values()].map((g) => positionAt(g, now));
 }
 
 /**
- * A glide for bus [b] from [from] (where it's drawn), or none: it jumps. On
- * its line at both ends, it only ever moves along the line: a bus that
- * can't glide along it (the other side of the road, a long way) jumps
- * rather than cut across. Straight only onto or off its line, a short way.
+ * A glide for bus [b] from [from] (where it's drawn; null for a new bus),
+ * or none: it jumps there. On its line at both ends, it only ever moves
+ * along the line: a bus that can't glide along it (the other side of the
+ * road, a long way) jumps rather than cut across. Straight only onto or off
+ * its line, a short way.
  */
 function glideFrom(from, b, path, now) {
+  const jump = { from: null, to: b, start: now, path: b.along != null ? path : null };
+  if (!from) return jump;
   const d = path && alongBy(path, from, b);
-  if (d != null) {
-    if (d < -HOLD_BACK_M) return { from: null, to: b };
-    return { from, to: b, start: now, path, d: Math.max(0, d) };
-  }
-  if (from.along != null && b.along != null) return { from: null, to: b };
-  if (haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return { from: null, to: b };
+  if (d != null) return d < -HOLD_BACK_M ? jump : { from, to: b, start: now, path, d };
+  if (from.along != null && b.along != null) return jump;
+  if (haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return jump;
   return { from, to: b, start: now, path: null, d: null };
 }
 
-/** Where glide [g]'s bus is drawn at [now], at a steady pace. */
+/**
+ * Where glide [g]'s bus is drawn at [now]. Its answer goes on at its speed
+ * up to its until; the bus catches up with that over CATCH_MS, or, a little
+ * ahead of it (the bus went slower than shown), waits for it.
+ */
 function positionAt(g, now) {
-  if (!g.from) return g.to;
-  const k = Math.max(0, Math.min(1, (now - g.start) / GLIDE_MS));
+  // Metres the answer's bus has gone on since.
+  const on = Math.min(onFor(g.to), ((g.to.speed ?? 0) * Math.max(0, now - g.start)) / 1000);
+  if (!g.from) return g.path && on > 0 ? alongAt(g.path, g.to, g.to.along + on, true) : g.to;
+  const k = Math.max(0, Math.min(1, (now - g.start) / (g.to.speed == null ? GLIDE_MS : CATCH_MS)));
   // Mid-glide straight, it's off the line: the next glide is straight too.
   if (g.d == null) return k === 1 ? g.to : { ...g.to, along: null, lat: g.from.lat + (g.to.lat - g.from.lat) * k, lon: g.from.lon + (g.to.lon - g.from.lon) * k };
-  const along = g.from.along + g.d * k;
-  const at = pointAt(g.path, along);
-  const total = g.path.total;
-  return { ...g.to, along: g.path.closed ? ((along % total) + total) % total : along, lat: at.lat, lon: at.lon, heading: g.d > 0 ? at.bearing : g.to.heading };
+  const target = g.d + on;
+  const m = g.d >= 0 ? target * k : Math.max(0, target);
+  return alongAt(g.path, g.to, g.from.along + m, m > 0);
+}
+
+/** Bus [b] drawn [m] metres along [path]; pointing along the road when it's going [forward]. */
+function alongAt(path, b, m, forward) {
+  const at = pointAt(path, m);
+  const total = path.total;
+  return { ...b, along: path.closed ? ((m % total) + total) % total : m, lat: at.lat, lon: at.lon, heading: forward ? at.bearing : b.heading };
 }
 
 /* A route line measured as the API measures it (haversine, metres from its

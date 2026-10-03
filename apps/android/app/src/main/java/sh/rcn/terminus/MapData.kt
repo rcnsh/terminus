@@ -161,7 +161,14 @@ data class LiveBus(
     val nextStop: String?,
     /** Metres along its route line; null off it. */
     val along: Double? = null,
-)
+    /** Metres a second it's estimated to be moving along its line, up to [until]; null from an older API. */
+    val speed: Double? = null,
+    /** Metres along its line it isn't shown past before the next answer. */
+    val until: Double? = null,
+) {
+    /** Metres it may go on along its line before the next answer. */
+    val onFor: Double get() = if (speed != null && speed > 0 && until != null && along != null) max(0.0, until - along) else 0.0
+}
 
 /** One service's buses. [available] false: the feed couldn't be reached, which isn't "no buses". */
 data class BusList(val svc: String, val available: Boolean, val buses: List<LiveBus>) {
@@ -181,7 +188,9 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                         moving = b.optBoolean("moving"),
                         crowd = b.optString("crowd").takeIf { !b.isNull("crowd") && it.isNotEmpty() },
                         nextStop = b.optJSONObject("nextStop")?.optString("name")?.ifEmpty { null },
-                        along = if (!b.has("along") || b.isNull("along")) null else b.optDouble("along"),
+                        along = b.number("along"),
+                        speed = b.number("speed"),
+                        until = b.number("until"),
                     )
                 },
             )
@@ -240,15 +249,17 @@ object MapGeoJson {
 }
 
 /**
- * Each bus's glide from where it was drawn to where it is. The feed moves a
- * bus every 15-20 s, so a glide lasts [ms] at a steady pace and the bus keeps
- * driving instead of jumping and waiting; one whose position hasn't changed
- * since the last update keeps gliding. Along its route line when both ends
- * are on it, so it follows the road round corners, and never straight
- * between two places on it; straight only onto or off its line, a short
- * way. Times are any one clock.
+ * Each bus's glide from where it was drawn to where it is. The API says
+ * where each bus is estimated to be now and how fast it's going ([LiveBus.speed]
+ * up to [LiveBus.until]), so a bus keeps moving between answers, catching up
+ * with each new one over [catchMs]; a little ahead of it (it went slower than
+ * shown), it waits rather than reversing. One whose position hasn't changed
+ * keeps going. Along its route line when both ends are on it, so it follows
+ * the road round corners, and never straight between two places on it;
+ * straight only onto or off its line, a short way. From an older API without
+ * a speed, it glides to each position over [ms]. Times are any one clock.
  */
-class Glides(private val ms: Long = GLIDE_MS) {
+class Glides(private val ms: Long = GLIDE_MS, private val catchMs: Long = CATCH_MS) {
     private class Glide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double?)
 
     private var glides: Map<String, Glide> = emptyMap()
@@ -258,9 +269,8 @@ class Glides(private val ms: Long = GLIDE_MS) {
         glides = buses.associate { b ->
             val g = glides[b.id]
             b.id to when {
-                g == null -> Glide(null, b, now, null, null)
-                g.to.lat == b.lat && g.to.lon == b.lon -> Glide(g.from, b, g.start, g.path, g.d)
-                else -> glideFrom(at(g, now), b, path, now)
+                g != null && g.to.lat == b.lat && g.to.lon == b.lon -> Glide(g.from, b, g.start, g.path, g.d)
+                else -> glideFrom(g?.let { at(it, now) }, b, path, now)
             }
         }
     }
@@ -269,45 +279,67 @@ class Glides(private val ms: Long = GLIDE_MS) {
     fun at(now: Long): List<LiveBus> = glides.values.map { at(it, now) }
 
     /** Whether any bus is still on its way at [now]. */
-    fun moving(now: Long): Boolean = glides.values.any { it.from != null && now - it.start < ms }
+    fun moving(now: Long): Boolean = glides.values.any { g ->
+        (g.from != null && now - g.start < span(g.to)) || (g.path != null && (g.to.speed ?: 0.0) * (now - g.start) / 1000.0 < g.to.onFor)
+    }
 
-    private fun glideFrom(from: LiveBus, b: LiveBus, path: RoutePath?, now: Long): Glide {
+    private fun span(b: LiveBus) = if (b.speed == null) ms else catchMs
+
+    private fun glideFrom(from: LiveBus?, b: LiveBus, path: RoutePath?, now: Long): Glide {
+        val jump = Glide(null, b, now, if (b.along != null) path else null, null)
+        if (from == null) return jump
         val d = path?.alongBy(from, b)
-        if (d != null) {
-            // Put back a little (GPS error), it stays where it's drawn; a long way back, it jumps.
-            return if (d < -HOLD_BACK_M) Glide(null, b, now, null, null) else Glide(from, b, now, path, max(0.0, d))
-        }
+        // Put back a little (GPS error), it waits where it's drawn; a long way back, it jumps.
+        if (d != null) return if (d < -HOLD_BACK_M) jump else Glide(from, b, now, path, d)
         // On its line at both ends but not along it (the other side of the road, a long way): it jumps, never cuts across.
-        if (from.along != null && b.along != null) return Glide(null, b, now, null, null)
-        if (RoutePath.haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return Glide(null, b, now, null, null)
+        if (from.along != null && b.along != null) return jump
+        if (RoutePath.haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return jump
         return Glide(from, b, now, null, null)
     }
 
     private fun at(g: Glide, now: Long): LiveBus {
-        val f = g.from ?: return g.to
         val b = g.to
-        val k = ((now - g.start).toDouble() / ms).coerceIn(0.0, 1.0)
+        // Metres the answer's bus has gone on since.
+        val on = min(b.onFor, (b.speed ?: 0.0) * max(0L, now - g.start) / 1000.0)
+        val f = g.from
         val path = g.path
+        if (f == null) {
+            val a = b.along
+            return if (path != null && a != null && on > 0) along(path, b, a + on, true) else b
+        }
+        val k = ((now - g.start).toDouble() / span(b)).coerceIn(0.0, 1.0)
         val d = g.d
         val fa = f.along
         // Mid-glide straight, it's off the line: the next glide is straight too.
         if (path == null || d == null || fa == null) {
             return if (k >= 1.0) b else b.copy(lat = f.lat + (b.lat - f.lat) * k, lon = f.lon + (b.lon - f.lon) * k, along = null)
         }
-        val m = fa + d * k
+        val target = d + on
+        val m = if (d >= 0) target * k else max(0.0, target)
+        return along(path, b, fa + m, m > 0)
+    }
+
+    /** [b] drawn [m] metres along [path]; pointing along the road when it's going [forward]. */
+    private fun along(path: RoutePath, b: LiveBus, m: Double, forward: Boolean): LiveBus {
         val (lat, lon, road) = path.pointAt(m)
-        return b.copy(lat = lat, lon = lon, along = path.wrap(m), heading = if (d > 0) road else b.heading)
+        return b.copy(lat = lat, lon = lon, along = path.wrap(m), heading = if (forward) road else b.heading)
     }
 
     companion object {
+        /** From an older API without a speed: about as long as the feed holds a position. */
         const val GLIDE_MS = 15_000L
+
+        /** Catching up with a new answer: about one answer. */
+        const val CATCH_MS = 5_000L
 
         /** Off its line, further than this from where it's drawn, a bus jumps (not across buildings). */
         const val GLIDE_STRAIGHT_MAX_M = 250.0
 
-        /** Put back along its line by less than this, a bus stays where it's drawn instead of reversing. */
+        /** Put back along its line by less than this, a bus waits where it's drawn instead of reversing. */
         const val HOLD_BACK_M = 60.0
     }
 }
+
+private fun JSONObject.number(key: String): Double? = if (!has(key) || isNull(key)) null else optDouble(key)
 
 private fun JSONArray?.stringList(): List<String> = if (this == null) emptyList() else (0 until length()).map { getString(it) }

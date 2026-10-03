@@ -224,9 +224,14 @@ docs/map-plan.md      How the campus map was planned and built
   - Within 50 m of its line, a bus is drawn **on** the line, with
     `along` = metres along it, never moving back. A short jump off the line
     (under 30 s) holds it at its last place.
-  - Clients poll every 5 s and glide each bus along its line for 15 s, only
-    when its position changes (web `map.js` `moveTo`; Android `Glides`).
-    Between two places on the line they glide along it or jump, never
+  - The feed only refreshes every 15–20 s (its own time stamp; no faster
+    source exists), so each bus is shown where it's estimated to be now
+    (`motion`): on from its reading at 0.8 × the feed's speed, at most 25 s,
+    never past its next stop, never back. `speed` and `until` let clients
+    keep it moving between answers.
+  - Clients poll every 5 s and keep each bus moving along its line, catching
+    up with each answer over 5 s (web `map.js` `moveTo`; Android `Glides`).
+    Between two places on the line they move along it or jump, never
     straight across.
   - `test/fixtures/bus-trace.jsonl` is a real feed trace (the probe
     workflow with `trace`); `buses.test.js` replays it.

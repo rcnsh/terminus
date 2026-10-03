@@ -236,7 +236,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Live buses on one service',
           description:
-            'Where each bus on a service is now, how full it is and the stop it reaches next. Positions come from the live feed through a 5-second cache per service. A bus on its route is placed on the route line, with `heading` along the road, so GPS drift does not show it beside its line. On a road the route uses both ways, its side follows from where it has been: a bus only moves forward along its route, so it keeps its side and its next stop only moves on. `nextStop` is worked out from the bus\'s position and heading along its route, and is null for a bus away from its route (such as one parked at the depot). Bus plates are not given; `id` stays the same for a bus while it runs, so a map can move it smoothly between updates.',
+            'Where each bus on a service is now, how full it is and the stop it reaches next. Positions come from the live feed through a 5-second cache per service. A bus on its route is placed on the route line, with `heading` along the road, so GPS drift does not show it beside its line. On a road the route uses both ways, its side follows from where it has been: a bus only moves forward along its route, so it keeps its side and its next stop only moves on. The feed gives a new position every 15 to 20 seconds, so each bus is shown where it is estimated to be now: on from its last position at about the speed it was going, never past its next stop, with `speed` and `until` to keep it moving until the next answer. `nextStop` is worked out from the bus\'s position and heading along its route, and is null for a bus away from its route (such as one parked at the depot). Bus plates are not given; `id` stays the same for a bus while it runs, so a map can move it smoothly between updates.',
           operationId: 'getBuses',
           parameters: [
             { name: 'svc', in: 'query', required: true, description: 'Service code, case-insensitive.', schema: { type: 'string' }, example: 'D2' },
@@ -250,7 +250,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   example: {
                     svc: 'D2',
                     color: '#8e44c9',
-                    buses: [{ id: '3f9a1c0b7e21', lat: 1.29497, lon: 103.77349, along: 1834.2, heading: 92, moving: true, crowd: 'low', nextStop: { code: 'COM3', name: 'COM 3' } }],
+                    buses: [{ id: '3f9a1c0b7e21', lat: 1.29497, lon: 103.77349, along: 1834.2, speed: 6.7, until: 1990.5, heading: 92, moving: true, crowd: 'low', nextStop: { code: 'COM3', name: 'COM 3' } }],
                     asOf: '2026-10-02T01:14:02.000Z',
                     available: true,
                     stale: false,
@@ -1085,12 +1085,14 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['id', 'lat', 'lon', 'along', 'heading', 'moving', 'crowd', 'nextStop'],
+                required: ['id', 'lat', 'lon', 'along', 'speed', 'until', 'heading', 'moving', 'crowd', 'nextStop'],
                 properties: {
                   id: { type: 'string', description: 'Stable for a bus while it runs; not its plate.' },
                   lat: { type: 'number' },
                   lon: { type: 'number' },
                   along: { type: ['number', 'null'], description: 'Metres along the service’s route line in `/campus` (`routes[svc].line`), so a map can glide the bus along the road between updates. It does not go back between answers, except past the start of a loop, or when a bus first placed on the wrong side of the road is put right. Null for a bus away from its line.' },
+                  speed: { type: ['number', 'null'], description: 'Metres a second the bus is estimated to be moving along its line now, so a map can keep it moving between answers (along + speed × seconds since, up to `until`). 0 when it is not; null away from its line.' },
+                  until: { type: ['number', 'null'], description: 'Metres along the line the bus is not shown past before the next answer: its next stop, or as far as its last reading can say. Null away from its line.' },
                   heading: { type: ['integer', 'null'], description: 'Degrees clockwise from north.' },
                   moving: { type: 'boolean' },
                   crowd: { type: ['string', 'null'], enum: ['low', 'medium', 'high', null] },
