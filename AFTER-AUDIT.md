@@ -9,8 +9,10 @@ Already done, from the VPS: production and the beta are migrated, and both
 have their street map on R2. As of 3 October, both are deployed up to
 a548ce3: everything on `main`, the website and the API included (the
 calmer card, the semester reminder, "Crowding: low/medium/high", the 12- or
-24-hour setting, the feed-shape check). No migrations. The Android and Mac
-parts ship with 2.1.0.
+24-hour setting, the feed-shape check). No migrations. Since then, not yet
+deployed: 130c1ef (the map and /campus kept at the edge) and 4eb2b03 (the
+bill guards: website files skip the Worker, a CPU limit, a limit on the
+map's R2 reads). The Android and Mac parts ship with 2.1.0.
 
 To deploy again from the VPS, in one line:
 
