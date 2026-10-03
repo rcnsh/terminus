@@ -31,7 +31,7 @@
 <main class="wrap narrow">
   <article>
     <h1>隐私</h1>
-    <p class="updated">最后更新：2026 年 10 月 2 日</p>
+    <p class="updated">最后更新：2026 年 10 月 3 日</p>
     <p class="hint">这是<a href="/privacy/?original" lang="en">英文隐私政策</a>的中文翻译，方便阅读。如有出入，以英文版为准。</p>
 
     <p>terminus 是一个免费、独立的学生项目。它只保留告诉你该搭哪班巴士所需的信息，你随时可以自己删除所有信息。</p>
@@ -57,7 +57,7 @@
     <ul>
       <li><strong>你的位置。</strong>当应用发送你的位置来找最近的车站时，位置会被取整到约 11 米，只用于那一次答案，不会保存。同一个答案也会检查你是否在你家附近车站所服务的校内宿舍里，以免你已经在那里时还叫你回家；具体是哪个宿舍从不保存。位置放在请求的地址里，而 terminus 自己的请求日志是关闭的；传送每个请求的 Cloudflare 只为送达而处理它。</li>
       <li><strong>你在地图上的位置。</strong>校园地图上的圆点由你的设备根据它自己的位置画出，而且只在你已经允许位置权限时显示。它不会发送给 terminus。</li>
-      <li>没有跟踪、广告、分析 Cookie 或追踪器。唯一的 Cookie 是让你保持登录的那一个。</li>
+      <li>没有广告，除了让你保持登录的那一个 Cookie 之外没有其他 Cookie，也没有任何东西在不同网站之间跟踪你。网站用 Cloudflare Web Analytics 统计页面访问量（见下文），它不设置 Cookie，也不识别你的身份。</li>
     </ul>
     <p>为了改进估计，terminus 会记录关于答案的匿名统计：哪个车站、哪条线路和哪班车（车牌号），以及多久后到达。这些不包含账户、邮箱或位置。</p>
     <p>当应用识别到一次完整的乘车（巴士开出并到达你那一站）时，会保留这段路程用了多长时间：线路、两个车站、巴士车牌、小时和日期，保留 120 天，用来了解巴士在车站之间实际要多久。它不包含账户、设备或位置，也没有任何东西把它和你联系起来。</p>
@@ -71,6 +71,7 @@
       <li><strong>Google Fonts</strong>：本网站使用的字体。</li>
       <li><strong>cdnjs</strong>（Cloudflare）：账户页面上的二维码库。</li>
       <li><strong>unpkg</strong>：仅用于 API 文档页面。</li>
+      <li><strong>Cloudflare Web Analytics</strong>：在网站上统计访问量：哪个页面、加载用了多久，以及浏览器、设备类型和国家或地区。它不使用 Cookie 或其他保存的标识，也不把访问和你或你的账户联系起来。应用不使用它。</li>
     </ul>
     <p>在装有 Google Play 服务的 Android 手机上，terminus 使用 <strong>Firebase Cloud Messaging</strong>（Google）通知应用你的行程有变化，这样应用就不必一直查询。消息只说明这一点，以及行程处于哪个阶段（例如“该出发了”）；然后应用会自己向 terminus 询问详情。</p>
     <p>如果你在网页应用中开启通知，同样的消息会经过你的浏览器自己的推送服务（Safari 用 Apple 的，Chrome 用 Google 的，Firefox 用 Mozilla 的），并经过加密，只有你的浏览器能读取。然后你的浏览器会向 terminus 询问详情并显示通知。在网页应用中关闭通知或在那里退出登录，会删除这个地址。</p>

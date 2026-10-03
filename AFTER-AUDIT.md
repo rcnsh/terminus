@@ -190,13 +190,14 @@ Android:
 
 The web: where the search button goes when the chips don't fit on one line.
 
-## 7. Cloudflare dashboard: turn off Web Analytics
+## 7. Cloudflare Web Analytics: check it reports
 
-Cloudflare adds its Web Analytics script to every page of both sites
-(found on 3 October). The site's CSP blocks it, so nothing is sent, but
-every page logs a blocked-script error, and the privacy page promises no
-trackers. In the dashboard: Analytics & Logs → Web Analytics → the site →
-turn off automatic setup. Leave the CSP as it is.
+Cloudflare adds its Web Analytics script to every page of both sites. The
+CSP now allows it (the script from static.cloudflareinsights.com, reports
+to cloudflareinsights.com), and the privacy page says the website uses it.
+After deploying, open a page and check Analytics & Logs → Web Analytics
+shows visits within a few minutes. It counts browser page loads only, not
+the apps or the API; those are in Analytics Engine.
 
 Also small, for later: offline, the pages fall back to the system fonts,
 because the service worker doesn't keep the web fonts.

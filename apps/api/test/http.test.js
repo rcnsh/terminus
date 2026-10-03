@@ -26,6 +26,10 @@ test('security headers: every response; CSP on HTML only; /docs may load unpkg',
   const page = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/account/');
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.doesNotMatch(page.headers.get('content-security-policy'), /unpkg/);
+  // Cloudflare adds the Web Analytics beacon to every page; it must load and report.
+  const csp = Object.fromEntries(page.headers.get('content-security-policy').split('; ').map((d) => [d.split(' ')[0], d]));
+  assert.match(csp['script-src'], / https:\/\/static\.cloudflareinsights\.com( |$)/);
+  assert.match(csp['connect-src'], / https:\/\/cloudflareinsights\.com( |$)/);
   const docs = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/docs');
   assert.match(docs.headers.get('content-security-policy'), /unpkg/);
   assert.equal(withSecurityHeaders(new Response(''), '/auth/verify').headers.get('referrer-policy'), 'no-referrer');
