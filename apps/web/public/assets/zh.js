@@ -270,7 +270,7 @@ window.TERMINUS_ZH = {
  "The Android home-screen widget: leave by 6:00 PM for CS2030, with buttons for favourites.": "Android 主屏幕小组件：下午 6:00 前出发去上 CS2030，带有收藏按钮。",
  "The D2 never came, the walk is longer than that…": "D2 一直没来、步行比说的久…",
  "The Mac menu bar app: leave by 9:41 for CS2030 at 10:00, catch the 9:45 D2 at PGP.": "Mac 菜单栏应用：9:41 前出发去上 10:00 的 CS2030，在 PGP 搭 9:45 的 D2。",
- "The account page: a timetable of three classes, and a live preview of your widget saying leave by 6:33 PM and catch the 6:38 PM D2 at PGP Foyer, arriving 13 minutes early.": "账户页面：三节课的课表，以及小组件的实时预览：下午 6:33 前出发，在 PGP Foyer 搭下午 6:38 的 D2，早到 13 分钟。",
+ "The account page: a timetable of three classes, and a live preview of your widget saying leave by 9:28 AM, in 8 minutes, and catch the 9:30 AM D2 at PGP, arriving 5 minutes early.": "账户页面：三节课的课表，以及小组件的实时预览：上午 9:28 前出发，还有 8 分钟，在 PGP 搭上午 9:30 的 D2，早到 5 分钟。",
  "The start time must be before the end time": "开始时间必须早于结束时间",
  "The latest bus that still gets you there, walks along real campus paths at your pace, and a bus earlier when yours is usually packed.": "最晚还能让你准时到的那班巴士，按你的步速沿真实校园路线计算步行时间，你那班经常很挤时就提早一班。",
  "The next NUS shuttle to wherever you're going next, from your timetable. A home-screen widget for Android and a menu bar app for Mac.": "根据你的课表，告诉你去下一个地方的下一班 NUS 校园巴士。Android 主屏幕小组件和 Mac 菜单栏应用。",

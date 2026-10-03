@@ -45,6 +45,16 @@ The same answer on your phone, your Mac and the web, in light or dark.
       When to leave, one glance up. The rest, a click away.
     </td>
   </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/assets/shots/web-dark.webp">
+        <img alt="The account page on the web: a timetable of three classes beside the card, which says leave by 9:28 AM, in 8 minutes, and catch the 9:30 AM D2 at PGP, arriving 5 minutes early." src="apps/web/public/assets/shots/web-light.webp" width="100%">
+      </picture>
+      <h3>On the web</h3>
+      The same card in any browser, with your timetable and settings beside it. Add it to your home screen for the app, with notifications when it's time to leave.
+    </td>
+  </tr>
 </table>
 
 ## What it knows
@@ -53,7 +63,7 @@ The same answer on your phone, your Mac and the web, in light or dark.
   <tr>
     <td width="33%" valign="top">
       <h3>Your timetable</h3>
-      Import from NUSMods once. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps.
+      Import from NUSMods once a semester; the week before the next one starts, it reminds you. It knows teaching weeks, recess, exams and public holidays, and sends you home in long gaps.
     </td>
     <td width="33%" valign="top">
       <h3>The right time</h3>
@@ -68,6 +78,11 @@ The same answer on your phone, your Mac and the web, in light or dark.
 
 ### And a map of campus
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/assets/shots/map-dark.webp">
+  <img alt="The campus map with D2 picked: its purple line, its stops and three buses on it, over a street map of NUS." src="apps/web/public/assets/shots/map-light.webp" width="100%">
+</picture>
+
 On Android and the web: every bus route in its colour, on a quiet street map. Tap a service to see its line and its buses moving live; tap a stop for what's coming, the services that call there, and a way to go there. It works offline after the first look.
 
 ## Set up in two minutes
@@ -76,11 +91,11 @@ On Android and the web: every bus route in its colour, on a quiet street map. Ta
 
 **On the web or a Mac:**
 
-1. **Sign in** at [terminus.rcn.sh/account](https://terminus.rcn.sh/account) with a code sent to your email. No password.
+1. **Sign in** at [terminus.rcn.sh/account](https://terminus.rcn.sh/account) with a code or link sent to your email. No password.
 2. **Import** your NUSMods share link and pick your home stop.
 3. **Install** the Mac menu bar app and sign in with the same email: approve it from the link we email you, on any device, by choosing the number the Mac shows. Or pair it with a code from the account page or the Android app's Settings.
 
-That's it. It updates through the day and goes quiet in the evening.
+That's it. It updates through the day and goes quiet in the evening. The app has three tabs: **Now** (the card and your places), **Map** and **Settings**.
 
 <details>
 <summary><b>Installing outside the app stores</b></summary>
