@@ -267,12 +267,17 @@ export async function savePlan(env: Env, userId: string, key: string, plan: Boar
 
 /** Records a signal for one trip today; `null` clears that trip ("reset"). */
 export async function saveSignal(env: Env, userId: string, key: string, rec: TripRecord | null, nowMs: number): Promise<DayRecord | null> {
+  return saveSignals(env, userId, [{ key, rec }], nowMs);
+}
+
+/** Several trips' records in one call to the Trip object (null deletes one). */
+export async function saveSignals(env: Env, userId: string, items: { key: string; rec: TripRecord | null }[], nowMs: number): Promise<DayRecord | null> {
   const s = stub(env, userId);
   if (!s) return null;
   const res = await s.fetch('https://trip/signal', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ date: sgtDate(nowMs), key, rec, deleteAt: endOfDayMs(nowMs) }),
+    body: JSON.stringify({ date: sgtDate(nowMs), items, deleteAt: endOfDayMs(nowMs) }),
   });
   if (!res.ok) throw new Error(`trip signal failed: ${res.status}`);
   return (await res.json()) as DayRecord;

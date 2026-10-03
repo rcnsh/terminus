@@ -64,13 +64,18 @@ export class Trip {
     }
 
     if (req.method === 'POST' && url.pathname === '/signal') {
-      const body = (await req.json()) as { date: string; key: string; rec: TripRecord | null; deleteAt: number };
+      // One trip's record, or several at once ("Not on campus today").
+      type Item = { key: string; rec: TripRecord | null };
+      const body = (await req.json()) as Partial<Item> & { items?: Item[]; date: string; deleteAt: number };
+      const items = body.items ?? [{ key: body.key!, rec: body.rec ?? null }];
       const next = today(day, body.date);
-      // A day has a handful of trips; past this many a new one is refused,
-      // so the record stays far below a stored value's size limit.
-      if (body.rec && !(body.key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) return Response.json(next);
-      if (body.rec) next.trips[body.key] = body.rec;
-      else delete next.trips[body.key];
+      for (const { key, rec } of items) {
+        // A day has a handful of trips; past this many a new one is refused,
+        // so the record stays far below a stored value's size limit.
+        if (rec && !(key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) continue;
+        if (rec) next.trips[key] = rec;
+        else delete next.trips[key];
+      }
       await this.storage.put('day', next);
       await this.arm(body.deleteAt);
       return Response.json(next);

@@ -42,7 +42,7 @@ import {
 import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
 import { type Planned, hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
-import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, isHomeKey, loadDay, markFollowed, savePlan, saveSignal, sgtDate, watchTrip } from './trip.ts';
+import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, isHomeKey, loadDay, markFollowed, savePlan, saveSignal, saveSignals, sgtDate, watchTrip } from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
@@ -623,17 +623,14 @@ export const ME_ROUTES: MeRoute[] = [
         // "Not on campus today" skips every trip left today (not the ones
         // already answered); "Back on campus" brings them all back. Neither is
         // an outcome: a day away says nothing about a class.
-        let after = day;
-        if (kind === 'away') {
-          for (const c of classesOn(profile, nowMs)) {
-            const k = classKey(c);
-            const r = day?.trips[k];
-            if (r && r.kind !== 'waiting') continue;
-            after = await saveSignal(env, session.user.id, k, { kind: 'skipped', at: nowMs, label: c.label, away: true }, nowMs);
-          }
-        } else {
-          for (const [k, r] of Object.entries(day?.trips ?? {})) if (r.away) after = await saveSignal(env, session.user.id, k, null, nowMs);
-        }
+        const items: { key: string; rec: TripRecord | null }[] =
+          kind === 'away'
+            ? classesOn(profile, nowMs)
+                .filter((c) => (day?.trips[classKey(c)]?.kind ?? 'waiting') === 'waiting')
+                .map((c) => ({ key: classKey(c), rec: { kind: 'skipped', at: nowMs, label: c.label, away: true } }))
+            : Object.entries(day?.trips ?? {}).filter(([, r]) => r.away).map(([key]) => ({ key, rec: null }));
+        // One call to the Trip object, however many classes.
+        const after = items.length ? await saveSignals(env, session.user.id, items, nowMs) : day;
         logSignal(env, kind);
         const prefs = await prefsFor(db, session.user.id, profile, nowMs);
         const out = await nextBody(url, env, ctx, nowMs, deps, profile, after, session.user.id, prefs);

@@ -699,7 +699,15 @@ test('"Not on campus today" skips every trip left today on every device; "Back o
   const first = await t.next(t.phone);
   const away = first.card.actions.find((a) => a.id === 'away');
   assert.equal(away.label, 'Not on campus today');
+  // Both classes are skipped in one call to the Trip object.
+  const saves = [];
+  const get = t.TRIPS.get.bind(t.TRIPS);
+  t.TRIPS.get = (id) => {
+    const stub = get(id);
+    return { ...stub, fetch: (url, init) => (String(url).endsWith('/signal') && saves.push(url), stub.fetch(url, init)) };
+  };
   const off = await (await t.signal(t.phone, { kind: 'away' })).json();
+  assert.equal(saves.length, 1);
   assert.equal(off.label, 'Not on campus today');
   assert.equal(off.card.phase, 'idle');
   assert.deepEqual(off.card.actions.map((a) => [a.id, a.label]), [['back', 'Back on campus']]);
