@@ -579,7 +579,7 @@ const ME_ROUTES: MeRoute[] = [
         logSignal(env, kind);
         const prefs = await prefsFor(db, session.user.id, profile, nowMs);
         const out = await nextBody(url, env, ctx, nowMs, deps, profile, after, session.user.id, prefs);
-        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, ask: out.card.ask !== null, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
+        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
         return json(out);
       }
       const now = await planned(here, env, ctx, nowMs, deps, profile, day);
@@ -703,7 +703,7 @@ const ME_ROUTES: MeRoute[] = [
       // A tap here changes the other phones' cards now, not at their next refresh.
       // Being at the stop isn't worth waking them for.
       if (rec !== undefined && rec?.kind !== 'waiting') {
-        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, ask: out.card.ask !== null, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
+        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
       }
       return json(out);
     },
@@ -772,8 +772,7 @@ const ME_ROUTES: MeRoute[] = [
     method: 'GET',
     path: '/me/choices',
     run: async ({ db, session }) => {
-      // askMuted: always false now that nothing is asked; kept for older apps.
-      return json({ choices: await listPrefs(db, session.user.id), askMuted: false, history: await historySize(db, session.user.id) });
+      return json({ choices: await listPrefs(db, session.user.id), history: await historySize(db, session.user.id) });
     },
   },
   {
@@ -783,16 +782,6 @@ const ME_ROUTES: MeRoute[] = [
       // "Clear trip history": the outcomes go, the choices made from them stay.
       const cleared = await clearHistory(db, session.user.id);
       return json({ ok: true, cleared });
-    },
-  },
-  {
-    method: 'POST',
-    path: '/me/ask',
-    run: async () => {
-      // "Ask if I caught the bus" back on, from older apps. Nothing is asked
-      // any more (the trip follows the plan and the phone's location), so
-      // there's nothing to turn on.
-      return json({ ok: true, askMuted: false });
     },
   },
   {
@@ -1201,14 +1190,14 @@ export async function tripCardFor(
   day: DayRecord | null,
   nowMs: number,
   savePlanLocal: (key: string, plan: Boarded) => Promise<void>,
-): Promise<{ key: string | null; phase: string; ask: boolean; remind: boolean; wakeAt: number | null } | null> {
+): Promise<{ key: string | null; phase: string; remind: boolean; wakeAt: number | null } | null> {
   if (!env.DB) return null;
   const profile = await getProfile(env.DB, userId, deps.graph);
   if (!classesOn(profile, nowMs).length) return null;
   const prefs = await prefsFor(env.DB, userId, profile, nowMs);
   const url = new URL('https://terminus.internal/me/next');
   const { body, trip } = await nextWithTrip(url, env, ctx, nowMs, deps, profile, day, userId, prefs, { savePlan: savePlanLocal });
-  return { key: trip.key, phase: body.card.phase, ask: body.card.ask !== null, remind: body.card.remind !== false, wakeAt: nextPhaseAt(body, trip, nowMs) };
+  return { key: trip.key, phase: body.card.phase, remind: body.card.remind !== false, wakeAt: nextPhaseAt(body, trip, nowMs) };
 }
 
 const CHOICES = ['accept', 'dismiss', 'undo'] as const;

@@ -32,7 +32,6 @@ const MIN_WAKE_GAP_MS = 30_000;
 interface Pushed {
   key: string | null;
   phase: string;
-  ask: boolean;
 }
 
 export class Trip {
@@ -145,14 +144,14 @@ export class Trip {
     if (!card) return;
 
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
-    const now: Pushed = { key: card.key, phase: card.phase, ask: card.ask };
+    const now: Pushed = { key: card.key, phase: card.phase };
     // Only what was actually pushed counts: one device having fetched a card
     // says nothing about the others. Nothing to say yet is never the first push.
-    const changed = last ? last.key !== now.key || last.phase !== now.phase || last.ask !== now.ask : now.phase !== 'idle' || now.ask;
+    const changed = last ? last.key !== now.key || last.phase !== now.phase : now.phase !== 'idle';
     if (changed) {
-      // Wake the phone for what the user should see: time to go, the question, a missed bus.
-      const urgent = now.phase === 'due' || now.phase === 'missed' || (now.ask && !last?.ask);
-      await nudgeUser(env, userId, { phase: now.phase, ask: now.ask, urgent, remind: card.remind }, nowMs);
+      // Wake the phone for what the user should see: time to go, a missed bus.
+      const urgent = now.phase === 'due' || now.phase === 'missed';
+      await nudgeUser(env, userId, { phase: now.phase, urgent, remind: card.remind }, nowMs);
       await this.storage.put('pushed', now);
     }
     // Keep waking while there's a trip and someone to tell.

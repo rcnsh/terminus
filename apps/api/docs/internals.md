@@ -217,9 +217,9 @@ account into another one.
   isn't where the next trip is planned from (`DayState.missed`), on the card
   or in Today: without a location, from the class before or from home.
 - **Nothing is asked.** terminus used to ask "On the 9:41 D2?" at the
-  departure and offer On the D2 · Missed it · I'm there; it doesn't any more
-  (`card.ask` is always null and `askMuted` false, kept for older apps, which
-  can still send those signals). The app should be invisible: three minutes
+  departure and offer On the D2 · Missed it · I'm there; it doesn't any more,
+  and the card has no question in it (the apps can still send those signals).
+  The app should be invisible: three minutes
   after the departure the phase is taken as `riding` (`TripView.assumed`),
   and the phone's location corrects it: at the boarding stop, or standing
   still off the bus's road, makes it `missed` (detect.ts); in your residence

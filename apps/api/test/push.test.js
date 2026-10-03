@@ -123,7 +123,7 @@ test('the Trip object wakes when the phase changes and nudges the phone, once pe
   const woke = await wakeUntil(() => fcm.sent.length > 0);
   assert.ok(woke <= 3);
   assert.equal(fcm.sent.length, 1);
-  assert.deepEqual(fcm.sent[0].data, { kind: 'card', phase: 'due', ask: '0' });
+  assert.deepEqual(fcm.sent[0].data, { kind: 'card', phase: 'due' });
   assert.equal(fcm.sent[0].android.priority, 'HIGH', 'time to go is worth waking the phone for');
   assert.equal(fcm.sent[0].token, 'fcm-phone');
   assert.equal(fcm.oauth, 1);
@@ -145,7 +145,7 @@ test('nothing is pushed to ask about the bus: after the departure the trip moves
   const plan = Object.values([...TRIPS.instances.values()][0].storage._map.get('day').plans)[0];
   clock(Date.parse(plan.board) + 30_000);
   await TRIPS.fireAlarms();
-  assert.ok(fcm.sent.every((m) => m.data.ask === '0'), 'never a question');
+  assert.ok(fcm.sent.every((m) => !('ask' in m.data)), 'never a question');
   // No answer means on it: the ride, pushed without waking anyone.
   clock(Date.parse(plan.board) + 4 * 60_000);
   await wakeUntil(() => fcm.sent.at(-1).data.phase === 'riding');
@@ -155,7 +155,7 @@ test('nothing is pushed to ask about the bus: after the departure the trip moves
   const before = fcm.sent.length;
   await call('/me/signal', { method: 'POST', token: phone, body: { kind: 'boarded' } });
   const told = fcm.sent.slice(before);
-  assert.deepEqual(told.map((m) => [m.token, m.data.phase, m.data.ask, m.android.priority]), [['fcm-tablet', 'riding', '0', 'NORMAL']]);
+  assert.deepEqual(told.map((m) => [m.token, m.data.phase, m.android.priority]), [['fcm-tablet', 'riding', 'NORMAL']]);
 });
 
 test('the morning cron starts the day for push users, so the push comes without any app asking', async () => {
@@ -165,7 +165,7 @@ test('the morning cron starts the day for push users, so the push comes without 
   assert.equal(await armTrips(env, Date.now()), 1);
   assert.ok(alarm() !== undefined, 'the Trip object is watching');
   await wakeUntil(() => fcm.sent.length > 0);
-  assert.deepEqual(fcm.sent[0].data, { kind: 'card', phase: 'due', ask: '0' });
+  assert.deepEqual(fcm.sent[0].data, { kind: 'card', phase: 'due' });
   assert.equal(await armTrips(env, Date.now()), 0, 'once a day');
 });
 

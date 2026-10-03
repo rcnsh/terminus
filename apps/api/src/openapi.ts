@@ -680,7 +680,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             'What happened on a trip, or a plan for today. Cards offer only plans: `skipped` (not going today), `away` ("Not on campus today", ' +
             'on an idle trip: every trip left today, not counted as outcomes) and `back` (undoes it), and `reset` (undo). Nothing asks what ' +
-            'happened (`card.ask` is always null): no answer is taken as on the planned bus a few minutes after it leaves, and the phone\'s location ' +
+            'happened: no answer is taken as on the planned bus a few minutes after it leaves, and the phone\'s location ' +
             'corrects it. `boarded`, `missed`, `left`, `arrived` and `undetected` still work, for older apps. `trip` is the key from a card action ' +
             'or /me/day; without it, the trip in progress. Recorded for the day on every device, and answered with the new `/me/next`. Deleted at the ' +
             'end of the day. During a trip an app may send a `location` every 20 seconds or so, with `speed` (m/s) and `acc` (metres) when it has ' +
@@ -720,8 +720,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Register this device for push',
           description:
             "An app sends its Firebase Cloud Messaging token; the web app its Web Push subscription (`PushSubscription.toJSON()`, subscribed with the key from GET /me/push/key). " +
-            "When the trip's phase or question changes, an app gets a data message `{kind: 'card', phase, ask: '0'|'1'}` and should fetch `/me/next`. " +
-            'The web app gets the same as an encrypted payload `{kind, phase, ask, urgent}`, only when there is something to show. ' +
+            "When the trip's phase changes, an app gets a data message `{kind: 'card', phase}` and should fetch `/me/next`. " +
+            'The web app gets the same as an encrypted payload `{kind, phase, urgent}`, only when there is something to show. ' +
             'A push address lives on one session; one the push service no longer knows is dropped.',
           operationId: 'mePushRegister',
           security: [{ bearer: [] }, { cookie: [] }],
@@ -796,7 +796,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'object',
               properties: {
                 choices: { type: 'array', items: { type: 'object', properties: { trip: { type: 'string' }, pref: { type: 'string', enum: ['earlier', 'quiet'] }, label: { type: ['string', 'null'] }, since: { type: 'string', format: 'date-time' } } } },
-                askMuted: { type: 'boolean' },
                 history: { type: 'integer', description: 'Trips in the history (the last 35 days), which DELETE /me/history clears.' },
               },
             }),
@@ -812,17 +811,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           operationId: 'meClearHistory',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, cleared: { type: 'integer', description: 'Trips forgotten.' } } }) },
-        },
-      },
-      '/me/ask': {
-        post: {
-          tags: ['Account'],
-          summary: 'Ask if I caught the bus again (no longer used)',
-          description: 'Nothing is asked any more, so there is nothing to turn back on. Kept for older apps; answers `{ok: true, askMuted: false}`.',
-          deprecated: true,
-          operationId: 'meAskAgain',
-          security: [{ bearer: [] }, { cookie: [] }],
-          responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, askMuted: { type: 'boolean' } } }) },
         },
       },
       '/me/feedback': {

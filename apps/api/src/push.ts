@@ -31,8 +31,6 @@ interface ServiceAccount {
 /** What a push says; the app fetches the card itself. */
 export interface Nudge {
   phase: string;
-  /** A question is showing ("On the 9:41 D2?"). */
-  ask: boolean;
   /** Worth waking the phone for. */
   urgent: boolean;
   /** False when reminders are off for this trip: the web app then isn't
@@ -105,7 +103,7 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
       if (r.push_token.startsWith(WEB_PREFIX)) {
         // Every web push shows a notification (iOS insists), so nothing to
         // show means nothing sent: an idle card, or reminders off for the trip.
-        if ((nudge.phase === 'idle' && !nudge.ask) || nudge.remind === false) continue;
+        if (nudge.phase === 'idle' || nudge.remind === false) continue;
         let sub = null;
         try {
           sub = parseSubscription(JSON.parse(r.push_token.slice(WEB_PREFIX.length)));
@@ -114,7 +112,7 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
         }
         // One browser's failure (a key that won't import, a service that hangs) mustn't stop the rest.
         const out = sub
-          ? await sendWebPush(env, sub, { kind: 'card', phase: nudge.phase, ask: nudge.ask, urgent: nudge.urgent }, { urgent: nudge.urgent, nowMs }).catch((err) => {
+          ? await sendWebPush(env, sub, { kind: 'card', phase: nudge.phase, urgent: nudge.urgent }, { urgent: nudge.urgent, nowMs }).catch((err) => {
               console.error('web push', String(err));
               return 'failed' as const;
             })
@@ -131,7 +129,7 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
           body: JSON.stringify({
             message: {
               token: r.push_token,
-              data: { kind: 'card', phase: nudge.phase, ask: nudge.ask ? '1' : '0' },
+              data: { kind: 'card', phase: nudge.phase },
               android: { priority: nudge.urgent ? 'HIGH' : 'NORMAL', ttl: '600s', collapse_key: 'card' },
             },
           }),

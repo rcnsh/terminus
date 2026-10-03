@@ -57,14 +57,6 @@ export interface TripView {
   reached?: string;
 }
 
-/** "On the 9:41 D2?": no longer asked (Card.ask is always null). The shape
- *  stays for older apps. */
-export interface CardAsk {
-  trip: string;
-  question: string;
-  actions: CardAction[];
-}
-
 export interface Card {
   kind: CardKind;
   /** Dim the answer from this instant: the bus has gone, the plan has moved
@@ -109,10 +101,6 @@ export interface Card {
   warning: string | null;
   /** When this card should be expected to change by itself; refetch then. */
   nextChangeAt: string | null;
-  /** Always null: terminus no longer asks "On the 9:41 D2?". Kept for older apps. */
-  ask: CardAsk | null;
-  /** Always false (nothing is asked). Kept for older apps. */
-  askMuted: boolean;
   /** False when the user asked for no reminders for this trip: no leave
    *  notification. The card itself is unchanged. */
   remind: boolean;
@@ -169,7 +157,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 
 const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
-type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'ask' | 'askMuted' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
+type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
 type V1 = Omit<Card, V2>;
 
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }): Card {
@@ -359,10 +347,6 @@ function v2(
     actions.push({ id: 'reset', label: isHomeKey(trip.undo.key) ? m().undoHome : m().undoTo(trip.undo.label), trip: trip.undo.key });
   }
 
-  // The question ("On the 9:41 D2?") is no longer asked: always null, and
-  // askMuted always false, for older apps that still read them.
-  const ask: CardAsk | null = null;
-
   // The next moment this card changes by itself: the trip's next phase, or
   // the answer going stale, whichever is sooner.
   const phaseAt = nextPhaseAt(a, trip, nowMs);
@@ -376,8 +360,6 @@ function v2(
     actions,
     warning: a.warning ?? null,
     nextChangeAt: next === undefined ? null : iso(next),
-    ask,
-    askMuted: false,
     remind: trip.remind !== false,
     suggestion: trip.suggestion ?? null,
     ride: phase === 'riding' && onBus ? rideOf(onBus) : null,

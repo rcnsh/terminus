@@ -298,22 +298,18 @@ test('with every class today skipped, the day is free and "next" is not a skippe
 test('nothing is asked about the bus, before or after it leaves, and no answer means you are on it', async () => {
   const { phone, mac, next, signal, clock } = await setup();
   const first = await next(phone);
-  assert.equal(first.card.ask, null, 'nothing to ask before the trip is due');
   const leaveAt = Date.parse(first.leave.at);
 
   // Due: the plan is remembered from here on.
   clock(leaveAt - 60_000);
   const due = await next(phone);
   assert.equal(due.card.phase, 'due');
-  assert.equal(due.card.ask, null, 'not before the bus leaves');
   const board = Date.parse(due.leave.board);
   const svc = due.leave.svc;
 
   // Just after it left: nothing asked, on any device.
   clock(board + 30_000);
   const left = await next(mac);
-  assert.equal(left.card.ask, null);
-  assert.equal(left.card.askMuted, false);
   assert.equal(left.card.actions.some((x) => ['boarded', 'missed', 'arrived'].includes(x.id)), false);
 
   // A few minutes on, nobody having said otherwise: on that bus, not the next one.
@@ -390,7 +386,6 @@ test('no answer means "on it": the planned bus, a few minutes after it left', as
   assert.equal(quiet.card.phase, 'riding');
   assert.equal(quiet.label, `On the ${due.leave.svc}`);
   assert.match(quiet.card.line, new RegExp(`^On the ${due.leave.svc}`));
-  assert.equal(quiet.card.ask, null, 'and nothing asks');
 });
 
 test('still at the stop a few minutes after the bus left: missed, without being asked', async () => {
@@ -463,12 +458,13 @@ test('silence is not an outcome: nothing was asked, so nothing is noted', async 
   assert.deepEqual(outcomesToday(env), []);
 });
 
-test('old "no answer" rows mute nothing, and /me/ask from an older app is harmless', async () => {
+test('old "no answer" rows change nothing, and the old question routes are gone', async () => {
   const { env, call, phone, next } = await setup();
   for (let d = 1; d <= 5; d++) seed(env, `${d}:600:UTOWN`, d, 'none');
-  assert.equal((await next(phone)).card.askMuted, false);
-  assert.equal((await (await call('/me/choices', { token: phone })).json()).askMuted, false);
-  assert.deepEqual(await (await call('/me/ask', { method: 'POST', token: phone })).json(), { ok: true, askMuted: false });
+  const a = await next(phone);
+  assert.equal('ask' in a.card || 'askMuted' in a.card, false);
+  assert.equal('askMuted' in (await (await call('/me/choices', { token: phone })).json()), false);
+  assert.equal((await call('/me/ask', { method: 'POST', token: phone })).status, 404);
 });
 
 test('clearing the trip history forgets the outcomes and drops the suggestion, but keeps choices', async () => {
@@ -486,15 +482,8 @@ test('clearing the trip history forgets the outcomes and drops the suggestion, b
   assert.equal(r.history, 0);
   assert.deepEqual(r.choices.map((c) => [c.trip, c.pref]), [[SECOND, 'quiet']], 'choices stay');
   const a = await next(phone);
-  assert.equal(a.card.askMuted, false);
   assert.equal(a.card.suggestion, null);
   assert.equal((await call('/me/history', { method: 'DELETE' })).status, 401);
-});
-
-test('one answer among the last five keeps the question', async () => {
-  const { env, phone, next } = await setup();
-  for (let d = 1; d <= 5; d++) seed(env, `${d}:600:UTOWN`, d, d === 3 ? 'boarded' : 'none');
-  assert.equal((await next(phone)).card.askMuted, false);
 });
 
 test('three misses of a class in a month suggest a bus earlier; accepting it moves the leave-by, undoing it moves it back', async () => {
@@ -589,7 +578,6 @@ test('waiting at the stop, then moving at bus speed along its road: on the bus, 
   assert.equal(riding.card.phaseText, "Looks like you're on the bus");
   // Nothing asks what happened, and there's nothing to answer.
   assert.deepEqual(riding.card.actions, []);
-  assert.equal(riding.card.ask, null, 'nothing to ask: it is known');
   // Every device, even one without a location.
   const mac = await t.next(t.mac);
   assert.equal(mac.card.phase, 'riding');
@@ -803,7 +791,6 @@ test('followed by location or not, nothing asks what happened: no question, no b
   assert.ok(followed.card.actions.some((a) => a.id === 'skipped'), '"Not going" is a plan, not a status: it stays');
   t.clock(board + 3 * 60_000); // no fix for a while
   const quiet = await t.next(t.mac);
-  assert.equal(quiet.card.ask, null);
   assert.equal(quiet.card.actions.some((a) => ['boarded', 'missed', 'arrived', 'undetected'].includes(a.id)), false);
 });
 
@@ -827,7 +814,6 @@ test('having been at the stop is not an answer: after the bus leaves, the phone 
   t.clock(board + 4 * 60_000);
   const later = await t.next(t.mac);
   assert.equal(later.card.phase, 'riding');
-  assert.equal(later.card.ask, null, 'and never asked');
 });
 
 test('a NUSMods class ends half an hour before its timetable end: the day, "till", and the trip home go by that', async () => {
