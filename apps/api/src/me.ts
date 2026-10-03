@@ -538,7 +538,9 @@ const ME_ROUTES: MeRoute[] = [
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
       const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
-      return json(await dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url), prefs.earlier, coordsFrom(url)));
+      const here = coordsFrom(url);
+      const plan = () => dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url), prefs.earlier, here);
+      return json(await dayCached(ctx, nowMs, [session.user.id, profile, day, hour12(url), [...prefs.earlier], here, lang()], plan));
     },
   },
   {
@@ -1115,6 +1117,26 @@ export async function handleMe(
 }
 
 /** Today's trip signals, looked up only when there's a trip to track today. */
+/**
+ * /me/day's plan, kept up to a minute per user: a phone, a Mac and a browser
+ * each ask every 30 s or so, and planning the whole day is the expensive
+ * part. Kept under everything it's worked out from (the profile, today's
+ * record, the clock style, the language, roughly where you are) and the
+ * minute, so a change to any of them plans afresh at once.
+ */
+async function dayCached<T>(ctx: ExecutionContext, nowMs: number, inputs: unknown[], plan: () => Promise<T>): Promise<T> {
+  const round = (x: unknown) => (typeof x === 'number' ? Math.round(x * 1000) / 1000 : x);
+  const seed = JSON.stringify([...inputs, Math.floor(nowMs / 60_000)], (_, v) => round(v));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seed));
+  const key = new Request(`https://terminus.internal/day/${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')}`);
+  const cache = typeof caches === 'undefined' ? null : caches.default;
+  const hit = await cache?.match(key).catch(() => undefined);
+  if (hit) return (await hit.json()) as T;
+  const fresh = await plan();
+  if (cache) ctx.waitUntil(cache.put(key, new Response(JSON.stringify(fresh), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=60' } })).catch(() => {}));
+  return fresh;
+}
+
 async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number): Promise<DayRecord | null> {
   if (!env.TRIPS || !classesOn(profile, nowMs).length) return null;
   return loadDay(env, userId, nowMs);
