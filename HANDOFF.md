@@ -28,21 +28,39 @@ recently, what's left, and where to look. Delete it once it's out of date.
   44). It is not released yet. The release waits for the owner, who needs
   their Mac and signing keys (`ON-MACOS.md` C6, C7 and Y4). Agents never tag or
   release by hand.
-- **Deployed.** Both sites (terminus.rcn.sh and the beta) run `598ba46`.
-  - Two later commits are on `main` but not yet deployed, unless the owner
-    has done it since: `aacf961` (edge caching) and `17dc7d9` (bill
-    guards).
-  - Neither has a migration.
-  - Check what's live with `curl -s https://terminus.rcn.sh/sw.js | head -20`.
-    `SHELL = 'shell-v11'` means 17dc7d9 is deployed.
+- **Deployed.** Both sites (terminus.rcn.sh and the beta) run `ee278ff`,
+  everything on `main` as of 3 October evening, with no migration pending.
+  - `/health` on both says `ok: true` and `calendar.source: fetched`: the
+    calendar is answered from the copy the cron fetched (`d85239b`).
+  - Check what's live with `curl -s https://terminus.rcn.sh/health`, and
+    `curl -s https://terminus.rcn.sh/sw.js | head -20` for the website's
+    `SHELL` version.
+  - Live buses on production haven't been recorded since the deploy
+    (`ON-MACOS.md` C3); it needs buses running.
 - **The owner deploys from a VPS:**
-  `git fetch origin && git reset --hard origin/main && pnpm install --frozen-lockfile && (cd apps/api && pnpm run deploy:beta && pnpm run deploy)`
-- **CI** was green on every commit up to 17dc7d9: api, lint, web, android
-  and mac.
+  `git fetch origin --tags --force && git reset --hard origin/main && pnpm install --frozen-lockfile && (cd apps/api && pnpm run deploy:beta && pnpm run deploy)`
+- **History.** Every commit message was rewritten to Conventional Commits
+  on 3 October, tags included. A clone from before then needs
+  `git fetch origin --tags --force && git reset --hard origin/main`.
+- **CI** was green on every commit up to `ee278ff`: api, lint, web,
+  android and mac.
 
 ## What was done recently, newest first
 
 Use `git show` on each for the details.
+
+- **ee278ff** Dependabot's oxlint bump (PR #10), merged.
+- **b3d4dc4 ON-MACOS.md.** The owner's Mac to-do list (it was
+  AFTER-AUDIT.md), in two parts: what Claude can do there, and what only
+  the owner can do.
+- **8f4e556 Conventional Commits.** The whole history's messages were
+  rewritten to `type(scope): summary`; CLAUDE.md and CONTRIBUTING.md
+  describe it, and the scrape workflow, Dependabot and
+  `release-notes.py` follow it.
+- **d85239b The calendar keeps itself up to date.** The cron fetches
+  NUSMods' semester dates and data.gov.sg's holidays weekly into KV
+  (`src/calendarsync.ts`), so the calendar doesn't run out when nobody
+  deploys. `/health` says which copy answers.
 
 - **17dc7d9 Guards against a big Cloudflare bill.**
   - **Static files skip the Worker.** `/assets/*` and `/vendor/*` are

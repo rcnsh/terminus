@@ -4,29 +4,31 @@ What's left for when you're back at the Mac, split in two: what Claude can
 do there for you, and what only you can do (your keys, accounts, devices
 and decisions). Delete this file once it's done.
 
-## Where things stand (3 October)
+## Where things stand (3 October, evening)
 
-- **Deployed:** production and the beta are deployed up to the bill guards
-  (`17dc7d9`), with no migrations pending.
-- **Not deployed yet:** the calendar refreshing itself (`d85239b`), and
-  whatever lands after it.
+- **Deployed:** production and the beta both run everything on `main` up
+  to `ee278ff`, with no migrations pending.
+  - That includes the calendar refreshing itself. Both sites already
+    answer from the copy the cron fetched (`/health` says
+    `calendar.source: fetched`).
+  - The deploy accepted the 5 s CPU limit, so the plan allows it.
+- **History rewritten:** every commit message is in Conventional Commits,
+  pushed with all the tags (Y1, done). The old `ccr-*` and `imgbot`
+  branches are deleted.
 - **Not released:** the apps are at 2.1.0 (build 44) on `main`, Android
   and Mac together. The last release is 2.0.4.
-- **History rewrite waiting:** every commit message has been rewritten to
-  Conventional Commits, but GitHub refused the force-push from the cloud
-  session. It's waiting in `terminus-rewritten.bundle`, which Claude sent
-  you in chat. Step Y1 below pushes it.
+- **Not checked yet:** live buses on production, which needs buses running
+  (C3).
 
 ## The order
 
-1. **You:** push the history rewrite, or decide not to (Y1).
-2. **Claude:** get `main`, then build and test everything (C1, C2).
-3. **You:** deploy from the VPS (Y2). **Claude:** check it worked (C3).
-4. **Claude:** install the apps (C4). **You:** try them (Y3).
-5. **Claude:** retake the screenshots (C5) and dry-run the release (C6).
-6. **You:** read the release notes and say go (Y4). **Claude:** releases
+1. **Claude:** get `main`, then build and test everything (C1, C2).
+2. **Claude:** check live buses on production in the daytime (C3).
+3. **Claude:** install the apps (C4). **You:** try them (Y3).
+4. **Claude:** retake the screenshots (C5) and dry-run the release (C6).
+5. **You:** read the release notes and say go (Y4). **Claude:** releases
    (C7). **You:** approve it on GitHub (Y4).
-7. **You:** Cloudflare and GitHub settings (Y5, Y6) and the open decisions
+6. **You:** Cloudflare and GitHub settings (Y5, Y6) and the open decisions
    (Y7), any time.
 
 ## Part 1: for Claude on the Mac
@@ -36,10 +38,10 @@ Ask the owner before anything marked **ask first**.
 
 ### C1. Get `main`
 
-The history was rewritten on 2 October (authors), and, once Y1 is done,
-again on 3 October (messages). A plain `git pull` would merge the old
-history into the new, so reset instead. Check `git status` first: anything
-uncommitted is lost by the reset.
+The history was rewritten on 2 October (authors) and again on 3 October
+(messages), so a clone from before then has the old history. A plain
+`git pull` would merge the old history into the new, so reset instead.
+Check `git status` first: anything uncommitted is lost by the reset.
 
 ```sh
 git checkout main
@@ -47,10 +49,6 @@ git fetch origin --tags --force    # the tags moved with the rewrite
 git reset --hard origin/main
 pnpm install --frozen-lockfile
 ```
-
-If `git log -1 --format=%s` starts with `feat`, `fix`, `chore` or similar,
-the rewrite is on GitHub. If not, Y1 hasn't happened: carry on, and tell
-the owner.
 
 ### C2. Build and test everything
 
@@ -66,19 +64,19 @@ pnpm lint && pnpm check
 All of it should pass. CI was green on every commit, so a failure here
 points at this Mac's setup (Java 21, Xcode, the Android SDK).
 
-### C3. After the owner deploys (Y2)
+### C3. Check the live sites
 
-- `curl -s https://terminus.rcn.sh/health`:
-  - `ok` is true;
-  - `calendar.source` is `fetched` once the cron has run (within 15
-    minutes of the deploy);
-  - `calendar.through` goes past August 2027 once NUSMods lists 2027/2028.
-- Do the same for `https://beta.terminus.rcn.sh/health`.
+The 3 October deploy is already checked: `/health` on both sites says
+`ok: true` and `calendar.source: fetched`. Still to do:
+
 - Run the **record live buses** workflow on production while buses run
   (weekdays, daytime): `gh workflow run record-buses.yml -f
   site=https://terminus.rcn.sh`. Its summary should report no bus
   switching sides or jumping. It uses a throwaway account and needs no
   secrets.
+- `calendar.through` in `/health` (now 23 August 2027) moves past then
+  once NUSMods lists 2027/2028. Nothing to do until then.
+- After any later deploy, check `/health` on both sites again.
 
 ### C4. Install the apps
 
@@ -150,50 +148,21 @@ that isn't on `main`.
 
 ## Part 2: only you
 
-### Y1. Push the history rewrite
+### Y1. Push the history rewrite (done, 3 October)
 
-Every commit's message is in Conventional Commits now (`feat(map): …`,
-`fix(api): …`, `chore(release): terminus 2.0.4`):
-- the files, authors and dates are unchanged;
-- every tag points at its rewritten commit;
-- long one-line subjects became a short subject with the original text
-  as the body.
+Pushed from the VPS, with all 35 tags, and the old `ccr-*` and `imgbot`
+branches deleted. Any other clone made before 3 October needs C1's reset.
 
-GitHub refused the force-push from the cloud session, so it has to come
-from you. The bundle holds all 5 branches and 35 tags.
+### Y2. Deploy from the VPS (done, 3 October)
 
-1. If `main` has branch protection against force-pushes, turn it off
-   (GitHub → Settings → Branches).
-2. Push the bundle:
-   ```sh
-   git clone --mirror terminus-rewritten.bundle terminus-rewritten.git
-   cd terminus-rewritten.git
-   git push --force https://github.com/rcnsh/terminus 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
-   ```
-3. Turn the protection back on.
-
-Do it before anything else lands on `main`: a push in between (Dependabot,
-the Monday scrape, a cloud session) would be overwritten. If something has
-landed since 3 October, ask Claude to put it on top of the rewritten
-history first.
-
-If you'd rather not rewrite, delete the bundle. The commit that switches
-to the convention from now on (CLAUDE.md, CONTRIBUTING.md, the scrape
-workflow, Dependabot, `release-notes.py`) is only in the bundle, so ask
-Claude to make it on the current `main` instead.
-
-### Y2. Deploy from the VPS
-
-No migrations. From the VPS, in one line (beta first, then production):
+Both sites run `ee278ff`. For the next deploy, the same line (beta first,
+then production; no migrations pending):
 
 ```sh
 git fetch origin --tags --force && git reset --hard origin/main && pnpm install --frozen-lockfile && (cd apps/api && pnpm run deploy:beta && pnpm run deploy)
 ```
 
-The deploy sets a CPU limit of 5 s per request (`limits.cpuMs` in
-`apps/api/cloudflare.config.ts`). That needs the Workers Paid plan: if the
-deploy refuses it, remove those three lines and deploy again. Then tell
-Claude to check it (C3).
+Then ask Claude to check it (C3).
 
 ### Y3. Try the apps for real
 
