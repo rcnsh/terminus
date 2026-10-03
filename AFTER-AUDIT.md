@@ -145,8 +145,6 @@ Server load and cost:
   an app's first start would stop scripted sign-ups.
 - `/me/day` plans the whole day again on every 30-second poll; it could be
   kept per user for a short while.
-- The morning's trip arming makes up to 2,000 Durable Object calls in one
-  cron run; it should go in batches.
 - Map tiles, fonts and `/campus` could be cached at the edge, or `/campus`
   given an ETag (or a `?part=map` that leaves out what the map doesn't use).
 - Fonts could be served from our own domain, and the Chinese strings loaded

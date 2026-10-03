@@ -169,6 +169,18 @@ test('the morning cron starts the day for push users, so the push comes without 
   assert.equal(await armTrips(env, Date.now()), 0, 'once a day');
 });
 
+test('the morning cron arms push users in batches, each run carrying on from the last', async () => {
+  const { call, phone, env } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  // A batch of one: the first run arms the one user and isn't sure it's done.
+  assert.equal(await armTrips(env, Date.now(), 1), 1);
+  assert.match(await env.KV.get('trips:armed'), / /, 'under way, after that user');
+  // The next run finds nobody after them: the day is done.
+  assert.equal(await armTrips(env, Date.now(), 1), 0);
+  assert.doesNotMatch(await env.KV.get('trips:armed'), / /);
+  assert.equal(await armTrips(env, Date.now(), 1), 0, 'once a day');
+});
+
 test('an access token that went stale is replaced, and the push still goes', async () => {
   const { call, phone, next, fcm, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });

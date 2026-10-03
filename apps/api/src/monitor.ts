@@ -267,8 +267,11 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
 /** From this hour (Singapore) each day, the cron starts the day's trip watching. */
 export const ARM_FROM_HOUR = 6;
 const ARMED_KEY = 'trips:armed';
-/** Users armed per day at most; more than this and push needs a queue. */
-const ARM_MAX = 2000;
+/** Users armed per cron run (every 15 minutes), so one run never runs out
+ *  of time partway: the next run carries on after the last one armed. */
+const ARM_BATCH = 400;
+/** Trip objects asked at once within a batch. */
+const ARM_AT_ONCE = 20;
 
 /**
  * Starts every push user's Trip object watching today's trips, once a day.
@@ -278,14 +281,25 @@ const ARM_MAX = 2000;
  * the card, wakes at the next change (time to go, the question), and keeps
  * going for the day; on a day without classes it just stops.
  */
-export async function armTrips(env: Env, nowMs: number): Promise<number> {
+export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {
   if (!env.DB || !env.TRIPS || !pushEnabled(env)) return 0;
   const today = sgtDate(nowMs);
   const hour = new Date(nowMs + 8 * 3_600_000).getUTCHours();
-  if (hour < ARM_FROM_HOUR || (await env.KV.get(ARMED_KEY)) === today) return 0;
-  const { results } = await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL ORDER BY user_id LIMIT ?').bind(ARM_MAX).all<{ user_id: string }>();
-  for (const r of results) await watchTrip(env, r.user_id, nowMs, nowMs);
-  await env.KV.put(ARMED_KEY, today, { expirationTtl: 2 * 86_400 });
+  if (hour < ARM_FROM_HOUR) return 0;
+  // "2026-10-03" when today is done; "2026-10-03 <user id>" while it's under
+  // way, after that user. (Before batches it was the date alone, which still reads as done.)
+  const mark = (await env.KV.get(ARMED_KEY)) ?? '';
+  if (mark === today) return 0;
+  const after = mark.startsWith(`${today} `) ? mark.slice(today.length + 1) : '';
+  const { results } = await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL AND user_id > ? ORDER BY user_id LIMIT ?')
+    .bind(after, batch)
+    .all<{ user_id: string }>();
+  for (let i = 0; i < results.length; i += ARM_AT_ONCE) {
+    await Promise.all(results.slice(i, i + ARM_AT_ONCE).map((r) => watchTrip(env, r.user_id, nowMs, nowMs).catch(() => {})));
+  }
+  // A short batch was the last one.
+  const done = results.length < batch;
+  await env.KV.put(ARMED_KEY, done ? today : `${today} ${results[results.length - 1].user_id}`, { expirationTtl: 2 * 86_400 });
   return results.length;
 }
 
