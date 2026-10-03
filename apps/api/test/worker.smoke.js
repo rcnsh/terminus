@@ -291,7 +291,7 @@ const D2_BUSES = [
   { vehplate: 'PD999Z', lat: 1.3015, lng: 103.7605, speed: 0, direction: 10, loadInfo: { crowdLevel: 'low' } },
 ];
 
-test('/buses places each bus on its route and never gives the plate', async () => {
+test('/buses places each bus on its route, with its number plate', async () => {
   const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D2;
   // Put the first bus a third of the way along D2's line, heading along it.
   const i = Math.floor(shape.line.length / 3);
@@ -317,7 +317,7 @@ test('/buses places each bus on its route and never gives the plate', async () =
   assert.equal(parked.moving, false);
   assert.match(on.id, /^[0-9a-f]{12}$/);
   assert.notEqual(on.id, parked.id);
-  assert.ok(!JSON.stringify(body).includes('PD123A'), 'the plate is not passed on');
+  assert.ok(body.buses.some((b) => b.plate === 'PD123A'), 'each bus comes with its plate');
   assert.equal(fetchImpl.requests[0].body.route_code, 'D2');
 
   // A second look within 10 s is served from the cache.
