@@ -117,7 +117,12 @@ TTLs and tuning constants.
 Sign-up is open; addresses on the `blocklist` table are refused. The account
 page at `/account` signs in with an emailed code (or the link in the same
 email) and stores one profile per user in D1: timetable, home stops, gap threshold and
-saved places. Apps hold a device token (`Authorization: Bearer`), which they
+saved places. A saved profile that no longer validates as a whole (a stop
+dropped by the weekly scrape, say) is read back part by part
+(`salvageProfile` in `me.ts`): whatever still holds is kept, so the next save
+doesn't write defaults over the day's hours, usual times or one-off trips.
+Request bodies are read with a hard cap as they arrive (`readCapped`, 64 KB
+for JSON), whether or not they declare a length. Apps hold a device token (`Authorization: Bearer`), which they
 get one of three ways:
 
 - **`POST /auth/anon`** on first launch: an account with no email
@@ -326,8 +331,10 @@ Settings. It uses the same routes as the account page, with the session cookie.
   in Safari. `/account/?next=/app/` comes back to the app after sign-in, and
   `/account/?add=1&next=/app/` adds an email from the app's Settings.
 - **Offline.** `/sw.js` fetches the app's files network-first and keeps a
-  copy for offline. `/me`, `/me/next` and `/me/day` are also network-first,
-  and the last good reply is kept (one per route and place). When the network
+  copy for offline (`SHELL_FILES`; `web-sw.test.js` fails if a module the app
+  imports at startup is missing from it). `/me`, `/me/next` and `/me/day` are
+  also network-first, and the last good reply is kept (one per route, place
+  and `to`, so a searched stop's card never stands in for the plan's). When the network
   is down, the kept reply comes back with `x-terminus-cached` (when it was
   fetched), and the page dims the card and says so. Signing out, deleting the
   account or a 401 empties the kept replies.
@@ -543,6 +550,12 @@ it. Where several berths exist and no suffix separates them, the answer caps
 Also: `arrivalTime_ts` looks like an absolute arrival time and would be better
 than relative minutes across a cache TTL, but real rows carry timestamps
 minutes in the past alongside a positive `arrivalTime`. It is not used.
+
+`normalize()` and `normalizeBuses()` treat anything they can't read as
+missing, never as zero: an `arrivalTime` that is negative or looks like a
+clock time ("-3", "12:30") is no time, and a live bus with a blank or null
+latitude, longitude or direction has no position or heading, rather than
+sitting at latitude 0 or heading north.
 
 ## Data flow, confirmed
 

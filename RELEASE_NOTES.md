@@ -15,6 +15,8 @@
 
 **Smaller things.** The web app can search for anywhere, as the phone and Mac apps can: tap the search button by Next and Nearby. On Android it moves there too, from the bottom of the screen. Nearby shows each service in its colour, and tapping a stop opens it on the map. Sign-in and pairing codes send themselves once the last character is in. Your timetable in Settings is a line per class, in your phone's clock style. On the Mac you can add and remove favourites in Settings. On a phone, the account page no longer scrolls sideways.
 
+**Fixes.** terminus no longer offers a bus that has already left when the live times are a few minutes old, and a timetable guess is never shown as a live time. On the Mac, an update waits until Settings is closed, and changing the language no longer quits the app if it can't start again. Badges on light colours have dark text, so they're easier to read.
+
 **Services in their colours**, as on the buses: A1 red, A2 yellow, D1 pink, D2 purple, K light blue, P grey, R1 orange, R2 green.
 
 **A smaller Android download.** There's an APK for each kind of phone: `terminus-2.1.0.apk` suits nearly every phone, and the app's update button picks the right one by itself.

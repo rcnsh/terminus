@@ -1,12 +1,13 @@
 # Back at the Mac
 
-What's left after the security audit (PR #2), the campus map and the
-redesign (tab motion, Settings as a list of groups, the theme choice), for
-when you're back at the Mac. Delete this file once it's done.
+What's left after the security audit (PR #2), the campus map, the
+redesign (tab motion, Settings as a list of groups, the theme choice) and
+the second audit's fixes (2 October), for when you're back at the Mac.
+Delete this file once it's done.
 
 Already done, from the VPS: production and the beta are migrated and
-deployed, and both have their street map on R2. The redesign isn't deployed
-yet: from the VPS, `git fetch origin && git reset --hard origin/main &&
+deployed, and both have their street map on R2. The redesign and the second
+audit's fixes aren't deployed yet: from the VPS, `git fetch origin && git reset --hard origin/main &&
 pnpm install`, then in `apps/api`, `pnpm run deploy` and `pnpm run deploy:beta`.
 
 ## 1. Get main
@@ -52,6 +53,11 @@ cd apps/android
 - Settings › Appearance: Light and Dark apply at once, the map and status bar
   included. Follow this phone goes back to the system's setting.
 - Open the app: the last plan shows straight away while it refreshes.
+- Nearby: tap a stop. The map moves to it as its sheet opens.
+- During a trip on Android 12–15: the live notification shows (it crashed
+  before the fix).
+- On the leave-by notification, tap Not going with the phone offline: the
+  notification stays and nothing is skipped.
 
 Mac:
 
@@ -66,6 +72,7 @@ swift test
 - Settings… in the menu opens a Settings window: a sidebar of groups, and a
   back arrow. Appearance switches light and dark for the popover and every
   window. Open at login, updates and language moved from the menu to here.
+- Badges on light colours (A2, K) have dark text.
 
 On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
 
@@ -75,6 +82,8 @@ On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
   group's page. "Notify me when to leave" is under Notifications.
 - Settings › Appearance: Light and Dark apply at once, the map included.
 - The map, and the beta's at beta.terminus.rcn.sh/app/#map, shows streets.
+- Open the app once, then turn on airplane mode and open it again: it
+  starts and shows the kept plan (it stayed on "Checking…" before the fix).
 
 ## 3. Release 2.1.0
 
@@ -113,6 +122,67 @@ when you want it.
 4320` (three days), so newer versions are refused until they're that old;
 beta.11 is allowed from 5 October, 06:58 UTC. Nothing to do: Dependabot
 will open a PR, and CI checks it.
+
+## 6. Decide: what the second audit left open
+
+The second audit (2 October) fixed what was clearly wrong and left these,
+which each need a choice. Ask Claude to do any of them.
+
+Server load and cost:
+
+- Rate limits are per IP (`RL_PUBLIC`, `RL_MAIL`, `RL_ANON`); on campus
+  Wi-Fi many students share one. Per account would be fairer; Turnstile on
+  an app's first start would stop scripted sign-ups.
+- `/me/day` plans the whole day again on every 30-second poll; it could be
+  kept per user for a short while.
+- The morning's trip arming makes up to 2,000 Durable Object calls in one
+  cron run; it should go in batches.
+- Map tiles, fonts and `/campus` could be cached at the edge, or `/campus`
+  given an ETag (or a `?part=map` that leaves out what the map doesn't use).
+- Fonts could be served from our own domain, and the Chinese strings loaded
+  only when Chinese is chosen.
+- The service worker waits as long as the network takes before using its
+  kept copy; a few seconds' timeout would help on a bad connection.
+
+The API's answers:
+
+- `/me/next` passes on a bus id hashed without a salt, so a plate could be
+  worked out from it.
+- A `?to=` that matches nothing isn't answered clearly.
+- `youreHome` is labelled `live`; `headwayS` is never filled in.
+- Some routes aren't in the OpenAPI spec.
+
+The same on every app:
+
+- Should the web count down every second, as Android and the Mac do?
+- Should Today's heading and Nearby's wording come from the server, rather
+  than each app writing its own?
+- "Not going" or "Not going today": the button says both in places.
+- Chips are in a different order on different apps.
+- Walk minutes on some cards ignore the walking pace you set.
+- Android-only features (ride progress, Go later, chips that stay put, the
+  opposite stop) on the web and the Mac? The Mac has no Not going button
+  and leaves some settings to the account page.
+- Wording differs: favourite or place, "Add a device", how a packed bus is
+  described, what the report link is called.
+
+The Mac:
+
+- The menu bar shows estimates without "~".
+- A long popover has no maximum height.
+- Some Settings errors aren't shown; two quick saves can overwrite each
+  other, and a save sends the whole profile.
+- Signing out has no confirmation.
+
+Android:
+
+- Answers could be cached by the HTTP client; the live trip asks for GPS
+  more often than it needs; the street map is kept on metered connections
+  too.
+- Not checked on a phone: whether Follow this phone switches with the
+  system's dark mode, and whether the map keeps its place across restarts.
+
+The web: where the search button goes when the chips don't fit on one line.
 
 ## From your phone, any time
 
