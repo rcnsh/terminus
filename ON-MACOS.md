@@ -7,12 +7,16 @@ and decisions). Delete this file once it's done.
 ## Where things stand (3 October, evening)
 
 - **Deployed:** production and the beta both run all of `main`, up to
-  `e4f59b4`. No migrations pending.
+  `ae24ab9`. No migrations pending.
   - The calendar refreshes itself: both sites answer from the copy the
     cron fetched (`/health` says `calendar.source: fetched`).
   - The API docs say 2.1.0, and on a phone they scroll as a page, so
     their end and their menu's clear Chrome's toolbar (checked on a
     phone).
+  - Search: the landing page's title and description match what
+    students search for, shared links show a preview card, and
+    `robots.txt` and `/sitemap.xml` are live. The beta asks not to be
+    crawled or indexed. Google hasn't been told about the site yet (Y6).
   - The deploy accepted the 5 s CPU limit, so the plan allows it.
 - **History rewritten:** every commit message is in Conventional Commits,
   pushed with all the tags (Y1, done). The old `ccr-*` and `imgbot`
@@ -32,8 +36,8 @@ and decisions). Delete this file once it's done.
 3. **Claude:** retake the screenshots (C5) and dry-run the release (C6).
 4. **You:** read the release notes and say go (Y4). **Claude:** releases
    (C7). **You:** approve it on GitHub (Y4).
-5. **You:** Cloudflare and GitHub settings (Y5, Y6) and the open decisions
-   (Y7), any time.
+5. **You:** Cloudflare, GitHub and Google Search Console (Y5, Y6) and the
+   open decisions (Y7), any time.
 
 ## Part 1: for Claude on the Mac
 
@@ -114,7 +118,10 @@ The web, map and widget shots are current.
   Now with a class card showing), `adb exec-out screencap -p > shot.png`.
 
 Convert to WebP at the size and crop of the old files (`cwebp -q 85`), and
-compare side by side before committing.
+compare side by side before committing. Then run `.github/readme/render.sh`
+(it needs `cwebp`): it redraws the README banners and the link preview
+image (`apps/web/public/assets/og.png`), which show the landing page's
+phone shot.
 
 ### C6. Dry-run the release
 
@@ -162,7 +169,7 @@ branches deleted. Any other clone made before 3 October needs C1's reset.
 
 ### Y2. Deploy from the VPS
 
-Both sites run all of `main` (`e4f59b4`), so nothing waits for a deploy.
+Both sites run all of `main` (`ae24ab9`), so nothing waits for a deploy.
 For the next one, from the VPS, in one line (beta first, then production):
 
 ```sh
@@ -287,7 +294,7 @@ Cloudflare has no spending cap, so set these once:
 - **Requests:** for the first weeks of 2.1.0, keep an eye on Workers &
   Pages → terminus → Metrics → Requests.
 
-### Y6. GitHub and your own Claude setup
+### Y6. GitHub, Google and your own Claude setup
 
 - **Security alerts:** GitHub → Settings → Code security: turn on
   Dependabot alerts and security updates. `.github/dependabot.yml`
@@ -299,6 +306,15 @@ Cloudflare has no spending cap, so set these once:
     `CLAUDE.local.md` (gitignored) on the Mac, or `~/.claude/CLAUDE.md`.
   - The cloud environment already has your git identity (set on 3
     October). Add a line there saying to push to `main` too.
+- **Google Search Console:** add `terminus.rcn.sh` at
+  https://search.google.com/search-console, verifying with the DNS TXT
+  record it gives you (in Cloudflare, under rcn.sh's DNS). Then submit
+  `https://terminus.rcn.sh/sitemap.xml` and use URL inspection → Request
+  indexing on the home page. It shows within days whether Google has the
+  site, and which searches find it.
+- **Getting found:** links from elsewhere count most. Post it on r/nus and
+  in hall, faculty and module Telegram groups, ask the student press, and
+  list it on Google Play once it's ready (the listing ranks in Google too).
 - **The street map** can be refreshed any time, from your phone: GitHub →
   Actions → **map tiles** → Run workflow (stable, beta or both). It also
   runs by itself on 1 January and 1 July.
