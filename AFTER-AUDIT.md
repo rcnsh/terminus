@@ -6,19 +6,9 @@ the second audit's fixes (2 October), for when you're back at the Mac.
 Delete this file once it's done.
 
 Already done, from the VPS: production and the beta are migrated, and both
-have their street map on R2. As of 3 October:
-
-- Production is at 211243f: the redesign, the second audit's fixes, the
-  Preact website, favourites without usual times and the Chinese wording
-  fixes. It doesn't have the three commits below.
-- The beta has everything up to 87fa887, but not c75f7ce.
-- Still to deploy:
-  - 4c3b75a: the site's security policy lets Cloudflare Web Analytics run,
-    and the privacy page says so. Until then production blocks its script
-    and logs an error on every page.
-  - 87fa887: live buses keep to their own side of the road.
-  - c75f7ce: live buses shown where they're estimated to be now, moving
-    between updates.
+have their street map on R2. As of 3 October, both are deployed up to
+bd26015 (the live-bus fixes, Cloudflare Web Analytics allowed). Still to
+deploy: e229547, the web map's pills running to the screen's edges.
 
 From the VPS: `git fetch origin && git reset --hard origin/main && pnpm install`,
 then in `apps/api`, `pnpm run deploy:beta`, check the beta, then
