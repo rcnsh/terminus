@@ -388,4 +388,5 @@
     <string name="your_last_class">上一节课</string>
     <string name="your_timetable">你的课表</string>
     <string name="your_timetable_sub">粘贴你的 NUSMods 分享链接。每节课会对应离教室最近的车站。</string>
+    <string name="busy_try_again">terminus 正忙，请一分钟后再试。</string>
 </resources>

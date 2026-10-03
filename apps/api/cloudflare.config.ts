@@ -26,7 +26,7 @@ function site(mode: string | undefined) {
 			downloads: "terminus-downloads",
 			dataset: "terminus",
 			// Rate limit counters are per namespace; the beta has its own.
-			rl: { auth: "1001", public: "1002", me: "1003", mail: "1004", anon: "1005" },
+			rl: { auth: "1001", public: "1002", me: "1003", mail: "1004", anon: "1005", map: "1006" },
 			env: {},
 		};
 	}
@@ -39,7 +39,7 @@ function site(mode: string | undefined) {
 			kv: BETA.kv,
 			downloads: "terminus-beta-downloads",
 			dataset: "terminus_beta",
-			rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005" },
+			rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005", map: "2006" },
 			env: {
 				PUBLIC_ORIGIN: bindings.text("https://beta.terminus.rcn.sh"),
 				AE_DATASET: bindings.text("terminus_beta"),
@@ -65,8 +65,17 @@ function site(mode: string | undefined) {
 					invocationLogs: false,
 				},
 			},
+			// The Worker runs first for the pages (security headers, the CSP, the
+			// beta's badge) and everything it answers. Scripts, styles and images
+			// skip it: static files are free, a Worker request is not. Their
+			// headers come from ../web/public/_headers instead.
 			assets: {
-				runWorkerFirst: true,
+				runWorkerFirst: ["/*", "!/assets/*", "!/vendor/*"],
+			},
+			// Nothing here needs more than a fraction of this: it stops a bug
+			// that loops from running up the bill, one request at a time.
+			limits: {
+				cpuMs: 5_000,
 			},
 			domains: [
 				s.domain,
@@ -137,6 +146,15 @@ function site(mode: string | undefined) {
 					namespace: s.rl.me,
 					simple: {
 						limit: 120,
+						period: 60,
+					},
+				}),
+				// The map's reads from R2, per IP. A map open is dozens of pieces,
+				// but nearly all come from the edge cache and don't count.
+				RL_MAP: bindings.rateLimit({
+					namespace: s.rl.map,
+					simple: {
+						limit: 300,
 						period: 60,
 					},
 				}),

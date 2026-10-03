@@ -612,6 +612,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     private suspend fun request(method: String, path: String, body: JSONObject? = null): JSONObject =
         withContext(Dispatchers.IO) {
+            // Asked to slow down: nothing goes out until Retry-After is up.
+            if (System.currentTimeMillis() < Quiet.untilMs) throw ApiError(429, L.s(R.string.busy_try_again))
             val conn = URL(BuildConfig.API_BASE + path).openConnection() as HttpURLConnection
             try {
                 conn.requestMethod = method
@@ -629,6 +631,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                     conn.outputStream.use { it.write(body.toString().toByteArray()) }
                 }
                 val status = conn.responseCode
+                if (status == 429) Quiet.after(conn.getHeaderField("retry-after"))
                 val stream = if (status in 200..299) conn.inputStream else conn.errorStream
                 val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(text) }.getOrNull()
@@ -642,6 +645,21 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     private fun query(parts: List<String>) = if (parts.isEmpty()) "" else "?" + parts.joinToString("&")
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+}
+
+/**
+ * After a 429, every request on this phone (the app, its widgets, the live
+ * notification) waits out the server's Retry-After, at most 5 minutes: a
+ * loop that kept asking would only keep the limit tripped, and each refused
+ * request still costs the server one.
+ */
+object Quiet {
+    @Volatile var untilMs = 0L
+
+    fun after(retryAfter: String?) {
+        val s = retryAfter?.trim()?.toLongOrNull()?.takeIf { it > 0 } ?: 60
+        untilMs = System.currentTimeMillis() + s.coerceAtMost(300) * 1000
+    }
 }
 
 /** `x-terminus-client`: platform and version. */

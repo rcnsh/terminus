@@ -12,7 +12,7 @@
 // they were fetched, so the page can say it's showing old times.
 
 import { Icon, Rich, html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
-import { api, clock, hour12, inkOn, t } from '/account/dom.js';
+import { api, clock, hour12, inkOn, send, t } from '/account/dom.js';
 import { Card, Message, Report, isStale, signal } from '/account/preview.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
@@ -66,7 +66,7 @@ let shared = null;
 
 /** GET a JSON route; `cached` is when the service worker's copy was fetched, if that's what came back. */
 async function get(path) {
-  const res = await fetch(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
+  const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
   if (res.status === 401) {
     // Sign in on the account page, then come back here. In the installed app
     // on iOS this is its own sign-in: its storage is separate from Safari's.

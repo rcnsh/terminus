@@ -16,12 +16,14 @@
  *
  * Every map open asks for dozens of pieces, the same pieces for everyone,
  * so each piece is kept in the edge cache (edgePart) and R2 is read once
- * per piece per data centre, not once per person.
+ * per piece per data centre, not once per person. Reads from R2 are
+ * limited per IP (RL_MAP); pieces already in the cache are not, so a lecture
+ * hall on one Wi-Fi address can all open the map at once.
  */
 
 import { layers, namedFlavor } from '@protomaps/basemaps';
 import type { Env } from './types.ts';
-import { CORS, json } from './http.ts';
+import { CORS, clientKey, json } from './http.ts';
 
 const PREFIX = 'map/';
 const TILES = 'campus.pmtiles';
@@ -84,8 +86,12 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
   }
 
   if (!env.DOWNLOADS) return json({ error: 'not found' }, 404);
+  // Asked at most once per request, and only when R2 is about to be read.
+  let allowed: Promise<boolean> | null = null;
+  const mayRead = () => (allowed ??= env.RL_MAP ? env.RL_MAP.limit({ key: `map:${clientKey(req)}` }).then((r) => r.success, () => true) : Promise.resolve(true));
+  const part = (key: string, type: string, maxAgeS: number) => edgePart(req, env.DOWNLOADS!, key, type, maxAgeS, mayRead, ctx);
 
-  if (path === `/map/${TILES}`) return edgePart(req, env.DOWNLOADS, PREFIX + TILES, 'application/vnd.pmtiles', 86400, ctx);
+  if (path === `/map/${TILES}`) return part(PREFIX + TILES, 'application/vnd.pmtiles', 86400);
 
   // A malformed escape ("%E0") is a bad path: not found, not an error.
   let decoded: string;
@@ -95,21 +101,34 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
     return json({ error: 'not found' }, 404);
   }
   const font = FONT.exec(decoded);
-  if (font) return edgePart(req, env.DOWNLOADS, `${PREFIX}fonts/${font[1]}/${font[2]}.pbf`, 'application/x-protobuf', 30 * 86400, ctx);
+  if (font && glyphRange(font[2])) return part(`${PREFIX}fonts/${font[1]}/${font[2]}.pbf`, 'application/x-protobuf', 30 * 86400);
 
   const sprite = SPRITE.exec(path);
   if (sprite) {
     const type = sprite[3] === 'png' ? 'image/png' : 'application/json';
-    return edgePart(req, env.DOWNLOADS, `${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`, type, 30 * 86400, ctx);
+    return part(`${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`, type, 30 * 86400);
   }
   return json({ error: 'not found' }, 404);
 }
+
+/** A range of 256 glyphs, as MapLibre asks for them ("512-767"): anything else is no file, so not worth an R2 read. */
+export function glyphRange(range: string): boolean {
+  const [start, end] = range.split('-').map(Number);
+  return start % 256 === 0 && end === start + 255 && end <= 65_535;
+}
+
+const slowDown = () => json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
 
 /** How long an isolate trusts what it last learnt of a file (its ETag and size). */
 const HEAD_TTL_MS = 5 * 60_000;
 /** Pieces bigger than this go straight from R2, uncached. The whole map file is about 4 MB. */
 const MAX_CACHED_BYTES = 32 * 1024 * 1024;
 const heads = new Map<string, { etag: string; httpEtag: string; size: number; atMs: number }>();
+
+const knows = (key: string, nowMs: number) => {
+  const known = heads.get(key);
+  return known !== undefined && nowMs - known.atMs < HEAD_TTL_MS;
+};
 
 async function headOf(bucket: R2Bucket, key: string, nowMs: number) {
   const known = heads.get(key);
@@ -152,33 +171,45 @@ export function rangeOf(header: string | null, size: number): { offset: number; 
  * seen within HEAD_TTL_MS. PMTiles readers ask for the same ranges every
  * time, so the pieces are shared by everyone.
  */
-async function edgePart(req: Request, bucket: R2Bucket, key: string, type: string, maxAgeS: number, ctx?: ExecutionContext): Promise<Response> {
+async function edgePart(
+  req: Request,
+  bucket: R2Bucket,
+  key: string,
+  type: string,
+  maxAgeS: number,
+  mayRead: () => Promise<boolean>,
+  ctx?: ExecutionContext,
+): Promise<Response> {
   const cache = typeof caches === 'undefined' ? null : caches.default;
-  if (!cache) return servePart(req, bucket, key, type, maxAgeS);
-  const head = await headOf(bucket, key, Date.now());
+  const fromR2 = async () => ((await mayRead()) ? servePart(req, bucket, key, type, maxAgeS) : slowDown());
+  if (!cache) return fromR2();
+  const nowMs = Date.now();
+  if (!knows(key, nowMs) && !(await mayRead())) return slowDown();
+  const head = await headOf(bucket, key, nowMs);
   if (!head) return json({ error: 'not found' }, 404);
   const headers = partHeaders(type, maxAgeS, head.httpEtag);
   // The client's copy is current: nothing to read.
   if (matchesEtag(req, head.httpEtag)) return new Response(null, { status: 304, headers });
   // Anything conditional beyond that, R2 decides.
-  if (req.headers.has('if-match') || req.headers.has('if-modified-since') || req.headers.has('if-unmodified-since') || req.headers.has('if-range')) return servePart(req, bucket, key, type, maxAgeS);
+  if (req.headers.has('if-match') || req.headers.has('if-modified-since') || req.headers.has('if-unmodified-since') || req.headers.has('if-range')) return fromR2();
 
   const range = rangeOf(req.headers.get('range'), head.size);
   if (range === 'unsatisfiable') return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}` } });
-  if (range === 'other') return servePart(req, bucket, key, type, maxAgeS);
+  if (range === 'other') return fromR2();
   const { offset, length } = range ?? { offset: 0, length: head.size };
-  if (length > MAX_CACHED_BYTES) return servePart(req, bucket, key, type, maxAgeS);
+  if (length > MAX_CACHED_BYTES) return fromR2();
 
   const id = new Request(`https://terminus.internal/map/${encodeURIComponent(key)}?etag=${encodeURIComponent(head.etag)}&bytes=${offset}-${length}`);
   let body: ArrayBuffer | null = null;
   const hit = await cache.match(id).catch(() => undefined);
   if (hit) body = await hit.arrayBuffer();
   else {
+    if (!(await mayRead())) return slowDown();
     const obj = await bucket.get(key, { range: { offset, length }, onlyIf: { etagMatches: head.etag } }).catch(() => null);
     // Replaced since we last looked (or gone): forget it and let R2 answer.
     if (!obj || !('body' in obj)) {
       heads.delete(key);
-      return servePart(req, bucket, key, type, maxAgeS);
+      return fromR2();
     }
     body = await obj.arrayBuffer();
     const put = cache.put(id, new Response(body.slice(0), { headers: { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}` } })).catch(() => {});

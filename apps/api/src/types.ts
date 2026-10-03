@@ -39,6 +39,8 @@ export interface Env {
   RL_PUBLIC?: RateLimit;
   /** Per-account limit on /me. */
   RL_ME?: RateLimit;
+  /** Per-IP limit on the map's reads from R2 (not on pieces already in the edge cache). */
+  RL_MAP?: RateLimit;
   /** Unlocks /health?probe=1 and the /admin dashboard via the x-health-token header. Unset: neither. */
   HEALTH_TOKEN?: string;
   /** Optional. An API token with Account Analytics Read, so the dashboard can

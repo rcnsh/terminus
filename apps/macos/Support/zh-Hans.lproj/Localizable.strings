@@ -47,6 +47,7 @@
 "Couldn't get this Mac's location. Pick your stop instead." = "无法获取这台 Mac 的位置。请自己选择车站。";
 "Couldn't reach terminus. Check your connection and try again." = "无法连接 terminus。请检查网络后再试。";
 "Couldn't reach terminus. Try again in a moment." = "无法连接 terminus。请稍后再试。";
+"terminus is busy. Try again in a minute." = "terminus 正忙，请一分钟后再试。";
 "Couldn't remove it. Try again in a moment." = "无法移除。请稍后再试。";
 "Couldn't save that" = "无法保存";
 "Couldn't save the pairing on this Mac. Check that there's enough disk space, then pair again." = "无法在这台 Mac 上保存配对。请确认磁盘空间充足，然后重新配对。";

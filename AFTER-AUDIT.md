@@ -163,8 +163,6 @@ Server load and cost:
 - Sign-in and new accounts are still limited per IP (`RL_MAIL`,
   `RL_ANON`); the map and answers are per account now. Turnstile on an
   app's first start would stop scripted sign-ups.
-- Map tiles, fonts and `/campus` could be cached at the edge, or `/campus`
-  given an ETag (or a `?part=map` that leaves out what the map doesn't use).
 - Fonts could be served from our own domain, and the Chinese strings loaded
   only when Chinese is chosen.
 
@@ -214,7 +212,28 @@ the apps or the API; those are in Analytics Engine.
 Also small, for later: offline, the pages fall back to the system fonts,
 because the service worker doesn't keep the web fonts.
 
-## 8. Optional: your own Claude setup
+## 8. Cloudflare: two settings against a big bill
+
+Cloudflare has no spending cap, so set these once, in the dashboard:
+
+- **A billing alert.** Notifications → Add → Usage Based Billing (if it's
+  listed for your account): Workers requests, say at 8 million a month,
+  under the 10 million the plan includes.
+- **A rate-limit rule** in front of the Worker, which also stops floods the
+  Worker never sees (and isn't billed for): Security → WAF → Rate limiting
+  rules → Create. If the path starts with `/map/` or `/download/`, count per
+  IP, 600 requests in 10 seconds, then block for 10 seconds. That's far
+  above what a lecture hall opening the map on one Wi-Fi address asks for.
+  The free plan includes one rule.
+
+The deploy now sets a CPU limit of 5 s per request (`limits.cpuMs` in
+`apps/api/cloudflare.config.ts`). That needs the Workers Paid plan: if a
+deploy refuses it, remove those three lines.
+
+Then keep an eye on Workers & Pages → terminus → Metrics → Requests for the
+first weeks of 2.1.0.
+
+## 9. Optional: your own Claude setup
 
 CLAUDE.md now tells agents to work on a branch and commit as whoever they
 work for, so a contributor's agent never signs as you. Your own "push

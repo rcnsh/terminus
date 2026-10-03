@@ -863,6 +863,37 @@ test('map pieces are kept at the edge: R2 is read once per piece, and a new uplo
   }
 });
 
+test('reads from R2 for the map are limited per IP; pieces in the edge cache are not', async () => {
+  const files = new Map([
+    ['map/fonts/Noto Sans Medium/256-511.pbf', 'GLYPHS'],
+    ['map/sprites/v4/light.json', '{}'],
+  ]);
+  const bucket = rangedBucket(files);
+  const heads = bucket.head;
+  let headCalls = 0;
+  bucket.head = (k) => (headCalls++, heads(k));
+  const asked = [];
+  const RL_MAP = { limit: async ({ key }) => (asked.push(key), { success: asked.length <= 1 }) };
+  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p) => (await call(p, { env, cache, headers: { 'cf-connecting-ip': '203.0.113.9' } })).res;
+
+  assert.equal((await get('/map/fonts/Noto%20Sans%20Medium/256-511.pbf')).status, 200);
+  assert.deepEqual(asked, ['map:203.0.113.9'], 'one read from R2, asked once');
+  // A lecture hall behind the same address: from the cache, never limited.
+  for (let i = 0; i < 5; i++) assert.equal(await (await get('/map/fonts/Noto%20Sans%20Medium/256-511.pbf')).text(), 'GLYPHS');
+  assert.equal(asked.length, 1);
+  // Past the limit, a file not yet in the cache waits.
+  const limited = await get('/map/sprites/v4/light.json');
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get('retry-after'), '60');
+  // A glyph range MapLibre never asks for is no file: no read, no limit.
+  const before = headCalls;
+  assert.equal((await get('/map/fonts/Noto%20Sans%20Medium/1-5.pbf')).status, 404);
+  assert.equal(headCalls, before);
+  assert.equal(asked.length, 2);
+});
+
 test('/campus is the same bytes every time, with an ETag a client can revalidate with', async () => {
   const cache = installGlobals(makeFetch({}));
   const first = (await call('/campus', { cache })).res;
@@ -896,4 +927,36 @@ test('/map/style.json is a quiet light or dark map with every URL on our own dom
   assert.equal(dark.sprite, `${BASE}/map/sprites/v4/dark`);
   assert.notDeepEqual(dark.layers.find((l) => l.id === 'background').paint, light.layers.find((l) => l.id === 'background').paint);
   assert.match(JSON.stringify(dark.layers), /name:zh-Hans/, 'Chinese labels where OpenStreetMap has them');
+});
+
+test('files served without the Worker get the same headers from _headers', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { withSecurityHeaders } = await import('../src/http.ts');
+  const config = await readFile(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
+  const skipped = [...config.matchAll(/"!(\/[\w-]+\/\*)"/g)].map((m) => m[1]).sort();
+  assert.deepEqual(skipped, ['/assets/*', '/vendor/*']);
+
+  // _headers: a path, then its indented headers.
+  const rules = new Map();
+  let at = null;
+  for (const line of (await readFile(new URL('../../web/public/_headers', import.meta.url), 'utf8')).split('\n')) {
+    if (!line.trim() || line.startsWith('#')) continue;
+    if (!/^\s/.test(line)) rules.set((at = line.trim()), {});
+    else {
+      const [name, ...value] = line.trim().split(':');
+      rules.get(at)[name.toLowerCase()] = value.join(':').trim();
+    }
+  }
+  assert.deepEqual([...rules.keys()].sort(), skipped, 'every path that skips the Worker has its headers');
+  for (const path of skipped) {
+    const viaWorker = Object.fromEntries(withSecurityHeaders(new Response('', { headers: { 'content-type': 'text/javascript' } }), path.replace('*', 'x.js')).headers);
+    delete viaWorker['content-type'];
+    assert.deepEqual(rules.get(path), viaWorker, `${path}: the headers the Worker would give`);
+  }
+  // Nothing under them is a page, which would need the CSP.
+  const { readdir } = await import('node:fs/promises');
+  for (const dir of ['assets', 'vendor']) {
+    const files = await readdir(new URL(`../../web/public/${dir}/`, import.meta.url), { recursive: true });
+    assert.equal(files.filter((f) => f.endsWith('.html')).length, 0, `no pages in ${dir}/`);
+  }
 });

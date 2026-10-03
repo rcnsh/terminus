@@ -14,7 +14,7 @@
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
 import { html, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '/assets/ui.js';
-import { inkOn, t } from '/account/dom.js';
+import { inkOn, send, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 
 // "@" spelled %40: Cloudflare's static assets redirect the "@" form to it,
@@ -85,7 +85,7 @@ const colorOf = (svc) => campusData.get()?.routes[svc]?.color ?? '#8a939c';
 const svcVars = (svc) => `--svc:${colorOf(svc)};--svc-ink:${inkOn(colorOf(svc))}`;
 
 async function getJSON(path) {
-  const res = await fetch(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
+  const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
   if (res.status === 401) {
     location.replace('/account/?next=/app/');
     throw new Error('signed out');

@@ -1189,6 +1189,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '206': { description: 'The range asked for.', content: { 'application/vnd.pmtiles': {} } },
             '304': { description: 'Your copy is current (`If-None-Match`).' },
             '404': errorResponse('No street map uploaded yet.'),
+            '429': errorResponse('Too many reads of parts not yet cached, from one IP. Wait for `Retry-After`.'),
           },
         },
       },

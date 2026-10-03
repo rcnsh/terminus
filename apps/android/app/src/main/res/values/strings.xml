@@ -388,4 +388,5 @@
     <string name="your_last_class">your last class</string>
     <string name="your_timetable">Your timetable</string>
     <string name="your_timetable_sub">Paste your NUSMods share link. Each class goes to the stop nearest its room.</string>
+    <string name="busy_try_again">terminus is busy. Try again in a minute.</string>
 </resources>

@@ -397,6 +397,21 @@ struct SignInPoll: Decodable {
     let outcome: String?
 }
 
+/// After a 429, every request from this Mac waits out the server's
+/// Retry-After, at most 5 minutes: asking again sooner only keeps the limit
+/// tripped, and each refused request still costs the server one.
+enum Quiet {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var untilDate = Date.distantPast
+
+    static var until: Date { lock.withLock { untilDate } }
+
+    static func after(_ retryAfter: String?) {
+        let s = retryAfter.flatMap { Double($0.trimmingCharacters(in: .whitespaces)) }.flatMap { $0 > 0 ? $0 : nil } ?? 60
+        lock.withLock { untilDate = Date().addingTimeInterval(min(s, 300)) }
+    }
+}
+
 struct ApiError: LocalizedError {
     let status: Int
     let message: String
@@ -593,6 +608,8 @@ struct Api {
 
     /// The response body of a 2xx; anything else throws with the server's message.
     private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil) async throws -> Data {
+        // Asked to slow down: nothing goes out until Retry-After is up.
+        if Date() < Quiet.until { throw ApiError(status: 429, message: L("terminus is busy. Try again in a minute.")) }
         var comps = URLComponents(string: Api.base + path)!
         if !query.isEmpty { comps.queryItems = query }
         var req = URLRequest(url: comps.url!, timeoutInterval: 10)
@@ -609,6 +626,7 @@ struct Api {
         }
         let (data, resp) = try await URLSession.shared.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")) }
         guard (200..<300).contains(status) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             throw ApiError(status: status, message: msg.map(sentence) ?? "HTTP \(status)")

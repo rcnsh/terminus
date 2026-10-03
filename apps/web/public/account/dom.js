@@ -7,9 +7,27 @@
 export const t = (en, ...args) => (globalThis.window?.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? '')));
 export const locale = () => globalThis.window?.i18n?.locale;
 
+// After a 429, nothing is sent until the server's Retry-After has passed:
+// a page that keeps polling at full speed only keeps the limit tripped.
+let quietUntil = 0;
+
+/**
+ * fetch(), unless the server asked this page to slow down: then it throws
+ * at once, with status 429, until Retry-After (at most 5 minutes) is up.
+ */
+export async function send(path, init) {
+  if (Date.now() < quietUntil) throw Object.assign(new Error(t('terminus is busy. Try again in a minute.')), { status: 429 });
+  const res = await fetch(path, init);
+  if (res.status === 429) {
+    const s = Number(res.headers.get('retry-after'));
+    quietUntil = Date.now() + Math.min(Number.isFinite(s) && s > 0 ? s : 60, 300) * 1000;
+  }
+  return res;
+}
+
 /** A same-origin JSON call; throws with the server's error message and status. */
 export async function api(path, { method = 'GET', body } = {}) {
-  const res = await fetch(path, {
+  const res = await send(path, {
     method,
     // The API writes answers and errors in the page's language.
     headers: { 'accept-language': window.i18n?.header ?? 'en', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },

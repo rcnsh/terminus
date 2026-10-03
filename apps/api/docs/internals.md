@@ -106,7 +106,24 @@ limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
 for buses every 5 s. `/health`, `/status.json`, `/admin/stats` and
-`/download/*` stay limited by IP.
+`/download/*` stay limited by IP. `/map/*` is limited by IP only where it
+reads R2 (`RL_MAP`, 300 a minute): a piece already in the edge cache is
+never refused, so a lecture hall can open the map at once.
+
+Every 429 carries `Retry-After`, and every client waits it out, at most 5
+minutes, sending nothing meanwhile (web `send()` in `account/dom.js`,
+Android `Quiet`, Mac `Quiet`). A refused request still costs a Worker
+request, so a client stuck in a loop must stop asking, not just fail.
+
+What the bill depends on, and the guards against it:
+
+- Worker requests are what grows with use. Static files under `/assets/`
+  and `/vendor/` skip the Worker (`runWorkerFirst` in
+  `cloudflare.config.ts`; their headers are in `apps/web/public/_headers`,
+  checked against `withSecurityHeaders` by a test), so they're free.
+- `limits.cpuMs` (5 s) stops a request that loops from running on.
+- The map's pieces come from the edge cache, so R2 is read once per piece
+  per data centre.
 
 ## Personalisation
 
