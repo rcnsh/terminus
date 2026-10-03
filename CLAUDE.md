@@ -352,12 +352,22 @@ docs/map-plan.md      How the campus map was planned and built
   lives outside the repo: in `CLAUDE.local.md` or `~/.claude/CLAUDE.md` on
   their machines, and in their cloud environment's settings. Follow it when
   it's there; it's never checked in (`CLAUDE.local.md` is gitignored).
-- **Commit messages.** The subject is a short plain-English summary of the
-  change as a user or developer would notice it, for example
-  "Map stops easier to tap on a phone" or
-  "map-tiles.sh: upload from apps/api, where wrangler is installed". Don't
-  use a conventional-commit prefix. The body is wrapped at about 72
-  characters and says what changed and why.
+- **Commit messages** follow [Conventional Commits](https://www.conventionalcommits.org):
+  `type(scope): summary`, the whole line under 100 characters.
+  - Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`,
+    `ci`, `chore`, `revert`.
+  - The scope names the part changed: `api`, `web`, `android`, `mac`,
+    `widget`, `map`, `calendar`, `i18n`, `data`, `scripts`, `release`,
+    `deps`. Leave it out when a change spans several.
+  - The summary is short plain English, lower case after the colon, saying
+    what a user or developer would notice: `fix(map): stops easier to tap
+    on a phone`, `fix(scripts): map-tiles.sh uploads from apps/api, where
+    wrangler is installed`.
+  - A version bump is `chore(release): terminus <version>`.
+  - The body is wrapped at about 72 characters and says what changed and
+    why. Merge commits keep Git's own message.
 - **After pushing,** watch CI on the commit and fix anything red straight
   away.
-- **History.** Never rewrite pushed history unless asked.
+- **History.** Never rewrite pushed history unless asked. It was rewritten
+  once to this convention (3 October 2026): every commit's message, with
+  the files, authors and dates unchanged.

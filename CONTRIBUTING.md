@@ -34,9 +34,12 @@ node apps/api/scripts/dev-stub.mjs        # local API with fake buses
 ## Sending a change
 
 Work on a branch (from a fork if you don't have write access) and open a
-pull request against `main`. Commit under your own name. If an agent such
-as Claude Code writes your commits, it follows [CLAUDE.md](CLAUDE.md),
-which tells it to use your git identity and never anyone else's.
+pull request against `main`. Commit under your own name. Commit messages
+follow [Conventional Commits](https://www.conventionalcommits.org), for
+example `fix(map): stops easier to tap on a phone`; CLAUDE.md lists the
+types and scopes. If an agent such as Claude Code writes your commits, it
+follows [CLAUDE.md](CLAUDE.md), which tells it to use your git identity and
+never anyone else's.
 
 ## English and Chinese
 

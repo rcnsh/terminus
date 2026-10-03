@@ -9,6 +9,10 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    # Conventional Commits, as every commit here: "ci(deps): bump ...".
+    commit-message:
+      prefix: ci
+      include: scope
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -16,6 +20,10 @@ updates:
     groups:
       dev-dependencies:
         patterns: ["*"]
+    # "chore(deps): bump ...".
+    commit-message:
+      prefix: chore
+      include: scope
     # Let a new release sit a few days first: a compromised version is
     # usually caught and pulled within that.
     cooldown:

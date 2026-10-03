@@ -27,23 +27,23 @@ recently, what's left, and where to look. Delete it once it's out of date.
   44). It is not released yet. The release waits for the owner, who needs
   their Mac and signing keys (`AFTER-AUDIT.md` §3). Agents never tag or
   release by hand.
-- **Deployed.** Both sites (terminus.rcn.sh and the beta) run `a548ce3`.
+- **Deployed.** Both sites (terminus.rcn.sh and the beta) run `598ba46`.
   - Two later commits are on `main` but not yet deployed, unless the owner
-    has done it since: `130c1ef` (edge caching) and `4eb2b03` (bill
+    has done it since: `aacf961` (edge caching) and `17dc7d9` (bill
     guards).
   - Neither has a migration.
   - Check what's live with `curl -s https://terminus.rcn.sh/sw.js | head -20`.
-    `SHELL = 'shell-v11'` means 4eb2b03 is deployed.
+    `SHELL = 'shell-v11'` means 17dc7d9 is deployed.
 - **The owner deploys from a VPS:**
   `git fetch origin && git reset --hard origin/main && pnpm install --frozen-lockfile && (cd apps/api && pnpm run deploy:beta && pnpm run deploy)`
-- **CI** was green on every commit up to 4eb2b03: api, lint, web, android
+- **CI** was green on every commit up to 17dc7d9: api, lint, web, android
   and mac.
 
 ## What was done recently, newest first
 
 Use `git show` on each for the details.
 
-- **4eb2b03 Guards against a big Cloudflare bill.**
+- **17dc7d9 Guards against a big Cloudflare bill.**
   - **Static files skip the Worker.** `/assets/*` and `/vendor/*` are
     served free (`runWorkerFirst` in `apps/api/cloudflare.config.ts`).
     Their headers are in `apps/web/public/_headers`, and a test checks
@@ -55,7 +55,7 @@ Use `git show` on each for the details.
   - **Clients wait out a 429.** Every client honours `Retry-After`: web
     `send()` in `account/dom.js`, Android `Quiet` in `Api.kt`, Mac
     `Quiet` in `Api.swift`.
-- **130c1ef Edge caching.**
+- **aacf961 Edge caching.**
   - **Map pieces.** `edgePart()` in `apps/api/src/map.ts` keeps every
     PMTiles piece, font and icon in `caches.default`, keyed by the file's
     ETag and byte range.
@@ -63,31 +63,31 @@ Use `git show` on each for the details.
     gets a 304.
   - **Shared test fake.** `makeBucket()` in `test/_stubs.mjs` is a fake
     R2, shared by the tests and the dev stub.
-- **a548ce3 Feed-shape check.** `arrivalsProblem()` and `busesProblem()` in
+- **598ba46 Feed-shape check.** `arrivalsProblem()` and `busesProblem()` in
   `src/fms.ts` treat a feed whose rows change shape as an outage, so users
   see the "live times are down" notice instead of wrong guesses.
   - Bus times hours away are deliberately not checked: real ConnectX
     times near midnight are about 7 hours away.
-- **fc11d7a CLAUDE.md identity.** Agents commit as whoever they work for,
+- **26658b6 CLAUDE.md identity.** Agents commit as whoever they work for,
   never as the owner. The owner's own setup (push to main as themselves)
   lives outside the repo: `CLAUDE.local.md` (gitignored), or the cloud
   environment's settings.
-- **8ecbe87 A 12- or 24-hour setting.**
+- **264160b A 12- or 24-hour setting.**
   - **Server.** Profile `clock` (`auto|12|24`) and `card.h12`; `hour12()`
     is in `src/next.ts`.
   - **Clients.** Settings › Language and time on all three, plus "Show
     times as" in setup.
   - **Widgets** on Android follow it too.
-- **92ecfa2 Crowding words.** Crowding reads "low, medium, high", and
+- **9015e73 Crowding words.** Crowding reads "low, medium, high", and
   "often busy" replaces "packed". The glossary is at the top of
   `src/i18n.ts`.
-- **c979fa1 Semester reminder.** One push reminds people to import a new
+- **f0a0ff5 Semester reminder.** One push reminds people to import a new
   semester's timetable, unless they already have.
   - It is sent from the cron (`src/monitor.ts`).
   - Android handles it in `TermReminder` in `Push.kt`.
-- **b5bd276 Calmer card.** The class card shows one plan, plus one quiet
+- **940ce90 Calmer card.** The class card shows one plan, plus one quiet
   "Or go now" line.
-- **Earlier** (see `git log` past `b5bd276`, and `docs/map-plan.md`):
+- **Earlier** (see `git log` past `940ce90`, and `docs/map-plan.md`):
   - the campus map with live buses (`src/buses.ts`, web `app/map.js`,
     Android `MapData.kt`/`MapScreen.kt`);
   - the redesign: tabs and Settings as a list of groups;

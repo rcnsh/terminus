@@ -74,10 +74,13 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
     else:
         changes = []
         for s in git('log', '--no-merges', '--reverse', '--format=%s', f'{prev}..{tag}').splitlines():
+            # Conventional Commits: "feat(map): stops easier to tap" reads as "Stops easier to tap".
+            s = re.sub(r'^[a-z]+(\([^)]*\))?!?: ', '', s)
             if re.fullmatch(r'(terminus|nusbus) \d+\.\d+\.\d+(-[a-z]+(\.\d+)?)?', s, re.I):
                 continue  # the version bump itself
-            if s.startswith('[ImgBot]'):
+            if s.startswith('[ImgBot]') or s == 'optimize images':
                 continue  # image compression, nothing to see
+            s = s[:1].upper() + s[1:]
             # The first sentence of each commit subject.
             changes.append('- ' + re.split(r'(?<=[a-z0-9)`"])\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.'))
         if changes:

@@ -7,10 +7,10 @@ Delete this file once it's done.
 
 Already done, from the VPS: production and the beta are migrated, and both
 have their street map on R2. As of 3 October, both are deployed up to
-a548ce3: everything on `main`, the website and the API included (the
+598ba46: everything on `main`, the website and the API included (the
 calmer card, the semester reminder, "Crowding: low/medium/high", the 12- or
 24-hour setting, the feed-shape check). No migrations. Since then, not yet
-deployed: 130c1ef (the map and /campus kept at the edge) and 4eb2b03 (the
+deployed: aacf961 (the map and /campus kept at the edge) and 17dc7d9 (the
 bill guards: website files skip the Worker, a CPU limit, a limit on the
 map's R2 reads). The Android and Mac parts ship with 2.1.0.
 
@@ -22,15 +22,18 @@ git fetch origin && git reset --hard origin/main && pnpm install --frozen-lockfi
 
 ## 1. Get main
 
-`main`'s history was rewritten on 2 October (commits authored as you), so a
-plain `git pull` would try to merge the old history into the new. Check for
-local changes you want to keep first:
+`main`'s history was rewritten on 2 October (commits authored as you), and
+again on 3 October (every commit message in Conventional Commits; files,
+authors and dates unchanged, every tag moved to its new commit). A plain
+`git pull` would try to merge the old history into the new. Check for local
+changes you want to keep first. The VPS needs the same `fetch` and `reset`;
+its deploy line above already does both.
 
 ```sh
 cd ~/path/to/terminus
 git status                         # anything here is lost by the reset below
 git checkout main
-git fetch origin
+git fetch origin --tags --force    # the tags moved too
 git reset --hard origin/main
 pnpm install
 pnpm test && pnpm lint             # optional: as CI runs them
