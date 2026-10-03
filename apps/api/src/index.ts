@@ -27,6 +27,7 @@ import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
 import { readIncidents, readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
+import { robotsTxt, SITEMAP } from './seo.ts';
 import { calendarSource, loadCalendar } from './calendarsync.ts';
 import { handleDownload } from './downloads.ts';
 import { handleMap, matchesEtag } from './map.ts';
@@ -35,7 +36,7 @@ import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
 
 import { GRAPH } from './graph.ts';
-import { markBeta, siteOrigin } from './site.ts';
+import { isBeta, markBeta, siteOrigin } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { langOfRequest, m, withLang } from './i18n.ts';
 
@@ -344,10 +345,16 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
 
     switch (url.pathname) {
       case '/docs':
-        // The landing page at / is a static asset (apps/web).
+        // The landing page at / is a static asset (apps/web). The beta's
+        // docs, like its pages, ask not to be indexed.
         return new Response(DOCS_PAGE, {
-          headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
+          headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...(isBeta(env) ? { 'x-robots-tag': 'noindex' } : {}) },
         });
+      case '/robots.txt':
+        return new Response(robotsTxt(env), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+      case '/sitemap.xml':
+        if (isBeta(env)) return json({ error: 'not found' }, 404);
+        return new Response(SITEMAP, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
       case '/openapi.json':
         // servers[] is this request's origin, so the docs' "Send API Request"
         // hits whichever deployment is serving them.

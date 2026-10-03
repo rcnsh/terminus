@@ -1707,6 +1707,8 @@ export const DOCS_PAGE = `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>API · terminus</title>
+  <meta name="description" content="The terminus API: NUS shuttle bus arrivals, live buses and the campus map, as ready-to-show answers. Free with an API key.">
+  <link rel="canonical" href="https://terminus.rcn.sh/docs">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script src="${ELEMENTS}/web-components.min.js" integrity="sha384-X5kH2B8aH81JEl8IfSBwwnr8FYcCqMzdxpqjmmlRbhIl7SsQ9Zn0xk+csQmU37zN" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="${ELEMENTS}/styles.min.css" integrity="sha384-NzdOiocfnINlXfuCXi4OpL/xvdbgLiKaLHQ07Z+IwhVaxHqLShn5rVD5OHt/LYgz" crossorigin="anonymous">

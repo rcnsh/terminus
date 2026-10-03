@@ -1,5 +1,6 @@
 #!/bin/sh
-# Renders banner.html to banner-light.webp and banner-dark.webp for the README.
+# Renders banner.html to banner-light.webp and banner-dark.webp for the README,
+# and to the site's link preview image (apps/web/public/assets/og.png, light).
 # Needs a headless Chromium (Playwright's, or set CHROME) and cwebp.
 set -eu
 cd "$(dirname "$0")"
@@ -13,4 +14,7 @@ for theme in light dark; do
   cwebp -quiet -q 88 "banner-$theme.png" -o "banner-$theme.webp"
   rm "banner-$theme.png"
 done
-ls -l banner-*.webp
+"$CHROME" --headless --hide-scrollbars --allow-file-access-from-files \
+  --window-size=1280,672 --force-device-scale-factor=1 --virtual-time-budget=5000 \
+  --screenshot="$PWD/../../apps/web/public/assets/og.png" "$page#og" >/dev/null 2>&1
+ls -l banner-*.webp ../../apps/web/public/assets/og.png
