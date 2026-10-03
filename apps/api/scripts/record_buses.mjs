@@ -36,12 +36,11 @@ function haversine(aLat, aLon, bLat, bLon) {
   return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
-/** A route line's length, and whether it ends where it starts (a loop). */
-function measure(line) {
+/** A route line's length. */
+function lengthOf(line) {
   let total = 0;
   for (let i = 1; i < line.length; i++) total += haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]);
-  const [a, z] = [line[0], line[line.length - 1]];
-  return { total, loop: line.length > 1 && haversine(a[1], a[0], z[1], z[0]) < 5 };
+  return total;
 }
 
 async function record() {
@@ -54,7 +53,9 @@ async function record() {
   let routes = {};
   try {
     const campus = await (await fetch(`${SITE}/campus`, { headers })).json();
-    routes = Object.fromEntries(SERVICES.map((s) => [s, campus.routes?.[s]?.line ?? []]));
+    // /campus says which routes are loops: a loop's line can end tens of
+    // metres from where it starts (A1, A2), so the ends can't tell.
+    routes = Object.fromEntries(SERVICES.map((s) => [s, { line: campus.routes?.[s]?.line ?? [], loop: campus.routes?.[s]?.loop === true }]));
     const end = Date.now() + MINUTES * 60_000;
     while (Date.now() < end) {
       const tick = Date.now();
@@ -82,7 +83,8 @@ function check({ routes, rows }) {
   const out = [];
   const bad = [];
   for (const svc of SERVICES) {
-    const { total, loop } = measure(routes[svc] ?? []);
+    const { line = [], loop = false } = routes[svc] ?? {};
+    const total = lengthOf(line);
     const byBus = new Map();
     for (const r of rows.filter((x) => x.svc === svc)) {
       if (!byBus.has(r.id)) byBus.set(r.id, []);
@@ -101,6 +103,7 @@ function check({ routes, rows }) {
         if (prev && r.along !== prev.along) {
           moves++;
           let gone = r.along - prev.along;
+          // Round a loop, past its start.
           if (loop && total > 0 && gone < -total / 2) gone += total;
           if (loop && total > 0 && gone > total / 2) gone -= total;
           const dt = (r.t - prev.t) / 1000;
