@@ -252,7 +252,13 @@ The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 
 `GET /me/day` is today's timeline, worked out with the same planner. A
 class you're on the bus to carries `onBus` (the bus, where to get off, the
-arrival) instead of a leave-by that has passed.
+arrival) instead of a leave-by that has passed. Apps send it the same
+`lat`/`lon` as `/me/next`, and the next class is planned from there, so Today
+and the card agree even on the first load, when both are asked at once and
+the card's plan isn't saved yet. (Without it, Today planned from the home
+stop and its walk from Settings, the card from where you were, and they
+differed by a few minutes until the next refresh.) Later classes are planned
+from the class or home before them.
 
 Card v2 adds `phase`, `phaseText`, `glance` (12 characters, for a menu bar
 or a tile), `line` (one line, for a notification), `actions`, `warning` and

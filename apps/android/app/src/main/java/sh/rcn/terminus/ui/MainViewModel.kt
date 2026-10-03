@@ -362,7 +362,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val token = store.token ?: return
         if (dayJob?.isActive == true) return
         dayJob = viewModelScope.launch {
-            runCatching { Api(token, hour12 = hour12(getApplication())).dayJson() }.onSuccess { json ->
+            // Where the phone was a moment ago (no new fix): the next class from there, as the card has it.
+            val loc = Locator.lastKnown(getApplication(), maxAgeMs = 60_000)
+            runCatching { Api(token, hour12 = hour12(getApplication())).dayJson(loc?.latitude, loc?.longitude) }.onSuccess { json ->
                 // Kept for when the phone goes offline (OfflineDay).
                 store.saveDay(json, System.currentTimeMillis())
                 _state.update { it.copy(day = DayPlan.parse(json)) }

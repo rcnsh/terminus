@@ -637,7 +637,7 @@ final class AppModel {
             if (popoverOpen && dayAge > 120) || dayAge > 3600 || day?.date != OfflineDay.sgtDate(Date()) {
                 dayFetched = Date()
                 // A failed fetch keeps the plan there was: it's what offline falls back to.
-                if let d = try? await api.day() { day = d }
+                if let d = try? await api.day(lat: lat, lon: lon) { day = d }
             }
             return true
         } catch let e as ApiError where e.status == 401 && TokenStore.read() != token {

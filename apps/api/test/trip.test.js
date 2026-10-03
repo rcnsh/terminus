@@ -199,6 +199,21 @@ test('/me/day: each class with where you set off, the leave-by, and the trip hom
   assert.equal(day.items.some((i) => i.key === FIRST), false, 'taken off today: not listed');
 });
 
+test('/me/day: the next class planned from where the device is, as the card plans it', async () => {
+  const { phone, call, next } = await setup();
+  // Near Kent Ridge MRT, not at home: a different stop and walk from the home stop's.
+  const here = '?lat=1.2950&lon=103.7846';
+  // Today first, as an app asks both at once: before the card has saved its plan.
+  const located = await (await call(`/me/day${here}`, { token: phone })).json();
+  const unlocated = await (await call('/me/day', { token: phone })).json();
+  const card = await next(phone, here);
+  assert.equal(card.leave.stop, located.items[0].leave.stop);
+  assert.equal(card.leave.at, located.items[0].leave.at, 'Today says the leave-by the card does');
+  assert.notEqual(unlocated.items[0].leave.stop, located.items[0].leave.stop, 'without a location, from the home stop');
+  // Only the next class: a later one is from wherever you'll be before it.
+  assert.deepEqual(located.items.at(-2).leave, unlocated.items.at(-2).leave);
+});
+
 test('/me/day: anything not done yet can be taken off today, the trip home too, and put back', async () => {
   const t = await setup({ ...PROFILE, gapHours: 0.5 });
   const list = async () => (await (await t.call('/me/day', { token: t.phone })).json()).items;

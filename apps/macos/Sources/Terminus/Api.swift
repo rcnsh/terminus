@@ -519,8 +519,10 @@ struct Api {
     }
 
     /// Today at a glance: each class with its leave-by, and the trips home.
-    func day() async throws -> DayPlan {
-        let q = usesHour12 ? [URLQueryItem(name: "h12", value: "1")] : []
+    /// With a location, the next class is planned from there, as the card is.
+    func day(lat: Double? = nil, lon: Double? = nil) async throws -> DayPlan {
+        var q = coords(lat, lon)
+        if usesHour12 { q.append(URLQueryItem(name: "h12", value: "1")) }
         return try JSONDecoder().decode(DayPlan.self, from: try await send("GET", "/me/day", query: q))
     }
 

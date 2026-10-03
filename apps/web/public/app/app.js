@@ -81,7 +81,8 @@ async function refresh() {
   try {
     const at = await here();
     const params = { ...(target.kind === 'place' ? { place: target.key } : target.kind === 'stop' ? { to: target.to } : {}), ...at };
-    const [nextR, dayR] = await Promise.allSettled([get(`/me/next${query(params)}`), get(`/me/day${query()}`)]);
+    // Today gets the location too: its next class is planned from here, as the card is.
+    const [nextR, dayR] = await Promise.allSettled([get(`/me/next${query(params)}`), get(`/me/day${query(at ?? {})}`)]);
     if (mine !== generation) return;
     if (nextR.status === 'rejected' && nextR.reason?.message === 'signed out') return;
     const next = nextR.status === 'fulfilled' ? nextR.value : null;

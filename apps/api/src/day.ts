@@ -66,7 +66,17 @@ export interface DayPlan {
   note: string | null;
 }
 
-export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile, day: DayRecord | null, h12: boolean, earlier: Set<string> = new Set()): Promise<DayPlan> {
+export async function dayPlan(
+  env: Env,
+  ctx: ExecutionContext,
+  nowMs: number,
+  deps: MeDeps,
+  profile: Profile,
+  day: DayRecord | null,
+  h12: boolean,
+  earlier: Set<string> = new Set(),
+  here: { lat: number | null; lon: number | null } = { lat: null, lon: null },
+): Promise<DayPlan> {
   const idx = indexGraph(deps.graph);
   const name = (code: string | null) => (code ? (idx.byCode.get(code)?.name ?? code) : null);
   const t = sgt(nowMs);
@@ -125,10 +135,14 @@ export async function dayPlan(env: Env, ctx: ExecutionContext, nowMs: number, de
     else if (assumed) item.onBus = { svc: plan.svc, off: offStop(plan), arrive: plan.arrive };
     // The plan's leave-by until then, even once its bus has left (the card still says it).
     else if (plan?.board && (Date.parse(plan.board) > nowMs || (unsaid && nowMs < Date.parse(plan.board) + ASSUME_MS))) item.leave = leaveOf(plan);
-    // Upcoming classes get a leave-by, from where you'll be then.
+    // Upcoming classes get a leave-by, from where you'll be then: for the
+    // next one, where the device is now (as the card plans it, so the two
+    // agree before the card's plan is saved); for later ones, the class or
+    // home before.
     else if ((status === 'next' || status === 'later') && from) {
+      const at = status === 'next' ? here : { lat: null, lon: null };
       pending.push(
-        tripAnswer(env, ctx, nowMs, deps, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, { lat: null, lon: null }, places, h12, earlier.has(classKey(c)))
+        tripAnswer(env, ctx, nowMs, deps, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, at, places, h12, earlier.has(classKey(c)))
           .then((a) => {
             item.leave = a.leave ?? null;
             item.timing = a.timing ?? null;

@@ -568,10 +568,22 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** Today's timeline. */
-    suspend fun day(): DayPlan = DayPlan.parse(dayJson())
+    suspend fun day(lat: Double? = null, lon: Double? = null): DayPlan = DayPlan.parse(dayJson(lat, lon))
 
-    /** /me/day as it came: kept for when the phone is offline ([Store.saveDay]). */
-    suspend fun dayJson(): JSONObject = request("GET", "/me/day" + if (hour12) "?h12=1" else "")
+    /**
+     * /me/day as it came: kept for when the phone is offline ([Store.saveDay]).
+     * With a location, the next class is planned from there, as the card is.
+     */
+    suspend fun dayJson(lat: Double? = null, lon: Double? = null): JSONObject {
+        val q = buildList {
+            if (lat != null && lon != null) {
+                add("lat=${coord(lat)}")
+                add("lon=${coord(lon)}")
+            }
+            if (hour12) add("h12=1")
+        }
+        return request("GET", "/me/day" + if (q.isEmpty()) "" else "?" + q.joinToString("&"))
+    }
 
     /** Whose account a pairing code belongs to (masked), without spending it. */
     suspend fun pairCheck(code: String): String =

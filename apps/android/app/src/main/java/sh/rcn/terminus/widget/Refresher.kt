@@ -79,7 +79,7 @@ object Refresher {
             // when the one kept is another day's or an hour old.
             val kept = store.lastDay()
             if (kept == null || kept.first.date != OfflineDay.sgtDate(now) || now - kept.second > DAY_MAX_AGE_MS) {
-                runCatching { store.saveDay(api.dayJson(), now) }
+                runCatching { store.saveDay(api.dayJson(loc?.latitude, loc?.longitude), now) }
             }
             store.lastError = null
             scheduleNext(ctx, NextAnswer.parse(json), now)

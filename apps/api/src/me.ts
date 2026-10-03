@@ -538,7 +538,7 @@ const ME_ROUTES: MeRoute[] = [
     run: async ({ url, env, ctx, nowMs, deps, db, session }) => {
       const profile = await getProfile(db, session.user.id, deps.graph);
       const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
-      return json(await dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url), prefs.earlier));
+      return json(await dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url), prefs.earlier, coordsFrom(url)));
     },
   },
   {
