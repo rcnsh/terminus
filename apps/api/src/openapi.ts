@@ -1734,6 +1734,12 @@ export const DOCS_PAGE = `<!doctype html>
          wherever the page flow put it. It goes right under our 48px bar. */
       elements-api .TopNav--mosaic { z-index: 20; top: 48px; }
       elements-api .sl-drawer-container > .sl-fixed { z-index: 30; }
+      /* The menu drawer is fixed and 100vh tall (sl-h-screen), which Chrome on
+         Android takes as the height with its bars hidden: the end of the menu
+         sat under the bottom bar, where scrolling couldn't reach it. The
+         visible height (dvh) keeps every entry reachable, with room after
+         the last. */
+      elements-api .sl-drawer { box-sizing: border-box; height: 100vh; height: 100dvh; padding-bottom: 16px; }
       /* Room past the last line, plus the height of the browser's retractable
          bars (large minus small viewport). Chrome's bottom address bar sits
          over the page, and since the page never scrolls it never hides, so
