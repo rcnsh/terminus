@@ -7,19 +7,16 @@ Delete this file once it's done.
 
 Already done, from the VPS: production and the beta are migrated, and both
 have their street map on R2. As of 3 October, both are deployed up to
-bd26015 (the live-bus fixes, Cloudflare Web Analytics allowed). Still to
-deploy, everything since: the web map's pills running to the screen's
-edges; bus plates on the map's bus card; walk times at your own pace in
-search; "Not going" everywhere; the service worker's 4-second timeout;
-rate limits per account; /me/day kept for a minute; morning arming in
-batches; the old trip question and `undetected` removed; every route in the
-API docs; the feed-down notice on the card; the web's per-second
-countdown. No migrations. The Android and Mac parts (plates, walk pace,
-the notice, "Not going") ship with 2.1.0.
+a548ce3: everything on `main`, the website and the API included (the
+calmer card, the semester reminder, "Crowding: low/medium/high", the 12- or
+24-hour setting, the feed-shape check). No migrations. The Android and Mac
+parts ship with 2.1.0.
 
-From the VPS: `git fetch origin && git reset --hard origin/main && pnpm install`,
-then in `apps/api`, `pnpm run deploy:beta`, check the beta, then
-`pnpm run deploy`.
+To deploy again from the VPS, in one line:
+
+```sh
+git fetch origin && git reset --hard origin/main && pnpm install --frozen-lockfile && (cd apps/api && pnpm run deploy:beta && pnpm run deploy)
+```
 
 ## 1. Get main
 
@@ -71,6 +68,14 @@ cd apps/android
   before the fix).
 - On the leave-by notification, tap Not going with the phone offline: the
   notification stays and nothing is skipped.
+- The card: one quiet "Or go now" line, not a second plan.
+- Map: a bus's card says "Crowding: low" (or medium, high) when the feed
+  has it, which is in the daytime.
+- Settings › Language and time › Time format: 12-hour and 24-hour change
+  the card, the widgets and the notifications at once; Automatic follows
+  the phone. A new account's setup asks "Show times as".
+- Settings › Notifications in Android's own settings lists a "New semester"
+  channel. The reminder itself can't be tried until January.
 
 Mac:
 
@@ -86,6 +91,8 @@ swift test
   back arrow. Appearance switches light and dark for the popover and every
   window. Open at login, updates and language moved from the menu to here.
 - Badges on light colours (A2, K) have dark text.
+- Settings › Language and time › Time format, and "Show times as" in setup:
+  the popover, the menu bar and notifications follow it.
 
 On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
 
@@ -102,6 +109,11 @@ On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
   sign in, first-time setup with a new account, every Settings page, Now,
   Nearby, the map's stops and buses, and Save as place showing in Settings
   straight away. Then the landing page, status page and dashboard.
+
+Then retake the README's app shots, which are out of date (the web and map
+ones are new): `apps/web/public/assets/shots/app-light.webp` and
+`app-dark.webp` (the landing page's phone, with the old layout) and
+`mac-light.webp` / `mac-dark.webp` (green lines, before the colours).
 
 ## 3. Release 2.1.0
 
@@ -169,8 +181,8 @@ The same on every app:
 - Android-only features (ride progress, Go later, chips that stay put, the
   opposite stop) on the web and the Mac? The Mac has no Not going button
   and leaves some settings to the account page.
-- Wording differs: favourite or place, "Add a device", how a packed bus is
-  described, what the report link is called.
+- Wording differs: favourite or place, "Add a device", what the report
+  link is called.
 
 The Mac:
 
@@ -201,6 +213,14 @@ the apps or the API; those are in Analytics Engine.
 
 Also small, for later: offline, the pages fall back to the system fonts,
 because the service worker doesn't keep the web fonts.
+
+## 8. Optional: your own Claude setup
+
+CLAUDE.md now tells agents to work on a branch and commit as whoever they
+work for, so a contributor's agent never signs as you. Your own "push
+straight to main, as me" lives outside the repo: in `CLAUDE.local.md`
+(gitignored) on the Mac, or `~/.claude/CLAUDE.md`, and in the cloud
+environment's settings (the git identity variables you set on 3 October).
 
 ## From your phone, any time
 
