@@ -10,7 +10,7 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
-import { armTrips } from '../src/monitor.ts';
+import { armTrips, remindTerm } from '../src/monitor.ts';
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
@@ -179,6 +179,38 @@ test('the morning cron arms push users in batches, each run carrying on from the
   assert.equal(await armTrips(env, Date.now(), 1), 0);
   assert.doesNotMatch(await env.KV.get('trips:armed'), / /);
   assert.equal(await armTrips(env, Date.now(), 1), 0, 'once a day');
+});
+
+test('the week before a semester, push users with an older timetable are reminded to import the new one, once', async () => {
+  const { call, phone, fcm, env, clock } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const setProfile = (extra) => {
+    const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], ...extra };
+    env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
+  };
+  setProfile({ term: { acadYear: '2025/2026', semester: 2 } });
+  // Semester 1 of 2026/27 starts on Monday 10 August.
+  clock(Date.parse('2026-08-01T10:30:00+08:00'));
+  assert.equal(await remindTerm(env, Date.now()), 0, 'not yet: nine days before');
+  clock(Date.parse('2026-08-04T09:30:00+08:00'));
+  assert.equal(await remindTerm(env, Date.now()), 0, 'not before 10 in the morning');
+  clock(Date.parse('2026-08-04T10:30:00+08:00'));
+  const before = fcm.sent.length;
+  assert.equal(await remindTerm(env, Date.now()), 1);
+  const [sent] = fcm.sent.slice(before);
+  assert.equal(sent.data.kind, 'term');
+  assert.equal(sent.data.title, 'Sem 1 2026/27 starts Mon 10 Aug');
+  assert.equal(sent.data.zhTitle, '2026/27 第 1 学期将于 8月10日（周一）开始');
+  assert.match(sent.data.body, /NUSMods/);
+  assert.equal(await remindTerm(env, Date.now()), 0, 'once a semester');
+
+  // Already imported for the new semester, or no timetable: nothing.
+  await env.KV.delete('term:reminded');
+  setProfile({ term: { acadYear: '2026/2027', semester: 1 } });
+  assert.equal(await remindTerm(env, Date.now()), 0, 'already imported');
+  await env.KV.delete('term:reminded');
+  setProfile({ trips: [], term: { acadYear: '2025/2026', semester: 2 } });
+  assert.equal(await remindTerm(env, Date.now()), 0, 'no timetable to bring up to date');
 });
 
 test('an access token that went stale is replaced, and the push still goes', async () => {

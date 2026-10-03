@@ -724,6 +724,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             "An app sends its Firebase Cloud Messaging token; the web app its Web Push subscription (`PushSubscription.toJSON()`, subscribed with the key from GET /me/push/key). " +
             "When the trip's phase changes, an app gets a data message `{kind: 'card', phase}` and should fetch `/me/next`. " +
             'The web app gets the same as an encrypted payload `{kind, phase, urgent}`, only when there is something to show. ' +
+            "The week before a semester starts, a device whose account imported an older semester's timetable gets `{kind: 'term', title, body, zhTitle, zhBody}`, a notification to show as it is. " +
             'A push address lives on one session; one the push service no longer knows is dropped.',
           operationId: 'mePushRegister',
           security: [{ bearer: [] }, { cookie: [] }],

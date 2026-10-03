@@ -12,10 +12,11 @@ import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
 import { KV_APP_VERSION, UpstreamRejected } from './auth.ts';
 import { autoUpdateVersion, type AutoResult } from './appversion.ts';
-import { calendarThrough } from './calendar.ts';
+import { calendarThrough, semesterSoon, termFrom, termName } from './calendar.ts';
 import { pruneCrowdSeen } from './crowd.ts';
 import { ACCOUNT_TTL } from './accounts.ts';
-import { pushEnabled } from './push.ts';
+import { type Notice, pushEnabled, remindUser } from './push.ts';
+import { m, withLang } from './i18n.ts';
 import { sgtDate, watchTrip } from './trip.ts';
 import { refreshTable } from './ridetimes.ts';
 import { sgt } from './config.ts';
@@ -318,6 +319,64 @@ export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Prom
   return results.length;
 }
 
+const REMINDED_KEY = 'term:reminded';
+/** Not before 10 in the morning, Singapore time. */
+const REMIND_FROM_HOUR = 10;
+
+/** The new semester's reminder, in both languages: the app shows its own. */
+export function termNotice(term: { acadYear: string; semester: number }, start: string): Notice {
+  const d = new Date(`${start}T00:00:00Z`);
+  const words = () => ({ title: m().termSoonTitle(termName(term), m().shortDate(d.getUTCDay(), d.getUTCDate(), d.getUTCMonth())), body: m().termSoonBody });
+  const en = withLang('en', words);
+  const zh = withLang('zh', words);
+  return { title: en.title, body: en.body, zhTitle: zh.title, zhBody: zh.body };
+}
+
+/**
+ * The week before semester 1 or 2 starts: a push to everyone with a
+ * timetable from an earlier semester, to import the new one. Not to anyone
+ * who has already imported it, nor to anyone with no timetable at all. Once
+ * per semester, in batches like armTrips; the KV mark is "<year> <sem>" when
+ * done and "<year> <sem> <last user id>" while under way.
+ */
+export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {
+  if (!env.DB || !pushEnabled(env)) return 0;
+  const soon = semesterSoon(nowMs);
+  if (!soon || new Date(nowMs + 8 * 3_600_000).getUTCHours() < REMIND_FROM_HOUR) return 0;
+  const id = `${soon.term.acadYear} ${soon.term.semester}`;
+  const mark = (await env.KV.get(REMINDED_KEY)) ?? '';
+  if (mark === id) return 0;
+  const after = mark.startsWith(`${id} `) ? mark.slice(id.length + 1) : '';
+  const { results } = await env.DB.prepare(
+    'SELECT DISTINCT s.user_id AS user_id, p.json AS json FROM sessions s JOIN profiles p ON p.user_id = s.user_id WHERE s.push_token IS NOT NULL AND s.user_id > ? ORDER BY s.user_id LIMIT ?',
+  )
+    .bind(after, batch)
+    .all<{ user_id: string; json: string }>();
+  const both = termNotice(soon.term, soon.start);
+  // A language chosen in Settings wins over each device's.
+  const en: Notice = { ...both, zhTitle: both.title, zhBody: both.body };
+  const zh: Notice = { title: both.zhTitle, body: both.zhBody, zhTitle: both.zhTitle, zhBody: both.zhBody };
+  let sent = 0;
+  const due: { userId: string; notice: Notice }[] = [];
+  for (const r of results) {
+    let p: { trips?: unknown[]; term?: { acadYear: string; semester: number } | null; lang?: string } = {};
+    try {
+      p = JSON.parse(r.json);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) continue;
+    due.push({ userId: r.user_id, notice: p.lang === 'en' ? en : p.lang === 'zh' ? zh : both });
+  }
+  for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
+    const n = await Promise.all(due.slice(i, i + ARM_AT_ONCE).map((u) => remindUser(env, u.userId, u.notice, nowMs).catch(() => 0)));
+    sent += n.reduce((x, y) => x + y, 0);
+  }
+  const done = results.length < batch;
+  await env.KV.put(REMINDED_KEY, done ? id : `${id} ${results[results.length - 1].user_id}`, { expirationTtl: 30 * 86_400 });
+  return sent;
+}
+
 /** Each step on its own: a KV failure must not stop D1 cleanup, and the reverse. */
 export async function runCron(env: Env, nowMs: number): Promise<void> {
   const step = async (name: string, fn: () => Promise<unknown>) => {
@@ -332,6 +391,7 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   if (env.DB) await step('housekeeping', () => housekeeping(env.DB!, nowMs));
   if (env.DB) await step('crowds', () => pruneCrowdSeen(env.DB!, nowMs));
   await step('trips', () => armTrips(env, nowMs));
+  await step('term', () => remindTerm(env, nowMs));
   // Measured ride times (phase 8.2): once a day, early, before the day's trips.
   if (env.DB && sgt(nowMs).minutes >= 4 * 60) await step('ride times', () => refreshTable(env, nowMs));
 }

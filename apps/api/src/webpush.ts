@@ -7,8 +7,8 @@
  * Each push is signed for the browser's push service with the VAPID key in
  * VAPID_PRIVATE_KEY (a P-256 JWK, RFC 8292) and its payload encrypted for the
  * browser (aes128gcm, RFC 8291), all with WebCrypto. The payload is the nudge
- * (phase, question); the service worker fetches the card and words the
- * notification itself.
+ * (its phase); the service worker fetches the card and words the
+ * notification itself. A semester reminder carries its own words instead.
  */
 
 import type { Env } from './types.ts';
@@ -143,7 +143,7 @@ export async function sendWebPush(
   env: Env,
   sub: WebSubscription,
   data: Record<string, unknown>,
-  { urgent, nowMs }: { urgent: boolean; nowMs: number },
+  { urgent, nowMs, topic = 'card', ttlS = 600 }: { urgent: boolean; nowMs: number; topic?: string; ttlS?: number },
 ): Promise<WebPushResult> {
   const v = vapid(env);
   if (!v) return 'failed';
@@ -154,10 +154,10 @@ export async function sendWebPush(
       authorization: await vapidAuth(v, sub.endpoint, nowMs),
       'content-encoding': 'aes128gcm',
       'content-type': 'application/octet-stream',
-      ttl: '600',
+      ttl: String(ttlS),
       urgency: urgent ? 'high' : 'normal',
       // One card at a time: a newer nudge replaces one not yet delivered.
-      topic: 'card',
+      topic,
     },
     body,
     // A push service answers; it never redirects. Nor does it take 5 s.

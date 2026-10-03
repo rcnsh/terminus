@@ -406,6 +406,16 @@ Settings. It uses the same routes as the account page, with the session cookie.
   left, is the card's "Not going": the service worker posts
   `/me/signal` `{kind: 'skipped'}` itself, without opening the app (the
   Android notification has the same button). A tap elsewhere opens the app.
+- **A new semester.** In the week before semester 1 or 2 starts
+  (`semesterSoon` in calendar.ts), from 10:00 Singapore time, the cron
+  (`remindTerm` in monitor.ts) pushes each device of a user whose imported
+  timetable is an older semester's: `{kind: 'term', title, body, zhTitle,
+  zhBody}`, worded by the server in both languages, since the device picks
+  its own. Anyone who has already imported the new semester, or has never
+  imported one, is skipped. It goes once per semester, 400 users a run, with
+  `term:reminded` in KV marking the semester and the last user reached, as
+  `trips:armed` does. A tap opens the timetable settings on the web, and the
+  app on Android. The Mac app has no push, so it isn't told.
 
 ### Every trip, detected (phase 8)
 
@@ -820,7 +830,8 @@ src/graph.ts      The stop graph, with hand-kept fixes
 src/geo.ts        Distance (a leaf module)
 src/residences.ts, src/landmarks.ts  Halls and named places served by several stops
 src/push.ts       FCM to Android; src/webpush.ts Web Push to the web app
-src/monitor.ts    The cron: feed health, incidents, housekeeping, arming trips
+src/monitor.ts    The cron: feed health, incidents, housekeeping, arming trips,
+                  the new-semester reminder
 src/appversion.ts Finding the new uNivUS version when NUS refuses the old one
 src/downloads.ts  /download/*: app files and the Mac appcast from R2
 src/admin.ts      /admin/stats; src/feedback.ts "Is this wrong?" reports

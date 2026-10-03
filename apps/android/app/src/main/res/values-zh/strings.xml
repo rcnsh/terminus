@@ -81,6 +81,8 @@
     <string name="channel_leave_desc">什么时候出发去上下一节课</string>
     <string name="channel_live">实时巴士时间</string>
     <string name="channel_live_desc">行程中实时更新的下一班巴士和倒计时</string>
+    <string name="channel_term">新学期</string>
+    <string name="channel_term_desc">新学期开始前一周，提醒你导入新课表</string>
     <string name="channel_widget">小组件更新</string>
     <string name="channel_widget_desc">只在小组件需要一段时间查找附近巴士时显示</string>
     <string name="check_email">查看你的邮箱</string>

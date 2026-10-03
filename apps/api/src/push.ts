@@ -3,11 +3,12 @@
  * (phase 5) Web Push to the installed web app (webpush.ts), both kept as the
  * session's push_token: an FCM token, or `web:` and a subscription.
  *
- * A push is only a nudge. It says the card has changed (`kind: 'card'`, the
- * phase, and whether there's a question), and the app fetches /me/next
- * itself, so the words are never worked out twice and nothing sensitive
- * travels through Google. It's high priority only when the user should look:
- * the trip is due, the bus has left and there's a question, or it was missed.
+ * A push is usually only a nudge. It says the card has changed (`kind:
+ * 'card'` and the phase), and the app fetches /me/next itself, so the words
+ * are never worked out twice and nothing sensitive travels through Google.
+ * It's high priority only when the user should look: the trip is due, or it
+ * was missed. The one exception is the new semester's reminder (`kind:
+ * 'term'`), which carries its own words, in English and Chinese.
  *
  * The Worker signs its own OAuth token from the service account in
  * FCM_SERVICE_ACCOUNT (RS256 with WebCrypto) and keeps it in KV for 50
@@ -90,6 +91,48 @@ async function accessToken(env: Env, a: ServiceAccount, nowMs: number): Promise<
  * were sent. Never throws: push is a nicety on top of the apps' own refresh.
  */
 export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: number, exceptTokenHash?: string): Promise<number> {
+  // Every web push shows a notification (iOS insists), so nothing to show
+  // means nothing sent: an idle card, or reminders off for the trip.
+  const quiet = nudge.phase === 'idle' || nudge.remind === false;
+  return deliver(env, userId, {
+    web: quiet ? null : { kind: 'card', phase: nudge.phase, urgent: nudge.urgent },
+    fcm: { kind: 'card', phase: nudge.phase },
+    urgent: nudge.urgent,
+    collapse: 'card',
+    ttlS: 600,
+  }, nowMs, exceptTokenHash);
+}
+
+/** A notification worded by the server, in English and Chinese: the app shows the one in its language. */
+export interface Notice {
+  title: string;
+  body: string;
+  zhTitle: string;
+  zhBody: string;
+}
+
+/**
+ * The new semester's reminder (monitor.ts): a notification the apps show as
+ * it is, rather than a card to fetch. Returns how many devices it went to.
+ */
+export async function remindUser(env: Env, userId: string, notice: Notice, nowMs: number): Promise<number> {
+  const words = { title: notice.title, body: notice.body, zhTitle: notice.zhTitle, zhBody: notice.zhBody };
+  return deliver(env, userId, { web: { kind: 'term', ...words }, fcm: { kind: 'term', ...words }, urgent: false, collapse: 'term', ttlS: 2 * 86_400 }, nowMs);
+}
+
+interface Delivery {
+  /** The web push's payload, or null to send browsers nothing. */
+  web: Record<string, unknown> | null;
+  /** FCM data: strings only. */
+  fcm: Record<string, string>;
+  urgent: boolean;
+  /** A newer message with the same key replaces one not yet delivered. */
+  collapse: string;
+  ttlS: number;
+}
+
+/** Sends one message to every device of a user that takes push, and clears tokens that are gone. */
+async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, exceptTokenHash?: string): Promise<number> {
   const a = account(env);
   if (!pushEnabled(env) || !env.DB) return 0;
   try {
@@ -101,9 +144,7 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
     let sent = 0;
     for (const r of results) {
       if (r.push_token.startsWith(WEB_PREFIX)) {
-        // Every web push shows a notification (iOS insists), so nothing to
-        // show means nothing sent: an idle card, or reminders off for the trip.
-        if (nudge.phase === 'idle' || nudge.remind === false) continue;
+        if (!msg.web) continue;
         let sub = null;
         try {
           sub = parseSubscription(JSON.parse(r.push_token.slice(WEB_PREFIX.length)));
@@ -112,7 +153,7 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
         }
         // One browser's failure (a key that won't import, a service that hangs) mustn't stop the rest.
         const out = sub
-          ? await sendWebPush(env, sub, { kind: 'card', phase: nudge.phase, urgent: nudge.urgent }, { urgent: nudge.urgent, nowMs }).catch((err) => {
+          ? await sendWebPush(env, sub, msg.web, { urgent: msg.urgent, nowMs, topic: msg.collapse, ttlS: msg.ttlS }).catch((err) => {
               console.error('web push', String(err));
               return 'failed' as const;
             })
@@ -129,8 +170,8 @@ export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: n
           body: JSON.stringify({
             message: {
               token: r.push_token,
-              data: { kind: 'card', phase: nudge.phase },
-              android: { priority: nudge.urgent ? 'HIGH' : 'NORMAL', ttl: '600s', collapse_key: 'card' },
+              data: msg.fcm,
+              android: { priority: msg.urgent ? 'HIGH' : 'NORMAL', ttl: `${msg.ttlS}s`, collapse_key: msg.collapse },
             },
           }),
         });

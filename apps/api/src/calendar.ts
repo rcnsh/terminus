@@ -151,6 +151,23 @@ export function termsForImport(semester: number, nowMs: number, data: CalendarDa
   return [{ acadYear: `${y}/${y + 1}`, semester }];
 }
 
+/**
+ * Semester 1 or 2 when it starts within `days` days (after today), with its
+ * start date: the week to remind people to import the new timetable. Special
+ * terms are left out; few students take them.
+ */
+export function semesterSoon(nowMs: number, days = 7, data: CalendarData = DATA): { term: Term; start: string } | null {
+  const today = sgtMidnight(sgtDate(nowMs));
+  const s = data.semesters.find((x) => x.semester <= 2 && sgtMidnight(x.start) > today && sgtMidnight(x.start) - today <= days * DAY_MS);
+  return s ? { term: { acadYear: s.acadYear, semester: s.semester }, start: s.start } : null;
+}
+
+/** Whether a timetable is for this semester or a later one (an unknown term is not). */
+export function termFrom(term: Term | null | undefined, start: string, data: CalendarData = DATA): boolean {
+  const s = term ? semesterStart(term, data) : undefined;
+  return s !== undefined && s.start >= start;
+}
+
 /** Whether a timetable's semester has finished (exams included). Unknown terms count as current. */
 export function termEnded(term: Term, nowMs: number, data: CalendarData = DATA): boolean {
   const s = semesterStart(term, data);

@@ -1,7 +1,12 @@
 package sh.rcn.terminus
 
 import android.app.Application
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.graphics.drawable.Icon
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailabilityLight
 import com.google.firebase.FirebaseApp
@@ -13,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 
 /**
@@ -21,9 +27,11 @@ import sh.rcn.terminus.widget.Refresher
  *
  * Firebase Cloud Messaging, only on a phone with Google Play services and a
  * build that has the Firebase config (BuildConfig.FIREBASE_*). A push is a
- * nudge (`{kind: 'card', phase, ask}`); the app fetches /me/next itself and
+ * nudge (`{kind: 'card', phase}`); the app fetches /me/next itself and
  * redraws the widgets and the trip's notification from it. Everything else
- * (the heads-up alarm, the widget refresh) still works without it.
+ * (the heads-up alarm, the widget refresh) still works without it. The one
+ * other kind, `term`, is the reminder to import a new semester's timetable,
+ * worded by the server in both languages.
  */
 object Push {
     /** This build has Firebase, and the phone has Play services. */
@@ -88,11 +96,45 @@ class PushService : FirebaseMessagingService() {
 
     /** The card changed: fetch it, and let the widgets and the trip's notification follow. */
     override fun onMessageReceived(message: RemoteMessage) {
+        if (message.data["kind"] == "term") return TermReminder.post(applicationContext, message.data)
         if (message.data["kind"] != "card") return
         val ctx = applicationContext
         // A background thread with a few seconds to spare; the fetch is one request.
         runBlocking { Refresher.refresh(ctx, fast = true) }
         // The live notification runs from "due" until you're there.
         if (message.data["phase"] in LiveService.TRIP_PHASES) LiveService.start(ctx)
+    }
+}
+
+/** A new semester starts within the week and the account's timetable is last semester's. */
+object TermReminder {
+    private const val CHANNEL = "term"
+    private const val NOTIFICATION_ID = 3
+
+    fun post(ctx: Context, data: Map<String, String>) {
+        if (!LeaveAlerts.canNotify(ctx)) return
+        val zh = Lang.current(ctx) == Lang.ZH
+        val title = (if (zh) data["zhTitle"] else data["title"]) ?: return
+        val body = (if (zh) data["zhBody"] else data["body"]).orEmpty()
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL, L.s(R.string.channel_term), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = L.s(R.string.channel_term_desc)
+            },
+        )
+        val open = PendingIntent.getActivity(
+            ctx, NOTIFICATION_ID, MainActivity.intentFor(ctx),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = Notification.Builder(ctx, CHANNEL)
+            .setSmallIcon(Icon.createWithResource(ctx, R.drawable.ic_bus))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(Notification.BigTextStyle().bigText(body))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .build()
+        nm.notify(NOTIFICATION_ID, n)
     }
 }

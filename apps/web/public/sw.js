@@ -15,7 +15,7 @@
 //   the pieces MapLibre asks for. So the campus map works offline after the
 //   first look. Live buses and arrivals are never kept.
 
-const SHELL = 'shell-v8';
+const SHELL = 'shell-v9';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -265,8 +265,19 @@ self.addEventListener('push', (event) => {
   } catch {
     nudge = {};
   }
-  event.waitUntil(notifyFromCard(Boolean(nudge.urgent)));
+  event.waitUntil(nudge.kind === 'term' ? notifyTerm(nudge) : notifyFromCard(Boolean(nudge.urgent)));
 });
+
+/** The new semester's reminder: the server's words, in this browser's language. Opens Settings › Timetable. */
+function notifyTerm(n) {
+  const zh = /^zh/i.test(self.navigator.language ?? '');
+  return self.registration.showNotification((zh ? n.zhTitle : n.title) ?? 'terminus', {
+    body: (zh ? n.zhBody : n.body) ?? '',
+    tag: 'term',
+    icon: '/assets/icons/icon-192.png',
+    data: { url: '/app/#settings/timetable' },
+  });
+}
 
 async function notifyFromCard(urgent, fetched) {
   let a = fetched ?? null;
@@ -317,7 +328,7 @@ self.addEventListener('notificationclick', (event) => {
   const trip = event.notification.data?.trip;
   // "Not going": the class off today, as the app's button does, without opening it.
   if (event.action === 'skipped' && trip) event.waitUntil(skipTrip(trip));
-  else event.waitUntil(openApp());
+  else event.waitUntil(openApp(event.notification.data?.url));
 });
 
 /** Takes a class off today from the notification, then tells an open app to show the new plan. */
@@ -338,12 +349,14 @@ async function skipTrip(trip) {
 }
 
 /** The app, focused if it's open, opened if not. */
-async function openApp() {
+async function openApp(url = '/app/') {
   const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   const app = open.find((w) => new URL(w.url).pathname.startsWith('/app'));
   if (app) {
+    // Somewhere in particular (the reminder's Settings › Timetable): go there.
+    if (url !== '/app/' && 'navigate' in app) return app.navigate(url).then((w) => w?.focus());
     app.postMessage({ kind: 'refresh' });
     return app.focus();
   }
-  return self.clients.openWindow('/app/');
+  return self.clients.openWindow(url);
 }

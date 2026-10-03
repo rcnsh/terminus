@@ -81,6 +81,8 @@
     <string name="channel_leave_desc">When to set off for your next class</string>
     <string name="channel_live">Live bus times</string>
     <string name="channel_live_desc">The next bus and a countdown, updated live during your trips</string>
+    <string name="channel_term">New semester</string>
+    <string name="channel_term_desc">A reminder to import your new timetable the week before a semester starts</string>
     <string name="channel_widget">Widget updates</string>
     <string name="channel_widget_desc">Shown only if the widget takes a while to find buses near you</string>
     <string name="check_email">Check your email</string>
