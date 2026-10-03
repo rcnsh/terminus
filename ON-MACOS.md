@@ -6,24 +6,28 @@ and decisions). Delete this file once it's done.
 
 ## Where things stand (3 October, evening)
 
-- **Deployed:** production and the beta both run everything on `main` up
-  to `ee278ff`, with no migrations pending.
+- **Deployed:** production and the beta both run `main` up to `ee278ff`.
   - That includes the calendar refreshing itself. Both sites already
     answer from the copy the cron fetched (`/health` says
     `calendar.source: fetched`).
   - The deploy accepted the 5 s CPU limit, so the plan allows it.
+- **Not deployed yet:** `81500ec`, the API docs showing 2.1.0 instead of
+  1.0.0 (Y2). No migrations. The commits after it only change docs.
 - **History rewritten:** every commit message is in Conventional Commits,
   pushed with all the tags (Y1, done). The old `ccr-*` and `imgbot`
   branches are deleted.
 - **Not released:** the apps are at 2.1.0 (build 44) on `main`, Android
-  and Mac together. The last release is 2.0.4.
-- **Not checked yet:** live buses on production, which needs buses running
-  (C3).
+  and Mac together, and the API docs say the same. The last release is
+  2.0.4. It stays 2.1.0, not 3.0: everything since 2.0.4 adds to what was
+  there, and nothing in the public API changed or went away.
+- **Live buses checked:** the record live buses workflow ran on production
+  on 3 October at 8:50 pm Singapore time. It recorded 3 buses for 10
+  minutes, and none switched sides or jumped (C3).
 
 ## The order
 
-1. **Claude:** get `main`, then build and test everything (C1, C2).
-2. **Claude:** check live buses on production in the daytime (C3).
+1. **You:** deploy (Y2). **Claude:** check it (C3).
+2. **Claude:** get `main`, then build and test everything (C1, C2).
 3. **Claude:** install the apps (C4). **You:** try them (Y3).
 4. **Claude:** retake the screenshots (C5) and dry-run the release (C6).
 5. **You:** read the release notes and say go (Y4). **Claude:** releases
@@ -66,17 +70,22 @@ points at this Mac's setup (Java 21, Xcode, the Android SDK).
 
 ### C3. Check the live sites
 
-The 3 October deploy is already checked: `/health` on both sites says
-`ok: true` and `calendar.source: fetched`. Still to do:
+The 3 October deploy is checked: `/health` on both sites says `ok: true`
+and `calendar.source: fetched`, and the record live buses workflow found
+no bus switching sides or jumping on production. After the next deploy
+(Y2):
 
-- Run the **record live buses** workflow on production while buses run
-  (weekdays, daytime): `gh workflow run record-buses.yml -f
-  site=https://terminus.rcn.sh`. Its summary should report no bus
-  switching sides or jumping. It uses a throwaway account and needs no
-  secrets.
+- `curl -s https://terminus.rcn.sh/health` and the same for
+  `https://beta.terminus.rcn.sh/health`: `ok` is true on both.
+- `curl -s https://terminus.rcn.sh/openapi.json`: `info.version` is
+  `2.1.0` (it was `1.0.0`), and the docs page at `/docs` shows the same.
+- Optional: the 3 October recording was on a Saturday evening with only 3
+  buses. A weekday daytime run would check many more:
+  `gh workflow run record-buses.yml -f site=https://terminus.rcn.sh`. Its
+  summary should report no bus switching sides or jumping. It uses a
+  throwaway account and needs no secrets.
 - `calendar.through` in `/health` (now 23 August 2027) moves past then
   once NUSMods lists 2027/2028. Nothing to do until then.
-- After any later deploy, check `/health` on both sites again.
 
 ### C4. Install the apps
 
@@ -153,10 +162,11 @@ that isn't on `main`.
 Pushed from the VPS, with all 35 tags, and the old `ccr-*` and `imgbot`
 branches deleted. Any other clone made before 3 October needs C1's reset.
 
-### Y2. Deploy from the VPS (done, 3 October)
+### Y2. Deploy from the VPS
 
-Both sites run `ee278ff`. For the next deploy, the same line (beta first,
-then production; no migrations pending):
+Both sites run `ee278ff`. `81500ec` (the API docs showing 2.1.0) is waiting
+for a deploy; there are no migrations. From the VPS, in one line (beta
+first, then production):
 
 ```sh
 git fetch origin --tags --force && git reset --hard origin/main && pnpm install --frozen-lockfile && (cd apps/api && pnpm run deploy:beta && pnpm run deploy)
