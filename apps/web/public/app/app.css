@@ -103,6 +103,11 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 }
 .map-top > * { pointer-events: auto; }
 .map-pills { width: 100%; margin: 0; padding-bottom: 2px; }
+/* Edge to edge: scrolled pills go off the screen's edge, not under an inset
+   line 12 px in. They still start 12 px in, lined up with what's below. */
+.map-top > .map-pills { width: calc(100% + 24px); margin: 0 -12px; padding: 4px 0 2px 12px; scroll-padding-inline: 12px; }
+/* Room after the last pill (end padding in a scrolling row isn't reliable). */
+.map-pills::after { content: ''; flex: none; width: 4px; }
 .map-pills button { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
 .map-pills .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--svc); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.15); }
 .map-pills button[aria-pressed="true"] { background: var(--svc); border-color: var(--svc); color: var(--svc-ink, #fff); }
