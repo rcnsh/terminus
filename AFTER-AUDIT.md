@@ -8,7 +8,14 @@ Delete this file once it's done.
 Already done, from the VPS: production and the beta are migrated, and both
 have their street map on R2. As of 3 October, both are deployed up to
 bd26015 (the live-bus fixes, Cloudflare Web Analytics allowed). Still to
-deploy: e229547, the web map's pills running to the screen's edges.
+deploy, everything since: the web map's pills running to the screen's
+edges; bus plates on the map's bus card; walk times at your own pace in
+search; "Not going" everywhere; the service worker's 4-second timeout;
+rate limits per account; /me/day kept for a minute; morning arming in
+batches; the old trip question and `undetected` removed; every route in the
+API docs; the feed-down notice on the card; the web's per-second
+countdown. No migrations. The Android and Mac parts (plates, walk pace,
+the notice, "Not going") ship with 2.1.0.
 
 From the VPS: `git fetch origin && git reset --hard origin/main && pnpm install`,
 then in `apps/api`, `pnpm run deploy:beta`, check the beta, then
@@ -49,6 +56,7 @@ cd apps/android
   updates, on their own side of two-way roads. A bus never cuts across the
   road, and never goes backwards.
 - Map: tap near a stop, not right on its dot, or on its name: it opens.
+- Map: tap a bus. Its card shows its number plate next to "D2 bus".
 - Read through Settings and the notifications: the wording was rewritten.
 - Switch tabs: Now, Map and Settings fade through, and come back where you
   left them (scroll position, the map's view).
@@ -140,34 +148,24 @@ which each need a choice. Ask Claude to do any of them.
 
 Server load and cost:
 
-- Rate limits are per IP (`RL_PUBLIC`, `RL_MAIL`, `RL_ANON`); on campus
-  Wi-Fi many students share one. Per account would be fairer; Turnstile on
-  an app's first start would stop scripted sign-ups.
-- `/me/day` plans the whole day again on every 30-second poll; it could be
-  kept per user for a short while.
+- Sign-in and new accounts are still limited per IP (`RL_MAIL`,
+  `RL_ANON`); the map and answers are per account now. Turnstile on an
+  app's first start would stop scripted sign-ups.
 - Map tiles, fonts and `/campus` could be cached at the edge, or `/campus`
   given an ETag (or a `?part=map` that leaves out what the map doesn't use).
 - Fonts could be served from our own domain, and the Chinese strings loaded
   only when Chinese is chosen.
-- The service worker waits as long as the network takes before using its
-  kept copy; a few seconds' timeout would help on a bad connection.
 
 The API's answers:
 
-- `/me/next` passes on a bus id hashed without a salt, so a plate could be
-  worked out from it.
 - A `?to=` that matches nothing isn't answered clearly.
 - `youreHome` is labelled `live`; `headwayS` is never filled in.
-- Some routes aren't in the OpenAPI spec.
 
 The same on every app:
 
-- Should the web count down every second, as Android and the Mac do?
 - Should Today's heading and Nearby's wording come from the server, rather
   than each app writing its own?
-- "Not going" or "Not going today": the button says both in places.
 - Chips are in a different order on different apps.
-- Walk minutes on some cards ignore the walking pace you set.
 - Android-only features (ride progress, Go later, chips that stay put, the
   opposite stop) on the web and the Mac? The Mac has no Not going button
   and leaves some settings to the account page.
