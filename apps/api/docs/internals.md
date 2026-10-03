@@ -134,6 +134,29 @@ NUSMods' semester dates and MOM's public holidays by
 `scripts/fetch_calendar.py`). [`src/config.ts`](../src/config.ts) holds the cache
 TTLs and tuning constants.
 
+The calendar keeps itself up to date without a deploy
+([src/calendarsync.ts](../src/calendarsync.ts)). `data/calendar.json` is
+bundled at deploy time, and the scrape workflow refreshes it weekly, but a
+bundled file only changes when someone deploys. So the cron also fetches the
+same two sources once a week. The copy must pass checks:
+- dates are real, and every semester starts on a Monday;
+- there are terms 1 to 4 and at least 4 semesters and 5 holidays.
+
+A copy that passes is merged over what's known and kept in KV
+(`calendar:data`). After a failure the cron tries again the next day, and the
+error is in the Worker's logs as `cron calendar`.
+
+Every request, and the Trip object, reads that copy at most every 10 minutes
+per instance and merges it with the bundled one; the newer wins where they
+differ. A source that drops a year loses nothing, and a broken reply changes
+nothing.
+
+`/health` says which is in use (`calendar.source`: `bundled` or `fetched`)
+and how far it goes. The "calendar runs out soon" email only comes when even
+the fetched copy is within 45 days of its end, that is when NUSMods doesn't
+list the next academic year yet. Past the end, imported classes count every
+week, as before.
+
 ## Accounts
 
 Sign-up is open; addresses on the `blocklist` table are refused. The account
@@ -836,6 +859,7 @@ src/fms.ts        ShuttleService client + defensive response normalisation
 src/auth.ts       Public token, lazy refresh, KV + in-memory memo
 src/config.ts     Cache TTLs and tuning constants
 src/calendar.ts   NUS teaching weeks and public holidays
+src/calendarsync.ts  The calendar fetched weekly by the cron into KV, between deploys
 src/nusmods.ts    NUSMods share URL -> trips
 src/campus.ts     /campus: stops, route lines and colours, destination search
 src/buses.ts      /buses: live buses placed on their route, next stop

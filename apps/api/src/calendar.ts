@@ -11,12 +11,44 @@
 import calendarJson from '../data/calendar.json' with { type: 'json' };
 import { m } from './i18n.ts';
 
-interface CalendarData {
+export interface CalendarData {
+  /** When it was built (ISO); the newer of two copies wins where they differ. */
+  generated?: string;
   semesters: Array<{ acadYear: string; semester: number; start: string }>;
   holidays: Array<{ date: string; name: string }>;
 }
 
-const DATA = calendarJson as CalendarData;
+/** The copy bundled at deploy time. */
+export const BUNDLED = calendarJson as CalendarData;
+/** What's answered from: the bundled copy, or a newer one the Worker
+ *  fetched itself (calendarsync.ts) merged over it. */
+let DATA: CalendarData = BUNDLED;
+
+/** The calendar answered from now. */
+export const currentCalendar = (): CalendarData => DATA;
+
+/** Answer from [data] from now on; null goes back to the bundled copy. */
+export function useCalendar(data: CalendarData | null): void {
+  DATA = data ?? BUNDLED;
+}
+
+/**
+ * [a] and [b] together: every semester and holiday either has, with [b]'s
+ * where both have one (the same semester, or a holiday on the same date).
+ * A source that drops an old year never loses it here.
+ */
+export function mergeCalendars(a: CalendarData, b: CalendarData): CalendarData {
+  const sems = new Map(a.semesters.map((s) => [`${s.acadYear} ${s.semester}`, s]));
+  for (const s of b.semesters) sems.set(`${s.acadYear} ${s.semester}`, s);
+  const days = new Map(a.holidays.map((h) => [h.date, h]));
+  for (const h of b.holidays) days.set(h.date, h);
+  const generated = [a.generated, b.generated].filter(Boolean).sort().at(-1);
+  return {
+    ...(generated ? { generated } : {}),
+    semesters: [...sems.values()].sort((x, y) => x.start.localeCompare(y.start) || x.semester - y.semester),
+    holidays: [...days.values()].sort((x, y) => x.date.localeCompare(y.date)),
+  };
+}
 const DAY_MS = 86_400_000;
 const SGT_MS = 8 * 3_600_000;
 

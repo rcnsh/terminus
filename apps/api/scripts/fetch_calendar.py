@@ -12,6 +12,9 @@ Usage:
     python3 scripts/fetch_calendar.py [--out data/calendar.json]
 
 Only rewrites the file when the dates actually change.
+
+The Worker also fetches the same sources weekly into KV (src/calendarsync.ts),
+so the calendar stays current between deploys; keep the two in step.
 """
 
 import argparse

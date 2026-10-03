@@ -12,6 +12,7 @@
  *   device that takes push, and stops otherwise.
  */
 
+import { loadCalendar } from './calendarsync.ts';
 import type { Env } from './types.ts';
 import type { Boarded, DayRecord, TripRecord } from './trip.ts';
 import type { MeDeps } from './me.ts';
@@ -54,6 +55,7 @@ export class Trip {
   }
 
   private async handle(req: Request): Promise<Response> {
+    await loadCalendar(this.env);
     const url = new URL(req.url);
     const day = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
 
@@ -122,6 +124,7 @@ export class Trip {
 
   async alarm(): Promise<void> {
     const nowMs = Date.now();
+    await loadCalendar(this.env, nowMs);
     const deleteAt = await this.storage.get<number>('deleteAt');
     // Midnight (or an object from before phase 3, which only knew midnight).
     if (deleteAt === undefined || nowMs >= deleteAt - 1000) {

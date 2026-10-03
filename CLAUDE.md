@@ -192,7 +192,9 @@ docs/map-plan.md      How the campus map was planned and built
   `shapes.json` (route lines from OpenStreetMap via Overpass) and
   `calendar.json`. The workflow runs the tests and `check_scraped.py`, then
   commits to main as `github-actions[bot]`. The data is bundled into the
-  Worker, so a data change needs a deploy.
+  Worker, so a data change needs a deploy. The calendar is the exception:
+  the cron also fetches it weekly into KV (`src/calendarsync.ts`), so it
+  doesn't run out when nobody deploys.
 - **Answering.** `resolve.ts` picks candidate stops near the user, pairs each
   stop with its twin across the road, checks the bus goes downstream to the
   destination, and scores the options by arrival time. Rides use a per-hop

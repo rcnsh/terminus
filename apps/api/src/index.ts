@@ -27,6 +27,7 @@ import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
 import { readIncidents, readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
+import { calendarSource, loadCalendar } from './calendarsync.ts';
 import { handleDownload } from './downloads.ts';
 import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
@@ -247,7 +248,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         stops: GRAPH.stops.length,
         services: [...idx.routes.keys()],
       },
-      calendar: { through, daysLeft },
+      calendar: { through, daysLeft, source: calendarSource() },
       // Presence only. Never the values.
       config: {
         auth: authConfigured(env),
@@ -302,6 +303,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   const nowMs = Date.now();
 
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  // The calendar the cron keeps fresh in KV (calendarsync.ts), read every few minutes.
+  await loadCalendar(env, nowMs);
 
   try {
     const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);

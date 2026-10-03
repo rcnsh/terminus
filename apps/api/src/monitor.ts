@@ -13,6 +13,7 @@ import { fetchArrivals } from './fms.ts';
 import { KV_APP_VERSION, UpstreamRejected } from './auth.ts';
 import { autoUpdateVersion, type AutoResult } from './appversion.ts';
 import { calendarThrough, semesterSoon, termFrom, termName } from './calendar.ts';
+import { loadCalendar, refreshCalendar } from './calendarsync.ts';
 import { pruneCrowdSeen } from './crowd.ts';
 import { ACCOUNT_TTL } from './accounts.ts';
 import { type Notice, pushEnabled, remindUser } from './push.ts';
@@ -260,9 +261,10 @@ export async function housekeeping(db: D1Database, nowMs: number): Promise<void>
 }
 
 /**
- * Email once a week while calendar.json is within CALENDAR_WARN_DAYS of
- * running out. Past its end imported classes fail open (every week counts),
- * which is survivable but wrong in recess and exams.
+ * Email once a week while the calendar is within CALENDAR_WARN_DAYS of
+ * running out: the bundled calendar.json, or the newer copy the cron fetches
+ * into KV (calendarsync.ts). Past its end imported classes fail open (every
+ * week counts), which is survivable but wrong in recess and exams.
  */
 export async function checkCalendar(env: Env, nowMs: number, through = calendarThrough()): Promise<boolean> {
   const daysLeft = Math.floor((Date.parse(`${through}T00:00:00Z`) - nowMs) / 86_400_000);
@@ -274,7 +276,7 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
     from: { email: env.EMAIL_FROM, name: 'terminus' },
     to: env.ALERT_EMAIL,
     subject: 'terminus: academic calendar data runs out soon',
-    text: `data/calendar.json covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nRefresh it and deploy:\n  python3 apps/api/scripts/fetch_calendar.py && pnpm run deploy`,
+    text: `The academic calendar covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nThe Worker fetches the calendar itself every week, from NUSMods and data.gov.sg, so either NUSMods doesn't list the next academic year yet, or the fetch is failing (look for "cron calendar" in the Worker's logs).\n\nWhen NUSMods has the year, nothing else is needed. To bundle it as well:\n  python3 apps/api/scripts/fetch_calendar.py && pnpm run deploy`,
   });
   await env.KV.put(CALENDAR_KEY, String(nowMs));
   return true;
@@ -387,7 +389,15 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
     }
   };
   await step('upstream', () => checkUpstream(env, nowMs));
-  await step('calendar', () => checkCalendar(env, nowMs));
+  await step('calendar', async () => {
+    await loadCalendar(env, nowMs);
+    try {
+      await refreshCalendar(env, nowMs);
+    } finally {
+      // Whether or not the refresh worked, warn if the calendar runs out soon.
+      await checkCalendar(env, nowMs);
+    }
+  });
   if (env.DB) await step('housekeeping', () => housekeeping(env.DB!, nowMs));
   if (env.DB) await step('crowds', () => pruneCrowdSeen(env.DB!, nowMs));
   await step('trips', () => armTrips(env, nowMs));
