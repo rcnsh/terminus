@@ -264,12 +264,20 @@ class Glides(private val ms: Long = GLIDE_MS, private val catchMs: Long = CATCH_
 
     private var glides: Map<String, Glide> = emptyMap()
 
+    /** When the last answer came, to tell a stale map. */
+    private var lastUpdate: Long? = null
+
     /** New positions [buses], with [path] their route's line, at [now]. */
     fun update(buses: List<LiveBus>, path: RoutePath?, now: Long) {
+        // No answer for a while (the screen was off, the app in the
+        // background): every bus jumps to where it is now, not races there.
+        val stale = lastUpdate.let { it == null || now - it > STALE_MS }
+        lastUpdate = now
         glides = buses.associate { b ->
             val g = glides[b.id]
             b.id to when {
                 g != null && g.to.lat == b.lat && g.to.lon == b.lon -> Glide(g.from, b, g.start, g.path, g.d)
+                stale -> Glide(null, b, now, if (b.along != null) path else null, null)
                 else -> glideFrom(g?.let { at(it, now) }, b, path, now)
             }
         }
@@ -289,8 +297,9 @@ class Glides(private val ms: Long = GLIDE_MS, private val catchMs: Long = CATCH_
         val jump = Glide(null, b, now, if (b.along != null) path else null, null)
         if (from == null) return jump
         val d = path?.alongBy(from, b)
-        // Put back a little (GPS error), it waits where it's drawn; a long way back, it jumps.
-        if (d != null) return if (d < -HOLD_BACK_M) jump else Glide(from, b, now, path, d)
+        // Put back a little (GPS error), it waits where it's drawn; a long way
+        // back, or further ahead than JUMP_AHEAD_M, it jumps rather than race there.
+        if (d != null) return if (d < -HOLD_BACK_M || (d > JUMP_AHEAD_M && b.speed != null)) jump else Glide(from, b, now, path, d)
         // On its line at both ends but not along it (the other side of the road, a long way): it jumps, never cuts across.
         if (from.along != null && b.along != null) return jump
         if (RoutePath.haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return jump
@@ -337,6 +346,12 @@ class Glides(private val ms: Long = GLIDE_MS, private val catchMs: Long = CATCH_
 
         /** Put back along its line by less than this, a bus waits where it's drawn instead of reversing. */
         const val HOLD_BACK_M = 60.0
+
+        /** Further ahead than this, a bus jumps to its new place: the map was a long way behind it. */
+        const val JUMP_AHEAD_M = 100.0
+
+        /** No answer for longer than this: every bus jumps to where it is now. */
+        const val STALE_MS = 15_000L
     }
 }
 

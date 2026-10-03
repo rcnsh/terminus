@@ -40,6 +40,12 @@ const GLIDE_STRAIGHT_MAX_M = 250;
 /** Put back along its line by less than this (GPS error), a bus stays where
  *  it's drawn instead of reversing. */
 const HOLD_BACK_M = 60;
+/** Further ahead than this, a bus jumps to its new place instead of racing
+ *  along the road to catch up: the map was a long way behind it. */
+const JUMP_AHEAD_M = 100;
+/** No answer for longer than this (the screen was off, the tab hidden, the
+ *  connection lost): every bus jumps to where it is now. */
+const STALE_MS = 15_000;
 /** Further than this from campus, the map opens on campus, not on you. */
 const NEAR_CAMPUS_M = 3_000;
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts). */
@@ -65,6 +71,8 @@ let busTimer = null;
 let watchId = null;
 /** Each bus's glide, by id: from where it was drawn to where it is now. */
 let glides = new Map();
+/** When the last answer came (performance.now()), to tell a stale map. */
+let lastAnswer = -Infinity;
 let glide = null;
 /** The whole-campus view, for the button back to it. */
 let fit = null;
@@ -370,6 +378,8 @@ document.addEventListener('visibilitychange', () => {
  */
 function moveTo(buses) {
   const now = performance.now();
+  const stale = now - lastAnswer > STALE_MS;
+  lastAnswer = now;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const path = pathOf(campusData.get()?.routes[selected.get()]?.line);
   shown.set(new Map(buses.map((b) => [b.id, b])));
@@ -377,7 +387,7 @@ function moveTo(buses) {
   for (const b of buses) {
     const g = glides.get(b.id);
     if (g && g.to.lat === b.lat && g.to.lon === b.lon) next.set(b.id, { ...g, to: b });
-    else if (reduce) next.set(b.id, { from: null, to: b, start: now, path: null });
+    else if (reduce || stale) next.set(b.id, { from: null, to: b, start: now, path: b.along != null ? path : null });
     else next.set(b.id, glideFrom(g ? positionAt(g, now) : null, b, path, now));
   }
   glides = next;
@@ -406,14 +416,16 @@ function frameAt(now) {
  * A glide for bus [b] from [from] (where it's drawn; null for a new bus),
  * or none: it jumps there. On its line at both ends, it only ever moves
  * along the line: a bus that can't glide along it (the other side of the
- * road, a long way) jumps rather than cut across. Straight only onto or off
- * its line, a short way.
+ * road, a long way) jumps rather than cut across, and so does one further
+ * ahead than JUMP_AHEAD_M rather than race to catch up. Straight only onto
+ * or off its line, a short way.
  */
 function glideFrom(from, b, path, now) {
   const jump = { from: null, to: b, start: now, path: b.along != null ? path : null };
   if (!from) return jump;
   const d = path && alongBy(path, from, b);
-  if (d != null) return d < -HOLD_BACK_M ? jump : { from, to: b, start: now, path, d };
+  // An older API's answer (no speed) glides 15 s and may be further ahead.
+  if (d != null) return d < -HOLD_BACK_M || (d > JUMP_AHEAD_M && b.speed != null) ? jump : { from, to: b, start: now, path, d };
   if (from.along != null && b.along != null) return jump;
   if (haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return jump;
   return { from, to: b, start: now, path: null, d: null };

@@ -70,7 +70,9 @@ const DOUBT_FIXES = 2;
 /** A tracked bus whose only places on its line are behind it, by up to
  *  this, stays where it was for up to HOLD_BACK_MS. Leaving Kent Ridge Bus
  *  Terminal, A1 and A2 drive out along the road they came in by before
- *  they join the start of their line. */
+ *  they join the start of their line. At the end of a loop (the terminus),
+ *  where a bus can wait longer than that, it stays for as long as its track
+ *  lasts (TRACK_MS). */
 const HOLD_BACK_M = 500;
 const HOLD_BACK_MS = 120_000;
 /** Off its line for less than this, a tracked bus stays at its last place on it. */
@@ -261,11 +263,12 @@ export function follow(
     // The same reading again (the feed holds a position for 15-20 s): the same answer.
     if (fix.lat === kept.lat && fix.lon === kept.lon && kept.offSince == null) return { place: pointAlong(shape, kept.along), track: kept, kept: true };
     const ageS = (now - kept.at) / 1000;
-    // Metres driven from the track to `along`: from a little behind it
-    // (GPS error) on; round a loop, everything else is ahead.
+    // Metres driven from the track to `along`. Round a loop, up to
+    // HOLD_BACK_M behind is behind, not a lap ahead: after a long wait, the
+    // distance it could have driven would otherwise reach all the way round.
     const gone = (along: number) => {
       let g = along - kept.along;
-      if (loop && total > 0) g = ((((g + TRACK_BACK_M) % total) + total) % total) - TRACK_BACK_M;
+      if (loop && total > 0) g = ((((g + HOLD_BACK_M) % total) + total) % total) - HOLD_BACK_M;
       return g;
     };
     const reach = found.filter((c) => {
@@ -308,7 +311,8 @@ export function follow(
     }
     // Only behind it, not far: it doesn't drive backwards, so it waits there.
     const back = (along: number) => (loop && total > 0 ? (((kept.along - along) % total) + total) % total : kept.along - along);
-    if (now - kept.at < HOLD_BACK_MS && found.every((c) => back(c.along) > TRACK_BACK_M && back(c.along) <= HOLD_BACK_M)) {
+    const atLoopEnd = loop && total > 0 && total - kept.along <= HOLD_BACK_M;
+    if (now - kept.at < (atLoopEnd ? TRACK_MS : HOLD_BACK_MS) && found.every((c) => back(c.along) > TRACK_BACK_M && back(c.along) <= HOLD_BACK_M)) {
       return { place: pointAlong(shape, kept.along), track: { ...kept, held: true }, kept: true };
     }
     // Nowhere it could have driven to: start again from this fix.

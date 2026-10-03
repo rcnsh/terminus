@@ -83,14 +83,21 @@ test('a bus is never put back along its line', () => {
   // A loop round a block, 500 m by 200 m: east, north, west, then south
   // into the terminus at its start. Leaving the terminus, the bus drives
   // north up the road it came in by: up to 500 m behind its place, it waits
-  // there (for two minutes at most), then joins its line ahead.
+  // there, then joins its line ahead. At the loop's end (the terminus) it
+  // waits as long as its track lasts: at Kent Ridge Bus Terminal, A1 waited
+  // more than two minutes and was drawn 261 m back.
   const w = 500 / mLon(1.3), h = 200 / M_LAT;
   const block = { stops: ['T', 'X', 'T'], line: [[103.77, 1.3], [103.77 + w, 1.3], [103.77 + w, 1.3 + h], [103.77, 1.3 + h], [103.77, 1.3]], at: [0, 700, 1400] };
   const up = { lon: 103.77, lat: 1.3 + 150 / M_LAT, heading: 0 };
   const waits = follow(block, up, track(1390, 0), 20_000, true);
   assert.equal(waits.place.along, 1390);
   assert.ok(Math.abs(follow(block, { lon: 103.77 + (w * 30) / 500, lat: 1.3, heading: 90 }, waits.track, 40_000, true).place.along - 30) < 2, 'and then on ahead');
-  assert.ok(follow(block, up, track(1390, 0), 130_000, true).place.along < 1300, 'still there after two minutes: placed afresh');
+  assert.equal(follow(block, up, track(1390, 0), 130_000, true).place.along, 1390, 'at the loop end, still waiting after two minutes');
+  assert.ok(follow(block, up, track(1390, 0), 700_000, true).place.along < 1300, 'its track gone (10 minutes): placed afresh');
+  // Mid-route, behind it for more than two minutes: placed afresh.
+  const side = { lon: 103.77 + w, lat: 1.3 + 50 / M_LAT, heading: 180 };
+  assert.ok(follow(block, side, track(800, 0), 20_000, true).place.along === 800, 'mid-route, waits');
+  assert.ok(follow(block, side, track(800, 0), 130_000, true).place.along < 800, 'mid-route, after two minutes: placed afresh');
 });
 
 test('a tracked bus that jumps off its line for a moment stays on it', () => {

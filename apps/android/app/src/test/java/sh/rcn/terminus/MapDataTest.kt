@@ -162,6 +162,12 @@ class MapDataTest {
         g.update(listOf(at(200.0, 10.0, 400.0)), path, 12_000)
         assertEquals("halfway to where it now is (205 m)", 182.5, g.at(12_500)[0].along!!, 1e-6)
         assertEquals(220.0, g.at(14_000)[0].along!!, 1e-6)
+        // An answer more than 100 m ahead of where it's drawn: it jumps there, not race along the road.
+        g.update(listOf(at(450.0, 10.0, 600.0)), path, 14_500)
+        assertEquals(450.0, g.at(14_500)[0].along!!, 1e-6)
+        // No answer for 20 s (the screen was off): it jumps to the new place, even a short way ahead.
+        g.update(listOf(at(520.0, 10.0, 700.0)), path, 34_500)
+        assertEquals(520.0, g.at(34_500)[0].along!!, 1e-6)
         // From an older API, with no speed: it glides there over 15 s, as before.
         val old = Glides()
         old.update(listOf(at(0.0, 0.0, 0.0).copy(speed = null, until = null)), path, 0)
