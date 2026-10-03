@@ -269,7 +269,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Campus map and destinations',
           description:
-            'Returns stop positions (as SVG coordinates and lat/lon) and each route\'s path along the roads, plus a destination search list: every stop, named buildings and NUSMods rooms, each mapped to the stop an import would use. The data only changes when the API is redeployed, and responses are cached for an hour.',
+            'Returns stop positions (as SVG coordinates and lat/lon) and each route\'s path along the roads, plus a destination search list: every stop, named buildings and NUSMods rooms, each mapped to the stop an import would use. The data only changes when the API is redeployed, and responses are cached for an hour. Send the `ETag` back as `If-None-Match` to get a 304 when nothing has changed.',
           operationId: 'getCampus',
           responses: {
             '200': {
@@ -1187,6 +1187,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': { description: 'The whole file.', content: { 'application/vnd.pmtiles': {} } },
             '206': { description: 'The range asked for.', content: { 'application/vnd.pmtiles': {} } },
+            '304': { description: 'Your copy is current (`If-None-Match`).' },
             '404': errorResponse('No street map uploaded yet.'),
           },
         },

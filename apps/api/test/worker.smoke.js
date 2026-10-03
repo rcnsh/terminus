@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 // Installs globalThis.caches before the Worker module graph is evaluated.
-import { FROZEN_NOW, installGlobals, makeAnalytics, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv, makeFetch, makeKV } from './_stubs.mjs';
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { ME_ROUTES } from '../src/me.ts';
@@ -779,25 +779,8 @@ test('every response carries nosniff and HSTS; HTML gets a CSP, /docs one that a
   assert.match(await docs.text(), /integrity="sha384-/);
 });
 
-/** An R2 bucket that understands range requests, as the real one does. */
-function rangedBucket(files) {
-  return {
-    async get(key, opts = {}) {
-      if (!files.has(key)) return null;
-      const data = new TextEncoder().encode(files.get(key));
-      const etag = `"${key.length}-${data.length}"`;
-      const h = opts.onlyIf instanceof Headers ? opts.onlyIf : new Headers();
-      const base = { size: data.length, httpEtag: etag };
-      if (h.get('if-none-match') === etag) return base;
-      const r = opts.range instanceof Headers ? /bytes=(\d+)-(\d+)?/.exec(opts.range.get('range') ?? '') : null;
-      if (!r) return { ...base, body: data };
-      const offset = Number(r[1]);
-      if (offset >= data.length) throw new Error('range not satisfiable');
-      const end = r[2] != null ? Math.min(Number(r[2]), data.length - 1) : data.length - 1;
-      return { ...base, body: data.slice(offset, end + 1), range: { offset, length: end - offset + 1 } };
-    },
-  };
-}
+/** An R2 bucket of these files (text), ranges and all. */
+const rangedBucket = (files) => makeBucket((key) => (files.has(key) ? new TextEncoder().encode(files.get(key)) : null));
 
 test('/map serves the map file in pieces, and its fonts and icons', async () => {
   const files = new Map([
@@ -831,6 +814,71 @@ test('/map serves the map file in pieces, and its fonts and icons', async () => 
   assert.equal((await get('/map/fonts/..%2F..%2Flatest.json/0-255.pbf')).status, 404);
   assert.equal((await get('/map/latest.json')).status, 404);
   assert.equal((await get('/map/fonts/Noto Sans Regular/0-255.pbf.bak')).status, 404);
+});
+
+test('map pieces are kept at the edge: R2 is read once per piece, and a new upload is seen', async () => {
+  const files = new Map([['map/campus.pmtiles', 'PMTiles-0123456789']]);
+  const bucket = rangedBucket(files);
+  const env = { ...makeEnv(), DOWNLOADS: bucket };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
+
+  const first = await get('/map/campus.pmtiles', { range: 'bytes=8-11' });
+  assert.equal(first.status, 206);
+  assert.equal(first.headers.get('content-range'), 'bytes 8-11/18');
+  assert.equal(await first.text(), '0123');
+  const etag = first.headers.get('etag');
+
+  // Everyone after asks for the same piece: from the cache, the same bytes.
+  for (let i = 0; i < 3; i++) {
+    const again = await get('/map/campus.pmtiles', { range: 'bytes=8-11' });
+    assert.equal(again.status, 206);
+    assert.equal(again.headers.get('content-range'), 'bytes 8-11/18');
+    assert.equal(again.headers.get('etag'), etag);
+    assert.equal(await again.text(), '0123');
+  }
+  assert.equal(bucket.gets, 1, 'one R2 read for four people');
+
+  // The whole file (Android keeps it for offline), and the last bytes.
+  assert.equal(await (await get('/map/campus.pmtiles')).text(), 'PMTiles-0123456789');
+  assert.equal(await (await get('/map/campus.pmtiles')).text(), 'PMTiles-0123456789');
+  assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=-4' })).text(), '6789');
+  assert.equal(bucket.gets, 3);
+  // A copy that's current costs no read, weakened by compression or not.
+  assert.equal((await get('/map/campus.pmtiles', { 'if-none-match': `W/${etag}` })).status, 304);
+  assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=18-' })).status, 416);
+  assert.equal(bucket.gets, 3);
+
+  // A new map is uploaded. Within minutes its pieces are served, never the
+  // old file's bytes under the new file's ETag.
+  files.set('map/campus.pmtiles', 'PMTiles-abcdefghij');
+  const was = Date.now;
+  Date.now = () => was() + 10 * 60_000;
+  try {
+    const fresh = await get('/map/campus.pmtiles', { range: 'bytes=8-11' });
+    assert.equal(await fresh.text(), 'abcd');
+    assert.notEqual(fresh.headers.get('etag'), etag);
+  } finally {
+    Date.now = was;
+  }
+});
+
+test('/campus is the same bytes every time, with an ETag a client can revalidate with', async () => {
+  const cache = installGlobals(makeFetch({}));
+  const first = (await call('/campus', { cache })).res;
+  assert.equal(first.status, 200);
+  const etag = first.headers.get('etag');
+  assert.match(etag, /^"[0-9a-f]{24}"$/);
+  const body = await first.text();
+  assert.ok(JSON.parse(body).stops.length > 20);
+
+  const again = (await call('/campus', { cache })).res;
+  assert.equal(again.headers.get('etag'), etag);
+  assert.equal(await again.text(), body);
+  const kept = (await call('/campus', { cache, headers: { 'if-none-match': `W/${etag}` } })).res;
+  assert.equal(kept.status, 304);
+  assert.equal(await kept.text(), '');
+  assert.equal((await call('/campus', { cache, headers: { 'if-none-match': '"old"' } })).res.status, 200);
 });
 
 test('/map/style.json is a quiet light or dark map with every URL on our own domain', async () => {

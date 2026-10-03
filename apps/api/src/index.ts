@@ -28,7 +28,7 @@ import { accountsConfigured } from './accounts.ts';
 import { readIncidents, readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
 import { handleDownload } from './downloads.ts';
-import { handleMap } from './map.ts';
+import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
@@ -129,11 +129,23 @@ async function probeAuth(env: Env, nowMs: number): Promise<Record<string, unknow
 
 /**
  * GET /campus -- static map + search data for the Map and Plan tabs. Pure
- * function of the bundled stop graph, so it is cheap to cache hard: it only
- * changes when a deploy ships a new scrape, same as the graph itself.
+ * function of the bundled stop graph: it only changes when a deploy ships a
+ * new scrape. So it's written once per isolate, with an ETag of its own
+ * bytes, and a client that already has it (the browser revalidating after
+ * max-age) gets a 304 instead of the 100 KB again.
  */
-function handleCampus(): Response {
-  return jsonCached({ viewBox: CAMPUS_MAP.viewBox, stops: CAMPUS_MAP.stops, routes: CAMPUS_MAP.routes, destinations: DESTINATIONS, residences: RESIDENCE_LIST }, 3600, 'private');
+let campusBody: Promise<{ body: string; etag: string }> | null = null;
+
+async function handleCampus(req: Request): Promise<Response> {
+  campusBody ??= (async () => {
+    const body = JSON.stringify({ viewBox: CAMPUS_MAP.viewBox, stops: CAMPUS_MAP.stops, routes: CAMPUS_MAP.routes, destinations: DESTINATIONS, residences: RESIDENCE_LIST });
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)));
+    return { body, etag: `"${Array.from(digest.slice(0, 12)).map((b) => b.toString(16).padStart(2, '0')).join('')}"` };
+  })();
+  const { body, etag } = await campusBody;
+  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'private, max-age=3600', etag, ...CORS };
+  if (matchesEtag(req, etag)) return new Response(null, { status: 304, headers });
+  return new Response(body, { headers });
 }
 
 /**
@@ -324,7 +336,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     const dl = await handleDownload(url.pathname, env, url);
     if (dl) return dl;
     // The street map: open like the website, and served from R2 or built.
-    const map = await handleMap(req, url, env);
+    const map = await handleMap(req, url, env, ctx);
     if (map) return map;
 
     switch (url.pathname) {
@@ -350,7 +362,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         if (!isOperator(env, req)) return json({ error: 'not found' }, 404);
         return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
       case '/campus':
-        return handleCampus();
+        return await handleCampus(req);
       case '/stops/pairs':
         // Static like /campus: changes only with a new scrape.
         return jsonCached(STOP_PAIRS, 3600, 'private');

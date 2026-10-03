@@ -13,11 +13,15 @@
  * scripts/map-tiles.sh cuts the file from the Protomaps build of
  * OpenStreetMap and uploads it, the fonts and the icons, under map/ in the
  * DOWNLOADS bucket. Map data (c) OpenStreetMap contributors, ODbL.
+ *
+ * Every map open asks for dozens of pieces, the same pieces for everyone,
+ * so each piece is kept in the edge cache (edgePart) and R2 is read once
+ * per piece per data centre, not once per person.
  */
 
 import { layers, namedFlavor } from '@protomaps/basemaps';
 import type { Env } from './types.ts';
-import { json } from './http.ts';
+import { CORS, json } from './http.ts';
 
 const PREFIX = 'map/';
 const TILES = 'campus.pmtiles';
@@ -62,20 +66,26 @@ export function mapStyle(origin: string, theme: Theme, lang: 'en' | 'zh'): Recor
   };
 }
 
+/** Each style, built once per isolate: it's the same every time. */
+const styles = new Map<string, string>();
+
 /** Serves /map/*; null for any other path. */
-export async function handleMap(req: Request, url: URL, env: Env): Promise<Response | null> {
+export async function handleMap(req: Request, url: URL, env: Env, ctx?: ExecutionContext): Promise<Response | null> {
   const path = url.pathname;
   if (!path.startsWith('/map/')) return null;
 
   if (path === '/map/style.json') {
     const theme: Theme = url.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
     const lang = url.searchParams.get('lang') === 'zh' ? 'zh' : 'en';
-    return json(mapStyle(url.origin, theme, lang), 200, { 'cache-control': 'public, max-age=3600' });
+    const id = `${url.origin} ${theme} ${lang}`;
+    let style = styles.get(id);
+    if (!style) styles.set(id, (style = JSON.stringify(mapStyle(url.origin, theme, lang))));
+    return new Response(style, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=3600', ...CORS } });
   }
 
   if (!env.DOWNLOADS) return json({ error: 'not found' }, 404);
 
-  if (path === `/map/${TILES}`) return servePart(req, env.DOWNLOADS, PREFIX + TILES, 'application/vnd.pmtiles', 86400);
+  if (path === `/map/${TILES}`) return edgePart(req, env.DOWNLOADS, PREFIX + TILES, 'application/vnd.pmtiles', 86400, ctx);
 
   // A malformed escape ("%E0") is a bad path: not found, not an error.
   let decoded: string;
@@ -85,14 +95,115 @@ export async function handleMap(req: Request, url: URL, env: Env): Promise<Respo
     return json({ error: 'not found' }, 404);
   }
   const font = FONT.exec(decoded);
-  if (font) return servePart(req, env.DOWNLOADS, `${PREFIX}fonts/${font[1]}/${font[2]}.pbf`, 'application/x-protobuf', 30 * 86400);
+  if (font) return edgePart(req, env.DOWNLOADS, `${PREFIX}fonts/${font[1]}/${font[2]}.pbf`, 'application/x-protobuf', 30 * 86400, ctx);
 
   const sprite = SPRITE.exec(path);
   if (sprite) {
     const type = sprite[3] === 'png' ? 'image/png' : 'application/json';
-    return servePart(req, env.DOWNLOADS, `${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`, type, 30 * 86400);
+    return edgePart(req, env.DOWNLOADS, `${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`, type, 30 * 86400, ctx);
   }
   return json({ error: 'not found' }, 404);
+}
+
+/** How long an isolate trusts what it last learnt of a file (its ETag and size). */
+const HEAD_TTL_MS = 5 * 60_000;
+/** Pieces bigger than this go straight from R2, uncached. The whole map file is about 4 MB. */
+const MAX_CACHED_BYTES = 32 * 1024 * 1024;
+const heads = new Map<string, { etag: string; httpEtag: string; size: number; atMs: number }>();
+
+async function headOf(bucket: R2Bucket, key: string, nowMs: number) {
+  const known = heads.get(key);
+  if (known && nowMs - known.atMs < HEAD_TTL_MS) return known;
+  const obj = await bucket.head(key);
+  if (!obj) {
+    heads.delete(key);
+    return null;
+  }
+  const head = { etag: obj.etag, httpEtag: obj.httpEtag, size: obj.size, atMs: nowMs };
+  heads.set(key, head);
+  return head;
+}
+
+/**
+ * The byte range a Range header asks for, within a file this size: null for
+ * the whole file, 'unsatisfiable' past its end, 'other' for what R2 should
+ * work out itself (several ranges, nonsense).
+ */
+export function rangeOf(header: string | null, size: number): { offset: number; length: number } | null | 'unsatisfiable' | 'other' {
+  if (header === null) return null;
+  const r = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!r || (r[1] === '' && r[2] === '')) return 'other';
+  if (r[1] === '') {
+    // The last n bytes.
+    const n = Math.min(Number(r[2]), size);
+    return n > 0 ? { offset: size - n, length: n } : 'unsatisfiable';
+  }
+  const offset = Number(r[1]);
+  if (offset >= size) return 'unsatisfiable';
+  const end = r[2] === '' ? size - 1 : Math.min(Number(r[2]), size - 1);
+  return end < offset ? 'other' : { offset, length: end - offset + 1 };
+}
+
+/**
+ * servePart, through the edge cache. A piece is kept under the file's ETag
+ * and its byte range, and read from R2 only when it's missing, with the
+ * ETag as a condition, so a cached piece is always from the file its key
+ * names. A newly uploaded file has a new ETag, so its pieces are new keys,
+ * seen within HEAD_TTL_MS. PMTiles readers ask for the same ranges every
+ * time, so the pieces are shared by everyone.
+ */
+async function edgePart(req: Request, bucket: R2Bucket, key: string, type: string, maxAgeS: number, ctx?: ExecutionContext): Promise<Response> {
+  const cache = typeof caches === 'undefined' ? null : caches.default;
+  if (!cache) return servePart(req, bucket, key, type, maxAgeS);
+  const head = await headOf(bucket, key, Date.now());
+  if (!head) return json({ error: 'not found' }, 404);
+  const headers = partHeaders(type, maxAgeS, head.httpEtag);
+  // The client's copy is current: nothing to read.
+  if (matchesEtag(req, head.httpEtag)) return new Response(null, { status: 304, headers });
+  // Anything conditional beyond that, R2 decides.
+  if (req.headers.has('if-match') || req.headers.has('if-modified-since') || req.headers.has('if-unmodified-since') || req.headers.has('if-range')) return servePart(req, bucket, key, type, maxAgeS);
+
+  const range = rangeOf(req.headers.get('range'), head.size);
+  if (range === 'unsatisfiable') return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}` } });
+  if (range === 'other') return servePart(req, bucket, key, type, maxAgeS);
+  const { offset, length } = range ?? { offset: 0, length: head.size };
+  if (length > MAX_CACHED_BYTES) return servePart(req, bucket, key, type, maxAgeS);
+
+  const id = new Request(`https://terminus.internal/map/${encodeURIComponent(key)}?etag=${encodeURIComponent(head.etag)}&bytes=${offset}-${length}`);
+  let body: ArrayBuffer | null = null;
+  const hit = await cache.match(id).catch(() => undefined);
+  if (hit) body = await hit.arrayBuffer();
+  else {
+    const obj = await bucket.get(key, { range: { offset, length }, onlyIf: { etagMatches: head.etag } }).catch(() => null);
+    // Replaced since we last looked (or gone): forget it and let R2 answer.
+    if (!obj || !('body' in obj)) {
+      heads.delete(key);
+      return servePart(req, bucket, key, type, maxAgeS);
+    }
+    body = await obj.arrayBuffer();
+    const put = cache.put(id, new Response(body.slice(0), { headers: { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}` } })).catch(() => {});
+    if (ctx) ctx.waitUntil(put);
+    else await put;
+  }
+  headers.set('content-length', String(body.byteLength));
+  if (!range) return new Response(body, { headers });
+  headers.set('content-range', `bytes ${offset}-${offset + body.byteLength - 1}/${head.size}`);
+  return new Response(body, { status: 206, headers });
+}
+
+/** If-None-Match names this ETag. Cloudflare weakens an ETag when it compresses the body, so W/ counts too. */
+export const matchesEtag = (req: Request, etag: string) =>
+  req.headers.get('if-none-match')?.split(',').some((t) => t.trim().replace(/^W\//, '') === etag) ?? false;
+
+function partHeaders(type: string, maxAgeS: number, httpEtag: string): Headers {
+  return new Headers({
+    'content-type': type,
+    'cache-control': `public, max-age=${maxAgeS}`,
+    etag: httpEtag,
+    'accept-ranges': 'bytes',
+    'access-control-allow-origin': '*',
+    'access-control-expose-headers': 'etag, content-range, content-length',
+  });
 }
 
 /**
@@ -109,14 +220,7 @@ async function servePart(req: Request, bucket: R2Bucket, key: string, type: stri
     return new Response(null, { status: 416 });
   }
   if (!obj) return json({ error: 'not found' }, 404);
-  const headers = new Headers({
-    'content-type': type,
-    'cache-control': `public, max-age=${maxAgeS}`,
-    etag: obj.httpEtag,
-    'accept-ranges': 'bytes',
-    'access-control-allow-origin': '*',
-    'access-control-expose-headers': 'etag, content-range, content-length',
-  });
+  const headers = partHeaders(type, maxAgeS, obj.httpEtag);
   // onlyIf failed: the client's copy is current.
   if (!('body' in obj)) return new Response(null, { status: 304, headers });
   const range = obj.range as { offset?: number; length?: number; suffix?: number } | undefined;

@@ -88,8 +88,8 @@ pnpm run deploy
 | `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
 | `GET /buses?svc=<service>` | One service's live buses for the map: position and heading (on its route line, on its own side of the road, when within 50 m of it, with metres along that line so a map can glide it along the road), crowding and the next stop (from where the bus is along that line). One upstream call per service per 5 s; each bus with its number plate. |
-| `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, and destination search data. Cached hard. |
-| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. |
+| `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, and destination search data. Written once per isolate, with an ETag: a client revalidating gets a 304. |
+| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. |

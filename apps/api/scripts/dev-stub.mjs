@@ -30,7 +30,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { installGlobals, makeDurableObjects, makeEnv, makeCtx, shuttlePayload } from '../test/_stubs.mjs';
+import { installGlobals, makeBucket, makeDurableObjects, makeEnv, makeCtx, shuttlePayload } from '../test/_stubs.mjs';
 import { Trip } from '../src/tripdo.ts';
 import { SESSION_COOKIE as DEV_COOKIE } from '../src/accounts.ts';
 import { makeD1, makeEmail } from '../test/_d1.mjs';
@@ -177,25 +177,12 @@ const ASSETS = {
 // The map's files (fonts, icons, the map file if there is one) from dev/map/,
 // standing in for R2, byte ranges and all.
 const MAP_DIR = new URL('../../../dev/map/', import.meta.url).pathname;
-const DOWNLOADS = {
-  async get(key, opts = {}) {
-    if (!key.startsWith('map/')) return null;
-    const file = path.join(MAP_DIR, key.slice(4));
-    if (!file.startsWith(MAP_DIR)) return null;
-    let data;
-    try {
-      data = await readFile(file);
-    } catch {
-      return null;
-    }
-    const base = { size: data.length, httpEtag: `"${data.length}"` };
-    const r = opts.range instanceof Headers ? /bytes=(\d+)-(\d*)/.exec(opts.range.get('range') ?? '') : null;
-    if (!r) return { ...base, body: data };
-    const offset = Number(r[1]);
-    const end = r[2] ? Math.min(Number(r[2]), data.length - 1) : data.length - 1;
-    return { ...base, body: data.subarray(offset, end + 1), range: { offset, length: end - offset + 1 } };
-  },
-};
+const DOWNLOADS = makeBucket(async (key) => {
+  if (!key.startsWith('map/')) return null;
+  const file = path.join(MAP_DIR, key.slice(4));
+  if (!file.startsWith(MAP_DIR)) return null;
+  return readFile(file).catch(() => null);
+});
 
 // Locked like production: the bus answers need a key or a signed-in account.
 // The /admin dashboard opens with the token "dev" here.

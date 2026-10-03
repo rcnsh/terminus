@@ -24,7 +24,8 @@ export function makeCache() {
     },
     async put(req, res) {
       const key = typeof req === 'string' ? req : req.url;
-      const body = await res.text();
+      // Bytes, not text: the map's pieces are binary.
+      const body = await res.arrayBuffer();
       const cc = res.headers.get('cache-control') || '';
       const m = /max-age=(\d+)/.exec(cc);
       store.set(key, {
@@ -229,6 +230,57 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
   fn.requests = requests;
   fn.mints = mints;
   return fn;
+}
+
+/**
+ * An R2 bucket over `read(key)` (bytes or null), as the real one behaves for
+ * what the Worker uses: get with a range and a condition (as Headers or as
+ * objects), head, and ETags that change with the content. `gets` counts the
+ * reads that returned a body, which is what costs.
+ */
+export function makeBucket(read) {
+  const etagOf = (data) => {
+    let h = 0;
+    for (const b of data) h = (h * 31 + b) >>> 0;
+    return `${data.length}-${h.toString(16)}`;
+  };
+  const bucket = {
+    gets: 0,
+    async head(key) {
+      const data = await read(key);
+      if (!data) return null;
+      const etag = etagOf(data);
+      return { size: data.length, etag, httpEtag: `"${etag}"` };
+    },
+    async get(key, opts = {}) {
+      const data = await read(key);
+      if (!data) return null;
+      const etag = etagOf(data);
+      const base = { size: data.length, etag, httpEtag: `"${etag}"` };
+      const cond = opts.onlyIf;
+      if (cond instanceof Headers ? cond.get('if-none-match') === base.httpEtag : cond?.etagMatches != null && cond.etagMatches !== etag) return base;
+      let offset = 0;
+      let length = data.length;
+      let ranged = false;
+      if (opts.range instanceof Headers) {
+        const r = /bytes=(\d+)-(\d*)/.exec(opts.range.get('range') ?? '');
+        if (r) {
+          ranged = true;
+          offset = Number(r[1]);
+          length = (r[2] ? Math.min(Number(r[2]), data.length - 1) : data.length - 1) - offset + 1;
+        }
+      } else if (opts.range) {
+        ranged = true;
+        offset = opts.range.offset ?? 0;
+        length = opts.range.length ?? data.length - offset;
+      }
+      if (offset >= data.length) throw new Error('range not satisfiable');
+      const body = data.slice(offset, offset + length);
+      bucket.gets++;
+      return { ...base, body, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), ...(ranged ? { range: { offset, length: body.length } } : {}) };
+    },
+  };
+  return bucket;
 }
 
 /** Installs caches/fetch globals. Call per test to get a clean cache. */
