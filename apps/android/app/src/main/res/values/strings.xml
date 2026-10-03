@@ -211,7 +211,7 @@
     <string name="no_stop_for">No stop found for %1$s. Add those by hand in Settings, under Timetable.</string>
     <string name="no_stops_near">No stops near you</string>
     <string name="none_yet">None yet</string>
-    <string name="not_going_today">Not going today</string>
+    <string name="not_going_today">Not going</string>
     <string name="not_saved">Not saved: %1$s</string>
     <string name="not_signed_in">Not signed in</string>
     <string name="not_signed_in_hint">Your settings are stored only on this phone. Add an email to keep them if you lose your phone, and to use terminus on your Mac or the web.</string>

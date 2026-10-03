@@ -117,7 +117,7 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
     let later = try #require(day.items[1].sub)
     #expect(later.hasPrefix("Leave by ~"))
     #expect(later.hasSuffix(" · D2 from UTown · ~3 min late"))
-    #expect(day.items[2].sub == "Not going today")
+    #expect(day.items[2].sub == "Not going")
     #expect(day.items[3].title == "Home, from COM 3")
     #expect(day.items[3].sub == nil)
 }

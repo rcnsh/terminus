@@ -211,7 +211,7 @@
     <string name="no_stop_for">找不到 %1$s 的车站。请在“设置”的“课表”里手动添加。</string>
     <string name="no_stops_near">附近没有车站</string>
     <string name="none_yet">暂无</string>
-    <string name="not_going_today">今天不去</string>
+    <string name="not_going_today">不去了</string>
     <string name="not_saved">没有保存：%1$s</string>
     <string name="not_signed_in">未登录</string>
     <string name="not_signed_in_hint">你的设置只保存在这部手机上。添加邮箱后，即使手机遗失也能保留设置，并可在 Mac 或网页上使用 terminus。</string>

@@ -175,7 +175,7 @@ window.TERMINUS_ZH = {
  "None recorded.": "没有记录。",
  "Normal": "正常",
  "Normal, about 4.7 km/h": "正常，约 4.7 公里/小时",
- "Not going today": "今天不去",
+ "Not going": "不去了",
  "Not now": "以后再说",
  "Not saved. {0}": "没有保存。{0}",
  "Notifications are blocked for this site. Allow them in your browser settings to turn this on.": "这个网站的通知已被阻止。在浏览器设置中允许通知后才能开启。",

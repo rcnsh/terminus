@@ -330,7 +330,7 @@ struct DayPlan: Decodable {
 
         /// "Leave by 09:38 · D2 from PGP", "On the D2 · off at UTown · arrive 09:52", or nil.
         var sub: String? {
-            if status == "skipped" { return L("Not going today") }
+            if status == "skipped" { return L("Not going") }
             if status == "done" { return nil }
             if let b = onBus {
                 return ([L("On the %@", b.svc), b.off.map { L("off at %@", $0) }, b.arrive.flatMap(parseISODate).map { L("arrive %@", campusTime($0)) }] as [String?]).compactMap { $0 }.joined(separator: " · ")

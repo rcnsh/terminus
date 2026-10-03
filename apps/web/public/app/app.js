@@ -684,7 +684,7 @@ function Today() {
         ${items.map((it) => {
           const title = it.kind === 'home' ? t('Home, from {0}', it.fromName ?? t('your last class')) : it.label;
           let sub = null;
-          if (it.status === 'skipped') sub = t('Not going today');
+          if (it.status === 'skipped') sub = t('Not going');
           else if (it.onBus) sub = [t('On the {0}', it.onBus.svc), it.onBus.off ? t('off at {0}', it.onBus.off) : null, it.onBus.arrive ? t('arrive {0}', clock(it.onBus.arrive)) : null].filter(Boolean).join(' · ');
           else if (it.status !== 'done' && it.leave?.at) {
             const how = it.leave.svc ? t('{0} from {1}', it.leave.svc, it.leave.stop ?? it.fromName) : t('walk');
