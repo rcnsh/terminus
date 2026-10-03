@@ -24,7 +24,7 @@ import {
   nearestStop,
   walkAllTheWayS,
 } from '../src/resolve.ts';
-import { crowdFromLoad, normalize, normalizeBuses, parseCrowd, parseEtaS, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
+import { arrivalsProblem, busesProblem, crowdFromLoad, normalize, normalizeBuses, parseCrowd, parseEtaS, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
@@ -999,6 +999,30 @@ test('a filled window actually gates the ended rung', () => {
 /* ------------------------------------------------------------------ */
 /* ConnectX FMS: the confirmed query-param scheme                      */
 /* ------------------------------------------------------------------ */
+
+test('every real feed capture reads as a board; rows that changed shape do not', () => {
+  // The real ones, the after-midnight ConnectX capture included: every bus
+  // there is hours away, the next morning's, and that is not a fault.
+  for (const raw of [COM3_FIXTURE, UHC_FIXTURE, CONNECTX_FIXTURE]) assert.equal(arrivalsProblem(raw), null);
+  assert.equal(arrivalsProblem({ timings: [] }), null, 'an empty board is a real "no bus"');
+  assert.equal(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: '-', nextArrivalTime: '-' }] }), null, '"-" is a real "no bus"');
+  // The same board after a rename: a field normalize() reads is gone.
+  const renamed = (from, to) => ({ etas: { timings: COM3_FIXTURE.etas.timings.map(({ [from]: v, ...rest }) => ({ ...rest, [to]: v })) } });
+  assert.match(arrivalsProblem(renamed('name', 'routeName')), /no row names a service/);
+  assert.match(arrivalsProblem(renamed('arrivalTime', 'arrival_min')), /no row has an arrival time/);
+  assert.match(arrivalsProblem({ timings: [{ name: 'Route D2', arrivalTime: '3' }] }), /no service it names is known \(Route D2\)/);
+  // One service unknown among known ones (a new route before the weekly scrape) is fine.
+  assert.equal(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: '3' }, { name: 'Z9', arrivalTime: '5' }] }), null);
+});
+
+test('a bus list whose rows lost their plates or positions is a changed feed, not "no buses"', () => {
+  const list = [{ vehplate: 'PD726D', lat: 1.2949, lng: 103.7735, speed: 20, direction: 90 }];
+  assert.equal(busesProblem({ activebus: list }), null);
+  assert.equal(busesProblem({ activebus: [] }), null);
+  assert.equal(busesProblem({ activebus: [{ vehplate: 'PD726D', lat: 0, lng: 0 }] }), null, 'no fix yet is a real bus without a place');
+  assert.match(busesProblem({ activebus: [{ busPlate: 'PD726D', lat: 1.29, lng: 103.77 }] }), /no row has a plate/);
+  assert.match(busesProblem({ activebus: [{ vehplate: 'PD726D', position: [1.29, 103.77] }] }), /no row has a position/);
+});
 
 test('normalize handles the raw ConnectX ShuttleService shape', () => {
   // The real thing, straight from fms.connectx.com.sg -- richer than the

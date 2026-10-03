@@ -605,6 +605,18 @@ clock time ("-3", "12:30") is no time, and a live bus with a blank or null
 latitude, longitude or direction has no position or heading, rather than
 sitting at latitude 0 or heading north.
 
+A reply the feed calls OK but that can't be read is a failure, never an
+empty board. With no list at all (`hasList`), or a list whose rows lost
+what `normalize()` reads (`arrivalsProblem`: no row names a service, none
+names a service we know, or none has an arrival time; `busesProblem`: no
+row has a plate or a position), the fetch throws. Read as it was, every
+service would have "no bus", every card a headway guess, the map "No D2
+buses running", and the monitor's probe a healthy feed. Thrown, it is the
+feed being down: the last answer while it's under five minutes old, then
+"No live data", the monitor's email after two checks, and the feed-down
+notice on the card. How far away the times are is not checked: after
+midnight every real arrival is the next morning's, hours away.
+
 ## Data flow, confirmed
 
 As of uNivUS 2.59.2 (2026-09-28). On 2026-09-05 uNivUS stopped
@@ -850,7 +862,8 @@ migrations/       D1 schema
 `normalize()` in `fms.ts` is the only function that touches the raw FMS shape.
 It is undocumented and has changed before, so it is tolerant and everything
 downstream assumes a clean `Arrival[]`. When the feed shifts, exactly one
-function needs editing.
+function needs editing, and `arrivalsProblem()` makes sure the shift is
+noticed (an alert) rather than read as an empty board.
 
 ## Prior art
 

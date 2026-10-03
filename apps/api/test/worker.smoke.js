@@ -611,6 +611,23 @@ test('a feed that says OK but has no arrivals list is a failure, not "no bus"', 
   assert.equal((await res.json()).available, false);
 });
 
+test('a feed whose rows changed shape is a failure the monitor sees, not every bus turned into an estimate', async () => {
+  // A rename upstream: the list is there, but its rows say routeName, not name.
+  const raw = { code: '00000', msg: '', data: { etas: { timings: [{ routeName: 'D2', arrivalTime: '3', nextArrivalTime: '15' }] } } };
+  const { res } = await call('/arrivals?stop=PGP', { fetchImpl: makeFetch({ raw }) });
+  const body = await res.json();
+  assert.equal(body.available, false);
+  assert.ok(body.board.length > 0 && body.board.every((x) => x.quality === 'unknown'), 'no headway guess passed off as the board');
+  // The monitor's probe fails the same way, so the outage is confirmed and emailed.
+  const { checkUpstream, FAILS_TO_ALERT } = await import('../src/monitor.ts');
+  installGlobals(makeFetch({ raw }));
+  const env = makeEnv();
+  let state;
+  for (let i = 0; i < FAILS_TO_ALERT; i++) ({ state } = await checkUpstream(env, Date.now()));
+  assert.equal(state.up, false);
+  assert.match(state.reason, /unknown shape \(no row names a service\)/);
+});
+
 test('concurrent token requests share one mint instead of each minting', async () => {
   const fetchImpl = makeFetch({});
   installGlobals(fetchImpl);

@@ -13,6 +13,7 @@ import { TTL } from './config.ts';
 import { timedFetch } from './http.ts';
 import { UpstreamRejected, getSession, mintWith, proxyEnvelope, proxyHeaders } from './auth.ts';
 import type { Session } from './auth.ts';
+import graphJson from '../data/stops.json' with { type: 'json' };
 
 /** Envelope keys the FMS wraps results in. It nests one level deeper than you
  *  expect on some endpoints, so unwrapping is a loop, not a single lookup. */
@@ -211,6 +212,44 @@ export function normalize(raw: unknown): Arrival[] {
   });
 }
 
+/** The services the stop graph knows. */
+const KNOWN_SERVICES: ReadonlySet<string> = new Set(Object.keys((graphJson as { routes: Record<string, unknown> }).routes));
+
+const objects = (list: unknown[]) => list.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object');
+const hasKey = (o: Record<string, unknown>, ...keys: string[]) => keys.some((k) => o[k] !== undefined);
+
+/**
+ * Why an arrivals payload that has rows can't be read as a board, or null.
+ *
+ * hasList() catches a reply with no list at all. This catches the subtler
+ * change: the list is still there but its rows aren't what normalize()
+ * reads. Taken as it is, that board says "no bus" for every service, so
+ * every card turns into headway guesses, and the monitor's probe sees a
+ * healthy feed and never says anything. Thrown instead, it reads as the
+ * feed being down: stale or "No live data" on the card, the monitor's email,
+ * the feed-down notice. A row with "-" for its time is a real "no bus" and
+ * passes; only rows that lost the field altogether count.
+ */
+export function arrivalsProblem(raw: unknown, arrivals: Arrival[] = normalize(raw), known: ReadonlySet<string> = KNOWN_SERVICES): string | null {
+  const rows = objects(pickList(raw, ['timings', 'shuttles', 'Shuttles', 'ShuttleService', 'services', 'arrivals']));
+  if (!rows.length) return null;
+  if (!arrivals.length) return 'no row names a service';
+  if (!arrivals.some((a) => known.has(a.svc))) return `no service it names is known (${[...new Set(arrivals.map((a) => a.svc))].slice(0, 4).join(', ')})`;
+  // Not checked: how far away the times are. After midnight every real
+  // arrival is the next morning's, hours away (fixtures/connectx-*.json).
+  if (!rows.some((r) => hasKey(r, '_etas', 'nextArrivals', 'arrivalTime', 'eta', 'arrival'))) return 'no row has an arrival time';
+  return null;
+}
+
+/** Why a bus list with rows can't be read: no row has a plate, or none a position. */
+export function busesProblem(raw: unknown): string | null {
+  const rows = objects(pickList(raw, ['activebus', 'activeBus', 'ActiveBus', 'buses']));
+  if (!rows.length) return null;
+  if (!rows.some((r) => hasKey(r, 'vehplate', 'veh_plate', 'vehiclePlate', 'plate'))) return 'no row has a plate';
+  if (!rows.some((r) => hasKey(r, 'lat', 'latitude') && hasKey(r, 'lng', 'lon', 'longitude'))) return 'no row has a position';
+  return null;
+}
+
 export function fmsConfigured(env: Env): boolean {
   return Boolean(env.NEXTBUS_PROXY_BASE && env.NEXTBUS_PROXY_API_KEY);
 }
@@ -283,7 +322,10 @@ export async function fetchArrivals(
   // "00000" with no list anywhere is not "no bus": the payload changed shape,
   // and reading it as an empty board would print confident headway guesses.
   if (!hasList(body.data)) throw new Error('shuttle-service answered in an unknown shape (no arrivals list)');
-  return { code, arrivals: normalize(body.data), fetchedAt: nowMs, stale: false, available: true };
+  const arrivals = normalize(body.data);
+  const problem = arrivalsProblem(body.data, arrivals);
+  if (problem) throw new Error(`shuttle-service answered in an unknown shape (${problem})`);
+  return { code, arrivals, fetchedAt: nowMs, stale: false, available: true };
 }
 
 export { UpstreamRejected };
@@ -487,6 +529,9 @@ export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Da
   }
   // No list at all is a changed payload, not "no buses running".
   if (!hasList(body.data)) throw new Error('active-bus answered in an unknown shape (no bus list)');
+  // Rows it can't read would show as "No D2 buses running right now".
+  const problem = busesProblem(body.data);
+  if (problem) throw new Error(`active-bus answered in an unknown shape (${problem})`);
   return { svc, buses: normalizeBuses(body.data), fetchedAt: nowMs, stale: false };
 }
 
