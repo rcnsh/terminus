@@ -286,88 +286,88 @@ export default {
 };
 
 async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(req.url);
-    const nowMs = Date.now();
+  const url = new URL(req.url);
+  const nowMs = Date.now();
 
-    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-    try {
-      const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
-      if (me) return me;
-      // Public routes: a per-IP ceiling. The per-stop cache already protects
-      // NUS; this protects the Worker from being a free proxy, and D1/R2 from
-      // being a free bill.
-      const keyed = KEYED.includes(url.pathname);
-      if (env.RL_PUBLIC && !keyed && (url.pathname === '/health' || url.pathname === '/status.json' || url.pathname === '/admin/stats' || url.pathname.startsWith('/download/'))) {
-        const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
-        if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
-      }
-      // The answers need an API key or a signed-in account, and are limited
-      // by who's asking: on campus Wi-Fi hundreds of students share one IP,
-      // and the map alone asks every 5 s. A key has its own ceiling wherever
-      // it's used from; a request with neither is limited by IP.
-      if (keyed) {
-        const caller = await callerFor(env, req, nowMs, ctx);
-        const bucket =
-          caller?.kind === 'key' ? { rl: env.RL_PUBLIC, key: `key:${caller.keyId}` }
-          : caller?.kind === 'account' ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
-          : { rl: env.RL_PUBLIC, key: `pub:${clientKey(req)}` };
-        if (bucket?.rl && !(await bucket.rl.limit({ key: bucket.key })).success) {
-          return json({ error: caller?.kind === 'key' ? 'too many requests for this key, slow down' : 'too many requests, slow down' }, 429, { 'retry-after': '60' });
-        }
-        if (!caller) {
-          return json({ error: m().needsKey(siteOrigin(env)) }, 401, {
-            'www-authenticate': 'Bearer realm="terminus"',
-          });
-        }
-      }
-      const dl = await handleDownload(url.pathname, env, url);
-      if (dl) return dl;
-      // The street map: open like the website, and served from R2 or built.
-      const map = await handleMap(req, url, env);
-      if (map) return map;
-
-      switch (url.pathname) {
-        case '/docs':
-          // The landing page at / is a static asset (apps/web).
-          return new Response(DOCS_PAGE, {
-            headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
-          });
-        case '/openapi.json':
-          // servers[] is this request's origin, so the docs' "Send API Request"
-          // hits whichever deployment is serving them.
-          return jsonCached(openApiSpec(url.origin), 300);
-        case '/next':
-          return await handleNext(url, env, ctx, nowMs);
-        case '/trip':
-          return await handleTrip(url, env, ctx, nowMs);
-        case '/health':
-          return await handleHealth(req, url, env, nowMs);
-        case '/status.json':
-          return await handleStatus(env, nowMs);
-        case '/admin/stats':
-          // The dashboard's data: operator only, never cached.
-          if (!isOperator(env, req)) return json({ error: 'not found' }, 404);
-          return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
-        case '/campus':
-          return handleCampus();
-        case '/stops/pairs':
-          // Static like /campus: changes only with a new scrape.
-          return jsonCached(STOP_PAIRS, 3600, 'private');
-        case '/arrivals':
-          return await handleArrivals(url, env, ctx, nowMs);
-        case '/buses':
-          return await handleBuses(url, env, ctx, nowMs);
-        default:
-          // Everything else is the website.
-          if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return markBeta(await env.ASSETS.fetch(req), env);
-          return json({ error: 'not found' }, 404);
-      }
-    } catch (err) {
-      // Logged, because a caught error never shows up as an exception in the
-      // dashboard. The path only: the query can hold coordinates.
-      console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
-      logError(env, url.pathname);
-      return json({ error: 'internal' }, 500);
+  try {
+    const me = await handleMe(req, url, env, ctx, nowMs, ME_DEPS);
+    if (me) return me;
+    // Public routes: a per-IP ceiling. The per-stop cache already protects
+    // NUS; this protects the Worker from being a free proxy, and D1/R2 from
+    // being a free bill.
+    const keyed = KEYED.includes(url.pathname);
+    if (env.RL_PUBLIC && (url.pathname === '/health' || url.pathname === '/status.json' || url.pathname === '/admin/stats' || url.pathname.startsWith('/download/'))) {
+      const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
+      if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
     }
+    // The answers need an API key or a signed-in account, and are limited
+    // by who's asking: on campus Wi-Fi hundreds of students share one IP,
+    // and the map alone asks every 5 s. A key has its own ceiling wherever
+    // it's used from; a request with neither is limited by IP.
+    if (keyed) {
+      const caller = await callerFor(env, req, nowMs, ctx);
+      const bucket =
+        caller?.kind === 'key' ? { rl: env.RL_PUBLIC, key: `key:${caller.keyId}` }
+        : caller?.kind === 'account' ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
+        : { rl: env.RL_PUBLIC, key: `pub:${clientKey(req)}` };
+      if (bucket.rl && !(await bucket.rl.limit({ key: bucket.key })).success) {
+        return json({ error: caller?.kind === 'key' ? 'too many requests for this key, slow down' : 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+      }
+      if (!caller) {
+        return json({ error: m().needsKey(siteOrigin(env)) }, 401, {
+          'www-authenticate': 'Bearer realm="terminus"',
+        });
+      }
+    }
+    const dl = await handleDownload(url.pathname, env, url);
+    if (dl) return dl;
+    // The street map: open like the website, and served from R2 or built.
+    const map = await handleMap(req, url, env);
+    if (map) return map;
+
+    switch (url.pathname) {
+      case '/docs':
+        // The landing page at / is a static asset (apps/web).
+        return new Response(DOCS_PAGE, {
+          headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
+        });
+      case '/openapi.json':
+        // servers[] is this request's origin, so the docs' "Send API Request"
+        // hits whichever deployment is serving them.
+        return jsonCached(openApiSpec(url.origin), 300);
+      case '/next':
+        return await handleNext(url, env, ctx, nowMs);
+      case '/trip':
+        return await handleTrip(url, env, ctx, nowMs);
+      case '/health':
+        return await handleHealth(req, url, env, nowMs);
+      case '/status.json':
+        return await handleStatus(env, nowMs);
+      case '/admin/stats':
+        // The dashboard's data: operator only, never cached.
+        if (!isOperator(env, req)) return json({ error: 'not found' }, 404);
+        return json(await adminStats(env, nowMs), 200, { 'cache-control': 'no-store' });
+      case '/campus':
+        return handleCampus();
+      case '/stops/pairs':
+        // Static like /campus: changes only with a new scrape.
+        return jsonCached(STOP_PAIRS, 3600, 'private');
+      case '/arrivals':
+        return await handleArrivals(url, env, ctx, nowMs);
+      case '/buses':
+        return await handleBuses(url, env, ctx, nowMs);
+      default:
+        // Everything else is the website.
+        if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return markBeta(await env.ASSETS.fetch(req), env);
+        return json({ error: 'not found' }, 404);
+    }
+  } catch (err) {
+    // Logged, because a caught error never shows up as an exception in the
+    // dashboard. The path only: the query can hold coordinates.
+    console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
+    logError(env, url.pathname);
+    return json({ error: 'internal' }, 500);
+  }
 }

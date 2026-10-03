@@ -15,7 +15,7 @@
 
 import { html, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { inkOn, t } from '/account/dom.js';
-import { loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
+import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 
 // "@" spelled %40: Cloudflare's static assets redirect the "@" form to it,
 // which cost a round trip per file.
@@ -92,12 +92,6 @@ async function getJSON(path) {
   }
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
   return res.json();
-}
-
-function metres(aLat, aLon, bLat, bLon) {
-  const r = Math.PI / 180;
-  const x = (bLon - aLon) * r * Math.cos(((aLat + bLat) / 2) * r);
-  return Math.hypot(x, (bLat - aLat) * r) * 6_371_000;
 }
 
 /** Where the phone is, only when location is already allowed. Never asks. */
@@ -190,7 +184,7 @@ async function startOnMe() {
       const { latitude: lat, longitude: lon } = p.coords;
       let best = null;
       for (const s of campusData.get().stops) {
-        const d = metres(lat, lon, s.lat, s.lon);
+        const d = haversineM(lat, lon, s.lat, s.lon);
         if (!best || d < best.d) best = { s, d };
       }
       if (best && best.d < NEAR_CAMPUS_M) map.jumpTo({ center: [best.s.lon, best.s.lat], zoom: 17 });
@@ -427,7 +421,7 @@ function glideFrom(from, b, path, now) {
   // An older API's answer (no speed) glides 15 s and may be further ahead.
   if (d != null) return d < -HOLD_BACK_M || (d > JUMP_AHEAD_M && b.speed != null) ? jump : { from, to: b, start: now, path, d };
   if (from.along != null && b.along != null) return jump;
-  if (haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return jump;
+  if (haversineM(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return jump;
   return { from, to: b, start: now, path: null, d: null };
 }
 
@@ -465,10 +459,10 @@ function pathOf(line) {
   let p = paths.get(line);
   if (!p) {
     const cum = [0];
-    for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]));
+    for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + haversineM(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]));
     const total = cum[cum.length - 1];
     const [a, z] = [line[0], line[line.length - 1]];
-    p = { line, cum, total, closed: haversine(a[1], a[0], z[1], z[0]) < 5 };
+    p = { line, cum, total, closed: haversineM(a[1], a[0], z[1], z[0]) < 5 };
     paths.set(line, p);
   }
   return p;
@@ -481,7 +475,7 @@ function alongBy(path, f, b) {
   // A line kept from before the route changed: `along` isn't a place on it.
   for (const x of [f, b]) {
     const at = pointAt(path, x.along);
-    if (haversine(at.lat, at.lon, x.lat, x.lon) > 10) return null;
+    if (haversineM(at.lat, at.lon, x.lat, x.lon) > 10) return null;
   }
   let d = b.along - f.along;
   // Round a loop the short way, past its start.
@@ -508,13 +502,6 @@ function pointAt(path, m) {
   const seg = cum[hi] - cum[lo];
   const k = seg > 0 ? (m - cum[lo]) / seg : 0;
   return { lat: aLat + (bLat - aLat) * k, lon: aLon + (bLon - aLon) * k, bearing: bearing(aLat, aLon, bLat, bLon) };
-}
-
-/** As apps/api/src/geo.ts, so distances along a line match the API's. */
-function haversine(aLat, aLon, bLat, bLon) {
-  const r = Math.PI / 180;
-  const s = Math.sin(((bLat - aLat) * r) / 2) ** 2 + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.sin(((bLon - aLon) * r) / 2) ** 2;
-  return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
 function bearing(aLat, aLon, bLat, bLon) {

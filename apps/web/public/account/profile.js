@@ -112,6 +112,7 @@ export function stopName(code) {
   return c?.stops.find((s) => s.code === code)?.name ?? c?.destinations?.find((d) => d.code === code)?.label ?? code;
 }
 
+/** Metres between two points, as apps/api/src/geo.ts works it out, so the map's distances along a line match the API's. */
 export function haversineM(aLat, aLon, bLat, bLon) {
   const r = (d) => (d * Math.PI) / 180;
   const s = Math.sin(r(bLat - aLat) / 2) ** 2 + Math.cos(r(aLat)) * Math.cos(r(bLat)) * Math.sin(r(bLon - aLon) / 2) ** 2;

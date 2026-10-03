@@ -86,11 +86,6 @@ export function parseEtaS(v: unknown): number | null {
   return Math.round(n * 60);
 }
 
-/**
- * Crowd level. Nobody uses this well and at peak it is the real question --
- * not when the bus arrives but whether you will get on it. Plumbed through
- * from the start even though v1 barely uses it.
- */
 /** A value that is ALREADY in seconds (ConnectX eta_s). null if absent/blank. */
 export function parseSeconds(v: unknown): number | null {
   if (v == null || v === '' || v === '-') return null;
@@ -98,6 +93,10 @@ export function parseSeconds(v: unknown): number | null {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
 }
 
+/**
+ * Crowd level from a word, a colour or a percentage. At peak it is the real
+ * question: not when the bus arrives, but whether you will get on it.
+ */
 export function parseCrowd(v: unknown): Crowd | null {
   if (v == null || v === '') return null;
   if (typeof v === 'number' && Number.isFinite(v)) {
