@@ -3,6 +3,8 @@
 
 **A map of campus.** On Android and the web app, a new **Map** tab shows every bus route in its colour on a street map of campus. Tap a service along the top to see its line and its buses moving live, with how full each is and where it stops next. Tap a stop for what's coming, the services that call there, and **Go there**, walking directions or **Save as place**. After the first look it works offline; on Android the street map downloads once (about 4 MB).
 
+**Live buses that look right.** Each bus stays on its own side of the road, keeps moving between updates, and is drawn close to where it really is. The map never animates a bus across the road or backwards.
+
 **Now · Map · Settings.** The app and the web app have a bar along the bottom, and Settings moves into it. Switching tabs fades smoothly from one to the next, and each tab stays where you left it, scrolled to the same place, with the map looking at the same streets. In the web app, Settings opens without loading a new page.
 
 **Settings, reorganised.** Settings is now a short list (Your trips, Timetable, Favourites, Notifications, Devices, Language, Appearance and Account), each with a line saying what's set. Tap one to open its page. On Android the back gesture closes it, and the page follows your finger as you swipe. On the web, the browser's Back button closes it, and on a wide screen the list and the page sit side by side. On the Mac, **Settings…** in the menu opens a Settings window with the groups down the side.

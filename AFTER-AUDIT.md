@@ -5,11 +5,24 @@ redesign (tab motion, Settings as a list of groups, the theme choice) and
 the second audit's fixes (2 October), for when you're back at the Mac.
 Delete this file once it's done.
 
-Already done, from the VPS: production and the beta are migrated and
-deployed, and both have their street map on R2. The redesign, the second
-audit's fixes and the website's move to Preact aren't deployed to production
-yet (the beta has all but the Preact move). From the VPS, `git fetch origin && git reset --hard origin/main &&
-pnpm install`, then in `apps/api`, `pnpm run deploy` and `pnpm run deploy:beta`.
+Already done, from the VPS: production and the beta are migrated, and both
+have their street map on R2. As of 3 October:
+
+- Production is at 211243f: the redesign, the second audit's fixes, the
+  Preact website, favourites without usual times and the Chinese wording
+  fixes. It doesn't have the three commits below.
+- The beta has everything up to 87fa887, but not c75f7ce.
+- Still to deploy:
+  - 4c3b75a: the site's security policy lets Cloudflare Web Analytics run,
+    and the privacy page says so. Until then production blocks its script
+    and logs an error on every page.
+  - 87fa887: live buses keep to their own side of the road.
+  - c75f7ce: live buses shown where they're estimated to be now, moving
+    between updates.
+
+From the VPS: `git fetch origin && git reset --hard origin/main && pnpm install`,
+then in `apps/api`, `pnpm run deploy:beta`, check the beta, then
+`pnpm run deploy`.
 
 ## 1. Get main
 
@@ -42,8 +55,9 @@ cd apps/android
   someone else.
 - Tap a widget's place button: it opens that place.
 - Sign out: the app keeps its language.
-- Map: tap a service. Its buses drive along their roads (a 15-second glide
-  each time the feed moves them), on their own side of two-way roads.
+- Map: tap a service. Its buses keep moving along their roads between
+  updates, on their own side of two-way roads. A bus never cuts across the
+  road, and never goes backwards.
 - Map: tap near a stop, not right on its dot, or on its name: it opens.
 - Read through Settings and the notifications: the wording was rewritten.
 - Switch tabs: Now, Map and Settings fade through, and come back where you
@@ -85,8 +99,8 @@ On the iPhone (the web app on the Home Screen, iOS 18.2 or later):
 - The map, and the beta's at beta.terminus.rcn.sh/app/#map, shows streets.
 - Open the app once, then turn on airplane mode and open it again: it
   starts and shows the kept plan (it stayed on "Checking…" before the fix).
-- The website is now built with Preact (3 October). It should look and work
-  as before. Worth a run through on the beta first (`pnpm run deploy:beta`):
+- The website is now built with Preact (3 October), live on both sites. It
+  should look and work as before. Worth a run through:
   sign in, first-time setup with a new account, every Settings page, Now,
   Nearby, the map's stops and buses, and Save as place showing in Settings
   straight away. Then the landing page, status page and dashboard.
