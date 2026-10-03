@@ -11,6 +11,13 @@ on:
       services:
         description: "Services, space-separated"
         default: "A1 A2 D1 D2"
+      every:
+        description: "Seconds between polls of each service"
+        default: "1"
+      trace:
+        description: "Also print every reading (no plates) to the log, for replaying"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,10 +44,14 @@ jobs:
           NEXTBUS_PROXY_API_KEY: ${{ secrets.NEXTBUS_PROXY_API_KEY }}
           MINUTES: ${{ inputs.minutes }}
           SERVICES: ${{ inputs.services }}
+          EVERY: ${{ inputs.every }}
+          TRACE: ${{ inputs.trace }}
         working-directory: apps/api/scripts
         # SERVICES unquoted on purpose: one argument per service.
         run: |
-          python3 probe_buses.py --minutes "$MINUTES" $SERVICES > report.md
+          if [ "$TRACE" = true ]; then set -- --trace trace.jsonl; fi
+          python3 probe_buses.py --minutes "$MINUTES" --every "$EVERY" "$@" $SERVICES > report.md
+          if [ "$TRACE" = true ]; then echo "--- trace ---"; cat trace.jsonl; echo "--- end trace ---"; fi
           cat report.md >> "$GITHUB_STEP_SUMMARY"
           # Also as one annotation, readable through the API without the logs.
           python3 -c 'import sys; t = sys.stdin.read().replace("%", "%25").replace("\r", "").replace("\n", "%0A"); print("::notice title=probe::" + t)' < report.md

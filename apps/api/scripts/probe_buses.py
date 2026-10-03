@@ -9,12 +9,17 @@ Same guest token and bus proxy as scrape_stops.py, and the same config
 (environment, falling back to .dev.vars). Never prints a credential, and
 buses are shown as #1, #2..., not plates.
 
-    python3 scripts/probe_buses.py [--minutes 3] [--every 1] [A1 A2 D2 ...]
+    python3 scripts/probe_buses.py [--minutes 3] [--every 1] [--trace FILE] [A1 A2 D2 ...]
+
+--trace also writes every reading, one JSON object a line (seconds since the
+start, service, bus number, lat, lng, speed, direction), for replaying through
+the map's bus placement (test/fixtures/bus-trace.jsonl). No plates.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import statistics
 import sys
@@ -33,6 +38,7 @@ def main() -> int:
     ap.add_argument("services", nargs="*", default=["A1", "A2", "D1", "D2"])
     ap.add_argument("--minutes", type=float, default=3)
     ap.add_argument("--every", type=float, default=1, help="seconds between polls of each service")
+    ap.add_argument("--trace", help="also write every reading to this file, as JSON lines")
     args = ap.parse_args()
 
     load_dev_vars()
@@ -47,6 +53,7 @@ def main() -> int:
     seen: dict = {}
     stamps: dict = {svc: [] for svc in args.services}  # the reply's TimeStamp
     errors = 0
+    trace = open(args.trace, "w") if args.trace else None
     start = time.monotonic()
     end = start + args.minutes * 60
     while time.monotonic() < end:
@@ -73,8 +80,13 @@ def main() -> int:
                 except (TypeError, ValueError):
                     speed = 0.0
                 seen.setdefault((svc, bus), []).append((t, b.get("lat"), b.get("lng"), speed))
+                if trace:
+                    row = {"t": round(t, 1), "svc": svc, "bus": bus, "lat": b.get("lat"), "lng": b.get("lng"), "speed": speed, "direction": b.get("direction")}
+                    trace.write(json.dumps(row) + "\n")
         time.sleep(max(0, args.every - (time.monotonic() - tick)))
 
+    if trace:
+        trace.close()
     print(f"## Live-bus feed probe: {args.minutes:g} min, every {args.every:g} s\n")
     print("A *change* is a poll where the bus's position differs from the poll before.")
     print("*Held* is how long a moving bus's position stayed the same before a change.\n")
