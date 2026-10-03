@@ -91,6 +91,16 @@ stops still draw.
 
 - Polling pages never reach "network idle" in Playwright: wait for a URL or
   an element instead.
+- The stub sends a sign-in code only once per email for a while (later
+  requests say "sent" but print nothing, as the real server does). Sign in
+  once, keep the session cookie (`context.cookies()`) and reuse it, or
+  restart the stub.
+- Against the live sites (terminus.rcn.sh, the beta), Chromium's own
+  connections through the container's proxy fail at random
+  (`ERR_TOO_MANY_RETRIES`) and its trust store may predate the proxy's
+  certificate. Route the page's requests through Node instead
+  (`context.route` with `fetch`, run with `NODE_USE_ENV_PROXY=1`), and use
+  a temporary anonymous account (`POST /auth/anon`, then `DELETE /me`).
 - The container has Chromium only (`/opt/pw-browsers/chromium`), no WebKit;
   don't run `playwright install`. For Safari, use a one-off workflow
   (Playwright WebKit on Linux, or an iOS Simulator on a macOS runner).

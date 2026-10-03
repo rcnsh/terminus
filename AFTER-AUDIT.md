@@ -8,7 +8,7 @@ Delete this file once it's done.
 Already done, from the VPS: production and the beta are migrated and
 deployed, and both have their street map on R2. The redesign, the second
 audit's fixes and the website's move to Preact aren't deployed to production
-yet (the beta has all but the Preact move): from the VPS, `git fetch origin && git reset --hard origin/main &&
+yet (the beta has all but the Preact move). From the VPS, `git fetch origin && git reset --hard origin/main &&
 pnpm install`, then in `apps/api`, `pnpm run deploy` and `pnpm run deploy:beta`.
 
 ## 1. Get main
@@ -189,6 +189,17 @@ Android:
   system's dark mode, and whether the map keeps its place across restarts.
 
 The web: where the search button goes when the chips don't fit on one line.
+
+## 7. Cloudflare dashboard: turn off Web Analytics
+
+Cloudflare adds its Web Analytics script to every page of both sites
+(found on 3 October). The site's CSP blocks it, so nothing is sent, but
+every page logs a blocked-script error, and the privacy page promises no
+trackers. In the dashboard: Analytics & Logs → Web Analytics → the site →
+turn off automatic setup. Leave the CSP as it is.
+
+Also small, for later: offline, the pages fall back to the system fonts,
+because the service worker doesn't keep the web fonts.
 
 ## From your phone, any time
 
