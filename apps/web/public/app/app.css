@@ -168,14 +168,18 @@ button.svc-tag { cursor: pointer; }
 
 /* MapLibre's own controls, in the app's colours. */
 .map .map-recentre { display: grid; place-items: center; color: var(--ink); }
-.map .maplibregl-ctrl-attrib { background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--muted); font-size: 11px; }
+.map .maplibregl-ctrl-attrib,
+.map .maplibregl-ctrl-attrib.maplibregl-compact { background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--muted); font-size: 11px; }
+.map .maplibregl-ctrl-attrib-button { background-color: transparent; }
 .map .maplibregl-ctrl-attrib a { color: var(--muted); }
 .map .maplibregl-ctrl-group { background: var(--surface); }
 .map .maplibregl-ctrl-group button + button { border-top-color: var(--line); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .map .maplibregl-ctrl button .maplibregl-ctrl-icon { filter: invert(1); }
+  :root:not([data-theme="light"]) .map .maplibregl-ctrl button .maplibregl-ctrl-icon,
+  :root:not([data-theme="light"]) .map .maplibregl-ctrl-attrib-button { filter: invert(1); }
 }
-:root[data-theme="dark"] .map .maplibregl-ctrl button .maplibregl-ctrl-icon { filter: invert(1); }
+:root[data-theme="dark"] .map .maplibregl-ctrl button .maplibregl-ctrl-icon,
+:root[data-theme="dark"] .map .maplibregl-ctrl-attrib-button { filter: invert(1); }
 
 /* The header row's height, the same on every tab that has one. */
 :root { --header-h: 60px; }

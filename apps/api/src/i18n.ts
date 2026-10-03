@@ -124,8 +124,8 @@ const en = {
   // Clock and lateness (clock.ts)
   am: 'AM',
   pm: 'PM',
-  /** "6:36 PM". */
-  clock12: ((hm: string, pm: boolean) => `${hm} ${pm ? 'PM' : 'AM'}`) as Fn<[string, boolean]>,
+  /** "6:36 PM", with a no-break space so a line never ends between the two. */
+  clock12: ((hm: string, pm: boolean) => `${hm}\u00a0${pm ? 'PM' : 'AM'}`) as Fn<[string, boolean]>,
   earlyBy: ((n: number) => `${n} min early`) as Fn<[number]>,
   justInTime: 'just in time',
   lateBy: ((n: number) => `~${n} min late`) as Fn<[number]>,
@@ -353,7 +353,7 @@ const zh: Msgs = {
 
   am: '上午',
   pm: '下午',
-  clock12: (hm, pm) => `${pm ? '下午' : '上午'} ${hm}`,
+  clock12: (hm, pm) => `${pm ? '下午' : '上午'}\u00a0${hm}`,
   earlyBy: (n) => `早到 ${n} 分钟`,
   justInTime: '刚好赶上',
   lateBy: (n) => `约迟到 ${n} 分钟`,

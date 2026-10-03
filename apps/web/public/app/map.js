@@ -10,8 +10,10 @@
 
 import { $, api, el, inkOn, t } from '/account/dom.js';
 
-const MAPLIBRE = '/vendor/maplibre-gl@6.11.2/';
-const PMTILES = '/vendor/pmtiles@4.5.0/pmtiles.mjs';
+// "@" spelled %40: Cloudflare's static assets redirect the "@" form to it,
+// which cost a round trip per file.
+const MAPLIBRE = '/vendor/maplibre-gl%406.11.2/';
+const PMTILES = '/vendor/pmtiles%404.5.0/pmtiles.mjs';
 /** Live buses refresh this often while a pill is on (the API caches 5 s). */
 const BUSES_MS = 5_000;
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
