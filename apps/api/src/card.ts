@@ -25,7 +25,7 @@ export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup
 /** A button the server decided to show. Clients render it and send `id`
  *  and `trip` back to /me/signal; they never decide which to show. */
 export interface CardAction {
-  id: 'boarded' | 'missed' | 'skipped' | 'arrived' | 'reset' | 'undetected' | 'away' | 'back';
+  id: 'boarded' | 'missed' | 'skipped' | 'arrived' | 'reset' | 'away' | 'back';
   label: string;
   trip: string;
 }

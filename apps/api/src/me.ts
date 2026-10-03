@@ -570,7 +570,7 @@ const ME_ROUTES: MeRoute[] = [
           for (const c of classesOn(profile, nowMs)) {
             const k = classKey(c);
             const r = day?.trips[k];
-            if (r && r.kind !== 'waiting' && r.kind !== 'undetected') continue;
+            if (r && r.kind !== 'waiting') continue;
             after = await saveSignal(env, session.user.id, k, { kind: 'skipped', at: nowMs, label: c.label, away: true }, nowMs);
           }
         } else {
@@ -652,17 +652,6 @@ const ME_ROUTES: MeRoute[] = [
           }
           break;
         }
-        case 'undetected': {
-          // "Not on the bus", "Didn't miss it", "Not there yet": detection got
-          // it wrong. A detected arrival goes back to the ride it ended, and
-          // detection leaves the trip alone from now on.
-          const prev = day?.trips[key];
-          rec =
-            prev?.kind === 'arrived' && prev.boarded
-              ? { kind: 'boarded', at: nowMs, label: prev.label ?? label, boarded: prev.boarded, noDetect: true }
-              : { kind: 'undetected', at: nowMs, label: prev?.label ?? label };
-          break;
-        }
         case 'boarded':
           // No bus to be on (a walk, or an old card): you've set off.
           if (!l?.svc) {
@@ -695,7 +684,7 @@ const ME_ROUTES: MeRoute[] = [
       logSignal(env, rec?.detected ? `detected:${rec.kind}` : kind);
       // What happened to the trip, for what terminus learns (outcomes.ts).
       const outcome = rec ? OUTCOME_OF[rec.kind] : undefined;
-      if (rec === null || rec?.kind === 'undetected') await clearOutcome(db, session.user.id, key, nowMs);
+      if (rec === null) await clearOutcome(db, session.user.id, key, nowMs);
       // A trip home isn't a class: nothing to learn from skipping it.
       else if (outcome && !/^(gap-)?home:/.test(key)) await recordOutcome(db, session.user.id, key, outcome, nowMs);
       const prefs = await prefsFor(db, session.user.id, profile, nowMs);

@@ -24,7 +24,7 @@ import { shortStop } from './format.ts';
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
 
 /** What a client can send to /me/signal. */
-export const SIGNALS = ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'undetected', 'away', 'back'] as const;
+export const SIGNALS = ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'away', 'back'] as const;
 export type SignalKind = (typeof SIGNALS)[number];
 
 /** The bus you said you're on, as the answer had it when you said so. */
@@ -113,14 +113,10 @@ export function rideOf(b: Boarded): Ride | null {
 
 /** The latest signal about one trip today. */
 export interface TripRecord {
-  /** 'undetected': someone said detection got this trip wrong; the clock
-   *  and the taps decide it from then on (detect.ts). */
   kind: Exclude<SignalKind, 'location' | 'reset' | 'away' | 'back'> | 'waiting';
   at: number;
   /** Worked out from the phone's location, not tapped (phase 8.1). */
   detected?: boolean;
-  /** Detection leaves this trip alone: its arrival was said to be wrong. */
-  noDetect?: boolean;
   /** A detected miss at the boarding stop, rather than at home. */
   atStop?: boolean;
   /** Skipped by "Not on campus today" (phase 8.3); "Back on campus" undoes all of them. */
@@ -180,10 +176,9 @@ export function endOfDayMs(nowMs: number): number {
   return nowMs - (sgt(nowMs).minutes * 60_000 + (nowMs % 60_000)) + 86_400_000;
 }
 
-/** The trip's record as the planner reads it: "detection was wrong" is no record at all. */
+/** The trip's record as the planner reads it. */
 export function signalOf(day: DayRecord | null, key: string): TripRecord | undefined {
-  const r = day?.trips[key];
-  return r?.kind === 'undetected' ? undefined : r;
+  return day?.trips[key];
 }
 
 /** Keys reached or skipped today, for the planner. */

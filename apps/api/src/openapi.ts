@@ -681,7 +681,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             'What happened on a trip, or a plan for today. Cards offer only plans: `skipped` (not going today), `away` ("Not on campus today", ' +
             'on an idle trip: every trip left today, not counted as outcomes) and `back` (undoes it), and `reset` (undo). Nothing asks what ' +
             'happened: no answer is taken as on the planned bus a few minutes after it leaves, and the phone\'s location ' +
-            'corrects it. `boarded`, `missed`, `left`, `arrived` and `undetected` still work, for older apps. `trip` is the key from a card action ' +
+            'corrects it. `boarded`, `missed`, `left` and `arrived` still work, for older apps. `trip` is the key from a card action ' +
             'or /me/day; without it, the trip in progress. Recorded for the day on every device, and answered with the new `/me/next`. Deleted at the ' +
             'end of the day. During a trip an app may send a `location` every 20 seconds or so, with `speed` (m/s) and `acc` (metres) when it has ' +
             'them; only what it means is kept: waiting at the stop and then moving at bus speed along its road is taken as `boarded` (with the plate ' +
@@ -696,7 +696,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'object',
               required: ['kind'],
               properties: {
-                kind: { type: 'string', enum: ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'undetected', 'away', 'back'] },
+                kind: { type: 'string', enum: ['boarded', 'missed', 'skipped', 'left', 'arrived', 'location', 'reset', 'away', 'back'] },
                 trip: { type: 'string' },
                 lat: { type: 'number' },
                 lon: { type: 'number' },

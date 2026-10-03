@@ -379,12 +379,10 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
 
   // Nobody said what happened and the bus left a while ago: the plan worked
   // (most people catch the bus they were told to), unless a location still
-  // has you at its stop. Assumed, never recorded as a signal. Not when
-  // someone said detection got this trip wrong.
-  const undetected = day?.trips[key]?.kind === 'undetected';
+  // has you at its stop. Assumed, never recorded as a signal.
   // Having been at the stop is not an answer about the bus.
   const answered = out.trip.rec !== undefined && out.trip.rec.kind !== 'waiting';
-  if (!answered && !undetected && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
+  if (!answered && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
     // Still at the stop now (this request's location), not just earlier:
     // missed, and the answer is the next way there.
     if (phaseFor(answer, undefined, nowMs, at) === 'waiting') return { answer: fresh, trip: { ...out.trip, phase: 'missed', assumed: true, plan: bus, planChanged: false } };

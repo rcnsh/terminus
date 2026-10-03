@@ -435,11 +435,7 @@ Nothing is asked, so a wrong guess puts itself right: taken to be on the bus
 off its road is a miss, and the plan moves on to the next way there. Each fix
 also notes the time on the day's record (`followed`, at most once a minute).
 Anything detected has `detected: true` ("Looks like you're on the bus"). The
-cards offer only plans ("Not going", "Not on campus today"). An older app can
-still send `undetected`: the trip record is then `undetected` (or the ride
-again, with `noDetect`), which the planner reads as no record at all but
-which stops detection, and the "no answer means on it" assumption, for that
-trip. A `waiting` record (a fix at the stop) is not an answer: after the
+cards offer only plans ("Not going", "Not on campus today"). A `waiting` record (a fix at the stop) is not an answer: after the
 departure only a location at the stop now counts as missed. Analytics counts
 `detected:<kind>` signals separately from taps.
 

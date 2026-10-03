@@ -16,8 +16,7 @@
  * Nothing asks what happened, so a wrong guess has to put itself right: taken
  * to be on a bus (detected, or nobody said) but standing still off its road
  * is a miss, and the plan moves on to the next way there. A tap from an older
- * app always wins, and `undetected` (which older apps can still send) makes
- * detection leave that trip alone.
+ * app always wins.
  */
 
 import type { Graph, Stop } from './types.ts';
@@ -64,7 +63,6 @@ export function fixOf(body: Record<string, unknown> | null): Fix | null {
 /** Whether detection may still act on this trip. */
 export function mayDetect(rec: TripRecord | undefined): boolean {
   if (!rec) return true;
-  if (rec.kind === 'undetected' || rec.noDetect) return false;
   // Its own conclusions it can move on from; a tap it only follows to the end of the ride.
   return rec.detected === true || rec.kind === 'waiting' || rec.kind === 'left' || rec.kind === 'boarded';
 }
@@ -86,7 +84,7 @@ export interface DetectInput {
 /** What this fix says happened, or null when it says nothing new. */
 export function detect(x: DetectInput): Detected | null {
   const { rec, bus, fix, nowMs } = x;
-  if (rec?.kind === 'undetected' || rec?.noDetect || rec?.kind === 'arrived' || rec?.kind === 'skipped') return null;
+  if (rec?.kind === 'arrived' || rec?.kind === 'skipped') return null;
   const idx = indexGraph(x.graph);
   const slack = Math.min(fix.accM ?? 0, MAX_ACC_M);
   const near = (code: string | undefined, m: number) => {

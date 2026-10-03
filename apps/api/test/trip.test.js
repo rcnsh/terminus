@@ -604,7 +604,7 @@ test('moving fast without having been at the stop, or off the bus route, is not 
   assert.notEqual(walking.card.detected, true, 'walking pace');
 });
 
-test('still at the stop three minutes after the bus left: missed, recorded for every device; an older app can still say it is wrong', async () => {
+test('still at the stop three minutes after the bus left: missed, recorded for every device', async () => {
   const t = await setup();
   const { plan, board } = await waitingAtStop(t);
   t.clock(board + 4 * 60_000);
@@ -616,15 +616,9 @@ test('still at the stop three minutes after the bus left: missed, recorded for e
   assert.equal((await t.next(t.mac)).card.phase, 'missed', 'the Mac too, without a location');
   assert.deepEqual(outcomesToday(t.env).map((o) => [o.trip, o.outcome]), [[FIRST, 'missed']]);
 
-  assert.deepEqual(missed.card.actions.filter((a) => a.id === 'undetected'), [], 'no button for it');
-  const back = await (await t.signal(t.mac, { kind: 'undetected', trip: FIRST })).json();
-  assert.notEqual(back.card.phase, 'missed');
-  assert.equal(back.card.detected, false);
-  assert.deepEqual(outcomesToday(t.env), [], 'the outcome goes with it');
-  // Detection leaves the trip alone now, and nothing is assumed either.
-  const again = await (await t.signal(t.phone, { kind: 'location', lat: s.lat, lon: s.lon, speed: 0 })).json();
-  assert.notEqual(again.card.phase, 'missed');
-  assert.equal((await tripRec(t)).kind, 'undetected');
+  // The old "detection was wrong" signal is gone: no app sends it.
+  assert.equal((await t.signal(t.mac, { kind: 'undetected', trip: FIRST })).status, 400);
+  assert.equal((await tripRec(t)).kind, 'missed');
 });
 
 test('a miss then the next bus: detected on that one', async () => {
@@ -651,7 +645,7 @@ test('a tap wins: after "Missed it" a fast fix is not taken as the bus', async (
   assert.equal(fast.card.detected, false);
 });
 
-test('on the bus you said you were on, reaching your stop: there; an older app\'s "undetected" puts you back on it', async () => {
+test('on the bus you said you were on, reaching your stop: there', async () => {
   const t = await setup();
   const before = await t.next(t.phone);
   const riding = await (await t.signal(t.phone, { kind: 'boarded', trip: FIRST })).json();
@@ -661,14 +655,7 @@ test('on the bus you said you were on, reaching your stop: there; an older app\'
   const there = await (await t.signal(t.phone, { kind: 'location', lat: off.lat, lon: off.lon, speed: 0, acc: 20 })).json();
   assert.equal(there.label, "You're there", 'there, before it starts');
   assert.equal(there.dest.label, 'GEA1000 @ UTown');
-  assert.equal(there.card.actions.some((a) => a.id === 'undetected'), false, 'no button for it');
   assert.equal(t.env.DB._db.prepare('SELECT COUNT(*) AS n FROM ride_times').get().n, 0, 'a tapped boarding is not measured');
-
-  const back = await (await t.signal(t.phone, { kind: 'undetected', trip: FIRST })).json();
-  assert.equal(back.card.phase, 'riding');
-  assert.equal(back.dest.label, 'GEA1000 @ UTown');
-  const still = await (await t.signal(t.phone, { kind: 'location', lat: off.lat, lon: off.lon, speed: 0 })).json();
-  assert.equal(still.card.phase, 'riding', 'not taken as there again');
 });
 
 test('a ride seen from start to end is measured, with no user or location in it', async () => {
@@ -787,11 +774,11 @@ test('followed by location or not, nothing asks what happened: no question, no b
   const t = await setup();
   const { board } = await waitingAtStop(t);
   const followed = await t.next(t.mac);
-  assert.equal(followed.card.actions.some((a) => ['boarded', 'missed', 'arrived', 'undetected'].includes(a.id)), false);
+  assert.equal(followed.card.actions.some((a) => ['boarded', 'missed', 'arrived'].includes(a.id)), false);
   assert.ok(followed.card.actions.some((a) => a.id === 'skipped'), '"Not going" is a plan, not a status: it stays');
   t.clock(board + 3 * 60_000); // no fix for a while
   const quiet = await t.next(t.mac);
-  assert.equal(quiet.card.actions.some((a) => ['boarded', 'missed', 'arrived', 'undetected'].includes(a.id)), false);
+  assert.equal(quiet.card.actions.some((a) => ['boarded', 'missed', 'arrived'].includes(a.id)), false);
 });
 
 test('taken to be on the bus, but standing still away from its road: missed, and the next way there', async () => {
