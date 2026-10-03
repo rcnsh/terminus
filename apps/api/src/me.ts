@@ -1163,7 +1163,8 @@ async function nextWithTrip(
   if (!local && at !== null && pushEnabled(env) && day?.watch !== at && classesOn(profile, nowMs).length) {
     ctx.waitUntil(watchTrip(env, userId, at, nowMs));
   }
-  return { body: { ...full, card }, trip };
+  // The user's walking speed, for walk times the apps show themselves (search).
+  return { body: { ...full, walkSpeedMs: paceSpeed(profile.walkPace), card }, trip };
 }
 
 /**

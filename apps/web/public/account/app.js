@@ -6,7 +6,7 @@ import { Fill, MARK, Rich, html, render, store, useEffect, useInterval, useRef, 
 import { api, t } from './dom.js';
 import { Onboarding } from './onboarding.js';
 import { Card, HOUR12, Message, Report } from './preview.js';
-import { Toast, loadCampus, loadProfile, saves } from './profile.js';
+import { Toast, loadCampus, loadProfile, saves, walkSpeed } from './profile.js';
 import { Settings, offerImport } from './settings.js';
 
 const params = new URLSearchParams(location.search);
@@ -254,7 +254,9 @@ function Preview({ me }) {
   const saved = useStore(saves);
   const load = async () => {
     try {
-      setA(await api(`/me/next${HOUR12 ? '?h12=1' : ''}`));
+      const answer = await api(`/me/next${HOUR12 ? '?h12=1' : ''}`);
+      if (answer?.walkSpeedMs) walkSpeed.set(answer.walkSpeedMs);
+      setA(answer);
       setFailed(false);
     } catch {
       setA(null);

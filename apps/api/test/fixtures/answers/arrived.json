@@ -29,6 +29,7 @@
       "label": "The Deck"
     }
   ],
+  "walkSpeedMs": 1.3,
   "card": {
     "kind": "arrived",
     "staleAt": "2026-08-27T01:15:00Z",

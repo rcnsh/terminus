@@ -48,6 +48,8 @@ internal fun Search(state: UiState, vm: MainViewModel, onClose: () -> Unit) {
 
 @Composable
 private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: String, setQuery: (String) -> Unit, modifier: Modifier, onPicked: () -> Unit) {
+    // Walk times at the user's pace, as the server last said it (1.3 m/s before any answer).
+    val walkSpeed = state.answer?.walkSpeedMs ?: 1.3
     OutlinedTextField(
         value = query,
         onValueChange = {
@@ -86,7 +88,7 @@ private fun SearchField(state: UiState, vm: MainViewModel, query: String, q: Str
                 else -> buildString {
                     if (d.label != d.code) append("${d.code} · ")
                     append(L.s(R.string.stop_suffix, stopName(d.stopCode)))
-                    d.walkM?.let { append(L.s(R.string.min_walk_comma, maxOf(1, Math.round(it / 1.3 / 60).toInt()))) }
+                    d.walkM?.let { append(L.s(R.string.min_walk_comma, maxOf(1, Math.round(it / walkSpeed / 60).toInt()))) }
                 }
             }
             Column(

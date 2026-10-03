@@ -23,6 +23,7 @@
     }
   ],
   "refreshAt": "2026-08-27T10:00:00Z",
+  "walkSpeedMs": 1.3,
   "card": {
     "kind": "free",
     "staleAt": "2026-08-27T10:00:00Z",

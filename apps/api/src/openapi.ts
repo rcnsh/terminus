@@ -1291,6 +1291,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   enum: ['trip', 'nearby', 'rest'],
                   description: '`rest` outside your day hours: no bus, and `detail` names your next class. Show a rest state, not a bus.',
                 },
+                walkSpeedMs: { type: 'number', description: 'The user’s walking speed in metres a second, from their walking pace (1.1, 1.3 or 1.5). For walk times an app works out itself from metres, such as `walkM` in search results.' },
                 dest: {
                   type: ['object', 'null'],
                   properties: {

@@ -36,20 +36,20 @@ export function rank(dests, query) {
     .map((x) => x.d);
 }
 
-const walkMin = (m) => Math.max(1, Math.round(m / 1.3 / 60));
+const walkMin = (m, speedMs) => Math.max(1, Math.round(m / speedMs / 60));
 
 /** What a result's group is called in the list. */
 export const groupOf = (d) => GROUP[d.kind];
 
 /** The line under a result: where it takes you. `stopName(code)` names a stop. */
-export function metaOf(d, stopName) {
+export function metaOf(d, stopName, speedMs = 1.3) {
   if (d.kind === 'timetable') return d.detail;
   if (d.kind === 'stop') return t('Bus stop');
   if (d.kind === 'place' || d.kind === 'class') return t('{0} stop', stopName(d.stopCode));
   // Served by more than one stop: the quicker one is used at the time.
   if (d.kind === 'landmark') return `${d.detail ? `${d.detail} · ` : ''}${t('{0} stop', d.stops.map(stopName).join(t(' or ')))}`;
   const code = d.label !== d.code ? `${d.code} · ` : '';
-  return `${code}${t('{0} stop', stopName(d.stopCode))}${d.walkM != null ? t(', {0} min walk', walkMin(d.walkM)) : ''}`;
+  return `${code}${t('{0} stop', stopName(d.stopCode))}${d.walkM != null ? t(', {0} min walk', walkMin(d.walkM, speedMs)) : ''}`;
 }
 
 /** The results for `query`: `pinned` first whenever they match, in their own group. */

@@ -6,6 +6,7 @@
 
 import { html, useId, useLayoutEffect, useRef, useState } from '../assets/ui.js';
 import { t } from './dom.js';
+import { walkSpeed } from './profile.js';
 import { groupOf, metaOf, pickedText, results } from './search.js';
 
 /**
@@ -112,7 +113,7 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, on
         }}
       >
         <span class="search-title">${d.label}</span>
-        <span class="search-meta">${metaOf(d, stopName)}</span>
+        <span class="search-meta">${metaOf(d, stopName, walkSpeed.get())}</span>
       </li>
     `);
   });

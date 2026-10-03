@@ -32,6 +32,8 @@ struct Search: View {
             if !q.isEmpty {
                 let matches = rankDestinations(model.destinations, q)
                 let stopName = { (code: String) in model.destinations.first { $0.kind == "stop" && $0.code == code }?.label ?? code }
+                // Walk times at the user's pace, as the server last said it.
+                let walkSpeed = model.plan?.walkSpeedMs ?? 1.3
                 VStack(spacing: 0) {
                     ForEach(Array(matches), id: \.self) { d in
                         Button {
@@ -43,7 +45,7 @@ struct Search: View {
                                     .foregroundStyle(.secondary).frame(width: 16)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(d.label)
-                                    Text(d.kind == "stop" ? L("Bus stop") : d.kind == "landmark" ? "\(d.detail.map { "\($0) · " } ?? "")\(L("%@ stop", (d.stops ?? []).map(stopName).joined(separator: L(" or "))))" : "\(d.label != d.code ? "\(d.code) · " : "")\(L("%@ stop", stopName(d.stopCode)))\(d.walkM.map { L(", %@ min walk", "\(Swift.max(1, Int((Double($0) / 1.3 / 60).rounded())))") } ?? "")")
+                                    Text(d.kind == "stop" ? L("Bus stop") : d.kind == "landmark" ? "\(d.detail.map { "\($0) · " } ?? "")\(L("%@ stop", (d.stops ?? []).map(stopName).joined(separator: L(" or "))))" : "\(d.label != d.code ? "\(d.code) · " : "")\(L("%@ stop", stopName(d.stopCode)))\(d.walkM.map { L(", %@ min walk", "\(Swift.max(1, Int((Double($0) / walkSpeed / 60).rounded())))") } ?? "")")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()

@@ -10,6 +10,8 @@ import { api, t } from './dom.js';
 export const profile = store(null);
 /** /campus: stops, routes, destinations (the search list) and residences. Null until loaded. */
 export const campus = store(null);
+/** The user's walking speed (m/s, from their pace), as /me/next last said, for walk times worked out here. */
+export const walkSpeed = store(1.3);
 /** Bumped after each save: what depends on the profile (the account page's preview) redraws. */
 export const saves = store(0);
 /** Bumped when the lists the server keeps apart from the profile change (devices, keys, choices). */

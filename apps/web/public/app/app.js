@@ -14,7 +14,7 @@
 import { Icon, Rich, html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
 import { api, clock, inkOn, t } from '/account/dom.js';
 import { Card, HOUR12, Message, Report, isStale, signal } from '/account/preview.js';
-import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile } from '/account/profile.js';
+import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
 
@@ -126,6 +126,7 @@ async function refresh() {
     if (mine !== generation) return;
     if (nextR.status === 'rejected' && nextR.reason?.message === 'signed out') return;
     const next = nextR.status === 'fulfilled' ? nextR.value : null;
+    if (next?.data?.walkSpeedMs) walkSpeed.set(next.data.walkSpeedMs);
     const plan = dayR.status === 'fulfilled' ? dayR.value : null;
     if (plan) {
       day.set(plan.data);

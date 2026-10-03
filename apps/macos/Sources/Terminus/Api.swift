@@ -33,6 +33,8 @@ struct NextAnswer: Decodable {
     let leave: Leave?
     /// Display-ready text and the stale time, worded on the server (card.ts).
     let card: Card?
+    /// The user's walking speed (m/s, from their pace), for walk times worked out here (search).
+    let walkSpeedMs: Double?
     /// The response as it came, sent with an "Is this wrong?" report. Never in the JSON.
     var raw: Data? = nil
 
@@ -69,7 +71,7 @@ struct NextAnswer: Decodable {
         let suggestion: Suggestion?
     }
 
-    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card }
+    enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card, walkSpeedMs }
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
@@ -89,6 +91,7 @@ struct NextAnswer: Decodable {
         arrived = (try? c.decodeIfPresent(Bool.self, forKey: .arrived)) ?? false
         leave = try? c.decodeIfPresent(Leave.self, forKey: .leave)
         card = try? c.decodeIfPresent(Card.self, forKey: .card)
+        walkSpeedMs = (try? c.decodeIfPresent(Double.self, forKey: .walkSpeedMs)).flatMap { $0 }
     }
     struct ArrivalLite: Decodable { let svc: String; let crowd: String? }
 

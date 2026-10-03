@@ -770,6 +770,9 @@ test('/me/next: a slower walking pace means leaving earlier', async () => {
   // At least the extra time on the room's walk; more when the slower walk
   // changes which way wins.
   assert.ok(Date.parse(normal.leave.at) - Date.parse(slow.leave.at) >= (Math.round(m / 1.1) - Math.round(m / 1.3)) * 1000);
+  // The speed comes with the answer, for walk times the apps show themselves (search).
+  assert.equal(normal.walkSpeedMs, 1.3);
+  assert.equal(slow.walkSpeedMs, 1.1);
 });
 
 test('/me: a new account gets the full setup, then never again', async () => {

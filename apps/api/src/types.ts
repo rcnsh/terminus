@@ -164,6 +164,9 @@ export interface MeAnswer extends Answer {
   refreshAt?: string;
   /** "Last D2 from UTown in 18 min", on the way home near the end of service. */
   warning?: string | null;
+  /** The user's walking speed in metres a second (their pace), for walk
+   *  times an app shows itself, such as search results. Added by the route. */
+  walkSpeedMs?: number;
   /** Display-ready text and the stale time (card.ts). Added last, by the route. */
   card?: import('./card.ts').Card;
 }
