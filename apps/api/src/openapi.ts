@@ -64,12 +64,17 @@ const answerExample = {
   ],
 };
 
+/** The apps' version (Android versionName, the Mac's CFBundleShortVersionString):
+ *  the API and the apps are released together. A test fails when a version
+ *  bump leaves this behind. */
+export const API_VERSION = '2.1.0';
+
 export function openApiSpec(origin: string): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
       title: 'terminus API',
-      version: '1.0.0',
+      version: API_VERSION,
       description: [
         'Arrival times for the NUS internal shuttle buses, returned as short text ready to display.',
         '',

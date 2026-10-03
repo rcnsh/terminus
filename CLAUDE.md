@@ -299,9 +299,10 @@ docs/map-plan.md      How the campus map was planned and built
   - Server-side changes, the website included, are live for everyone once
     deployed. Android and Mac changes need an app release.
 - **Releasing.**
-  - Bump Android `versionName`/`versionCode` (`apps/android/app/build.gradle.kts`)
-    and the Mac `CFBundleShortVersionString`/`CFBundleVersion`
-    (`apps/macos/Support/Info.plist`) together.
+  - Bump Android `versionName`/`versionCode` (`apps/android/app/build.gradle.kts`),
+    the Mac `CFBundleShortVersionString`/`CFBundleVersion`
+    (`apps/macos/Support/Info.plist`) and `API_VERSION` (`apps/api/src/openapi.ts`,
+    the version on the API docs) together. A test fails if they differ.
   - Run `scripts/release.sh --dry-run`, then `scripts/release.sh`. It tests,
     builds the signed split APKs, uploads to R2 and tags `v<version>`.
   - Pushing the tag runs `release.yml`. That workflow builds and signs the

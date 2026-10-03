@@ -7,8 +7,9 @@
 #   scripts/release.sh --dry-run   # test and build the APK, upload nothing
 #   scripts/release.sh             # build, upload, tag v<version>
 #
-# Bump versionName/versionCode (Android) and CFBundleShortVersionString/
-# CFBundleVersion (apps/macos/Support/Info.plist) together first.
+# Bump versionName/versionCode (Android), CFBundleShortVersionString/
+# CFBundleVersion (apps/macos/Support/Info.plist) and API_VERSION
+# (apps/api/src/openapi.ts, the API docs) together first; a test checks.
 #
 # The version is the Android versionName. The Android release key must be
 # set up in ~/.gradle/gradle.properties (TERMINUS_*), or the APK would be

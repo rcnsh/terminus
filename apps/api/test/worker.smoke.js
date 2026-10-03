@@ -6,6 +6,7 @@ import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeCtx, makeEnv
 import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { ME_ROUTES } from '../src/me.ts';
+import { API_VERSION } from '../src/openapi.ts';
 
 const BASE = 'https://bus.example.test';
 const ARRIVALS_KEY = (code) => `https://terminus.internal/arrivals/${code}`;
@@ -215,6 +216,15 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   assert.equal(res.status, 200);
   const spec = await res.json();
   assert.equal(spec.openapi, '3.1.0');
+  // The docs' version is the apps' version: bump all three together.
+  const { readFileSync } = await import('node:fs');
+  const gradle = readFileSync(new URL('../../android/app/build.gradle.kts', import.meta.url), 'utf8');
+  const plist = readFileSync(new URL('../../macos/Support/Info.plist', import.meta.url), 'utf8');
+  const android = gradle.match(/versionName = "([^"]+)"/)?.[1];
+  const mac = plist.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+  assert.equal(spec.info.version, API_VERSION);
+  assert.equal(API_VERSION, android, 'API_VERSION in src/openapi.ts matches versionName in apps/android/app/build.gradle.kts');
+  assert.equal(API_VERSION, mac, 'API_VERSION in src/openapi.ts matches CFBundleShortVersionString in apps/macos/Support/Info.plist');
   assert.equal(spec.servers[0].url, BASE, 'try-it requests go to whoever serves the docs');
 
   // Every method on every path, with path parameters as `*`: the account
