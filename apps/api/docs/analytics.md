@@ -32,7 +32,7 @@ GROUP BY stop, svc ORDER BY n DESC
 
 It is 95, a guess, and it is what the ranking uses wherever measured ride
 times don't cover a service and hour yet (detected rides, `src/ridetimes.ts`;
-see internals.md, phase 8.2). The walk comparison fires more often than
+see internals.md, "Measured ride times"). The walk comparison fires more often than
 expected on the real graph, which is either correct (this campus is walkable)
 or a sign the constant is too high.
 

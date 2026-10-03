@@ -152,7 +152,7 @@ How they were taken: the emulator's clock moved to the morning (`adb shell cmd a
 - **Exact alarms:** `SCHEDULE_EXACT_ALARM` needs no declaration. The user allows it under "Alarms & reminders".
 - **Location:** `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` only, never `ACCESS_BACKGROUND_LOCATION`. Every use starts from something the user does (the app open, a tap on the widget or the live notification), so it's while-in-use access, and the location foreground service runs only after such a tap. No background location declaration is needed; the foreground service one below is.
 - **Account deletion URL:** https://terminus.rcn.sh/privacy (section "Your controls"): an account with an email is deleted from https://terminus.rcn.sh/account; one without is deleted in the app (Settings → Delete this account), and is deleted anyway 60 days after it was last used.
-- **Data safety:** as given in Play Console (PLAN.md phase 4). Still accurate on 2 October 2026:
+- **Data safety:** as given in Play Console:
   - Location: precise, collected, ephemeral, optional, App functionality.
   - Email: optional; Account management and App functionality.
   - User IDs, app interactions and user-generated content: required.

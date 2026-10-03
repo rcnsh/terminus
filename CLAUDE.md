@@ -91,6 +91,12 @@ stops still draw.
 
 - Polling pages never reach "network idle" in Playwright: wait for a URL or
   an element instead.
+- Block service workers in Playwright (`serviceWorkers: 'block'`), or the
+  web app's service worker can serve a file from before your edit.
+- The service worker fetches the app's files from the network first, so an
+  edit reaches users without anything else. When the list of files it keeps
+  (`SHELL_FILES` in `apps/web/public/sw.js`) changes, bump `SHELL` too, so the
+  old copy is dropped.
 - The stub sends a sign-in code only once per email for a while (later
   requests say "sent" but print nothing, as the real server does). Sign in
   once, keep the session cookie (`context.cookies()`) and reuse it, or
@@ -182,7 +188,6 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
 .github/workflows/    ci.yml, release.yml (tag-driven), scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
                       record-buses.yml (manual: no bus switches sides after a deploy)
-docs/map-plan.md      How the campus map was planned and built
 ```
 
 ## How the core works (short version)

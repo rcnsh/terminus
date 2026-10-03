@@ -128,7 +128,6 @@ down the clock itself, so no screen ever shows a stale "4 min".
 | [`apps/api`](apps/api) | Cloudflare Worker: the API, accounts (D1), the cron monitor, and the website. API docs at [/docs](https://terminus.rcn.sh/docs). |
 | [`apps/web`](apps/web) | Landing page, account page, the web app (Now, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
 | [`apps/android`](apps/android) | Home-screen widgets (compact and with places) and the app: Now, the campus map, Settings. |
-| [`docs/map-plan.md`](docs/map-plan.md) | How the campus map was planned and built. |
 | [`apps/macos`](apps/macos) | Menu bar app. |
 
 ## Running it
