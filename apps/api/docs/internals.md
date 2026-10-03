@@ -241,8 +241,8 @@ account into another one.
   class start, ride end; not at `staleAt`). At each wake it works out the card
   again, nudges the user's devices (`sessions.push_token`) if the phase
   changed, and schedules the next wake; with no device taking
-  push it stops. A nudge is a data message, `{kind: 'card', phase, ask}` (`ask`
-  always `0` now), high priority for due and missed; the app fetches /me/next
+  push it stops. A nudge is a data message, `{kind: 'card', phase}`, high
+  priority for due and missed; the app fetches /me/next
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).
 
@@ -270,7 +270,11 @@ or a tile), `line` (one line, for a notification), `actions`, `warning` and
 `nextChangeAt` (when the card changes by itself). While riding, `ride` lists
 the stops from boarding to getting off, with the board and arrival times (the
 arrival live when the bus's plate is known), for a progress bar (phase 6). v1
-fields are unchanged.
+fields are unchanged. `notice` is a line above the answer while the monitor
+has NUS's feed down ("NUS's live bus times have been down since 9:14 AM"),
+on an answer that is an estimate or has no time (the feed may be back
+before the next check, and a day with no bus needs no notice). Each isolate reads the monitor's state from KV at most once a
+minute (`feedDownSince`).
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
   last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
   again, once fewer than 23 days are left. However much it's used, a web

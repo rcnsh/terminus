@@ -77,6 +77,8 @@ internal fun AnswerCard(
                 Actions(answer, onAction, busy, onSuggestion)
                 return@Column
             }
+            // NUS's live times are down: said once, above the answer.
+            answer.card?.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
             // Where the trip is, when one is under way: the same on every device.
             answer.phaseText?.let { Pill(it, MaterialTheme.colorScheme.primary) }
             answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }

@@ -139,6 +139,7 @@ const en = {
   qualityScheduled: 'Timetable estimate',
   qualityStale: 'Live times are a few minutes old',
   qualityUnknown: 'No live data',
+  feedDown: ((since: string) => `NUS's live bus times have been down since ${since}.`) as Fn<[string]>,
   estimateNote: 'Estimated from the usual gap between buses. Live times show nearer the time.',
   /** At the stop: "D2 at 9:41". */
   busAt: ((svc: string, t: string) => `${svc} at ${t}`) as Fn<[string, string]>,
@@ -366,6 +367,7 @@ const zh: Msgs = {
   qualityScheduled: '按时刻表估计',
   qualityStale: '实时时间已是几分钟前的',
   qualityUnknown: '没有实时数据',
+  feedDown: (since) => `NUS 的实时巴士时间自 ${since} 起无法获取。`,
   estimateNote: '根据巴士平常的间隔估计，临近时会显示实时时间。',
   busAt: (svc, t) => `${t} 的 ${svc}`,
   leaveBy: (t) => `${t} 前出发`,

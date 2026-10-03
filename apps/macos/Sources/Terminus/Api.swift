@@ -69,6 +69,8 @@ struct NextAnswer: Decodable {
         let remind: Bool?
         /// "Leave one bus earlier for CS2030?", accepted or turned down with /me/choice.
         let suggestion: Suggestion?
+        /// "NUS's live bus times have been down since 9:14 AM", above the answer.
+        let notice: String?
     }
 
     enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card, walkSpeedMs }

@@ -55,6 +55,7 @@
     "suggestion": null,
     "ride": null,
     "detected": false,
-    "walkTo": null
+    "walkTo": null,
+    "notice": null
   }
 }

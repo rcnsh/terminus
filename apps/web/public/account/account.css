@@ -87,6 +87,7 @@ label[for="home-walk"] { margin-top: 14px; }
 /* The trip's phase, the same on every device, and the server's buttons. */
 .widget .phase { display: inline-block; margin-bottom: 8px; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; color: var(--accent); background: var(--accent-soft); }
 .widget .warning { margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; color: var(--warn-ink); }
+.widget .notice { margin-bottom: 10px; font-size: 0.9rem; color: var(--warn-ink); }
 .widget .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
 .banner {

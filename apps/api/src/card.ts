@@ -118,6 +118,10 @@ export interface Card {
    *  catch the bus at, or the destination's stop when the answer is to walk.
    *  Null on the bus, at the stop, once there, and with nothing to catch. */
   walkTo: { name: string; lat: number; lon: number } | null;
+  /** "NUS's live bus times have been down since 9:14 AM": a notice above
+   *  the answer while the monitor has the feed down and this answer is an
+   *  estimate or has no time. Null otherwise. */
+  notice: string | null;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -158,15 +162,19 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
 type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
-type V1 = Omit<Card, V2>;
+type V1 = Omit<Card, V2 | 'notice'>;
 
-export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }): Card {
+/** `feedDownSince`: when the monitor confirmed NUS's feed down, or null while it's up. */
+export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }, feedDownSince: number | null = null): Card {
   const card = v1(a, h12);
   // At the stop, there's nowhere to leave: the headline is the bus to wait for
   // ("D2 at 9:41"). Apps show it as it is, without turning it into "Leave now".
   const l = a.leave ?? null;
   if (trip.key && trip.phase === 'waiting' && l?.svc && l.board) card.leaveBy = m().busAt(l.svc, approx(l.estimated, clockAt(Date.parse(l.board), h12)));
-  return { ...card, ...v2(a, card, h12, trip) };
+  // Only on an answer that wanted a live time and has none: the feed may be
+  // back before the monitor's next check, and a day with no bus needs none.
+  const notice = feedDownSince !== null && QUALITY[a.quality] ? m().feedDown(clockAt(feedDownSince, h12)) : null;
+  return { ...card, ...v2(a, card, h12, trip), notice };
 }
 
 function v1(a: MeAnswer, h12: boolean): V1 {

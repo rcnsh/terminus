@@ -12,6 +12,7 @@ struct AnswerDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
+                if let n = a.card?.notice { Row(icon: "antenna.radiowaves.left.and.right.slash", text: n).foregroundStyle(Color.warn) }
                 if let w = a.card?.warning { Row(icon: "exclamationmark.triangle.fill", text: w).fontWeight(.semibold).foregroundStyle(Color.warn) }
                 if a.isFree {
                     // Nothing to catch: no bus to mistake for advice.

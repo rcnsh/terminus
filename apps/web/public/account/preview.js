@@ -42,10 +42,12 @@ function ClassPlan({ a }) {
   `;
 }
 
-/** Where the trip is (the same phase the phone and the Mac show) and a last-bus warning. */
+/** Where the trip is (the same phase the phone and the Mac show), a last-bus
+ *  warning, and the notice while NUS's live times are down. */
 function Phase({ a }) {
   const c = a.card ?? {};
   return html`
+    ${c.notice && html`<div class="notice">${c.notice}</div>`}
     ${c.phaseText && html`<div class="phase">${c.phaseText}</div>`}
     ${c.warning && html`<div class="warning">${c.warning}</div>`}
   `;

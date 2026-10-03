@@ -170,6 +170,8 @@ data class Card(
     val ride: Ride? = null,
     /** Where to walk to now (the bus's stop, or the destination on foot), for walking directions. */
     val walkTo: WalkTo? = null,
+    /** "NUS's live bus times have been down since 9:14 AM", above the answer. */
+    val notice: String? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) = Card(
@@ -194,6 +196,7 @@ data class Card(
                 (0 until a.length()).map { a.getJSONObject(it).let { x -> CardAction(x.getString("id"), x.getString("label"), x.getString("trip")) } }
             }.orEmpty(),
             warning = o.optStringOrNull("warning"),
+            notice = o.optStringOrNull("notice"),
             nextChangeAtMs = o.optStringOrNull("nextChangeAt")?.let(::parseInstant),
             remind = o.optBoolean("remind", true),
             suggestion = o.optJSONObject("suggestion")?.let { s ->

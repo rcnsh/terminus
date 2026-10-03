@@ -95,6 +95,21 @@ async function recordIncident(env: Env, state: UpstreamState, nowMs: number): Pr
   await env.KV.put(INCIDENTS_KEY, JSON.stringify(list.slice(0, INCIDENTS_KEPT)));
 }
 
+/** The confirmed state changes at most every 15 minutes: each isolate reads it once a minute. */
+const DOWN_MEMO_MS = 60_000;
+const downMemo = new WeakMap<object, { at: number; since: number | null }>();
+
+/** When the monitor confirmed the feed down, or null while it's up (or never checked). */
+export async function feedDownSince(env: Env, nowMs: number): Promise<number | null> {
+  if (!env.KV) return null;
+  const kept = downMemo.get(env.KV);
+  if (kept && nowMs - kept.at < DOWN_MEMO_MS && nowMs >= kept.at) return kept.since;
+  const u = await readUpstream(env);
+  const since = u && !u.up ? u.since : null;
+  downMemo.set(env.KV, { at: nowMs, since });
+  return since;
+}
+
 export async function readUpstream(env: Env): Promise<UpstreamState | null> {
   const raw = await env.KV.get(KEY).catch(() => null);
   if (!raw) return null;

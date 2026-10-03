@@ -4,8 +4,10 @@ import assert from 'node:assert/strict';
 import { makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import { readFileSync } from 'node:fs';
-import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_ID, adviceFor, checkCalendar, checkUpstream, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
+import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_ID, adviceFor, checkCalendar, checkUpstream, feedDownSince, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
 import { UpstreamRejected } from '../src/auth.ts';
+import { cardFor } from '../src/card.ts';
+import { withLang } from '../src/i18n.ts';
 
 function env() {
   return { KV: makeKV(), EMAIL: makeEmail(), EMAIL_FROM: 'login@example.test', ALERT_EMAIL: 'ops@example.test' };
@@ -181,4 +183,23 @@ test('the KV namespace in the alert commands is the stable one in cloudflare.con
   const config = readFileSync(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
   const id = /name: "terminus",[\s\S]*?\bkv: "([0-9a-f]+)"/.exec(config)?.[1];
   assert.equal(KV_NAMESPACE_ID, id);
+});
+
+test('the card says when the feed is down, on an answer without a live time', async () => {
+  const e = env();
+  await checkUpstream(e, 1000, ok);
+  assert.equal(await feedDownSince(e, 1000), null);
+  const down = Date.parse('2026-09-28T01:14:00Z'); // 9:14 in Singapore
+  await checkUpstream(e, down - 900_000, fail('HTTP 502'));
+  assert.equal(await feedDownSince(e, down - 10_000), null, 'one failed check is a blip');
+  await checkUpstream(e, down, fail('HTTP 502'));
+  assert.equal(await feedDownSince(e, down + 30_000), null, 'read again at most once a minute');
+  assert.equal(await feedDownSince(e, down + 60_000), down);
+
+  const answer = JSON.parse(readFileSync(new URL('./fixtures/answers/class-bus.json', import.meta.url), 'utf8'));
+  assert.equal(cardFor(answer, true, undefined, down).notice, null, 'a live answer: the feed is back');
+  const guess = { ...answer, quality: 'scheduled' };
+  assert.equal(cardFor(guess, true, undefined, down).notice, "NUS's live bus times have been down since 9:14\u00a0AM.");
+  assert.equal(withLang('zh', () => cardFor(guess, false, undefined, down).notice), 'NUS 的实时巴士时间自 09:14 起无法获取。');
+  assert.equal(cardFor(guess, true).notice, null, 'up');
 });
