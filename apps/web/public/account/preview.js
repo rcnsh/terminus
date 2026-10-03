@@ -20,6 +20,25 @@ const leaveHead = (a) => (a.card.phase !== 'waiting' && Date.now() >= Date.parse
 /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
 const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
 
+/**
+ * "Leaves in 3 min 12 s", ticking every second from `departsAt`, as the
+ * Android and Mac apps do, so the card never shows an old "4 min". Only this
+ * line re-renders each second.
+ */
+function Countdown({ at }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [at]);
+  const left = Math.floor((Date.parse(at) - now) / 1000);
+  const text =
+    left > 60 ? t('Leaves in {0} min {1} s', Math.floor(left / 60), left % 60)
+    : left > 0 ? t('Leaves in {0} s', left)
+    : t('Left {0} min ago · updating', Math.floor((-left + 59) / 60));
+  return html`<div class=${left > 0 ? 'countdown' : 'countdown gone'}>${text}</div>`;
+}
+
 /** Sends a card's button (Not going, Undo, …) and returns the answer that comes back. */
 export const signal = (body) => api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body });
 
@@ -38,7 +57,7 @@ function ClassPlan({ a }) {
     ${c.arrive && html`<div class=${`arrive${late}`}>${c.arrive}</div>`}
     ${c.note && html`<div class="crowd-note">${c.note}</div>`}
     ${c.estimate && html`<div class="note">${c.estimate}</div>`}
-    ${c.goNow && html`<div class="go-now">${c.goNow}</div>`}
+    ${c.goNow && html`<div class="go-now">${c.goNow}${a.departsAt && a.quality !== 'unknown' && html`<${Countdown} at=${a.departsAt} />`}</div>`}
   `;
 }
 
@@ -170,6 +189,7 @@ export function Card({ a, onAnswer, onChoice, chips = false }) {
       <${Phase} a=${a} />
       <div class="where">${where}</div>
       <div class="big">${big}</div>
+      ${timed && !old && html`<${Countdown} at=${a.departsAt} />`}
       <div class="detail">${old ? t('Updating times…') : a.detail}</div>
       ${a.leave && a.card && !old && html`<div class="leave">${leaveText(a)}</div>`}
       ${a.timing && !old && !a.detail?.includes(a.timing.text) && html`<span class=${`ontime ${a.timing.status}`}>${a.timing.text}</span>`}

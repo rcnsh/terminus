@@ -434,5 +434,8 @@ window.TERMINUS_ZH = {
  "{0} on the map": "在地图上查看 {0}",
  "Undo for {0}": "撤销 {0} 的设置",
  "The end time must be after the start time": "结束时间必须晚于开始时间",
- "Couldn't update. Trying again soon.": "无法更新，稍后会再试。"
+ "Couldn't update. Trying again soon.": "无法更新，稍后会再试。",
+ "Leaves in {0} min {1} s": "{0} 分 {1} 秒后开",
+ "Leaves in {0} s": "{0} 秒后开",
+ "Left {0} min ago · updating": "{0} 分钟前已开走 · 正在更新"
 };
