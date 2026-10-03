@@ -530,6 +530,23 @@ test('rate limits answer 429', async () => {
   assert.equal(pub.headers.get('retry-after'), '60');
 });
 
+test('signed in, the map and answers are limited per account, not per IP', async () => {
+  const { env, email } = setup();
+  delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
+  const cookie = await signIn(env, email);
+  const never = { limit: async () => ({ success: false }) };
+  // Everyone else on the same campus Wi-Fi has used up the IP's share: still answered.
+  assert.equal((await call({ ...env, RL_PUBLIC: never }, '/campus', { cookie })).status, 200);
+  // The account's own share used up: 429.
+  const keys = [];
+  const own = { limit: async ({ key }) => (keys.push(key), { success: !key.startsWith('acct:') }) };
+  assert.equal((await call({ ...env, RL_ME: own }, '/campus', { cookie })).status, 429);
+  assert.ok(keys.some((k) => /^acct:.+/.test(k)), 'keyed by account');
+  // Not signed in: still by IP, then asked for a key.
+  assert.equal((await call({ ...env, RL_PUBLIC: never }, '/campus')).status, 429);
+  assert.equal((await call(env, '/campus')).status, 401);
+});
+
 /** A global fetch that answers NUSMods module requests, and delegates the rest. */
 function withNusmods(modules, { down = [] } = {}) {
   const inner = globalThis.fetch;

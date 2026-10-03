@@ -297,21 +297,28 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       // Public routes: a per-IP ceiling. The per-stop cache already protects
       // NUS; this protects the Worker from being a free proxy, and D1/R2 from
       // being a free bill.
-      if (env.RL_PUBLIC && (KEYED.includes(url.pathname) || url.pathname === '/health' || url.pathname === '/status.json' || url.pathname === '/admin/stats' || url.pathname.startsWith('/download/'))) {
+      const keyed = KEYED.includes(url.pathname);
+      if (env.RL_PUBLIC && !keyed && (url.pathname === '/health' || url.pathname === '/status.json' || url.pathname === '/admin/stats' || url.pathname.startsWith('/download/'))) {
         const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
         if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
       }
-      // The answers need an API key or a signed-in account.
-      if (KEYED.includes(url.pathname)) {
+      // The answers need an API key or a signed-in account, and are limited
+      // by who's asking: on campus Wi-Fi hundreds of students share one IP,
+      // and the map alone asks every 5 s. A key has its own ceiling wherever
+      // it's used from; a request with neither is limited by IP.
+      if (keyed) {
         const caller = await callerFor(env, req, nowMs, ctx);
+        const bucket =
+          caller?.kind === 'key' ? { rl: env.RL_PUBLIC, key: `key:${caller.keyId}` }
+          : caller?.kind === 'account' ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
+          : { rl: env.RL_PUBLIC, key: `pub:${clientKey(req)}` };
+        if (bucket?.rl && !(await bucket.rl.limit({ key: bucket.key })).success) {
+          return json({ error: caller?.kind === 'key' ? 'too many requests for this key, slow down' : 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+        }
         if (!caller) {
           return json({ error: m().needsKey(siteOrigin(env)) }, 401, {
             'www-authenticate': 'Bearer realm="terminus"',
           });
-        }
-        // And a ceiling per key, wherever it's used from.
-        if (caller.kind === 'key' && env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `key:${caller.keyId}` })).success) {
-          return json({ error: 'too many requests for this key, slow down' }, 429, { 'retry-after': '60' });
         }
       }
       const dl = await handleDownload(url.pathname, env, url);

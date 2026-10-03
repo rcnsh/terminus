@@ -101,7 +101,12 @@ pnpm run deploy
 | `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. |
 
 `/next`, `/trip`, `/arrivals`, `/buses`, `/campus` and `/stops/pairs` need an API key
-(made on the account page, sent as `x-api-key`) or a signed-in session.
+(made on the account page, sent as `x-api-key`) or a signed-in session. They're
+limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
+an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
+On campus Wi-Fi hundreds of students share one IP, and the map alone asks
+for buses every 5 s. `/health`, `/status.json`, `/admin/stats` and
+`/download/*` stay limited by IP.
 
 ## Personalisation
 
