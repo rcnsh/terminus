@@ -65,7 +65,9 @@ async function record() {
             const r = await fetch(`${SITE}/buses?svc=${encodeURIComponent(svc)}`, { headers });
             if (!r.ok) return void failed++;
             const d = await r.json();
-            for (const b of d.buses ?? []) rows.push({ t: tick, svc, ...b });
+            // Which Cloudflare data centre answered: each keeps its own tracks.
+            const colo = r.headers.get('cf-ray')?.split('-')[1] ?? '?';
+            for (const b of d.buses ?? []) rows.push({ t: tick, svc, colo, ...b });
           } catch {
             failed++;
           }
@@ -110,7 +112,7 @@ function check({ routes, rows }) {
           maxBack = Math.max(maxBack, -gone);
           if (dt > 0) maxRate = Math.max(maxRate, gone / dt);
           if (gone < -BACK_M || gone > AHEAD_M + AHEAD_MS * dt) {
-            bad.push({ svc, bus: id.slice(0, 6), at: new Date(r.t).toISOString().slice(11, 19), from: Math.round(prev.along), to: Math.round(r.along), gone: Math.round(gone), dt: Math.round(dt) });
+            bad.push({ svc, bus: id.slice(0, 6), at: new Date(r.t).toISOString().slice(11, 19), from: Math.round(prev.along), to: Math.round(r.along), gone: Math.round(gone), dt: Math.round(dt), colos: prev.colo === r.colo ? r.colo : `${prev.colo} → ${r.colo}` });
           }
         }
         if (!prev || r.along !== prev.along) prev = r;
@@ -130,10 +132,11 @@ console.log(`A *move* is a reading whose \`along\` differs from the bus's previo
 console.log('| service | buses | readings | off its line | moves | furthest back | fastest |');
 console.log('|---|---|---|---|---|---|---|');
 for (const line of table) console.log(line);
-console.log(`\n${trace.rows.length} readings, ${withSpeed} with \`speed\`; ${trace.failed} requests failed.`);
+const colos = [...new Set(trace.rows.map((r) => r.colo))];
+console.log(`\n${trace.rows.length} readings, ${withSpeed} with \`speed\`; ${trace.failed} requests failed. Answered from ${colos.join(', ')}.`);
 if (!trace.rows.length) console.log('\nNo buses seen: none running, or the feed is down.');
 else if (!bad.length) console.log('\n**No flagged moves:** no bus switched sides or jumped.');
 else {
-  console.log(`\n**${bad.length} flagged moves:**\n\n| service | bus | at (UTC) | from | to | moved | over |\n|---|---|---|---|---|---|---|`);
-  for (const b of bad) console.log(`| ${b.svc} | ${b.bus} | ${b.at} | ${b.from} m | ${b.to} m | ${b.gone} m | ${b.dt} s |`);
+  console.log(`\n**${bad.length} flagged moves:**\n\n| service | bus | at (UTC) | from | to | moved | over | data centre |\n|---|---|---|---|---|---|---|---|`);
+  for (const b of bad) console.log(`| ${b.svc} | ${b.bus} | ${b.at} | ${b.from} m | ${b.to} m | ${b.gone} m | ${b.dt} s | ${b.colos} |`);
 }
