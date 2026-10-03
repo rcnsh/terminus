@@ -30,8 +30,34 @@ function sentence(text) {
   return /[\u4e00-\u9fff]/.test(s) ? `${s}。` : `${s}.`;
 }
 
+// 12- or 24-hour times: the account's choice (its profile's `clock`), kept
+// in this browser so the first paint has it; 'auto' follows the browser.
+const CLOCK_KEY = 'terminus.clock';
+let clockPref = 'auto';
+try {
+  clockPref = globalThis.localStorage?.getItem(CLOCK_KEY) ?? 'auto';
+} catch {}
+
+/** The account's clock choice, from each profile as it loads or saves. */
+export function setClockPref(v) {
+  clockPref = v === '12' || v === '24' ? v : 'auto';
+  try {
+    globalThis.localStorage?.setItem(CLOCK_KEY, clockPref);
+  } catch {}
+}
+
+/** This browser's own style, before any choice. */
+export const browserHour12 = () => new Intl.DateTimeFormat(locale() ?? [], { hour: 'numeric' }).resolvedOptions().hour12 === true;
+export const hour12 = () => (clockPref === '12' ? true : clockPref === '24' ? false : browserHour12());
+
+/** A time as the card writes it: "9:41 AM" or "09:41". */
+export const clockOpts = () => (hour12() ? { hour: 'numeric', minute: '2-digit', hour12: true } : { hour: '2-digit', minute: '2-digit', hour12: false });
+
+/** A formatted time with a space after 上午/下午, as the server writes it ("下午 6:36"). */
+export const spaced = (s) => s.replace(/([上下]午)(\d)/, '$1 $2');
+
 // Campus time, like the apps: class times from the server are Singapore time.
-export const clock = (iso) => new Date(iso).toLocaleTimeString(locale() ?? [], { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' });
+export const clock = (iso) => spaced(new Date(iso).toLocaleTimeString(locale() ?? [], { ...clockOpts(), timeZone: 'Asia/Singapore' }));
 
 /**
  * Text that reads on a service's colour: white or near-black, whichever

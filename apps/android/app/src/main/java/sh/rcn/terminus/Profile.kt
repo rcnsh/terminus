@@ -24,6 +24,11 @@ class ProfileDoc(val json: JSONObject) {
         get() = json.optString("lang", "auto")
         set(v) { json.put("lang", v) }
 
+    /** The account's times: auto (each device's own), 12 or 24. */
+    var clock: String
+        get() = json.optString("clock", "auto")
+        set(v) { json.put("clock", v) }
+
     var homeWalkMin: Int
         get() = json.optInt("homeWalkMin", 5)
         set(v) { json.put("homeWalkMin", v.coerceIn(0, 30)) }

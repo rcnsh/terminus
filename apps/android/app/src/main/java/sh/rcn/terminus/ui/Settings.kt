@@ -87,6 +87,7 @@ import sh.rcn.terminus.hour12
 import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Lang
+import sh.rcn.terminus.Clock
 import sh.rcn.terminus.L
 import kotlin.coroutines.cancellation.CancellationException
 import androidx.compose.ui.semantics.semantics
@@ -228,11 +229,18 @@ private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (Sett
                         state.email == null -> stringResource(R.string.devices_need_email)
                         else -> state.devices?.let { if (it.size == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, it.size) }
                     }
-                    SettingsPage.Language -> when (Lang.pref(ctx)) {
-                        Lang.EN -> "English"
-                        Lang.ZH -> "中文"
-                        else -> stringResource(R.string.follow_device)
-                    }
+                    SettingsPage.Language -> listOfNotNull(
+                        when (Lang.pref(ctx)) {
+                            Lang.EN -> "English"
+                            Lang.ZH -> "中文"
+                            else -> stringResource(R.string.follow_device)
+                        },
+                        when (state.profile?.clock) {
+                            Clock.H12 -> stringResource(R.string.clock_12)
+                            Clock.H24 -> stringResource(R.string.clock_24)
+                            else -> null
+                        },
+                    ).joinToString(" · ")
                     SettingsPage.Appearance -> stringResource(themeName(Theme.pref(ctx)))
                     SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
                 }
@@ -312,7 +320,12 @@ private fun SettingsPageContent(
                 Devices(state, account, onSignedOut)
             }
         }
-        SettingsPage.Language -> LanguagePicker(account)
+        SettingsPage.Language -> {
+            LanguagePicker(account)
+            Spacer(Modifier.height(20.dp))
+            ClockPicker(state.profile, account, stringResource(R.string.time_format), auto = true)
+            Hint(stringResource(R.string.time_format_hint), Modifier.padding(top = 4.dp))
+        }
         SettingsPage.Appearance -> ThemePicker()
         SettingsPage.Account -> AccountSection(state, account, main, onAddEmail, onSignedOut)
     }
@@ -656,6 +669,24 @@ private fun ThemePicker() {
         { it?.let { pref -> Theme.set(ctx, pref) } },
     )
     Hint(stringResource(R.string.theme_hint), Modifier.padding(top = 4.dp))
+}
+
+/**
+ * 12- or 24-hour times for the account, each with an example time. In
+ * Settings, `auto` (the phone's own) is a choice too; in setup the phone's
+ * style is shown picked until another is.
+ */
+@Composable
+internal fun ClockPicker(profile: ProfileDoc?, account: AccountViewModel, label: String, auto: Boolean) {
+    val ctx = LocalContext.current
+    val pref = profile?.clock ?: Clock.AUTO
+    val options = listOfNotNull(
+        if (auto) Clock.AUTO to stringResource(R.string.follow_device) else null,
+        Clock.H12 to stringResource(R.string.with_example, stringResource(R.string.clock_12), stringResource(R.string.clock_12_eg)),
+        Clock.H24 to stringResource(R.string.with_example, stringResource(R.string.clock_24), "18:36"),
+    )
+    val shown = if (auto || pref != Clock.AUTO) pref else if (hour12(ctx)) Clock.H12 else Clock.H24
+    Choice(label, options, shown, { it?.let(account::setClock) })
 }
 
 /** Follow the phone, English or 中文 (phase 10). The languages are named in themselves. */

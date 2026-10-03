@@ -731,8 +731,34 @@ private fun parseDestination(d: JSONObject) = Destination(
 
 private fun parseInstant(s: String): Long? = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrNull()
 
-/** The phone shows 12-hour times: ask the server for its card in that style. */
-fun hour12(ctx: android.content.Context): Boolean = !android.text.format.DateFormat.is24HourFormat(ctx)
+/**
+ * 12-hour times: the account's choice ([Clock]), else the phone's own
+ * setting. The server is asked for its card in the same style.
+ */
+fun hour12(ctx: android.content.Context): Boolean = when (Clock.pref(ctx)) {
+    Clock.H12 -> true
+    Clock.H24 -> false
+    else -> !android.text.format.DateFormat.is24HourFormat(ctx)
+}
+
+/**
+ * The account's 12- or 24-hour choice (its profile's `clock`), kept on the
+ * phone for the widgets and alarms, which don't load the profile.
+ */
+object Clock {
+    const val AUTO = "auto"
+    const val H12 = "12"
+    const val H24 = "24"
+    private const val KEY = "clock"
+
+    private fun prefs(ctx: android.content.Context) = ctx.applicationContext.getSharedPreferences("terminus", android.content.Context.MODE_PRIVATE)
+
+    fun pref(ctx: android.content.Context): String = prefs(ctx).getString(KEY, AUTO) ?: AUTO
+
+    fun keep(ctx: android.content.Context, pref: String) {
+        prefs(ctx).edit().putString(KEY, if (pref == H12 || pref == H24) pref else AUTO).apply()
+    }
+}
 
 /**
  * "1.0.10" > "1.0.9", and a release is newer than its own pre-release:

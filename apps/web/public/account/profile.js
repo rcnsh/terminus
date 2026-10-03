@@ -4,10 +4,12 @@
 // Settings at once, and a change made in Settings is the one the map sees.
 
 import { html, store, useStore } from '../assets/ui.js';
-import { api, t } from './dom.js';
+import { api, setClockPref, t } from './dom.js';
 
 /** The profile as the server last returned it, with edits not yet saved. Null until loaded. */
 export const profile = store(null);
+// Times everywhere follow the account's 12- or 24-hour choice.
+profile.subscribe((p) => p && setClockPref(p.clock));
 /** /campus: stops, routes, destinations (the search list) and residences. Null until loaded. */
 export const campus = store(null);
 /** The user's walking speed (m/s, from their pace), as /me/next last said, for walk times worked out here. */

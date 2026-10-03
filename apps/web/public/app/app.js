@@ -12,8 +12,8 @@
 // they were fetched, so the page can say it's showing old times.
 
 import { Icon, Rich, html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
-import { api, clock, inkOn, t } from '/account/dom.js';
-import { Card, HOUR12, Message, Report, isStale, signal } from '/account/preview.js';
+import { api, clock, hour12, inkOn, t } from '/account/dom.js';
+import { Card, Message, Report, isStale, signal } from '/account/preview.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
@@ -93,7 +93,7 @@ let slowRetry = null;
 
 /** A query string: the 12-hour style, and the other params given. */
 function query(params = {}) {
-  const q = new URLSearchParams(HOUR12 ? { h12: '1' } : {});
+  const q = new URLSearchParams(hour12() ? { h12: '1' } : {});
   for (const [k, v] of Object.entries(params)) if (v !== null && v !== undefined) q.set(k, String(v));
   const s = q.toString();
   return s ? `?${s}` : '';
@@ -177,7 +177,7 @@ async function keptCard(to) {
   if (!('caches' in window) || (to.kind !== 'plan' && to.kind !== 'place')) return null;
   const q = new URLSearchParams();
   if (to.kind === 'place') q.set('place', to.key);
-  if (HOUR12) q.set('h12', '1');
+  if (hour12()) q.set('h12', '1');
   q.set('lang', window.i18n?.header ?? 'en');
   try {
     // Only sw.js's data cache holds /me/next, whatever its version.

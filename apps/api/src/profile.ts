@@ -86,7 +86,12 @@ export interface Profile {
   term: Term | null;
   /** The language terminus speaks (phase 10): 'auto' follows each device. */
   lang: LangPref;
+  /** 12- or 24-hour times; 'auto' follows each device. */
+  clock: ClockPref;
 }
+
+export type ClockPref = 'auto' | '12' | '24';
+export const CLOCK_PREFS: readonly ClockPref[] = ['auto', '12', '24'];
 
 export const DEFAULT_PROFILE: Profile = {
   home: null,
@@ -105,6 +110,7 @@ export const DEFAULT_PROFILE: Profile = {
   share: null,
   term: null,
   lang: 'auto',
+  clock: 'auto',
 };
 
 export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24, usual: 30, once: 10 } as const;
@@ -171,6 +177,11 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean, is
   if (raw.lang !== undefined) {
     if (typeof raw.lang !== 'string' || !LANG_PREFS.includes(raw.lang as LangPref)) return { ok: false, error: 'lang must be auto, en or zh' };
     p.lang = raw.lang as LangPref;
+  }
+
+  if (raw.clock !== undefined) {
+    if (typeof raw.clock !== 'string' || !CLOCK_PREFS.includes(raw.clock as ClockPref)) return { ok: false, error: 'clock must be auto, 12 or 24' };
+    p.clock = raw.clock as ClockPref;
   }
 
   if (raw.homeWalkMin !== undefined) {

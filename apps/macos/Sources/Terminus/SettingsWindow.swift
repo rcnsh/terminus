@@ -17,7 +17,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .favourites: L("Favourites")
         case .notifications: L("Notifications")
         case .devices: L("Devices")
-        case .language: L("Language")
+        case .language: L("Language and time")
         case .appearance: L("Appearance")
         case .account: L("Account")
         }
@@ -138,6 +138,14 @@ struct SettingsPaneView: View {
                 }
                 .pickerStyle(.radioGroup)
                 Hint(L("Also used for emails and on your other devices. Place and bus names stay in English, as on the signs."))
+                Picker(L("Time format"), selection: Binding(get: { setup.clock }, set: { setup.setClock($0) })) {
+                    Text(L("Follow this Mac")).tag("auto")
+                    Text(L("12-hour (%@)", L("6:36 PM"))).tag("12")
+                    Text(L("24-hour (%@)", "18:36")).tag("24")
+                }
+                .pickerStyle(.radioGroup)
+                .padding(.top, 12)
+                Hint(L("For every time terminus shows, here, on your phone and on the web."))
             case .appearance:
                 Picker(L("Theme"), selection: $theme) {
                     Text(L("Follow this Mac")).tag("auto")

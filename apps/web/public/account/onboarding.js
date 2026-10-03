@@ -3,9 +3,9 @@
 // (profile.js), so leaving halfway loses nothing.
 
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, t } from './dom.js';
+import { api, browserHour12, t } from './dom.js';
 import { campus, profile, residenceWalkMin, residencesByName, saveNow, stopsNear, toast } from './profile.js';
-import { StopSelect } from './settings-pages.js';
+import { CLOCKS, StopSelect } from './settings-pages.js';
 
 const PACES = [
   { value: 'slow', title: t('Slow'), hint: t('A relaxed pace, or if you often carry a bag'), min: 6 },
@@ -122,6 +122,9 @@ function Actions({ nav, next = t('Continue'), skip, onNext }) {
 }
 
 function Welcome({ nav }) {
+  // Untouched, times follow the browser; a pick is the account's, on every device.
+  const [clock, setClock] = useState(null);
+  const shown = clock ?? (browserHour12() ? '12' : '24');
   return html`
     <img class="ob-mark" src="/assets/mark.svg" alt="" />
     <${Heading} text=${t('Welcome to terminus')} sub=${t('It tells you when to leave for class, not just when the bus comes. Setting up takes about a minute.')} />
@@ -130,7 +133,18 @@ function Welcome({ nav }) {
       <li>${t('Where your day starts')}</li>
       <li>${t('How fast you walk')}</li>
     </ul>
-    <${Actions} nav=${nav} next=${t('Get started')} />
+    <fieldset class="theme-choice ob-clock">
+      <legend>${t('Show times as')}</legend>
+      ${CLOCKS().map(
+        (c) => html`
+          <label class="check" key=${c.value}>
+            <input type="radio" name="ob-clock" value=${c.value} checked=${shown === c.value} onChange=${() => setClock(c.value)} />
+            ${' '}${t('{0} ({1})', c.label, c.eg)}
+          </label>
+        `,
+      )}
+    </fieldset>
+    <${Actions} nav=${nav} next=${t('Get started')} onNext=${clock ? () => saveNow((x) => (x.clock = clock)) : undefined} />
   `;
 }
 

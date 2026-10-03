@@ -3,9 +3,9 @@
 // as the API, so the session cookie just works.
 
 import { Fill, MARK, Rich, html, render, store, useEffect, useInterval, useRef, useState, useStore } from '../assets/ui.js';
-import { api, t } from './dom.js';
+import { api, hour12, t } from './dom.js';
 import { Onboarding } from './onboarding.js';
-import { Card, HOUR12, Message, Report } from './preview.js';
+import { Card, Message, Report } from './preview.js';
 import { Toast, loadCampus, loadProfile, saves, walkSpeed } from './profile.js';
 import { Settings, offerImport } from './settings.js';
 
@@ -254,7 +254,7 @@ function Preview({ me }) {
   const saved = useStore(saves);
   const load = async () => {
     try {
-      const answer = await api(`/me/next${HOUR12 ? '?h12=1' : ''}`);
+      const answer = await api(`/me/next${hour12() ? '?h12=1' : ''}`);
       if (answer?.walkSpeedMs) walkSpeed.set(answer.walkSpeedMs);
       setA(answer);
       setFailed(false);

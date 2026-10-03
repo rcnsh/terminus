@@ -598,6 +598,7 @@ export const ERRORS_ZH: Record<string, string> = {
   "home must be {stops: [...]}": "home 必须是 {stops: [...]}",
   "homeWalkMin must be 0 to 30 minutes": "homeWalkMin 必须是 0 到 30 分钟",
   "lang must be auto, en or zh": "lang 必须是 auto、en 或 zh",
+  "clock must be auto, 12 or 24": "clock 必须是 auto、12 或 24",
   "no release yet": "还没有发布版本",
   "release file missing": "找不到发布文件",
   "say what went wrong": "请说说哪里出了问题",

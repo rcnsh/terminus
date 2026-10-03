@@ -10,7 +10,7 @@ service actually goes where you are going.
 
 ```
 GET /next  ->  { "label": "D2 · 4 min",
-                 "detail": "Opp KR MRT · right here · COM3 ~6 min · quiet · or A1 9 min",
+                 "detail": "Opp KR MRT · right here · COM3 ~6 min · crowding: low · or A1 9 min",
                  "alt":    "A1 · 9 min · Kent Ridge MRT",
                  "quality": "live", ... }
 ```
@@ -333,13 +333,20 @@ Settings. It uses the same routes as the account page, with the session cookie.
   fetched afresh each time Settings opens again (it may have changed on
   another device), unless a change here is still waiting to be saved.
 - **Settings' pages.** A list of groups (Your trips, Timetable, Favourites,
-  Notifications in the app, Devices, Language, Appearance, Account), each with a line
+  Notifications in the app, Devices, Language and time, Appearance, Account), each with a line
   saying what's set, opening its page. The page is in the address (`#trips`
   on the account page, `#settings/trips` in the app), so the browser's Back
   returns to the list. On a phone the page slides in over the list; from
   900 px wide they sit side by side. The installed app on an iPhone, which has
   no browser swipe, goes back on a swipe from the left edge. "Notify me when
   to leave" is under Notifications.
+- **12- or 24-hour times.** The profile's `clock` (`auto`, `12`, `24`)
+  is the account's choice, set in Language and time or in setup. The server
+  words every card in it (`hour12()` in next.ts: the profile's choice, else
+  the request's `?h12=1`) and says which on the card (`card.h12`). Each
+  client keeps a copy (web `dom.js` `hour12()`, Android `Clock`, Mac
+  `Clock`) so the times it writes itself, and the widgets, match; `auto`
+  follows the device.
 - **Now.** A search button at the end of the chips opens "Go somewhere
   else" (account/search-box.js, ranked by search.js, over `/campus`'s
   destinations); a pick shows its card under a chip of its own. "Is this

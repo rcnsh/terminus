@@ -3,12 +3,11 @@
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
 import { Icon, Rich, html, useEffect, useRef, useState } from '../assets/ui.js';
-import { api, clock, t } from './dom.js';
+import { api, clock, hour12, t } from './dom.js';
 import { lists } from './profile.js';
 
 const MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/>';
 /** This browser shows 12-hour times: ask for the card in that style. */
-export const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
 
 /** Past the card's staleAt: its bus has gone, the plan has moved on, or it's 15 minutes old. */
 export const isStale = (a) => Boolean(a?.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
@@ -40,7 +39,7 @@ function Countdown({ at }) {
 }
 
 /** Sends a card's button (Not going, Undo, …) and returns the answer that comes back. */
-export const signal = (body) => api(`/me/signal${HOUR12 ? '?h12=1' : ''}`, { method: 'POST', body });
+export const signal = (body) => api(`/me/signal${hour12() ? '?h12=1' : ''}`, { method: 'POST', body });
 
 /**
  * "Leave by 6:36" and, under it, the one countdown on the card ("in 8 min"),

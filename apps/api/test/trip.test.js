@@ -74,6 +74,25 @@ test('a class trip starts idle, with only "Not going" and "Not on campus today" 
   assert.equal(a.card.actions[0].trip, FIRST);
 });
 
+test("times follow the account's 12- or 24-hour choice on every device, else each request's", async () => {
+  const { call, cookie, phone, next } = await setup();
+  const auto24 = await next(phone);
+  const auto12 = await next(phone, '?h12=1');
+  assert.equal(auto24.card.h12, false);
+  assert.match(auto24.card.leaveBy, /\b\d{2}:\d{2}$/);
+  assert.equal(auto12.card.h12, true);
+  assert.match(auto12.card.leaveBy, /\d:\d{2}\s[AP]M$/);
+  assert.equal((await call('/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: '12' } })).status, 200);
+  const chose12 = await next(phone);
+  assert.equal(chose12.card.h12, true);
+  assert.equal(chose12.card.leaveBy, auto12.card.leaveBy);
+  assert.equal((await call('/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: '24' } })).status, 200);
+  const chose24 = await next(phone, '?h12=1');
+  assert.equal(chose24.card.h12, false);
+  assert.equal(chose24.card.leaveBy, auto24.card.leaveBy);
+  assert.equal((await call('/me/profile', { method: 'PUT', cookie, body: { ...PROFILE, clock: 'am/pm' } })).status, 400);
+});
+
 test('"On the R2" on the phone puts the Mac on the bus too', async () => {
   const { phone, mac, next, signal } = await setup();
   const before = await next(phone);

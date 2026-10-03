@@ -3,7 +3,7 @@
 // profile (profile.js).
 
 import { Rich, html, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, locale, t } from './dom.js';
+import { api, clockOpts, locale, spaced, t } from './dom.js';
 import {
   campus,
   edit,
@@ -35,8 +35,8 @@ export const importOffer = store(null);
 /* ---------- helpers ---------- */
 
 const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-/** A time of day in this device's clock style ("9:00 AM" or "09:00"), for showing; hhmm is for time inputs. */
-const clockMin = (min) => new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
+/** A time of day in the account's clock style ("9:00 AM" or "09:00"), for showing; hhmm is for time inputs. */
+const clockMin = (min) => spaced(new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { ...clockOpts(), timeZone: 'UTC' }));
 /** "9:00–11:00 AM": the start's AM or PM left off when the end has the same. */
 function clockSpan(from, to) {
   const a = clockMin(from);
@@ -777,9 +777,16 @@ function Pairing({ count, reload }) {
   `;
 }
 
-/* ---------- Language, Appearance ---------- */
+/* ---------- Language and time, Appearance ---------- */
+
+/** The clock choices, shared with setup: one example time each, so the choice shows itself. */
+export const CLOCKS = () => [
+  { value: '12', label: t('12-hour'), eg: t('6:36 PM') },
+  { value: '24', label: t('24-hour'), eg: '18:36' },
+];
 
 export function Language() {
+  const p = useStore(profile);
   return html`
     <div class="card">
       <label for="lang">${t('Language')}</label>
@@ -799,6 +806,14 @@ export function Language() {
         <option value="zh">中文</option>
       </select>
       <p class="hint">${t('Also used for emails and on your other devices. Place and bus names stay in English, as on the signs.')}</p>
+    </div>
+    <div class="card">
+      <label for="clock">${t('Time format')}</label>
+      <select id="clock" value=${p?.clock ?? 'auto'} onChange=${(e) => saveNow((x) => (x.clock = e.currentTarget.value)).catch((err) => toast(t('Not saved. {0}', err.message)))}>
+        <option value="auto">${t('Follow this browser')}</option>
+        ${CLOCKS().map((c) => html`<option value=${c.value}>${t('{0} ({1})', c.label, c.eg)}</option>`)}
+      </select>
+      <p class="hint">${t('For every time terminus shows, here and on your other devices.')}</p>
     </div>
   `;
 }

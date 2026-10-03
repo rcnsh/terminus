@@ -39,7 +39,7 @@ import {
   sessionCookie,
   PLATFORMS,
 } from './accounts.ts';
-import { DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
+import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
 import { type Planned, hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, isHomeKey, loadDay, markFollowed, savePlan, saveSignal, saveSignals, sgtDate, watchTrip } from './trip.ts';
@@ -245,6 +245,7 @@ export function salvageProfile(p: Profile, ok: (code: string) => boolean): Profi
     share: p.share ?? null,
     term: p.term ?? null,
     lang: LANG_PREFS.includes(p.lang) ? p.lang : 'auto',
+    clock: CLOCK_PREFS.includes(p.clock) ? p.clock : 'auto',
   };
 }
 
@@ -597,8 +598,8 @@ export const ME_ROUTES: MeRoute[] = [
       const profile = await getProfile(db, session.user.id, deps.graph);
       const [day, prefs] = await Promise.all([tripDay(env, session.user.id, profile, nowMs), prefsFor(db, session.user.id, profile, nowMs)]);
       const here = coordsFrom(url);
-      const plan = () => dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url), prefs.earlier, here);
-      return json(await dayCached(ctx, nowMs, [session.user.id, profile, day, hour12(url), [...prefs.earlier], here, lang()], plan));
+      const plan = () => dayPlan(env, ctx, nowMs, deps, profile, day, hour12(url, profile), prefs.earlier, here);
+      return json(await dayCached(ctx, nowMs, [session.user.id, profile, day, hour12(url, profile), [...prefs.earlier], here, lang()], plan));
     },
   },
   {
@@ -1174,7 +1175,7 @@ async function nextWithTrip(
   const isPlan = !url.searchParams.get('place') && !url.searchParams.get('to');
   const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
   // The display-ready card, in the client's 12- or 24-hour style.
-  const card = cardFor(full, hour12(url), trip, await feedDownSince(env, nowMs));
+  const card = cardFor(full, hour12(url, profile), trip, await feedDownSince(env, nowMs));
   // Push: have the Trip object wake when this card next changes, to tell the phones.
   const at = nextPhaseAt(full, trip, nowMs);
   if (!local && at !== null && pushEnabled(env) && day?.watch !== at && classesOn(profile, nowMs).length) {

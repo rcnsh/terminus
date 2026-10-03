@@ -263,6 +263,8 @@ internal fun TimetableImport(state: AccountState, account: AccountViewModel, lin
 private fun PaceStep(profile: ProfileDoc, account: AccountViewModel, next: () -> Unit, back: () -> Unit) {
     Title(stringResource(R.string.get_around), stringResource(R.string.get_around_sub))
     PacePicker(profile, account)
+    Spacer(Modifier.height(16.dp))
+    ClockPicker(profile, account, stringResource(R.string.show_times_as), auto = false)
     StepActions(next = next, back = back)
 }
 

@@ -210,3 +210,11 @@
 "walk" = "步行";
 "your last class" = "上一节课";
 "~%@" = "约 %@";
+
+"Language and time" = "语言和时间";
+"Time format" = "时间格式";
+"Show times as" = "时间显示为";
+"12-hour (%@)" = "12 小时制（%@）";
+"24-hour (%@)" = "24 小时制（%@）";
+"6:36 PM" = "下午 6:36";
+"For every time terminus shows, here, on your phone and on the web." = "terminus 显示的所有时间都用这个格式，这里、手机和网页上都是。";

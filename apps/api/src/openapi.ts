@@ -52,7 +52,7 @@ const jsonBody = (schema: Record<string, unknown>, example?: Record<string, unkn
 
 const answerExample = {
   label: 'D2 · 4 min',
-  detail: 'KR MRT · cross the road · UTown ~12 min · quiet · or A2 9 min',
+  detail: 'KR MRT · cross the road · UTown ~12 min · crowding: low · or A2 9 min',
   alt: 'A2 · 9 min · KR MRT',
   stop: { code: 'KR-MRT', name: 'KR MRT', confidence: 0.97 },
   quality: 'live',
@@ -1582,6 +1582,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             seen: { type: 'array', items: { type: 'string' }, description: 'One-time screens already shown, e.g. `onboarding`.' },
             homeWalkMin: { type: 'integer', minimum: 0, maximum: 30, default: 5, description: 'Minutes from home to your home stop. Counts when a trip starts from home without a location.' },
             lang: { type: 'string', enum: ['auto', 'en', 'zh'], default: 'auto', description: "The language terminus writes in: answers, cards, emails and errors. `auto` follows each request's `Accept-Language` (any `zh*` is Simplified Chinese); `?lang=en|zh` on a request overrides it, and a set `lang` here overrides both." },
+            clock: { type: 'string', enum: ['auto', '12', '24'], default: 'auto', description: 'Clock times in answers and cards, 12-hour ("6:36 PM") or 24-hour ("18:36"). `auto` follows each request (`?h12=1` for 12-hour); `12` or `24` here overrides it, so every device shows the same.' },
             trips: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'From the NUSMods import.' },
             manual: { type: 'array', items: { $ref: '#/components/schemas/Trip' }, description: 'Entered by hand. Kept on re-import.' },
             places: {
@@ -1634,7 +1635,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   description:
                     'The answer worded for display, the same on every app: headline parts, the phase of the trip, `actions` (buttons), `warning`, and `notice`, ' +
                     'a line to show above the answer while NUS’s live bus times are down ("NUS’s live bus times have been down since 9:14 AM"), or null. Show its strings as they are.',
-                  properties: { notice: { type: ['string', 'null'] } },
+                  properties: {
+                    notice: { type: ['string', 'null'] },
+                    h12: { type: 'boolean', description: 'The card’s times are 12-hour. Write any time you show yourself the same way.' },
+                  },
                 },
                 walkSpeedMs: { type: 'number', description: 'The user’s walking speed in metres a second, from their walking pace (1.1, 1.3 or 1.5). For walk times an app works out itself from metres, such as `walkM` in search results.' },
                 dest: {

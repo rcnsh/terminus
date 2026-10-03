@@ -262,5 +262,6 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .theme-choice { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
 .theme-choice legend { padding: 0; margin-bottom: 4px; font-size: 0.9rem; color: var(--muted); }
 .theme-choice .check { margin: 0; }
+.ob-clock { margin-top: 18px; }
 @media (min-width: 640px) { .who-row.narrow-only { display: none; } }
 @media (max-width: 639.98px) { .nav-links #add-email, .nav-links #logout { display: none; } }

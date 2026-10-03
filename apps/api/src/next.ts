@@ -38,8 +38,12 @@ import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, isFol
 import { choosePlan, planOfLeave } from './plan.ts';
 import { m } from './i18n.ts';
 
-/** `?h12=1`: the client shows 12-hour times. Default 24-hour, as always. */
-export const hour12 = (url: URL) => url.searchParams.get('h12') === '1';
+/**
+ * 12-hour times: the account's choice when it made one, else the client's
+ * own (`?h12=1`). Default 24-hour, as always.
+ */
+export const hour12 = (url: URL, profile?: Pick<Profile, 'clock'>) =>
+  profile?.clock === '12' ? true : profile?.clock === '24' ? false : url.searchParams.get('h12') === '1';
 
 /** In the evening, a location this close to a stop is on campus. */
 export const ON_CAMPUS_M = 500;
@@ -279,7 +283,7 @@ export async function planned(
 async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile, day: DayRecord | null, prefs: TripPrefs): Promise<Planned> {
   const at = coordsFrom(url);
   const { lat, lon } = at;
-  const h12 = hour12(url);
+  const h12 = hour12(url, profile);
   const homeStop = profile.home?.stops[0] ?? null;
   const places: PlaceChip[] = profile.places.map(({ key, label }) => ({ key, label }));
   const undo = undoOf(day, nowMs);

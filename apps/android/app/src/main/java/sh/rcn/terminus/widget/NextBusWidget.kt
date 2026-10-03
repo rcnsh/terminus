@@ -648,7 +648,13 @@ class PlacesWidgetReceiver : BusWidgetReceiver(PlacesWidget())
  * 09:52" come from the server in Singapore time; a phone set to another
  * zone must not print the bus in a different one beside them.
  */
-fun clock(ctx: Context, ms: Long): String =
-    android.text.format.DateFormat.getTimeFormat(ctx)
+fun clock(ctx: Context, ms: Long): String {
+    // In the account's 12- or 24-hour style, as the server writes the card.
+    val locale = ctx.resources.configuration.locales[0]
+    val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, if (sh.rcn.terminus.hour12(ctx)) "hmm" else "HHmm")
+    return java.text.SimpleDateFormat(pattern, locale)
         .apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Singapore") }
         .format(Date(ms))
+        // "下午 6:36", with the space the server's Chinese has.
+        .replace(Regex("([上下]午)(\\d)"), "$1 $2")
+}

@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Campus
+import sh.rcn.terminus.Clock
 import sh.rcn.terminus.Device
 import sh.rcn.terminus.ImportResult
 import sh.rcn.terminus.ProfileDoc
@@ -107,6 +108,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 .onSuccess { p ->
                     _state.update { it.copy(profile = p) }
                     syncLang(p)
+                    Clock.keep(getApplication(), p.clock)
                 }
                 .onFailure { e -> if (_state.value.profile == null) _state.update { it.copy(message = fail(e as? Exception ?: Exception(e))) } }
             loadCampus()
@@ -188,6 +190,14 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun langShown() = _state.update { it.copy(langChanged = false) }
+
+    /** Settings or setup: 12- or 24-hour times on every device; the widgets redraw in it. */
+    fun setClock(pref: String) {
+        val app = getApplication<Application>()
+        Clock.keep(app, pref)
+        edit { it.clock = pref }
+        sh.rcn.terminus.widget.Refresher.refreshSoon(app)
+    }
 
     fun finishSetup() {
         store.needsSetup = false

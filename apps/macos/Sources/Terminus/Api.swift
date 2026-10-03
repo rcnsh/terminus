@@ -153,14 +153,34 @@ private enum ISOFormats {
 
 /// Campus time. Class times and "Arrive 09:52" come from the server in
 /// Singapore time, so bus times must too, even on a Mac set to another zone.
+/// In the account's 12- or 24-hour style ([usesHour12]), as the server writes the card.
 func campusTime(_ d: Date) -> String {
-    d.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Lang.locale, timeZone: TimeZone(identifier: "Asia/Singapore")!))
+    let f = DateFormatter()
+    f.locale = Lang.locale
+    f.timeZone = TimeZone(identifier: "Asia/Singapore")!
+    f.setLocalizedDateFormatFromTemplate(usesHour12 ? "hmm" : "HHmm")
+    // "下午 6:36", with the space the server's Chinese has.
+    return f.string(from: d).replacingOccurrences(of: #"([上下]午)(\d)"#, with: "$1 $2", options: .regularExpression)
 }
 
+/// The account's 12- or 24-hour choice (its profile's `clock`): "auto"
+/// follows this Mac. Kept here so the menu bar has it before the profile loads.
+enum Clock {
+    private static let key = "clock"
+    static var pref: String {
+        get { UserDefaults.standard.string(forKey: key) ?? "auto" }
+        set { UserDefaults.standard.set(["12", "24"].contains(newValue) ? newValue : "auto", forKey: key) }
+    }
+}
 
-/// Whether this Mac shows 12-hour times (the "j" skeleton picks up an "a").
+/// Whether to show 12-hour times: the account's choice, else this Mac's
+/// (the "j" skeleton picks up an "a").
 var usesHour12: Bool {
-    (DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current) ?? "").contains("a")
+    switch Clock.pref {
+    case "12": true
+    case "24": false
+    default: (DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current) ?? "").contains("a")
+    }
 }
 
 /// "1.0.10" is newer than "1.0.9".

@@ -142,7 +142,7 @@
     <string name="heading_devices">Devices</string>
     <string name="heading_favourites">Favourites</string>
     <string name="heading_getting_around">Getting around</string>
-    <string name="heading_language">Language</string>
+    <string name="heading_language">Language and time</string>
     <string name="heading_timetable">Timetable</string>
     <string name="heading_your_day">Your day</string>
     <string name="here">here</string>
@@ -164,6 +164,13 @@
     <string name="in_your_timetable">IN YOUR TIMETABLE</string>
     <string name="is_this_wrong">Is this wrong?</string>
     <string name="language">Language</string>
+    <string name="time_format">Time format</string>
+    <string name="time_format_hint">For every time terminus shows, here, on your Mac and on the web.</string>
+    <string name="show_times_as">Show times as</string>
+    <string name="clock_12">12-hour</string>
+    <string name="clock_12_eg">6:36 PM</string>
+    <string name="clock_24">24-hour</string>
+    <string name="with_example">%1$s (%2$s)</string>
     <string name="language_hint">Also used on your Mac, on the web and in emails. Place and bus names stay in English, as on the signs.</string>
     <string name="all_off">All off</string>
     <string name="devices_need_email">Add an email to use other devices</string>

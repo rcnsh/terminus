@@ -16,7 +16,7 @@ const TITLES = {
   favourites: t('Favourites'),
   notifications: t('Notifications'),
   devices: t('Devices'),
-  language: t('Language'),
+  language: t('Language and time'),
   appearance: t('Appearance'),
   account: t('Account'),
 };
@@ -45,7 +45,7 @@ function summaries({ p, me, notifyOn, devices, imported }) {
     favourites: p.places.map((x) => x.label).join(', ') || t('None yet'),
     notifications: notifyOn ? t('On for this device') : t('Off'),
     devices: me.anonymous ? t('Add an email to use other devices') : devices === null ? '' : devices === 1 ? t('1 device') : t('{0} devices', devices),
-    language: { en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'),
+    language: [{ en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'), { 12: t('12-hour'), 24: t('24-hour') }[p.clock]].filter(Boolean).join(' · '),
     appearance: { light: t('Light'), dark: t('Dark') }[window.theme?.pref()] ?? t('Follow this device'),
     account: me.email ?? t('No email'),
   };

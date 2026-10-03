@@ -142,7 +142,7 @@
     <string name="heading_devices">设备</string>
     <string name="heading_favourites">收藏</string>
     <string name="heading_getting_around">出行</string>
-    <string name="heading_language">语言</string>
+    <string name="heading_language">语言和时间</string>
     <string name="heading_timetable">课表</string>
     <string name="heading_your_day">你的一天</string>
     <string name="here">就在这里</string>
@@ -164,6 +164,13 @@
     <string name="in_your_timetable">在你的课表里</string>
     <string name="is_this_wrong">这不对？</string>
     <string name="language">语言</string>
+    <string name="time_format">时间格式</string>
+    <string name="time_format_hint">terminus 显示的所有时间都用这个格式，这里、Mac 和网页上都是。</string>
+    <string name="show_times_as">时间显示为</string>
+    <string name="clock_12">12 小时制</string>
+    <string name="clock_12_eg">下午 6:36</string>
+    <string name="clock_24">24 小时制</string>
+    <string name="with_example">%1$s（%2$s）</string>
     <string name="language_hint">也用于你的 Mac、网页和电子邮件。地点和巴士名称保持英文，与站牌一致。</string>
     <string name="all_off">全部关闭</string>
     <string name="devices_need_email">添加邮箱后可在其他设备上使用</string>

@@ -127,6 +127,7 @@
       "lat": 1.291765,
       "lon": 103.780419
     },
-    "notice": null
+    "notice": null,
+    "h12": false
   }
 }

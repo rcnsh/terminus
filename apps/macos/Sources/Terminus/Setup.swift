@@ -42,6 +42,7 @@ final class SetupModel {
             async let p = api.profile()
             async let c = api.campus()
             profile = try object(await p)
+            Clock.pref = clock
             campus = try await c
         } catch let e as ApiError {
             message = e.message
@@ -55,6 +56,8 @@ final class SetupModel {
     var homeStops: [String] { (profile?["home"] as? [String: Any])?["stops"] as? [String] ?? [] }
     var homeWalkMin: Int { profile?["homeWalkMin"] as? Int ?? 5 }
     var walkPace: String { profile?["walkPace"] as? String ?? "normal" }
+    /// auto (each device's own), 12 or 24.
+    var clock: String { profile?["clock"] as? String ?? "auto" }
     var fullBusMargin: Bool { profile?["fullBusMargin"] as? Bool ?? true }
     var share: String? { profile?["share"] as? String }
     var importedClasses: Int { (profile?["trips"] as? [Any])?.count ?? 0 }
@@ -117,6 +120,11 @@ final class SetupModel {
     func setHomeWalk(_ min: Int) { edit { $0["homeWalkMin"] = Swift.min(30, Swift.max(0, min)) } }
     func setPace(_ pace: String) { edit { $0["walkPace"] = pace } }
     func setFullBusMargin(_ on: Bool) { edit { $0["fullBusMargin"] = on } }
+    /// Times on every device; the menu bar follows at once, the card once saved.
+    func setClock(_ pref: String) {
+        Clock.pref = pref
+        edit { $0["clock"] = pref }
+    }
 
     /// Changes shown at once, saved in the background, put back if the save fails.
     func edit(_ change: (inout [String: Any]) -> Void) {
@@ -455,6 +463,13 @@ struct PaceStep: View {
                 Hint(L("When the bus you'd wait for is often full at that stop and time, aim one bus earlier."))
             }
         }
+        .padding(.top, 6)
+        // Untouched, this Mac's own style is the one shown picked.
+        Picker(L("Show times as"), selection: Binding(get: { setup.clock != "auto" ? setup.clock : (usesHour12 ? "12" : "24") }, set: { setup.setClock($0) })) {
+            Text(L("12-hour (%@)", L("6:36 PM"))).tag("12")
+            Text(L("24-hour (%@)", "18:36")).tag("24")
+        }
+        .pickerStyle(.radioGroup)
         .padding(.top, 6)
     }
 }

@@ -122,6 +122,10 @@ export interface Card {
    *  the answer while the monitor has the feed down and this answer is an
    *  estimate or has no time. Null otherwise. */
   notice: string | null;
+  /** The card's times are 12-hour ("6:36 PM"), not 24-hour ("18:36"): the
+   *  account's choice, else the request's. Clients write their own times
+   *  (a class's start, "Updated") the same way. */
+  h12: boolean;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -162,7 +166,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
 type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
-type V1 = Omit<Card, V2 | 'notice'>;
+type V1 = Omit<Card, V2 | 'notice' | 'h12'>;
 
 /** `feedDownSince`: when the monitor confirmed NUS's feed down, or null while it's up. */
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }, feedDownSince: number | null = null): Card {
@@ -174,7 +178,7 @@ export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, 
   // Only on an answer that wanted a live time and has none: the feed may be
   // back before the monitor's next check, and a day with no bus needs none.
   const notice = feedDownSince !== null && QUALITY[a.quality] ? m().feedDown(clockAt(feedDownSince, h12)) : null;
-  return { ...card, ...v2(a, card, h12, trip), notice };
+  return { ...card, ...v2(a, card, h12, trip), notice, h12 };
 }
 
 function v1(a: MeAnswer, h12: boolean): V1 {
