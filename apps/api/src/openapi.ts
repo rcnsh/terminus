@@ -1710,16 +1710,17 @@ export const DOCS_PAGE = `<!doctype html>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script src="${ELEMENTS}/web-components.min.js" integrity="sha384-X5kH2B8aH81JEl8IfSBwwnr8FYcCqMzdxpqjmmlRbhIl7SsQ9Zn0xk+csQmU37zN" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="${ELEMENTS}/styles.min.css" integrity="sha384-NzdOiocfnINlXfuCXi4OpL/xvdbgLiKaLHQ07Z+IwhVaxHqLShn5rVD5OHt/LYgz" crossorigin="anonymous">
+  <script src="/assets/docs.js"></script>
   <style>
     /* The page never scrolls; only the docs inside it do, so a phone's
        rubber-band scroll can't move our bar out from above Elements' fixed
-       mobile bar, or leave uncovered page below the docs. The height is the
-       visible one (dvh): Chrome on Android sizes a fixed inset-0 box as if
-       the address bar were hidden, which put the end of the docs off screen.
-       With nothing scrolling the page, the address bar never hides, so dvh
-       doesn't change under you. */
+       mobile bar, or leave uncovered page below the docs. Its height is the
+       part of the screen the browser really shows, measured by
+       /assets/docs.js (--seen): Chrome on Android sizes 100vh, and even
+       100dvh on a fixed box, as if its bars were hidden, which put the end
+       of the docs under its toolbar. dvh is the fallback without the script. */
     html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; }
-    body { position: fixed; top: 0; left: 0; right: 0; height: 100%; height: 100dvh; display: flex; flex-direction: column; }
+    body { position: fixed; top: 0; left: 0; right: 0; height: 100%; height: 100dvh; height: var(--seen, 100dvh); display: flex; flex-direction: column; }
     .bar { flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; border-bottom: 1px solid #e7e5e2; font: 500 14px/1 system-ui, -apple-system, sans-serif; background: #fafaf9; }
     .bar a { color: #1c1917; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
     .bar b { color: #c2410c; font-weight: inherit; }
@@ -1734,19 +1735,13 @@ export const DOCS_PAGE = `<!doctype html>
          wherever the page flow put it. It goes right under our 48px bar. */
       elements-api .TopNav--mosaic { z-index: 20; top: 48px; }
       elements-api .sl-drawer-container > .sl-fixed { z-index: 30; }
-      /* The menu drawer is fixed and 100vh tall (sl-h-screen), which Chrome on
-         Android takes as the height with its bars hidden: the end of the menu
-         sat under the bottom bar, where scrolling couldn't reach it. The
-         visible height (dvh) keeps every entry reachable, with room after
-         the last. */
-      elements-api .sl-drawer { box-sizing: border-box; height: 100vh; height: 100dvh; padding-bottom: 16px; }
-      /* Room past the last line, plus the height of the browser's retractable
-         bars (large minus small viewport). Chrome's bottom address bar sits
-         over the page, and since the page never scrolls it never hides, so
-         without this the end of the docs stays underneath it. */
-      elements-api .sl-overflow-y-auto.sl-flex-1 { padding-bottom: 12px; padding-bottom: calc((100lvh - 100svh + 24px) / 2); }
-      /* And a quarter of that above the title, under the mobile bar. */
-      elements-api .sl-overflow-y-auto.sl-flex-1 { padding-top: 6px; padding-top: calc((100lvh - 100svh + 24px) / 4); }
+      /* The menu drawer is fixed and 100vh tall (sl-h-screen): the same
+         measured height as the page, so every entry is reachable, with room
+         after the last. */
+      elements-api .sl-drawer { box-sizing: border-box; height: 100dvh; height: var(--seen, 100dvh); padding-bottom: 16px; }
+      /* A little room past the last line, and above the title under the
+         mobile bar. */
+      elements-api .sl-overflow-y-auto.sl-flex-1 { padding-top: 6px; padding-bottom: 16px; }
     }
   </style>
 </head>
