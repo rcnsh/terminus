@@ -67,7 +67,7 @@ The same answer on your phone, your Mac and the web, in light or dark.
     </td>
     <td width="33%" valign="top">
       <h3>The right time</h3>
-      The latest bus that still gets you there, walks along real campus paths at your pace, and a bus earlier when yours is usually packed.
+      The latest bus that still gets you there, walks along real campus paths at your pace, and a bus earlier when yours is usually busy.
     </td>
     <td width="33%" valign="top">
       <h3>The right stop</h3>

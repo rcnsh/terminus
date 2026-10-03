@@ -65,7 +65,7 @@
     }
   ],
   "label": "R2 · 6 min",
-  "detail": "PGP · 4 min walk · GEA1000 @ UTown in ~16 min · filling · or D2 in 4 min",
+  "detail": "PGP · 4 min walk · GEA1000 @ UTown in ~16 min · crowding: medium · or D2 in 4 min",
   "alt": "D2 · 4 min · PGP Foyer",
   "departsAt": "2026-08-27T01:06:00Z",
   "arriveAt": "2026-08-27T01:15:30Z",
@@ -106,7 +106,7 @@
   "card": {
     "kind": "class",
     "staleAt": "2026-08-27T01:06:30Z",
-    "crowd": "Filling",
+    "crowd": "Crowding: medium",
     "quality": null,
     "leaveBy": "Leave by ~09:37",
     "leaveVia": "catch the ~09:42 R2 at PGP",

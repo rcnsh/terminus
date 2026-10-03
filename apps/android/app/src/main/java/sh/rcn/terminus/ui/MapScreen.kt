@@ -527,9 +527,9 @@ private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge
 
 @Composable
 private fun crowdWord(c: String?): String? = when (c) {
-    "low" -> stringResource(R.string.crowd_quiet)
-    "medium" -> stringResource(R.string.crowd_filling)
-    "high" -> stringResource(R.string.crowd_packed)
+    "low" -> stringResource(R.string.crowd_low)
+    "medium" -> stringResource(R.string.crowd_medium)
+    "high" -> stringResource(R.string.crowd_high)
     else -> null
 }
 
@@ -537,7 +537,7 @@ private fun crowdWord(c: String?): String? = when (c) {
 private fun BusSheet(bus: LiveBus, svc: String, onClose: () -> Unit) {
     SheetSurface(stringResource(R.string.map_bus_title, svc), if (bus.moving) null else stringResource(R.string.map_bus_stopped), onClose, badge = bus.plate) {
         SheetRow(stringResource(R.string.map_next_stop), bus.nextStop ?: stringResource(R.string.map_not_on_route))
-        crowdWord(bus.crowd)?.let { SheetRow(stringResource(R.string.map_how_full), it) }
+        crowdWord(bus.crowd)?.let { SheetRow(stringResource(R.string.map_crowding), it) }
     }
 }
 

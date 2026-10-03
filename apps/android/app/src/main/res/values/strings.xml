@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="close">Close</string>
-    <string name="crowd_filling">Filling</string>
-    <string name="crowd_packed">Packed</string>
-    <string name="crowd_quiet">Quiet</string>
+    <string name="crowd_high">High</string>
+    <string name="crowd_low">Low</string>
+    <string name="crowd_medium">Medium</string>
     <string name="map_about">~%1$s</string>
     <string name="map_arriving">Arriving</string>
     <string name="map_bus_stopped">Stopped</string>
@@ -14,7 +14,7 @@
     <string name="map_downloading">Downloading the street map (about 4 MB)…</string>
     <string name="map_finding_buses">Finding %1$s buses…</string>
     <string name="map_go_there">Go there</string>
-    <string name="map_how_full">How full</string>
+    <string name="map_crowding">Crowding</string>
     <string name="map_min">%1$d min</string>
     <string name="map_needs_connection">The map needs a connection the first time.</string>
     <string name="map_next_stop">Next stop</string>
@@ -256,7 +256,7 @@
     <string name="pace_slow">Slow</string>
     <string name="pace_slow_hint">400 m in about 6 min. A relaxed pace, or if you often carry a bag.</string>
     <string name="pace_summary">%1$s pace</string>
-    <string name="packed">Allow for packed buses</string>
+    <string name="packed">Allow for busy buses</string>
     <string name="packed_hint">When the bus you\'d wait for is often full at that stop and time, aim one bus earlier.</string>
     <string name="pair">Pair</string>
     <string name="pair_instead">Pair with a code instead</string>

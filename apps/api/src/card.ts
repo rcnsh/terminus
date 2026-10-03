@@ -62,7 +62,7 @@ export interface Card {
   /** Dim the answer from this instant: the bus has gone, the plan has moved
    *  on, or it is 15 minutes old. Null: never on its own (setup). */
   staleAt: string | null;
-  /** "Quiet" / "Filling" / "Packed", for the bus in the headline. */
+  /** "Crowding: low" / "Crowding: medium" / "Crowding: high", for the bus in the headline. */
   crowd: string | null;
   /** "Timetable estimate", "Live times are a few minutes old", "No live data". */
   quality: string | null;

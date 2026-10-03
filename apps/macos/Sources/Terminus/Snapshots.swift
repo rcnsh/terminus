@@ -17,7 +17,7 @@ enum Snapshots {
          "departsAt":"\(departs)",
          "timing":{"status":"on-time","text":"Arrive 09:52 · 8 min early","classAt":"\(classAt)","reachAt":"\(reach)"},
          "leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP","board":"\(boards)","arrive":"\(arrives)"},
-         "card":{"kind":"class","crowd":"Quiet","leaveBy":"Leave by ~\(t(1080))","catch":"Catch the ~\(t(1380)) D2 at PGP","arrive":"Arrive ~\(t(1980)) · 3 min early","goNow":"Or go now: D2 at \(t(240)) · arrive \(t(840))","estimate":"Estimated from the usual gap between buses. Live times show nearer the time."},
+         "card":{"kind":"class","crowd":"Crowding: low","leaveBy":"Leave by ~\(t(1080))","catch":"Catch the ~\(t(1380)) D2 at PGP","arrive":"Arrive ~\(t(1980)) · 3 min early","goNow":"Or go now: D2 at \(t(240)) · arrive \(t(840))","estimate":"Estimated from the usual gap between buses. Live times show nearer the time."},
          "arrivals":[{"svc":"D2","crowd":"low"}],
          "quality":"live","asOf":"2026-09-29T01:00:00Z","mode":"trip","dest":{"to":"UTOWN","label":"GEA1000 @ UTown","why":"class"},
          "places":[{"key":"mrt","label":"KR MRT"},{"key":"utown","label":"UTown"},{"key":"gym","label":"Gym"}]}
@@ -131,7 +131,7 @@ enum Snapshots {
          "departsAt":"\(iso(300))",
          "timing":{"status":"on-time","text":"","classAt":"\(iso(2160))","reachAt":"\(iso(960))"},
          "leave":{"at":"\(iso(1020))","estimated":false,"svc":"D2","stop":"PGP","board":"\(iso(1260))","arrive":"\(iso(1920))"},
-         "card":{"kind":"class","crowd":"Quiet","leaveBy":"Leave by 9:41","catch":"Catch the 9:45 D2 at PGP","arrive":"Arrive 9:56 · 4 min early","goNow":"Or go now: D2 at 9:29 · arrive 9:40"},
+         "card":{"kind":"class","crowd":"Crowding: low","leaveBy":"Leave by 9:41","catch":"Catch the 9:45 D2 at PGP","arrive":"Arrive 9:56 · 4 min early","goNow":"Or go now: D2 at 9:29 · arrive 9:40"},
          "arrivals":[{"svc":"D2","crowd":"low"}],
          "quality":"live","asOf":"2026-09-29T01:24:00Z","mode":"trip","dest":{"to":"COM3","label":"CS2030 @ COM1","why":"class"},
          "places":[{"key":"mrt","label":"KR MRT"},{"key":"utown","label":"UTown"},{"key":"deck","label":"The Deck"}]}

@@ -232,7 +232,7 @@ export function Trips() {
         <div>
           <label class="check">
             <input id="full-bus" type="checkbox" checked=${p.fullBusMargin !== false} onChange=${(e) => edit((x) => (x.fullBusMargin = e.currentTarget.checked))} />
-            ${' '}${t('Aim one bus earlier when the bus is often packed')}
+            ${' '}${t('Aim one bus earlier when the bus is often busy')}
           </label>
         </div>
       </div>

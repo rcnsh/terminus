@@ -557,7 +557,8 @@ function directions(s) {
 
 /* ---------- drawing ---------- */
 
-const crowdWord = (c) => ({ low: t('Quiet'), medium: t('Filling'), high: t('Packed') })[c] ?? null;
+/** How crowded a bus is, as the feed says: low, medium or high. */
+const crowdWord = (c) => ({ low: t('Low'), medium: t('Medium'), high: t('High') })[c] ?? null;
 const mins = (s) => Math.round(s / 60);
 const when = (b) => (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
 
@@ -616,7 +617,7 @@ function BusSheet({ id, box }) {
     <${Frame} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.moving ? null : t('Stopped')} box=${box}>
       <div class="sheet-rows">
         <div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop?.name ?? t('Not on its route right now')}</span></div>
-        ${b.crowd && html`<div class="sheet-row"><span>${t('How full')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}
+        ${b.crowd && html`<div class="sheet-row"><span>${t('Crowding')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}
       </div>
     <//>
   `;
@@ -685,7 +686,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
           (b) => html`
             <div class="sheet-row" key=${`${b.svc}-${b.etaS}`}>
               <${SvcTag} svc=${b.svc} />
-              <span class="when">${when(b)}${b.crowd && html`<span class="crowd">${crowdWord(b.crowd)}</span>`}</span>
+              <span class="when">${when(b)}${b.crowd && html`<span class="crowd">${t('Crowding: {0}', crowdWord(b.crowd).toLowerCase())}</span>`}</span>
             </div>
           `,
         )}

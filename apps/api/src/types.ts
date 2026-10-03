@@ -183,7 +183,7 @@ export interface Leave {
   board: string | null;
   /** When you get there that way: the venue for a class, else the stop. ISO. */
   arrive: string | null;
-  /** A reason the time is earlier than it could be ("D2 is often packed…"). Display verbatim. */
+  /** A reason the time is earlier than it could be ("D2 is often busy…"). Display verbatim. */
   note?: string | null;
   /** Where to get off, when the bus only stops across the road from the
    *  destination. Absent otherwise. Short stop name. */
@@ -200,7 +200,7 @@ export interface ArriveBy {
   atMs: number;
   /** Walk from the destination stop to the venue. */
   venueWalkS: number;
-  /** Aim one bus earlier when the one to wait for is often packed. */
+  /** Aim one bus earlier when the one to wait for is often busy. */
   fullBusMargin?: boolean;
   /** Leave one bus earlier for this class: a suggestion the user accepted (outcomes.ts). */
   oneEarlier?: boolean;

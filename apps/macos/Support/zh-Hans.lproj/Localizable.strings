@@ -21,7 +21,7 @@
 "Add an email to your account first. Devices can only be added to an account with an email." = "请先为账户添加邮箱。只有绑定了邮箱的账户才能添加设备。";
 "Add where you live and your timetable" = "添加你住在哪里和你的课表";
 "Allow" = "允许";
-"Allow for packed buses" = "考虑巴士很挤的情况";
+"Allow for busy buses" = "考虑巴士很挤的情况";
 "Allow location" = "允许定位";
 "Allow terminus in System Settings → General → Login Items" = "请在“系统设置”→“通用”→“登录项”中允许 terminus";
 "Allow terminus in System Settings → Notifications" = "请在“系统设置”→“通知”中允许 terminus";

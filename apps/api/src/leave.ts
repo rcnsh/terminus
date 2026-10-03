@@ -144,16 +144,16 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
   return { ms: buses[0].at - walk, board: buses[0].at, arrive: arriveAfter(buses[0].at), estimated: buses[0].estimated, late: true, note: null };
 }
 
-/** Whether the bus you'd wait for is often packed, and what to say. */
+/** Whether the bus you'd wait for is often busy, and what to say. */
 function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk): { earlier: boolean; note: string | null; warnOnly: string | null } {
   const r = risk?.(leg.svc, leg.stop.code, atMs);
   if (r == null || r < OFTEN_PACKED) return { earlier: false, note: null, warnOnly: null };
   const where = shortStop(leg.stop.name);
-  const packed = m().oftenPacked(leg.svc, where);
+  const busy = m().oftenBusy(leg.svc, where);
   // Said on its own (no earlier bus, or you'd rather not), it says what that means for you.
-  const warnOnly = m().mayBeFull(packed);
+  const warnOnly = m().mayBeFull(busy);
   if (arriveBy.fullBusMargin === false) return { earlier: false, note: warnOnly, warnOnly };
-  return { earlier: true, note: m().soOneEarlier(packed), warnOnly };
+  return { earlier: true, note: m().soOneEarlier(busy), warnOnly };
 }
 
 /** Every service from every candidate stop, ignoring service hours. */

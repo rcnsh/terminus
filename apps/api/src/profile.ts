@@ -62,7 +62,7 @@ export interface Profile {
   homeWalkMin: number;
   /** How fast you walk. Scales every walk except homeWalkMin, which is yours. */
   walkPace: Pace;
-  /** Aim one bus earlier when the bus you'd wait for is often packed. */
+  /** Aim one bus earlier when the bus you'd wait for is often busy. */
   fullBusMargin: boolean;
   /** One-time screens already shown (the web onboarding, "new: walking pace"). */
   seen: string[];

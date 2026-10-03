@@ -248,7 +248,7 @@ function Travel({ nav }) {
     <label class="check ob-check">
       <input type="checkbox" checked=${full} onChange=${(e) => setFull(e.currentTarget.checked)} />
       <span>
-        <strong>${t('Allow for packed buses')}</strong>
+        <strong>${t('Allow for busy buses')}</strong>
         <span class="hint">${t('When the bus you would wait for is often full at that stop and time, aim one bus earlier.')}</span>
       </span>
     </label>

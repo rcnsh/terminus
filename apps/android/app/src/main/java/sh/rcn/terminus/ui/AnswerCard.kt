@@ -205,7 +205,7 @@ internal fun ClassPlan(answer: NextAnswer) {
     val error = MaterialTheme.colorScheme.error
     answer.catchHow?.let { Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = if (late) error else MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp)) }
     answer.catchArrive?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = if (late) error else muted) }
-    // A packed bus and an estimate are small print, not more headlines.
+    // A busy bus and an estimate are small print, not more headlines.
     listOfNotNull(answer.leaveNote, answer.card?.estimate).takeIf { it.isNotEmpty() }?.let {
         Text(it.joinToString(" "), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp))
     }

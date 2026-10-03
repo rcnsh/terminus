@@ -65,7 +65,7 @@
     }
   ],
   "label": "A1 · 9 分钟",
-  "detail": "PGP · 步行 5 分钟 · 约 11 分钟 到 KR MRT · 很挤 · 或 D2，14 分钟后",
+  "detail": "PGP · 步行 5 分钟 · 约 11 分钟 到 KR MRT · 拥挤程度：高 · 或 D2，14 分钟后",
   "alt": "D2 · 14 分钟 · PGP",
   "departsAt": "2026-08-27T01:09:00Z",
   "arriveAt": "2026-08-27T01:10:35Z",
@@ -100,7 +100,7 @@
   "card": {
     "kind": "trip",
     "staleAt": "2026-08-27T01:09:30Z",
-    "crowd": "很挤",
+    "crowd": "拥挤程度：高",
     "quality": null,
     "leaveBy": "09:03 前出发",
     "leaveVia": "在 PGP 搭 09:09 的 A1",

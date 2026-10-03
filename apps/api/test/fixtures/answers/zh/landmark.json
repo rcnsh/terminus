@@ -65,7 +65,7 @@
     }
   ],
   "label": "R2 · 6 分钟",
-  "detail": "PGP · 步行 5 分钟 · 约 9 分钟 到 The Deck · 人渐多 · 或 A1，9 分钟后",
+  "detail": "PGP · 步行 5 分钟 · 约 9 分钟 到 The Deck · 拥挤程度：中 · 或 A1，9 分钟后",
   "alt": "A1 · 9 分钟 · PGP",
   "departsAt": "2026-08-27T01:06:00Z",
   "arriveAt": "2026-08-27T01:09:10Z",
@@ -91,7 +91,7 @@
   "card": {
     "kind": "trip",
     "staleAt": "2026-08-27T01:06:30Z",
-    "crowd": "人渐多",
+    "crowd": "拥挤程度：中",
     "quality": null,
     "leaveBy": null,
     "leaveVia": null,

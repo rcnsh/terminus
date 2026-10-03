@@ -63,7 +63,7 @@ function LeaveBy({ a, late }) {
 /**
  * A class: when to leave is the headline with one countdown under it, then
  * the bus that goes with it and when it gets you there, and everything else
- * (a packed bus, an estimate, "or go now") quietly underneath. Same lines as
+ * (a busy bus, an estimate, "or go now") quietly underneath. Same lines as
  * the apps, because they all come from the server's card.
  */
 function ClassPlan({ a }) {
@@ -199,7 +199,7 @@ export function Card({ a, onAnswer, onChoice, chips = false }) {
   const svc = a.label.split(' · ')[0];
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const big = timed ? `${svc} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label;
-  // The crowd only when the detail line doesn't already say it ("· packed ·").
+  // The crowd only when the detail line doesn't already say it ("· crowding: high ·").
   const crowd = a.card?.crowd && !a.detail?.toLowerCase().includes(a.card.crowd.toLowerCase()) ? a.card.crowd : null;
   const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');
   return html`

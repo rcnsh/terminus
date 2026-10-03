@@ -37,7 +37,7 @@ data class NextAnswer(
     val leaveAtMs: Long? = null,
     /** Rests on a headway, not a live time: shown with a "~". */
     val leaveEstimated: Boolean = false,
-    /** Why leave-by is earlier than it could be ("D2 is often packed…"). Shown verbatim. */
+    /** Why leave-by is earlier than it could be ("D2 is often busy…"). Shown verbatim. */
     val leaveNote: String? = null,
     /** For a class, when it starts, epoch ms. */
     val classAtMs: Long? = null,
@@ -73,7 +73,7 @@ data class NextAnswer(
     val leaveLate: Boolean get() = card?.late ?: false
     /** The headline bus, when it's not the one to wait for. */
     val goNowLine: String? get() = card?.goNow
-    /** "Quiet" / "Filling" / "Packed". */
+    /** "Crowding: low" / "Crowding: medium" / "Crowding: high". */
     val crowdText: String? get() = card?.crowd?.takeUnless { detail.contains(it, ignoreCase = true) }
     /** "Timetable estimate", "Live data a few minutes old", "No live data". */
     val qualityText: String? get() = card?.quality

@@ -30,7 +30,7 @@ ONE ANSWER, ON YOUR HOME SCREEN
 • The widget shows when to leave for your next class. Its buttons switch it to the buses near you, or the quickest way to your favourite places, without opening the app.
 • A heads-up five minutes before you need to set off.
 • Late? It says so, and offers the quickest way there.
-• If the bus you'd catch is often packed at that stop and time, it aims for one bus earlier.
+• If the bus you'd catch is often busy at that stop and time, it aims for one bus earlier.
 
 IT FOLLOWS YOUR TRIP
 • Once your bus leaves, terminus takes it you're on it and shows when you'll get there.

@@ -40,7 +40,7 @@ class AnswerTest {
         assertEquals("Catch the ~09:42 R2 at PGP", a.catchHow)
         assertEquals("Arrive ~09:51 · 9 min early", a.catchArrive)
         assertEquals("Or go now: R2 at 09:06 · arrive 09:15", a.goNowLine)
-        assertEquals("Filling", a.card?.crowd)
+        assertEquals("Crowding: medium", a.card?.crowd)
         // The headline ticks on the phone: "Leave now" once leave.at passes.
         val at = a.leaveAtMs!!
         assertEquals("Leave by ~09:36", a.leaveHeadline(at - 1))
@@ -48,9 +48,9 @@ class AnswerTest {
     }
 
     @Test fun crowdIsShownOnceWhenTheDetailSaysIt() {
-        // "… · packed · or D2 in 14 min": no separate "Packed" under it.
+        // "… · crowding: high · or D2 in 14 min": not said again under it.
         val a = golden("place")
-        assertTrue(a.detail.contains("packed"))
+        assertTrue(a.detail.contains("crowding: high"))
         assertEquals(null, a.crowdText)
     }
 

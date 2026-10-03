@@ -272,7 +272,7 @@ private val PACES = listOf(
     Triple("fast", R.string.pace_fast, R.string.pace_fast_hint),
 )
 
-/** Three cards, one chosen, and "allow for packed buses". Shared by setup and settings. */
+/** Three cards, one chosen, and "allow for busy buses". Shared by setup and settings. */
 @Composable
 internal fun PacePicker(profile: ProfileDoc, account: AccountViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
