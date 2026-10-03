@@ -69,7 +69,6 @@
     <string name="approx">约 %1$s</string>
     <string name="arrive_at">%1$s 到达</string>
     <string name="back">返回</string>
-    <string name="be_there_at">到达时间</string>
     <string name="building">建筑</string>
     <string name="bus_stop">巴士站</string>
     <string name="cancel">取消</string>
@@ -117,7 +116,7 @@
     <string name="estimated_gap">~ 根据通常的班次间隔估计</string>
     <string name="eta_ended">已停运</string>
     <string name="exact_off">terminus 的“闹钟和提醒”已关闭。提醒可能会晚几分钟，实时通知也可能延迟开始。</string>
-    <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。为地点设置常用时间（例如每周二下午 6 点去健身房），当天会像课一样为你安排。</string>
+    <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。每周都去的地方，可以加到课表里。</string>
     <string name="finding_stop">正在找最近的车站…</string>
     <string name="follow_device">跟随手机设置</string>
     <string name="follow_trip">跟踪这次行程</string>
@@ -363,7 +362,7 @@
     <string name="updated_at">%1$s 更新</string>
     <string name="updating">正在更新…</string>
     <string name="used_when">%1$s使用过</string>
-    <string name="usual_time">常去时间</string>
+    <string name="every_week">每周</string>
     <string name="walk">步行</string>
     <string name="walk_one_less">少一分钟</string>
     <string name="walk_one_more">多一分钟</string>

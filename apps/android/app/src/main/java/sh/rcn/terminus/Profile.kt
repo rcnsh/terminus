@@ -100,12 +100,6 @@ class ProfileDoc(val json: JSONObject) {
             return (0 until a.length()).map { a.getJSONObject(it).let { u -> UsualTime(u.getString("place"), u.getInt("day"), u.getInt("atMin")) } }
         }
 
-    fun addUsual(u: UsualTime) {
-        if (u in usual) return
-        val list = json.optJSONArray("usual") ?: JSONArray()
-        list.put(JSONObject().put("place", u.place).put("day", u.day).put("atMin", u.atMin))
-        json.put("usual", list)
-    }
 
     fun removeUsual(u: UsualTime) {
         json.put("usual", JSONArray(usual.filter { it != u }.map { JSONObject().put("place", it.place).put("day", it.day).put("atMin", it.atMin) }))

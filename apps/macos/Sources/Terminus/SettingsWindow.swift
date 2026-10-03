@@ -170,7 +170,7 @@ struct SettingsPaneView: View {
         if setup.places.count < SetupModel.maxPlaces {
             FavouriteSearch(app: app, setup: setup)
         }
-        Hint(L("The times you usually go somewhere are set on the account page or in the phone app."))
+        Hint(L("To go somewhere every week, add it to your timetable on the account page or in the phone app."))
         Button(L("Open the account page")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#favourites")!) }
             .buttonStyle(.link)
     }

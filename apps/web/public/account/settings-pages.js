@@ -362,6 +362,8 @@ export function Timetable({ me }) {
     seenKeys.set(base, n + 1);
     return { ...r, key: `${base}-${n}` };
   });
+  // A favourite at its usual time each week: listed with the classes that day.
+  const usual = (p.usual ?? []).filter((u) => p.places.some((x) => x.key === u.place)).map((u) => ({ u, key: `usual-${u.place}-${u.day}-${u.atMin}` }));
 
   return html`
     ${reimport &&
@@ -374,11 +376,11 @@ export function Timetable({ me }) {
       <p class="hint" role="status">${msg}</p>
       <${Unresolved} list=${unresolved} onDone=${(u) => setUnresolved((l) => l.filter((x) => x !== u))} />
       <div class="classes">
-        ${!all.length && html`<p class="hint">${t('No classes yet. Import from NUSMods or add them by hand.')}</p>`}
+        ${!all.length && !usual.length && html`<p class="hint">${t('No classes yet. Import from NUSMods or add them by hand.')}</p>`}
         ${DAY_ORDER.map((day) => {
-          const rows = all.filter((r) => r.c.day === day).sort((a, b) => a.c.arriveByMin - b.c.arriveByMin);
+          const rows = [...all.filter((r) => r.c.day === day), ...usual.filter((r) => r.u.day === day)].sort((a, b) => (a.c?.arriveByMin ?? a.u.atMin) - (b.c?.arriveByMin ?? b.u.atMin));
           if (!rows.length) return null;
-          return html`<div class="day" key=${`d${day}`}>${DAYS[day]}</div>${rows.map(({ c, list, key }) => html`<${ClassRow} key=${key} c=${c} list=${list} />`)}`;
+          return html`<div class="day" key=${`d${day}`}>${DAYS[day]}</div>${rows.map((r) => (r.u ? html`<${UsualRow} key=${r.key} u=${r.u} />` : html`<${ClassRow} key=${r.key} c=${r.c} list=${r.list} />`))}`;
         })}
       </div>
       <${AddClass} />
@@ -427,6 +429,29 @@ function ClassRow({ c, list }) {
           class="remove"
           aria-label=${t('Remove {0}', c.label)}
           onClick=${() => edit((x) => (x[list] = x[list].filter((y) => !same(y, c))))}
+        >${t('Remove')}</button>
+      </div>
+    </details>
+  `;
+}
+
+/** A favourite at its usual time: its name, then when and where; opened, Remove. */
+function UsualRow({ u }) {
+  const place = profile.get().places.find((x) => x.key === u.place);
+  return html`
+    <details class="cls">
+      <summary>
+        <span class="what">
+          <span class="name">${place.label}</span>
+          <span class="where">${`${clockMin(u.atMin)} · ${stopName(place.to)}`}</span>
+        </span>
+      </summary>
+      <div class="cls-edit">
+        <button
+          type="button"
+          class="remove"
+          aria-label=${t('Remove {0}', `${place.label} ${DAYS[u.day]} ${clockMin(u.atMin)}`)}
+          onClick=${() => edit((x) => (x.usual = (x.usual ?? []).filter((y) => !(y.place === u.place && y.day === u.day && y.atMin === u.atMin))))}
         >${t('Remove')}</button>
       </div>
     </details>
@@ -569,12 +594,11 @@ function addFavourite(to, label) {
 export function Favourites() {
   const p = useStore(profile);
   const search = useRef(null);
-  const usual = p.usual ?? [];
   return html`
     <div class="card">
-      <p class="hint">${t("Available in one tap from the app, the widget and the menu bar. Give a place a usual time (for example, the gym on Tuesdays at 6 pm) and it's planned like a class that day.")}</p>
+      <p class="hint">${t('Available in one tap from the app, the widget and the menu bar. To go somewhere every week, add it to your timetable.')}</p>
       <ul class="list">
-        ${p.places.map((place) => html`<${Place} key=${place.key} place=${place} times=${usual.filter((u) => u.place === place.key)} />`)}
+        ${p.places.map((place) => html`<${Place} key=${place.key} place=${place} />`)}
       </ul>
       <form
         id="place-form"
@@ -608,11 +632,8 @@ export function Favourites() {
   `;
 }
 
-/** A favourite: its name, where it goes, its usual times, and Remove. */
-function Place({ place, times }) {
-  const [day, setDay] = useState('1');
-  const [at, setAt] = useState('');
-  const timeText = (u) => `${DAYS[u.day]} ${clockMin(u.atMin)}`;
+/** A favourite: its name, where it goes, and Remove (which takes its usual times too). */
+function Place({ place }) {
   return html`
     <li class="place">
       <div class="place-row">
@@ -631,38 +652,6 @@ function Place({ place, times }) {
             })}
         >${t('Remove')}</button>
       </div>
-      <div class="usual">
-        ${times.map(
-          (u) => html`<span class="usual-time" key=${`${u.day}-${u.atMin}`}>
-            ${timeText(u)}
-            <button
-              type="button"
-              class="remove"
-              aria-label=${t('Remove {0}', timeText(u))}
-              onClick=${() => edit((x) => (x.usual = (x.usual ?? []).filter((y) => !(y.place === u.place && y.day === u.day && y.atMin === u.atMin))))}
-            >×</button>
-          </span>`,
-        )}
-      </div>
-      <details class="usual-add">
-        <summary>${t('Add a usual time')}</summary>
-        <form
-          class="row usual-form"
-          onSubmit=${(e) => {
-            e.preventDefault();
-            const atMin = toMin(at);
-            if (atMin === null) return;
-            edit((x) => (x.usual = [...(x.usual ?? []), { place: place.key, day: Number(day), atMin }]));
-            setAt('');
-          }}
-        >
-          <select aria-label=${t('Day')} value=${day} onChange=${(e) => setDay(e.currentTarget.value)}>
-            ${DAYS.map((d, n) => html`<option value=${String(n)} key=${n}>${d}</option>`)}
-          </select>
-          <input type="time" aria-label=${t('Be there at')} required value=${at} onInput=${(e) => setAt(e.currentTarget.value)} />
-          <button type="submit" class="btn small ghost">${t('Add')}</button>
-        </form>
-      </details>
     </li>
   `;
 }

@@ -115,9 +115,9 @@
 "Open the account page" = "打开账户页面";
 "Remove %@" = "移除%@";
 "Settings…" = "设置…";
-"The times you usually go somewhere are set on the account page or in the phone app." = "常去某处的时间在账户页面或手机应用中设置。";
 "Theme" = "主题";
 "Timetable" = "课表";
+"To go somewhere every week, add it to your timetable on the account page or in the phone app." = "每周都去的地方，可以在账户页面或手机应用里加到课表中。";
 "Updating times…" = "正在更新时间…";
 "On the %@" = "在 %@ 上";
 "On the other device, open terminus and enter:" = "在另一台设备上打开 terminus，输入：";

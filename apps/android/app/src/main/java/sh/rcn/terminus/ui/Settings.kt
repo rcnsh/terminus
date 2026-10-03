@@ -79,7 +79,6 @@ import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.SavedPlace
 import sh.rcn.terminus.Theme
 import sh.rcn.terminus.Trip
-import sh.rcn.terminus.UsualTime
 import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayShort
 import sh.rcn.terminus.hhmm
@@ -351,31 +350,6 @@ private fun NotificationSettings(main: MainViewModel) {
     }
 }
 
-/** A day and a time for a favourite: from then on it's a trip that day, like a class. */
-@Composable
-private fun UsualTimeEditor(place: SavedPlace, account: AccountViewModel, done: () -> Unit) {
-    var day by rememberSaveable { mutableIntStateOf(1) }
-    var at by rememberSaveable { mutableStateOf<Int?>(null) }
-    Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice(stringResource(R.string.day), WEEKDAYS, day, { day = it ?: 1 })
-            TimeButton(stringResource(R.string.be_there_at), at, { at = it })
-            Row {
-                TextButton(onClick = done) { Text(stringResource(R.string.cancel)) }
-                Spacer(Modifier.weight(1f))
-                Button(
-                    onClick = {
-                        val m = at ?: return@Button
-                        account.edit { it.addUsual(UsualTime(place.key, day, m)) }
-                        done()
-                    },
-                    enabled = at != null,
-                ) { Text(stringResource(R.string.add)) }
-            }
-        }
-    }
-}
-
 /** What you chose for particular classes, each undoable. */
 @Composable
 private fun TripChoices(state: AccountState, account: AccountViewModel) {
@@ -557,6 +531,21 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
             }
         }
     }
+    // A favourite at its usual time each week: removable here with the classes.
+    val usual = profile.usual.mapNotNull { u -> profile.places.firstOrNull { it.key == u.place }?.let { u to it } }
+        .sortedWith(compareBy({ order.indexOf(it.first.day) }, { it.first.atMin }))
+    if (usual.isNotEmpty()) {
+        Text(stringResource(R.string.every_week), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        for ((u, place) in usual) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${dayShort(u.day)} ${time(u.atMin)} · ${place.label}")
+                    if (campus != null) Hint(stringResource(R.string.stop_suffix, campus.stopName(place.to)))
+                }
+                TextButton(onClick = { account.edit { it.removeUsual(u) } }) { Text(stringResource(R.string.remove)) }
+            }
+        }
+    }
     var open by rememberSaveable { mutableStateOf(false) }
     if (!open) {
         TextButton(onClick = { open = true; account.loadCampus() }) { Text(stringResource(R.string.add_by_hand)) }
@@ -617,13 +606,10 @@ private fun DayHours(profile: ProfileDoc, account: AccountViewModel) {
 @Composable
 private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
     Hint(stringResource(R.string.favourites_hint))
-    val ctx = LocalContext.current
-    val time = { m: Int -> if (hour12(ctx)) hhmm12(m) else hhmm(m) }
     // A stop's name, or a food court's (favourites and classes can go to one).
     val stopName = { code: String ->
         campus?.stops?.firstOrNull { it.code == code }?.name ?: campus?.destinations?.firstOrNull { it.code == code && it.kind == "landmark" }?.label ?: code
     }
-    var timing by rememberSaveable { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
     for (p in profile.places) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -632,16 +618,8 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
                 // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
                 if (campus != null && p.label != stopName(p.to)) Hint(stringResource(R.string.stop_suffix, stopName(p.to)))
             }
-            TextButton(onClick = { timing = if (timing == p.key) null else p.key }) { Text(stringResource(R.string.usual_time)) }
             TextButton(onClick = { account.edit { it.removePlace(p.key) } }) { Text(stringResource(R.string.remove)) }
         }
-        for (u in profile.usual.filter { it.place == p.key }) {
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${dayShort(u.day)} ${time(u.atMin)}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                TextButton(onClick = { account.edit { it.removeUsual(u) } }) { Text(stringResource(R.string.remove)) }
-            }
-        }
-        if (timing == p.key) UsualTimeEditor(p, account) { timing = null }
     }
     if (profile.places.size >= 12) return
     // The stops your classes go to come first, each saying which classes use it.

@@ -474,6 +474,9 @@ same way (leave-by, push, detection, "Not going"):
 
 - `profile.usual`: a saved place at a usual time, `{place, day, atMin}`,
   kept apart from `places` so an older app rewriting the places can't drop it.
+  The apps no longer add them (a place you go every week is added to the
+  timetable by hand); ones already saved are listed in Timetable, where they
+  can be removed, and go with their place when it's removed.
 - `profile.once`: a one-off trip on a date, `{date, arriveByMin, to, label}`,
   added with `POST /me/once` and dropped once its date has passed.
 
