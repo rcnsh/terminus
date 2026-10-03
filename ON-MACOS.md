@@ -6,13 +6,14 @@ and decisions). Delete this file once it's done.
 
 ## Where things stand (3 October, evening)
 
-- **Deployed:** production and the beta both run `main` up to `ee278ff`.
-  - That includes the calendar refreshing itself. Both sites already
-    answer from the copy the cron fetched (`/health` says
-    `calendar.source: fetched`).
+- **Deployed:** production and the beta both run all of `main`, up to
+  `e4f59b4`. No migrations pending.
+  - The calendar refreshes itself: both sites answer from the copy the
+    cron fetched (`/health` says `calendar.source: fetched`).
+  - The API docs say 2.1.0, and on a phone they scroll as a page, so
+    their end and their menu's clear Chrome's toolbar (checked on a
+    phone).
   - The deploy accepted the 5 s CPU limit, so the plan allows it.
-- **Not deployed yet:** `81500ec`, the API docs showing 2.1.0 instead of
-  1.0.0 (Y2). No migrations. The commits after it only change docs.
 - **History rewritten:** every commit message is in Conventional Commits,
   pushed with all the tags (Y1, done). The old `ccr-*` and `imgbot`
   branches are deleted.
@@ -26,13 +27,12 @@ and decisions). Delete this file once it's done.
 
 ## The order
 
-1. **You:** deploy (Y2). **Claude:** check it (C3).
-2. **Claude:** get `main`, then build and test everything (C1, C2).
-3. **Claude:** install the apps (C4). **You:** try them (Y3).
-4. **Claude:** retake the screenshots (C5) and dry-run the release (C6).
-5. **You:** read the release notes and say go (Y4). **Claude:** releases
+1. **Claude:** get `main`, then build and test everything (C1, C2).
+2. **Claude:** install the apps (C4). **You:** try them (Y3).
+3. **Claude:** retake the screenshots (C5) and dry-run the release (C6).
+4. **You:** read the release notes and say go (Y4). **Claude:** releases
    (C7). **You:** approve it on GitHub (Y4).
-6. **You:** Cloudflare and GitHub settings (Y5, Y6) and the open decisions
+5. **You:** Cloudflare and GitHub settings (Y5, Y6) and the open decisions
    (Y7), any time.
 
 ## Part 1: for Claude on the Mac
@@ -70,15 +70,13 @@ points at this Mac's setup (Java 21, Xcode, the Android SDK).
 
 ### C3. Check the live sites
 
-The 3 October deploy is checked: `/health` on both sites says `ok: true`
-and `calendar.source: fetched`, and the record live buses workflow found
-no bus switching sides or jumping on production. After the next deploy
-(Y2):
+Everything deployed so far is checked: `/health` on both sites says
+`ok: true` and `calendar.source: fetched`, `/openapi.json` says `2.1.0`,
+and the record live buses workflow found no bus switching sides or
+jumping on production. After any later deploy (Y2):
 
 - `curl -s https://terminus.rcn.sh/health` and the same for
   `https://beta.terminus.rcn.sh/health`: `ok` is true on both.
-- `curl -s https://terminus.rcn.sh/openapi.json`: `info.version` is
-  `2.1.0` (it was `1.0.0`), and the docs page at `/docs` shows the same.
 - Optional: the 3 October recording was on a Saturday evening with only 3
   buses. A weekday daytime run would check many more:
   `gh workflow run record-buses.yml -f site=https://terminus.rcn.sh`. Its
@@ -164,9 +162,8 @@ branches deleted. Any other clone made before 3 October needs C1's reset.
 
 ### Y2. Deploy from the VPS
 
-Both sites run `ee278ff`. `81500ec` (the API docs showing 2.1.0) is waiting
-for a deploy; there are no migrations. From the VPS, in one line (beta
-first, then production):
+Both sites run all of `main` (`e4f59b4`), so nothing waits for a deploy.
+For the next one, from the VPS, in one line (beta first, then production):
 
 ```sh
 git fetch origin --tags --force && git reset --hard origin/main && pnpm install --frozen-lockfile && (cd apps/api && pnpm run deploy:beta && pnpm run deploy)
