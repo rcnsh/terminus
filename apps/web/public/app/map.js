@@ -294,10 +294,11 @@ function addLayers() {
       'icon-ignore-placement': image !== 'bus',
     },
   });
+  map.addLayer({ ...bus('bus-on', 'bus-on'), filter: ['==', ['get', 'id'], ''] });
   map.addLayer(bus('buses', 'bus'));
   map.addLayer(bus('bus-heading', 'heading'));
   highlight();
-  drawStretch(stretchOn);
+  markOpen(openBus);
   drawBuses(frameAt(performance.now()));
 }
 
@@ -324,6 +325,19 @@ function paintBus() {
   const image = g.getImageData(0, 0, size, size);
   if (map.hasImage('bus')) map.updateImage('bus', image);
   else map.addImage('bus', image, { pixelRatio: 2 });
+  // The tapped bus: a ring in the page's ink round it, a little way out.
+  const ringSize = 80;
+  const rc = document.createElement('canvas');
+  rc.width = rc.height = ringSize;
+  const rg = rc.getContext('2d');
+  rg.strokeStyle = dark() ? '#f2efeb' : '#1c1917';
+  rg.lineWidth = 5;
+  rg.beginPath();
+  rg.arc(ringSize / 2, ringSize / 2, 33, 0, Math.PI * 2);
+  rg.stroke();
+  const ring = rg.getImageData(0, 0, ringSize, ringSize);
+  if (map.hasImage('bus-on')) map.updateImage('bus-on', ring);
+  else map.addImage('bus-on', ring, { pixelRatio: 2 });
 }
 
 /** A small white arrow pointing up (north) before rotation. */
@@ -511,21 +525,23 @@ function bearing(aLat, aLon, bLat, bLon) {
   return (((Math.atan2(y, x) / r) % 360) + 360) % 360;
 }
 
-/** The bus whose stretch is drawn, or null. */
-let stretchOn = null;
+/** The bus whose card is open, or null. */
+let openBus = null;
 
 /**
- * Bus [b]'s stretch over its route, with the rest of the route stepping
- * back; nothing for null, or a bus at a stop. Its midpoint can be a long way
- * from the bus, so the whole stretch is where it is.
+ * Bus [b], whose card is open, ringed; between stops, its stretch drawn over
+ * its route, with the rest of the route stepping well back. Its midpoint can
+ * be a long way from the bus, so the whole stretch is where it is. Null
+ * clears both.
  */
-function drawStretch(b) {
-  stretchOn = b;
+function markOpen(b) {
+  openBus = b;
   if (!map?.getSource('stretch')) return;
+  map.setFilter('bus-on', ['==', ['get', 'id'], b?.id ?? '']);
   const path = b?.stretch && pathOf(campusData.get()?.routes[b.svc]?.line);
   const line = path ? sliceOf(path, b.stretch.from, b.stretch.to) : null;
   map.getSource('stretch').setData(line ? { type: 'Feature', properties: { color: b.color }, geometry: { type: 'LineString', coordinates: line } } : empty);
-  map.setPaintProperty('route-on', 'line-opacity', line ? 0.35 : 1);
+  map.setPaintProperty('route-on', 'line-opacity', line ? 0.2 : 1);
 }
 
 /** The part of [path] from [a] to [b] metres along it, as [lon, lat] points. */
@@ -653,9 +669,9 @@ function BusSheet({ id, box }) {
     if (!b) sheet.set(null);
   }, [b]);
   useEffect(() => {
-    drawStretch(b ?? null);
-  }, [b?.stretch?.from, b?.stretch?.to, b?.svc]);
-  useEffect(() => () => drawStretch(null), []);
+    markOpen(b ?? null);
+  }, [b?.id, b?.stretch?.from, b?.stretch?.to, b?.svc]);
+  useEffect(() => () => markOpen(null), []);
   if (!b) return null;
   return html`
     <${Frame} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.at ? t('At {0}', b.at.name) : b.stretch && b.nextStop ? t('Between {0} and {1}', b.stretch.last.name, b.nextStop.name) : null} box=${box}>

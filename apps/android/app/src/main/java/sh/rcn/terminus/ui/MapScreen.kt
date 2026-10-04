@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -266,6 +267,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // not a circle, so a bus at a stop can sit beside the dot (its offset is
     // per bus, and turns with the road).
     val busIcon = remember(color, paper) { BusIcon(Color(color), paper) }
+    val ringIcon = remember(ink) { RingIcon(ink) }
     val busSize = interpolate(linear(), zoom(), 13 to const(0.64f), 17 to const(1f))
     val selected = ui.selected
     val state = rememberMapState(baseStyle = BaseStyle.Json(style)) {
@@ -301,7 +303,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 filter = feature["svc"].asString() eq const(selected),
                 color = feature["color"].asString().convertToColor(),
                 width = interpolate(linear(), zoom(), 13 to const(3.dp), 16 to const(6.dp), 18 to const(9.dp)),
-                opacity = const(if (stretchOn) 0.35f else 1f),
+                opacity = const(if (stretchOn) 0.2f else 1f),
                 cap = const(LineCap.Round),
                 join = const(LineJoin.Round),
             )
@@ -363,6 +365,17 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         )
         CircleLayer(id = "me-halo", source = meSource, radius = const(14.dp), color = const(Color(0xFF2B7BF3)), opacity = const(0.18f))
         CircleLayer(id = "me", source = meSource, radius = const(6.5.dp), color = const(Color(0xFF2B7BF3)), strokeColor = const(Color.White), strokeWidth = const(2.5.dp))
+        // The tapped bus, ringed.
+        SymbolLayer(
+            id = "bus-on",
+            source = busSource,
+            filter = feature["id"].asString() eq const(openBus?.id.orEmpty()),
+            iconImage = image(ringIcon, size = DpSize(40.dp, 40.dp)),
+            iconSize = busSize,
+            iconOffset = feature["offset"].asDpOffset(),
+            iconAllowOverlap = const(true),
+            iconIgnorePlacement = const(true),
+        )
         SymbolLayer(
             id = "buses",
             source = busSource,
@@ -646,6 +659,20 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
 }
 
 /** A bus on the map: a disc of [fill], 11 dp across the middle, ringed 2.5 dp in [ring]. */
+/** The tapped bus's ring, in the map's ink, a little way out from the bus. */
+private class RingIcon(private val ink: Color) : Painter() {
+    override val intrinsicSize: Size = Size.Unspecified
+
+    override fun DrawScope.onDraw() {
+        val stroke = size.minDimension * 2.5f / 40f
+        drawCircle(ink, radius = size.minDimension * 16.5f / 40f, style = Stroke(stroke))
+    }
+
+    override fun equals(other: Any?) = other is RingIcon && other.ink == ink
+
+    override fun hashCode() = ink.hashCode()
+}
+
 private class BusIcon(private val fill: Color, private val ring: Color) : Painter() {
     override val intrinsicSize: Size = Size.Unspecified
 
