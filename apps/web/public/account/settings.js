@@ -7,9 +7,9 @@
 import { html, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { api, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
-import { Account, Appearance, Devices, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
+import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 
-const PAGES = ['trips', 'timetable', 'favourites', 'notifications', 'devices', 'language', 'appearance', 'account'];
+const PAGES = ['trips', 'timetable', 'favourites', 'notifications', 'devices', 'language', 'appearance', 'account', 'about', 'feedback'];
 const TITLES = {
   trips: t('Your trips'),
   timetable: t('Timetable'),
@@ -19,6 +19,8 @@ const TITLES = {
   language: t('Language and time'),
   appearance: t('Appearance'),
   account: t('Account'),
+  about: t('About'),
+  feedback: t('Feedback'),
 };
 
 async function signOut() {
@@ -48,6 +50,8 @@ function summaries({ p, me, notifyOn, devices, imported }) {
     language: [{ en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'), { 12: t('12-hour'), 24: t('24-hour') }[p.clock]].filter(Boolean).join(' · '),
     appearance: { light: t('Light'), dark: t('Dark') }[window.theme?.pref()] ?? t('Follow this device'),
     account: me.email ?? t('No email'),
+    about: t('Not affiliated with NUS'),
+    feedback: t('Tell us what to change'),
   };
 }
 
@@ -256,6 +260,8 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         ${page('language', html`<${Language} />`)}
         ${page('appearance', html`<${Appearance} />`)}
         ${page('account', html`<${Account} me=${me} inApp=${inApp} onAddEmail=${onAddEmail} onSignOut=${onSignOut} />`)}
+        ${page('about', html`<${About} />`)}
+        ${page('feedback', html`<${Feedback} me=${me} />`)}
       </div>
     </div>
   `;

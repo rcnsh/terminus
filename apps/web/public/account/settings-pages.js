@@ -970,3 +970,67 @@ function Keys() {
   `;
 }
 
+
+/* ---------- About, Feedback ---------- */
+
+export function About() {
+  return html`
+    <div class="card">
+      <p>${t('terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable.')}</p>
+      <${Rich}
+        as="p"
+        class="hint"
+        text=${t('terminus is an independent student project, not affiliated with NUS. Bus times come from NUS\'s shuttle feed. Walking routes use map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.')}
+      />
+      <div class="actions">
+        <a class="btn ghost small" href="/">${t('Get the apps')}</a>
+        <a class="btn ghost small" href="/status">${t('Status')}</a>
+        <a class="btn ghost small" href="/privacy">${t('Privacy')}</a>
+        <a class="btn ghost small" href="/docs">${t('API docs')}</a>
+        <a class="btn ghost small" href="https://github.com/rcnsh/terminus">${t('Source code')}</a>
+      </div>
+    </div>
+  `;
+}
+
+/** A note to the operator about anything; a wrong answer is better sent from under the card, with the answer. */
+export function Feedback({ me }) {
+  const [note, setNote] = useState('');
+  const [msg, setMsg] = useState('');
+  const [sending, setSending] = useState(false);
+  const send = async (e) => {
+    e.preventDefault();
+    if (!note.trim()) return setMsg(t('Write something first.'));
+    setSending(true);
+    try {
+      await api('/me/feedback', { method: 'POST', body: { kind: 'other', note: note.trim(), platform: 'web' } });
+      setNote('');
+      setMsg(t('Thanks. Your feedback was sent.'));
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+  return html`
+    <form class="card feedback" onSubmit=${send}>
+      <label for="feedback-note">${t('Ideas, problems, anything')}</label>
+      <textarea
+        id="feedback-note"
+        rows="5"
+        maxlength="1000"
+        placeholder=${t('A place you want to go, something that confused you…')}
+        value=${note}
+        onInput=${(e) => setNote(e.currentTarget.value)}
+      ></textarea>
+      <p class="hint">
+        ${me.anonymous
+          ? t('This sends your note. Add an email if you want a reply.')
+          : t('This sends your note, with your email address so you can get a reply.')}
+      </p>
+      <p class="hint">${t('Was an answer wrong? Press “Is this wrong?” under it instead, so we see what you saw.')}</p>
+      <div class="actions"><button type="submit" class="btn small accent" disabled=${sending}>${t('Send')}</button></div>
+      <p class="hint" role="status">${msg}</p>
+    </form>
+  `;
+}

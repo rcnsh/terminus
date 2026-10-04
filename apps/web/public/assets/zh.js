@@ -451,5 +451,20 @@ window.TERMINUS_ZH = {
  "Leaves in {0} s": "{0} 秒后开",
  "Left {0} min ago · updating": "{0} 分钟前已开走 · 正在更新",
  "in {0} min": "{0} 分钟后",
- "in {0} min {1} s": "{0} 分 {1} 秒后"
+ "in {0} min {1} s": "{0} 分 {1} 秒后",
+ "About": "关于",
+ "Feedback": "反馈",
+ "Not affiliated with NUS": "与 NUS 没有关联",
+ "Tell us what to change": "告诉我们该改什么",
+ "terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable.": "terminus 根据你的 NUSMods 课表，告诉你该搭哪一班 NUS 校园巴士、在哪个车站搭，以及什么时候出发。",
+ "Get the apps": "下载应用",
+ "API docs": "API 文档",
+ "Source code": "源代码",
+ "Write something first.": "请先写点内容。",
+ "Thanks. Your feedback was sent.": "谢谢，你的反馈已发送。",
+ "Ideas, problems, anything": "想法、问题，什么都可以",
+ "A place you want to go, something that confused you…": "想去的地方、让你困惑的地方……",
+ "This sends your note. Add an email if you want a reply.": "这会发送你写的内容。如果想收到回复，请添加邮箱。",
+ "This sends your note, with your email address so you can get a reply.": "这会发送你写的内容和你的邮箱，方便我们回复你。",
+ "Was an answer wrong? Press “Is this wrong?” under it instead, so we see what you saw.": "某个答案不对？请改按它下面的“这不对？”，这样我们能看到你看到的内容。"
 };

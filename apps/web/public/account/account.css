@@ -242,7 +242,7 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .report-open { margin-top: 6px; font-size: 0.875rem; }
 .report { margin-top: 10px; display: grid; gap: 8px; }
 .report label { font-weight: 600; font-size: 0.9rem; }
-.report textarea { width: 100%; resize: vertical; font: inherit; }
+.report textarea, .feedback textarea { width: 100%; resize: vertical; font: inherit; }
 .report .actions { margin-top: 0; }
 
 /* Favourites. */
