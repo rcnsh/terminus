@@ -464,7 +464,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (s.target == Target.Plan) {
                         // The timeline moves when the answer's trip does.
                         val before = _state.value.answers[Target.Plan]
-                        if (_state.value.day == null || before?.destLabel != answer.destLabel || before?.card?.phase != answer.card?.phase) loadDay()
+                        // And when the kept one is over two minutes old, as on the Mac: the
+                        // copy from disk counts as loaded, so Today's leave-by times could
+                        // be hours old beside a fresh card.
+                        val dayAge = now - (store.lastDay()?.second ?: 0L)
+                        if (_state.value.day == null || dayAge > DAY_MAX_AGE_MS || before?.destLabel != answer.destLabel || before?.card?.phase != answer.card?.phase) loadDay()
                         store.saveAnswer(json, now)
                         Refresher.scheduleNext(ctx, answer, now)
                         store.lastError = null
@@ -515,3 +519,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 /** Installed by the Play Store, rather than the APK from the website. */
 internal fun installedFromPlay(ctx: android.content.Context): Boolean =
     runCatching { ctx.packageManager.getInstallSourceInfo(ctx.packageName).installingPackageName == "com.android.vending" }.getOrDefault(false)
+
+/** Today is fetched again with the answer once it's this old. */
+private const val DAY_MAX_AGE_MS = 120_000L
