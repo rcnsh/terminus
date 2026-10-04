@@ -224,6 +224,12 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
 
 @media (max-width: 640px) {
   .nav-links .hide-sm { display: none; }
+  .nav-links { gap: 8px; }
+}
+/* Open the app and Sign in both stay in the header on a phone, so the name
+   beside the mark gives way to them (screen readers still hear it). */
+@media (max-width: 420px) {
+  .nav:has(.open-app) .wordmark { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {
