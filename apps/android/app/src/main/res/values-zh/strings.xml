@@ -405,12 +405,15 @@
     <string name="send_feedback">发送反馈</string>
     <string name="about_what">terminus 根据你的 NUSMods 课表，告诉你该搭哪一班 NUS 校园巴士、在哪个车站搭，以及什么时候出发。</string>
     <string name="about_independent">terminus 是一个独立的学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士数据。步行路线和地图使用 OpenStreetMap 贡献者的数据。</string>
+    <string name="about_aup">使用 terminus 时，请遵守 NUS 的 IT 资源可接受使用政策。</string>
     <string name="about_version">版本 %1$s</string>
     <string name="status">状态</string>
     <string name="privacy">隐私</string>
     <string name="api_docs">API 文档</string>
     <string name="source_code">源代码</string>
     <string name="map_data">地图数据</string>
+    <string name="aup">NUS 可接受使用政策</string>
+    <string name="end_of_the_line">终点站到了！本车在此终止服务。</string>
     <string name="feedback_label">想法、问题，什么都可以</string>
     <string name="feedback_placeholder">想去的地方、让你困惑的地方……</string>
     <string name="feedback_no_email">这会发送你写的内容。如果想收到回复，请添加邮箱。</string>

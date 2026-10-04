@@ -105,7 +105,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TabHeader { Wordmark(MaterialTheme.typography.titleLarge) }
+        TabHeader { HeaderWordmark() }
 
         state.update?.let { v ->
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {

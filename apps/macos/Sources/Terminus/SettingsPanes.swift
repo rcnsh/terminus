@@ -341,6 +341,7 @@ struct AboutPane: View {
             Text(L("terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable."))
                 .fixedSize(horizontal: false, vertical: true)
             Hint(L("terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes and the map use data from OpenStreetMap contributors."))
+            Hint(L("Use terminus in line with the NUS Acceptable Use Policy for IT Resources."))
             Hint(L("Version %@", version))
             Flow(spacing: 8) {
                 link(L("Get the apps"), "\(Api.site)/")
@@ -349,6 +350,7 @@ struct AboutPane: View {
                 link(L("API docs"), "\(Api.site)/docs")
                 link(L("Source code"), "https://github.com/rcnsh/terminus")
                 link(L("Map data"), "https://www.openstreetmap.org/copyright")
+                link(L("NUS Acceptable Use Policy"), "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf")
             }
         }
     }

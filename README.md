@@ -153,5 +153,6 @@ Linux VPS, set up by `scripts/vps-setup.sh`. The campus map's street map goes on
 
 <p align="center">
   <sub>An independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed.<br>
+  Use terminus in line with the <a href="https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf">NUS Acceptable Use Policy for IT Resources</a>.<br>
   Walking routes, bus route lines and the street map use map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, the street map through <a href="https://protomaps.com">Protomaps</a>. <a href="LICENSE">MIT licensed</a>.</sub>
 </p>

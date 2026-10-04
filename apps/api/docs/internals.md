@@ -942,6 +942,6 @@ noticed (an alert) rather than read as an empty board.
 
 This reads a public, unauthenticated endpoint the uNivUS app itself uses,
 at roughly one request per stop per 15 seconds. Use it in line with the
-[NUS IT Acceptable Use Policy](https://nusit.nus.edu.sg/its/resources/acceptable-use-policy/).
+[NUS Acceptable Use Policy for IT Resources](https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf).
 Do not commit captured credentials, do not use NUSNET credentials with it, and
 do not raise the request rate.
