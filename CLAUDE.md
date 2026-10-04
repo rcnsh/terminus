@@ -146,7 +146,7 @@ apps/api/
   src/monitor.ts      15-minute cron: feed health, incidents, housekeeping
   src/openapi.ts      OpenAPI 3.1 spec + docs page (a test fails if routes drift from it)
   src/http.ts         JSON helpers, CORS, security headers (CSP lives here)
-  src/seo.ts          robots.txt and the sitemap (the beta asks not to be crawled)
+  src/seo.ts          robots.txt, the sitemap, /llms.txt for AI agents (the beta asks not to be crawled)
   src/i18n.ts         Server strings, m(), ERRORS_ZH
   src/config.ts       TTLs and tuning constants (WALK, RIDE, ...)
   data/               Bundled JSON: stops.json (graph), shapes.json (route lines),

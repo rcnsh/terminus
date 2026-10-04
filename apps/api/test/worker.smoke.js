@@ -1000,3 +1000,30 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   assert.equal((await call('/docs', { env: beta })).res.headers.get('x-robots-tag'), 'noindex');
   assert.equal((await call('/docs')).res.headers.get('x-robots-tag'), null);
 });
+
+test('AI agents get /llms.txt: a short guide whose endpoints and links are real', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
+  const { res } = await call('/llms.txt', { fetchImpl });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /^text\/markdown/);
+  const text = await res.text();
+  assert.match(text, /^# terminus\n\n> /, 'a title, then a one-paragraph summary');
+  assert.match(text, /API key/);
+  const spec = await (await call('/openapi.json', { fetchImpl })).res.json();
+  const ops = new Set(Object.values(spec.paths).flatMap((item) => Object.values(item).map((op) => op.operationId)));
+  const links = [...text.matchAll(/\]\(([^)]+)\)/g)].map((m) => new URL(m[1]));
+  assert.ok(links.length >= 8);
+  for (const link of links) {
+    assert.equal(link.origin, BASE, `${link} is on the site serving it`);
+    const op = link.hash.match(/^#\/operations\/(\w+)$/)?.[1];
+    if (op) assert.ok(ops.has(op), `${link.hash} is an operation in the spec`);
+  }
+  // Each endpoint it shows, with its example query, answers.
+  for (const [, path] of text.matchAll(/^- \[GET ([^\]]+)\]/gm)) {
+    const { res: r } = await call(path, { fetchImpl });
+    assert.equal(r.status, 200, `${path} answers`);
+  }
+  // Without JavaScript, the docs page points at both.
+  const docs = await (await call('/docs')).res.text();
+  assert.match(docs, /<noscript>[^]*href="\/openapi.json"[^]*href="\/llms.txt"[^]*<\/noscript>/);
+});
