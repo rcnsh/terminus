@@ -688,6 +688,7 @@ export function Devices({ me }) {
   const anonymous = me.anonymous === true;
   return html`
     <div class="card">
+      <h3>${t('Devices')}</h3>
       ${anonymous
         ? html`<p class="hint">${t('Add an email to use terminus on your other devices too.')}</p>`
         : html`<${Rich} as="p" class="hint" text=${t('Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.')} />`}
@@ -851,7 +852,8 @@ export function Appearance() {
 
 /* ---------- Account ---------- */
 
-export function Account({ me, inApp, onAddEmail, onSignOut }) {
+/** The account, then `children` (Devices), then API keys. */
+export function Account({ me, inApp, onAddEmail, onSignOut, children }) {
   const [msg, setMsg] = useState('');
   return html`
     <div class="card">
@@ -889,6 +891,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
       </div>
       <p class="hint" role="status">${msg}</p>
     </div>
+    ${children}
     <${Keys} />
   `;
 }
@@ -1014,6 +1017,7 @@ export function Feedback({ me }) {
   };
   return html`
     <form class="card feedback" onSubmit=${send}>
+      <h3>${t('Feedback')}</h3>
       <label for="feedback-note">${t('Ideas, problems, anything')}</label>
       <textarea
         id="feedback-note"

@@ -172,8 +172,8 @@ branches deleted. Any other clone made before 3 October needs C1's reset.
 
 ### Y2. Deploy from the VPS
 
-Both sites run `main` up to `89b6b0f`. Waiting for a deploy: About and
-Feedback in the web's Settings.
+Both sites run `main` up to `89b6b0f`. Waiting for a deploy: the web's
+Settings with 7 rows, and its About and feedback page.
 For the next one, from the VPS, in one line (beta first, then production):
 
 ```sh
@@ -367,11 +367,13 @@ Each of these needs your choice; Claude then does it (C8).
 **The web:** where the search button goes when the chips don't fit on one
 line.
 
-**About and Feedback:** the web's Settings ends with an About page (what
-terminus is, not affiliated with NUS, links to the apps, status, privacy,
-the API docs and the source) and a Feedback page (a note sent to
-`/me/feedback` as `kind: 'other'`, emailed to you like "Is this wrong?").
-Should the Android and Mac Settings get the same two pages?
+**Settings on the apps:** the web's Settings now has 7 rows instead of 10
+(Language and appearance, Account and devices, About and feedback are
+each one page). About and feedback says what terminus is, that it isn't
+affiliated with NUS, and links to the apps, status, privacy, the API docs
+and the source; its form sends a note to `/me/feedback` as
+`kind: 'other'`, emailed to you like "Is this wrong?". Should the Android
+and Mac Settings be grouped the same way and get the same page?
 
 **An iOS app (not started; decide after 2.1.0 is out):**
 - Why: a large share of NUS students use iPhones, and they only have the

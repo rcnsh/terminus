@@ -9,19 +9,18 @@ import { api, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 
-const PAGES = ['trips', 'timetable', 'favourites', 'notifications', 'devices', 'language', 'appearance', 'account', 'about', 'feedback'];
+const PAGES = ['trips', 'timetable', 'favourites', 'notifications', 'language', 'account', 'about'];
 const TITLES = {
   trips: t('Your trips'),
   timetable: t('Timetable'),
   favourites: t('Favourites'),
   notifications: t('Notifications'),
-  devices: t('Devices'),
-  language: t('Language and time'),
-  appearance: t('Appearance'),
-  account: t('Account'),
-  about: t('About'),
-  feedback: t('Feedback'),
+  language: t('Language and appearance'),
+  account: t('Account and devices'),
+  about: t('About and feedback'),
 };
+/** Pages that were folded into another, so an old address still opens the right one. */
+const MOVED = { devices: 'account', appearance: 'language', feedback: 'about' };
 
 async function signOut() {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
@@ -46,12 +45,17 @@ function summaries({ p, me, notifyOn, devices, imported }) {
     timetable: me.needsReimport && !imported ? t('Re-import needed') : classes === 0 ? t('No classes yet') : classes === 1 ? t('1 class') : t('{0} classes', classes),
     favourites: p.places.map((x) => x.label).join(', ') || t('None yet'),
     notifications: notifyOn ? t('On for this device') : t('Off'),
-    devices: me.anonymous ? t('Add an email to use other devices') : devices === null ? '' : devices === 1 ? t('1 device') : t('{0} devices', devices),
-    language: [{ en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'), { 12: t('12-hour'), 24: t('24-hour') }[p.clock]].filter(Boolean).join(' · '),
-    appearance: { light: t('Light'), dark: t('Dark') }[window.theme?.pref()] ?? t('Follow this device'),
-    account: me.email ?? t('No email'),
-    about: t('Not affiliated with NUS'),
-    feedback: t('Tell us what to change'),
+    language: [
+      { en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'),
+      { 12: t('12-hour'), 24: t('24-hour') }[p.clock],
+      { light: t('Light'), dark: t('Dark') }[window.theme?.pref()],
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    account: me.anonymous
+      ? t('Add an email to use other devices')
+      : [me.email ?? t('No email'), devices === null ? '' : devices === 1 ? t('1 device') : t('{0} devices', devices)].filter(Boolean).join(' · '),
+    about: t('Tell us what to change'),
   };
 }
 
@@ -84,7 +88,8 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   }, []);
 
   /** The page the address names, if it's one shown here. */
-  const named = hash.startsWith(pageHash) ? hash.slice(pageHash.length) : '';
+  const asked = hash.startsWith(pageHash) ? hash.slice(pageHash.length) : '';
+  const named = MOVED[asked] ?? asked;
   const inAddress = groups.includes(named) ? named : null;
   // Somewhere else in the web app (Now, Map): Settings stays as it is.
   const elsewhere = Boolean(listHash) && !hash.startsWith(listHash);
@@ -256,12 +261,9 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         ${page('timetable', html`<${Timetable} me=${me} />`)}
         ${page('favourites', html`<${Favourites} />`)}
         ${Notify && page('notifications', html`<${Notify} />`)}
-        ${page('devices', html`<${Devices} me=${me} />`)}
-        ${page('language', html`<${Language} />`)}
-        ${page('appearance', html`<${Appearance} />`)}
-        ${page('account', html`<${Account} me=${me} inApp=${inApp} onAddEmail=${onAddEmail} onSignOut=${onSignOut} />`)}
-        ${page('about', html`<${About} />`)}
-        ${page('feedback', html`<${Feedback} me=${me} />`)}
+        ${page('language', html`<${Language} /><${Appearance} />`)}
+        ${page('account', html`<${Account} me=${me} inApp=${inApp} onAddEmail=${onAddEmail} onSignOut=${onSignOut}><${Devices} me=${me} /><//>`)}
+        ${page('about', html`<${About} /><${Feedback} me=${me} />`)}
       </div>
     </div>
   `;
