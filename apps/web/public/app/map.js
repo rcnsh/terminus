@@ -25,8 +25,10 @@ const PMTILES = '/vendor/pmtiles%404.5.0/pmtiles.mjs';
 const BUSES_MS = 5_000;
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
 const ARRIVALS_MS = 15_000;
-/** How long a bus takes to slide to its new place along the road. */
-const SLIDE_MS = 1_000;
+/** How long a bus takes to slide [m] metres along the road: a steady 150 m
+ *  a second, so a longer stretch takes longer, from 0.8 s for a short hop to
+ *  4 s, done before the next answer (every 5 s). As the Android app. */
+const slideMs = (m) => Math.max(800, Math.min(4_000, (m / 150) * 1_000));
 /** Further than this along its line in one answer (back from a hidden tab),
  *  a bus jumps instead of sliding. */
 const SLIDE_MAX_M = 1_500;
@@ -432,13 +434,13 @@ function moveTo(buses) {
     const g = glides.get(b.id);
     const from = g ? positionAt(g, now) : null;
     const d = !reduce && !stale && from && path ? aheadBy(path, from, b) : null;
-    next.set(b.id, d ? { from, to: b, start: now, path, d } : { from: null, to: b, start: now });
+    next.set(b.id, d ? { from, to: b, start: now, path, d, ms: slideMs(d) } : { from: null, to: b, start: now });
   }
   glides = next;
   cancelAnimationFrame(glide);
   const step = (ms) => {
     drawBuses(frameAt(ms));
-    if ([...glides.values()].some((g) => g.from && ms - g.start < SLIDE_MS)) glide = requestAnimationFrame(step);
+    if ([...glides.values()].some((g) => g.from && ms - g.start < g.ms)) glide = requestAnimationFrame(step);
   };
   glide = requestAnimationFrame(step);
 }
@@ -455,7 +457,7 @@ function frameAt(now) {
  */
 function positionAt(g, now) {
   if (!g.from) return g.to;
-  const k = Math.max(0, Math.min(1, (now - g.start) / SLIDE_MS));
+  const k = Math.max(0, Math.min(1, (now - g.start) / g.ms));
   if (k === 1) return g.to;
   const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
   const { from, to, path, d } = g;

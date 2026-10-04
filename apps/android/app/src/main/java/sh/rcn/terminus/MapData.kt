@@ -286,15 +286,16 @@ object MapGeoJson {
 
 /**
  * Each bus's slide from where it was drawn to its new place, along its route
- * line over [ms], so it follows the road round corners, easing in and out.
+ * line, so it follows the road round corners, easing in and out. It takes
+ * [msFor] its distance: further, longer.
  * Its old and new places may be beside the line (a stop's dot, and beside
  * it), so it moves from one to the other as it goes. One that can't get there
  * along the line (behind it, a long way on, no line) jumps, and so does every
  * bus with [still] (animations off) or after a while without an answer.
  * Times are any one clock.
  */
-class Slides(private val ms: Long = SLIDE_MS) {
-    private class Slide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double)
+class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
+    private class Slide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double, val ms: Long = 0)
 
     private var slides: Map<String, Slide> = emptyMap()
 
@@ -311,7 +312,7 @@ class Slides(private val ms: Long = SLIDE_MS) {
             val b = raw.placed()
             val from = slides[b.id]?.let { at(it, now) }
             val d = if (stale || still || from == null || path == null) null else path.aheadBy(from, b)
-            b.id to if (d != null) Slide(from, b, now, path, d) else Slide(null, b, now, null, 0.0)
+            b.id to if (d != null) Slide(from, b, now, path, d, msFor(d)) else Slide(null, b, now, null, 0.0)
         }
     }
 
@@ -319,7 +320,7 @@ class Slides(private val ms: Long = SLIDE_MS) {
     fun at(now: Long): List<LiveBus> = slides.values.map { at(it, now) }
 
     /** Whether any bus is still on its way at [now]. */
-    fun moving(now: Long): Boolean = slides.values.any { it.from != null && now - it.start < ms }
+    fun moving(now: Long): Boolean = slides.values.any { it.from != null && now - it.start < it.ms }
 
     private fun at(s: Slide, now: Long): LiveBus {
         val f = s.from
@@ -328,7 +329,7 @@ class Slides(private val ms: Long = SLIDE_MS) {
         val fa = f?.along
         val ba = b.along
         if (f == null || path == null || fa == null || ba == null) return b
-        val k = ((now - s.start).toDouble() / ms).coerceIn(0.0, 1.0)
+        val k = ((now - s.start).toDouble() / s.ms).coerceIn(0.0, 1.0)
         if (k >= 1.0) return b
         val e = if (k < 0.5) 2 * k * k else 1 - (-2 * k + 2).pow(2) / 2
         val (lat, lon, road) = path.pointAt(fa + s.d * e)
@@ -345,8 +346,10 @@ class Slides(private val ms: Long = SLIDE_MS) {
     }
 
     companion object {
-        /** About a second: long enough to see where it went. */
-        const val SLIDE_MS = 1_000L
+        /** How long a slide of [m] metres takes, as the web map: a steady
+         *  150 m a second, so a longer stretch takes longer, from 0.8 s for a
+         *  short hop to 4 s, done before the next answer (every 5 s). */
+        fun slideMs(m: Double): Long = (m / 150 * 1_000).toLong().coerceIn(800L, 4_000L)
 
         /** No answer for longer than this: every bus jumps to where it is now. */
         const val STALE_MS = 15_000L
