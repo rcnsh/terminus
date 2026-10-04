@@ -688,7 +688,6 @@ export function Devices({ me }) {
   const anonymous = me.anonymous === true;
   return html`
     <div class="card">
-      <h3>${t('Devices')}</h3>
       ${anonymous
         ? html`<p class="hint">${t('Add an email to use terminus on your other devices too.')}</p>`
         : html`<${Rich} as="p" class="hint" text=${t('Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.')} />`}
@@ -778,7 +777,7 @@ function Pairing({ count, reload }) {
   `;
 }
 
-/* ---------- Language and time, Appearance ---------- */
+/* ---------- Language and time, the theme ---------- */
 
 /** The clock choices, shared with setup: one example time each, so the choice shows itself. */
 export const CLOCKS = () => [
@@ -822,10 +821,11 @@ export function Language() {
 /** This browser's theme: applied at once, with nothing to save. */
 export const theme = store(window.theme?.pref() ?? 'auto');
 
-export function Appearance() {
+/** Auto, Light or Dark, on its row in the list. */
+export function ThemeSwitch({ labelledBy }) {
   const now = useStore(theme);
   const choice = (value, label) => html`
-    <label class="check">
+    <label>
       <input
         type="radio"
         name="theme"
@@ -836,24 +836,19 @@ export function Appearance() {
           theme.set(value);
         }}
       />
-      ${' '}${label}
+      <span>${label}</span>
     </label>
   `;
   return html`
-    <div class="card">
-      <fieldset class="theme-choice">
-        <legend>${t('Theme')}</legend>
-        ${choice('auto', t('Follow this device'))}${choice('light', t('Light'))}${choice('dark', t('Dark'))}
-      </fieldset>
-      <p class="hint">${t('Only in this browser.')}</p>
+    <div class="segmented" role="radiogroup" aria-labelledby=${labelledBy}>
+      ${choice('auto', t('Auto'))}${choice('light', t('Light'))}${choice('dark', t('Dark'))}
     </div>
   `;
 }
 
 /* ---------- Account ---------- */
 
-/** The account, then `children` (Devices), then API keys. */
-export function Account({ me, inApp, onAddEmail, onSignOut, children }) {
+export function Account({ me, inApp, onAddEmail, onSignOut }) {
   const [msg, setMsg] = useState('');
   return html`
     <div class="card">
@@ -891,7 +886,6 @@ export function Account({ me, inApp, onAddEmail, onSignOut, children }) {
       </div>
       <p class="hint" role="status">${msg}</p>
     </div>
-    ${children}
     <${Keys} />
   `;
 }
@@ -1017,7 +1011,6 @@ export function Feedback({ me }) {
   };
   return html`
     <form class="card feedback" onSubmit=${send}>
-      <h3>${t('Feedback')}</h3>
       <label for="feedback-note">${t('Ideas, problems, anything')}</label>
       <textarea
         id="feedback-note"
