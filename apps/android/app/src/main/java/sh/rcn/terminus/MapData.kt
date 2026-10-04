@@ -3,11 +3,9 @@ package sh.rcn.terminus
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
@@ -27,7 +25,7 @@ data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray
     /** [west, south, east, north] of the line. */
     fun bounds(): DoubleArray = doubleArrayOf(line.minOf { it[0] }, line.minOf { it[1] }, line.maxOf { it[0] }, line.maxOf { it[1] })
 
-    /** The line measured for gliding buses along it. */
+    /** The line measured for sliding buses along it. */
     val path: RoutePath by lazy { RoutePath(line) }
 }
 
@@ -41,7 +39,7 @@ class RoutePath(private val line: List<DoubleArray>) {
     }
     val total: Double = cum.lastOrNull() ?: 0.0
 
-    /** Ends where it starts: a bus can glide on past the start. */
+    /** Ends where it starts: a bus can slide on past the start. */
     val closed: Boolean = line.size >= 2 && haversine(line.first()[1], line.first()[0], line.last()[1], line.last()[0]) < 5
 
     /** The point [m] metres along, as (lat, lon, the road's bearing there). */
@@ -64,28 +62,22 @@ class RoutePath(private val line: List<DoubleArray>) {
     fun wrap(m: Double): Double = if (closed) ((m % total) + total) % total else m.coerceIn(0.0, total)
 
     /**
-     * Metres to glide along from bus [f] to bus [b]; null when not along it:
-     * off the line, a line kept from before the route changed, or a long way.
+     * Metres on along the line from bus [f] to bus [b], round a loop past its
+     * start; null when it isn't on ahead: the same place, behind, a long way,
+     * or a line kept from before the route changed.
      */
-    fun alongBy(f: LiveBus, b: LiveBus): Double? {
+    fun aheadBy(f: LiveBus, b: LiveBus): Double? {
         val fa = f.along ?: return null
         val ba = b.along ?: return null
-        if (line.size < 2 || total <= 0) return null
-        for ((m, bus) in listOf(fa to f, ba to b)) {
-            val (lat, lon) = pointAt(m)
-            if (haversine(lat, lon, bus.lat, bus.lon) > 10) return null
-        }
+        if (line.size < 2 || total <= 0 || fa > total + 1 || ba > total + 1) return null
         var d = ba - fa
-        // Round a loop the short way, past its start.
-        if (closed) {
-            if (d < -total / 2) d += total else if (d > total / 2) d -= total
-        }
-        return if (abs(d) > GLIDE_ALONG_MAX_M) null else d
+        if (closed && d < -total / 2) d += total
+        return if (d > 0 && d <= SLIDE_MAX_M) d else null
     }
 
     companion object {
-        /** Further than this in one update (back from the background), not along the line. */
-        const val GLIDE_ALONG_MAX_M = 1_500.0
+        /** Further than this in one answer (back from the background), a bus jumps. */
+        const val SLIDE_MAX_M = 1_500.0
 
         /** As apps/api/src/geo.ts. */
         fun haversine(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
@@ -150,7 +142,12 @@ fun parseColor(hex: String?): Long {
     return if (h != null && h.length == 6 && h.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) 0xFF000000L or h.toLong(16) else 0xFF8A939CL
 }
 
-/** A bus on the map, as `/buses` gives it: an id stable while it runs, and its number plate. */
+/**
+ * A bus on the map, as `/buses` gives it: an id stable while it runs, and its
+ * number plate. It's at a stop ([at], drawn at the stop's dot) or between two
+ * (drawn on its line); [ox] and [oy] are how far from that point it's drawn,
+ * in dp at full size, turned with the road: beside the dot at a stop.
+ */
 data class LiveBus(
     val id: String,
     val lat: Double,
@@ -159,17 +156,26 @@ data class LiveBus(
     val moving: Boolean,
     val crowd: String?,
     val nextStop: String?,
-    /** Metres along its route line; null off it. */
+    /** Metres along its route line of where it's drawn; null from an older API, off its line. */
     val along: Double? = null,
-    /** Metres a second it's estimated to be moving along its line, up to [until]; null from an older API. */
-    val speed: Double? = null,
-    /** Metres along its line it isn't shown past before the next answer. */
-    val until: Double? = null,
     /** Its number plate (PD726D); null from an older API. */
     val plate: String? = null,
+    /** The stop it's at, or null between stops. */
+    val at: String? = null,
+    /** At a stop, its place among the buses there: 0 in front, then 1, 2 behind. */
+    val slot: Int = 0,
+    val ox: Double = 0.0,
+    val oy: Double = 0.0,
 ) {
-    /** Metres it may go on along its line before the next answer. */
-    val onFor: Double get() = if (speed != null && speed > 0 && until != null && along != null) max(0.0, until - along) else 0.0
+    /** Drawn where it goes: at a stop, beside the dot to its left (the kerb:
+     *  buses drive on the left), the ones behind it further back. */
+    fun placed(): LiveBus = if (at != null) copy(ox = -AT_STOP_SIDE_DP, oy = AT_STOP_STEP_DP * slot) else copy(ox = 0.0, oy = 0.0)
+
+    companion object {
+        /** As the web map (apps/web/public/app/map.js). */
+        const val AT_STOP_SIDE_DP = 22.0
+        const val AT_STOP_STEP_DP = 26.0
+    }
 }
 
 /** One service's buses. [available] false: the feed couldn't be reached, which isn't "no buses". */
@@ -191,9 +197,9 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                         crowd = b.optString("crowd").takeIf { !b.isNull("crowd") && it.isNotEmpty() },
                         nextStop = b.optJSONObject("nextStop")?.optString("name")?.ifEmpty { null },
                         along = b.number("along"),
-                        speed = b.number("speed"),
-                        until = b.number("until"),
                         plate = b.optString("plate").takeIf { !b.isNull("plate") && it.isNotEmpty() },
+                        at = b.optJSONObject("at")?.optString("name")?.ifEmpty { null },
+                        slot = b.optInt("slot", 0),
                     )
                 },
             )
@@ -233,7 +239,7 @@ object MapGeoJson {
 
     fun buses(svc: String, color: Long, buses: List<LiveBus>): String = collection(
         buses.map { b ->
-            point(b.lon, b.lat, JSONObject().put("id", b.id).put("svc", svc).put("color", hex(color)).put("heading", b.heading ?: 0.0).put("moving", b.moving && b.heading != null))
+            point(b.lon, b.lat, JSONObject().put("id", b.id).put("svc", svc).put("color", hex(color)).put("heading", b.heading ?: 0.0).put("offset", JSONArray().put(b.ox).put(b.oy)))
         },
     )
 
@@ -252,106 +258,68 @@ object MapGeoJson {
 }
 
 /**
- * Each bus's glide from where it was drawn to where it is. The API says
- * where each bus is estimated to be now and how fast it's going ([LiveBus.speed]
- * up to [LiveBus.until]), so a bus keeps moving between answers, catching up
- * with each new one over [catchMs]; a little ahead of it (it went slower than
- * shown), it waits rather than reversing. One whose position hasn't changed
- * keeps going. Along its route line when both ends are on it, so it follows
- * the road round corners, and never straight between two places on it;
- * straight only onto or off its line, a short way. From an older API without
- * a speed, it glides to each position over [ms]. Times are any one clock.
+ * Each bus's slide from where it was drawn to its new place, along its route
+ * line over [ms], so it follows the road round corners, easing in and out.
+ * Its old and new places may be beside the line (a stop's dot, and beside
+ * it), so it moves from one to the other as it goes. One that can't get there
+ * along the line (behind it, a long way on, no line) jumps, and so does every
+ * bus with [still] (animations off) or after a while without an answer.
+ * Times are any one clock.
  */
-class Glides(private val ms: Long = GLIDE_MS, private val catchMs: Long = CATCH_MS) {
-    private class Glide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double?)
+class Slides(private val ms: Long = SLIDE_MS) {
+    private class Slide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double)
 
-    private var glides: Map<String, Glide> = emptyMap()
+    private var slides: Map<String, Slide> = emptyMap()
 
     /** When the last answer came, to tell a stale map. */
     private var lastUpdate: Long? = null
 
-    /** New positions [buses], with [path] their route's line, at [now]. */
-    fun update(buses: List<LiveBus>, path: RoutePath?, now: Long) {
+    /** New places [buses], with [path] their route's line, at [now]. */
+    fun update(buses: List<LiveBus>, path: RoutePath?, now: Long, still: Boolean = false) {
         // No answer for a while (the screen was off, the app in the
-        // background): every bus jumps to where it is now, not races there.
+        // background): every bus jumps to where it is now.
         val stale = lastUpdate.let { it == null || now - it > STALE_MS }
         lastUpdate = now
-        glides = buses.associate { b ->
-            val g = glides[b.id]
-            b.id to when {
-                g != null && g.to.lat == b.lat && g.to.lon == b.lon -> Glide(g.from, b, g.start, g.path, g.d)
-                stale -> Glide(null, b, now, if (b.along != null) path else null, null)
-                else -> glideFrom(g?.let { at(it, now) }, b, path, now)
-            }
+        slides = buses.associate { raw ->
+            val b = raw.placed()
+            val from = slides[b.id]?.let { at(it, now) }
+            val d = if (stale || still || from == null || path == null) null else path.aheadBy(from, b)
+            b.id to if (d != null) Slide(from, b, now, path, d) else Slide(null, b, now, null, 0.0)
         }
     }
 
     /** Each bus where it's drawn at [now]. */
-    fun at(now: Long): List<LiveBus> = glides.values.map { at(it, now) }
+    fun at(now: Long): List<LiveBus> = slides.values.map { at(it, now) }
 
     /** Whether any bus is still on its way at [now]. */
-    fun moving(now: Long): Boolean = glides.values.any { g ->
-        (g.from != null && now - g.start < span(g.to)) || (g.path != null && (g.to.speed ?: 0.0) * (now - g.start) / 1000.0 < g.to.onFor)
-    }
+    fun moving(now: Long): Boolean = slides.values.any { it.from != null && now - it.start < ms }
 
-    private fun span(b: LiveBus) = if (b.speed == null) ms else catchMs
-
-    private fun glideFrom(from: LiveBus?, b: LiveBus, path: RoutePath?, now: Long): Glide {
-        val jump = Glide(null, b, now, if (b.along != null) path else null, null)
-        if (from == null) return jump
-        val d = path?.alongBy(from, b)
-        // Put back a little (GPS error), it waits where it's drawn; a long way
-        // back, or further ahead than JUMP_AHEAD_M, it jumps rather than race there.
-        if (d != null) return if (d < -HOLD_BACK_M || (d > JUMP_AHEAD_M && b.speed != null)) jump else Glide(from, b, now, path, d)
-        // On its line at both ends but not along it (the other side of the road, a long way): it jumps, never cuts across.
-        if (from.along != null && b.along != null) return jump
-        if (RoutePath.haversine(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return jump
-        return Glide(from, b, now, null, null)
-    }
-
-    private fun at(g: Glide, now: Long): LiveBus {
-        val b = g.to
-        // Metres the answer's bus has gone on since.
-        val on = min(b.onFor, (b.speed ?: 0.0) * max(0L, now - g.start) / 1000.0)
-        val f = g.from
-        val path = g.path
-        if (f == null) {
-            val a = b.along
-            return if (path != null && a != null && on > 0) along(path, b, a + on, true) else b
-        }
-        val k = ((now - g.start).toDouble() / span(b)).coerceIn(0.0, 1.0)
-        val d = g.d
-        val fa = f.along
-        // Mid-glide straight, it's off the line: the next glide is straight too.
-        if (path == null || d == null || fa == null) {
-            return if (k >= 1.0) b else b.copy(lat = f.lat + (b.lat - f.lat) * k, lon = f.lon + (b.lon - f.lon) * k, along = null)
-        }
-        val target = d + on
-        val m = if (d >= 0) target * k else max(0.0, target)
-        return along(path, b, fa + m, m > 0)
-    }
-
-    /** [b] drawn [m] metres along [path]; pointing along the road when it's going [forward]. */
-    private fun along(path: RoutePath, b: LiveBus, m: Double, forward: Boolean): LiveBus {
-        val (lat, lon, road) = path.pointAt(m)
-        return b.copy(lat = lat, lon = lon, along = path.wrap(m), heading = if (forward) road else b.heading)
+    private fun at(s: Slide, now: Long): LiveBus {
+        val f = s.from
+        val path = s.path
+        val b = s.to
+        val fa = f?.along
+        val ba = b.along
+        if (f == null || path == null || fa == null || ba == null) return b
+        val k = ((now - s.start).toDouble() / ms).coerceIn(0.0, 1.0)
+        if (k >= 1.0) return b
+        val e = if (k < 0.5) 2 * k * k else 1 - (-2 * k + 2).pow(2) / 2
+        val (lat, lon, road) = path.pointAt(fa + s.d * e)
+        val (aLat, aLon) = path.pointAt(fa)
+        val (bLat, bLon) = path.pointAt(ba)
+        return b.copy(
+            lat = lat + (f.lat - aLat) * (1 - e) + (b.lat - bLat) * e,
+            lon = lon + (f.lon - aLon) * (1 - e) + (b.lon - bLon) * e,
+            along = path.wrap(fa + s.d * e),
+            heading = road,
+            ox = f.ox + (b.ox - f.ox) * e,
+            oy = f.oy + (b.oy - f.oy) * e,
+        )
     }
 
     companion object {
-        /** From an older API without a speed: about as long as the feed holds a position. */
-        const val GLIDE_MS = 15_000L
-
-        /** Catching up with a new answer: about one answer. */
-        const val CATCH_MS = 5_000L
-
-        /** Off its line, further than this from where it's drawn, a bus jumps (not across buildings). */
-        const val GLIDE_STRAIGHT_MAX_M = 250.0
-
-        /** Put back along its line by less than this, a bus waits where it's drawn instead of reversing. */
-        const val HOLD_BACK_M = 60.0
-
-        /** Further ahead than this, a bus jumps to its new place: the map was a long way behind it. */
-        const val JUMP_AHEAD_M = 100.0
+        /** About a second: long enough to see where it went. */
+        const val SLIDE_MS = 1_000L
 
         /** No answer for longer than this: every bus jumps to where it is now. */
         const val STALE_MS = 15_000L

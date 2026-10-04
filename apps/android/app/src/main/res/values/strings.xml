@@ -6,7 +6,7 @@
     <string name="crowd_medium">Medium</string>
     <string name="map_about">~%1$s</string>
     <string name="map_arriving">Arriving</string>
-    <string name="map_bus_stopped">Stopped</string>
+    <string name="map_bus_at">At %1$s</string>
     <string name="map_bus_title">%1$s bus</string>
     <string name="map_buses">%1$d buses on %2$s</string>
     <string name="map_buses_unavailable">Live buses aren’t available right now.</string>
@@ -21,7 +21,6 @@
     <string name="map_no_buses">No %1$s buses running right now.</string>
     <string name="map_no_buses_due">No buses due</string>
     <string name="map_no_times">No times right now</string>
-    <string name="map_not_on_route">Not on its route right now</string>
     <string name="map_one_bus">1 bus on %1$s</string>
     <string name="map_places_full">Saved places limit reached</string>
     <string name="map_recentre">Back to campus</string>

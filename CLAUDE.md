@@ -230,18 +230,16 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
   - Tracks are kept in the edge cache with the placed buses
     (`trackedBuses`), so every instance answers the same. Placing is a pure
     function of the update, its time and the tracks.
-  - Within 50 m of its line, a bus is drawn **on** the line, with
-    `along` = metres along it, never moving back. A short jump off the line
-    (under 30 s) holds it at its last place.
-  - The feed only refreshes every 15–20 s (its own time stamp; no faster
-    source exists), so each bus is shown where it's estimated to be now
-    (`motion`): on from its reading at 0.8 × the feed's speed, at most 25 s,
-    never past its next stop, never back. `speed` and `until` let clients
-    keep it moving between answers.
-  - Clients poll every 5 s and keep each bus moving along its line, catching
-    up with each answer over 5 s (web `map.js` `moveTo`; Android `Glides`).
-    Between two places on the line they move along it or jump, never
-    straight across.
+  - The readings are too far apart and noisy to draw a bus where it is, so
+    it's shown **at a stop or between two** (`sectionOf`): within 40 m of a
+    stop along its line, at that stop's dot (`at`, `slot` when several are
+    there); otherwise halfway between the stop it passed and the next, or
+    spread evenly with several (thirds for two), never back on the same
+    stretch. A bus over 50 m off its line isn't shown.
+  - Clients poll every 5 s. A bus at a stop is drawn a few pixels beside
+    the dot, on the kerb side (left of its heading), the ones behind it
+    further back; a bus that changes place slides there along the line in
+    about a second (web `map.js` `moveTo`; Android `Slides`), or jumps.
   - `test/fixtures/bus-trace.jsonl` is a real feed trace (the probe
     workflow with `trace`); `buses.test.js` replays it.
   - Each bus comes with its number plate (`plate`, shown on its card on

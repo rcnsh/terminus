@@ -25,27 +25,19 @@ const PMTILES = '/vendor/pmtiles%404.5.0/pmtiles.mjs';
 const BUSES_MS = 5_000;
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
 const ARRIVALS_MS = 15_000;
-/** How long a bus takes to catch up with a new answer, which says where it
- *  is now and how fast it's going (speed, until): about one answer. */
-const CATCH_MS = 5_000;
-/** From an answer without a speed (an older API), how long a bus takes to
- *  glide to its new position: about as long as the feed holds one. */
-const GLIDE_MS = 15_000;
-/** Further than this along its line in one update (back from a hidden tab),
- *  a bus doesn't glide along it. */
-const GLIDE_ALONG_MAX_M = 1_500;
-/** Off its line, further than this from where it's drawn, a bus jumps
- *  instead of gliding straight across (through buildings). */
-const GLIDE_STRAIGHT_MAX_M = 250;
-/** Put back along its line by less than this (GPS error), a bus stays where
- *  it's drawn instead of reversing. */
-const HOLD_BACK_M = 60;
-/** Further ahead than this, a bus jumps to its new place instead of racing
- *  along the road to catch up: the map was a long way behind it. */
-const JUMP_AHEAD_M = 100;
+/** How long a bus takes to slide to its new place along the road. */
+const SLIDE_MS = 1_000;
+/** Further than this along its line in one answer (back from a hidden tab),
+ *  a bus jumps instead of sliding. */
+const SLIDE_MAX_M = 1_500;
 /** No answer for longer than this (the screen was off, the tab hidden, the
  *  connection lost): every bus jumps to where it is now. */
 const STALE_MS = 15_000;
+/** A bus at a stop is drawn this far beside the dot, to its left (the kerb:
+ *  buses drive on the left), and each one behind it this much further back
+ *  along the road: pixels at full size (zoom 17), smaller zoomed out. */
+const AT_STOP_SIDE_PX = 22;
+const AT_STOP_STEP_PX = 26;
 /** Further than this from campus, the map opens on campus, not on you. */
 const NEAR_CAMPUS_M = 3_000;
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts). */
@@ -69,7 +61,7 @@ let map = null;
 let visible = false;
 let busTimer = null;
 let watchId = null;
-/** Each bus's glide, by id: from where it was drawn to where it is now. */
+/** Each bus's slide, by id: from where it was drawn to where it is now. */
 let glides = new Map();
 /** When the last answer came (performance.now()), to tell a stale map. */
 let lastAnswer = -Infinity;
@@ -269,8 +261,9 @@ function addLayers() {
       'text-field': ['get', 'name'],
       'text-font': ['Noto Sans Medium'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 15, 11, 18, 14],
-      'text-offset': [0, 0.9],
-      'text-anchor': 'top',
+      // Below the dot, or another side of it when a bus is there.
+      'text-variable-anchor': ['top', 'bottom', 'right', 'left'],
+      'text-radial-offset': 0.9,
       'text-optional': true,
       'text-max-width': 8,
     },
@@ -279,16 +272,53 @@ function addLayers() {
   map.addLayer({ id: 'me-halo', type: 'circle', source: 'me', paint: { 'circle-radius': 14, 'circle-color': '#2b7bf3', 'circle-opacity': 0.18 } });
   map.addLayer({ id: 'me', type: 'circle', source: 'me', paint: { 'circle-radius': 6.5, 'circle-color': '#2b7bf3', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5 } });
   if (!map.hasImage('heading')) map.addImage('heading', arrow('#ffffff'), { pixelRatio: 2 });
-  map.addLayer({ id: 'buses', type: 'circle', source: 'buses', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 7, 17, 11], 'circle-color': ['get', 'color'], 'circle-stroke-color': paper, 'circle-stroke-width': 2.5 } });
-  map.addLayer({
-    id: 'bus-heading',
+  paintBus();
+  // Icons, not circles, so a bus at a stop can sit beside the dot: a
+  // symbol's offset is per bus, in pixels, and turns with the road.
+  const bus = (id, image) => ({
+    id,
     type: 'symbol',
     source: 'buses',
-    filter: ['==', ['get', 'moving'], true],
-    layout: { 'icon-image': 'heading', 'icon-rotate': ['get', 'heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.7, 17, 1] },
+    layout: {
+      'icon-image': image,
+      'icon-size': BUS_SIZE,
+      'icon-rotate': ['get', 'heading'],
+      'icon-rotation-alignment': 'map',
+      'icon-offset': ['get', 'offset'],
+      'icon-allow-overlap': true,
+      // Stop names keep clear of buses (they move to another side of their dot).
+      'icon-ignore-placement': image !== 'bus',
+    },
   });
+  map.addLayer(bus('buses', 'bus'));
+  map.addLayer(bus('bus-heading', 'heading'));
   highlight();
   drawBuses(frameAt(performance.now()));
+}
+
+/** How big a bus is drawn: full size from zoom 17, smaller zoomed out. */
+const BUS_SIZE = ['interpolate', ['linear'], ['zoom'], 13, 0.64, 17, 1];
+const busSize = (zoom) => Math.max(0.64, Math.min(1, 0.64 + ((zoom - 13) * 0.36) / 4));
+
+/** The bus icon in the chosen service's colour, ringed in the page's: one
+ *  service's buses are shown at a time. */
+function paintBus() {
+  const paper = dark() ? '#1a1816' : '#ffffff';
+  const color = colorOf(selected.get());
+  // At 2 pixels a point: 11 across the disc, with a 2.5 ring.
+  const size = 60;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  for (const [r, fill] of [[27, paper], [22, color]]) {
+    g.fillStyle = fill;
+    g.beginPath();
+    g.arc(size / 2, size / 2, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  const image = g.getImageData(0, 0, size, size);
+  if (map.hasImage('bus')) map.updateImage('bus', image);
+  else map.addImage('bus', image, { pixelRatio: 2 });
 }
 
 /** A small white arrow pointing up (north) before rotation. */
@@ -333,6 +363,7 @@ function choose(svc) {
   glides = new Map();
   drawBuses([]);
   highlight();
+  if (map) paintBus();
   status.set(null);
   if (!svc) return;
   map.fitBounds(boundsOf(campusData.get().routes[svc].line), { padding: { top: 80, bottom: 40, left: 40, right: 40 }, maxZoom: 16.5, duration: 600 });
@@ -363,12 +394,11 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /**
- * Starts a glide for each bus whose position changed, from where it's drawn
- * to where it is: along its route line when both ends are on it, so it
- * follows the road round corners; straight only onto or off its line. The
- * API says where each bus is estimated to be now and how fast it's going,
- * so a bus keeps moving between answers, up to the place the answer says
- * it doesn't pass. A bus whose position hasn't changed keeps going.
+ * Slides each bus whose place changed from where it's drawn to its new
+ * place, along its route line, so it follows the road round corners. One
+ * that can't get there along the line (behind it, or a long way on) jumps,
+ * and so does every bus with reduced motion or after a while without an
+ * answer.
  */
 function moveTo(buses) {
   const now = performance.now();
@@ -378,75 +408,48 @@ function moveTo(buses) {
   const path = pathOf(campusData.get()?.routes[selected.get()]?.line);
   shown.set(new Map(buses.map((b) => [b.id, b])));
   const next = new Map();
-  for (const b of buses) {
+  for (const raw of buses) {
+    const b = { ...raw, offset: raw.at ? [-AT_STOP_SIDE_PX, AT_STOP_STEP_PX * raw.slot] : [0, 0] };
     const g = glides.get(b.id);
-    if (g && g.to.lat === b.lat && g.to.lon === b.lon) next.set(b.id, { ...g, to: b });
-    else if (reduce || stale) next.set(b.id, { from: null, to: b, start: now, path: b.along != null ? path : null });
-    else next.set(b.id, glideFrom(g ? positionAt(g, now) : null, b, path, now));
+    const from = g ? positionAt(g, now) : null;
+    const d = !reduce && !stale && from && path ? aheadBy(path, from, b) : null;
+    next.set(b.id, d ? { from, to: b, start: now, path, d } : { from: null, to: b, start: now });
   }
   glides = next;
   cancelAnimationFrame(glide);
   const step = (ms) => {
     drawBuses(frameAt(ms));
-    if ([...glides.values()].some((g) => moving(g, ms))) glide = requestAnimationFrame(step);
+    if ([...glides.values()].some((g) => g.from && ms - g.start < SLIDE_MS)) glide = requestAnimationFrame(step);
   };
   glide = requestAnimationFrame(step);
 }
-
-/** Whether glide [g]'s bus is still on its way at [now]. */
-function moving(g, now) {
-  if (g.from && now - g.start < (g.to.speed == null ? GLIDE_MS : CATCH_MS)) return true;
-  return Boolean(g.path && g.to.speed > 0 && (g.to.speed * (now - g.start)) / 1000 < onFor(g.to));
-}
-
-/** Metres an answer's bus may go on along its line before the next answer. */
-const onFor = (b) => (b.speed > 0 && b.until != null && b.along != null ? Math.max(0, b.until - b.along) : 0);
 
 function frameAt(now) {
   return [...glides.values()].map((g) => positionAt(g, now));
 }
 
 /**
- * A glide for bus [b] from [from] (where it's drawn; null for a new bus),
- * or none: it jumps there. On its line at both ends, it only ever moves
- * along the line: a bus that can't glide along it (the other side of the
- * road, a long way) jumps rather than cut across, and so does one further
- * ahead than JUMP_AHEAD_M rather than race to catch up. Straight only onto
- * or off its line, a short way.
- */
-function glideFrom(from, b, path, now) {
-  const jump = { from: null, to: b, start: now, path: b.along != null ? path : null };
-  if (!from) return jump;
-  const d = path && alongBy(path, from, b);
-  // An older API's answer (no speed) glides 15 s and may be further ahead.
-  if (d != null) return d < -HOLD_BACK_M || (d > JUMP_AHEAD_M && b.speed != null) ? jump : { from, to: b, start: now, path, d };
-  if (from.along != null && b.along != null) return jump;
-  if (haversineM(from.lat, from.lon, b.lat, b.lon) > GLIDE_STRAIGHT_MAX_M) return jump;
-  return { from, to: b, start: now, path: null, d: null };
-}
-
-/**
- * Where glide [g]'s bus is drawn at [now]. Its answer goes on at its speed
- * up to its until; the bus catches up with that over CATCH_MS, or, a little
- * ahead of it (the bus went slower than shown), waits for it.
+ * Where slide [g]'s bus is drawn at [now]: along the line from its old place
+ * to its new one, easing in and out. Its old and new places may be beside the
+ * line (a stop's dot, and beside it), so it moves from one to the other as
+ * it goes.
  */
 function positionAt(g, now) {
-  // Metres the answer's bus has gone on since.
-  const on = Math.min(onFor(g.to), ((g.to.speed ?? 0) * Math.max(0, now - g.start)) / 1000);
-  if (!g.from) return g.path && on > 0 ? alongAt(g.path, g.to, g.to.along + on, true) : g.to;
-  const k = Math.max(0, Math.min(1, (now - g.start) / (g.to.speed == null ? GLIDE_MS : CATCH_MS)));
-  // Mid-glide straight, it's off the line: the next glide is straight too.
-  if (g.d == null) return k === 1 ? g.to : { ...g.to, along: null, lat: g.from.lat + (g.to.lat - g.from.lat) * k, lon: g.from.lon + (g.to.lon - g.from.lon) * k };
-  const target = g.d + on;
-  const m = g.d >= 0 ? target * k : Math.max(0, target);
-  return alongAt(g.path, g.to, g.from.along + m, m > 0);
-}
-
-/** Bus [b] drawn [m] metres along [path]; pointing along the road when it's going [forward]. */
-function alongAt(path, b, m, forward) {
-  const at = pointAt(path, m);
-  const total = path.total;
-  return { ...b, along: path.closed ? ((m % total) + total) % total : m, lat: at.lat, lon: at.lon, heading: forward ? at.bearing : b.heading };
+  if (!g.from) return g.to;
+  const k = Math.max(0, Math.min(1, (now - g.start) / SLIDE_MS));
+  if (k === 1) return g.to;
+  const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+  const { from, to, path, d } = g;
+  const at = pointAt(path, from.along + d * e);
+  const [a, b] = [pointAt(path, from.along), pointAt(path, to.along)];
+  return {
+    ...to,
+    along: path.closed ? (((from.along + d * e) % path.total) + path.total) % path.total : from.along + d * e,
+    lat: at.lat + (from.lat - a.lat) * (1 - e) + (to.lat - b.lat) * e,
+    lon: at.lon + (from.lon - a.lon) * (1 - e) + (to.lon - b.lon) * e,
+    heading: at.bearing,
+    offset: [from.offset[0] + (to.offset[0] - from.offset[0]) * e, from.offset[1] + (to.offset[1] - from.offset[1]) * e],
+  };
 }
 
 /* A route line measured as the API measures it (haversine, metres from its
@@ -468,22 +471,14 @@ function pathOf(line) {
   return p;
 }
 
-/** Metres to glide along [path] from bus [f] to bus [b]; null when not
- *  along it (off the line, a line that isn't the API's, or a long way). */
-function alongBy(path, f, b) {
-  if (f.along == null || b.along == null || path.total <= 0) return null;
-  // A line kept from before the route changed: `along` isn't a place on it.
-  for (const x of [f, b]) {
-    const at = pointAt(path, x.along);
-    if (haversineM(at.lat, at.lon, x.lat, x.lon) > 10) return null;
-  }
+/** Metres on along [path] from bus [f] to bus [b], round a loop past its
+ *  start; null when it isn't on ahead (the same place, behind, a long way,
+ *  or a line kept from before the route changed). */
+function aheadBy(path, f, b) {
+  if (f.along == null || b.along == null || path.total <= 0 || f.along > path.total + 1 || b.along > path.total + 1) return null;
   let d = b.along - f.along;
-  // Round a loop the short way, past its start.
-  if (path.closed) {
-    if (d < -path.total / 2) d += path.total;
-    else if (d > path.total / 2) d -= path.total;
-  }
-  return Math.abs(d) > GLIDE_ALONG_MAX_M ? null : d;
+  if (path.closed && d < -path.total / 2) d += path.total;
+  return d > 0 && d <= SLIDE_MAX_M ? d : null;
 }
 
 /** The point [m] metres along [path], and the road's direction there. */
@@ -516,7 +511,7 @@ function drawBuses(buses) {
     type: 'FeatureCollection',
     features: buses.map((b) => ({
       type: 'Feature',
-      properties: { id: b.id, svc: b.svc, color: b.color, heading: b.heading ?? 0, moving: Boolean(b.moving && b.heading !== null) },
+      properties: { id: b.id, svc: b.svc, color: b.color, heading: b.heading ?? 0, offset: b.offset ?? [0, 0] },
       geometry: { type: 'Point', coordinates: [b.lon, b.lat] },
     })),
   });
@@ -535,7 +530,7 @@ function onClick(e) {
   const around = (n) => [[e.point.x - n, e.point.y - n], [e.point.x + n, e.point.y + n]];
   let best = null;
   for (const f of map.queryRenderedFeatures(around(r), { layers: ['buses', 'stops'] })) {
-    const p = map.project(f.geometry.coordinates);
+    const p = f.layer.id === 'buses' ? drawnAt(f) : map.project(f.geometry.coordinates);
     // A bus wins over a stop under it.
     const d = Math.hypot(p.x - e.point.x, p.y - e.point.y) - (f.layer.id === 'buses' ? 12 : 0);
     if (d <= r && (!best || d < best.d)) best = { f, d };
@@ -547,6 +542,18 @@ function onClick(e) {
   }
   if (!best) return sheet.set(null);
   sheet.set(best.f.layer.id === 'buses' ? { bus: best.f.properties.id } : { stop: best.f.properties.code });
+}
+
+/** Where bus feature [f] is drawn on screen: its point, moved by its offset
+ *  (turned with the road, and sized with the bus). */
+function drawnAt(f) {
+  const p = map.project(f.geometry.coordinates);
+  // Arrays come back from the map as JSON text.
+  const o = f.properties.offset;
+  const [ox, oy] = typeof o === 'string' ? JSON.parse(o) : (o ?? [0, 0]);
+  const k = busSize(map.getZoom());
+  const r = ((f.properties.heading - map.getBearing()) * Math.PI) / 180;
+  return { x: p.x + k * (ox * Math.cos(r) - oy * Math.sin(r)), y: p.y + k * (ox * Math.sin(r) + oy * Math.cos(r)) };
 }
 
 /** Walking directions in the phone's maps app: Apple Maps on Apple devices, Google Maps elsewhere. */
@@ -614,9 +621,9 @@ function BusSheet({ id, box }) {
   }, [b]);
   if (!b) return null;
   return html`
-    <${Frame} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.moving ? null : t('Stopped')} box=${box}>
+    <${Frame} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.at ? t('At {0}', b.at.name) : null} box=${box}>
       <div class="sheet-rows">
-        <div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop?.name ?? t('Not on its route right now')}</span></div>
+        ${b.nextStop && html`<div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop.name}</span></div>`}
         ${b.crowd && html`<div class="sheet-row"><span>${t('Crowding')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}
       </div>
     <//>
