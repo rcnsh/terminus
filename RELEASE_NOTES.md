@@ -1,34 +1,21 @@
-<!-- 2.1.0 -->
-### terminus 2.1.0
+<!-- 2.2.0 -->
+### terminus 2.2.0
 
-**A map of campus.** On Android and the web app, a new **Map** tab shows every bus route in its colour on a street map of campus. Tap a service along the top to see its line and its buses moving live; tap a bus for its number plate, how busy it is and where it stops next, with the bus ringed and the stretch of road it's on picked out. Tap a stop for what's coming, the services that call there, and **Go there**, walking directions or **Save as place**. After the first look it works offline; on Android the street map downloads once (about 4 MB).
+**The map comes to the Mac.** A **Map** button at the bottom of the menu bar app, and **Map…** in its menu, open the campus map in a window of its own, as on the phone and the web: every route in its colour on a street map of campus, a button per service along the top to show its line and its buses moving live, and a card for a stop (what's coming, the services that call there, **Go there** and walking directions) or a bus (its number plate, how busy it is and where it stops next). The street map downloads once (about 4 MB), then works offline.
 
-**Live buses that look right.** Each bus stays on its own side of the road, keeps moving between updates, and is drawn close to where it really is. The map never animates a bus across the road or backwards, and after the screen has been off, buses appear where they are instead of racing there.
+**The same app everywhere.** Android, the web app and the Mac now do the same things:
 
-**Now · Map · Settings.** The app and the web app have a bar along the bottom, and Settings moves into it. Switching tabs fades smoothly from one to the next, and each tab stays where you left it, scrolled to the same place, with the map looking at the same streets. In the web app, Settings opens without loading a new page.
+- **Settings in three groups** (Your day, Account and Display), with **About** and **Send feedback** underneath, on every app.
+- **Your timetable, on every app.** Change the stop for any class, add a class or commitment by hand, pick a stop for rooms the import couldn't place, or skip them. When the semester has ended, it says to import the new timetable. On the Mac this needed the account page before.
+- **Download my data** from Settings › Account on the phone and the Mac.
+- **The stop across the road.** Nearby has a swap button for the stop on the other side of the road, in the app and the web app as on the widget.
+- **On the bus,** the card shows how far along the ride you are and the next stop, on every app.
+- **Places you searched for keep a tab**, with an × to close it, on the web and the Mac as on the phone, and **Go later today at…** plans a one-off trip there.
+- **Start without an email on the Mac**, as on the phone and the web. Add one later in Settings › Account to use the same account everywhere.
+- On the Mac, **Your trips** shows the choices you've made and your trip history, with Undo and Clear.
 
-**Settings, reorganised.** Settings is now a short list (Your trips, Timetable, Favourites, Notifications, Devices, Language and time, Appearance and Account), each with a line saying what's set. Tap one to open its page. On Android the back gesture closes it, and the page follows your finger as you swipe. On the web, the browser's Back button closes it, and on a wide screen the list and the page sit side by side. In the web app the list is three short cards, Your day, Account and Display, with Appearance as a switch on its row and **About** and **Send feedback** underneath. On the Mac, **Settings…** in the menu opens a Settings window with the groups down the side. On every app, Your trips is now three short groups (Where you live, Your day and Walking) instead of one long page, and the Mac gains the day's hours and the gap for going home.
+**Lighter on your phone.** During a trip the app checks your location half as often, with no loss: a bus takes longer than that between stops. A newer street map (about twice a year) waits for Wi-Fi; the first download doesn't.
 
-**Notifications have moved.** On Android, the switches for leave alerts, the live notification and noticing when you board are now in Settings, under Notifications. In the web app, **Notify me when to leave** is there too. The leave-by notification has a **Not going** button, which takes that class off today without opening the app.
+**Faster web pages.** The website's fonts come from terminus itself instead of Google, and the Chinese text loads only for Chinese pages.
 
-**A calmer card.** The card shows one plan. When going now also works, it's one quiet line underneath, **Or go now**, rather than a second plan.
-
-**Favourites are one tap.** Favourites no longer take usual times: something you do every week belongs in your timetable, under **Add a class or commitment by hand**, which lists your favourites first. Usual times you already saved keep working and show in Timetable with that day's classes.
-
-**12- or 24-hour times.** Settings › Language and time lets you choose 12-hour or 24-hour times, or follow your phone, browser or Mac. It's kept with your account, so every device shows times the same way, widgets and notifications included. Setup asks too.
-
-**Crowding, in plain words.** A bus's crowding reads low, medium or high, and the setting for full buses is now "Allow for busy buses".
-
-**A new semester.** When a new semester starts and you haven't imported its timetable yet, terminus sends one reminder to do it.
-
-**Light or dark.** Settings › Appearance lets you choose light, dark, or follow your phone, browser or Mac, as before. The choice is for that device only.
-
-**Quicker to open.** The app and the web app show your last plan as soon as they open, then update it. Going back to Next or a favourite you've already looked at shows it straight away while it refreshes.
-
-**Smaller things.** In the web app, the card counts down to the second ("Leaves in 3 min 12 s"), and **Is this wrong?** sits under it on Now. The landing page has an **Open the app** button beside Sign in. The web app can search for anywhere, as the phone and Mac apps can: tap the search button by Next and Nearby. On Android it moves there too, from the bottom of the screen. Nearby shows each service in its colour, and tapping a stop opens it on the map. Sign-in and pairing codes send themselves once the last character is in. Your timetable in Settings is a line per class, in the clock style you chose. On the Mac you can add and remove favourites in Settings. On a phone, the account page no longer scrolls sideways. Walk times in search use the walking pace you set. When NUS's live bus times are down, the card says so, and since when. The button is called **Not going** everywhere.
-
-**Fixes.** terminus no longer offers a bus that has already left when the live times are a few minutes old, and a timetable guess is never shown as a live time. On the Mac, an update waits until Settings is closed, and changing the language no longer quits the app if it can't start again. Badges on light colours have dark text, so they're easier to read.
-
-**Services in their colours**, as on the buses: A1 red, A2 yellow, D1 pink, D2 purple, K light blue, P grey, R1 orange, R2 green.
-
-**A smaller Android download.** There's an APK for each kind of phone: `terminus-2.1.0.apk` suits nearly every phone, and the app's update button picks the right one by itself.
+**Fixes.** Pairing a phone with a code no longer gets stuck on the setup screen. On Android, Today's leave-by times refresh with the card, so the two always agree. The Mac's menu bar shows `~` on an estimate, as the card does, and a long day scrolls inside the menu instead of running off the screen.
