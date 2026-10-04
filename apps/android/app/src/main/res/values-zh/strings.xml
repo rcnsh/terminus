@@ -7,6 +7,7 @@
     <string name="map_about">约 %1$s</string>
     <string name="map_arriving">即将到站</string>
     <string name="map_bus_at">在 %1$s</string>
+    <string name="map_bus_between">在 %1$s 和 %2$s 之间</string>
     <string name="map_bus_title">%1$s 巴士</string>
     <string name="map_buses">%2$s 有 %1$d 辆巴士</string>
     <string name="map_buses_unavailable">暂时看不到实时巴士。</string>

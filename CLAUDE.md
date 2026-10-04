@@ -235,7 +235,8 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
     stop along its line, at that stop's dot (`at`, `slot` when several are
     there); otherwise halfway between the stop it passed and the next, or
     spread evenly with several (thirds for two), never back on the same
-    stretch. A bus over 50 m off its line isn't shown.
+    stretch. Between stops it comes with its `stretch`, which a tapped bus
+    highlights, so the midpoint doesn't pass for where it is. A bus over 50 m off its line isn't shown.
   - Clients poll every 5 s. A bus at a stop is drawn a few pixels beside
     the dot, on the kerb side (left of its heading), the ones behind it
     further back; a bus that changes place slides there along the line in

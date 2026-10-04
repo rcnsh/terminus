@@ -255,6 +255,11 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val color = ui.selected?.let { campus.routes[it]?.color } ?: 0xFF8A939CL
     val buses = MapGeoJson.buses(ui.selected.orEmpty(), color, drawn)
     val me = ui.me?.let { (lat, lon) -> MapGeoJson.me(lat, lon) } ?: MapGeoJson.EMPTY
+    // A tapped bus between stops: its stretch, the part of the route it's
+    // somewhere on (its midpoint can be a long way from the bus).
+    val openBus = (ui.sheet as? MapSheet.Bus)?.let { sheet -> ui.buses.firstOrNull { it.id == sheet.id } }
+    val stretch = MapGeoJson.stretch(color, path, openBus?.stretch)
+    val stretchOn = stretch != MapGeoJson.EMPTY
 
     val heading = painterResource(R.drawable.ic_heading)
     // The bus: a disc in the service's colour, ringed in the map's. An icon,
@@ -268,6 +273,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         val stopSource = rememberGeoJsonSource(GeoJsonData.JsonString(stops))
         val busSource = rememberGeoJsonSource(GeoJsonData.JsonString(buses))
         val meSource = rememberGeoJsonSource(GeoJsonData.JsonString(me))
+        val stretchSource = rememberGeoJsonSource(GeoJsonData.JsonString(stretch))
         val lineWidth = interpolate(linear(), zoom(), 13 to const(1.5.dp), 16 to const(4.dp), 18 to const(7.dp))
         LineLayer(
             id = "route-casing",
@@ -295,10 +301,27 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
                 filter = feature["svc"].asString() eq const(selected),
                 color = feature["color"].asString().convertToColor(),
                 width = interpolate(linear(), zoom(), 13 to const(3.dp), 16 to const(6.dp), 18 to const(9.dp)),
+                opacity = const(if (stretchOn) 0.35f else 1f),
                 cap = const(LineCap.Round),
                 join = const(LineJoin.Round),
             )
         }
+        LineLayer(
+            id = "stretch-casing",
+            source = stretchSource,
+            color = const(paper),
+            width = interpolate(linear(), zoom(), 13 to const(7.dp), 16 to const(13.dp), 18 to const(18.dp)),
+            cap = const(LineCap.Round),
+            join = const(LineJoin.Round),
+        )
+        LineLayer(
+            id = "stretch",
+            source = stretchSource,
+            color = feature["color"].asString().convertToColor(),
+            width = interpolate(linear(), zoom(), 13 to const(5.dp), 16 to const(9.dp), 18 to const(13.dp)),
+            cap = const(LineCap.Round),
+            join = const(LineJoin.Round),
+        )
         // Of the stops a tap takes in, the one nearest the finger.
         val openNearestStop: FeaturesClickHandler = { features ->
             val codes = features.mapNotNull { it.properties?.get("code")?.toString()?.trim('"') }
@@ -550,7 +573,12 @@ private fun crowdWord(c: String?): String? = when (c) {
 
 @Composable
 private fun BusSheet(bus: LiveBus, svc: String, onClose: () -> Unit) {
-    SheetSurface(stringResource(R.string.map_bus_title, svc), bus.at?.let { stringResource(R.string.map_bus_at, it) }, onClose, badge = bus.plate) {
+    val sub = when {
+        bus.at != null -> stringResource(R.string.map_bus_at, bus.at)
+        bus.stretch != null && bus.nextStop != null -> stringResource(R.string.map_bus_between, bus.stretch.last, bus.nextStop)
+        else -> null
+    }
+    SheetSurface(stringResource(R.string.map_bus_title, svc), sub, onClose, badge = bus.plate) {
         bus.nextStop?.let { SheetRow(stringResource(R.string.map_next_stop), it) }
         crowdWord(bus.crowd)?.let { SheetRow(stringResource(R.string.map_crowding), it) }
     }

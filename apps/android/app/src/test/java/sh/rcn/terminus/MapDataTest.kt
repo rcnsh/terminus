@@ -139,13 +139,34 @@ class MapDataTest {
 
     @Test fun busesSayWhichStopTheyAreAt() {
         val list = BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": [
-            {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}},
-            {"id": "b", "lat": 1.0, "lon": 103.0, "along": 900, "heading": 90, "moving": true, "crowd": null, "at": null, "slot": 0, "nextStop": null}]}"""))
+            {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "stretch": null, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}},
+            {"id": "b", "lat": 1.0, "lon": 103.0, "along": 900, "heading": 90, "moving": true, "crowd": null, "at": null, "slot": 0, "stretch": {"from": 812.5, "to": 1100, "last": {"code": "COM3", "name": "COM 3"}}, "nextStop": null}]}"""))
         assertEquals("COM 3", list.buses[0].at)
         assertEquals(1, list.buses[0].slot)
         assertEquals("PD726D", list.buses[0].plate)
         assertNull(list.buses[1].at)
         assertNull("an older API: no plate", list.buses[1].plate)
+        assertNull("at a stop: no stretch", list.buses[0].stretch)
+        assertEquals(Stretch(812.5, 1100.0, "COM 3"), list.buses[1].stretch)
+    }
+
+    @Test fun aTappedBusShowsTheStretchItIsOn() {
+        // East, then north: an L with its corner at (103.001, 1.0).
+        val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))
+        val leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
+        val line = path.slice(leg - 20, leg + 30)!!
+        assertEquals("from its start, round the corner, to its end", 3, line.size)
+        assertEquals(103.001, line[1][0], 1e-12)
+        assertEquals(path.pointAt(leg + 30).second, line[2][0], 1e-12)
+        assertEquals(path.pointAt(leg + 30).first, line[2][1], 1e-12)
+        assertEquals("a straight piece: just its ends", 2, path.slice(10.0, 20.0)!!.size)
+        assertNull("not a stretch of this line", path.slice(20.0, 10.0))
+        assertNull(path.slice(10.0, path.total + 500))
+        val geo = JSONObject(MapGeoJson.stretch(0xFF8E44C9L, path, Stretch(leg - 20, leg + 30, "COM 3"))).getJSONArray("features").getJSONObject(0)
+        assertEquals("#8e44c9", geo.getJSONObject("properties").getString("color"))
+        assertEquals(3, geo.getJSONObject("geometry").getJSONArray("coordinates").length())
+        assertEquals("no stretch, nothing drawn", MapGeoJson.EMPTY, MapGeoJson.stretch(0xFF8E44C9L, path, null))
+        assertEquals(MapGeoJson.EMPTY, MapGeoJson.stretch(0xFF8E44C9L, null, Stretch(0.0, 10.0, "COM 3")))
     }
 
     @Test fun busesSayHowFarAlongTheirLineTheyAre() {

@@ -338,6 +338,7 @@ test('/buses shows each bus on its route at a stop or between two, with its numb
   assert.ok(on.at === null || shape.stops.includes(on.at.code), 'at one of its stops, or between two');
   assert.equal(typeof on.along, 'number');
   assert.equal(on.slot, 0);
+  assert.ok(on.at ? on.stretch === null : on.stretch.from < on.along && on.along < on.stretch.to, 'between stops, the stretch it is on');
   assert.match(on.id, /^[0-9a-f]{12}$/);
   assert.equal(on.plate, 'PD123A', 'each bus comes with its plate');
   assert.equal(fetchImpl.requests[0].body.route_code, 'D2');

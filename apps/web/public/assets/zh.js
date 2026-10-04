@@ -390,6 +390,7 @@ window.TERMINUS_ZH = {
  "Show {0} on the map": "在地图上显示 {0}",
  "{0} bus": "{0} 巴士",
  "At {0}": "在 {0}",
+ "Between {0} and {1}": "在 {0} 和 {1} 之间",
  "Next stop": "下一站",
  "Crowding": "拥挤程度",
  "Save as place": "存为地点",

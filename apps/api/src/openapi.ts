@@ -243,7 +243,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Live buses on one service',
           description:
-            'Which stop each bus on a service is at, or which two stops it is between, how full it is and the stop it reaches next. Positions come from the live feed through a 5-second cache per service. The feed gives a new position only every 15 to 20 seconds, too far apart to draw a bus where it really is, so each bus is shown at a stop or between two. Within 40 metres of one of its stops, measured along its route, it is at that stop (`at`), with `lat` and `lon` the stop’s own; a map draws it just beside the stop, and several there side by side by `slot`. Otherwise it is halfway between the stop it passed and its next one, on the route line, or spread evenly between them when there are several (a third and two thirds of the way for two). On a road the route uses both ways, its side follows from where it has been: a bus only moves forward along its route, so it keeps its side and its next stop only moves on. A bus away from its route (such as one parked at the depot) is left out. `plate` is the bus’s number plate, as painted on it; `id` stays the same for a bus while it runs, so a map can move it from one place to the next.',
+            'Which stop each bus on a service is at, or which two stops it is between, how full it is and the stop it reaches next. Positions come from the live feed through a 5-second cache per service. The feed gives a new position only every 15 to 20 seconds, too far apart to draw a bus where it really is, so each bus is shown at a stop or between two. Within 40 metres of one of its stops, measured along its route, it is at that stop (`at`), with `lat` and `lon` the stop’s own; a map draws it just beside the stop, and several there side by side by `slot`. Otherwise it is halfway between the stop it passed and its next one, on the route line, or spread evenly between them when there are several (a third and two thirds of the way for two); `stretch` gives that part of the route, so a map can show the bus is somewhere along it. On a road the route uses both ways, its side follows from where it has been: a bus only moves forward along its route, so it keeps its side and its next stop only moves on. A bus away from its route (such as one parked at the depot) is left out. `plate` is the bus’s number plate, as painted on it; `id` stays the same for a bus while it runs, so a map can move it from one place to the next.',
           operationId: 'getBuses',
           parameters: [
             { name: 'svc', in: 'query', required: true, description: 'Service code, case-insensitive.', schema: { type: 'string' }, example: 'D2' },
@@ -257,7 +257,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   example: {
                     svc: 'D2',
                     color: '#8e44c9',
-                    buses: [{ id: '3f9a1c0b7e21', plate: 'PD726D', lat: 1.29497, lon: 103.77349, along: 1834.2, heading: 92, moving: true, crowd: 'low', at: null, slot: 0, nextStop: { code: 'COM3', name: 'COM 3' } }],
+                    buses: [{ id: '3f9a1c0b7e21', plate: 'PD726D', lat: 1.29497, lon: 103.77349, along: 1834.2, heading: 92, moving: true, crowd: 'low', at: null, slot: 0, stretch: { from: 1410.5, to: 2257.9, last: { code: 'LT13', name: 'LT13' } }, nextStop: { code: 'COM3', name: 'COM 3' } }],
                     asOf: '2026-10-02T01:14:02.000Z',
                     available: true,
                     stale: false,
@@ -1429,7 +1429,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['id', 'plate', 'lat', 'lon', 'along', 'heading', 'moving', 'crowd', 'at', 'slot', 'nextStop'],
+                required: ['id', 'plate', 'lat', 'lon', 'along', 'heading', 'moving', 'crowd', 'at', 'slot', 'stretch', 'nextStop'],
                 properties: {
                   id: { type: 'string', description: 'Stable for a bus while it runs.' },
                   plate: { type: 'string', example: 'PD726D', description: 'The bus’s number plate, as painted on it.' },
@@ -1445,6 +1445,16 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     properties: { code: { type: 'string' }, name: { type: 'string' } },
                   },
                   slot: { type: 'integer', minimum: 0, description: 'At a stop, its place among the buses there: 0 for the one in front, then 1, 2 behind it. 0 between stops.' },
+                  stretch: {
+                    type: ['object', 'null'],
+                    description: 'Between stops, the part of its route line the bus is somewhere on: from the stop it passed (`last`) to its next stop, in metres along the line (`from`, `to`). Null at a stop.',
+                    required: ['from', 'to', 'last'],
+                    properties: {
+                      from: { type: 'number' },
+                      to: { type: 'number' },
+                      last: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } },
+                    },
+                  },
                   nextStop: {
                     type: ['object', 'null'],
                     properties: { code: { type: 'string' }, name: { type: 'string' } },

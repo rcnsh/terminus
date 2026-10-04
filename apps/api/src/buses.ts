@@ -129,6 +129,10 @@ export interface LiveBus {
   /** At a stop, its place among the buses there: 0 the one in front, then
    *  1, 2 behind it. 0 between stops. */
   slot: number;
+  /** Between stops, the stretch of its route line it's somewhere on, in
+   *  metres along the line, and the stop at its start (the one it passed),
+   *  so a map can show the stretch; null at a stop. */
+  stretch: { from: number; to: number; last: { code: string; name: string } } | null;
   nextStop: { code: string; name: string } | null;
 }
 
@@ -456,6 +460,7 @@ export async function placeBuses(
         crowd: f.b.crowd,
         at: stopOf(k),
         slot: k != null ? i : 0,
+        stretch: k == null ? { from: round(shape.at[from], 10), to: round(shape.at[to!], 10), last: stopOf(from)! } : null,
         nextStop: stopOf(nextOf(shape, f.section, loop)),
       });
     });

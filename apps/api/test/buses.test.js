@@ -210,17 +210,20 @@ test('buses are drawn at their stop’s dot, or spread evenly between two stops'
   assert.equal(by.P1.lon, Math.round(graph.stops[1].lon * 1e6) / 1e6);
   assert.equal(by.P1.along, 500);
   assert.equal(by.P1.nextStop.code, 'C');
+  assert.equal(by.P1.stretch, null, 'at a stop: no stretch');
   // Two between A and B: a third and two thirds of the way.
   assert.equal(by.P2.at, null);
   assert.ok(Math.abs(by.P2.along - 500 / 3) < 0.1, `the one behind at a third: ${by.P2.along}`);
   assert.ok(Math.abs(by.P4.along - 1000 / 3) < 0.1, `the one ahead at two thirds: ${by.P4.along}`);
   assert.equal(by.P2.slot, 0);
   assert.equal(by.P2.nextStop.code, 'B');
+  assert.deepEqual(by.P2.stretch, { from: 0, to: 500, last: { code: 'A', name: graph.stops[0].name } }, 'somewhere from A to B');
   // One between B and C: halfway, on the line, pointing along the road.
   assert.equal(by.P5.along, 750);
   assert.ok(metres([by.P5.lon, by.P5.lat], [lonAt(750), 1.3]) < 3);
   assert.equal(by.P5.heading, 90);
   assert.equal(by.P5.crowd, 'low');
+  assert.deepEqual([by.P5.stretch.from, by.P5.stretch.to, by.P5.stretch.last.code], [500, 1000, 'B']);
 });
 
 test('a bus off its route, or on a service with no route line, is not shown', async () => {
@@ -267,6 +270,7 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
   const seen = new Map();
   let atStops = 0;
   let between = 0;
+  const outside = [];
   for (const p of [...polls.values()].sort((a, b) => a.t - b.t)) {
     const placed = await placeBuses(graph, p.svc, p.raw, p.t * 1000, tracks[p.svc] ?? {});
     tracks[p.svc] = placed.tracks;
@@ -279,9 +283,14 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
       list.push({ t: p.t, reading: b ? placed.tracks[b.id].along : null, shown: b?.along ?? null, fix: `${r.lat},${r.lon}` });
       seen.set(key, list);
       if (b?.at) atStops++;
-      else if (b) between++;
+      else if (b) {
+        between++;
+        // Drawn inside its stretch, which runs from the stop it passed to its next.
+        if (!(b.stretch.from < b.along && b.along < b.stretch.to) || b.stretch.last.code === b.nextStop.code) outside.push(`${key} at ${p.t} s: ${b.along} in ${JSON.stringify(b.stretch)}`);
+      }
     }
   }
+  assert.deepEqual(outside, []);
   const wrong = [];
   const back = [];
   for (const [key, list] of seen) {
