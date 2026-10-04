@@ -132,10 +132,21 @@ struct Popover: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Group {
+            let content = Group {
                 if model.paired { Main(model: model) } else { Pair(model: model) }
             }
             .padding(14)
+            if model.isSnapshot {
+                // ImageRenderer can't draw a ScrollView (an NSScrollView).
+                content
+            } else {
+                // No taller than the screen: a long Today scrolls inside the
+                // popover, with the footer kept in view, instead of running
+                // off the bottom.
+                ScrollView { content }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(maxHeight: Self.maxContentHeight)
+            }
             Footer(model: model)
         }
         .frame(width: 360)
@@ -165,6 +176,11 @@ struct Popover: View {
             shown = false
         }
         .onAppear { open() }
+    }
+
+    /// The screen under the menu bar, less room for the footer and a margin.
+    private static var maxContentHeight: CGFloat {
+        ((NSScreen.main?.visibleFrame.height) ?? 800) - 90
     }
 
     private func open() {

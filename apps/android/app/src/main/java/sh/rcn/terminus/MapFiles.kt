@@ -89,6 +89,8 @@ object MapFiles {
         val kept = runCatching { JSONObject(meta.readText()) }.getOrNull()
         val now = System.currentTimeMillis()
         if (tiles.exists() && kept != null && now - kept.optLong("checked") < CHECK_MS) return@withContext
+        // A newer map (twice a year) can wait for Wi-Fi; the first one can't, or there's no map.
+        if (tiles.exists() && metered(ctx)) return@withContext
         runCatching {
             val conn = URL("${BuildConfig.API_BASE}/map/$TILES").openConnection() as HttpURLConnection
             try {
@@ -114,6 +116,9 @@ object MapFiles {
             }
         }
     }
+
+    private fun metered(ctx: Context): Boolean =
+        ctx.getSystemService(android.net.ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true
 
     private fun get(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
