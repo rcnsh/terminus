@@ -20,6 +20,14 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.core.graphics.toColorInt
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.NearbyStop
+import sh.rcn.terminus.widget.NearbySwap
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
 import sh.rcn.terminus.L
@@ -30,8 +38,14 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
         Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.nothing_yet))
         return
     }
+    // The stop across the road first, as on the widget: the nearest one by GPS
+    // can be the wrong side. Kept while the nearest stop is the same, for up to an hour.
+    var swap by remember { mutableStateOf<NearbySwap.Swap?>(null) }
+    val now = System.currentTimeMillis()
+    val shown = NearbySwap.order(stops, swap, now)
+    val twin = NearbySwap.twin(stops)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        for (s in stops) {
+        for ((i, s) in shown.withIndex()) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -43,6 +57,13 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
                             modifier = Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = stringResource(R.string.on_the_map, s.name)) { onOpenStop(s.code) },
                         )
                         Text(if (s.walkS < 60) stringResource(R.string.here) else stringResource(R.string.min_walk, (s.walkS + 30) / 60), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (i == 0 && twin != null) {
+                            val swapped = NearbySwap.active(stops, swap, now)
+                            val other = if (swapped) stops.first() else twin
+                            IconButton(onClick = { swap = if (swapped) null else NearbySwap.Swap(stops.first().code, twin.code, System.currentTimeMillis()) }) {
+                                Icon(painterResource(R.drawable.ic_swap), contentDescription = stringResource(R.string.nearby_swap, other.name))
+                            }
+                        }
                     }
                     if (!s.available) Text(stringResource(R.string.no_live_data), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     for (row in s.board) {

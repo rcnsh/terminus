@@ -4,6 +4,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -17,6 +19,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -91,6 +95,7 @@ import sh.rcn.terminus.Clock
 import sh.rcn.terminus.L
 import kotlin.coroutines.cancellation.CancellationException
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 
@@ -104,7 +109,17 @@ internal enum class SettingsPage(val title: Int) {
     Language(R.string.heading_language),
     Appearance(R.string.heading_appearance),
     Account(R.string.heading_account),
+    // Under the list, as links, rather than in a group.
+    About(R.string.about),
+    Feedback(R.string.send_feedback),
 }
+
+/** The list's groups, under their headings, as on the website and the Mac. */
+private val SETTINGS_GROUPS = listOf(
+    R.string.heading_your_day to listOf(SettingsPage.Trips, SettingsPage.Timetable, SettingsPage.Favourites, SettingsPage.Notifications),
+    R.string.heading_account to listOf(SettingsPage.Account, SettingsPage.Devices),
+    R.string.display to listOf(SettingsPage.Language, SettingsPage.Appearance),
+)
 
 /**
  * Everything the account page has, so the website is optional for daily
@@ -206,13 +221,20 @@ private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (Sett
     Column(Modifier.fillMaxSize()) {
         TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            for (page in SettingsPage.entries) {
+            for ((heading, pages) in SETTINGS_GROUPS) {
+            Text(
+                stringResource(heading),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 16.dp, bottom = 2.dp).semantics { heading() },
+            )
+            for (page in pages) {
                 val summary = when (page) {
                     SettingsPage.Trips -> profile?.let {
                         val home = it.homeStops.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
                         listOf(home ?: stringResource(R.string.no_home_stop), stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))).joinToString(" · ")
                     }
-                    SettingsPage.Timetable -> profile?.let {
+                    SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let {
                         when (val n = it.trips.size + it.manual.size) {
                             0 -> stringResource(R.string.no_classes_yet)
                             1 -> stringResource(R.string.one_class)
@@ -243,6 +265,7 @@ private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (Sett
                     ).joinToString(" · ")
                     SettingsPage.Appearance -> stringResource(themeName(Theme.pref(ctx)))
                     SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
+                    SettingsPage.About, SettingsPage.Feedback -> null
                 }
                 Row(
                     Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(page) }.padding(vertical = 14.dp),
@@ -260,6 +283,12 @@ private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (Sett
                     }
                     Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+            }
+            // About and Send feedback, as links under the list.
+            Row(Modifier.padding(top = 16.dp).offset(x = (-12).dp)) {
+                TextButton(onClick = { onOpen(SettingsPage.About) }) { Text(stringResource(R.string.about)) }
+                TextButton(onClick = { onOpen(SettingsPage.Feedback) }) { Text(stringResource(R.string.send_feedback)) }
             }
         }
     }
@@ -301,6 +330,15 @@ private fun SettingsPageContent(
         SettingsPage.Timetable -> {
             if (profile == null) return
             var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
+            // The semester the link is for has ended: say so above everything else.
+            if (state.needsReimport) {
+                Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(stringResource(R.string.reimport_title), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.reimport_text, state.term.orEmpty()), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
             TimetableImport(state, account, link) { link = it }
             Classes(profile, state.campus, account)
         }
@@ -322,7 +360,48 @@ private fun SettingsPageContent(
         }
         SettingsPage.Appearance -> ThemePicker()
         SettingsPage.Account -> AccountSection(state, account, main, onAddEmail, onSignedOut)
+        SettingsPage.About -> AboutPage()
+        SettingsPage.Feedback -> FeedbackPage(state, account)
     }
+}
+
+/** What terminus is, that it isn't NUS's, where its data comes from, and links. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AboutPage() {
+    val ctx = LocalContext.current
+    val open = { url: String -> ctx.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+    Text(stringResource(R.string.about_what))
+    Hint(stringResource(R.string.about_independent), Modifier.padding(top = 12.dp))
+    Hint(stringResource(R.string.about_version, BuildConfig.VERSION_NAME), Modifier.padding(top = 12.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
+        OutlinedButton(onClick = { open("${BuildConfig.SITE}/status") }) { Text(stringResource(R.string.status)) }
+        OutlinedButton(onClick = { open("${BuildConfig.SITE}/privacy") }) { Text(stringResource(R.string.privacy)) }
+        OutlinedButton(onClick = { open("${BuildConfig.SITE}/docs") }) { Text(stringResource(R.string.api_docs)) }
+        OutlinedButton(onClick = { open("https://github.com/rcnsh/terminus") }) { Text(stringResource(R.string.source_code)) }
+        OutlinedButton(onClick = { open("https://www.openstreetmap.org/copyright") }) { Text(stringResource(R.string.map_data)) }
+    }
+}
+
+/** A note to the operator about anything; a wrong answer is better sent from under the card. */
+@Composable
+private fun FeedbackPage(state: AccountState, account: AccountViewModel) {
+    var note by rememberSaveable { mutableStateOf("") }
+    OutlinedTextField(
+        value = note,
+        onValueChange = { note = it.take(1000) },
+        label = { Text(stringResource(R.string.feedback_label)) },
+        placeholder = { Text(stringResource(R.string.feedback_placeholder)) },
+        minLines = 5,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Hint(stringResource(if (state.email == null) R.string.feedback_no_email else R.string.feedback_with_email), Modifier.padding(top = 8.dp))
+    Hint(stringResource(R.string.feedback_wrong_answer), Modifier.padding(top = 4.dp))
+    Button(
+        onClick = { account.sendFeedback(note) { note = "" } },
+        enabled = note.isNotBlank() && !state.busy,
+        modifier = Modifier.padding(top = 12.dp),
+    ) { Text(stringResource(R.string.send)) }
 }
 
 /**
@@ -401,10 +480,12 @@ internal fun TripHistory(state: AccountState, account: AccountViewModel) {
 private fun AccountSection(state: AccountState, account: AccountViewModel, main: MainViewModel, onAddEmail: () -> Unit, onSignedOut: () -> Unit) {
     val ctx = LocalContext.current
     var confirm by remember { mutableStateOf<String?>(null) }
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(account::exportTo) }
     if (state.email == null) {
         Text(stringResource(R.string.not_signed_in))
         Hint(stringResource(R.string.not_signed_in_hint))
         Button(onClick = onAddEmail, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.add_email)) }
+        TextButton(onClick = { export.launch("terminus-export.json") }) { Text(stringResource(R.string.download_data)) }
         TextButton(onClick = { confirm = "delete" }) { Text(stringResource(R.string.delete_account)) }
     } else {
         Text(stringResource(R.string.signed_in_as, state.email))
@@ -412,6 +493,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
             TextButton(onClick = { confirm = "signout" }) { Text(stringResource(R.string.sign_out_phone)) }
             TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }) { Text(stringResource(R.string.account_page)) }
         }
+        TextButton(onClick = { export.launch("terminus-export.json") }) { Text(stringResource(R.string.download_data)) }
         Hint(stringResource(R.string.account_page_hint))
     }
     when (confirm) {
@@ -524,18 +606,29 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
     val destinations = campus?.destinations.orEmpty()
     // Monday first, as the week reads; the index is the class's place in its own list.
     val order = WEEKDAYS.map { it.first }
+    var changing by rememberSaveable { mutableStateOf<String?>(null) }
     val all = (profile.trips.mapIndexed { i, t -> Triple(true, i, t) } + profile.manual.mapIndexed { i, t -> Triple(false, i, t) })
         .sortedWith(compareBy({ order.indexOf(it.third.day) }, { it.third.arriveByMin }))
     if (all.isNotEmpty()) {
         Text(if (all.size == 1) stringResource(R.string.one_class) else stringResource(R.string.n_classes, all.size), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
         for ((imported, i, t) in all) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Tapped, a class opens to change its stop, as on the account page.
+            val key = "${if (imported) "t" else "m"}$i"
+            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { changing = if (changing == key) null else key }, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("${dayShort(t.day)} ${time(t.arriveByMin)} · ${t.label}")
                     val about = listOfNotNull(campus?.let { L.s(R.string.stop_suffix, it.stopName(t.to)) }, if (imported) null else stringResource(R.string.added_by_hand))
                     if (about.isNotEmpty()) Hint(about.joinToString(" · "))
                 }
                 TextButton(onClick = { account.edit { it.removeClass(imported, i) } }) { Text(stringResource(R.string.remove)) }
+            }
+            if (changing == key) {
+                WherePicker(stringResource(R.string.change_stop, t.label), destinations, null) { d ->
+                    if (d != null) {
+                        account.edit { it.setClassStop(imported, i, if (d.kind == "landmark") d.code else d.stopCode) }
+                        changing = null
+                    }
+                }
             }
         }
     }

@@ -605,6 +605,14 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         request("POST", "/me/feedback", body)
     }
 
+    /** Send feedback: a note about anything, emailed to the operator like "Is this wrong?". */
+    suspend fun feedback(note: String, appVersion: String) {
+        request("POST", "/me/feedback", JSONObject().put("kind", "other").put("note", note).put("platform", "android").put("appVersion", appVersion))
+    }
+
+    /** Download my data: everything the account holds, as the account page gives it. */
+    suspend fun export(): JSONObject = request("GET", "/me/export")
+
     /** Ends this device's session on the server. */
     suspend fun logout() {
         request("POST", "/auth/logout", JSONObject())
@@ -666,12 +674,14 @@ object Quiet {
 val CLIENT = "android/${BuildConfig.VERSION_NAME}"
 
 /** `/me`: who this device is signed in as. */
-data class Me(val email: String?, val anonymous: Boolean, val needsSetup: Boolean) {
+data class Me(val email: String?, val anonymous: Boolean, val needsSetup: Boolean, val needsReimport: Boolean = false, val term: String? = null) {
     companion object {
         fun parse(o: JSONObject) = Me(
             email = o.optStringOrNull("email"),
             anonymous = o.optBoolean("anonymous", false),
             needsSetup = o.optStringOrNull("onboarding") != null,
+            needsReimport = o.optBoolean("needsReimport", false),
+            term = o.optStringOrNull("term"),
         )
     }
 }
@@ -712,7 +722,10 @@ data class Campus(val stops: List<Stop>, val residences: List<Residence>, val de
 }
 
 /** `/me/import`: what was found, what couldn't be placed, and for which semester. */
-data class ImportResult(val profile: JSONObject, val classes: Int, val unresolved: List<String>, val missing: List<String>, val term: String) {
+/** An imported class whose room couldn't be placed: the person picks its stop, or skips it. */
+data class Unplaced(val module: String, val venue: String, val day: Int, val arriveByMin: Int, val endMin: Int?, val offCampus: Boolean)
+
+data class ImportResult(val profile: JSONObject, val classes: Int, val unresolved: List<String>, val missing: List<String>, val term: String, val unplaced: List<Unplaced> = emptyList()) {
     companion object {
         fun parse(o: JSONObject): ImportResult {
             val profile = o.getJSONObject("profile")
@@ -724,6 +737,11 @@ data class ImportResult(val profile: JSONObject, val classes: Int, val unresolve
                 unresolved = (0 until un.length()).map { un.getJSONObject(it).let { u -> L.s(R.string.module_at_venue, u.optString("module"), u.optString("venue")) } },
                 missing = (0 until miss.length()).map { miss.getString(it) },
                 term = o.optString("term"),
+                unplaced = (0 until un.length()).map {
+                    un.getJSONObject(it).let { u ->
+                        Unplaced(u.optString("module"), u.optString("venue"), u.optInt("day"), u.optInt("arriveByMin"), if (u.has("endMin")) u.optInt("endMin") else null, u.optBoolean("offCampus"))
+                    }
+                },
             )
         }
     }
