@@ -4,10 +4,10 @@ What's left for when you're back at the Mac, split in two: what Claude can
 do there for you, and what only you can do (your keys, accounts, devices
 and decisions). Delete this file once it's done.
 
-## Where things stand (3 October, evening)
+## Where things stand (4 October)
 
 - **Deployed:** production and the beta both run all of `main`, up to
-  `ae24ab9`. No migrations pending.
+  `89b6b0f`. No migrations pending.
   - The calendar refreshes itself: both sites answer from the copy the
     cron fetched (`/health` says `calendar.source: fetched`).
   - The API docs say 2.1.0, and on a phone they scroll as a page, so
@@ -17,6 +17,9 @@ and decisions). Delete this file once it's done.
     students search for, shared links show a preview card, and
     `robots.txt` and `/sitemap.xml` are live. The beta asks not to be
     crawled or indexed. Google hasn't been told about the site yet (Y6).
+  - The web app and account page ask for all their modules at once,
+    and the account page shows sign-in before it loads Settings
+    (checked on both sites, no errors).
   - The deploy accepted the 5 s CPU limit, so the plan allows it.
 - **History rewritten:** every commit message is in Conventional Commits,
   pushed with all the tags (Y1, done). The old `ccr-*` and `imgbot`
@@ -169,7 +172,7 @@ branches deleted. Any other clone made before 3 October needs C1's reset.
 
 ### Y2. Deploy from the VPS
 
-Both sites run all of `main` (`ae24ab9`), so nothing waits for a deploy.
+Both sites run all of `main` (`89b6b0f`), so nothing waits for a deploy.
 For the next one, from the VPS, in one line (beta first, then production):
 
 ```sh
