@@ -71,6 +71,36 @@ struct NextAnswer: Decodable {
         let suggestion: Suggestion?
         /// "NUS's live bus times have been down since 9:14 AM", above the answer.
         let notice: String?
+        /// On the bus: the stops from boarding to getting off, for a progress bar.
+        let ride: Ride?
+    }
+
+    /// The ride, from boarding to getting off. Stops are taken as evenly spaced
+    /// between the two times, as on the phone's live notification.
+    struct Ride: Decodable {
+        struct Stop: Decodable { let code: String; let name: String }
+        let svc: String
+        let stops: [Stop]
+        let board: String
+        let arrive: String
+
+        /// 0 to 1 along the ride.
+        func progress(_ now: Date) -> Double {
+            guard let b = parseISODate(board), let a = parseISODate(arrive), a > b else { return 0 }
+            return min(1, max(0, now.timeIntervalSince(b) / a.timeIntervalSince(b)))
+        }
+
+        /// "Next: Opp NUSS · 3 stops to go", the same as the phone and the web.
+        func nextText(_ now: Date) -> String {
+            let hops = stops.count - 1
+            guard hops > 0 else { return "" }
+            let passed = Int(progress(now) * Double(hops))
+            let left = max(0, hops - passed)
+            let off = stops[hops].name
+            if passed + 1 > hops || left == 0 { return L("Getting off at %@", off) }
+            if left == 1 { return L("Next: %@, where you get off", off) }
+            return L("Next: %@ · %@ stops to go", stops[passed + 1].name, "\(left)")
+        }
     }
 
     enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card, walkSpeedMs }
@@ -217,6 +247,8 @@ struct NearbyStop: Decodable, Identifiable {
     let walkS: Int
     let available: Bool
     let board: [BoardRow]
+    /// The stop across the road, when there is one (the nearest stop's is always in the list).
+    var opposite: String? = nil
     var id: String { stop.code }
 }
 
@@ -302,21 +334,55 @@ struct Campus: Decodable {
     }
 }
 
+/// An imported class whose room couldn't be placed: the person picks its stop, or skips it.
+struct Unplaced: Hashable {
+    let module: String
+    let venue: String
+    let day: Int
+    let arriveByMin: Int
+    let endMin: Int?
+    let offCampus: Bool
+}
+
 /// `/me/import`: what was found, what couldn't be placed, and for which semester.
 struct ImportResult {
     let profile: [String: Any]
     let classes: Int
-    let unresolved: [String]
+    let unplaced: [Unplaced]
     let missing: [String]
     let term: String
 
     init(_ o: [String: Any]) {
         profile = o["profile"] as? [String: Any] ?? [:]
         classes = (profile["trips"] as? [Any])?.count ?? 0
-        unresolved = (o["unresolved"] as? [[String: Any]] ?? []).map { "\($0["module"] as? String ?? "") at \($0["venue"] as? String ?? "")" }
+        unplaced = (o["unresolved"] as? [[String: Any]] ?? []).map {
+            Unplaced(module: $0["module"] as? String ?? "", venue: $0["venue"] as? String ?? "", day: $0["day"] as? Int ?? 1, arriveByMin: $0["arriveByMin"] as? Int ?? 0, endMin: $0["endMin"] as? Int, offCampus: $0["offCampus"] as? Bool ?? false)
+        }
         missing = o["missing"] as? [String] ?? []
         term = o["term"] as? String ?? ""
     }
+}
+
+/// `/me`: who this Mac is signed in as.
+struct Me: Decodable {
+    let email: String?
+    let anonymous: Bool?
+    /// The timetable is for a semester that has ended.
+    let needsReimport: Bool?
+    let term: String?
+}
+
+/// A class you chose to leave a bus earlier for (`earlier`) or get no reminders for (`quiet`).
+struct TripChoice: Decodable, Hashable {
+    let trip: String
+    let pref: String
+    let label: String?
+}
+
+/// `/me/choices`: those classes, and how many trips are remembered.
+struct Choices: Decodable {
+    let choices: [TripChoice]
+    let history: Int
 }
 
 /// A device signed in to the account, as Settings lists it.
@@ -576,6 +642,68 @@ struct Api {
         struct R: Decodable { let destinations: [Destination] }
         let r: R = try await request("GET", "/campus")
         return r.destinations
+    }
+
+    /// Starts without an email: an account of its own for this Mac, as the phone's first launch.
+    func anon(name: String) async throws -> String {
+        struct R: Decodable { let token: String }
+        let r: R = try await request("POST", "/auth/anon", body: ["name": name, "platform": "mac"])
+        return r.token
+    }
+
+    /// After adding an email where both had a setup: keep the account's, or this Mac's.
+    func merge(anon: String, keepDevice: Bool) async throws {
+        _ = try await send("POST", "/auth/app/merge", json: JSONSerialization.data(withJSONObject: ["anon": anon, "keep": keepDevice ? "device" : "account"]))
+    }
+
+    func me() async throws -> Me {
+        try JSONDecoder().decode(Me.self, from: await send("GET", "/me"))
+    }
+
+    /// A one-off trip later today (phase 8.3), planned like a class. Answers with the new plan.
+    func once(_ target: Target, atMin: Int) async throws -> NextAnswer {
+        var body: [String: Any] = ["atMin": atMin]
+        switch target {
+        case .plan: break
+        case .place(let key): body["place"] = key
+        case .code(let code, let label): body["to"] = code; body["label"] = label
+        }
+        let q = usesHour12 ? [URLQueryItem(name: "h12", value: "1")] : []
+        let data = try await send("POST", "/me/once", query: q, json: try JSONSerialization.data(withJSONObject: body))
+        var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
+        answer.raw = data
+        return answer
+    }
+
+    /// Send feedback: a note about anything, emailed to the operator like "Is this wrong?".
+    func feedback(note: String) async throws {
+        var body: [String: Any] = ["kind": "other", "note": note, "platform": "mac"]
+        if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String { body["appVersion"] = v }
+        _ = try await send("POST", "/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
+    }
+
+    /// Download my data: everything the account holds, as JSON.
+    func export() async throws -> Data {
+        try await send("GET", "/me/export")
+    }
+
+    func choices() async throws -> Choices {
+        try JSONDecoder().decode(Choices.self, from: await send("GET", "/me/choices"))
+    }
+
+    /// A class's "one bus earlier" or "no reminders" undone.
+    func undoChoice(trip: String, pref: String) async throws {
+        _ = try await send("POST", "/me/choice", json: JSONSerialization.data(withJSONObject: ["choice": "undo", "trip": trip, "pref": pref]))
+    }
+
+    /// Clear trip history: the outcomes go; the choices made from them stay.
+    func clearHistory() async throws {
+        _ = try await send("DELETE", "/me/history")
+    }
+
+    /// An account without an email: everything goes. (One with an email is deleted on the account page.)
+    func deleteAccount() async throws {
+        _ = try await send("DELETE", "/me")
     }
 
     /// The released version, from /download/latest.json.

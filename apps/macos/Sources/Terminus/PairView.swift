@@ -59,7 +59,16 @@ struct Pair: View {
             Button(L("Pair with a code instead")) { useCode = true }
                 .buttonStyle(.link)
                 .font(.callout)
-            Text(L("New to terminus? Get the Android app, or set up at %@/account, then sign in here.", Api.siteHost))
+            Divider().padding(.vertical, 2)
+            // As on the phone and the web: start straight away, add an email later.
+            Button {
+                model.startWithoutEmail()
+            } label: {
+                Text(model.startingAnon ? L("Starting…") : L("Use terminus without an email")).frame(maxWidth: .infinity)
+            }
+            .controlSize(.large)
+            .disabled(model.startingAnon)
+            Text(L("Your setup stays on this Mac. Add an email any time in Settings to use it on your other devices, or to keep it if this Mac is lost."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

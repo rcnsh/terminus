@@ -31,6 +31,28 @@ final class AppModel {
     private var signInTask: Task<Void, Never>?
     private var signInRequest: SignInRequest?
 
+    /// Started without an email (`/auth/anon`): an account of its own for this
+    /// Mac, as the phone's first launch. Adding an email keeps or merges it.
+    var anonymous = UserDefaults.standard.bool(forKey: "anonymous") {
+        didSet { UserDefaults.standard.set(anonymous, forKey: "anonymous") }
+    }
+    /// Adding an email to an account that, like this Mac, has a setup: which to keep.
+    var chooseSetup: (token: String, email: String)?
+    /// This Mac's email-less token while an email is being added, for the merge.
+    private var anonToken: String?
+
+    /// Places gone to from the search or the map, each with a tab and an ×, as
+    /// on the phone and the web: up to 5, newest first, on this Mac only.
+    struct AddedPlace: Codable, Hashable { let code: String; let label: String }
+    static let maxAdded = 5
+    var added: [AddedPlace] = (UserDefaults.standard.data(forKey: "addedPlaces")).flatMap { try? JSONDecoder().decode([AddedPlace].self, from: $0) } ?? [] {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(added), forKey: "addedPlaces") }
+    }
+
+    /// Nearby's swap: the stop across the road shown first while the nearest
+    /// stop is the same one, for up to an hour.
+    var nearbySwap: (from: String, to: String, at: Date)?
+
     /// Always the planned trip: this is what the menu bar shows.
     var plan: NextAnswer? { answers[.plan] }
     var target: Target = .plan
@@ -320,6 +342,87 @@ final class AppModel {
         }
     }
 
+    // MARK: starting without an email
+
+    var startingAnon = false
+
+    /// "Use terminus without an email": an account for this Mac alone, with no sign-in.
+    func startWithoutEmail() {
+        guard !startingAnon else { return }
+        startingAnon = true
+        signInError = nil
+        Task {
+            defer { startingAnon = false }
+            do {
+                let name = String((Host.current().localizedName ?? "Mac").prefix(40))
+                let token = try await Api(token: nil).anon(name: name)
+                guard TokenStore.write(token) else {
+                    signInError = L("Couldn't save the sign-in on this Mac. Check that there's enough disk space, then try again.")
+                    return
+                }
+                anonymous = true
+                needsSetup = true
+                paired = true
+                if locator.undecided { locator.ask() }
+                kick()
+            } catch let e as ApiError {
+                signInError = e.message
+            } catch {
+                signInError = L("Couldn't reach terminus. Check your connection and try again.")
+            }
+        }
+    }
+
+    /// An account without an email: everything goes, and this Mac starts over.
+    func deleteAnonymousAccount() {
+        guard let token = TokenStore.read() else { return }
+        Task {
+            do {
+                try await Api(token: token).deleteAccount()
+                TokenStore.write(nil)
+                clearLocal()
+            } catch let e as ApiError {
+                error = e.message
+            } catch {
+                self.error = L("Couldn't reach terminus. Check your connection and try again.")
+            }
+        }
+    }
+
+    // MARK: places added from the search
+
+    func addPlace(code: String, label: String) {
+        if added.contains(where: { $0.code == code }) || places.contains(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) { return }
+        added = Array(([AddedPlace(code: code, label: label)] + added).prefix(Self.maxAdded))
+    }
+
+    /// The × on an added place's tab: gone, and back to Next if it was showing.
+    func removeAdded(_ p: AddedPlace) {
+        added.removeAll { $0.code == p.code }
+        if case .code(let c, _) = target, c == p.code { select(.plan) }
+    }
+
+    // MARK: going later (phase 8.3)
+
+    /// "Go later today at…": a one-off trip to what's on screen, planned like a class.
+    func goLater(atMin: Int) async -> String? {
+        guard let token = TokenStore.read(), target != .plan else { return nil }
+        do {
+            let a = try await Api(token: token).once(target, atMin: atMin)
+            answers[.plan] = a
+            updated = Date()
+            LeaveNotifier.shared.update(a)
+            select(.plan)
+            dayFetched = Date()
+            day = try? await Api(token: token).day()
+            return nil
+        } catch let e as ApiError {
+            return e.message
+        } catch {
+            return L("Couldn't add it. Check your connection.")
+        }
+    }
+
     // MARK: signing in by email
 
     /// Emails a link that approves this Mac from any device (the phone's mail
@@ -332,7 +435,9 @@ final class AppModel {
         signInTask = Task {
             do {
                 let name = String((Host.current().localizedName ?? "Mac").prefix(40))
-                let r = try await Api(token: nil).signInStart(email: email, name: name)
+                // Adding an email to this Mac's own account: it's sent, so the server keeps or merges its setup.
+                anonToken = anonymous ? TokenStore.read() : nil
+                let r = try await Api(token: anonToken).signInStart(email: email, name: name)
                 signingIn = false
                 signInRequest = r
                 signInWaiting = (email, r.match)
@@ -372,6 +477,28 @@ final class AppModel {
 
     private func signedIn(_ p: SignInPoll) {
         signInRequest = nil
+        // Both this Mac and the account have a setup: ask which to keep first.
+        if p.outcome == "choose", let token = p.token, anonToken != nil {
+            signInWaiting = nil
+            chooseSetup = (token, p.email ?? "")
+            return
+        }
+        finishSignIn(p)
+    }
+
+    /// The choice after adding an email: the account's setup, or this Mac's.
+    func keepSetup(mac: Bool) {
+        guard let c = chooseSetup else { return }
+        let anon = anonToken
+        Task {
+            if let anon { try? await Api(token: c.token).merge(anon: anon, keepDevice: mac) }
+            chooseSetup = nil
+            finishSignIn(SignInPoll(status: "approved", token: c.token, email: c.email, outcome: "signed-in"))
+        }
+    }
+
+    private func finishSignIn(_ p: SignInPoll) {
+        anonToken = nil
         guard let token = p.token, TokenStore.write(token) else {
             signInWaiting = nil
             signInError = L("Couldn't save the sign-in on this Mac. Check that there's enough disk space, then try again.")
@@ -380,6 +507,7 @@ final class AppModel {
         signInWaiting = nil
         // A brand-new account has nothing to show yet.
         needsSetup = p.outcome == "created"
+        anonymous = false
         paired = true
         if locator.undecided { locator.ask() }
         kick()
@@ -432,6 +560,9 @@ final class AppModel {
     private func clearLocal() {
         paired = false
         needsSetup = false
+        anonymous = false
+        added = []
+        nearbySwap = nil
         answers = [:]
         day = nil
         dayFetched = nil
@@ -510,6 +641,16 @@ final class AppModel {
         target = t
         showNearby = false
         kick()
+    }
+
+    /// A search result: a favourite's own tab if it's one, else a tab of its own.
+    func goSomewhere(code: String, label: String) {
+        if let fav = places.first(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) {
+            select(.place(key: fav.key))
+            return
+        }
+        addPlace(code: code, label: label)
+        select(.code(code, label: label))
     }
 
     func selectNearby() {
