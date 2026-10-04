@@ -33,10 +33,21 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .app-chips .chip-search[aria-expanded="true"] { color: var(--ink); border-color: var(--ink); }
 .chip-search svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .where-box input { width: 100%; }
+/* A place added from the search: its chip, and an X to take it off. */
+.app-chips .chip-added { flex: none; display: inline-flex; align-items: center; }
+.app-chips .chip-added > button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0; padding-right: 8px; }
+.app-chips .chip-x { display: grid; place-items: center; padding: 7px 9px 7px 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; color: var(--muted); }
+.app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.chip-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.go-later { display: block; margin: 10px auto 0; }
+.go-later-form { margin-top: 10px; }
+.go-later-form .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 
 .nearby-stop + .nearby-stop { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .nearby-stop header { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; margin-bottom: 6px; }
-.nearby-stop header span { font-weight: 400; color: var(--muted); }
+.nearby-stop header span { font-weight: 400; color: var(--muted); margin-left: auto; }
+.nearby-stop header .swap { display: grid; place-items: center; padding: 2px 4px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.nearby-stop header .swap svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nearby-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-variant-numeric: tabular-nums; }
 .nearby-stop header .linkish { padding: 0; font: inherit; font-weight: 600; color: var(--ink); text-align: left; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 

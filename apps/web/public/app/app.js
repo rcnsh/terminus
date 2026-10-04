@@ -11,7 +11,7 @@
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
-import { Icon, Rich, html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
+import { Icon, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { api, clock, hour12, inkOn, send, t } from '/account/dom.js';
 import { Card, Message, Report, isStale, signal } from '/account/preview.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, walkSpeed } from '/account/profile.js';
@@ -61,6 +61,42 @@ const stopToShow = store(null);
 const settings = store({ status: 'idle', mod: null });
 /** A NUSMods link shared to the app, for Settings to offer to import. */
 let shared = null;
+
+/**
+ * Somewhere searched for or picked on the map keeps a tab of its own, with
+ * an X, as on the phone: up to 5, newest first, kept in this browser only.
+ * One that's a favourite is that favourite's tab instead.
+ */
+const ADDED_MAX = 5;
+const added = store(readAdded());
+function readAdded() {
+  try {
+    const list = JSON.parse(localStorage.getItem('added-places') ?? '[]');
+    return Array.isArray(list) ? list.filter((x) => typeof x?.to === 'string' && typeof x?.label === 'string').slice(0, ADDED_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+function keepAdded(list) {
+  added.set(list);
+  try {
+    localStorage.setItem('added-places', JSON.stringify(list));
+  } catch {
+    // Storage blocked: the tabs last until the page closes.
+  }
+}
+const favouriteNamed = (label) => places.get().find((p) => p.label.toLowerCase() === label.toLowerCase());
+function addPlace(to, label) {
+  const list = added.get();
+  if (list.some((x) => x.to === to) || favouriteNamed(label)) return;
+  keepAdded([{ to, label }, ...list].slice(0, ADDED_MAX));
+}
+/** The X on an added place's tab: gone, and back to Next if it was showing. */
+function removeAdded(x) {
+  keepAdded(added.get().filter((y) => y.to !== x.to));
+  const now = target.get();
+  if (now.kind === 'stop' && now.to === x.to) choose({ kind: 'plan' });
+}
 
 /* ---------- fetching ---------- */
 
@@ -218,12 +254,17 @@ function choose(to) {
 function goSomewhere(d) {
   searching.set(false);
   // A stop or a place is called by its name; a building or room by its code, as on its door.
-  choose({ kind: 'stop', to: d.code, label: d.kind === 'stop' || d.kind === 'landmark' ? d.label : d.code });
+  const label = d.kind === 'stop' || d.kind === 'landmark' ? d.label : d.code;
+  const fav = favouriteNamed(label);
+  if (fav) return choose({ kind: 'place', key: fav.key });
+  addPlace(d.code, label);
+  choose({ kind: 'stop', to: d.code, label });
 }
 
 /** Go there, from a stop on the map: Now, with the card for that stop. */
 function goToStop({ code, name, place }) {
   // A saved place already has its chip: that one, not a second.
+  if (!place) addPlace(code, name);
   target.set(place ? { kind: 'place', key: place } : { kind: 'stop', to: code, label: name });
   drawSeen();
   if (location.hash === '#map') history.pushState(null, '', '#now');
@@ -468,6 +509,7 @@ async function togglePush() {
 /* ---------- drawing ---------- */
 
 const SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>';
+const CLOSE = '<path d="M6 6l12 12M18 6 6 18"/>';
 
 /** "Notify me when to leave", in Settings under Notifications, where this browser can do it. */
 function Notify() {
@@ -540,20 +582,30 @@ function InstallHint() {
 }
 const installDismissed = store(false);
 
-/** Next, each saved place, and Nearby: the phone app's chips, then the search button. */
+/** Next, Nearby, each favourite, then places added from the search: the phone app's chips, then the search button. */
 function Chips() {
   const to = useStore(target);
   const list = useStore(places);
+  const extra = useStore(added);
   const open = useStore(searching);
+  const same = (a, b) => a.kind === b.kind && (a.kind !== 'place' || a.key === b.key) && (a.kind !== 'stop' || a.to === b.to);
   const chip = (label, value) => html`
-    <button type="button" aria-pressed=${String(JSON.stringify(value) === JSON.stringify(to))} onClick=${() => choose(value)}>${label}</button>
+    <button type="button" aria-pressed=${String(same(value, to))} onClick=${() => choose(value)}>${label}</button>
   `;
   return html`
     <nav class="app-chips" aria-label=${t('Where to')}>
       ${chip(t('Next'), { kind: 'plan' })}
-      ${list.map((p) => chip(p.label, { kind: 'place', key: p.key }))}
       ${chip(t('Nearby'), { kind: 'nearby' })}
-      ${to.kind === 'stop' && chip(to.label, to)}
+      ${list.map((p) => chip(p.label, { kind: 'place', key: p.key }))}
+      ${extra.map(
+        (x) => html`<span class="chip-added" key=${x.to}>
+          ${chip(x.label, { kind: 'stop', to: x.to, label: x.label })}
+          <button type="button" class="chip-x" aria-label=${t('Remove {0}', x.label)} onClick=${() => removeAdded(x)}>
+            <${Icon} paths=${CLOSE} />
+          </button>
+        </span>`,
+      )}
+      ${to.kind === 'stop' && !extra.some((x) => x.to === to.to) && chip(to.label, to)}
       <button type="button" class="chip-search" aria-label=${t('Go somewhere else')} aria-expanded=${String(open)} onClick=${() => searching.set(!open)}>
         <${Icon} paths=${SEARCH} />
       </button>
@@ -622,13 +674,31 @@ function OfflineCard({ item, step }) {
 }
 
 const mins = (s) => Math.round(s / 60);
+const SWAP = '<path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/>';
+
+/**
+ * The stop across the road first, as on the phone: stops either side of a
+ * road are a few metres apart, within the location's error, so the nearest
+ * can be the wrong side. Kept while the nearest stop is the same, for up to
+ * an hour.
+ */
+const swapped = store(null);
+const SWAP_KEEP_MS = 60 * 60_000;
+function nearbyOrder(stops, swap, now) {
+  const first = stops[0];
+  const twin = first?.opposite ? stops.find((s) => s.stop.code === first.opposite) : null;
+  const active = Boolean(twin && swap && now - swap.at <= SWAP_KEEP_MS && swap.from === first.stop.code && swap.to === twin.stop.code);
+  return { twin, active, shown: active ? [twin, first, ...stops.slice(1).filter((s) => s !== twin)] : stops };
+}
 
 /** Nearby: each stop around you with what's coming, its name opening it on the map. */
 function NearbyCard({ stops }) {
+  const swap = useStore(swapped);
+  const { twin, active, shown } = nearbyOrder(stops, swap, Date.now());
   return html`
     <div class="widget" aria-live="polite">
-      ${stops.map(
-        (s) => html`
+      ${shown.map(
+        (s, i) => html`
           <section class="nearby-stop" key=${s.stop.code}>
             <header>
               <button
@@ -641,6 +711,15 @@ function NearbyCard({ stops }) {
                 }}
               >${s.stop.name}</button>
               <span>${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
+              ${i === 0 &&
+              twin &&
+              html`<button
+                type="button"
+                class="swap"
+                aria-label=${t('Show {0} instead', (active ? stops[0] : twin).stop.name)}
+                title=${t('Show {0} instead', (active ? stops[0] : twin).stop.name)}
+                onClick=${() => swapped.set(active ? null : { from: stops[0].stop.code, to: twin.stop.code, at: Date.now() })}
+              ><${Icon} paths=${SWAP} /></button>`}
             </header>
             ${s.board.length
               ? s.board.map(
@@ -671,6 +750,65 @@ function CardArea() {
       <div class="updated hint">${when}</div>
       ${to.kind !== 'nearby' && html`<${Report} answer=${c.a ?? null} anonymous=${who?.anonymous === true} />`}
     </section>
+  `;
+}
+
+/** Half an hour from now on campus, on a five-minute mark: where "Go later" starts. */
+function soonOnCampus() {
+  const sgt = new Date(Date.now() + 8 * 3600_000);
+  const min = Math.ceil((sgt.getUTCHours() * 60 + sgt.getUTCMinutes() + 30) / 5) * 5;
+  return Math.min(min, 23 * 60 + 55);
+}
+const hhmmOf = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+/**
+ * Somewhere other than the plan: going there later today, planned like a
+ * class (POST /me/once), as on the phone. The plan comes back and shows.
+ */
+function GoLater() {
+  const to = useStore(target);
+  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    setOpen(false);
+    setMsg('');
+  }, [JSON.stringify(to)]);
+  if (to.kind !== 'place' && to.kind !== 'stop') return null;
+  if (!open) {
+    return html`<button
+      type="button"
+      class="btn small ghost go-later"
+      onClick=${() => {
+        setAt(hhmmOf(soonOnCampus()));
+        setOpen(true);
+      }}
+    >${t('Go later today at…')}</button>`;
+  }
+  const submit = async (e) => {
+    e.preventDefault();
+    const [h, m] = at.split(':').map(Number);
+    if (!Number.isInteger(h) || !Number.isInteger(m)) return;
+    const body = to.kind === 'place' ? { place: to.key, atMin: h * 60 + m } : { to: to.to, label: to.label, atMin: h * 60 + m };
+    try {
+      const a = await api(`/me/once${query()}`, { method: 'POST', body });
+      target.set({ kind: 'plan' });
+      card.set({ a });
+      refresh();
+    } catch (err) {
+      setMsg(err.message || t("Couldn't add it. Check your connection."));
+    }
+  };
+  return html`
+    <form class="card go-later-form" onSubmit=${submit}>
+      <label for="go-later-at">${t('Go later today at…')}</label>
+      <div class="row">
+        <input id="go-later-at" type="time" required value=${at} onInput=${(e) => setAt(e.currentTarget.value)} />
+        <button type="submit" class="btn small accent">${t('Plan it')}</button>
+        <button type="button" class="btn small ghost" onClick=${() => setOpen(false)}>${t('Cancel')}</button>
+      </div>
+      <p class="hint" role="status">${msg}</p>
+    </form>
   `;
 }
 
@@ -777,6 +915,7 @@ function App() {
       <${Chips} />
       <${Where} />
       <${CardArea} />
+      <${GoLater} />
       <${Today} />
     </main>
     <section id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><${MapArea} /></section>
