@@ -28,6 +28,11 @@ install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS
 # Sparkle, for updates. Its XPC services are only for sandboxed apps.
 ditto "$OUT/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
+# MapLibre, for the map (Vendor/, from scripts/vendor-maplibre-mac.sh). It's
+# built for Intel too; this app is arm64 only, so that half is left out.
+ditto "$OUT/MapLibre.framework" "$APP/Contents/Frameworks/MapLibre.framework"
+ML="$APP/Contents/Frameworks/MapLibre.framework/Versions/A/MapLibre"
+lipo "$ML" -thin arm64 -output "$ML.arm64" && mv "$ML.arm64" "$ML"
 cp Support/Info.plist "$APP/Contents/Info.plist"
 if [ "$CHANNEL" = beta ]; then
   # Its own app to macOS (permissions, login item, notifications), its own
@@ -51,11 +56,12 @@ if [ -z "${SIGN_IDENTITY:-}" ] && security find-identity -p codesigning | grep -
   SIGN_IDENTITY=$TERMINUS_CERT
 fi
 sign() { codesign --force --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$@"; }
-# Inside out: Sparkle's helpers, the framework, then the app.
+# Inside out: Sparkle's helpers, the frameworks, then the app.
 FW="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
 sign "$FW/Autoupdate"
 sign "$FW/Updater.app"
 sign "$APP/Contents/Frameworks/Sparkle.framework"
+sign "$APP/Contents/Frameworks/MapLibre.framework"
 sign --identifier "$ID" "$APP"
 echo "built $APP"
 if [ "${1:-}" = install ]; then

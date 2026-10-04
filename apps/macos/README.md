@@ -15,6 +15,9 @@ swift test                                           # tests on the API's answer
 CHANNEL=beta ./build.sh                              # build/terminus beta.app, for beta.terminus.rcn.sh
 ```
 
+The map window needs the built app (`./build.sh`): MapLibre keeps its cache
+by the app's bundle id, which `swift run` doesn't have.
+
 `TERMINUS_SNAPSHOT=<dir> swift run` renders every screen with sample data to
 PNGs and quits, for checking layout without clicking around.
 
@@ -25,6 +28,8 @@ PNGs and quits, for checking layout without clicking around.
 | `Sources/Terminus/Api.swift` | The API client and the answer types |
 | `Sources/Terminus/AppModel.swift` | State, refresh timing and pairing |
 | `Sources/Terminus/*View*.swift`, `Header`, `Tabs`, `Search`, `Footer` | The popover |
+| `Sources/Terminus/MapWindow.swift`, `MapData.swift`, `MapFiles.swift` | The map window: MapLibre, live buses, the street map kept on disk |
+| `Vendor/MapLibre.xcframework.zip` | MapLibre Native for macOS, built by [`scripts/vendor-maplibre-mac.sh`](../../scripts/vendor-maplibre-mac.sh) |
 | `Support/` | `Info.plist` and the app icon |
 
 Releases are built, signed and packaged as a DMG by

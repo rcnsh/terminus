@@ -779,8 +779,14 @@ that failed because logging failed would be an absurd way to miss a bus.
 
 The Android widget and app ([apps/android](../../android)), the Mac menu bar app
 ([apps/macos](../../macos)) and the website ([apps/web](../../web)) all use `/me/next`.
-The Android app and the web app also have the campus map: `/campus`, `/buses`,
-`/arrivals` and `/map/*`.
+The Android app, the web app and the Mac (in a window of its own) also have
+the campus map: `/campus`, `/buses`, `/arrivals` and `/map/*`. The apps
+download `campus.pmtiles` once and read it from disk, since MapLibre Native
+fails the whole style when one streamed piece fails. The Mac's MapLibre is
+built from source (`scripts/vendor-maplibre-mac.sh`; no macOS build is
+published), and its Metal renderer draws the style's background layer over
+the street map's fills, so the Mac drops that layer when the street map is
+there.
 For local work, `node scripts/dev-stub.mjs` runs this Worker with a fake bus
 feed and a seeded test account.
 

@@ -322,3 +322,35 @@
 "Plan it" = "安排";
 "Couldn't save your data. %@" = "无法保存你的数据。%@";
 "Ride progress" = "行程进度";
+
+/* The map window */
+"Map" = "地图";
+"Map…" = "地图…";
+"The map needs a connection the first time." = "第一次打开地图需要联网。";
+"Downloading the street map (about 4 MB)…" = "正在下载街道地图（约 4 MB）…";
+"The street map hasn’t downloaded yet. Routes and stops are still available." = "街道地图尚未下载。路线和车站仍可使用。";
+"Back to campus" = "回到校园";
+"Finding %@ buses…" = "正在查找 %@ 巴士…";
+"1 bus on %@" = "%@ 有 1 辆巴士";
+"%1$@ buses on %2$@" = "%2$@ 有 %1$@ 辆巴士";
+"No %@ buses running right now." = "%@ 现在没有巴士在运行。";
+"Live buses aren’t available right now." = "暂时看不到实时巴士。";
+"%@: show its line and live buses" = "%@：显示路线和实时巴士";
+"Close" = "关闭";
+"At %@" = "在 %@";
+"Between %1$@ and %2$@" = "在 %1$@ 和 %2$@ 之间";
+"%@ bus" = "%@ 巴士";
+"Next stop" = "下一站";
+"Crowding" = "拥挤程度";
+"Low" = "低";
+"Medium" = "中";
+"High" = "高";
+"Live times need a connection." = "实时时间需要联网。";
+"No buses due" = "暂时没有巴士";
+"No times right now" = "暂时没有时间";
+"Services here" = "经过这里的路线";
+"Added to terminus in the menu bar" = "已加到菜单栏的 terminus 里";
+"Go there" = "去这里";
+"Walking directions" = "步行路线";
+"Arriving" = "即将到站";
+"The map needs the built app (./build.sh)." = "地图需要构建好的应用（./build.sh）。";

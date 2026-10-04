@@ -37,6 +37,10 @@ struct TerminusApp: App {
             .defaultPosition(.center)
         Window(L("Settings"), id: "settings") { SettingsWindow(app: model).closesWhenSignedOut(model, id: "settings") }
             .defaultPosition(.center)
+        // The campus map with live buses, like the phone's Map tab.
+        Window(L("Map"), id: "map") { MapWindow(app: model).closesWhenSignedOut(model, id: "map") }
+            .defaultSize(width: 900, height: 680)
+            .defaultPosition(.center)
         #if DEBUG
         // The popover's content in a window (TERMINUS_OPEN=popover), for
         // testing it when the menu bar item is hidden behind the notch.
@@ -216,7 +220,7 @@ private struct ContentHeight: PreferenceKey {
 }
 
 /// Hands back the NSWindow this view ends up in.
-private struct WindowReader: NSViewRepresentable {
+struct WindowReader: NSViewRepresentable {
     let found: (NSWindow) -> Void
 
     init(_ found: @escaping (NSWindow) -> Void) { self.found = found }

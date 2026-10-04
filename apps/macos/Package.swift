@@ -11,9 +11,14 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Terminus",
-            dependencies: [.product(name: "Sparkle", package: "Sparkle")],
-            path: "Sources/Terminus"
+            dependencies: [.product(name: "Sparkle", package: "Sparkle"), "MapLibre"],
+            path: "Sources/Terminus",
+            // `swift run` finds the frameworks beside the binary (build.sh adds the app's own rpath).
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path"])]
         ),
+        // The campus map: MapLibre Native, built for macOS by
+        // scripts/vendor-maplibre-mac.sh (none is published).
+        .binaryTarget(name: "MapLibre", path: "Vendor/MapLibre.xcframework.zip"),
         // Parses the API's golden answers (apps/api/test/fixtures/answers).
         .testTarget(name: "TerminusTests", dependencies: ["Terminus"], path: "Tests/TerminusTests"),
     ]
