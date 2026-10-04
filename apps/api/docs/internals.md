@@ -856,9 +856,9 @@ each. The offset is in pixels, so it looks the same at every zoom. When a
 bus's place changes, it slides there along the route line in about a
 second; with reduced motion, after 15 s without an answer, or to a place
 it can't reach along the line (behind it, or over 1.5 km on), it jumps.
-A tapped bus between stops has its `stretch` drawn over the route, wider,
-with the rest of the route dimmed, and its card says "Between LT13 and
-COM 3".
+A tapped bus is ringed. Between stops, its `stretch` is drawn over the
+route, wider, with the rest of the route faded well back, and its card
+says "Between LT13 and COM 3".
 
 ## Layout
 
