@@ -300,7 +300,12 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .linkish:hover { color: var(--ink); }
 /* Who's signed in, at the top of Account: in the web app (no header there),
    and on the account page when its header has no room for these buttons. */
-.field-email { overflow-wrap: anywhere; }
+.account-who { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.field-email { min-width: 0; overflow-wrap: anywhere; }
+/* Equal columns, so no button is a different width from its neighbour; one per line on a phone. */
+.account-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 8px; }
+.account-danger { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.account-card > .hint:not(:empty) { margin: 0; }
 /* Appearance: the theme, one choice per line. */
 .theme-choice { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
 .theme-choice legend { padding: 0; margin-bottom: 4px; font-size: 0.9rem; color: var(--muted); }
