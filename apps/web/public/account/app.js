@@ -1,13 +1,22 @@
 // The account page: signing in, first-time setup (onboarding.js), then
 // Settings (settings.js) with "Your widget right now" beside it. Same origin
-// as the API, so the session cookie just works.
+// as the API, so the session cookie just works. Setup and Settings load once
+// someone is signed in: the sign-in card doesn't wait for them.
 
 import { Fill, MARK, Rich, html, render, store, useEffect, useInterval, useRef, useState, useStore } from '../assets/ui.js';
 import { api, hour12, t } from './dom.js';
-import { Onboarding } from './onboarding.js';
 import { Card, Message, Report } from './preview.js';
 import { Toast, loadCampus, loadProfile, saves, walkSpeed } from './profile.js';
-import { Settings, offerImport } from './settings.js';
+
+/** Settings and first-time setup ({ Settings, offerImport, Onboarding }), once loaded. */
+const parts = store(null);
+let loading = null;
+function loadParts() {
+  loading ??= Promise.all([import('./settings.js'), import('./onboarding.js')]).then(([s, o]) => {
+    parts.set({ Settings: s.Settings, offerImport: s.offerImport, Onboarding: o.Onboarding });
+  });
+  return loading;
+}
 
 const params = new URLSearchParams(location.search);
 /** Where to go after signing in: only the web app, never an arbitrary URL. */
@@ -295,9 +304,13 @@ function Who() {
 
 function AccountPage() {
   const { view, me, adding, error } = useStore(page);
+  const p = useStore(parts);
   if (view === 'loading') return null;
   if (view === 'error') return html`<p class="hint">${t('Something went wrong. {0}', error)}</p>`;
   if (view === 'signin') return html`<${SignIn} adding=${false} />`;
+  // Signed in, the parts are loaded before the view changes (start).
+  if (!p) return null;
+  const { Onboarding, Settings } = p;
   if (view === 'onboarding') return html`<${Onboarding} onDone=${afterSetup} />`;
   return html`
     ${adding && html`<${SignIn} adding=${true} />`}
@@ -319,7 +332,7 @@ function afterSetup() {
   set({ view: 'settings' });
   if (shared) {
     history.replaceState(null, '', location.pathname);
-    offerImport(shared);
+    parts.get().offerImport(shared);
   }
 }
 
@@ -328,10 +341,16 @@ async function start() {
   try {
     me = await api('/me');
   } catch (err) {
-    if (err.status === 401) return set({ view: 'signin' });
+    if (err.status === 401) {
+      set({ view: 'signin' });
+      // Ready by the time they've signed in, without holding up the card.
+      if (document.readyState === 'complete') loadParts();
+      else addEventListener('load', () => loadParts(), { once: true });
+      return;
+    }
     throw err;
   }
-  await Promise.all([loadProfile(), loadCampus()]);
+  await Promise.all([loadProfile(), loadCampus(), loadParts()]);
   set({ me });
   // First sign-in: set up before Settings appears, and before the header's
   // buttons, which would only distract from it.

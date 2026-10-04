@@ -347,7 +347,12 @@ Settings. It uses the same routes as the account page, with the session cookie.
   the app what the card is for, the card, Today and the push switch (top of
   `app/app.js`). The tabs are shown and hidden by the fade itself, not by
   Preact, so it can swap them between its halves; MapLibre is driven
-  directly inside the Map tab's effects.
+  directly inside the Map tab's effects. With no bundler the browser finds
+  a module's imports only once it has it, one round trip per level, so
+  `/app/` and `/account/` list every module they start with as
+  `modulepreload` links (kept right by `web-sw.test.js`). What isn't
+  needed at first loads with `import()`: the map and Settings in the app,
+  and Settings and setup on the account page once someone is signed in.
 
 - **Tabs.** Now, Map and Settings are three views of one page (`#map`,
   `#settings` in the address, so Back and a reload keep the tab). Switching

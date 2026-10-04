@@ -37,3 +37,29 @@ test('every module the web app loads at startup is kept for offline', () => {
   const missing = [...seen].filter((f) => !shell.has(f));
   assert.deepEqual(missing, []);
 });
+
+/** Every module [entry] loads at startup, itself left out: its static imports, all the way down. */
+function startupModules(entry) {
+  const seen = new Set();
+  const queue = [entry];
+  while (queue.length) {
+    const f = queue.shift();
+    if (seen.has(f)) continue;
+    seen.add(f);
+    queue.push(...importsOf(f));
+  }
+  seen.delete(entry);
+  return [...seen].sort();
+}
+
+test('each page asks for every module it starts with at once (modulepreload), and only those', () => {
+  // Without a bundler the browser finds a module's imports only once it has
+  // it: one round trip per level. The page's list lets it ask for them all
+  // in one go. Out of date, it would load a file for nothing, or miss one.
+  for (const [page, entry] of [['/app/index.html', '/app/app.js'], ['/account/index.html', '/account/app.js']]) {
+    const listed = [...read(page).matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map((m) => m[1]).sort();
+    assert.deepEqual(listed, startupModules(entry), page);
+  }
+  // Settings and setup wait for sign-in on the account page.
+  assert.ok(!startupModules('/account/app.js').includes('/account/settings.js'));
+});

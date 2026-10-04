@@ -336,8 +336,12 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
   `/assets/ui.js`; no bundler, no build step, so a page loads the files as
   written. What several components share (the profile, what the card is
   for) lives in a `store()` read with `useStore()`, not copied into each.
-  MapLibre is driven directly, inside the Map tab's effects. Every word goes
-  through `t()` (see below). External code only goes in `vendor/`, via its
+  MapLibre is driven directly, inside the Map tab's effects. With no
+  bundler, `/app/` and `/account/` list the modules they start with as
+  `<link rel="modulepreload">`, so the browser asks for them at once;
+  `web-sw.test.js` fails when an import changes and the list doesn't. Load
+  what isn't needed at first with `import()` (the map, Settings). Every word
+  goes through `t()` (see below). External code only goes in `vendor/`, via its
   script. The CSP is in `src/http.ts`; new origins need adding there.
 - **Kotlin:** keep logic that can be tested on the JVM out of composables
   (see `MapData.kt`).
