@@ -138,14 +138,14 @@ class MapDataTest {
     }
 
     @Test fun aLongerSlideTakesLonger() {
-        assertEquals(800L, Slides.slideMs(30.0))
-        assertEquals(2_000L, Slides.slideMs(300.0))
+        assertEquals(1_000L, Slides.slideMs(30.0))
+        assertEquals(2_100L, Slides.slideMs(210.0))
         assertEquals("done before the next answer", 4_000L, Slides.slideMs(1_400.0))
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.01, 1.0)))
         fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, null, along = m) }
         val s = Slides()
         s.update(listOf(at(0.0)), path, 0)
-        s.update(listOf(at(300.0)), path, 1_000)
+        s.update(listOf(at(200.0)), path, 1_000)
         assertTrue(s.moving(2_900))
         assertFalse(s.moving(3_000))
     }

@@ -25,10 +25,10 @@ const PMTILES = '/vendor/pmtiles%404.5.0/pmtiles.mjs';
 const BUSES_MS = 5_000;
 /** A stop's arrivals refresh this often while its sheet is open (cached 15 s). */
 const ARRIVALS_MS = 15_000;
-/** How long a bus takes to slide [m] metres along the road: a steady 150 m
- *  a second, so a longer stretch takes longer, from 0.8 s for a short hop to
+/** How long a bus takes to slide [m] metres along the road: a steady 100 m
+ *  a second, so a longer stretch takes longer, from 1 s for a short hop to
  *  4 s, done before the next answer (every 5 s). As the Android app. */
-const slideMs = (m) => Math.max(800, Math.min(4_000, (m / 150) * 1_000));
+const slideMs = (m) => Math.max(1_000, Math.min(4_000, (m / 100) * 1_000));
 /** Further than this along its line in one answer (back from a hidden tab),
  *  a bus jumps instead of sliding. */
 const SLIDE_MAX_M = 1_500;

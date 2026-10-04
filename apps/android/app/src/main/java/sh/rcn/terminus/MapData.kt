@@ -347,9 +347,9 @@ class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
 
     companion object {
         /** How long a slide of [m] metres takes, as the web map: a steady
-         *  150 m a second, so a longer stretch takes longer, from 0.8 s for a
+         *  100 m a second, so a longer stretch takes longer, from 1 s for a
          *  short hop to 4 s, done before the next answer (every 5 s). */
-        fun slideMs(m: Double): Long = (m / 150 * 1_000).toLong().coerceIn(800L, 4_000L)
+        fun slideMs(m: Double): Long = (m / 100 * 1_000).toLong().coerceIn(1_000L, 4_000L)
 
         /** No answer for longer than this: every bus jumps to where it is now. */
         const val STALE_MS = 15_000L
