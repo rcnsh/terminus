@@ -105,18 +105,20 @@ function refuse(input, message) {
 
 /** One setting on a row of a group: its name, then its control. */
 function Field({ id, label, sub, children }) {
+  const name = html`${label}${sub && html`<span class="field-sub">${sub}</span>`}`;
+  // A row whose control is a button has no label: clicking the words would press it.
   return html`
     <div class="field">
-      <label for=${id}>${label}${sub && html`<span class="field-sub">${sub}</span>`}</label>
+      ${id ? html`<label for=${id}>${name}</label>` : html`<div class="field-label">${name}</div>`}
       <div class="field-control">${children}</div>
     </div>
   `;
 }
 
 /** A group's heading and its rows, with at most one line of explanation under them. */
-function Group({ title, hint, children }) {
+function Group({ title, hint, class: cls = '', children }) {
   return html`
-    <section class="trips-group">
+    <section class=${`trips-group ${cls}`}>
       <h3 class="eyebrow">${title}</h3>
       <div class="card settings-list">${children}</div>
       ${hint && html`<p class="hint group-hint">${hint}</p>`}
@@ -887,45 +889,64 @@ export function ThemeSwitch({ labelledBy }) {
 
 /* ---------- Account ---------- */
 
+/** An email that may wrap: after the @ first, so the name stays whole. */
+const breakAfterAt = (email) => {
+  const at = email.indexOf('@');
+  return at < 0 ? email : html`${email.slice(0, at + 1)}<wbr />${email.slice(at + 1)}`;
+};
+
+/**
+ * Who you're signed in as, then what you can do with your account, one row
+ * each with its button on the right, then API keys. On the account page's
+ * wide layout the header shows who's signed in, so the first group is only
+ * for narrow screens there.
+ */
 export function Account({ me, inApp, onAddEmail, onSignOut }) {
   const [msg, setMsg] = useState('');
   return html`
-    <div class="card">
-      <div class=${inApp ? 'who-row' : 'who-row narrow-only'}>
-        <span class="hint">${me.email ?? t('No email')}</span>
-        ${me.anonymous === true
-          ? html`<button type="button" class="btn small ghost" onClick=${onAddEmail}>${t('Add an email')}</button>`
-          : html`<button type="button" class="btn small ghost" onClick=${onSignOut}>${t('Sign out')}</button>`}
-      </div>
-      <div class="actions">
-        <a class="btn ghost small" href="/me/export" download>${t('Download my data')}</a>
-        <button
-          type="button"
-          class="btn ghost small"
-          onClick=${async () => {
-            if (!confirm(t('Sign out of every browser and device, including this one?'))) return;
-            await api('/me/sessions', { method: 'DELETE' });
-            location.reload();
-          }}
-        >${t('Sign out everywhere')}</button>
-        <button
-          type="button"
-          class="btn danger small"
-          onClick=${async () => {
-            const typed = prompt(t('This deletes your account, timetable, favourites and paired devices immediately. Type DELETE to confirm.'));
-            if (typed !== 'DELETE') return;
-            try {
-              await api('/me', { method: 'DELETE' });
-              location.href = '/';
-            } catch (err) {
-              setMsg(err.message);
-            }
-          }}
-        >${t('Delete account')}</button>
-      </div>
-      <p class="hint" role="status">${msg}</p>
+    <div class="trips">
+      <${Group} title=${t('Email address')} class=${inApp ? '' : 'narrow-only'}>
+        <${Field} label=${html`<span class="field-email">${me.email ? breakAfterAt(me.email) : t('No email')}</span>`} sub=${me.anonymous === true ? t('Add one to sign in on your other devices.') : null}>
+          ${me.anonymous === true
+            ? html`<button type="button" class="btn small ghost" onClick=${onAddEmail}>${t('Add an email')}</button>`
+            : html`<button type="button" class="btn small ghost" onClick=${onSignOut}>${t('Sign out')}</button>`}
+        <//>
+      <//>
+      <${Group} title=${t('Your data')}>
+        <${Field} label=${t('Download my data')} sub=${t('Your timetable, settings and trips, in one file.')}>
+          <a class="btn ghost small" href="/me/export" download>${t('Download')}</a>
+        <//>
+        <${Field} label=${t('Sign out everywhere')} sub=${t('Every browser and device, including this one.')}>
+          <button
+            type="button"
+            class="btn ghost small"
+            onClick=${async () => {
+              if (!confirm(t('Sign out of every browser and device, including this one?'))) return;
+              await api('/me/sessions', { method: 'DELETE' });
+              location.reload();
+            }}
+          >${t('Sign out')}</button>
+        <//>
+        <${Field} label=${t('Delete account')} sub=${t('Your timetable, favourites and paired devices, straight away.')}>
+          <button
+            type="button"
+            class="btn danger small"
+            onClick=${async () => {
+              const typed = prompt(t('This deletes your account, timetable, favourites and paired devices immediately. Type DELETE to confirm.'));
+              if (typed !== 'DELETE') return;
+              try {
+                await api('/me', { method: 'DELETE' });
+                location.href = '/';
+              } catch (err) {
+                setMsg(err.message);
+              }
+            }}
+          >${t('Delete')}</button>
+        <//>
+      <//>
+      ${msg && html`<p class="hint group-hint" role="status">${msg}</p>`}
+      <${Keys} />
     </div>
-    <${Keys} />
   `;
 }
 
@@ -942,8 +963,9 @@ function Keys() {
     load();
   }, []);
   return html`
-    <div class="card">
-      <h3>${t('API keys')}</h3>
+    <section class="trips-group">
+      <h3 class="eyebrow">${t('API keys')}</h3>
+      <div class="card">
       <${Rich} as="p" class="hint" text=${t('For your own scripts and projects. See the <a href="/docs">API docs</a>; send the key in the <code>x-api-key</code> header.')} />
       <ul class="list">
         ${keys.map(
@@ -1002,7 +1024,8 @@ function Keys() {
         <p class="hint">${t('Try it:')} <code>${`curl -H "x-api-key: ${made}" "${location.origin}/arrivals?stop=COM3"`}</code></p>
       </div>`}
       <p class="hint" role="status">${msg}</p>
-    </div>
+      </div>
+    </section>
   `;
 }
 

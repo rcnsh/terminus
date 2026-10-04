@@ -300,12 +300,11 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .linkish:hover { color: var(--ink); }
 /* Who's signed in, at the top of Account: in the web app (no header there),
    and on the account page when its header has no room for these buttons. */
-.who-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
-.who-row .hint { flex: 1; min-width: 12rem; margin: 0; overflow-wrap: anywhere; }
+.field-email { overflow-wrap: anywhere; }
 /* Appearance: the theme, one choice per line. */
 .theme-choice { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
 .theme-choice legend { padding: 0; margin-bottom: 4px; font-size: 0.9rem; color: var(--muted); }
 .theme-choice .check { margin: 0; }
 .ob-clock { margin-top: 18px; }
-@media (min-width: 640px) { .who-row.narrow-only { display: none; } }
+@media (min-width: 640px) { .narrow-only { display: none; } }
 @media (max-width: 639.98px) { .nav-links #add-email, .nav-links #logout { display: none; } }
