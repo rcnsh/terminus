@@ -3,13 +3,15 @@
 // Loaded in <head>, before the page: it picks the language (the choice made
 // on this browser, or the account's, or else the browser's own languages)
 // and, for Chinese, hides the page until it's translated, so English never
-// flashes. The translations are in zh.js, keyed by the English they replace.
+// flashes. The translations are in zh.js, keyed by the English they replace,
+// which only a Chinese page loads: English readers never download it.
 // Pages need no markup for it: text is matched as it appears, and a sentence
 // with a link or a name inside is matched as the whole element's HTML.
 // Scripts word what they build with t('English {0}', value).
 (() => {
   const KEY = 'terminus-lang';
-  const ZH = window.TERMINUS_ZH || {};
+  /** The translations, once zh.js has run (loaded below, for Chinese only). */
+  const zh = () => window.TERMINUS_ZH || {};
 
   const read = (k) => {
     try {
@@ -47,10 +49,14 @@
   const alt = document.documentElement.dataset[lang === 'zh' ? 'altZh' : 'altEn'];
   if (alt && !location.search.includes('original')) location.replace(alt);
   document.documentElement.lang = lang === 'zh' ? 'zh-Hans' : 'en';
+  // Chinese: zh.js now, before the rest of the page. Written into the parser
+  // so it runs before the page's own scripts, which word what they build
+  // with t() as they load. Same-origin, so no browser holds it back.
+  if (lang === 'zh' && !window.TERMINUS_ZH) document.write('<script src="/assets/zh.js"></script>');
 
   const fill = (s, args) => s.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? ''));
   /** "Updated {0}" in this page's language, with the blanks filled. */
-  const t = (en, ...args) => fill(lang === 'zh' && ZH[en] != null ? ZH[en] : en, args);
+  const t = (en, ...args) => fill(lang === 'zh' && zh()[en] != null ? zh()[en] : en, args);
 
   const norm = (s) => s.replace(/\s+/g, ' ').trim();
   let byHtml = null;
@@ -59,7 +65,7 @@
     if (byHtml) return byHtml;
     byHtml = new Map();
     const tpl = document.createElement('template');
-    for (const [k, v] of Object.entries(ZH)) {
+    for (const [k, v] of Object.entries(zh())) {
       if (!k.includes('<')) continue;
       tpl.innerHTML = k;
       byHtml.set(norm(tpl.innerHTML), v);
@@ -73,7 +79,7 @@
   function walk(node) {
     if (node.nodeType === Node.TEXT_NODE) {
       const raw = node.nodeValue;
-      const hit = ZH[norm(raw)];
+      const hit = zh()[norm(raw)];
       if (hit != null) node.nodeValue = raw.match(/^\s*/)[0] + hit + raw.match(/\s*$/)[0];
       return;
     }
@@ -81,7 +87,7 @@
     // A text box's placeholder, though not what's typed in it.
     for (const a of ATTRS) {
       const v = node.getAttribute(a);
-      if (v && ZH[norm(v)] != null) node.setAttribute(a, ZH[norm(v)]);
+      if (v && zh()[norm(v)] != null) node.setAttribute(a, zh()[norm(v)]);
     }
     if (SKIP.has(node.tagName)) return;
     if (node.children.length) {
