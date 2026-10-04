@@ -27,7 +27,7 @@ import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
 import { readIncidents, readUpstream, runCron } from './monitor.ts';
 import { calendarThrough } from './calendar.ts';
-import { robotsTxt, SITEMAP } from './seo.ts';
+import { llmsTxt, robotsTxt, SITEMAP } from './seo.ts';
 import { calendarSource, loadCalendar } from './calendarsync.ts';
 import { handleDownload } from './downloads.ts';
 import { handleMap, matchesEtag } from './map.ts';
@@ -352,6 +352,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         });
       case '/robots.txt':
         return new Response(robotsTxt(env), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+      case '/llms.txt':
+        return new Response(llmsTxt(url.origin), { headers: { 'content-type': 'text/markdown; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
       case '/sitemap.xml':
         if (isBeta(env)) return json({ error: 'not found' }, 404);
         return new Response(SITEMAP, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });

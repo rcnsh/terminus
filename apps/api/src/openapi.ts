@@ -1780,7 +1780,7 @@ export const DOCS_PAGE = `<!doctype html>
     <a href="/"><img src="/assets/mark.svg" alt="" width="22" height="22"><span>termi<b>nus</b> API</span></a>
     <a class="back" href="/">Back to terminus</a>
   </div>
-  <noscript><p style="padding:16px">The docs need JavaScript. The raw spec is at <a href="/openapi.json">/openapi.json</a>.</p></noscript>
+  <noscript><p style="padding:16px">The docs need JavaScript. Without it: the spec, every endpoint with examples, is at <a href="/openapi.json">/openapi.json</a>, and a short guide to the API, in Markdown, is at <a href="/llms.txt">/llms.txt</a>.</p></noscript>
   <elements-api apiDescriptionUrl="/openapi.json" router="hash" layout="responsive"></elements-api>
 </body>
 </html>`;
