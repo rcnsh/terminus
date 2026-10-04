@@ -63,8 +63,12 @@ class TripWatch(private val ctx: Context) {
     data class Fix(val lat: Double, val lon: Double, val speedMs: Double?, val accM: Double?)
 
     companion object {
-        /** A fix about this often: enough to see a bus pass one stop. */
-        const val INTERVAL_MS = 10_000L
+        /**
+         * A fix about this often: as often as the live notification sends one
+         * (LiveService's WATCH_MS), so no fix is taken only to be thrown away.
+         * A bus takes 40 s or more between stops, so it still sees each one.
+         */
+        const val INTERVAL_MS = 20_000L
         /** Older than this, a fix says where you were, not where you are. */
         const val MAX_AGE_MS = 45_000L
 

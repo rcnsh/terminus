@@ -202,8 +202,9 @@ final class AppModel {
         if let plan, plan.tripUnderWay, let g = plan.card?.glance { return g }
         guard let plan, plan.quality != "ended", plan.card?.kind != "setup", !plan.isFree else { return nil }
         // A class: when to leave is what matters from the menu bar.
+        // "~" on an estimate, as the card and the phone say it.
         if plan.isClassPlan, let at = plan.leaveAt {
-            return now >= at ? L("Leave now") : L("Leave %@", campusTime(at))
+            return now >= at ? L("Leave now") : L("Leave %@", plan.leave?.estimated == true ? L("~%@", campusTime(at)) : campusTime(at))
         }
         guard plan.hasLiveTime, let at = plan.departure else {
             let short = plan.label.replacingOccurrences(of: " · ", with: " ").replacingOccurrences(of: " min", with: "m")
@@ -211,7 +212,8 @@ final class AppModel {
         }
         let left = at.timeIntervalSince(now)
         if left < -30 { return nil }
-        return left < 45 ? "\(plan.service) \(L("now"))" : "\(plan.service) \(L("%@m", "\(Int((left / 60).rounded()))"))"
+        let mins = L("%@m", "\(Int((left / 60).rounded()))")
+        return left < 45 ? "\(plan.service) \(L("now"))" : "\(plan.service) \(plan.quality == "scheduled" ? L("~%@", mins) : mins)"
     }
 
     /// Same rule as the Android widget: the bus has left, the plan has moved
