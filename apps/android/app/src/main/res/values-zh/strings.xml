@@ -413,7 +413,6 @@
     <string name="source_code">源代码</string>
     <string name="map_data">地图数据</string>
     <string name="aup">NUS 可接受使用政策</string>
-    <string name="end_of_the_line">终点站到了！本车在此终止服务。</string>
     <string name="feedback_label">想法、问题，什么都可以</string>
     <string name="feedback_placeholder">想去的地方、让你困惑的地方……</string>
     <string name="feedback_no_email">这会发送你写的内容。如果想收到回复，请添加邮箱。</string>

@@ -1,7 +1,6 @@
 package sh.rcn.terminus.ui
 
 import android.os.SystemClock
-import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -21,11 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -33,7 +30,7 @@ import sh.rcn.terminus.R
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/** Taps that count as one go at the egg, as on the web app. */
+/** Taps that count as one go at the egg. */
 private const val TAPS = 5
 private const val TAP_WINDOW_MS = 1_500L
 
@@ -44,12 +41,10 @@ private const val TAP_WINDOW_MS = 1_500L
  */
 @Composable
 fun RowScope.HeaderWordmark() {
-    val ctx = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val drive = remember { Animatable(0f) }
     val taps = remember { ArrayDeque<Long>() }
-    val message = stringResource(R.string.end_of_the_line)
     val bus = 28.dp
     val busPx = with(LocalDensity.current) { bus.toPx() }
     val bob = with(LocalDensity.current) { 2.dp.toPx() }
@@ -57,7 +52,7 @@ fun RowScope.HeaderWordmark() {
     BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
         val widthPx = constraints.maxWidth.toFloat()
         Box(
-            Modifier.pointerInput(message) {
+            Modifier.pointerInput(Unit) {
                 detectTapGestures {
                     val now = SystemClock.uptimeMillis()
                     taps.addLast(now)
@@ -65,7 +60,6 @@ fun RowScope.HeaderWordmark() {
                     if (taps.size >= TAPS && !drive.isRunning) {
                         taps.clear()
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show()
                         scope.launch {
                             drive.snapTo(0f)
                             drive.animateTo(1f, tween(2_400, easing = LinearEasing))
