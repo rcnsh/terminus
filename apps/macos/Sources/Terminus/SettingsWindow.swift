@@ -114,9 +114,7 @@ struct SettingsPaneView: View {
             }
             switch pane {
             case .trips:
-                HomeStep(setup: setup, app: app)
-                Divider().padding(.vertical, 8)
-                PaceStep(setup: setup)
+                TripsPane(setup: setup, app: app)
             case .timetable:
                 TimetableStep(setup: setup)
             case .favourites:
@@ -232,5 +230,163 @@ private struct FavouriteSearch: View {
             if let note { Hint(note) }
         }
         .padding(.top, 4)
+    }
+}
+
+/// A group's heading, its rows in one box, and at most one line under them.
+private struct TripsGroup<Content: View>: View {
+    let title: String
+    let hint: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.headline)
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) { content }
+                    .padding(6)
+            }
+            Hint(hint).padding(.leading, 4)
+        }
+    }
+}
+
+/// Your trips: where you live, your day's hours and how you walk, in three
+/// short groups of one-line rows, as on the phone and the web. Setup asks
+/// the same things with more words (HomeStep, PaceStep).
+struct TripsPane: View {
+    let setup: SetupModel
+    let app: AppModel
+    @State private var offCampus = false
+    @State private var locating: String?
+
+    private var residence: Campus.Residence? { setup.campus?.residences.first { $0.stops == setup.homeStops } }
+    private let paces = [
+        ("slow", L("Slow"), L("400 m in about 6 min. A relaxed pace, or if you often carry a bag.")),
+        ("normal", L("Normal"), L("400 m in about 5 min. An average pace.")),
+        ("fast", L("Fast"), L("400 m in about 4 min. A brisk pace.")),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            TripsGroup(title: L("Where you live"), hint: L("Only your stops are saved, never where you live.")) { home }
+            TripsGroup(title: L("Your day"), hint: L("Outside these hours, you see your next class instead of a bus.")) { day }
+            TripsGroup(title: L("Walking"), hint: L("Walks follow the paths on campus.")) { walking }
+        }
+        .onChange(of: setup.homeStops) { offCampus = false }
+    }
+
+    @ViewBuilder private var home: some View {
+        if let campus = setup.campus {
+            let picking = offCampus || residence == nil
+            LabeledContent(L("Residence")) {
+                Picker(L("Residence"), selection: Binding(
+                    get: { picking ? "" : residence!.code },
+                    set: { code in
+                        if let r = campus.residences.first(where: { $0.code == code }) { setup.setResidence(r) } else { offCampus = true }
+                    }
+                )) {
+                    Text(L("Off campus")).tag("")
+                    ForEach(campus.residences, id: \.code) { Text($0.name).tag($0.code) }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            if !picking, let r = residence {
+                Hint(L("Your stops: %@.", r.stops.map(campus.stopName).joined(separator: ", ")))
+            } else {
+                Divider()
+                LabeledContent(L("Your stop")) {
+                    Picker(L("Your stop"), selection: Binding(
+                        get: { setup.homeStops.first ?? "" },
+                        // "Choose a stop" clears the first one rather than saving a blank stop.
+                        set: { code in setup.setHomeStops((code.isEmpty ? [] : [code]) + setup.homeStops.dropFirst().filter { $0 != code }) }
+                    )) {
+                        Text(L("Choose a stop")).tag("")
+                        ForEach(campus.stops, id: \.code) { Text($0.name).tag($0.code) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                HStack {
+                    Button(L("Pick the stop nearest me")) {
+                        locating = L("Finding the nearest stop…")
+                        Task {
+                            if let loc = await app.whereAmI(), let near = campus.nearest(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) {
+                                setup.setHomeStops([near.code] + setup.homeStops.filter { $0 != near.code })
+                                locating = L("Picked %@. Change it if you use a different stop.", near.name)
+                            } else {
+                                locating = L("Couldn't get this Mac's location. Pick your stop instead.")
+                            }
+                        }
+                    }
+                    .buttonStyle(.link)
+                    if let locating { Hint(locating) }
+                }
+            }
+            Divider()
+            LabeledContent(L("Walk to your stop")) {
+                Stepper(L("%@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: 0...30)
+            }
+        } else {
+            ProgressView()
+        }
+    }
+
+    @ViewBuilder private var day: some View {
+        LabeledContent(L("Show buses between")) {
+            HStack(spacing: 6) {
+                DatePicker(L("Day starts"), selection: time(get: { setup.dayStartMin }, set: setup.setDayStart), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                Text(L("and")).foregroundStyle(.secondary)
+                DatePicker(L("Day ends"), selection: time(get: { setup.dayEndMin }, set: setup.setDayEnd), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+            }
+        }
+        Divider()
+        LabeledContent(L("Go home in gaps longer than")) {
+            let h = setup.gapHours
+            let shown = h == 1 ? L("1 hour") : L("%@ hours", h.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(h))" : "\(h)")
+            Stepper(shown, value: Binding(get: { setup.gapHours }, set: { setup.setGapHours($0) }), in: 0.5...12, step: 0.5)
+        }
+    }
+
+    @ViewBuilder private var walking: some View {
+        let pace = paces.first { $0.0 == setup.walkPace } ?? paces[1]
+        LabeledContent {
+            Picker(L("Walking pace"), selection: Binding(get: { pace.0 }, set: { setup.setPace($0) })) {
+                ForEach(paces, id: \.0) { Text($0.1).tag($0.0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("Walking pace"))
+                Hint(pace.2)
+            }
+        }
+        Divider()
+        LabeledContent {
+            Toggle(L("Allow for busy buses"), isOn: Binding(get: { setup.fullBusMargin }, set: { setup.setFullBusMargin($0) }))
+                .toggleStyle(.switch)
+                .labelsHidden()
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("Allow for busy buses"))
+                Hint(L("Aim one bus earlier when yours is often full."))
+            }
+        }
+    }
+
+    /// Minutes after midnight as a time of day for a DatePicker, today on this Mac's calendar.
+    private func time(get: @escaping () -> Int, set: @escaping (Int) -> Void) -> Binding<Date> {
+        Binding(
+            get: { Calendar.current.date(bySettingHour: get() / 60, minute: get() % 60, second: 0, of: Date()) ?? Date() },
+            set: { d in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+                set((c.hour ?? 0) * 60 + (c.minute ?? 0))
+            }
+        )
     }
 }

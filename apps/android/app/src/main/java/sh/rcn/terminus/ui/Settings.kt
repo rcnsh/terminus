@@ -296,13 +296,7 @@ private fun SettingsPageContent(
     when (page) {
         SettingsPage.Trips -> {
             if (profile == null) return
-            Heading(stringResource(R.string.heading_your_day))
-            state.campus?.let { HomePicker(profile, it, account) }
-            DayHours(profile, account)
-            Heading(stringResource(R.string.heading_getting_around))
-            PacePicker(profile, account)
-            TripChoices(state, account)
-            TripHistory(state, account)
+            TripsSettings(profile, state, account)
         }
         SettingsPage.Timetable -> {
             if (profile == null) return
@@ -365,32 +359,33 @@ private fun NotificationSettings(main: MainViewModel) {
 
 /** What you chose for particular classes, each undoable. */
 @Composable
-private fun TripChoices(state: AccountState, account: AccountViewModel) {
+internal fun TripChoices(state: AccountState, account: AccountViewModel) {
     if (state.choices.isEmpty()) return
-    Text(stringResource(R.string.your_classes), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
-    state.choices.forEach { c ->
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(c.label ?: stringResource(R.string.class_gone))
-                Text(
-                    if (c.pref == "earlier") stringResource(R.string.one_bus_earlier) else stringResource(R.string.no_reminders),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    TripsGroup(stringResource(R.string.your_classes)) {
+        state.choices.forEachIndexed { i, c ->
+            if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(c.label ?: stringResource(R.string.class_gone))
+                    Hint(if (c.pref == "earlier") stringResource(R.string.one_bus_earlier) else stringResource(R.string.no_reminders))
+                }
+                TextButton(onClick = { account.undoChoice(c) }) { Text(stringResource(R.string.undo)) }
             }
-            TextButton(onClick = { account.undoChoice(c) }) { Text(stringResource(R.string.undo)) }
         }
     }
 }
 
 /** How each trip went, kept 35 days for the suggestions; cleared here without touching the rest. */
 @Composable
-private fun TripHistory(state: AccountState, account: AccountViewModel) {
+internal fun TripHistory(state: AccountState, account: AccountViewModel) {
     if (state.history == 0) return
     var confirm by remember { mutableStateOf(false) }
-    Text(stringResource(R.string.trip_history), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
-    Hint(if (state.history == 1) stringResource(R.string.history_one) else stringResource(R.string.history_n, state.history))
-    OutlinedButton(onClick = { confirm = true }, modifier = Modifier.padding(top = 4.dp)) { Text(stringResource(R.string.clear_history)) }
+    TripsGroup(stringResource(R.string.trip_history), stringResource(R.string.history_kept)) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (state.history == 1) stringResource(R.string.trips_recorded_one) else stringResource(R.string.trips_recorded_n, state.history), modifier = Modifier.weight(1f))
+            TextButton(onClick = { confirm = true }) { Text(stringResource(R.string.clear_history)) }
+        }
+    }
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
@@ -593,26 +588,6 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
                 ) { Text(stringResource(R.string.add)) }
             }
         }
-    }
-}
-
-@Composable
-private fun DayHours(profile: ProfileDoc, account: AccountViewModel) {
-    Spacer(Modifier.height(12.dp))
-    Text(stringResource(R.string.show_buses_between))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        TimeButton("", profile.dayStartMin, { m -> if (m < profile.dayEndMin) account.edit { it.dayStartMin = m } }, Modifier.weight(1f))
-        Text(stringResource(R.string.and))
-        TimeButton("", profile.dayEndMin, { m -> if (m > profile.dayStartMin) account.edit { it.dayEndMin = m } }, Modifier.weight(1f))
-    }
-    Hint(stringResource(R.string.day_hours_hint))
-    Spacer(Modifier.height(12.dp))
-    Text(stringResource(R.string.gap_home))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = { account.edit { it.gapHours = profile.gapHours - 0.5 } }, enabled = profile.gapHours > 0.5, modifier = Modifier.semantics { contentDescription = L.s(R.string.gap_shorter) }) { Text("−") }
-        val h = profile.gapHours
-        Text(if (h == 1.0) stringResource(R.string.one_hour) else stringResource(R.string.n_hours, if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()), modifier = Modifier.padding(horizontal = 16.dp))
-        OutlinedButton(onClick = { account.edit { it.gapHours = profile.gapHours + 0.5 } }, enabled = profile.gapHours < 12, modifier = Modifier.semantics { contentDescription = L.s(R.string.gap_longer) }) { Text("+") }
     }
 }
 

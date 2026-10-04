@@ -202,7 +202,7 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
     Hint(stringResource(R.string.home_walk_hint))
 }
 
-private fun nearestStop(stops: List<Stop>, lat: Double, lon: Double): Stop? = stops.minByOrNull {
+internal fun nearestStop(stops: List<Stop>, lat: Double, lon: Double): Stop? = stops.minByOrNull {
     val dLat = it.lat - lat
     val dLon = (it.lon - lon) * Math.cos(Math.toRadians(lat))
     dLat * dLat + dLon * dLon

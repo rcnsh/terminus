@@ -24,8 +24,6 @@ import { pickedStop } from './search.js';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(d));
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-/** Home stops further than this from where you are aren't picked for you. */
-const WALK_RADIUS_M = 450;
 
 /** Devices paired, for Devices' line in the list; null until loaded. */
 export const deviceCount = store(null);
@@ -105,42 +103,71 @@ function refuse(input, message) {
 
 /* ---------- Your trips ---------- */
 
+/** One setting on a row of a group: its name, then its control. */
+function Field({ id, label, sub, children }) {
+  return html`
+    <div class="field">
+      <label for=${id}>${label}${sub && html`<span class="field-sub">${sub}</span>`}</label>
+      <div class="field-control">${children}</div>
+    </div>
+  `;
+}
+
+/** A group's heading and its rows, with at most one line of explanation under them. */
+function Group({ title, hint, children }) {
+  return html`
+    <section class="trips-group">
+      <h3 class="eyebrow">${title}</h3>
+      <div class="card settings-list">${children}</div>
+      ${hint && html`<p class="hint group-hint">${hint}</p>`}
+    </section>
+  `;
+}
+
+const PACES = () => [
+  { value: 'slow', label: t('Slow'), hint: t('400 m in about 6 min. A relaxed pace, or if you often carry a bag.') },
+  { value: 'normal', label: t('Normal'), hint: t('400 m in about 5 min. An average pace.') },
+  { value: 'fast', label: t('Fast'), hint: t('400 m in about 4 min. A brisk pace.') },
+];
+
+/**
+ * Where you live, your day's hours and how you walk: three short groups of
+ * one-line rows, each group with one line of explanation. The first-time
+ * setup (onboarding.js) asks the same things with more words.
+ */
 export function Trips() {
   const p = useStore(profile);
   const c = useStore(campus);
   const now = p.home?.stops ?? [];
   const residences = useMemo(() => residencesByName(c), [c]);
+  const residence = residenceFor(now);
   // "Off campus" can be chosen while the stops are a residence's: it stays
-  // chosen (to pick stops below) until the stops change.
+  // chosen (to pick a stop below) until the stops change.
   const [offCampus, setOffCampus] = useState(false);
   useEffect(() => setOffCampus(false), [now.join()]);
   const [msg, setMsg] = useState('');
+  const picking = offCampus || !residence;
 
-  const pick = (idx) => (v) =>
+  // The first stop is the one picked here; any others (from before) stay after it.
+  const pickStop = (code) =>
     edit((x) => {
-      const next = [...(x.home?.stops ?? [])];
-      next[idx] = v;
-      const clean = next.filter(Boolean).filter((code, i, a) => a.indexOf(code) === i);
-      x.home = clean.length ? { stops: clean } : null;
+      const rest = (x.home?.stops ?? []).slice(1).filter((s) => s !== code);
+      const next = code ? [code, ...rest] : rest;
+      x.home = next.length ? { stops: next } : null;
     });
 
-  // Finds the nearest stops in the browser. The location itself is never sent.
+  // Finds the nearest stop in the browser. The location itself is never sent.
   const locate = () => {
     if (!navigator.geolocation) return setMsg(t('This browser cannot share its location.'));
-    setMsg(t('Finding the nearest stops…'));
+    setMsg(t('Finding the nearest stop…'));
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        const near = stopsNear(coords.latitude, coords.longitude);
-        const within = near.filter((n) => n.d <= WALK_RADIUS_M).slice(0, 2);
-        const picked = (within.length ? within : near.slice(0, 1)).map((n) => n.s.code);
-        edit((x) => (x.home = { stops: picked }));
-        setMsg(
-          within.length
-            ? t('Picked {0}. Change them if you use a different stop.', picked.map(stopName).join(t(' and ')))
-            : t('No stop within {0} m, so we picked the nearest: {1}.', WALK_RADIUS_M, stopName(picked[0])),
-        );
+        const near = stopsNear(coords.latitude, coords.longitude)[0];
+        if (!near) return setMsg('');
+        pickStop(near.s.code);
+        setMsg(t('Picked {0}. Change it if you use a different stop.', stopName(near.s.code)));
       },
-      (err) => setMsg(t("Couldn't get your location ({0}). Pick your stops instead.", err.message)),
+      (err) => setMsg(t("Couldn't get your location ({0}). Pick your stop instead.", err.message)),
       { enableHighAccuracy: true, timeout: 10_000 },
     );
   };
@@ -166,77 +193,82 @@ export function Trips() {
     edit((x) => (x[field] = v));
   };
 
+  const pace = PACES().find((x) => x.value === (p.walkPace ?? 'normal')) ?? PACES()[1];
+
   return html`
-    <div class="card">
-      <label for="residence">${t('Where do you live?')}</label>
-      <select
-        id="residence"
-        value=${offCampus ? '' : (residenceFor(now)?.code ?? '')}
-        onChange=${(e) => {
-          const r = residences.find((x) => x.code === e.currentTarget.value);
-          // "Off campus": keep the stops, pick them below.
-          if (!r) return setOffCampus(true);
-          edit((x) => {
-            x.home = { stops: [...r.stops] };
-            x.homeWalkMin = residenceWalkMin(r);
-          });
-        }}
-      >
-        <option value="">${t("Off campus, or I'll pick stops")}</option>
-        ${residences.map((r) => html`<option value=${r.code} key=${r.code}>${r.name}</option>`)}
-      </select>
-      <p class="hint">${t("If you live on campus, this fills in your stops so the app doesn't direct you home when you're already there.")}</p>
-      <label for="home-1">${t('Home stops')}</label>
-      <p class="hint">${t('Where your day starts and ends. Only the stops are saved, never where you live.')}</p>
-      <div class="row">
-        <${StopSelect} id="home-1" aria-label=${t('Main home stop')} value=${now[0]} onChange=${pick(0)} blank=${t('Main stop')} />
-        <${StopSelect} id="home-2" aria-label=${t('Second home stop')} value=${now[1]} onChange=${pick(1)} blank=${t('Second stop (optional)')} />
-      </div>
-      <button type="button" class="link-btn locate" onClick=${locate}>${t('Pick the stops nearest me')}</button>
-      <p class="hint" role="status">${msg}</p>
-      <label for="home-walk">${t('Walk from home to your stop')}</label>
-      <div class="row tight">
-        <input id="home-walk" type="number" min="0" max="30" step="1" value=${p.homeWalkMin ?? 5} onChange=${number('homeWalkMin', (v) => Number.isInteger(v) && v >= 0 && v <= 30, t('Between 0 and 30 minutes'), 5)} />
-        <span>${t('minutes')}</span>
-      </div>
-      <p class="hint">${t("Included in your departure time when your location isn't available.")}</p>
-
-      <div class="split">
-        <div>
-          <label for="day-start">${t('Show buses between')}</label>
-          <div class="row tight">
-            <input id="day-start" type="time" aria-label=${t('Day starts')} value=${hhmm(p.dayStartMin ?? 360)} onChange=${dayTime('dayStartMin')} />
-            <span>${t('and')}</span>
-            <input id="day-end" type="time" aria-label=${t('Day ends')} value=${hhmm(p.dayEndMin ?? 1080)} onChange=${dayTime('dayEndMin')} />
-          </div>
-        </div>
-        <div>
-          <label for="gap">${t('Go home in gaps longer than')}</label>
-          <div class="row tight">
-            <input id="gap" type="number" min="0.5" max="12" step="0.5" value=${p.gapHours} onChange=${number('gapHours', (v) => v >= 0.5 && v <= 12, null, 2)} />
-            <span>${t('hours')}</span>
-          </div>
-        </div>
-      </div>
-      <p class="hint">${t('Outside these hours, the widget shows your next class instead of a bus. Classes that start earlier or end later extend these hours automatically.')}</p>
-
-      <div class="split">
-        <div>
-          <label for="pace">${t('Walking pace')}</label>
-          <select id="pace" value=${p.walkPace ?? 'normal'} onChange=${(e) => edit((x) => (x.walkPace = e.currentTarget.value))}>
-            <option value="slow">${t('Slow, about 4 km/h')}</option>
-            <option value="normal">${t('Normal, about 4.7 km/h')}</option>
-            <option value="fast">${t('Fast, about 5.4 km/h')}</option>
+    <div class="trips">
+      <${Group} title=${t('Where you live')} hint=${t('Only your stops are saved, never where you live.')}>
+        <${Field} id="residence" label=${t('Residence')}>
+          <select
+            id="residence"
+            value=${picking ? '' : residence.code}
+            onChange=${(e) => {
+              const r = residences.find((x) => x.code === e.currentTarget.value);
+              // "Off campus": keep the stops, pick one below.
+              if (!r) return setOffCampus(true);
+              edit((x) => {
+                x.home = { stops: [...r.stops] };
+                x.homeWalkMin = residenceWalkMin(r);
+              });
+            }}
+          >
+            <option value="">${t('Off campus')}</option>
+            ${residences.map((r) => html`<option value=${r.code} key=${r.code}>${r.name}</option>`)}
           </select>
+        <//>
+        ${picking
+          ? html`
+              <${Field} id="home-1" label=${t('Your stop')}>
+                <${StopSelect} id="home-1" value=${now[0]} onChange=${pickStop} blank=${t('Choose a stop')} />
+              <//>
+              <div class="field field-note">
+                <button type="button" class="link-btn" onClick=${locate}>${t('Pick the stop nearest me')}</button>
+                ${msg && html`<span class="hint" role="status">${msg}</span>`}
+              </div>
+            `
+          : html`<div class="field field-note"><span class="hint">${t('Your stops: {0}.', now.map(stopName).join(', '))}</span></div>`}
+        <${Field} id="home-walk" label=${t('Walk to your stop')}>
+          <span class="unit">
+            <input id="home-walk" type="number" inputmode="numeric" min="0" max="30" step="1" value=${p.homeWalkMin ?? 5} onChange=${number('homeWalkMin', (v) => Number.isInteger(v) && v >= 0 && v <= 30, t('Between 0 and 30 minutes'), 5)} />
+            ${t('min')}
+          </span>
+        <//>
+      <//>
+
+      <${Group} title=${t('Your day')} hint=${t('Outside these hours, you see your next class instead of a bus.')}>
+        <${Field} id="day-start" label=${t('Show buses between')}>
+          <span class="unit">
+            <input id="day-start" type="time" aria-label=${t('Day starts')} value=${hhmm(p.dayStartMin ?? 360)} onChange=${dayTime('dayStartMin')} />
+            ${t('and')}
+            <input id="day-end" type="time" aria-label=${t('Day ends')} value=${hhmm(p.dayEndMin ?? 1080)} onChange=${dayTime('dayEndMin')} />
+          </span>
+        <//>
+        <${Field} id="gap" label=${t('Go home in gaps longer than')}>
+          <span class="unit">
+            <input id="gap" type="number" inputmode="decimal" min="0.5" max="12" step="0.5" value=${p.gapHours} onChange=${number('gapHours', (v) => v >= 0.5 && v <= 12, null, 2)} />
+            ${t('hours')}
+          </span>
+        <//>
+      <//>
+
+      <${Group} title=${t('Walking')} hint=${t('Walks follow the paths on campus.')}>
+        <div class="field">
+          <span class="field-label" id="pace-label">${t('Walking pace')}<span class="field-sub">${pace.hint}</span></span>
+          <div class="field-control">
+            <div class="segmented" role="radiogroup" aria-labelledby="pace-label">
+              ${PACES().map(
+                (x) => html`<label key=${x.value}>
+                  <input type="radio" name="pace" value=${x.value} checked=${pace.value === x.value} onChange=${() => edit((y) => (y.walkPace = x.value))} />
+                  <span>${x.label}</span>
+                </label>`,
+              )}
+            </div>
+          </div>
         </div>
-        <div>
-          <label class="check">
-            <input id="full-bus" type="checkbox" checked=${p.fullBusMargin !== false} onChange=${(e) => edit((x) => (x.fullBusMargin = e.currentTarget.checked))} />
-            ${' '}${t('Aim one bus earlier when the bus is often busy')}
-          </label>
-        </div>
-      </div>
-      <p class="hint">${t('Walking times follow campus paths. Your pace applies to every walk except the one from home, which you set above.')}</p>
+        <${Field} id="full-bus" label=${t('Allow for busy buses')} sub=${t('Aim one bus earlier when yours is often full.')}>
+          <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => edit((x) => (x.fullBusMargin = e.currentTarget.checked))} />
+        <//>
+      <//>
       <${Choices} />
     </div>
   `;
@@ -259,9 +291,9 @@ function Choices() {
   const name = (c) => c.label ?? t('A class no longer in your timetable');
   return html`
     ${r.choices.length > 0 &&
-    html`<div id="trip-choices">
-      <h3>${t('Your classes')}</h3>
-      <ul class="list">
+    html`<section id="trip-choices" class="trips-group">
+      <h3 class="eyebrow">${t('Your classes')}</h3>
+      <ul class="list card settings-list">
         ${r.choices.map(
           (c) => html`<li key=${`${c.trip}-${c.pref}`}>
             <span><span>${name(c)}</span><div class="meta">${PREF_TEXT[c.pref]}</div></span>
@@ -277,12 +309,15 @@ function Choices() {
           </li>`,
         )}
       </ul>
-    </div>`}
+    </section>`}
     ${r.history > 0 &&
-    html`<div id="trip-history">
-      <h3>${t('Trip history')}</h3>
-      <p class="hint">${r.history === 1 ? t('1 trip recorded.') : t('{0} trips recorded.', r.history)} ${t('Kept for 35 days and used only to spot classes you often miss or skip.')}</p>
-      <button
+    html`<section id="trip-history" class="trips-group">
+      <h3 class="eyebrow">${t('Trip history')}</h3>
+      <div class="card settings-list">
+        <div class="field">
+          <span class="field-label">${r.history === 1 ? t('1 trip recorded.') : t('{0} trips recorded.', r.history)}</span>
+          <div class="field-control">
+            <button
         class="btn small ghost"
         type="button"
         onClick=${async () => {
@@ -292,7 +327,11 @@ function Choices() {
           lists.set((n) => n + 1);
         }}
       >${t('Clear trip history')}</button>
-    </div>`}
+          </div>
+        </div>
+      </div>
+      <p class="hint group-hint">${t('Kept for 35 days and used only to spot classes you often miss or skip.')}</p>
+    </section>`}
   `;
 }
 
