@@ -168,6 +168,8 @@ p { margin: 0; }
 .btn:hover { transform: translateY(-1px); }
 .btn:active { transform: none; }
 .btn.accent { background: var(--accent-bright); color: #1c1917; }
+/* Quieter than accent, for a second way in that shouldn't outshine the page's own button. */
+.btn.soft { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
 .btn.small { padding: 8px 12px; font-size: 0.875rem; border-radius: 9px; min-height: 40px; }
 .btn.danger { background: transparent; color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
@@ -215,6 +217,9 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
 .ontime.tight { background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--warn-ink); }
 .ontime.late { background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad-ink); }
 .beta { display: inline-block; margin-left: 8px; padding: 3px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 0.7rem; letter-spacing: 0.06em; vertical-align: 1px; }
+/* When the badge wraps under the eyebrow on a phone, it starts at the left edge with a gap above it. */
+.eyebrow:has(> .beta) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.eyebrow > .beta { margin-left: 0; }
 
 /* The widget preview's states, mirroring the apps. */
 .widget.old .big, .widget.old .detail { color: var(--muted); }
