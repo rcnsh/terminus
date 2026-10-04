@@ -7,6 +7,7 @@
     <string name="map_about">~%1$s</string>
     <string name="map_arriving">Arriving</string>
     <string name="map_bus_at">At %1$s</string>
+    <string name="map_bus_between">Between %1$s and %2$s</string>
     <string name="map_bus_title">%1$s bus</string>
     <string name="map_buses">%1$d buses on %2$s</string>
     <string name="map_buses_unavailable">Live buses aren’t available right now.</string>

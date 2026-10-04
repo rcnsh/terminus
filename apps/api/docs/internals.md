@@ -81,7 +81,7 @@ pnpm run deploy
 | `GET /next` | The answer. `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With neither it returns a "Set up" answer rather than inventing a destination. |
 | `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
-| `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
+| `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
 | `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, and destination search data. Written once per isolate, with an ETag: a client revalidating gets a 304. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
@@ -805,7 +805,10 @@ it is in the route:
   swap places in the feed, so on the same stretch they keep the order they
   were last shown in, and a bus is never drawn behind where it was last
   shown on that stretch (one coming into the feed ahead of it, or the one
-  ahead leaving, would otherwise push it back).
+  ahead leaving, would otherwise push it back). Its `stretch` is that part
+  of the line, from the stop it passed (`last`) to the next, in metres
+  along the line: on a long stretch the midpoint can be hundreds of metres
+  from the bus, so a tapped bus shows the whole stretch as where it is.
 - Before a route's first stop it's at the first; past a one-way route's
   last, at the last. A bus more than 50 m from its line (the depot, a
   detour), or on a service with no line, isn't shown.
@@ -853,6 +856,9 @@ each. The offset is in pixels, so it looks the same at every zoom. When a
 bus's place changes, it slides there along the route line in about a
 second; with reduced motion, after 15 s without an answer, or to a place
 it can't reach along the line (behind it, or over 1.5 km on), it jumps.
+A tapped bus between stops has its `stretch` drawn over the route, wider,
+with the rest of the route dimmed, and its card says "Between LT13 and
+COM 3".
 
 ## Layout
 

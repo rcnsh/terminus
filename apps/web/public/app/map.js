@@ -235,12 +235,16 @@ function addLayers() {
   });
   map.addSource('buses', { type: 'geojson', data: empty });
   map.addSource('me', { type: 'geojson', data: empty });
+  map.addSource('stretch', { type: 'geojson', data: empty });
 
   const width = ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 4, 18, 7];
   map.addLayer({ id: 'route-casing', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': paper, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 7, 18, 11], 'line-opacity': 0.9 } });
   map.addLayer({ id: 'routes', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': width } });
   // The chosen service, drawn again on top of the others.
   map.addLayer({ id: 'route-on', type: 'line', source: 'routes', filter: ['==', ['get', 'svc'], ''], layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 6, 18, 9] } });
+  // A tapped bus's stretch between two stops, the part of the route it's somewhere on.
+  map.addLayer({ id: 'stretch-casing', type: 'line', source: 'stretch', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': paper, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 7, 16, 13, 18, 18] } });
+  map.addLayer({ id: 'stretch', type: 'line', source: 'stretch', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 5, 16, 9, 18, 13] } });
   map.addLayer({
     id: 'stops',
     type: 'circle',
@@ -293,6 +297,7 @@ function addLayers() {
   map.addLayer(bus('buses', 'bus'));
   map.addLayer(bus('bus-heading', 'heading'));
   highlight();
+  drawStretch(stretchOn);
   drawBuses(frameAt(performance.now()));
 }
 
@@ -506,6 +511,34 @@ function bearing(aLat, aLon, bLat, bLon) {
   return (((Math.atan2(y, x) / r) % 360) + 360) % 360;
 }
 
+/** The bus whose stretch is drawn, or null. */
+let stretchOn = null;
+
+/**
+ * Bus [b]'s stretch over its route, with the rest of the route stepping
+ * back; nothing for null, or a bus at a stop. Its midpoint can be a long way
+ * from the bus, so the whole stretch is where it is.
+ */
+function drawStretch(b) {
+  stretchOn = b;
+  if (!map?.getSource('stretch')) return;
+  const path = b?.stretch && pathOf(campusData.get()?.routes[b.svc]?.line);
+  const line = path ? sliceOf(path, b.stretch.from, b.stretch.to) : null;
+  map.getSource('stretch').setData(line ? { type: 'Feature', properties: { color: b.color }, geometry: { type: 'LineString', coordinates: line } } : empty);
+  map.setPaintProperty('route-on', 'line-opacity', line ? 0.35 : 1);
+}
+
+/** The part of [path] from [a] to [b] metres along it, as [lon, lat] points. */
+function sliceOf(path, a, b) {
+  if (!(b > a) || a < 0 || b > path.total + 1) return null;
+  const end = (m) => {
+    const p = pointAt(path, Math.min(m, path.total));
+    return [p.lon, p.lat];
+  };
+  const inner = path.line.filter((_, i) => path.cum[i] > a && path.cum[i] < b);
+  return [end(a), ...inner, end(b)];
+}
+
 function drawBuses(buses) {
   map?.getSource('buses')?.setData({
     type: 'FeatureCollection',
@@ -619,9 +652,13 @@ function BusSheet({ id, box }) {
   useEffect(() => {
     if (!b) sheet.set(null);
   }, [b]);
+  useEffect(() => {
+    drawStretch(b ?? null);
+  }, [b?.stretch?.from, b?.stretch?.to, b?.svc]);
+  useEffect(() => () => drawStretch(null), []);
   if (!b) return null;
   return html`
-    <${Frame} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.at ? t('At {0}', b.at.name) : null} box=${box}>
+    <${Frame} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.at ? t('At {0}', b.at.name) : b.stretch && b.nextStop ? t('Between {0} and {1}', b.stretch.last.name, b.nextStop.name) : null} box=${box}>
       <div class="sheet-rows">
         ${b.nextStop && html`<div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop.name}</span></div>`}
         ${b.crowd && html`<div class="sheet-row"><span>${t('Crowding')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}

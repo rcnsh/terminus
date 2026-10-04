@@ -58,6 +58,14 @@ class RoutePath(private val line: List<DoubleArray>) {
         return Triple(aLat + (bLat - aLat) * t, aLon + (bLon - aLon) * t, bearing(aLat, aLon, bLat, bLon))
     }
 
+    /** The part of the line from [a] to [b] metres along it, as [lon, lat]
+     *  points; null when that isn't a stretch of this line. */
+    fun slice(a: Double, b: Double): List<DoubleArray>? {
+        if (line.size < 2 || !(b > a) || a < 0 || b > total + 1) return null
+        fun end(m: Double) = pointAt(min(m, total)).let { (lat, lon) -> doubleArrayOf(lon, lat) }
+        return listOf(end(a)) + line.filterIndexed { i, _ -> cum[i] > a && cum[i] < b } + listOf(end(b))
+    }
+
     /** [m] as a place on the line: round again on a loop, else held to its ends. */
     fun wrap(m: Double): Double = if (closed) ((m % total) + total) % total else m.coerceIn(0.0, total)
 
@@ -164,6 +172,8 @@ data class LiveBus(
     val at: String? = null,
     /** At a stop, its place among the buses there: 0 in front, then 1, 2 behind. */
     val slot: Int = 0,
+    /** Between stops, the stretch of its line it's somewhere on; null at a stop or from an older API. */
+    val stretch: Stretch? = null,
     val ox: Double = 0.0,
     val oy: Double = 0.0,
 ) {
@@ -177,6 +187,9 @@ data class LiveBus(
         const val AT_STOP_STEP_DP = 26.0
     }
 }
+
+/** A stretch of a route line, [from] and [to] metres along it, starting at the stop named [last]. */
+data class Stretch(val from: Double, val to: Double, val last: String)
 
 /** One service's buses. [available] false: the feed couldn't be reached, which isn't "no buses". */
 data class BusList(val svc: String, val available: Boolean, val buses: List<LiveBus>) {
@@ -200,6 +213,12 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                         plate = b.optString("plate").takeIf { !b.isNull("plate") && it.isNotEmpty() },
                         at = b.optJSONObject("at")?.optString("name")?.ifEmpty { null },
                         slot = b.optInt("slot", 0),
+                        stretch = b.optJSONObject("stretch")?.let { st ->
+                            val from = st.number("from")
+                            val to = st.number("to")
+                            val last = st.optJSONObject("last")?.optString("name")?.ifEmpty { null }
+                            if (from != null && to != null && last != null) Stretch(from, to, last) else null
+                        },
                     )
                 },
             )
@@ -242,6 +261,14 @@ object MapGeoJson {
             point(b.lon, b.lat, JSONObject().put("id", b.id).put("svc", svc).put("color", hex(color)).put("heading", b.heading ?: 0.0).put("offset", JSONArray().put(b.ox).put(b.oy)))
         },
     )
+
+    /** A tapped bus's [stretch] of [path], in the service's [color]; empty when there's none. */
+    fun stretch(color: Long, path: RoutePath?, stretch: Stretch?): String {
+        val line = stretch?.let { path?.slice(it.from, it.to) } ?: return EMPTY
+        return collection(
+            listOf(feature(JSONObject().put("type", "LineString").put("coordinates", JSONArray(line.map { JSONArray().put(it[0]).put(it[1]) })), JSONObject().put("color", hex(color)))),
+        )
+    }
 
     fun me(lat: Double, lon: Double): String = collection(listOf(point(lon, lat, JSONObject())))
 
