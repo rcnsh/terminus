@@ -81,6 +81,8 @@ internal fun AnswerCard(
             answer.card?.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
             // Where the trip is, when one is under way: the same on every device.
             answer.phaseText?.let { Pill(it, MaterialTheme.colorScheme.primary) }
+            // On the bus: how far along the ride, and the next stop, as the live notification shows.
+            answer.card?.ride?.let { RideProgress(it) }
             answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
             val heading = when {
                 answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
@@ -272,4 +274,20 @@ internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) {
             .background(color.copy(alpha = 0.12f), androidx.compose.foundation.shape.RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
+}
+
+/** On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3 stops to go". */
+@Composable
+private fun RideProgress(ride: sh.rcn.terminus.Ride) {
+    val now by produceState(System.currentTimeMillis(), ride) {
+        while (value < ride.arriveMs) {
+            delay(5_000)
+            value = System.currentTimeMillis()
+        }
+    }
+    androidx.compose.material3.LinearProgressIndicator(
+        progress = { ride.progress(now) },
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+    )
+    Text(ride.nextText(now), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
 }

@@ -72,6 +72,11 @@ class ProfileDoc(val json: JSONObject) {
         json.put("manual", list)
     }
 
+    /** Sends one class to another stop: imported ([trips]) or by hand ([manual]), by its place in that list. */
+    fun setClassStop(imported: Boolean, index: Int, to: String) {
+        json.optJSONArray(if (imported) "trips" else "manual")?.optJSONObject(index)?.put("to", to)
+    }
+
     /** Takes one class off: imported ([trips]) or added by hand ([manual]), by its place in that list. */
     fun removeClass(imported: Boolean, index: Int) {
         val list = json.optJSONArray(if (imported) "trips" else "manual") ?: return

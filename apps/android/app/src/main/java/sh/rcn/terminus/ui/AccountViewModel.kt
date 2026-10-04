@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Api
+import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Campus
 import sh.rcn.terminus.Clock
@@ -56,6 +59,11 @@ data class AccountState(
     val history: Int = 0,
     /** The language just changed: on Android 12 the activity is recreated to show it. */
     val langChanged: Boolean = false,
+    /** The timetable is for a semester that has ended (/me needsReimport), and which one. */
+    val needsReimport: Boolean = false,
+    val term: String? = null,
+    /** Imported classes whose room couldn't be placed, until each gets a stop or is skipped. */
+    val unplaced: List<sh.rcn.terminus.Unplaced> = emptyList(),
 )
 
 /**
@@ -102,7 +110,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching { api().me() }.onSuccess { me ->
                 store.email = me.email
-                _state.update { it.copy(email = me.email) }
+                _state.update { it.copy(email = me.email, needsReimport = me.needsReimport, term = me.term) }
             }
             runCatching { ProfileDoc(api().profile()) }
                 .onSuccess { p ->
@@ -149,7 +157,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val r = api().import(link)
-                _state.update { it.copy(importing = false, imported = r, profile = ProfileDoc(r.profile), sharedLink = null) }
+                _state.update { it.copy(importing = false, imported = r, profile = ProfileDoc(r.profile), sharedLink = null, needsReimport = false, term = r.term, unplaced = r.unplaced) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -157,6 +165,14 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    /** An unplaced class given a stop: added by hand at that stop, as the account page does. */
+    fun place(u: sh.rcn.terminus.Unplaced, to: String) {
+        edit { it.addManual(sh.rcn.terminus.Trip(u.day, u.arriveByMin, u.endMin, to, "${u.module} @ ${u.venue.substringBefore('-')}", u.venue)) }
+        skip(u)
+    }
+
+    fun skip(u: sh.rcn.terminus.Unplaced) = _state.update { it.copy(unplaced = it.unplaced - u) }
 
     /** NUSMods' Share sheet, pointed at terminus. */
     fun shared(link: String) = _state.update { it.copy(sharedLink = link) }
@@ -366,6 +382,41 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     }
 
 
+
+    /* ---------- feedback, your data ---------- */
+
+    /** Send feedback; [onSent] clears the box once it's gone. */
+    fun sendFeedback(note: String, onSent: () -> Unit) {
+        viewModelScope.launch {
+            _state.update { it.copy(busy = true) }
+            try {
+                api().feedback(note.trim(), BuildConfig.VERSION_NAME)
+                _state.update { it.copy(busy = false, message = L.s(R.string.feedback_thanks)) }
+                onSent()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, message = fail(e)) }
+            }
+        }
+    }
+
+    /** Download my data, into the file the person picked. */
+    fun exportTo(uri: android.net.Uri) {
+        viewModelScope.launch {
+            try {
+                val json = api().export().toString(2)
+                withContext(Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                }
+                _state.update { it.copy(message = L.s(R.string.export_saved)) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(message = fail(e)) }
+            }
+        }
+    }
 
     /* ---------- devices ---------- */
 

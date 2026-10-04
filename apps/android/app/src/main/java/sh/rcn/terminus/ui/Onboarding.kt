@@ -52,6 +52,10 @@ import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.Stop
 import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
+import sh.rcn.terminus.dayShort
+import sh.rcn.terminus.hhmm
+import sh.rcn.terminus.hhmm12
+import sh.rcn.terminus.hour12
 import sh.rcn.terminus.L
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -233,6 +237,32 @@ private fun TimetableStep(state: AccountState, account: AccountViewModel, next: 
 
 /** The share link field, its import, and what the import found. Shared by setup and settings. */
 @Composable
+internal fun Unplaced(state: AccountState, account: AccountViewModel) {
+    if (state.unplaced.isEmpty()) return
+    val ctx = LocalContext.current
+    val h12 = hour12(ctx)
+    val n = state.unplaced.size
+    Text(
+        if (n == 1) stringResource(R.string.unplaced_one) else stringResource(R.string.unplaced_n, n),
+        color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    for (u in state.unplaced) {
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val off = if (u.offCampus) stringResource(R.string.off_campus_paren) else ""
+                Text("${dayShort(u.day)} ${if (h12) hhmm12(u.arriveByMin) else hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}$off", Modifier.weight(1f))
+                TextButton(onClick = { account.skip(u) }) { Text(stringResource(R.string.skip)) }
+            }
+            WherePicker(stringResource(R.string.choose_stop), state.campus?.destinations.orEmpty(), null) { d ->
+                if (d != null) account.place(u, if (d.kind == "landmark") d.code else d.stopCode)
+            }
+        }
+    }
+}
+
+/** Import from NUSMods: the link, Import, and what came of it. Shared by setup and Settings. */
+@Composable
 internal fun TimetableImport(state: AccountState, account: AccountViewModel, link: String, onLink: (String) -> Unit) {
     OutlinedTextField(
         value = link,
@@ -249,9 +279,7 @@ internal fun TimetableImport(state: AccountState, account: AccountViewModel, lin
     val r = state.imported
     if (r != null) {
         Text(if (r.classes == 1) stringResource(R.string.imported_one, r.term) else stringResource(R.string.imported_n, r.classes, r.term), modifier = Modifier.padding(top = 8.dp))
-        if (r.unresolved.isNotEmpty()) {
-            Hint(stringResource(R.string.no_stop_for, r.unresolved.joinToString("; ")))
-        }
+        Unplaced(state, account)
         if (r.missing.isNotEmpty()) Hint(stringResource(R.string.nusmods_missing, r.missing.joinToString(", ")))
     } else {
         val n = state.profile?.trips?.size ?: 0
