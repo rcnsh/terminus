@@ -191,7 +191,7 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   return json({
     svc,
     color: ROUTE_COLORS[svc] ?? null,
-    buses: live ? await trackedBuses(GRAPH, svc, live, ctx, nowMs) : [],
+    buses: live ? await trackedBuses(GRAPH, svc, live, ctx) : [],
     asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
     available: Boolean(live),
     stale: Boolean(live?.stale),

@@ -78,111 +78,73 @@ class MapDataTest {
         assertEquals(" D1 D2 ", stops.getJSONObject(0).getJSONObject("properties").getString("services"))
         val routes = JSONObject(MapGeoJson.routes(campus)).getJSONArray("features")
         assertEquals(2, routes.length())
-        val bus = LiveBus("b1", 1.0, 103.0, null, true, null, null)
+        val bus = LiveBus("b1", 1.0, 103.0, null, true, null, null, at = "COM 3", slot = 1).placed()
         val props = JSONObject(MapGeoJson.buses("D2", 0xFF8E44C9L, listOf(bus))).getJSONArray("features").getJSONObject(0).getJSONObject("properties")
         assertEquals("#8e44c9", props.getString("color"))
-        assertFalse("no heading, no arrow", props.getBoolean("moving"))
+        assertEquals(0.0, props.getDouble("heading"), 0.0)
+        val offset = props.getJSONArray("offset")
+        assertEquals("at a stop: beside the dot, to its left", -LiveBus.AT_STOP_SIDE_DP, offset.getDouble(0), 0.0)
+        assertEquals("second in line: one bus further back", LiveBus.AT_STOP_STEP_DP, offset.getDouble(1), 0.0)
     }
 
-    @Test fun busesGlideStraightAShortWayOffTheirLine() {
-        val g = Glides(ms = 1_000)
-        val was = LiveBus("b1", 1.0, 103.0, 0.0, true, null, null)
-        g.update(listOf(was), null, 0)
-        // 0.001 deg is about 110 m: a glide.
-        val now = was.copy(lat = 1.001)
-        g.update(listOf(now, now.copy(id = "new")), null, 0)
-        val half = g.at(500)
-        assertEquals(1.0005, half[0].lat, 1e-9)
-        assertEquals("a new bus appears where it is", 1.001, half[1].lat, 1e-9)
-        assertTrue(g.moving(500))
-        assertFalse(g.moving(1_000))
-        // About 1.1 km: it jumps.
-        g.update(listOf(now.copy(lat = 1.011)), null, 1_000)
-        assertEquals(1.011, g.at(1_000)[0].lat, 1e-9)
-    }
-
-    @Test fun busesGlideAlongTheirLineRoundACorner() {
+    @Test fun busesSlideAlongTheirLineRoundACorner() {
         // East, then north: an L with its corner at (103.001, 1.0).
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))
         val leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
         fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 0.0, true, null, null, along = m) }
-        val g = Glides(ms = 1_000)
-        g.update(listOf(at(leg - 50)), path, 0)
-        g.update(listOf(at(leg + 50)), path, 0)
-        val half = g.at(500)[0]
-        assertEquals("at the corner, not cutting it", 1.0, half.lat, 1e-9)
+        val s = Slides(ms = 1_000)
+        s.update(listOf(at(leg - 50)), path, 0)
+        assertEquals("a new bus appears where it is", leg - 50, s.at(0)[0].along!!, 1e-9)
+        s.update(listOf(at(leg + 50), at(10.0).copy(id = "new")), path, 0)
+        val half = s.at(500)[0]
+        assertEquals("halfway, at the corner, not cutting it", 1.0, half.lat, 1e-9)
         assertEquals(103.001, half.lon, 1e-9)
-        // The same position again, mid-glide: it keeps going.
-        g.update(listOf(at(leg + 50)), path, 600)
-        val later = g.at(750)[0]
-        assertEquals("on the north leg", 103.001, later.lon, 1e-9)
-        assertEquals("pointing north", 0.0, later.heading!!, 1e-6)
-        // A new position mid-glide: on from where it's drawn, not from the old start.
-        g.update(listOf(at(leg + 100)), path, 750)
-        assertEquals(later.lat, g.at(750)[0].lat, 1e-9)
-        // Put back a little (GPS error): it stays put rather than reversing.
-        g.update(listOf(at(leg + 80)), path, 2_000)
-        assertEquals(path.pointAt(leg + 100).first, g.at(2_500)[0].lat, 1e-9)
-        // A line that isn't the API's (kept from before the route changed), or off its line: not along it.
-        assertNull(path.alongBy(at(0.0), at(50.0).copy(lat = 1.001)))
-        assertNull(path.alongBy(at(0.0).copy(along = null), at(50.0)))
+        assertTrue(s.moving(500))
+        assertFalse(s.moving(1_000))
+        assertEquals(leg + 50, s.at(1_000)[0].along!!, 1e-9)
+        assertEquals("pointing along the road", 0.0, s.at(1_000)[0].heading!!, 1e-6)
+        // Eased: slower at the ends than in the middle.
+        assertTrue(s.at(100)[0].along!! - (leg - 50) < 10)
     }
 
-    @Test fun busesNeverCutAcrossTheRoadBetweenTheTwoSidesOfTheirLine() {
-        // Out east about 2.2 km, then back west 8 m north: one road, both ways.
-        val east = 0.02
-        val north = 8 / 110_574.0
-        val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.0 + east, 1.0), doubleArrayOf(103.0 + east, 1.0 + north), doubleArrayOf(103.0, 1.0 + north)))
-        val out = RoutePath.haversine(1.0, 103.0, 1.0, 103.0 + east)
-        fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 0.0, true, null, null, along = m) }
-        val g = Glides(ms = 1_000)
-        g.update(listOf(at(280.0)), path, 0)
-        // The other side, 8 m away but kilometres along the route: it jumps there.
-        val across = at(out + 8 + (out - 280.0))
-        g.update(listOf(across), path, 0)
-        assertEquals(across.lat, g.at(500)[0].lat, 1e-12)
-        assertFalse(g.moving(500))
-    }
-
-    @Test fun busesKeepMovingBetweenAnswersAndWaitRatherThanReverse() {
-        // A straight line east, about 1.1 km.
+    @Test fun busesSlideBesideTheDotAtAStop() {
+        // A straight line east, about 1.1 km; a stop's dot 10 m north of it at 500 m.
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.01, 1.0)))
-        fun at(m: Double, speed: Double, until: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, null, along = m, speed = speed, until = until) }
-        val g = Glides(catchMs = 1_000)
-        g.update(listOf(at(100.0, 10.0, 150.0)), path, 0)
-        assertEquals("going on at its speed", 120.0, g.at(2_000)[0].along!!, 1e-6)
-        assertEquals("not past where the answer says", 150.0, g.at(9_000)[0].along!!, 1e-6)
-        assertTrue(g.moving(4_000))
-        assertFalse(g.moving(6_000))
-        // The next answer is behind where it's drawn (it went slower): it waits, then goes on.
-        g.update(listOf(at(130.0, 10.0, 300.0)), path, 9_000)
-        assertEquals(150.0, g.at(10_000)[0].along!!, 1e-6)
-        assertEquals(160.0, g.at(12_000)[0].along!!, 1e-6)
-        // An answer ahead: it catches up over catchMs, then goes on with it.
-        g.update(listOf(at(200.0, 10.0, 400.0)), path, 12_000)
-        assertEquals("halfway to where it now is (205 m)", 182.5, g.at(12_500)[0].along!!, 1e-6)
-        assertEquals(220.0, g.at(14_000)[0].along!!, 1e-6)
-        // An answer more than 100 m ahead of where it's drawn: it jumps there, not race along the road.
-        g.update(listOf(at(450.0, 10.0, 600.0)), path, 14_500)
-        assertEquals(450.0, g.at(14_500)[0].along!!, 1e-6)
-        // No answer for 20 s (the screen was off): it jumps to the new place, even a short way ahead.
-        g.update(listOf(at(520.0, 10.0, 700.0)), path, 34_500)
-        assertEquals(520.0, g.at(34_500)[0].along!!, 1e-6)
-        // From an older API, with no speed: it glides there over 15 s, as before.
-        val old = Glides()
-        old.update(listOf(at(0.0, 0.0, 0.0).copy(speed = null, until = null)), path, 0)
-        old.update(listOf(at(150.0, 0.0, 0.0).copy(speed = null, until = null)), path, 0)
-        assertEquals(75.0, old.at(7_500)[0].along!!, 1e-6)
+        val between = path.pointAt(300.0).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, "COM 3", along = 300.0) }
+        val (dotLat, dotLon) = path.pointAt(500.0).let { (lat, lon) -> lat + 10 / 110_574.0 to lon }
+        val atStop = between.copy(lat = dotLat, lon = dotLon, along = 500.0, at = "COM 3")
+        val s = Slides(ms = 1_000)
+        s.update(listOf(between), path, 0)
+        s.update(listOf(atStop), path, 2_000)
+        val half = s.at(2_500)[0]
+        assertEquals(400.0, half.along!!, 1e-6)
+        assertEquals("halfway beside it", -LiveBus.AT_STOP_SIDE_DP / 2, half.ox, 1e-9)
+        val there = s.at(3_000)[0]
+        assertEquals("at the dot", dotLat, there.lat, 1e-12)
+        assertEquals(-LiveBus.AT_STOP_SIDE_DP, there.ox, 0.0)
+        // Behind where it's drawn (the other side of the road, or put right): it jumps.
+        s.update(listOf(between), path, 4_000)
+        assertEquals(300.0, s.at(4_000)[0].along!!, 1e-9)
+        assertFalse(s.moving(4_000))
+        // Animations off: it jumps.
+        s.update(listOf(atStop), path, 5_000, still = true)
+        assertEquals(500.0, s.at(5_000)[0].along!!, 1e-9)
+        // No answer for 20 s (the screen was off): it jumps.
+        s.update(listOf(atStop.copy(along = 700.0, at = null)), path, 25_000)
+        assertEquals(700.0, s.at(25_000)[0].along!!, 1e-9)
+        // A long way on (over 1.5 km), or on a line kept from before the route changed: it jumps.
+        assertNull(path.aheadBy(between, atStop.copy(along = 2_000.0)))
+        assertNull(path.aheadBy(between, atStop.copy(along = 5_000.0)))
     }
 
-    @Test fun busesSayHowFastTheyAreGoing() {
+    @Test fun busesSayWhichStopTheyAreAt() {
         val list = BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": [
-            {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "speed": 6.7, "until": 990.0, "heading": 90, "moving": true, "crowd": null, "nextStop": null},
-            {"id": "b", "lat": 1.0, "lon": 103.0, "along": null, "heading": null, "moving": false, "crowd": null, "nextStop": null}]}"""))
-        assertEquals(6.7, list.buses[0].speed!!, 1e-9)
-        assertEquals(990.0, list.buses[0].until!!, 1e-9)
-        assertNull("an older API: no speed", list.buses[1].speed)
+            {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}},
+            {"id": "b", "lat": 1.0, "lon": 103.0, "along": 900, "heading": 90, "moving": true, "crowd": null, "at": null, "slot": 0, "nextStop": null}]}"""))
+        assertEquals("COM 3", list.buses[0].at)
+        assertEquals(1, list.buses[0].slot)
         assertEquals("PD726D", list.buses[0].plate)
+        assertNull(list.buses[1].at)
         assertNull("an older API: no plate", list.buses[1].plate)
     }
 

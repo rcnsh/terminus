@@ -313,7 +313,7 @@ const D2_BUSES = [
   { vehplate: 'PD999Z', lat: 1.3015, lng: 103.7605, speed: 0, direction: 10, loadInfo: { crowdLevel: 'low' } },
 ];
 
-test('/buses places each bus on its route, with its number plate', async () => {
+test('/buses shows each bus on its route at a stop or between two, with its number plate; one off its route is left out', async () => {
   const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D2;
   // Put the first bus a third of the way along D2's line, heading along it.
   const i = Math.floor(shape.line.length / 3);
@@ -329,17 +329,17 @@ test('/buses places each bus on its route, with its number plate', async () => {
   assert.equal(body.svc, 'D2');
   assert.equal(body.color, '#8e44c9');
   assert.equal(body.available, true);
-  assert.equal(body.buses.length, 2);
-  const [on, parked] = body.buses;
+  assert.equal(body.buses.length, 1, 'the bus away from its line is left out');
+  const [on] = body.buses;
   assert.equal(on.crowd, 'high');
   assert.equal(on.moving, true);
   assert.ok(on.nextStop, 'a bus on its line has a next stop');
   assert.ok(shape.stops.includes(on.nextStop.code));
-  assert.equal(parked.nextStop, null, 'a bus away from its line has none');
-  assert.equal(parked.moving, false);
+  assert.ok(on.at === null || shape.stops.includes(on.at.code), 'at one of its stops, or between two');
+  assert.equal(typeof on.along, 'number');
+  assert.equal(on.slot, 0);
   assert.match(on.id, /^[0-9a-f]{12}$/);
-  assert.notEqual(on.id, parked.id);
-  assert.ok(body.buses.some((b) => b.plate === 'PD123A'), 'each bus comes with its plate');
+  assert.equal(on.plate, 'PD123A', 'each bus comes with its plate');
   assert.equal(fetchImpl.requests[0].body.route_code, 'D2');
 
   // A second look within 10 s is served from the cache.

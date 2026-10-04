@@ -81,7 +81,7 @@ pnpm run deploy
 | `GET /next` | The answer. `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With neither it returns a "Set up" answer rather than inventing a destination. |
 | `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
-| `GET /buses?svc=<service>` | One service's live buses for the map: position and heading (on its route line, on its own side of the road, when within 50 m of it, with metres along that line so a map can glide it along the road), crowding and the next stop (from where the bus is along that line). One upstream call per service per 5 s; each bus with its number plate. |
+| `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
 | `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, and destination search data. Written once per isolate, with an ETag: a client revalidating gets a 304. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
@@ -786,10 +786,32 @@ feed and a seeded test account.
 
 ### Live buses on the map
 
-`/buses` places each bus on its route line (`src/buses.ts`). The feed gives
-a position, a speed and a heading, every 15–20 s per bus; the line is the
-route's road shape from `data/shapes.json`, with each stop's distance along
-it.
+`/buses` shows each bus at a stop or between two (`src/buses.ts`). The feed
+gives a position, a speed and a heading every 15–20 s per bus (the reply's
+own time stamp changes that often, for every bus at once, however often
+it's asked): too far apart, and too noisy, to draw a bus where it really
+is. So each bus is placed on its route line, the route's road shape from
+`data/shapes.json` with each stop's distance along it, only to tell where
+it is in the route:
+
+- Within 40 m of one of its stops, measured along the line (so never the
+  twin stop across the road), it's at that stop (`at`), drawn at the stop's
+  dot. Stops are at least 136 m apart along every route, so a bus is never
+  within 40 m of two. Several at one stop get a `slot` each, 0 for the one
+  furthest on.
+- Otherwise it's between the stop it passed and the next, drawn halfway
+  along the line between them; with several there, spread evenly, in the
+  order they're in (a third and two thirds for two). Two close together can
+  swap places in the feed, so on the same stretch they keep the order they
+  were last shown in, and a bus is never drawn behind where it was last
+  shown on that stretch (one coming into the feed ahead of it, or the one
+  ahead leaving, would otherwise push it back).
+- Before a route's first stop it's at the first; past a one-way route's
+  last, at the last. A bus more than 50 m from its line (the depot, a
+  detour), or on a service with no line, isn't shown.
+
+`heading` is the way the road runs at the place it's drawn, and `nextStop`
+the stop after the one it's at, or the one it's heading to.
 
 The hard part is the side of the road. Most of D1, D2 and K, and parts of
 the others, use one road both ways, and the two directions of the line are
@@ -820,32 +842,17 @@ Worker instance there returns that answer and places the next update from
 those tracks. Kept in each instance's memory instead, a request landing on
 another instance would place a standing bus afresh, often on the wrong side.
 
-The feed gives a new position for a bus every 15-20 s (the reply's own
-time stamp changes that often, for every bus at once, however often it's
-asked), so the map shows each bus where it's estimated to be now
-(`motion`): on from its reading at 0.8 of the speed the feed gives, for
-at most 25 s after the reading, and never past the next stop after it.
-It never goes back from how it was last shown: a reading that says the
-bus went slower leaves it where it is until it catches up. Each bus
-carries `speed` and `until`, so a map keeps it moving between answers
-(`along + speed × seconds`, up to `until`), and each answer moves the
-cached placement on to the time it's asked (`trackedBuses`). Replaying
-`test/fixtures/bus-trace.jsonl`, the map is 28 m from the bus on average,
-against 38 m showing each reading as it comes. The next stop stays the one
-after the reading. The older NextBus API (`nnextbus.nus.edu.sg`) still answers,
-behind a password NUS hasn't given us, and almost certainly reads the
-same 20-second positions.
+The older NextBus API (`nnextbus.nus.edu.sg`) still answers, behind a
+password NUS hasn't given us, and almost certainly reads the same 20-second
+positions.
 
-Clients keep each bus moving along the line: from where it's drawn they
-catch up with the moving estimate over 5 s, and a bus that's ahead of a
-new answer waits rather than reversing. Between two places on the line
-they only move along it: one that can't be reached along it (over 1.5 km,
-or behind by more than 60 m) jumps, and so does one more than 100 m ahead
-of where it's drawn, rather than race along the road to catch up. After
-15 s without an answer (the screen was off, the app in the background),
-every bus jumps to where it is now. A straight glide is only for a bus
-coming onto or leaving its line, a short way. An answer without `speed`
-(an older server) glides to `along` over 15 s, as before.
+Clients draw a bus at a stop just beside its dot, on the kerb side (left
+of the way it's going: buses drive on the left), so the dot stays in sight,
+and the ones behind it (`slot` 1, 2) one bus further back along the road
+each. The offset is in pixels, so it looks the same at every zoom. When a
+bus's place changes, it slides there along the route line in about a
+second; with reduced motion, after 15 s without an answer, or to a place
+it can't reach along the line (behind it, or over 1.5 km on), it jumps.
 
 ## Layout
 

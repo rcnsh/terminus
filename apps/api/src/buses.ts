@@ -1,11 +1,20 @@
 /**
- * Live buses on the map: where each bus of a service is, how full, and the
- * stop it reaches next.
+ * Live buses on the map: which stop each bus of a service is at, or which
+ * two stops it's between, how full it is, and the stop it reaches next.
  *
- * The feed gives a position and a heading, not a stop. The bus is placed on
- * its route's road shape (data/shapes.json), and its next stop is the first
- * one further along. A route with no shape for its current stops, or a bus
- * away from its line (parked at the depot), has no next stop.
+ * The feed gives a position and a heading, not a stop, and only every 15-20
+ * seconds, so a bus drawn where its reading puts it is often well off where
+ * it really is. Instead each bus is shown at a stop or between two:
+ *
+ * - within AT_STOP_M of one of its stops, measured along its route line,
+ *   it's at that stop, drawn at the stop's dot (clients draw it just beside
+ *   the dot, and several there side by side, by `slot`);
+ * - otherwise it's halfway between the stop it passed and the next one, or,
+ *   with several there, spread evenly between them (thirds for two).
+ *
+ * The bus is placed on its route's road shape (data/shapes.json) to tell
+ * which stop or stretch that is. A route with no shape for its current
+ * stops, or a bus away from its line (parked at the depot), isn't shown.
  *
  * Many routes use the same road both ways (most of D1, D2 and K), so the
  * two directions of the line are metres apart, often on the very same
@@ -47,8 +56,10 @@ import type { Crowd, Graph } from './types.ts';
 const ON_ROUTE_M = 50;
 /** A stretch of road counts as "the way it's heading" within this angle. */
 const HEADING_SLACK_DEG = 60;
-/** Within this of a stop, the bus is at it: the next stop is the one after. */
-const AT_STOP_M = 15;
+/** Within this of one of its stops, along its line, a bus is shown at that
+ *  stop: pulled in at the bay, plus GPS error. Stops are 136 m apart or more
+ *  on every route, so a bus is never within this of two. */
+const AT_STOP_M = 40;
 /** A bus's track counts for this long without an update: a bus standing at
  *  a terminus keeps its side. How far it may have gone grows with the time. */
 const TRACK_MS = 600_000;
@@ -57,14 +68,6 @@ const TRACK_MS = 600_000;
 const TRACK_BACK_M = 50;
 const TRACK_AHEAD_M = 100;
 const TRACK_AHEAD_MS = 20;
-/** Between readings a moving bus is shown going on at this share of the
- *  speed the feed gives (it slows for corners and crossings), for at most
- *  EXTRAPOLATE_S after the reading, and never past its next stop. Replaying
- *  test/fixtures/bus-trace.jsonl, the map is then 28 m from the bus on
- *  average (17 m median), against 38 m (27 m) showing each reading as it
- *  comes. The feed's readings are 15-20 s apart. */
-const SPEED_SHARE = 0.8;
-const EXTRAPOLATE_S = 25;
 /** Moving fixes in a row heading against its track before the track gives way. */
 const DOUBT_FIXES = 2;
 /** A tracked bus whose only places on its line are behind it, by up to
@@ -98,20 +101,10 @@ export interface Track {
   doubt: number;
   /** Since when it's been off its line while held at `along`; null on it. */
   offSince: number | null;
-  /** Held at `along` rather than placed from its reading: not moving on from there. */
+  /** Held at `along` rather than placed from its reading. */
   held?: boolean;
-  /** How it was last shown moving (the answer's along, speed and until, at t ms). */
-  shown?: Motion;
-}
-
-/** A bus's estimated place and how it goes on from there, at time t (ms). */
-export interface Motion {
-  along: number;
-  /** Metres a second along the line. */
-  speed: number;
-  /** Metres along the line it doesn't pass before the next reading. */
-  until: number;
-  t: number;
+  /** Where it was last shown: the stop or stretch, and metres along there. */
+  shown?: { key: string; along: number };
 }
 
 export interface LiveBus {
@@ -119,22 +112,23 @@ export interface LiveBus {
   id: string;
   /** Its number plate, as on the bus (PD726D). */
   plate: string;
+  /** Where it's drawn: the stop's dot when it's at a stop, else on its
+   *  route line between the two stops. */
   lat: number;
   lon: number;
-  /** Metres along the service's route line (`/campus` routes[svc].line),
-   *  so a map can glide the bus along the road; null off its line. Never
-   *  less than the last answer's, except round a loop's start. */
-  along: number | null;
-  /** Metres a second the bus is estimated to be moving along its line, so
-   *  a map can keep it moving between answers, up to `until`; 0 when it
-   *  isn't, null off its line. */
-  speed: number | null;
-  /** Metres along its line the bus isn't shown past before the next answer
-   *  (its next stop, or as far as its last reading can say); null off it. */
-  until: number | null;
+  /** Metres along the service's route line (`/campus` routes[svc].line) of
+   *  that place (at a stop, the stop's place on the line), so a map can
+   *  move the bus along the road to it. */
+  along: number;
+  /** The way the road runs there, in degrees: the way the bus is going. */
   heading: number | null;
   moving: boolean;
   crowd: Crowd | null;
+  /** The stop it's at, or null between stops. */
+  at: { code: string; name: string } | null;
+  /** At a stop, its place among the buses there: 0 the one in front, then
+   *  1, 2 behind it. 0 between stops. */
+  slot: number;
   nextStop: { code: string; name: string } | null;
 }
 
@@ -237,7 +231,6 @@ const onward = (kept: Track | null, fix: Fix, along: number, now: number, doubt 
   doubt,
   offSince: null,
   held,
-  shown: kept?.shown,
 });
 
 const best = <T>(xs: T[], better: (a: T, b: T) => boolean): T | null => xs.reduce<T | null>((b, x) => (b == null || better(x, b) ? x : b), null);
@@ -344,12 +337,42 @@ export function alongLine(shape: RouteShape, lat: number, lon: number, heading: 
   return follow(shape, { lat, lon, heading }, null, 0).place?.along ?? null;
 }
 
-/** The stop the bus reaches next, as an index into shape.stops. */
-export function nextStopIndex(shape: RouteShape, along: number, loop: boolean): number | null {
-  for (let k = 0; k < shape.at.length; k++) {
-    if (shape.at[k] > along + AT_STOP_M) return k;
-  }
-  // Past the last stop: a loop starts again (its first stop is its last).
+/** Which of shape.stops a bus is at, or the two it's between, as indexes. */
+export interface Section {
+  at: number | null;
+  from: number;
+  to: number | null;
+}
+
+/**
+ * Where a bus [along] its line is: within AT_STOP_M of a stop, at it;
+ * otherwise between the stop it passed and the next. Before the first stop
+ * it's at the first, and past a one-way route's last stop, at the last. On
+ * a loop, the last stop is the first (shape.stops starts and ends with it).
+ */
+export function sectionOf(shape: RouteShape, along: number, loop: boolean): Section {
+  const { at } = shape;
+  const last = at.length - 1;
+  const total = cumulative(shape.line).at(-1) ?? 0;
+  const gap = (k: number) => {
+    const d = Math.abs(at[k] - along);
+    return loop && total > 0 ? Math.min(d, total - d) : d;
+  };
+  let k = 0;
+  for (let i = 1; i <= last; i++) if (gap(i) < gap(k)) k = i;
+  const stopAt = (i: number): Section => ({ at: loop && i === last ? 0 : i, from: loop && i === last ? 0 : i, to: null });
+  if (gap(k) <= AT_STOP_M || along <= at[0]) return stopAt(k);
+  if (along >= at[last]) return stopAt(last);
+  let from = 0;
+  while (from + 1 < last && at[from + 1] <= along) from++;
+  return { at: null, from, to: from + 1 };
+}
+
+/** The stop after [s], as an index into shape.stops: round a loop it starts again; past a one-way route's end, none. */
+export function nextOf(shape: RouteShape, s: Section, loop: boolean): number | null {
+  if (s.at == null) return s.to;
+  const k = s.at + 1;
+  if (k < shape.stops.length) return k;
   return loop && shape.stops.length > 1 ? 1 : null;
 }
 
@@ -359,53 +382,10 @@ async function idFor(svc: string, plate: string): Promise<string> {
 }
 
 /**
- * Where a bus placed at [track] is estimated to be at [now], and how it goes
- * on: from its reading at the feed's speed (SPEED_SHARE of it), for at most
- * EXTRAPOLATE_S after the reading, never past the next stop after it. Never
- * behind how it was last shown ([kept]: on the same track), so it doesn't go
- * back when a reading says it went slower. Exported for the tests.
- */
-export function motion(shape: RouteShape, track: Track, kmh: number, now: number, kept: boolean): Motion {
-  const total = cumulative(shape.line).at(-1) ?? 0;
-  const v = track.held || track.offSince != null ? 0 : (Math.max(0, kmh) / 3.6) * SPEED_SHARE;
-  let stop = total;
-  for (const a of shape.at) {
-    if (a > track.along + AT_STOP_M) {
-      stop = a;
-      break;
-    }
-  }
-  const limit = Math.max(track.along, Math.min(stop, track.along + v * EXTRAPOLATE_S));
-  let along = Math.min(limit, track.along + v * Math.max(0, (now - track.at) / 1000));
-  const was = kept ? track.shown : undefined;
-  if (was) {
-    const shown = Math.min(was.until, was.along + (was.speed * Math.max(0, now - was.t)) / 1000);
-    // Ahead of the reading, but not round a loop's start from it.
-    if (shown > along && shown - along < total / 2) along = shown;
-  }
-  const until = Math.max(along, limit);
-  return { along, speed: until > along ? v : 0, until, t: now };
-}
-
-/** [b] as it is [ms] later, going on as its speed and until say. */
-function advance(shape: RouteShape, b: LiveBus, ms: number): LiveBus {
-  if (b.along == null || !b.speed || b.until == null || ms <= 0) return b;
-  const along = Math.min(b.until, b.along + (b.speed * ms) / 1000);
-  const at = pointAlong(shape, along);
-  return {
-    ...b,
-    lat: Math.round(at.lat * 1e6) / 1e6,
-    lon: Math.round(at.lon * 1e6) / 1e6,
-    along: Math.round(along * 10) / 10,
-    speed: along < b.until ? b.speed : 0,
-    heading: b.heading != null && at.bearing != null ? Math.round(at.bearing) : b.heading,
-  };
-}
-
-/**
  * A service's buses from the feed's [raw] positions at [now], each placed
  * from its track in [tracks], and the tracks to place the next update from.
- * A bus missing from this update keeps its track while it counts.
+ * A bus missing from this update keeps its track while it counts. Buses off
+ * their route aren't in the answer. [shape]: the route's line, for the tests.
  */
 export async function placeBuses(
   graph: Graph,
@@ -413,59 +393,76 @@ export async function placeBuses(
   raw: RawBus[],
   now: number = Date.now(),
   tracks: Record<string, Track> = {},
+  shape: RouteShape | null = shapeFor(svc, graph.routes?.[svc] ?? []),
 ): Promise<{ buses: LiveBus[]; tracks: Record<string, Track> }> {
   const seq = graph.routes?.[svc] ?? [];
-  const shape = shapeFor(svc, seq);
   const loop = graph.loops?.[svc] ?? (seq.length > 2 && seq[0] === seq[seq.length - 1]);
   const byCode = new Map(graph.stops.map((s) => [s.code, s]));
   const stops = shape ? shape.stops.map((c) => byCode.get(c) ?? null) : [];
   const next: Record<string, Track> = {};
   for (const [id, t] of Object.entries(tracks)) if (now - t.at < TRACK_MS) next[id] = t;
-  const round = (x: number | null, k: number) => (x == null ? null : Math.round(x * k) / k);
-  const buses = await Promise.all(
-    raw.map(async (b): Promise<LiveBus> => {
-      const id = await idFor(svc, b.plate);
-      let nextStop: LiveBus['nextStop'] = null;
-      let { lat, lon, heading } = b;
-      let along: number | null = null;
-      let speed: number | null = null;
-      let until: number | null = null;
-      if (shape) {
-        const moved = follow(shape, { lat: b.lat, lon: b.lon, heading: b.speed > 0 ? b.heading : null }, tracks[id] ?? null, now, loop, stops);
-        const place = moved.place;
-        if (place && moved.track) {
-          // The next stop is from its reading; it's shown on from there.
-          const k = nextStopIndex(shape, place.along, loop);
-          if (k != null) {
-            const code = shape.stops[k];
-            nextStop = { code, name: byCode.get(code)?.name ?? code };
-          }
-          const go = motion(shape, moved.track, b.speed, now, moved.kept);
-          next[id] = { ...moved.track, shown: go };
-          const at = pointAlong(shape, go.along);
-          ({ along, speed, until } = go);
-          // On its line, pointing along the road.
-          lat = at.lat;
-          lon = at.lon;
-          if (heading != null && at.bearing != null) heading = at.bearing;
-        } else if (moved.track) next[id] = moved.track;
-        else delete next[id];
-      }
-      return {
-        id,
-        plate: b.plate,
-        lat: round(lat, 1e6)!,
-        lon: round(lon, 1e6)!,
+  if (!shape) return { buses: [], tracks: next };
+  const total = cumulative(shape.line).at(-1) ?? 0;
+  const stopOf = (k: number | null) => (k == null ? null : { code: shape.stops[k], name: byCode.get(shape.stops[k])?.name ?? shape.stops[k] });
+
+  // Each bus on its line: where its reading is, and which stop or stretch that is.
+  const found: { b: RawBus; id: string; along: number; section: Section; key: string; was?: Track['shown'] }[] = [];
+  for (const b of raw) {
+    const id = await idFor(svc, b.plate);
+    const moved = follow(shape, { lat: b.lat, lon: b.lon, heading: b.speed > 0 ? b.heading : null }, tracks[id] ?? null, now, loop, stops);
+    if (moved.track) next[id] = moved.track;
+    else delete next[id];
+    if (moved.place && moved.track) {
+      const section = sectionOf(shape, moved.place.along, loop);
+      const key = section.at != null ? `at ${section.at}` : `from ${section.from}`;
+      found.push({ b, id, along: moved.place.along, section, key, was: tracks[id]?.shown });
+    }
+  }
+
+  // Grouped by stop, or by stretch: at a stop the one furthest on is in
+  // front; on a stretch they're spread evenly, in the order they're in. Two
+  // close together can swap places in the feed; on the same stretch as last
+  // time, they keep the order they were shown in, so neither jumps back.
+  const groups = new Map<string, typeof found>();
+  for (const f of found) groups.set(f.key, [...(groups.get(f.key) ?? []), f]);
+  const order = (x: (typeof found)[number]) => (x.was?.key === x.key ? x.was.along : x.along);
+  /** Metres past stop [k] (behind it, below 0), the short way round a loop. */
+  const past = (along: number, k: number) => {
+    let d = along - shape.at[k];
+    if (loop && total > 0) d = ((((d + total / 2) % total) + total) % total) - total / 2;
+    return d;
+  };
+  const round = (x: number, k: number) => Math.round(x * k) / k;
+  const buses: LiveBus[] = [];
+  for (const group of groups.values()) {
+    const { at: k, from, to } = group[0].section;
+    const sorted = k != null ? [...group].sort((x, y) => past(y.along, k) - past(x.along, k) || x.id.localeCompare(y.id)) : [...group].sort((x, y) => order(x) - order(y) || x.id.localeCompare(y.id));
+    sorted.forEach((f, i) => {
+      const even = k != null ? shape.at[k] : shape.at[from] + ((i + 1) / (sorted.length + 1)) * (shape.at[to!] - shape.at[from]);
+      // Never back along the same stretch (a bus that comes into the feed
+      // ahead of it, or the one ahead leaving): it waits where it was.
+      const along = k == null && f.was?.key === f.key ? Math.max(even, f.was.along) : even;
+      next[f.id] = { ...next[f.id], shown: { key: f.key, along } };
+      const line = pointAlong(shape, along);
+      const stop = k != null ? stops[k] : null;
+      buses.push({
+        id: f.id,
+        plate: f.b.plate,
+        lat: round(stop?.lat ?? line.lat, 1e6),
+        lon: round(stop?.lon ?? line.lon, 1e6),
         along: round(along, 10),
-        speed: round(speed, 10),
-        until: round(until, 10),
-        heading: heading == null ? null : Math.round(heading),
-        moving: b.speed > 0,
-        crowd: b.crowd,
-        nextStop,
-      };
-    }),
-  );
+        heading: line.bearing != null ? Math.round(line.bearing) : f.b.heading == null ? null : Math.round(f.b.heading),
+        moving: f.b.speed > 0,
+        crowd: f.b.crowd,
+        at: stopOf(k),
+        slot: k != null ? i : 0,
+        nextStop: stopOf(nextOf(shape, f.section, loop)),
+      });
+    });
+  }
+  // In the feed's order, so an answer doesn't shuffle when nothing moved.
+  const rank = new Map(found.map((f, i) => [f.id, i]));
+  buses.sort((x, y) => rank.get(x.id)! - rank.get(y.id)!);
   return { buses, tracks: next };
 }
 
@@ -482,18 +479,14 @@ const placedKey = (svc: string) => new Request(`https://terminus.internal/bus-tr
  * The service's buses at [now] for the feed update [live], placed once per
  * update per data centre: the edge cache keeps the placed buses with their
  * tracks, so every instance answers the same and the next update is placed
- * from these tracks wherever it lands. Each answer moves the buses on from
- * when they were placed to [now], as their speed says.
+ * from these tracks wherever it lands.
  */
 export async function trackedBuses(
   graph: Graph,
   svc: string,
   live: { buses: RawBus[]; fetchedAt: number },
   ctx: { waitUntil(p: Promise<unknown>): void },
-  now: number = Date.now(),
 ): Promise<LiveBus[]> {
-  const shape = shapeFor(svc, graph.routes?.[svc] ?? []);
-  const later = (p: Placed) => (shape ? p.buses.map((b) => advance(shape, b, now - p.fetchedAt)) : p.buses);
   const cache = caches.default;
   const key = placedKey(svc);
   let kept: Placed | null = null;
@@ -504,7 +497,7 @@ export async function trackedBuses(
     kept = null;
   }
   // This update, or a newer one, placed already.
-  if (kept && kept.fetchedAt >= live.fetchedAt) return later(kept);
+  if (kept && kept.fetchedAt >= live.fetchedAt) return kept.buses;
   const placed = await placeBuses(graph, svc, live.buses, live.fetchedAt, kept?.tracks ?? {});
   const body: Placed = { fetchedAt: live.fetchedAt, ...placed };
   ctx.waitUntil(
@@ -512,5 +505,5 @@ export async function trackedBuses(
       .put(key, new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json', 'cache-control': `max-age=${TRACK_MS / 1000}` } }))
       .catch(() => {}),
   );
-  return later(body);
+  return body.buses;
 }

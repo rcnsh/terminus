@@ -1,5 +1,6 @@
 package sh.rcn.terminus.ui
 
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
@@ -48,7 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -66,7 +70,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import org.maplibre.compose.camera.CameraAnimation
 import org.maplibre.compose.camera.CameraPosition
-import org.maplibre.compose.expressions.dsl.asBoolean
+import org.maplibre.compose.expressions.dsl.asDpOffset
 import org.maplibre.compose.expressions.dsl.asNumber
 import org.maplibre.compose.expressions.dsl.asString
 import org.maplibre.compose.expressions.dsl.condition
@@ -79,7 +83,6 @@ import org.maplibre.compose.expressions.dsl.image
 import org.maplibre.compose.expressions.dsl.interpolate
 import org.maplibre.compose.expressions.dsl.linear
 import org.maplibre.compose.expressions.dsl.switch
-import org.maplibre.compose.expressions.dsl.textOffset
 import org.maplibre.compose.expressions.dsl.zoom
 import org.maplibre.compose.expressions.value.IconRotationAlignment
 import org.maplibre.compose.expressions.value.LineCap
@@ -106,7 +109,7 @@ import org.maplibre.compose.util.DpPadding
 import org.maplibre.spatialk.geojson.BoundingBox
 import org.maplibre.spatialk.geojson.Position
 import sh.rcn.terminus.CampusMap
-import sh.rcn.terminus.Glides
+import sh.rcn.terminus.Slides
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.MapGeoJson
@@ -236,23 +239,29 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val routes = remember(campus) { MapGeoJson.routes(campus) }
     val stops = remember(campus) { MapGeoJson.stops(campus) }
 
-    // Buses glide to each new position, along their line (see Glides): a
-    // plain holder, not state, redrawn by the frame clock while one moves.
-    val glides = remember(ui.selected) { Glides() }
+    // Buses slide to each new place along their line (see Slides): a plain
+    // holder, not state, redrawn by the frame clock while one moves. With
+    // animations off in the phone's settings, they jump.
+    val slides = remember(ui.selected) { Slides() }
     var now by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
     val path = ui.selected?.let { campus.routes[it]?.path }
-    LaunchedEffect(ui.buses, glides) {
-        glides.update(ui.buses, path, SystemClock.uptimeMillis())
+    LaunchedEffect(ui.buses, slides) {
+        slides.update(ui.buses, path, SystemClock.uptimeMillis(), still = !ValueAnimator.areAnimatorsEnabled())
         do {
             withFrameMillis { now = SystemClock.uptimeMillis() }
-        } while (glides.moving(now))
+        } while (slides.moving(now))
     }
-    val gliding = glides.at(now)
+    val drawn = slides.at(now)
     val color = ui.selected?.let { campus.routes[it]?.color } ?: 0xFF8A939CL
-    val buses = MapGeoJson.buses(ui.selected.orEmpty(), color, gliding)
+    val buses = MapGeoJson.buses(ui.selected.orEmpty(), color, drawn)
     val me = ui.me?.let { (lat, lon) -> MapGeoJson.me(lat, lon) } ?: MapGeoJson.EMPTY
 
     val heading = painterResource(R.drawable.ic_heading)
+    // The bus: a disc in the service's colour, ringed in the map's. An icon,
+    // not a circle, so a bus at a stop can sit beside the dot (its offset is
+    // per bus, and turns with the road).
+    val busIcon = remember(color, paper) { BusIcon(Color(color), paper) }
+    val busSize = interpolate(linear(), zoom(), 13 to const(0.64f), 17 to const(1f))
     val selected = ui.selected
     val state = rememberMapState(baseStyle = BaseStyle.Json(style)) {
         val routeSource = rememberGeoJsonSource(GeoJsonData.JsonString(routes))
@@ -320,8 +329,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             textColor = const(ink),
             textHaloColor = const(paper),
             textHaloWidth = const(1.5.dp),
-            textAnchor = const(SymbolAnchor.Top),
-            textOffset = textOffset(0.em, 0.9.em),
+            // Below the dot, or another side of it when a bus is there.
+            textVariableAnchor = const(listOf(const(SymbolAnchor.Top), const(SymbolAnchor.Bottom), const(SymbolAnchor.Right), const(SymbolAnchor.Left))),
+            textRadialOffset = const(0.9.em),
             textOptional = const(true),
             textMaxWidth = const(8.em),
             textOpacity = switch(condition(onRoute, const(1f)), fallback = const(0.4f)),
@@ -330,13 +340,17 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         )
         CircleLayer(id = "me-halo", source = meSource, radius = const(14.dp), color = const(Color(0xFF2B7BF3)), opacity = const(0.18f))
         CircleLayer(id = "me", source = meSource, radius = const(6.5.dp), color = const(Color(0xFF2B7BF3)), strokeColor = const(Color.White), strokeWidth = const(2.5.dp))
-        CircleLayer(
+        SymbolLayer(
             id = "buses",
             source = busSource,
-            radius = interpolate(linear(), zoom(), 13 to const(7.dp), 17 to const(11.dp)),
-            color = feature["color"].asString().convertToColor(),
-            strokeColor = const(paper),
-            strokeWidth = const(2.5.dp),
+            iconImage = image(busIcon, size = DpSize(27.dp, 27.dp)),
+            iconSize = busSize,
+            iconRotate = feature["heading"].asNumber(),
+            iconRotationAlignment = const(IconRotationAlignment.Map),
+            iconOffset = feature["offset"].asDpOffset(),
+            iconAllowOverlap = const(true),
+            // Stop names keep clear of buses (they move to another side of their dot).
+            iconIgnorePlacement = const(false),
             hitPadding = 8.dp,
             onClick = { features ->
                 features.firstOrNull()?.properties?.get("id")?.toString()?.trim('"')?.let(actions.openBus)
@@ -346,8 +360,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         SymbolLayer(
             id = "bus-heading",
             source = busSource,
-            filter = feature["moving"].asBoolean(),
             iconImage = image(heading, size = DpSize(12.dp, 12.dp)),
+            iconSize = busSize,
+            iconOffset = feature["offset"].asDpOffset(),
             iconRotate = feature["heading"].asNumber(),
             iconRotationAlignment = const(IconRotationAlignment.Map),
             iconAllowOverlap = const(true),
@@ -535,8 +550,8 @@ private fun crowdWord(c: String?): String? = when (c) {
 
 @Composable
 private fun BusSheet(bus: LiveBus, svc: String, onClose: () -> Unit) {
-    SheetSurface(stringResource(R.string.map_bus_title, svc), if (bus.moving) null else stringResource(R.string.map_bus_stopped), onClose, badge = bus.plate) {
-        SheetRow(stringResource(R.string.map_next_stop), bus.nextStop ?: stringResource(R.string.map_not_on_route))
+    SheetSurface(stringResource(R.string.map_bus_title, svc), bus.at?.let { stringResource(R.string.map_bus_at, it) }, onClose, badge = bus.plate) {
+        bus.nextStop?.let { SheetRow(stringResource(R.string.map_next_stop), it) }
         crowdWord(bus.crowd)?.let { SheetRow(stringResource(R.string.map_crowding), it) }
     }
 }
@@ -600,4 +615,19 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
         }
         Spacer(Modifier.height(4.dp))
     }
+}
+
+/** A bus on the map: a disc of [fill], 11 dp across the middle, ringed 2.5 dp in [ring]. */
+private class BusIcon(private val fill: Color, private val ring: Color) : Painter() {
+    override val intrinsicSize: Size = Size.Unspecified
+
+    override fun DrawScope.onDraw() {
+        val r = size.minDimension / 2
+        drawCircle(ring, radius = r)
+        drawCircle(fill, radius = r * 22f / 27f)
+    }
+
+    override fun equals(other: Any?) = other is BusIcon && other.fill == fill && other.ring == ring
+
+    override fun hashCode() = fill.hashCode() * 31 + ring.hashCode()
 }
