@@ -18,8 +18,10 @@ struct Footer: View {
         HStack {
             if model.paired && model.isSnapshot {
                 Label(L("Settings"), systemImage: "gearshape")
+                Label(L("Map"), systemImage: "map").padding(.leading, 12)
             } else if model.paired {
                 Menu {
+                    Button(L("Map…")) { open("map") }
                     Button(L("Settings…")) { open("settings") }
                     Button(L("Refresh now")) { Task { await model.refresh() } }
                     Button(L("Report a wrong answer…")) { model.startReport() }
@@ -31,6 +33,11 @@ struct Footer: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                Button { open("map") } label: {
+                    Label(L("Map"), systemImage: "map")
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 12)
             }
             Spacer()
             Button {

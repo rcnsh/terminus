@@ -18,7 +18,7 @@ Clients are thin:
 | API + website host | `apps/api` | TypeScript on Cloudflare Workers (D1, KV, R2, Durable Objects, Analytics Engine, Email) |
 | Website + web app | `apps/web/public` | Preact + htm (vendored), CSS, **no build step**, served by the Worker |
 | Android app + widgets | `apps/android` | Kotlin, Jetpack Compose, Glance, maplibre-compose |
-| Mac menu bar app | `apps/macos` | SwiftUI, Sparkle updates |
+| Mac menu bar app | `apps/macos` | SwiftUI, Sparkle updates, MapLibre Native (map window) |
 
 Live at https://terminus.rcn.sh (API docs at `/docs`); beta at
 https://beta.terminus.rcn.sh. It's an independent student project, not
@@ -181,11 +181,13 @@ apps/android/app/src/main/java/sh/rcn/terminus/
   widget/             Glance widgets and their refresh schedule
   LeaveAlerts.kt, LiveService.kt, Push.kt   Notifications and FCM
 apps/macos/
-  Sources/Terminus/   Api.swift, AppModel.swift (state/refresh/pairing), views, Updater.swift
+  Sources/Terminus/   Api.swift, AppModel.swift (state/refresh/pairing), views, Updater.swift,
+                      MapWindow.swift + MapData.swift + MapFiles.swift (the map window)
+  Vendor/             MapLibre.xcframework.zip, from scripts/vendor-maplibre-mac.sh
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings
 scripts/              release.sh, release-beta.sh, github-release.sh, package-mac.sh,
                       publish-mac.sh, appcast.py, release-notes.py, map-tiles.sh,
-                      vendor-map.sh, vendor-preact.sh, vps-setup.sh
+                      vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh, vps-setup.sh
 .github/workflows/    ci.yml, release.yml (tag-driven), scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
                       record-buses.yml (manual: no bus switches sides after a deploy)
