@@ -413,7 +413,6 @@
     <string name="source_code">Source code</string>
     <string name="map_data">Map data</string>
     <string name="aup">NUS Acceptable Use Policy</string>
-    <string name="end_of_the_line">End of the line! This bus terminates here.</string>
     <string name="feedback_label">Ideas, problems, anything</string>
     <string name="feedback_placeholder">A place you want to go, something that confused you…</string>
     <string name="feedback_no_email">This sends your note. Add an email if you want a reply.</string>
