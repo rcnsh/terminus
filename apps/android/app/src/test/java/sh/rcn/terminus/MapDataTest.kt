@@ -92,7 +92,7 @@ class MapDataTest {
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))
         val leg = RoutePath.haversine(1.0, 103.0, 1.0, 103.001)
         fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 0.0, true, null, null, along = m) }
-        val s = Slides(ms = 1_000)
+        val s = Slides { 1_000 }
         s.update(listOf(at(leg - 50)), path, 0)
         assertEquals("a new bus appears where it is", leg - 50, s.at(0)[0].along!!, 1e-9)
         s.update(listOf(at(leg + 50), at(10.0).copy(id = "new")), path, 0)
@@ -113,7 +113,7 @@ class MapDataTest {
         val between = path.pointAt(300.0).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, "COM 3", along = 300.0) }
         val (dotLat, dotLon) = path.pointAt(500.0).let { (lat, lon) -> lat + 10 / 110_574.0 to lon }
         val atStop = between.copy(lat = dotLat, lon = dotLon, along = 500.0, at = "COM 3")
-        val s = Slides(ms = 1_000)
+        val s = Slides { 1_000 }
         s.update(listOf(between), path, 0)
         s.update(listOf(atStop), path, 2_000)
         val half = s.at(2_500)[0]
@@ -135,6 +135,19 @@ class MapDataTest {
         // A long way on (over 1.5 km), or on a line kept from before the route changed: it jumps.
         assertNull(path.aheadBy(between, atStop.copy(along = 2_000.0)))
         assertNull(path.aheadBy(between, atStop.copy(along = 5_000.0)))
+    }
+
+    @Test fun aLongerSlideTakesLonger() {
+        assertEquals(800L, Slides.slideMs(30.0))
+        assertEquals(2_000L, Slides.slideMs(300.0))
+        assertEquals("done before the next answer", 4_000L, Slides.slideMs(1_400.0))
+        val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.01, 1.0)))
+        fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, null, along = m) }
+        val s = Slides()
+        s.update(listOf(at(0.0)), path, 0)
+        s.update(listOf(at(300.0)), path, 1_000)
+        assertTrue(s.moving(2_900))
+        assertFalse(s.moving(3_000))
     }
 
     @Test fun busesSayWhichStopTheyAreAt() {
