@@ -85,7 +85,37 @@ function Phase({ a }) {
   return html`
     ${c.notice && html`<div class="notice">${c.notice}</div>`}
     ${c.phaseText && html`<div class="phase">${c.phaseText}</div>`}
+    ${c.ride && html`<${Ride} ride=${c.ride} />`}
     ${c.warning && html`<div class="warning">${c.warning}</div>`}
+  `;
+}
+
+/**
+ * On the bus: how far along the ride, and the next stop, as the phone's live
+ * notification shows. Stops are taken as evenly spaced between boarding and
+ * getting off; redrawn every few seconds.
+ */
+function Ride({ ride }) {
+  const [now, setNow] = useState(Date.now());
+  const board = Date.parse(ride.board);
+  const arrive = Date.parse(ride.arrive);
+  useEffect(() => {
+    if (now >= arrive) return;
+    const timer = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(timer);
+  }, [ride.board, ride.arrive]);
+  const hops = ride.stops.length - 1;
+  const done = Math.min(1, Math.max(0, (now - board) / Math.max(1, arrive - board)));
+  const passed = Math.floor(done * hops);
+  const next = ride.stops[passed + 1]?.name;
+  const left = Math.max(0, hops - passed);
+  const off = ride.stops[hops].name;
+  const text = !next || left === 0 ? t('Getting off at {0}', off) : left === 1 ? t('Next: {0}, where you get off', off) : t('Next: {0} · {1} stops to go', next, left);
+  return html`
+    <div class="ride">
+      <progress max="100" value=${Math.round(done * 100)} aria-label=${t('Ride progress')}></progress>
+      <div class="detail">${text}</div>
+    </div>
   `;
 }
 
