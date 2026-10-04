@@ -373,6 +373,7 @@ private fun AboutPage() {
     val open = { url: String -> ctx.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
     Text(stringResource(R.string.about_what))
     Hint(stringResource(R.string.about_independent), Modifier.padding(top = 12.dp))
+    Hint(stringResource(R.string.about_aup), Modifier.padding(top = 12.dp))
     Hint(stringResource(R.string.about_version, BuildConfig.VERSION_NAME), Modifier.padding(top = 12.dp))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
         OutlinedButton(onClick = { open("${BuildConfig.SITE}/status") }) { Text(stringResource(R.string.status)) }
@@ -380,6 +381,7 @@ private fun AboutPage() {
         OutlinedButton(onClick = { open("${BuildConfig.SITE}/docs") }) { Text(stringResource(R.string.api_docs)) }
         OutlinedButton(onClick = { open("https://github.com/rcnsh/terminus") }) { Text(stringResource(R.string.source_code)) }
         OutlinedButton(onClick = { open("https://www.openstreetmap.org/copyright") }) { Text(stringResource(R.string.map_data)) }
+        OutlinedButton(onClick = { open("https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf") }) { Text(stringResource(R.string.aup)) }
     }
 }
 

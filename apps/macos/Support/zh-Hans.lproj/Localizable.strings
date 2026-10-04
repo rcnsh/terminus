@@ -294,6 +294,8 @@
 "Clear your trip history? Your settings won't change." = "清除行程记录？你的设置不会改变。";
 "terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable." = "terminus 根据你的 NUSMods 课表，告诉你该搭哪一班 NUS 校园巴士、在哪个车站搭，以及什么时候出发。";
 "terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes and the map use data from OpenStreetMap contributors." = "terminus 是一个独立的学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士数据。步行路线和地图使用 OpenStreetMap 贡献者的数据。";
+"Use terminus in line with the NUS Acceptable Use Policy for IT Resources." = "使用 terminus 时，请遵守 NUS 的 IT 资源可接受使用政策。";
+"NUS Acceptable Use Policy" = "NUS 可接受使用政策";
 "Version %@" = "版本 %@";
 "Get the apps" = "下载应用";
 "Status" = "状态";

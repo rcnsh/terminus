@@ -14,7 +14,7 @@
 import { Icon, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { api, clock, hour12, inkOn, send, t } from '/account/dom.js';
 import { Card, Message, Report, isStale, signal } from '/account/preview.js';
-import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, walkSpeed } from '/account/profile.js';
+import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
 
@@ -925,11 +925,65 @@ function App() {
   `;
 }
 
+/** Taps on the logo that count as one go at the egg, as on Android. */
+const EGG_TAPS = 5;
+const EGG_WINDOW_MS = 1_500;
+/** The front of a bus, as Android's ic_bus. */
+const BUS = 'M6,3h12a3,3 0,0 1,3 3v10a2,2 0,0 1,-1 1.73V20a1,1 0,0 1,-1 1h-1a1,1 0,0 1,-1 -1v-1H7v1a1,1 0,0 1,-1 1H5a1,1 0,0 1,-1 -1v-2.27A2,2 0,0 1,3 16V6a3,3 0,0 1,3 -3zM5,7v4h14V7H5zM7.5,13.5a1.5,1.5 0,1 0,0 3a1.5,1.5 0,0 0,0 -3zM16.5,13.5a1.5,1.5 0,1 0,0 3a1.5,1.5 0,0 0,0 -3z';
+
+/**
+ * The logo (shown on Now) refreshes the answer in place rather than reloading
+ * the page. Five quick taps and a bus drives along the top to the end of the
+ * line: terminus is where the bus stops.
+ */
+function setupLogo() {
+  const brand = document.querySelector('header .brand');
+  if (!brand) return;
+  let taps = [];
+  brand.addEventListener('click', (e) => {
+    // A new tab or window still opens the app as a link.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    const now = performance.now();
+    taps = [...taps.filter((x) => now - x < EGG_WINDOW_MS), now];
+    // One refresh for a burst of taps, not one each.
+    if (taps.length === 1) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      refresh();
+    }
+    if (taps.length < EGG_TAPS) return;
+    taps = [];
+    endOfTheLine(brand);
+  });
+}
+
+let driving = false;
+function endOfTheLine(brand) {
+  toast(t('End of the line! This bus terminates here.'));
+  navigator.vibrate?.(60);
+  if (driving || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  driving = true;
+  const bus = document.createElement('div');
+  bus.className = 'egg-bus';
+  bus.setAttribute('aria-hidden', 'true');
+  bus.innerHTML = `<svg viewBox="0 0 24 24"><path d="${BUS}"/></svg>`;
+  const r = brand.getBoundingClientRect();
+  bus.style.top = `${Math.max(8, r.top + r.height / 2 - 14)}px`;
+  document.body.append(bus);
+  // In from the right edge, out past the left.
+  const run = bus.animate([{ transform: `translateX(${window.innerWidth}px)` }, { transform: 'translateX(-40px)' }], { duration: 2_400, easing: 'linear' });
+  run.finished.catch(() => {}).finally(() => {
+    bus.remove();
+    driving = false;
+  });
+}
+
 async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   // A tap on a notification with the app already open: show the new card.
   navigator.serviceWorker?.addEventListener('message', (e) => e.data?.kind === 'refresh' && refresh());
   render(html`<${App} />`, document.getElementById('root'));
+  setupLogo();
   // /me first: it renews the session, so the installed app stays signed in.
   // Offline it comes from the cache like everything else, or not at all.
   try {

@@ -1031,6 +1031,11 @@ export function About() {
         class="hint"
         text=${t('terminus is an independent student project, not affiliated with NUS. Bus times come from NUS\'s shuttle feed. Walking routes use map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.')}
       />
+      <${Rich}
+        as="p"
+        class="hint"
+        text=${t('Use terminus in line with the <a href="https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf">NUS Acceptable Use Policy for IT Resources</a>.')}
+      />
       <div class="actions">
         <a class="btn ghost small" href="/">${t('Get the apps')}</a>
         <a class="btn ghost small" href="/status">${t('Status')}</a>
