@@ -6,7 +6,7 @@ and decisions). Delete this file once it's done.
 
 ## Where things stand (4 October)
 
-- **Deployed:** production and the beta both run all of `main`, up to
+- **Deployed:** production and the beta both run `main` up to
   `89b6b0f`. No migrations pending.
   - The calendar refreshes itself: both sites answer from the copy the
     cron fetched (`/health` says `calendar.source: fetched`).
