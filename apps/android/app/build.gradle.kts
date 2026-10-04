@@ -66,9 +66,12 @@ android {
     // One APK per CPU type for the website and GitHub (MapLibre's native code
     // is about 4.5 MB per type, compressed); Play builds from the bundle and
     // splits by itself. MapLibre ships arm64, 32-bit ARM and x86_64 (emulators).
+    // Off when building the bundle: AGP refuses a bundle while splits are on,
+    // so release.sh builds the APKs and the bundle in separate runs.
+    val buildingBundle = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
     splits {
         abi {
-            isEnable = true
+            isEnable = !buildingBundle
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86_64")
             isUniversalApk = false

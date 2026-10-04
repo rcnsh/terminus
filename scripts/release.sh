@@ -54,7 +54,9 @@ echo "== android"
 # the java on the PATH.
 STUDIO_JAVA="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 if [ -z "${JAVA_HOME:-}" ] && [ -d "$STUDIO_JAVA" ]; then export JAVA_HOME="$STUDIO_JAVA"; fi
-(cd apps/android && ./gradlew :app:assembleStableRelease :app:bundleStableRelease --console=plain -q)
+# Two runs: ABI splits are off for the bundle (app/build.gradle.kts), and
+# AGP refuses a bundle in a run that also splits.
+(cd apps/android && ./gradlew :app:assembleStableRelease --console=plain -q && ./gradlew :app:bundleStableRelease --console=plain -q)
 # One APK per CPU type: terminus-<v>.apk (arm64, nearly every phone, and the
 # file older apps and links know), -armv7 (older 32-bit phones), -x86_64.
 APKS=apps/android/app/build/outputs/apk/stable/release
