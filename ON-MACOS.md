@@ -172,7 +172,8 @@ branches deleted. Any other clone made before 3 October needs C1's reset.
 
 ### Y2. Deploy from the VPS
 
-Both sites run all of `main` (`89b6b0f`), so nothing waits for a deploy.
+Both sites run `main` up to `89b6b0f`. Waiting for a deploy: About and
+Feedback in the web's Settings.
 For the next one, from the VPS, in one line (beta first, then production):
 
 ```sh
@@ -365,3 +366,40 @@ Each of these needs your choice; Claude then does it (C8).
 
 **The web:** where the search button goes when the chips don't fit on one
 line.
+
+**About and Feedback:** the web's Settings ends with an About page (what
+terminus is, not affiliated with NUS, links to the apps, status, privacy,
+the API docs and the source) and a Feedback page (a note sent to
+`/me/feedback` as `kind: 'other'`, emailed to you like "Is this wrong?").
+Should the Android and Mac Settings get the same two pages?
+
+**An iOS app (not started; decide after 2.1.0 is out):**
+- Why: a large share of NUS students use iPhones, and they only have the
+  web app.
+- What carries over: the Mac app's `Api.swift`, `AppModel.swift`,
+  `Lang.swift`, `OfflineDay.swift` and answer types (about 1,500 lines),
+  its tests against the shared golden answers, and its Chinese strings.
+  The server already renders the card, so nothing about planning moves.
+- What's new:
+  - phone screens in SwiftUI: Now, setup, Settings, sign-in and pairing;
+  - a WidgetKit widget, counting down with `Text(timerInterval:)` because
+    iOS allows only a few dozen refreshes a day;
+  - Live Activities for the leave-by countdown on the lock screen and
+    Dynamic Island, which no other client has;
+  - push: the Firebase SDK passing FCM on to APNs, or the Worker sending
+    to APNs itself;
+  - the map with MapLibre's iOS SDK, the same tiles and style, and the bus
+    movement ported from `MapData.kt`;
+  - less background location than Android, so ride detection leans on
+    the server.
+- Apple: the same developer account as the Mac app. App Review may
+  object to an app that looks official, so the name, icon and description
+  must say it's an independent student project. Expect a resubmission or
+  two. TestFlight is the beta. It builds only with Xcode, so on the Mac
+  or a macOS CI runner.
+- Effort, roughly: one to two weeks of sessions for Now, setup, sign-in
+  and one widget; one to two more for the map, notifications and Live
+  Activities; then App Review, and a fifth client to keep in step.
+- Before deciding: see how many people install the web app on an iPhone
+  from the website. Installed, it can already get notifications (iOS 16.4
+  and later), but not widgets or Live Activities.
