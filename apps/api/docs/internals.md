@@ -368,18 +368,19 @@ Settings. It uses the same routes as the account page, with the session cookie.
   changes too, so a place saved on the map is in Settings at once. It's
   fetched afresh each time Settings opens again (it may have changed on
   another device), unless a change here is still waiting to be saved.
-- **Settings' pages.** A list of groups (Your trips, Timetable, Favourites,
-  Notifications in the app, Language and appearance, Account and devices,
-  About and feedback), each with a line
+- **Settings' pages.** A list in three short cards with headings: Your day
+  (Your trips, Timetable, Favourites, Notifications in the app), Account
+  (Account, Devices) and Display (Language and time, and Appearance, whose
+  Auto/Light/Dark switch is on its row, with no page). Links under the list
+  open About and Send feedback, and go to Privacy and Status. Each row has a line
   saying what's set, opening its page. The page is in the address (`#trips`
   on the account page, `#settings/trips` in the app), so the browser's Back
   returns to the list. On a phone the page slides in over the list; from
   900 px wide they sit side by side. The installed app on an iPhone, which has
   no browser swipe, goes back on a swipe from the left edge. "Notify me when
-  to leave" is under Notifications. Feedback sends a note to `/me/feedback`
+  to leave" is under Notifications. Send feedback posts a note to `/me/feedback`
   as `kind: 'other'`; a wrong answer is better reported from under the card,
-  which attaches it. Old addresses of pages folded into others (`#devices`,
-  `#appearance`, `#feedback`) open the page they're now on.
+  which attaches it.
 - **12- or 24-hour times.** The profile's `clock` (`auto`, `12`, `24`)
   is the account's choice, set in Language and time or in setup. The server
   words every card in it (`hour12()` in next.ts: the profile's choice, else
@@ -393,7 +394,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   wrong?" under the card sends it to `/me/feedback` (account/preview.js
   `Report`), except for Nearby. A stop's name in Nearby opens it on the map
   (MapTab's `focus` in map.js).
-- **Theme.** Language and appearance chooses light, dark or the device's own, for this
+- **Theme.** Appearance's switch chooses light, dark or the device's own, for this
   browser only (`localStorage` `terminus-theme`). `assets/theme.js`, in every
   page's `<head>`, sets `<html data-theme>` before the page draws; `site.css`
   has the dark colours under both the device's dark mode (unless

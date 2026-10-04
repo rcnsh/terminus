@@ -7,20 +7,28 @@
 import { html, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { api, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
-import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
+import { About, Account, Devices, Feedback, Favourites, Language, Page, ThemeSwitch, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 
-const PAGES = ['trips', 'timetable', 'favourites', 'notifications', 'language', 'account', 'about'];
+/** The list, in groups; the theme is switched on its row, with no page. */
+const GROUPS = () => [
+  { title: t('Your day'), ids: ['trips', 'timetable', 'favourites', 'notifications'] },
+  { title: t('Account'), ids: ['account', 'devices'] },
+  { title: t('Display'), ids: ['language', 'appearance'] },
+];
+/** Pages opened from the links under the list. */
+const FOOT = ['about', 'feedback'];
 const TITLES = {
   trips: t('Your trips'),
   timetable: t('Timetable'),
   favourites: t('Favourites'),
   notifications: t('Notifications'),
-  language: t('Language and appearance'),
-  account: t('Account and devices'),
-  about: t('About and feedback'),
+  devices: t('Devices'),
+  language: t('Language and time'),
+  appearance: t('Appearance'),
+  account: t('Account'),
+  about: t('About'),
+  feedback: t('Send feedback'),
 };
-/** Pages that were folded into another, so an old address still opens the right one. */
-const MOVED = { devices: 'account', appearance: 'language', feedback: 'about' };
 
 async function signOut() {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
@@ -45,17 +53,9 @@ function summaries({ p, me, notifyOn, devices, imported }) {
     timetable: me.needsReimport && !imported ? t('Re-import needed') : classes === 0 ? t('No classes yet') : classes === 1 ? t('1 class') : t('{0} classes', classes),
     favourites: p.places.map((x) => x.label).join(', ') || t('None yet'),
     notifications: notifyOn ? t('On for this device') : t('Off'),
-    language: [
-      { en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'),
-      { 12: t('12-hour'), 24: t('24-hour') }[p.clock],
-      { light: t('Light'), dark: t('Dark') }[window.theme?.pref()],
-    ]
-      .filter(Boolean)
-      .join(' · '),
-    account: me.anonymous
-      ? t('Add an email to use other devices')
-      : [me.email ?? t('No email'), devices === null ? '' : devices === 1 ? t('1 device') : t('{0} devices', devices)].filter(Boolean).join(' · '),
-    about: t('Tell us what to change'),
+    devices: me.anonymous ? t('Add an email to use other devices') : devices === null ? '' : devices === 1 ? t('1 device') : t('{0} devices', devices),
+    language: [{ en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'), { 12: t('12-hour'), 24: t('24-hour') }[p.clock]].filter(Boolean).join(' · '),
+    account: me.email ?? t('No email'),
   };
 }
 
@@ -78,7 +78,8 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   const hash = useHash();
   const listHash = inApp ? '#settings' : '';
   const pageHash = inApp ? '#settings/' : '#';
-  const groups = PAGES.filter((x) => x !== 'notifications' || Notify);
+  const groups = GROUPS().map((g) => ({ ...g, ids: g.ids.filter((x) => x !== 'notifications' || Notify) }));
+  const pages = [...groups.flatMap((g) => g.ids).filter((x) => x !== 'appearance'), ...FOOT];
 
   // The account's language (phase 10): one chosen on another device is used
   // here; one chosen here before the account had one goes to the account.
@@ -88,9 +89,8 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   }, []);
 
   /** The page the address names, if it's one shown here. */
-  const asked = hash.startsWith(pageHash) ? hash.slice(pageHash.length) : '';
-  const named = MOVED[asked] ?? asked;
-  const inAddress = groups.includes(named) ? named : null;
+  const named = hash.startsWith(pageHash) ? hash.slice(pageHash.length) : '';
+  const inAddress = pages.includes(named) ? named : null;
   // Somewhere else in the web app (Now, Map): Settings stays as it is.
   const elsewhere = Boolean(listHash) && !hash.startsWith(listHash);
   const want = inAddress ?? (wide ? 'trips' : null);
@@ -237,23 +237,51 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
       <div class=${onSide ? 'settings-side leaving' : 'settings-side'} style=${onSide ? { top: `${leaving.shift}px` } : undefined} ref=${side_}>
         ${side}
         <h1 class="settings-title">${t('Settings')}</h1>
-        <nav class="settings-list card" aria-label=${t('Settings')}>
+        <nav class="settings-groups" aria-label=${t('Settings')}>
           ${groups.map(
-            (id) => html`
-              <button
-                type="button"
-                class="settings-row"
-                data-page=${id}
+            (g) => html`
+              <h2 class="eyebrow settings-group" key=${`h-${g.title}`}>${g.title}</h2>
+              <div class="settings-list card" key=${g.title}>
+                ${g.ids.map((id) =>
+                  id === 'appearance'
+                    ? html`<div class="settings-row inline" key=${id}>
+                        <span class="row-text"><span class="row-title" id="theme-label">${TITLES[id]}</span></span>
+                        <${ThemeSwitch} labelledBy="theme-label" />
+                      </div>`
+                    : html`
+                        <button
+                          type="button"
+                          class="settings-row"
+                          data-page=${id}
+                          key=${id}
+                          ref=${(n) => (rows[id] = n)}
+                          aria-current=${shown === id ? 'page' : undefined}
+                          onClick=${() => (shown === id ? null : openPage(id))}
+                        >
+                          <span class="row-text"><span class="row-title">${TITLES[id]}</span><span class="row-sum">${sum[id]}</span></span>
+                          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                        </button>
+                      `,
+                )}
+              </div>
+            `,
+          )}
+          <p class="settings-foot">
+            ${FOOT.map(
+              (id) => html`<a
+                href=${pageHash + id}
                 key=${id}
                 ref=${(n) => (rows[id] = n)}
                 aria-current=${shown === id ? 'page' : undefined}
-                onClick=${() => (shown === id ? null : openPage(id))}
-              >
-                <span class="row-text"><span class="row-title">${TITLES[id]}</span><span class="row-sum">${sum[id]}</span></span>
-                <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-              </button>
-            `,
-          )}
+                onClick=${(e) => {
+                  e.preventDefault();
+                  if (shown !== id) openPage(id);
+                }}
+              >${TITLES[id]}</a>`,
+            )}
+            <a href="/privacy">${t('Privacy')}</a>
+            <a href="/status">${t('Status')}</a>
+          </p>
         </nav>
       </div>
       <div class="settings-pages">
@@ -261,9 +289,11 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         ${page('timetable', html`<${Timetable} me=${me} />`)}
         ${page('favourites', html`<${Favourites} />`)}
         ${Notify && page('notifications', html`<${Notify} />`)}
-        ${page('language', html`<${Language} /><${Appearance} />`)}
-        ${page('account', html`<${Account} me=${me} inApp=${inApp} onAddEmail=${onAddEmail} onSignOut=${onSignOut}><${Devices} me=${me} /><//>`)}
-        ${page('about', html`<${About} /><${Feedback} me=${me} />`)}
+        ${page('devices', html`<${Devices} me=${me} />`)}
+        ${page('language', html`<${Language} />`)}
+        ${page('account', html`<${Account} me=${me} inApp=${inApp} onAddEmail=${onAddEmail} onSignOut=${onSignOut} />`)}
+        ${page('about', html`<${About} />`)}
+        ${page('feedback', html`<${Feedback} me=${me} />`)}
       </div>
     </div>
   `;
