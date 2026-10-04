@@ -24,10 +24,17 @@ and decisions). Delete this file once it's done.
 - **History rewritten:** every commit message is in Conventional Commits,
   pushed with all the tags (Y1, done). The old `ccr-*` and `imgbot`
   branches are deleted.
-- **Not released:** the apps are at 2.1.0 (build 44) on `main`, Android
-  and Mac together, and the API docs say the same. The last release is
-  2.0.4. It stays 2.1.0, not 3.0: everything since 2.0.4 adds to what was
-  there, and nothing in the public API changed or went away.
+- **Released 2.1.0** (4 October, from the Mac): the APKs, the DMG, the
+  Sparkle appcast and `latest.json` are live, and the GitHub release has
+  the notes. Done on the Mac: C1, C2 (all green), C5 for the Mac shots,
+  C6 (the release script needed a fix: AGP won't build the Play bundle
+  with ABI splits on) and C7. The Play bundle is in
+  `build/release/2.1.0/terminus-2.1.0.aab` on the Mac.
+- **Still to do:** deploy `main` (Y2), so the web's grouped Settings,
+  About and Send feedback in the notes go live; retake the Android
+  `app-light`/`app-dark` shots with the phone (C5); install the apps and
+  try them (C4, Y3). The Mac app was left at 2.0.4 so Check for updates…
+  can be tried on the real update.
 - **Live buses checked:** the record live buses workflow ran on production
   on 3 October at 8:50 pm Singapore time. It recorded 3 buses for 10
   minutes, and none switched sides or jumped (C3).
