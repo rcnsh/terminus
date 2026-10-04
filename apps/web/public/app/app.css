@@ -13,7 +13,8 @@ body.is-offline .app-card .widget { opacity: 0.6; }
 /* The day plan's next thing, offline: still the thing to do, so not dimmed (the banner says offline). */
 body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 
-.app-chips { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-bottom: -8px; padding: 4px 2px; margin-top: -4px; }
+/* Stretched so the icon buttons (search, an added place's X) are as tall as the text chips. */
+.app-chips { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-bottom: -8px; padding: 4px 2px; margin-top: -4px; }
 /* (The padding is room for a chip's focus ring, which the scrolling row would clip.) */
 .app-chips::-webkit-scrollbar { display: none; }
 .app-chips button {
@@ -34,7 +35,7 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .chip-search svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .where-box input { width: 100%; }
 /* A place added from the search: its chip, and an X to take it off. */
-.app-chips .chip-added { flex: none; display: inline-flex; align-items: center; }
+.app-chips .chip-added { flex: none; display: inline-flex; align-items: stretch; }
 .app-chips .chip-added > button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0; padding-right: 8px; }
 .app-chips .chip-x { display: grid; place-items: center; padding: 7px 9px 7px 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; color: var(--muted); }
 .app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { background: var(--ink); border-color: var(--ink); color: var(--bg); }
@@ -211,3 +212,9 @@ body.on-settings > .nav { display: none; }
 body.app > .nav { height: var(--header-h); padding-top: 0; padding-bottom: 0; }
 .settings-tab .settings-title, .settings-tab .page-head { display: flex; align-items: center; height: var(--header-h); margin-bottom: -4px; }
 body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); }
+/* Quick taps on the logo (the easter egg) shouldn't zoom the page. */
+.nav .brand { touch-action: manipulation; }
+/* The easter egg: a bus along the header to the end of the line, bouncing a little on the road. */
+.egg-bus { position: fixed; left: 0; width: 28px; height: 28px; color: var(--accent); pointer-events: none; z-index: 50; }
+.egg-bus svg { display: block; width: 100%; height: 100%; fill: currentColor; animation: egg-bob 0.2s ease-in-out infinite alternate; }
+@keyframes egg-bob { to { transform: translateY(-2px); } }
