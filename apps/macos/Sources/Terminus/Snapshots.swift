@@ -24,7 +24,7 @@ enum Snapshots {
         """
         let answer = try! JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
         let nearbyJSON = """
-        [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"quality":"live"},{"svc":"A1","etaS":540,"quality":"live"},{"svc":"K","etaS":20,"quality":"live"},{"svc":"R2","etaS":780,"quality":"live"},{"svc":"BTC1","etaS":1260,"quality":"scheduled"},{"svc":"E","etaS":null,"quality":"ended"}]},
+        [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"opposite":"PGPR","board":[{"svc":"D2","etaS":240,"quality":"live"},{"svc":"A1","etaS":540,"quality":"live"},{"svc":"K","etaS":20,"quality":"live"},{"svc":"R2","etaS":780,"quality":"live"},{"svc":"BTC1","etaS":1260,"quality":"scheduled"},{"svc":"E","etaS":null,"quality":"ended"}]},
          {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"quality":"live"}]}]
         """
         let nearby = try! JSONDecoder().decode([NearbyStop].self, from: Data(nearbyJSON.utf8))
@@ -43,6 +43,8 @@ enum Snapshots {
             m.nearby = nearby
             m.showNearby = nearbyTab
             m.updated = Date()
+            // A place gone to from the search: its own tab, with an ×.
+            m.added = [AppModel.AddedPlace(code: "COM3", label: "COM3")]
             return m
         }
 
@@ -56,6 +58,22 @@ enum Snapshots {
                 return m
             }()),
             ("rest", model(nearbyTab: false, resting: true)),
+            ("riding", {
+                let m = model(nearbyTab: false)
+                let ridingJSON = """
+                {"label":"On the D2","detail":"Off at UTown · arrive ~\(t(900))","stop":{"code":"PGP","name":"PGP"},"quality":"live","mode":"trip",
+                 "card":{"kind":"trip","phase":"riding","phaseText":"On the bus","glance":"D2 · UTown",
+                  "ride":{"svc":"D2","board":"\(iso(-240))","arrive":"\(iso(600))","stops":[{"code":"PGP","name":"PGP"},{"code":"KR-MRT","name":"KR MRT"},{"code":"LT27","name":"LT27"},{"code":"S17","name":"S17"},{"code":"UTOWN","name":"UTown"}]}}}
+                """
+                m.answers = [.plan: try! JSONDecoder().decode(NextAnswer.self, from: Data(ridingJSON.utf8))]
+                return m
+            }()),
+            ("later", {
+                let m = model(nearbyTab: false)
+                m.target = .code("COM3", label: "COM3")
+                m.answers[.code("COM3", label: "COM3")] = answer
+                return m
+            }()),
             ("today", {
                 let m = model(nearbyTab: false)
                 let dayJSON = """
@@ -95,7 +113,7 @@ enum Snapshots {
          "residences":[{"code":"PGPR","name":"Prince George's Park Residences","stops":["PGP"],"walkM":300},{"code":"RVRC","name":"Ridge View Residential College","stops":["COM3"],"walkM":420}]}
         """
         let campus = try! JSONDecoder().decode(Campus.self, from: Data(campusJSON.utf8))
-        let profile: [String: Any] = ["home": ["stops": ["PGP"]], "homeWalkMin": 4, "walkPace": "normal", "fullBusMargin": true, "trips": [[:], [:], [:]], "share": "https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1", "places": [["key": "mrt", "label": "KR MRT", "to": "KR-MRT"], ["key": "deck", "label": "The Deck", "to": "COM3"]]]
+        let profile: [String: Any] = ["home": ["stops": ["PGP"]], "homeWalkMin": 4, "walkPace": "normal", "fullBusMargin": true, "trips": [["day": 1, "arriveByMin": 600, "endMin": 720, "to": "COM3", "label": "CS2030 @ COM1"], ["day": 3, "arriveByMin": 840, "to": "UTOWN", "label": "GEA1000 @ UTown"], ["day": 4, "arriveByMin": 540, "to": "COM3", "label": "MA1100 @ LT21", "weeks": [1, 2, 3, 4, 5, 6]]], "manual": [["day": 5, "arriveByMin": 1080, "to": "UTOWN", "label": "Gym", "venue": ""]], "share": "https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1", "places": [["key": "mrt", "label": "KR MRT", "to": "KR-MRT"], ["key": "deck", "label": "The Deck", "to": "COM3"]]]
         let devices = [
             Device(id: "a", name: "MacBook Air", platform: "mac", lastSeen: Date().timeIntervalSince1970 * 1000, current: true),
             Device(id: "b", name: "Google Pixel 8", platform: "android", lastSeen: (Date().timeIntervalSince1970 - 7200) * 1000, current: false),

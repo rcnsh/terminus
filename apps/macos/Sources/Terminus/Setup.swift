@@ -1,5 +1,6 @@
 import AppKit
 import CoreImage.CIFilterBuiltins
+import UniformTypeIdentifiers
 import Observation
 import SwiftUI
 
@@ -18,6 +19,12 @@ final class SetupModel {
     private(set) var devices: [Device]?
     private(set) var pairCode: String?
     private(set) var busy = false
+    /// Imported classes whose room couldn't be placed, until each gets a stop or is skipped.
+    private(set) var unplaced: [Unplaced] = []
+    /// Who's signed in (/me): the email, and whether the timetable needs importing again.
+    private(set) var me: Me?
+    /// Classes with a bus earlier or no reminders, and the trips remembered (/me/choices).
+    private(set) var choices: Choices?
 
     private var api: Api { Api(token: TokenStore.read()) }
 
@@ -41,9 +48,13 @@ final class SetupModel {
         do {
             async let p = api.profile()
             async let c = api.campus()
+            async let m = try? api.me()
+            async let ch = try? api.choices()
             profile = try object(await p)
             Clock.pref = clock
             campus = try await c
+            me = await m
+            choices = await ch
         } catch let e as ApiError {
             message = e.message
         } catch {
@@ -156,6 +167,137 @@ final class SetupModel {
         }
     }
 
+    // MARK: the timetable, class by class
+
+    /// A class as the profile keeps it, imported (`trips`) or added by hand (`manual`), by its place in that list.
+    struct Class: Identifiable {
+        let list: String
+        let index: Int
+        let day: Int
+        let arriveByMin: Int
+        let endMin: Int?
+        let to: String
+        let label: String
+        let weeks: [Int]?
+        var id: String { "\(list)-\(index)" }
+    }
+
+    var classes: [Class] {
+        ["trips", "manual"].flatMap { list in
+            (profile?[list] as? [[String: Any]] ?? []).enumerated().compactMap { i, c -> Class? in
+                guard let day = c["day"] as? Int, let at = c["arriveByMin"] as? Int, let to = c["to"] as? String else { return nil }
+                return Class(list: list, index: i, day: day, arriveByMin: at, endMin: c["endMin"] as? Int, to: to, label: c["label"] as? String ?? "", weeks: c["weeks"] as? [Int])
+            }
+        }
+    }
+
+    func setClassStop(_ c: Class, to: String) {
+        edit {
+            var list = $0[c.list] as? [[String: Any]] ?? []
+            guard list.indices.contains(c.index) else { return }
+            list[c.index]["to"] = to
+            $0[c.list] = list
+        }
+    }
+
+    func removeClass(_ c: Class) {
+        edit {
+            var list = $0[c.list] as? [[String: Any]] ?? []
+            guard list.indices.contains(c.index) else { return }
+            list.remove(at: c.index)
+            $0[c.list] = list
+        }
+    }
+
+    /// "Add a class or commitment by hand"; it survives a re-import.
+    func addManual(day: Int, at: Int, end: Int?, to: String, label: String, venue: String = "") {
+        edit {
+            var list = $0["manual"] as? [[String: Any]] ?? []
+            var c: [String: Any] = ["day": day, "arriveByMin": at, "to": to, "label": label, "venue": venue]
+            if let end, end > at { c["endMin"] = end }
+            list.append(c)
+            $0["manual"] = list
+        }
+    }
+
+    /// A favourite at its usual time each week (from before favourites lost them), with its place.
+    var usual: [(place: String, day: Int, atMin: Int, label: String, to: String)] {
+        (profile?["usual"] as? [[String: Any]] ?? []).compactMap { u in
+            guard let key = u["place"] as? String, let day = u["day"] as? Int, let at = u["atMin"] as? Int, let p = places.first(where: { $0.key == key }) else { return nil }
+            return (key, day, at, p.label, p.to)
+        }
+    }
+
+    func removeUsual(place: String, day: Int, atMin: Int) {
+        edit { $0["usual"] = ($0["usual"] as? [[String: Any]] ?? []).filter { !($0["place"] as? String == place && $0["day"] as? Int == day && $0["atMin"] as? Int == atMin) } }
+    }
+
+    /// An unplaced class given a stop: added by hand there, as the account page does.
+    func place(_ u: Unplaced, to: String) {
+        addManual(day: u.day, at: u.arriveByMin, end: u.endMin, to: to, label: "\(u.module) @ \(u.venue.split(separator: "-").first.map(String.init) ?? u.venue)", venue: u.venue)
+        skip(u)
+    }
+
+    func skip(_ u: Unplaced) { unplaced.removeAll { $0 == u } }
+
+    // MARK: trip choices and history (phase 3)
+
+    func loadChoices() async { choices = try? await api.choices() }
+
+    func undoChoice(_ c: TripChoice) async {
+        do {
+            try await api.undoChoice(trip: c.trip, pref: c.pref)
+            await loadChoices()
+        } catch let e as ApiError {
+            message = e.message
+        } catch {
+            message = L("Couldn't reach terminus. Check your connection and try again.")
+        }
+    }
+
+    func clearHistory() async {
+        do {
+            try await api.clearHistory()
+            await loadChoices()
+        } catch let e as ApiError {
+            message = e.message
+        } catch {
+            message = L("Couldn't reach terminus. Check your connection and try again.")
+        }
+    }
+
+    // MARK: feedback, your data
+
+    /// Send feedback; nil once sent, else why not.
+    func sendFeedback(_ note: String) async -> String? {
+        do {
+            try await api.feedback(note: note.trimmingCharacters(in: .whitespacesAndNewlines))
+            return nil
+        } catch let e as ApiError {
+            return e.message
+        } catch {
+            return L("Couldn't reach terminus. Try again in a moment.")
+        }
+    }
+
+    /// Download my data: the export, saved where the person picks.
+    func export() async {
+        do {
+            let data = try await api.export()
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = "terminus-export.json"
+            panel.allowedContentTypes = [.json]
+            NSApp.activate()
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            try data.write(to: url)
+            message = nil
+        } catch let e as ApiError {
+            message = e.message
+        } catch {
+            message = L("Couldn't save your data. %@", error.localizedDescription)
+        }
+    }
+
     func importTimetable(_ link: String) async {
         let share = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !share.isEmpty, !importing else { return }
@@ -167,6 +309,8 @@ final class SetupModel {
             let r = ImportResult(try object(await api.importTimetable(share)))
             imported = r
             profile = r.profile
+            unplaced = r.unplaced
+            me = try? await api.me()
         } catch let e as ApiError {
             message = e.message
         } catch {
@@ -431,7 +575,7 @@ struct TimetableStep: View {
             .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || setup.importing)
         if let r = setup.imported {
             Text(r.classes == 1 ? L("Imported 1 class for %@.", r.term) : L("Imported %@ classes for %@.", "\(r.classes)", r.term))
-            if !r.unresolved.isEmpty { Hint(L("No stop found for %@. Add those by hand on the account page.", r.unresolved.joined(separator: "; "))) }
+            UnplacedList(setup: setup)
             if !r.missing.isEmpty { Hint(L("NUSMods has no classes this semester for %@.", r.missing.joined(separator: ", "))) }
         } else if setup.importedClasses > 0 {
             Hint(setup.importedClasses == 1 ? L("1 class imported.") : L("%@ classes imported.", "\(setup.importedClasses)"))

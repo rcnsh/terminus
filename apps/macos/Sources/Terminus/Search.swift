@@ -38,7 +38,7 @@ struct Search: View {
                     ForEach(Array(matches), id: \.self) { d in
                         Button {
                             query = ""
-                            model.select(.code(d.code, label: d.kind == "stop" || d.kind == "landmark" ? d.label : d.code))
+                            model.goSomewhere(code: d.code, label: d.kind == "stop" || d.kind == "landmark" ? d.label : d.code)
                         } label: {
                             HStack(alignment: .firstTextBaseline) {
                                 Image(systemName: d.kind == "stop" ? "bus" : d.kind == "room" ? "door.left.hand.open" : d.kind == "landmark" ? "fork.knife" : "building.2")

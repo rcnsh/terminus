@@ -6,9 +6,18 @@ import SwiftUI
 /// Settings' groups, in the order the sidebar shows them: the same as the
 /// phone's and the website's.
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case trips, timetable, favourites, notifications, devices, language, appearance, account
+    case trips, timetable, favourites, notifications, devices, language, appearance, account, about, feedback
 
     var id: String { rawValue }
+
+    /// The sidebar's groups, under their headings, as on the phone and the web;
+    /// About and Send feedback after them.
+    static let groups: [(String?, [SettingsPane])] = [
+        (L("Your day"), [.trips, .timetable, .favourites, .notifications]),
+        (L("Account"), [.account, .devices]),
+        (L("Display"), [.language, .appearance]),
+        (nil, [.about, .feedback]),
+    ]
 
     var title: String {
         switch self {
@@ -20,6 +29,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .language: L("Language and time")
         case .appearance: L("Appearance")
         case .account: L("Account")
+        case .about: L("About")
+        case .feedback: L("Send feedback")
         }
     }
 
@@ -33,6 +44,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .language: "globe"
         case .appearance: "circle.lefthalf.filled"
         case .account: "person.crop.circle"
+        case .about: "info.circle"
+        case .feedback: "bubble.left"
         }
     }
 }
@@ -54,8 +67,14 @@ struct SettingsWindow: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsPane.allCases, selection: $pane) { p in
-                Label(p.title, systemImage: p.icon).tag(p)
+            List(selection: $pane) {
+                ForEach(SettingsPane.groups, id: \.1) { title, panes in
+                    Section {
+                        ForEach(panes) { p in Label(p.title, systemImage: p.icon).tag(p) }
+                    } header: {
+                        if let title { Text(title) }
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
         } detail: {
@@ -115,8 +134,9 @@ struct SettingsPaneView: View {
             switch pane {
             case .trips:
                 TripsPane(setup: setup, app: app)
+                ChoicesSection(setup: setup).padding(.top, 10)
             case .timetable:
-                TimetableStep(setup: setup)
+                TimetablePane(app: app, setup: setup)
             case .favourites:
                 favourites
             case .notifications:
@@ -155,6 +175,10 @@ struct SettingsPaneView: View {
                 Hint(L("Only on this Mac."))
             case .account:
                 account
+            case .about:
+                AboutPane()
+            case .feedback:
+                FeedbackPane(setup: setup)
             }
         }
     }
@@ -176,9 +200,7 @@ struct SettingsPaneView: View {
         if setup.places.count < SetupModel.maxPlaces {
             FavouriteSearch(app: app, setup: setup)
         }
-        Hint(L("To go somewhere every week, add it to your timetable on the account page or in the phone app."))
-        Button(L("Open the account page")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#favourites")!) }
-            .buttonStyle(.link)
+        Hint(L("To go somewhere every week, add it to your timetable."))
     }
 
     @ViewBuilder private var account: some View {
@@ -189,12 +211,36 @@ struct SettingsPaneView: View {
         }
         .disabled(!Updater.shared.running)
         Divider().padding(.vertical, 8)
-        Hint(L("Your email, API keys, signing out everywhere and deleting your account are on the account page."))
-        HStack {
+        if app.anonymous || setup.me?.anonymous == true {
+            Text(L("No email")).fontWeight(.medium)
+            AddEmail(app: app)
+            HStack {
+                Button(L("Download my data")) { Task { await setup.export() } }
+                Button(L("Delete account"), role: .destructive) { confirmDelete = true }
+            }
+            .padding(.top, 8)
+            .confirmationDialog(L("Delete this account?"), isPresented: $confirmDelete) {
+                Button(L("Delete"), role: .destructive) { app.deleteAnonymousAccount() }
+            } message: {
+                Text(L("Your timetable and settings will be deleted immediately and this Mac will reset. Without an email on the account, they can't be recovered."))
+            }
+        } else {
+            if let email = setup.me?.email { Text(L("Signed in as %@", email)).fontWeight(.medium) }
+            HStack {
+                Button(L("Download my data")) { Task { await setup.export() } }
+                Button(L("Sign out of this Mac")) { confirmSignOut = true }
+            }
+            .confirmationDialog(L("Sign out of this Mac?"), isPresented: $confirmSignOut) {
+                Button(L("Sign out"), role: .destructive) { app.unpair() }
+            }
+            Hint(L("API keys, signing out everywhere and deleting your account are on the account page."))
             Button(L("Open the account page")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#account")!) }
-            Button(L("Sign out of this Mac")) { app.unpair() }
+                .buttonStyle(.link)
         }
     }
+
+    @State private var confirmDelete = false
+    @State private var confirmSignOut = false
 }
 
 /// Adding a favourite: the same search as the popover's, a pick adds it.
@@ -209,9 +255,16 @@ private struct FavouriteSearch: View {
             TextField(L("Add a stop, building or room"), text: $query)
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: query) { _, _ in app.loadDestinations() }
+                .onAppear { app.loadDestinations() }
             let q = query.trimmingCharacters(in: .whitespaces)
-            if !q.isEmpty {
-                ForEach(Array(rankDestinations(app.destinations, q)), id: \.self) { d in
+            // The stops your classes go to come first, before anything is typed too.
+            let favourite = Set(setup.places.map(\.to))
+            let timetable = Array(Set(setup.classes.map(\.to))).filter { !favourite.contains($0) }.sorted()
+                .compactMap { to in app.destinations.first { $0.kind == "stop" && $0.code == to } }
+            let list = q.isEmpty ? timetable : Array(rankDestinations(app.destinations, q))
+            if q.isEmpty, !list.isEmpty { Hint(L("In your timetable")) }
+            if !list.isEmpty {
+                ForEach(list, id: \.self) { d in
                     Button {
                         query = ""
                         note = setup.addPlace(d).map { L("Already a favourite: %@", $0) }

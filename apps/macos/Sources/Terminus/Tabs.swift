@@ -10,11 +10,13 @@ struct Tabs: View {
 
     private enum Tab: Hashable { case plan, place(String), code(String, String), nearby }
 
+    /// Next, Nearby, each favourite, then the places added from the search, as
+    /// on the phone, its widget and the web.
     private var tabs: [(Tab, String, String)] {
-        var out: [(Tab, String, String)] = [(.plan, L("Next"), "clock")]
+        var out: [(Tab, String, String)] = [(.plan, L("Next"), "clock"), (.nearby, L("Nearby"), "location")]
         out += model.places.map { (.place($0.key), $0.label, "mappin") }
-        if case .code(let c, let l) = model.target { out.append((.code(c, l), l, "magnifyingglass")) }
-        out.append((.nearby, L("Nearby"), "location"))
+        out += model.added.map { (.code($0.code, $0.label), $0.label, "magnifyingglass") }
+        if case .code(let c, let l) = model.target, !model.added.contains(where: { $0.code == c }) { out.append((.code(c, l), l, "magnifyingglass")) }
         return out
     }
 
@@ -75,6 +77,15 @@ struct Tabs: View {
                 .accessibilityLabel(title)
                 .accessibilityAddTraits(on ? .isSelected : [])
                 .id(tab)
+                // An added place's ×: off the tabs, as on the phone.
+                if case .code(let c, _) = tab, let p = model.added.first(where: { $0.code == c }) {
+                    Button { model.removeAdded(p) } label: {
+                        Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(.secondary).padding(.trailing, 4)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("Remove %@", p.label))
+                    .accessibilityLabel(L("Remove %@", p.label))
+                }
             }
         }
         .padding(3)
