@@ -240,7 +240,7 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
   - Clients poll every 5 s. A bus at a stop is drawn a few pixels beside
     the dot, on the kerb side (left of its heading), the ones behind it
     further back; a bus that changes place slides there along the line in
-    0.8–4 s, longer the further it goes (web `map.js` `moveTo`;
+    1–4 s, longer the further it goes (web `map.js` `moveTo`;
     Android `Slides`), or jumps.
   - `test/fixtures/bus-trace.jsonl` is a real feed trace (the probe
     workflow with `trace`); `buses.test.js` replays it.
