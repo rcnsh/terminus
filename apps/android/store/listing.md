@@ -33,15 +33,15 @@ ONE ANSWER, ON YOUR HOME SCREEN
 • If the bus you'd catch is often busy at that stop and time, it aims for one bus earlier.
 
 IT FOLLOWS YOUR TRIP
-• Once your bus leaves, terminus takes it you're on it and shows when you'll get there.
+• Once your bus leaves, terminus takes it you're on it and shows the next stop and when you'll get there.
 • Turn on "Notice when I board" and, during a trip, it uses your location to tell when you're on the bus, when you've missed it, and when you're there. On the bus, your arrival comes from that bus's live position.
 • Missed it? The next way there, straight away.
 • Not going? Swipe it off today's list, on every device.
 
 ANYWHERE ON CAMPUS
-• Search any building, stop or room. Places you look up keep a tab of their own until you remove them, and the newest one gets a button on the widget.
+• Search any building, stop or room. The last five places you look up keep a tab of their own, and the newest one gets a button on the widget.
 • Favourites: pick a stop, building or room and it's saved. The stops your classes use come first.
-• Nearby: every bus at the stops around you, live. Wrong side of the road? One tap on the widget shows the stop across it.
+• Nearby: every bus at the stops around you, live. Wrong side of the road? One tap, in the app or on the widget, shows the stop across it.
 • The map: every route in its colour on a street map of campus. Pick a service to see its buses moving live; tap a stop for what's coming. Works offline after the first look.
 
 IT LEARNS, AND ASKS FIRST
@@ -58,7 +58,7 @@ PRIVATE BY DESIGN
 • No sign-up: the app makes an account of its own. Adding an email is optional, and only needed to use terminus on another device.
 • Your location is used to find the stops near you and show where you are on the map while you use the app or tap a widget button, and during a trip only if you turn on "Notice when I board". terminus keeps what it means (on the bus, missed it, there), never where you were.
 • No ads, no tracking, no analytics SDK.
-• Delete your account and everything with it from Settings, or clear just your trip history. With an email added, export it all from the account page.
+• Download everything terminus keeps about you from Settings. Delete your account and everything with it from Settings (with an email added, from the account page), or clear just your trip history.
 
 terminus is an independent app. It is not made by, endorsed by or affiliated with the National University of Singapore. Bus times come from NUS's public shuttle feed.
 ```
@@ -93,15 +93,15 @@ terminus 告诉你什么时候该出发去上下一节课，以及该搭哪一�
 • 如果你要搭的那班车在那个站、那个时间经常很挤，它会建议早一班。
 
 它会跟着你的行程
-• 巴士开走后，terminus 会当作你已经上车，并显示你什么时候到。
+• 巴士开走后，terminus 会当作你已经上车，并显示下一站和你什么时候到。
 • 打开“上车时自动识别”后，行程中它会用你的位置判断你是否已经上车、错过了车，或已经到达。在车上时，到达时间来自那辆车的实时位置。
 • 错过了？立刻给出下一种走法。
 • 不去了？把它从今天的列表里滑掉，所有设备同步。
 
 校园里哪里都能去
-• 搜索任何建筑、车站或教室。你查过的地点会保留自己的标签，直到你移除；最新的一个会出现在小组件的按钮上。
+• 搜索任何建筑、车站或教室。你最近查过的五个地点会保留自己的标签；最新的一个会出现在小组件的按钮上。
 • 收藏：选一个车站、建筑或教室就能保存。你上课用到的车站排在最前面。
-• 附近：你周围各个车站的所有巴士，实时显示。站错马路了？在小组件上点一下，就能看对面的车站。
+• 附近：你周围各个车站的所有巴士，实时显示。站错马路了？在应用或小组件上点一下，就能看对面的车站。
 • 地图：校园街道地图上，每条路线用自己的颜色显示。选一条路线就能看它的巴士实时移动；点车站看即将到站的车。看过一次后离线也能用。
 
 它会学习，但先问你
@@ -118,7 +118,7 @@ terminus 告诉你什么时候该出发去上下一节课，以及该搭哪一�
 • 不用注册：应用会自己创建一个账户。添加邮箱是可选的，只有想在其他设备上使用 terminus 时才需要。
 • 你使用应用或点小组件按钮时，会用位置找附近的车站、在地图上显示你的位置；只有打开“上车时自动识别”后，行程中才会用到位置。terminus 只保留它代表的意思（已上车、错过了、已到达），从不保存你去过哪里。
 • 没有广告、没有追踪、没有分析 SDK。
-• 可以在设置里删除你的账户和所有数据，或只清除行程记录。添加邮箱后，还可以在账户页面导出全部数据。
+• 可以在设置里下载 terminus 保存的你的所有数据。可以在设置里删除你的账户和所有数据（添加邮箱后在账户页面删除），或只清除行程记录。
 
 terminus 是独立开发的应用，并非由新加坡国立大学（NUS）制作、认可，也与其没有关联。巴士时间来自 NUS 公开的校车数据。
 ```
@@ -130,10 +130,10 @@ Upload in this order. English in `screenshots/`, Chinese in `screenshots/zh/`, a
 1. `1-leave-by.png`: when to leave for the next class, the bus, and Today.
 2. `2-widget.png`: the widget on the home screen, with its buttons.
 3. `3-places.png`: a place from search keeps its tab (with ×).
-4. `4-on-the-bus.png`: on the bus, with the arrival.
+4. `4-on-the-bus.png`: on the bus, with how far along the ride you are, the next stop and the arrival.
 5. `5-nearby-widget.png`: Nearby on the widget, with the swap button for the stop across the road.
 
-How they were taken: the emulator's clock moved to the morning (`adb shell cmd alarm set-time`), the dev stub started with `CLASS_IN_MIN` and moved by `/__stub/skip` to the same time, the status bar cleaned with SystemUI demo mode.
+How they were taken: the dev stub started with a class at 10:00 (the `dev-stub-shots` launch config), moved to the morning with `/__stub/skip` and held there with `/__stub/freeze`; the emulator's clock set to the stub's time (`adb shell cmd alarm set-time`) and the status bar cleaned with SystemUI demo mode. The phone was placed a few minutes' walk from PGP with a test location provider (`adb shell appops set com.android.shell android:mock_location allow`, then `cmd location providers add-test-provider` and `set-test-provider-location`), since `adb emu geo fix` stops working once the clock has been moved. The stub remembers the day's trip, so restart it before going back to an earlier time.
 
 ## Category and contact
 
