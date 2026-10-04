@@ -51,6 +51,28 @@ and decisions). Delete this file once it's done.
     be tried on the real update.
   - Upload `build/release/2.1.0/terminus-2.1.0.aab` to Play.
   - The decisions in Y7.
+- **Feature parity (4–5 October, on `main`, not deployed or released):**
+  the three apps now have the same features, except where the platform
+  decides (Android's widget, live notification and noticing when you
+  board; the Mac's menu bar and open at login; the web's push setup).
+  - Android: About, Send feedback, Download my data, Settings in three
+    groups, change a class's stop, a stop for each room the import
+    couldn't place, the re-import banner, the stop-across-the-road swap
+    in the app's Nearby, ride progress on the card.
+  - Web: Go later, tabs for places searched for (with an X), the swap in
+    Nearby, ride progress. The chips now read Next, Nearby, favourites,
+    as on Android and its widget.
+  - Mac: start without an email (then Add an email in Settings), the
+    whole timetable editor, Your classes and Trip history, About, Send
+    feedback, Download my data, Delete account (no-email accounts), the
+    sidebar in groups, timetable stops first in Favourites, Go later,
+    added-place tabs, the swap, ride progress.
+  - Still different: **the Mac has no map**. Options: MapLibre's native
+    SDK (no official macOS SwiftPM build, so a real job), or a Map window
+    showing the web map in a WKWebView (needs a web session for the
+    account). Your call.
+  - Next: deploy for the web, and a 2.2.0 release for the apps, with
+    notes. Try on the Mac: start without an email, then add one.
 - **Live buses checked:** the record live buses workflow ran on production
   on 3 October at 8:50 pm Singapore time. It recorded 3 buses for 10
   minutes, and none switched sides or jumped (C3).
