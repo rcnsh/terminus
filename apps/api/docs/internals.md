@@ -369,13 +369,16 @@ Settings. It uses the same routes as the account page, with the session cookie.
   fetched afresh each time Settings opens again (it may have changed on
   another device), unless a change here is still waiting to be saved.
 - **Settings' pages.** A list of groups (Your trips, Timetable, Favourites,
-  Notifications in the app, Devices, Language and time, Appearance, Account), each with a line
+  Notifications in the app, Devices, Language and time, Appearance, Account,
+  About, Feedback), each with a line
   saying what's set, opening its page. The page is in the address (`#trips`
   on the account page, `#settings/trips` in the app), so the browser's Back
   returns to the list. On a phone the page slides in over the list; from
   900 px wide they sit side by side. The installed app on an iPhone, which has
   no browser swipe, goes back on a swipe from the left edge. "Notify me when
-  to leave" is under Notifications.
+  to leave" is under Notifications. Feedback sends a note to `/me/feedback`
+  as `kind: 'other'`; a wrong answer is better reported from under the card,
+  which attaches it.
 - **12- or 24-hour times.** The profile's `clock` (`auto`, `12`, `24`)
   is the account's choice, set in Language and time or in setup. The server
   words every card in it (`hour12()` in next.ts: the profile's choice, else
