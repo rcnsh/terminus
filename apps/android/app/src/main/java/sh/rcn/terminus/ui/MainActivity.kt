@@ -177,6 +177,15 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
         screen = Screen.Main
         tab = Tab.Now
     }
+    // Paired with a code: off the Pair screen, to the account's setup if it
+    // needs one, else the tabs. Left on it, the app fell through to setup and
+    // Skip setup couldn't leave, since the screen was still Pair.
+    LaunchedEffect(state.paired) {
+        if (state.paired && screen == Screen.Pair) {
+            setup = store.needsSetup
+            screen = Screen.Main
+        }
+    }
     // Signed in and set up: Now · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
         Tabs(tab, { tab = it }, vm, account, map, acct, onAddEmail = { account.beginSignIn(); screen = Screen.SignIn }, onSignedOut = signedOut)
