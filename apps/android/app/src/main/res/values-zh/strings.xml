@@ -101,7 +101,6 @@
     <string name="continue_">继续</string>
     <string name="couldnt_load">无法加载</string>
     <string name="day">星期</string>
-    <string name="day_hours_hint">在这段时间以外，小组件会显示你的下一节课，而不是巴士。更早开始或更晚结束的课会自动延长这段时间。</string>
     <string name="delete">删除</string>
     <string name="delete_account">删除这个账户</string>
     <string name="delete_account_text">你的课表和设置将被立即删除，应用会重置。由于账户未绑定邮箱，删除后无法恢复。</string>
@@ -141,14 +140,11 @@
     <string name="heading_account">账户</string>
     <string name="heading_devices">设备</string>
     <string name="heading_favourites">收藏</string>
-    <string name="heading_getting_around">出行</string>
     <string name="heading_language">语言和时间</string>
     <string name="heading_timetable">课表</string>
     <string name="heading_your_day">你的一天</string>
     <string name="here">就在这里</string>
     <string name="history_cleared">行程记录已清除</string>
-    <string name="history_n">已记录 %1$d 次行程。行程记录保留 35 天，仅用于发现你经常错过或跳过的课。</string>
-    <string name="history_one">已记录 1 次行程。行程记录保留 35 天，仅用于发现你经常错过或跳过的课。</string>
     <string name="home_from">回家，从 %1$s 出发</string>
     <string name="home_stop">家附近的车站</string>
     <string name="home_walk">从家步行到车站</string>
@@ -389,4 +385,19 @@
     <string name="your_timetable">你的课表</string>
     <string name="your_timetable_sub">粘贴你的 NUSMods 分享链接。每节课会对应离教室最近的车站。</string>
     <string name="busy_try_again">terminus 正忙，请一分钟后再试。</string>
+    <string name="where_you_live">你的住处</string>
+    <string name="only_stops_saved">只保存车站，不会保存你住在哪里。</string>
+    <string name="residence">宿舍</string>
+    <string name="off_campus_short">校外</string>
+    <string name="your_stop">你的车站</string>
+    <string name="your_stops">你的车站：%1$s。</string>
+    <string name="walk_to_stop">步行到车站</string>
+    <string name="day_hint_short">在这段时间以外，显示的是你的下一节课，而不是巴士。</string>
+    <string name="heading_walking">步行</string>
+    <string name="walks_follow_paths">步行时间按校园里的小路计算。</string>
+    <string name="walking_pace">步速</string>
+    <string name="busy_hint_short">你要搭的巴士经常满员时，提早一班。</string>
+    <string name="history_kept">保留 35 天，仅用于发现你经常错过或跳过的课。</string>
+    <string name="trips_recorded_one">已记录 1 次行程</string>
+    <string name="trips_recorded_n">已记录 %1$d 次行程</string>
 </resources>

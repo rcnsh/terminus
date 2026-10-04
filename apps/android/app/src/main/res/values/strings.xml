@@ -101,7 +101,6 @@
     <string name="continue_">Continue</string>
     <string name="couldnt_load">Couldn\'t load</string>
     <string name="day">Day</string>
-    <string name="day_hours_hint">Outside these hours, the widget shows your next class instead of a bus. Classes that start earlier or end later extend these hours automatically.</string>
     <string name="delete">Delete</string>
     <string name="delete_account">Delete this account</string>
     <string name="delete_account_text">Your timetable and settings will be deleted immediately and the app will reset. Without an email on the account, they can\'t be recovered.</string>
@@ -141,14 +140,11 @@
     <string name="heading_account">Account</string>
     <string name="heading_devices">Devices</string>
     <string name="heading_favourites">Favourites</string>
-    <string name="heading_getting_around">Getting around</string>
     <string name="heading_language">Language and time</string>
     <string name="heading_timetable">Timetable</string>
     <string name="heading_your_day">Your day</string>
     <string name="here">here</string>
     <string name="history_cleared">Trip history cleared</string>
-    <string name="history_n">%1$d trips recorded. Trip history is kept for 35 days and used only to spot classes you often miss or skip.</string>
-    <string name="history_one">1 trip recorded. Trip history is kept for 35 days and used only to spot classes you often miss or skip.</string>
     <string name="home_from">Home, from %1$s</string>
     <string name="home_stop">Home stop</string>
     <string name="home_walk">Walk from home to your stop</string>
@@ -389,4 +385,19 @@
     <string name="your_timetable">Your timetable</string>
     <string name="your_timetable_sub">Paste your NUSMods share link. Each class goes to the stop nearest its room.</string>
     <string name="busy_try_again">terminus is busy. Try again in a minute.</string>
+    <string name="where_you_live">Where you live</string>
+    <string name="only_stops_saved">Only your stops are saved, never where you live.</string>
+    <string name="residence">Residence</string>
+    <string name="off_campus_short">Off campus</string>
+    <string name="your_stop">Your stop</string>
+    <string name="your_stops">Your stops: %1$s.</string>
+    <string name="walk_to_stop">Walk to your stop</string>
+    <string name="day_hint_short">Outside these hours, you see your next class instead of a bus.</string>
+    <string name="heading_walking">Walking</string>
+    <string name="walks_follow_paths">Walks follow the paths on campus.</string>
+    <string name="walking_pace">Walking pace</string>
+    <string name="busy_hint_short">Aim one bus earlier when yours is often full.</string>
+    <string name="history_kept">Kept for 35 days and used only to spot classes you often miss or skip.</string>
+    <string name="trips_recorded_one">1 trip recorded</string>
+    <string name="trips_recorded_n">%1$d trips recorded</string>
 </resources>

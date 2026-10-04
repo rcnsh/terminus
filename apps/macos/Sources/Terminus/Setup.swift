@@ -59,6 +59,10 @@ final class SetupModel {
     /// auto (each device's own), 12 or 24.
     var clock: String { profile?["clock"] as? String ?? "auto" }
     var fullBusMargin: Bool { profile?["fullBusMargin"] as? Bool ?? true }
+    /// The day's hours, in minutes after midnight, and the gap long enough to go home in.
+    var dayStartMin: Int { profile?["dayStartMin"] as? Int ?? 360 }
+    var dayEndMin: Int { profile?["dayEndMin"] as? Int ?? 1080 }
+    var gapHours: Double { (profile?["gapHours"] as? NSNumber)?.doubleValue ?? 2 }
     var share: String? { profile?["share"] as? String }
     var importedClasses: Int { (profile?["trips"] as? [Any])?.count ?? 0 }
 
@@ -120,6 +124,10 @@ final class SetupModel {
     func setHomeWalk(_ min: Int) { edit { $0["homeWalkMin"] = Swift.min(30, Swift.max(0, min)) } }
     func setPace(_ pace: String) { edit { $0["walkPace"] = pace } }
     func setFullBusMargin(_ on: Bool) { edit { $0["fullBusMargin"] = on } }
+    /// The start stays before the end; a change that would cross them is refused.
+    func setDayStart(_ min: Int) { if min < dayEndMin { edit { $0["dayStartMin"] = min } } }
+    func setDayEnd(_ min: Int) { if min > dayStartMin { edit { $0["dayEndMin"] = min } } }
+    func setGapHours(_ h: Double) { edit { $0["gapHours"] = Swift.min(12, Swift.max(0.5, h)) } }
     /// Times on every device; the menu bar follows at once, the card once saved.
     func setClock(_ pref: String) {
         Clock.pref = pref
