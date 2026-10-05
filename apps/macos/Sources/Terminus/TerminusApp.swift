@@ -142,18 +142,24 @@ struct Popover: View {
                 if model.paired { Main(model: model) } else { Pair(model: model) }
             }
             .padding(14)
-            if overflows, !model.isSnapshot {
+            if model.isSnapshot {
+                // ImageRenderer can't draw a ScrollView (an NSScrollView).
+                content
+            } else {
                 // No taller than the screen: a long Today scrolls inside the
                 // popover, with the footer kept in view, instead of running
-                // off the bottom.
-                ScrollView { content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured($0) } }
-                    .frame(height: Self.maxContentHeight)
-            } else {
-                // Only then a scroll view: one around content that fits made
-                // switching tabs shake the popover, its scroll bar flickering,
-                // as the window's height changed. (A snapshot never scrolls:
-                // ImageRenderer can't draw an NSScrollView.)
-                content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured($0) }
+                // off the bottom. It scrolls only then: scrolling content
+                // that fits made switching tabs shake the popover, its scroll
+                // bar flickering, as the window's height changed. The scroll
+                // view stays either way, so the content (a search being
+                // typed, Go later) keeps its state as it grows past the screen.
+                ScrollView {
+                    content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured($0) }
+                }
+                .scrollDisabled(!overflows)
+                .scrollIndicators(overflows ? .automatic : .never)
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxHeight: Self.maxContentHeight)
             }
             Footer(model: model)
         }
