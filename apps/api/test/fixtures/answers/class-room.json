@@ -65,7 +65,7 @@
     }
   ],
   "label": "R2 · 6 min",
-  "detail": "PGP · 5 min walk · GEA1000 @ UTown in ~16 min · crowding: medium · or D2 in 14 min",
+  "detail": "PGP · 5 min walk · GEA1000 @ UTown in ~17 min · crowding: medium · or D2 in 14 min",
   "alt": "D2 · 14 min · PGP",
   "departsAt": "2026-08-27T01:06:00Z",
   "arriveAt": "2026-08-27T01:15:30Z",
@@ -78,7 +78,8 @@
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:15:30Z",
     "estimated": false,
-    "toStop": "UTown"
+    "toStop": "UTown",
+    "endWalkS": 92
   },
   "altBus": {
     "svc": "D2",
@@ -89,7 +90,8 @@
     "board": "2026-08-27T01:14:00Z",
     "arrive": "2026-08-27T01:23:30Z",
     "estimated": false,
-    "toStop": "UTown"
+    "toStop": "UTown",
+    "endWalkS": 92
   },
   "leave": {
     "at": "2026-08-27T01:36:40Z",
@@ -98,7 +100,7 @@
     "stop": "PGP",
     "stopCode": "PGP",
     "board": "2026-08-27T01:42:00Z",
-    "arrive": "2026-08-27T01:51:30Z",
+    "arrive": "2026-08-27T01:53:02Z",
     "note": null,
     "walkS": 300,
     "rideS": 570,
@@ -112,9 +114,9 @@
   },
   "timing": {
     "status": "on-time",
-    "text": "Arrive 09:15 · 45 min early",
+    "text": "Arrive 09:17 · 43 min early",
     "classAt": "2026-08-27T02:00:00Z",
-    "reachAt": "2026-08-27T01:15:30Z"
+    "reachAt": "2026-08-27T01:17:02Z"
   },
   "places": [
     {
@@ -136,10 +138,10 @@
     "leaveBy": "Leave by ~09:36",
     "leaveVia": "catch the ~09:42 R2 at PGP",
     "catch": "Catch the ~09:42 R2 at PGP",
-    "arrive": "Arrive ~09:51 · 9 min early",
-    "catchLine": "Catch the ~09:42 R2 at PGP · arrive ~09:51, 9 min early",
+    "arrive": "Arrive ~09:53 · 7 min early",
+    "catchLine": "Catch the ~09:42 R2 at PGP · arrive ~09:53, 7 min early",
     "late": false,
-    "goNow": "Or go now: R2 at 09:06 · arrive 09:15",
+    "goNow": "Or go now: R2 at 09:06 · arrive 09:17",
     "note": null,
     "estimate": "Estimated from the usual gap between buses. Live times show nearer the time.",
     "phase": "idle",
@@ -185,10 +187,10 @@
       "off": null,
       "to": "GEA1000 @ UTown",
       "toStop": "UTown",
-      "arrive": "~09:51",
-      "walkEnd": null,
+      "arrive": "~09:53",
+      "walkEnd": "2 min",
       "arriveStop": "~09:51",
-      "slack": "9 min early",
+      "slack": "7 min early",
       "live": false,
       "backup": {
         "svc": "R2",

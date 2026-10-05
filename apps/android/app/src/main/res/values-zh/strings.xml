@@ -454,6 +454,7 @@
     <string name="journey_arrive_place">到达 %1$s</string>
     <string name="journey_arrive_time">%1$s 到达</string>
     <string name="journey_at">在 %1$s</string>
+    <string name="journey_walk_from">从 %2$s 步行 %1$s</string>
     <string name="journey_live">实时</string>
     <string name="journey_backup">或在 %3$s 坐 %2$s 的 %1$s</string>
     <string name="journey_backup_now">或现在走：在 %3$s 坐 %2$s 的 %1$s</string>

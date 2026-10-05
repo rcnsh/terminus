@@ -269,12 +269,20 @@ data class Journey(
     /** Where you're going ("GEA1000 @ UTown") and the stop you get off at ("UTown"). */
     val to: String,
     val toStop: String,
+    /** When you get there: to the room or building itself when there's a `walkEnd`. */
     val arrive: String?,
+    /** The walk from `toStop` on to where you're going ("2 min"): a class's room, a building searched for. */
+    val walkEnd: String? = null,
+    /** When the bus gets to `toStop`; `arrive` when there's no `walkEnd`. */
+    val arriveStop: String? = arrive,
     /** A class: "3 min early". */
     val slack: String?,
     val live: Boolean,
     val backup: JourneyBus?,
 ) {
+    /** Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown". */
+    val place: String get() = to.substringBefore(" @ ")
+
     companion object {
         fun parse(o: JSONObject): Journey? {
             val bus = o.optJSONObject("bus")?.let(JourneyBus::parse) ?: return null
@@ -289,6 +297,8 @@ data class Journey(
                 to = o.optString("to"),
                 toStop = o.optString("toStop"),
                 arrive = o.optStringOrNull("arrive"),
+                walkEnd = o.optStringOrNull("walkEnd"),
+                arriveStop = o.optStringOrNull("arriveStop") ?: o.optStringOrNull("arrive"),
                 slack = o.optStringOrNull("slack"),
                 live = o.optBoolean("live", false),
                 backup = o.optJSONObject("backup")?.let(JourneyBus::parse),

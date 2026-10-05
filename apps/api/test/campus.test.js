@@ -210,3 +210,14 @@ test('each stop lists the services that call there', () => {
   assert.deepEqual(com3.services.sort(), ['D1', 'D2']);
   for (const s of map.stops) assert.ok(s.services.length > 0, `${s.code} has no services`);
 });
+
+test('search lists each place once: LT3 is a building and a room of the same name', () => {
+  const dest = buildDestinations(realGraph);
+  const seen = new Map();
+  for (const d of dest) {
+    const k = `${d.code}|${d.label}`;
+    assert.ok(!seen.has(k), `${d.code} "${d.label}" is listed as a ${seen.get(k)} and a ${d.kind}`);
+    seen.set(k, d.kind);
+  }
+  assert.equal(dest.filter((d) => d.code === 'LT3').length, 1);
+});

@@ -169,6 +169,8 @@
       "to": "KR MRT",
       "toStop": "KR MRT",
       "arrive": "09:10",
+      "walkEnd": null,
+      "arriveStop": "09:10",
       "slack": null,
       "live": true,
       "backup": {

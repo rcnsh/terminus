@@ -28,7 +28,7 @@ class AnswerTest {
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
     @Test fun everyGoldenAnswerParses() {
-        for (name in listOf("class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "place", "landmark", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup")) {
+        for (name in listOf("class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup")) {
             val a = golden(name)
             assertNotNull("$name has a card", a.card)
         }
@@ -177,6 +177,20 @@ class AnswerTest {
         assertNull(JourneyText.by(a, j, at))
         assertEquals("Or D2 at 09:14 from PGP", JourneyText.backup(a, j))
         assertEquals("Arrive 09:10", JourneyText.arrive(j))
+    }
+
+    @Test fun aRoomJourneyWalksOnFromItsStop() {
+        val j = golden("room").card!!.journey!!
+        assertEquals("IT", j.toStop)
+        assertEquals("LT3", j.place)
+        assertEquals("1 min", j.walkEnd)
+        // The bus reaches the stop, then the walk on gets you to the room.
+        assertEquals("09:12", j.arriveStop)
+        assertEquals("09:13", j.arrive)
+        // A stop is where you're going: no walk on, and one arrival.
+        val p = golden("place").card!!.journey!!
+        assertNull(p.walkEnd)
+        assertEquals(p.arrive, p.arriveStop)
     }
 
     @Test fun aClassJourneyOffersTheSoonerBusToGoNowOn() {

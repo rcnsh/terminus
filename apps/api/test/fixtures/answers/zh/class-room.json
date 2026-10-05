@@ -64,9 +64,9 @@
       "berth": null
     }
   ],
-  "label": "R2 · 6 min",
-  "detail": "PGP · 5 min walk · GEA1000 @ UTown in ~16 min · crowding: medium · or D2 in 14 min",
-  "alt": "D2 · 14 min · PGP",
+  "label": "R2 · 6 分钟",
+  "detail": "PGP · 步行 5 分钟 · 约 17 分钟 到 GEA1000 @ UTown · 拥挤程度：中 · 或 D2，14 分钟后",
+  "alt": "D2 · 14 分钟 · PGP",
   "departsAt": "2026-08-27T01:06:00Z",
   "arriveAt": "2026-08-27T01:15:30Z",
   "bus": {
@@ -78,7 +78,8 @@
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:15:30Z",
     "estimated": false,
-    "toStop": "UTown"
+    "toStop": "UTown",
+    "endWalkS": 92
   },
   "altBus": {
     "svc": "D2",
@@ -89,7 +90,8 @@
     "board": "2026-08-27T01:14:00Z",
     "arrive": "2026-08-27T01:23:30Z",
     "estimated": false,
-    "toStop": "UTown"
+    "toStop": "UTown",
+    "endWalkS": 92
   },
   "leave": {
     "at": "2026-08-27T01:36:40Z",
@@ -98,7 +100,7 @@
     "stop": "PGP",
     "stopCode": "PGP",
     "board": "2026-08-27T01:42:00Z",
-    "arrive": "2026-08-27T01:51:30Z",
+    "arrive": "2026-08-27T01:53:02Z",
     "note": null,
     "walkS": 300,
     "rideS": 570,
@@ -112,9 +114,9 @@
   },
   "timing": {
     "status": "on-time",
-    "text": "Arrive 09:15 · 45 min early",
+    "text": "09:17 到达 · 早到 43 分钟",
     "classAt": "2026-08-27T02:00:00Z",
-    "reachAt": "2026-08-27T01:15:30Z"
+    "reachAt": "2026-08-27T01:17:02Z"
   },
   "places": [
     {
@@ -131,30 +133,30 @@
   "card": {
     "kind": "class",
     "staleAt": "2026-08-27T01:06:30Z",
-    "crowd": "Crowding: medium",
+    "crowd": "拥挤程度：中",
     "quality": null,
-    "leaveBy": "Leave by ~09:36",
-    "leaveVia": "catch the ~09:42 R2 at PGP",
-    "catch": "Catch the ~09:42 R2 at PGP",
-    "arrive": "Arrive ~09:51 · 9 min early",
-    "catchLine": "Catch the ~09:42 R2 at PGP · arrive ~09:51, 9 min early",
+    "leaveBy": "约 09:36 前出发",
+    "leaveVia": "在 PGP 搭 约 09:42 的 R2",
+    "catch": "在 PGP 搭 约 09:42 的 R2",
+    "arrive": "约 09:53 到达 · 早到 7 分钟",
+    "catchLine": "在 PGP 搭 约 09:42 的 R2 · 约 09:53 到达，早到 7 分钟",
     "late": false,
-    "goNow": "Or go now: R2 at 09:06 · arrive 09:15",
+    "goNow": "或现在走：09:06 的 R2 · 09:17 到达",
     "note": null,
-    "estimate": "Estimated from the usual gap between buses. Live times show nearer the time.",
+    "estimate": "根据巴士平常的间隔估计，临近时会显示实时时间。",
     "phase": "idle",
     "phaseText": null,
-    "glance": "Leave 09:36",
-    "line": "Leave by ~09:36 · R2 from PGP",
+    "glance": "09:36 出发",
+    "line": "约 09:36 前出发 · 在 PGP 搭 R2",
     "actions": [
       {
         "id": "skipped",
-        "label": "Not going",
+        "label": "不去了",
         "trip": "4:600:UTOWN"
       },
       {
         "id": "away",
-        "label": "Not on campus today",
+        "label": "今天不在学校",
         "trip": "4:600:UTOWN"
       }
     ],
@@ -172,23 +174,23 @@
     "notice": null,
     "h12": false,
     "journey": {
-      "leave": "~09:36",
-      "walk": "5 min",
+      "leave": "约 09:36",
+      "walk": "5 分钟",
       "bus": {
         "svc": "R2",
         "color": "#34a853",
         "stop": "PGP",
-        "board": "~09:42"
+        "board": "约 09:42"
       },
       "boardAt": "2026-08-27T01:42:00Z",
-      "ride": "10 min",
+      "ride": "10 分钟",
       "off": null,
       "to": "GEA1000 @ UTown",
       "toStop": "UTown",
-      "arrive": "~09:51",
-      "walkEnd": null,
-      "arriveStop": "~09:51",
-      "slack": "9 min early",
+      "arrive": "约 09:53",
+      "walkEnd": "2 分钟",
+      "arriveStop": "约 09:51",
+      "slack": "早到 7 分钟",
       "live": false,
       "backup": {
         "svc": "R2",

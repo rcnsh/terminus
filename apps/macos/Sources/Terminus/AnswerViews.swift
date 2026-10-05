@@ -6,6 +6,8 @@ import os
 struct AnswerDetail: View {
     let answer: NextAnswer?
     var busy = false
+    /// Today's entry just taken off, whose row has Undo: the card doesn't offer it as well.
+    var undoShownFor: String? = nil
     var onAction: (CardAction) -> Void = { _ in }
     var onChoice: (Suggestion, Bool) -> Void = { _, _ in }
 
@@ -40,7 +42,7 @@ struct AnswerDetail: View {
                     }
                 }
                 // The server's buttons (plans only: Not going, Not on campus today, undo), the first one prominent.
-                if let actions = a.card?.actions, !actions.isEmpty {
+                if let actions = a.card?.actions?.filter({ !($0.id == "reset" && $0.trip == undoShownFor && undoShownFor != nil) }), !actions.isEmpty {
                     Flow(spacing: 6) {
                         ForEach(Array(actions.enumerated()), id: \.element) { i, action in
                             if i == 0 && action.id != "skipped" && action.id != "reset" {
@@ -232,27 +234,42 @@ struct FlowPills: View {
 struct TodayList: View {
     let day: DayPlan
     var removed: DayPlan.Item? = nil
+    /// Where `removed` was: above the entry that followed it (nil at the end),
+    /// or at `removedAt` should that one go too. Its row stays there, so nothing moves.
+    var removedAt = 0
+    var removedBefore: String? = nil
     var onRemove: (DayPlan.Item) -> Void = { _ in }
     var onUndo: () -> Void = {}
 
     var body: some View {
+        let at = removedBefore.map { k in day.items.firstIndex { $0.key == k } ?? min(removedAt, day.items.count) } ?? day.items.count
         VStack(alignment: .leading, spacing: 6) {
             SectionLabel(text: L("Today"))
-            // Just taken off today: Undo, for a few seconds.
-            if let r = removed {
-                HStack {
-                    Text(L("%@ removed from today", r.kind == "home" ? L("The trip home") : r.label.components(separatedBy: " @ ")[0])).font(.callout)
-                    Spacer()
-                    Button(L("Undo"), action: onUndo).buttonStyle(.plain).foregroundStyle(.tint).fontWeight(.medium)
-                }
-                .padding(.vertical, 5).padding(.horizontal, 8)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-            }
-            ForEach(day.items) { item in
+            ForEach(Array(day.items.enumerated()), id: \.element.id) { i, item in
+                if i == at, let r = removed { RemovedRow(item: r, onUndo: onUndo) }
                 TodayRow(item: item, onRemove: onRemove)
             }
+            if at == day.items.count, let r = removed { RemovedRow(item: r, onUndo: onUndo) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Where an entry was just taken off: "GEA1000 removed from today", with Undo for a few seconds.
+private struct RemovedRow: View {
+    let item: DayPlan.Item
+    let onUndo: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(parseISODate(item.startsAt).map(campusTime) ?? "")
+                .font(.callout.monospacedDigit())
+                .frame(width: 58, alignment: .leading)
+            Text(L("%@ removed from today", item.kind == "home" ? L("The trip home") : item.label.components(separatedBy: " @ ")[0])).font(.callout)
+            Spacer(minLength: 0)
+            Button(L("Undo"), action: onUndo).buttonStyle(.plain).foregroundStyle(.tint).fontWeight(.medium)
+        }
+        .foregroundStyle(.secondary)
     }
 }
 

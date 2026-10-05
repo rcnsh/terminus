@@ -73,8 +73,12 @@ final class AppModel {
     /// Today, for the popover, and kept for when the Mac goes offline (OfflineDay).
     var day: DayPlan?
     private var dayFetched: Date?
-    /// Just taken off Today, offered back with Undo for a few seconds.
+    /// Just taken off Today, offered back with Undo for a few seconds, in its
+    /// row so nothing below it moves: above the entry that followed it
+    /// (`removedBefore`, nil at the end), or at `removedAt` should that one go too.
     var removed: DayPlan.Item?
+    var removedAt = 0
+    var removedBefore: String?
     private var removedTask: Task<Void, Never>?
 
     /// "Notify me when to leave for class" (phase 7), mirrored from LeaveNotifier.
@@ -285,6 +289,8 @@ final class AppModel {
     /// class, one you added, the trip home). Gone at once, with Undo.
     func removeFromToday(_ item: DayPlan.Item) {
         guard let token = TokenStore.read() else { return }
+        removedAt = day?.items.firstIndex { $0.key == item.key } ?? 0
+        removedBefore = day.flatMap { $0.items.indices.contains(removedAt + 1) ? $0.items[removedAt + 1].key : nil }
         day?.items.removeAll { $0.key == item.key }
         removed = item
         removedTask?.cancel()

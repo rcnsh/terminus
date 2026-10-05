@@ -65,7 +65,7 @@
     }
   ],
   "label": "R2 · 6 min",
-  "detail": "PGP · 5 min walk · The Deck in ~9 min · crowding: medium · or A1 in 9 min",
+  "detail": "PGP · 5 min walk · The Deck in ~12 min · crowding: medium · or A1 in 9 min",
   "alt": "A1 · 9 min · PGP",
   "departsAt": "2026-08-27T01:06:00Z",
   "arriveAt": "2026-08-27T01:09:10Z",
@@ -78,7 +78,8 @@
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:09:10Z",
     "estimated": false,
-    "toStop": "Opp NUSS"
+    "toStop": "Opp NUSS",
+    "endWalkS": 191
   },
   "altBus": {
     "svc": "A1",
@@ -89,7 +90,8 @@
     "board": "2026-08-27T01:09:00Z",
     "arrive": "2026-08-27T01:23:15Z",
     "estimated": false,
-    "toStop": "AS 5"
+    "toStop": "AS 5",
+    "endWalkS": 162
   },
   "leave": null,
   "mode": "trip",
@@ -152,7 +154,9 @@
       "off": null,
       "to": "The Deck",
       "toStop": "Opp NUSS",
-      "arrive": "09:09",
+      "arrive": "09:12",
+      "walkEnd": "3 min",
+      "arriveStop": "09:09",
       "slack": null,
       "live": true,
       "backup": {

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -95,23 +97,30 @@ internal fun RouteLine(journey: Journey, modifier: Modifier = Modifier) {
     val bus = Color(journey.bus.color)
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         journey.walk?.let { walk ->
-            Point(stringResource(R.string.journey_you), journey.leave ?: stringResource(R.string.journey_now), MaterialTheme.colorScheme.primary)
+            Point(stringResource(R.string.journey_you), journey.leave ?: stringResource(R.string.journey_now), MaterialTheme.colorScheme.primary, narrow = journey.walkEnd != null)
             Stretch(Modifier.weight(1f), {}, walk) {
                 drawLine(muted, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 3.dp.toPx(), StrokeCap.Round, PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 6.dp.toPx())))
             }
         }
-        Point(journey.bus.stop, journey.bus.board, fg)
+        Point(journey.bus.stop, journey.bus.board, fg, narrow = journey.walkEnd != null)
         Stretch(Modifier.weight(1.4f), { BusBadge(journey.bus.svc, journey.bus.color, 12.sp) }, journey.ride) {
             drawLine(bus, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 5.dp.toPx(), StrokeCap.Round)
         }
-        Point(journey.toStop, journey.arrive ?: "", fg)
+        Point(journey.toStop, (if (journey.walkEnd != null) journey.arriveStop else journey.arrive) ?: "", fg, narrow = journey.walkEnd != null)
+        // On from the stop to the room or building: a fourth point, so the points take only the room their words need.
+        journey.walkEnd?.let { walk ->
+            Stretch(Modifier.weight(1f), {}, walk) {
+                drawLine(muted, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 3.dp.toPx(), StrokeCap.Round, PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 6.dp.toPx())))
+            }
+            Point(journey.place, journey.arrive ?: "", fg, narrow = true)
+        }
     }
 }
 
 /** A point on the line: a dot, its name and its time. */
 @Composable
-private fun Point(name: String, time: String, dot: Color) {
-    Column(Modifier.width(76.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun Point(name: String, time: String, dot: Color, narrow: Boolean = false) {
+    Column(if (narrow) Modifier.widthIn(min = 44.dp, max = 64.dp) else Modifier.width(76.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(CAPTION))
         Box(Modifier.size(DOT), contentAlignment = Alignment.Center) { Box(Modifier.size(14.dp).background(dot, CircleShape)) }
         Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
@@ -125,7 +134,8 @@ private fun Stretch(modifier: Modifier, above: @Composable () -> Unit, takes: St
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.height(CAPTION), contentAlignment = Alignment.Center) { above() }
         Canvas(Modifier.fillMaxWidth().height(DOT)) { line() }
-        Text(takes, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+        // Wider than a short stretch ("5 min" between two 12-hour times): drawn past its ends, over the gap beside the names, not cut.
+        Text(takes, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false, overflow = TextOverflow.Visible, modifier = Modifier.padding(top = 4.dp).wrapContentWidth(unbounded = true))
     }
 }
 
@@ -166,7 +176,7 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(stringResource(R.string.journey_arrive_time, arrive), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 // Late is said in red, as on the line and in the steps.
-                Text(journey.slack ?: stringResource(R.string.journey_at, journey.toStop), style = MaterialTheme.typography.bodySmall, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
+                Text(journey.slack ?: journey.walkEnd?.let { stringResource(R.string.journey_walk_from, it, journey.toStop) } ?: stringResource(R.string.journey_at, journey.toStop), style = MaterialTheme.typography.bodySmall, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
             }
         }
     }
@@ -198,6 +208,9 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long) {
             },
             listOfNotNull(stringResource(R.string.journey_ride, journey.ride), journey.off?.let { stringResource(R.string.off_at, it) }).joinToString(" · "),
         )
+        journey.walkEnd?.let { walk ->
+            Step(journey.arriveStop ?: "", first = false, last = false, { Text(stringResource(R.string.journey_walk_to, journey.place), style = MaterialTheme.typography.bodyLarge) }, walk)
+        }
         Step(journey.arrive ?: "", first = false, last = true, { Text(stringResource(R.string.journey_arrive_place, journey.to), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold) }, journey.slack, late = answer.leaveLate)
     }
     JourneyText.backup(answer, journey)?.let {

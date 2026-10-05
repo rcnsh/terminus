@@ -85,6 +85,10 @@ export interface FormatInput {
   destLabel: string | null;
   /** Seconds to walk the entire way, when known. */
   walkAllS: number | null;
+  /** Seconds on foot from where a bus gets you off to the destination itself (a room, a food court). */
+  endWalk?: (o: ScoredOption) => number;
+  /** The same from the stop the whole walk (`walkAllS`) ends at. */
+  walkEndS?: number;
   confidence: number;
   arrivals: Arrival[];
   nowMs: number;
@@ -99,16 +103,18 @@ export type WalkVerdict = 'win' | 'close' | 'lose';
  * headway estimate or no data at all, a known walking time is the better
  * answer the moment it is shorter.
  */
-export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefined): WalkVerdict {
+export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefined, bestEndS = 0): WalkVerdict {
   if (walkAllS == null || !best) return 'lose';
   const margin = isMeasured(best.quality) ? WALK.beatsBusByS : 0;
-  if (walkAllS + margin < best.totalS) return 'win';
-  if (walkAllS < best.totalS + WALK.mentionWithinS) return 'close';
+  // Both the whole way: `walkAllS` and the bus's `bestEndS` include the walk on to a room or food court.
+  const busS = best.totalS + bestEndS;
+  if (walkAllS + margin < busS) return 'win';
+  if (walkAllS < busS + WALK.mentionWithinS) return 'close';
   return 'lose';
 }
 
 /** An option as a leg, for the card's journey. An 'unknown' option's times are sort keys, so it has none. */
-export function legOf(o: ScoredOption): BusLeg {
+export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
   const timed = o.quality !== 'unknown';
   return {
     svc: o.svc,
@@ -121,6 +127,7 @@ export function legOf(o: ScoredOption): BusLeg {
     estimated: o.quality === 'scheduled',
     ...(o.off ? { off: shortStop(o.off.name) } : {}),
     ...(o.to ? { toStop: shortStop(o.to.name) } : {}),
+    ...(endWalkS > 0 ? { endWalkS } : {}),
   };
 }
 
@@ -157,14 +164,14 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     parts.push(
       best.quality === 'unknown'
         ? m().destStops(f.destLabel, best.hops)
-        : m().destIn(f.destLabel, mins(best.totalS)),
+        : m().destIn(f.destLabel, mins(best.totalS + (f.endWalk?.(best) ?? 0))),
     );
   } else if (f.destLabel) {
     parts.push(m().atDest(f.destLabel));
   }
 
   // The whole way on foot, for comparison: "walking 18 min", not "walk", which reads as a walk to the bus.
-  if (verdict === 'close' && f.walkAllS != null) parts.push(m().walkingAll(mins(f.walkAllS)));
+  if (verdict === 'close' && f.walkAllS != null) parts.push(m().walkingAll(mins(f.walkAllS + (f.walkEndS ?? 0))));
 
   const crowd = crowdWord(best.arrival?.crowd ?? null);
   if (crowd) parts.push(crowd);
@@ -208,17 +215,19 @@ export function buildAnswer(f: FormatInput): Answer {
   if (!best) {
     const stop = f.fallbackStop;
     const walk = f.walkAllS;
+    // What's said is the whole way, on to a room or food court; arriveAt stays at the stop, as a bus's does.
+    const said = walk != null ? walk + (f.walkEndS ?? 0) : null;
     // A short walk with nothing to board is not an outage, it is an answer.
-    const trivial = walk != null && walk <= WALK.mentionWithinS;
+    const trivial = said != null && said <= WALK.mentionWithinS;
     const label = clampLabel(
-      walk == null ? m().noBuses : trivial ? m().walkLabel(mins(walk)) : m().noBusWalk(mins(walk)),
+      said == null ? m().noBuses : trivial ? m().walkLabel(mins(said)) : m().noBusWalk(mins(said)),
     );
     const detail =
-      walk == null
+      said == null
         ? m().servicesEnded
         : trivial
-          ? m().isAWalk(f.destLabel, mins(walk))
-          : m().endedWalkTo(mins(walk), f.destLabel);
+          ? m().isAWalk(f.destLabel, mins(said))
+          : m().endedWalkTo(mins(said), f.destLabel);
     return {
       label,
       detail,
@@ -233,7 +242,9 @@ export function buildAnswer(f: FormatInput): Answer {
     };
   }
 
-  const verdict = walkVerdict(f.walkAllS, best);
+  const bestEndS = f.endWalk?.(best) ?? 0;
+  const walkThereS = f.walkAllS != null ? f.walkAllS + (f.walkEndS ?? 0) : null;
+  const verdict = walkVerdict(walkThereS, best, bestEndS);
 
   // `quality` still describes the bus data, because `asOf` and `arrivals`
   // still describe the feed. When it is 'unknown', that is precisely why
@@ -257,10 +268,10 @@ export function buildAnswer(f: FormatInput): Answer {
     const busPhrase =
       best.quality === 'unknown'
         ? m().busNoLive(best.svc)
-        : m().busWouldBe(best.svc, mins(best.totalS));
+        : m().busWouldBe(best.svc, mins(best.totalS + bestEndS));
     return {
       ...common,
-      label: clampLabel(m().walkLabel(mins(f.walkAllS))),
+      label: clampLabel(m().walkLabel(mins(walkThereS ?? f.walkAllS))),
       detail: [
         f.destLabel ? m().onFootTo(f.destLabel) : m().fasterOnFoot,
         busPhrase,
@@ -279,7 +290,7 @@ export function buildAnswer(f: FormatInput): Answer {
     alt: f.alt ? renderAlt(f.alt) : null,
     departsAt,
     arriveAt,
-    bus: legOf(best),
-    altBus: f.alt ? legOf(f.alt) : null,
+    bus: legOf(best, bestEndS),
+    altBus: f.alt ? legOf(f.alt, f.endWalk?.(f.alt) ?? 0) : null,
   };
 }
