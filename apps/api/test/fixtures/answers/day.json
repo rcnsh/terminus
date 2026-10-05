@@ -25,7 +25,8 @@
         "arrive": "2026-08-27T01:51:30Z",
         "note": null,
         "walkS": 300,
-        "rideS": 570
+        "rideS": 570,
+        "toStop": "UTown"
       },
       "timing": {
         "status": "on-time",

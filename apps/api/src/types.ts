@@ -140,6 +140,8 @@ export interface BusLeg {
   estimated: boolean;
   /** Where to get off, when the bus only stops across the road from the destination. */
   off?: string;
+  /** Where you get off (short name): the destination stop this bus calls at, or `off`. */
+  toStop?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -216,9 +218,11 @@ export interface Leave {
    *  road (otherwise the destination's own stop). For matching a bus in the feed. */
   stopCode?: string;
   offCode?: string;
-  /** Seconds on foot to the stop and on the bus, for the card's journey. */
+  /** Seconds on foot to the stop and on the bus, and the stop you get off
+   *  at (short name), for the card's journey. */
   walkS?: number;
   rideS?: number;
+  toStop?: string;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -297,6 +301,8 @@ export interface Leg {
   crossS?: number;
   /** Where to get off, when that's the twin rather than the destination. */
   off?: Stop;
+  /** Where you get off: the destination stop this bus calls at, or its twin. */
+  to?: Stop;
 }
 
 export interface Candidate {
@@ -337,6 +343,8 @@ export interface ScoredOption {
   ambiguousBerth: boolean;
   /** Where to get off, when the bus only stops across the road from the destination. */
   off?: Stop;
+  /** Where you get off: the destination stop this bus calls at, or its twin. */
+  to?: Stop;
 }
 
 export interface ResolveInput {
