@@ -216,14 +216,14 @@ private fun StepLine(time: String, what: String, bus: Journey?, late: Boolean = 
 /**
  * The trip in one line, for a compact widget: "Walk to PGP · D2 4:05 PM", or
  * "D2 4:05 PM · at PGP" there. For a class, when it gets you there instead of
- * the walk: "arrive 4:15 PM · D2 from PGP".
+ * the walk: "arrive 4:15 PM · D2 from PGP 4:05 PM".
  */
 private fun oneLine(answer: NextAnswer, journey: Journey): String {
     val bus = "${journey.bus.svc} ${journey.bus.board}"
     return when {
-        // The arrival first, so a narrow widget cuts the stop rather than it;
-        // the bus's own time is in the leave-by already.
-        answer.isClassPlan && journey.arrive != null -> "${L.s(R.string.arrive_at, journey.arrive)} · ${journey.bus.svc} ${L.s(R.string.journey_from, journey.bus.stop)}"
+        // Most needed first, as a narrow widget cuts the end: when you get
+        // there, where to board, then when the bus leaves.
+        answer.isClassPlan && journey.arrive != null -> "${L.s(R.string.arrive_at, journey.arrive)} · ${journey.bus.svc} ${L.s(R.string.journey_from, journey.bus.stop)} ${journey.bus.board}"
         journey.walk != null -> "${L.s(R.string.journey_walk_to, journey.bus.stop)} · $bus"
         else -> "$bus · ${L.s(R.string.journey_at, journey.bus.stop)}"
     }
