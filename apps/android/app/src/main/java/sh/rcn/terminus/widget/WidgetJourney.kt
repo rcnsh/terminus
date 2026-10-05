@@ -75,7 +75,7 @@ private fun Head(answer: NextAnswer, journey: Journey, note: String?, withArrive
     val late = answer.isClassPlan && answer.leaveLate && note == null
     val text = note ?: listOfNotNull(
         JourneyText.to(answer, journey) { clock(ctx, it) },
-        journey.arrive?.takeIf { withArrive && !answer.isClassPlan }?.let { L.s(R.string.journey_arrive_time, it) },
+        journey.arrive?.takeIf { withArrive }?.let { L.s(R.string.journey_arrive_time, it) },
         journey.slack?.takeIf { late },
     ).joinToString(" · ")
     Text(text, style = TextStyle(color = if (late) GlanceTheme.colors.error else GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
@@ -83,21 +83,22 @@ private fun Head(answer: NextAnswer, journey: Journey, note: String?, withArrive
 
 /** A class's "Arrive ~9:51 AM · 9 min early", red when it's late. */
 @Composable
-private fun Arrival(answer: NextAnswer, journey: Journey) {
+private fun Arrival(answer: NextAnswer, journey: Journey, top: Dp = 4.dp) {
     if (!answer.isClassPlan) return
     val colors = GlanceTheme.colors
     JourneyText.arrive(journey)?.let {
-        Text(it, style = TextStyle(color = if (answer.leaveLate) colors.error else colors.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(top = 4.dp))
+        Text(it, style = TextStyle(color = if (answer.leaveLate) colors.error else colors.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(top = top))
     }
 }
 
 /** Route: the headline, then you → the stop → where you're going on a line. */
 @Composable
 private fun Route(answer: NextAnswer, journey: Journey, large: Boolean, roomy: Boolean, note: String?) {
-    Head(answer, journey, note, withArrive = !roomy)
+    // A compact class says its arrival on the line under the headline.
+    Head(answer, journey, note, withArrive = !roomy && !answer.isClassPlan)
     Headline(answer, large)
     if (!roomy) {
-        Text(oneLine(journey), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
+        Text(oneLine(answer, journey), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
         return
     }
     Spacer(GlanceModifier.height(6.dp))
@@ -167,25 +168,28 @@ private fun Ticket(answer: NextAnswer, journey: Journey, large: Boolean, roomy: 
                 style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 20.sp else 17.sp),
                 maxLines = 1,
             )
+            // A class's arrival and margin get a line of their own where there's
+            // room; on a compact widget, the arrival time after the headline.
+            val split = roomy && answer.isClassPlan
             Text(
-                // A class's slack rather than the arrival: whether it's late is what matters.
-                listOfNotNull(headline(answer), if (answer.isClassPlan) journey.slack else journey.arrive?.let { L.s(R.string.journey_arrive_time, it) }).joinToString(" · "),
+                listOfNotNull(headline(answer), journey.arrive?.takeIf { !split }?.let { L.s(R.string.journey_arrive_time, it) }).joinToString(" · "),
                 style = TextStyle(color = if (answer.leaveLate) colors.error else colors.primary, fontSize = 13.sp, fontWeight = FontWeight.Medium),
                 maxLines = 1,
             )
+            if (split) Arrival(answer, journey, top = 0.dp)
         }
     }
-    if (large) JourneyText.backup(answer, journey)?.let { Text(it, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.padding(top = 6.dp)) }
+    if (large && !answer.isClassPlan) JourneyText.backup(answer, journey)?.let { Text(it, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.padding(top = 6.dp)) }
 }
 
 /** Steps: the headline, then walk, bus and arrive with their times, as many as fit. */
 @Composable
 private fun Steps(answer: NextAnswer, journey: Journey, large: Boolean, roomy: Boolean, note: String?) {
     // The big widget's last step is the arrival; the others say it at the top.
-    Head(answer, journey, note, withArrive = !large)
+    Head(answer, journey, note, withArrive = !large && (roomy || !answer.isClassPlan))
     Headline(answer, large)
     if (!roomy) {
-        Text(oneLine(journey), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
+        Text(oneLine(answer, journey), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
         return
     }
     Spacer(GlanceModifier.height(4.dp))
@@ -209,8 +213,16 @@ private fun StepLine(time: String, what: String, bus: Journey?, late: Boolean = 
     }
 }
 
-/** "Walk to PGP · D2 4:05 PM", or "D2 4:05 PM · at PGP" there: the trip in one line, for a compact widget. */
-private fun oneLine(journey: Journey): String {
+/**
+ * The trip in one line, for a compact widget: "Walk to PGP · D2 4:05 PM", or
+ * "D2 4:05 PM · at PGP" there. For a class, when it gets you there instead of
+ * the walk: "D2 4:05 PM · arrive 4:15 PM".
+ */
+private fun oneLine(answer: NextAnswer, journey: Journey): String {
     val bus = "${journey.bus.svc} ${journey.bus.board}"
-    return if (journey.walk != null) "${L.s(R.string.journey_walk_to, journey.bus.stop)} · $bus" else "$bus · ${L.s(R.string.journey_at, journey.bus.stop)}"
+    return when {
+        answer.isClassPlan && journey.arrive != null -> "$bus · ${L.s(R.string.arrive_at, journey.arrive)}"
+        journey.walk != null -> "${L.s(R.string.journey_walk_to, journey.bus.stop)} · $bus"
+        else -> "$bus · ${L.s(R.string.journey_at, journey.bus.stop)}"
+    }
 }
