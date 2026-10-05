@@ -2,8 +2,8 @@
  * App downloads, served from R2 on our own domain, so a download link stays
  * the same from one release to the next.
  *
- * scripts/release.sh uploads the APK and the release workflow the Mac DMG,
- * each under its version, and each rewrites latest.json, which names the
+ * scripts/release.sh uploads the APKs and the Mac DMG, each under its
+ * version, and then latest.json, which names the
  * current files. /download/android and /download/mac always serve whatever
  * latest.json points at, zip (up to 1.3.7) or DMG.
  *
@@ -13,7 +13,7 @@
  * serves the one asked for, as the app's update button does.
  *
  * The Mac app updates itself with Sparkle from /download/appcast.xml, which
- * the release workflow writes alongside latest.json and which points at the
+ * scripts/release.sh writes alongside latest.json and which points at the
  * DMG by its versioned path, /download/releases/<version>/<file>.
  */
 

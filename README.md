@@ -140,13 +140,10 @@ node apps/api/scripts/dev-stub.mjs    # local API with fake buses on :8787
 
 Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Email
 Sending) and the NUS feed configuration described in
-[apps/api/docs/internals.md](apps/api/docs/internals.md). Releases start with
-`scripts/release.sh` (tests, the Android build as one APK per CPU type, the
-tag); pushing the tag runs
-[`.github/workflows/release.yml`](.github/workflows/release.yml), which signs
-and packages the Mac app, publishes the appcast installed Macs update from,
-and publishes the release. `scripts/release.sh` and deploys also run on a
-Linux VPS, set up by `scripts/vps-setup.sh`. The campus map's street map goes onto R2 with the
+[apps/api/docs/internals.md](apps/api/docs/internals.md). Releases run on a
+Mac with `scripts/release.sh`: the tests, the Android build as one APK per CPU
+type, the signed Mac app and the appcast installed Macs update from, the
+uploads, the tag and the GitHub release. The campus map's street map goes onto R2 with the
 **map tiles** workflow (or `scripts/map-tiles.sh`). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <br>

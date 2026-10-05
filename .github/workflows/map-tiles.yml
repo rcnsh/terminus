@@ -1,7 +1,7 @@
 # The street map's files onto R2 (scripts/map-tiles.sh). Run by hand from the
 # Actions tab, or let it refresh itself twice a year for new buildings and
 # paths. Uses the CLOUDFLARE_API_TOKEN secret and CLOUDFLARE_ACCOUNT_ID
-# variable the release workflow uses, from the same environment.
+# variable from the `release` environment, which waits for a reviewer.
 name: map tiles
 
 on:
@@ -22,8 +22,8 @@ permissions:
 jobs:
   upload:
     runs-on: ubuntu-latest
-    # Where the release workflow's R2 token lives (an environment secret
-    # there; a repository secret is visible here too).
+    # Where the R2 token lives (an environment secret there; a repository
+    # secret would be visible to every workflow).
     environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,7 +32,7 @@ jobs:
         with:
           node-version: "24"
       - run: pnpm install --frozen-lockfile
-      # The token only in this step, as in the release workflow.
+      # The token only in this step, not in pnpm install's lifecycle scripts.
       - name: Build and upload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

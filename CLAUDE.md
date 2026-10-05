@@ -186,9 +186,9 @@ apps/macos/
   Vendor/             MapLibre.xcframework.zip, from scripts/vendor-maplibre-mac.sh
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings
 scripts/              release.sh, release-beta.sh, github-release.sh, package-mac.sh,
-                      publish-mac.sh, appcast.py, release-notes.py, map-tiles.sh,
-                      vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh, vps-setup.sh
-.github/workflows/    ci.yml, release.yml (tag-driven), scrape.yml (weekly data),
+                      appcast.py, release-notes.py, map-tiles.sh,
+                      vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh
+.github/workflows/    ci.yml, scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
                       record-buses.yml (manual: no bus switches sides after a deploy)
 ```
@@ -311,18 +311,18 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
     the Mac `CFBundleShortVersionString`/`CFBundleVersion`
     (`apps/macos/Support/Info.plist`) and `API_VERSION` (`apps/api/src/openapi.ts`,
     the version on the API docs) together. A test fails if they differ.
-  - Run `scripts/release.sh --dry-run`, then `scripts/release.sh`. It tests,
-    builds the signed split APKs, uploads to R2 and tags `v<version>`.
-  - Pushing the tag runs `release.yml`. That workflow builds and signs the
-    Mac DMG, writes the Sparkle appcast and `latest.json`, and publishes the
-    GitHub release. It needs reviewer approval in the `release` environment.
-  - Betas use `scripts/release-beta.sh <x.y.z-beta.n>`.
-  - Agents don't create GitHub releases or tags by hand; the scripts and
-    workflow do.
+  - Push `main`, then run `scripts/release.sh --dry-run` and
+    `scripts/release.sh` on the owner's Mac. It tests; builds the signed
+    split APKs and the signed Mac DMG with its Sparkle appcast; uploads them
+    and `latest.json` to R2; tags and pushes `v<version>`; and publishes the
+    GitHub release. Nothing waits for an approval.
+  - Betas use `scripts/release-beta.sh <x.y.z-beta.n>`, on the same Mac.
+  - Agents don't create GitHub releases or tags by hand; the scripts do.
 - **Signing keys.** The Android keystore (`~/.gradle/gradle.properties`
-  `TERMINUS_*`), the Mac certificate and the Sparkle key live off-repo on the
-  owner's machines. Releases can also run from a Linux VPS set up by
-  `scripts/vps-setup.sh`.
+  `TERMINUS_*`), the Mac certificate (in the login keychain, from
+  `~/.terminus/mac-signing.p12`) and the Sparkle key
+  (`~/.terminus/sparkle-ed25519.key`) live off-repo on the owner's Mac,
+  and nowhere else.
 
 ## Code style
 

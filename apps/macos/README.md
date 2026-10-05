@@ -32,8 +32,8 @@ PNGs and quits, for checking layout without clicking around.
 | `Vendor/MapLibre.xcframework.zip` | MapLibre Native for macOS, built by [`scripts/vendor-maplibre-mac.sh`](../../scripts/vendor-maplibre-mac.sh) |
 | `Support/` | `Info.plist` and the app icon |
 
-Releases are built, signed and packaged as a DMG by
-[`.github/workflows/release.yml`](../../.github/workflows/release.yml) (via
+Releases are built, signed and packaged as a DMG on the owner's Mac by
+[`scripts/release.sh`](../../scripts/release.sh) (via
 [`scripts/package-mac.sh`](../../scripts/package-mac.sh)) with the terminus
 self-signed certificate, so every version has the same code identity and macOS
 keeps its location permission and login item across updates. It isn't
