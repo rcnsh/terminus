@@ -9,7 +9,7 @@
  * dimming once `card.staleAt` passes.
  */
 
-import type { Crowd, MeAnswer, Quality } from './types.ts';
+import type { BusLeg, Crowd, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
 import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
@@ -17,7 +17,8 @@ import type { Suggestion } from './outcomes.ts';
 import { GRAPH } from './graph.ts';
 import { indexGraph } from './resolve.ts';
 import { targetStops } from './landmarks.ts';
-import { shortStop } from './format.ts';
+import { mins, shortStop } from './format.ts';
+import { routeColor } from './campus.ts';
 import { m } from './i18n.ts';
 
 export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup' | 'free';
@@ -55,6 +56,46 @@ export interface TripView {
   /** A trip this request's location says is over (home, in your
    *  residence, or at the destination): the caller records it as reached. */
   reached?: string;
+}
+
+/** A bus in the journey: the service, its colour as painted on the bus, its stop and when it leaves. */
+export interface JourneyBus {
+  svc: string;
+  color: string;
+  stop: string;
+  /** "4:05 PM", "~4:05 PM" for an estimate. */
+  board: string;
+}
+
+/**
+ * The trip as steps, for the card styles that draw it (a line from you to
+ * the destination, a ticket, a list of steps): walk to the stop, take the
+ * bus, get there. Every client draws the same steps from this; only the
+ * leave countdown ticks on the client, from `leave.at` (and `boardAt`).
+ */
+export interface Journey {
+  /** When to set off ("4:01 PM", "~4:01 PM"); null when it's now. */
+  leave: string | null;
+  /** The walk to the stop ("3 min"); null when you're at it. */
+  walk: string | null;
+  bus: JourneyBus;
+  /** When the bus leaves, ISO, to count down to. */
+  boardAt: string;
+  /** Time on the bus ("3 min"). */
+  ride: string;
+  /** Where to get off, when that's across the road from the destination. */
+  off: string | null;
+  /** Where you're going ("GEA1000 @ UTown"), the stop you get off at
+   *  ("UTown", short enough for the end of a line), and when you get there ("4:08 PM"). */
+  to: string;
+  toStop: string;
+  arrive: string | null;
+  /** A class only: "3 min early", "2 min late". */
+  slack: string | null;
+  /** The bus's time is live, not a timetable estimate. */
+  live: boolean;
+  /** Another bus: the next one for a trip, the one to go now on for a class. */
+  backup: JourneyBus | null;
 }
 
 export interface Card {
@@ -126,6 +167,8 @@ export interface Card {
    *  account's choice, else the request's. Clients write their own times
    *  (a class's start, "Updated") the same way. */
   h12: boolean;
+  /** The trip as steps, when there's a bus to catch and you're not on it yet. */
+  journey: Journey | null;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -166,7 +209,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
 type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
-type V1 = Omit<Card, V2 | 'notice' | 'h12'>;
+type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey'>;
 
 /** `feedDownSince`: when the monitor confirmed NUS's feed down, or null while it's up. */
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }, feedDownSince: number | null = null): Card {
@@ -178,7 +221,43 @@ export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, 
   // Only on an answer that wanted a live time and has none: the feed may be
   // back before the monitor's next check, and a day with no bus needs none.
   const notice = feedDownSince !== null && QUALITY[a.quality] ? m().feedDown(clockAt(feedDownSince, h12)) : null;
-  return { ...card, ...v2(a, card, h12, trip), notice, h12 };
+  return { ...card, ...v2(a, card, h12, trip), notice, h12, journey: journeyOf(a, card, h12, trip.phase) };
+}
+
+/** The journey (see Journey): null on the bus, once there, on foot, and with no time to give. */
+export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Journey | null {
+  if ((card.kind !== 'class' && card.kind !== 'trip') || !a.dest) return null;
+  if (phase === 'riding' || phase === 'arrived') return null;
+  const l = a.leave ?? null;
+  // A class takes the leave-by's bus; any other trip, the headline bus.
+  const leg: BusLeg | null =
+    card.kind === 'class'
+      ? l?.svc && l.stop && l.walkS != null && l.rideS != null
+        ? { svc: l.svc, stop: l.stop, stopCode: l.stopCode ?? '', walkS: l.walkS, rideS: l.rideS, board: l.board, arrive: l.arrive, estimated: l.estimated, ...(l.off ? { off: l.off } : {}), ...(l.toStop ? { toStop: l.toStop } : {}) }
+        : null
+      : (a.bus ?? null);
+  if (!leg?.board) return null;
+  const at = (iso: string, estimated: boolean) => approx(estimated, clockAt(Date.parse(iso), h12));
+  const busOf = (b: BusLeg): JourneyBus | null => (b.board ? { svc: b.svc, color: routeColor(b.svc), stop: b.stop, board: at(b.board, b.estimated) } : null);
+  // A trip's backup is the other bus; a class's, the headline bus when it isn't the one to wait for.
+  const other = card.kind === 'class' ? (card.goNow ? a.bus : null) : a.altBus;
+  const classAt = a.timing ? Date.parse(a.timing.classAt) : null;
+  return {
+    leave: l && Date.parse(l.at) > Date.parse(a.asOf) ? at(l.at, l.estimated) : null,
+    // At the stop, or close enough that the walk is nothing.
+    walk: phase === 'waiting' || leg.walkS < 45 ? null : mins(leg.walkS),
+    bus: busOf(leg)!,
+    boardAt: leg.board,
+    ride: mins(leg.rideS),
+    off: leg.off ?? null,
+    to: a.dest.label,
+    // Where this bus stops, which for a place with several stops may not be its first.
+    toStop: leg.off ?? leg.toStop ?? stopName(targetStops(a.dest.to).to) ?? a.dest.label,
+    arrive: leg.arrive ? at(leg.arrive, leg.estimated) : null,
+    slack: card.kind === 'class' && classAt != null && leg.arrive ? slackText((classAt - Date.parse(leg.arrive)) / 1000) : null,
+    live: a.quality === 'live' && !leg.estimated,
+    backup: other ? busOf(other) : null,
+  };
 }
 
 function v1(a: MeAnswer, h12: boolean): V1 {
@@ -277,6 +356,12 @@ export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number): number 
 
 /** Someone said what happened (or detection did); having been at the stop isn't that. */
 const answered = (trip: TripView) => trip.rec !== undefined && trip.rec.kind !== 'waiting';
+
+/** A stop's short name, from its code. */
+const stopName = (code: string | null | undefined) => {
+  const s = code ? indexGraph(GRAPH).byCode.get(code) : undefined;
+  return s ? shortStop(s.name) : null;
+};
 
 /** The stop to walk to (see Card.walkTo). */
 function walkToOf(a: MeAnswer, kind: CardKind, phase: Phase): Card['walkTo'] {

@@ -3,7 +3,8 @@
 // profile (profile.js).
 
 import { Rich, html, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clockOpts, locale, spaced, t } from './dom.js';
+import { api, clock, clockOpts, locale, spaced, t } from './dom.js';
+import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
   campus,
   edit,
@@ -883,6 +884,73 @@ export function ThemeSwitch({ labelledBy }) {
       ${choice('auto', t('Auto'))}${choice('light', t('Light'))}${choice('dark', t('Dark'))}
     </div>
   `;
+}
+
+/**
+ * Appearance: the theme, then the card styles, each drawn with a made-up
+ * trip so the choice is made by looking. Both hold for this browser only.
+ */
+export function Appearance() {
+  const chosen = useStore(cardStyle);
+  // Made again each minute (and when the clock style changes), so the
+  // sample always leaves in a few minutes, however long Settings was open.
+  const p = useStore(profile);
+  const [minute, setMinute] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setMinute(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const sample = useMemo(() => sampleAnswer(minute), [minute, p?.clock]);
+  return html`
+    <div class="card">
+      <span class="label" id="theme-label">${t('Theme')}</span>
+      <${ThemeSwitch} labelledBy="theme-label" />
+    </div>
+    <h2 class="eyebrow settings-group" id="style-label">${t('Card style')}</h2>
+    <p class="hint">${t('How the card shows a trip by bus. Only in this browser.')}</p>
+    <div class="style-picker" role="radiogroup" aria-labelledby="style-label">
+      ${STYLES.map(
+        (s) => html`
+          <label class=${chosen === s ? 'card style-choice on' : 'card style-choice'} key=${s}>
+            <span class="style-head">
+              <input type="radio" name="card-style" value=${s} checked=${chosen === s} onChange=${() => setCardStyle(s)} />
+              <span><strong>${styleName(s)}</strong><span class="hint">${styleHint(s)}</span></span>
+            </span>
+            <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${s} /></div>
+          </label>
+        `,
+      )}
+    </div>
+  `;
+}
+
+/** A D2 from PGP to UTown, leaving in a few minutes, in this browser's clock style. */
+function sampleAnswer(now) {
+  const iso = (ms) => new Date(ms).toISOString();
+  const leave = now + 4 * 60_000;
+  const board = leave + 4 * 60_000;
+  const arrive = board + 8 * 60_000;
+  return {
+    leave: { at: iso(leave) },
+    card: {
+      kind: 'trip',
+      phase: 'idle',
+      journey: {
+        leave: clock(iso(leave)),
+        walk: t('{0} min', 3),
+        bus: { svc: 'D2', color: '#8e44c9', stop: 'PGP', board: clock(iso(board)) },
+        boardAt: iso(board),
+        ride: t('{0} min', 8),
+        off: null,
+        to: 'UTown',
+        toStop: 'UTown',
+        arrive: clock(iso(arrive)),
+        slack: null,
+        live: true,
+        backup: { svc: 'A1', color: '#e53935', stop: 'PGP', board: clock(iso(board + 3 * 60_000)) },
+      },
+    },
+  };
 }
 
 /* ---------- Account ---------- */

@@ -148,6 +148,51 @@ a.settings-row { text-decoration: none; }
 .widget .notice { margin-bottom: 10px; font-size: 0.9rem; color: var(--warn-ink); }
 .widget .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
+/* A trip by bus (journey.js): Route, Ticket or Steps, as on Android. */
+.journey .big.late, .journey .under.late, .journey .late { color: var(--bad-ink); }
+.journey .under { color: var(--muted); font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+.bus-badge { display: inline-block; padding: 1px 7px; border-radius: 6px; font-weight: 800; font-size: 0.8rem; line-height: 1.4; }
+.bus-badge.big { display: grid; place-items: center; width: 64px; height: 64px; padding: 0; border-radius: 16px; font-size: 1.6rem; flex: none; }
+.route-line { display: flex; align-items: flex-start; margin: 18px 0 4px; }
+.route-line .above { display: grid; place-items: center; height: 24px; }
+.route-line .point { display: grid; justify-items: center; width: 76px; flex: none; text-align: center; }
+.route-line .dot { width: 14px; height: 14px; margin: 2px 0; border-radius: 50%; background: var(--ink); }
+.route-line .you .dot { background: var(--accent); }
+.route-line .name { margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 0.9rem; }
+.route-line .time, .route-line .takes { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.route-line .stretch { flex: 1; display: grid; justify-items: center; min-width: 0; }
+.route-line .stretch.ride { flex: 1.4; }
+.route-line .bar { width: 100%; height: 5px; margin: 6.5px 0; border-radius: 3px; }
+.route-line .walk .bar { height: 3px; margin: 7.5px 0; background: radial-gradient(circle, var(--muted) 1.5px, transparent 2px) 0 50% / 8px 3px repeat-x; }
+.route-line .takes { margin-top: 4px; }
+.journey .tags { display: flex; gap: 6px; margin-top: 12px; }
+.journey .tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--surface-2); }
+.journey .tag.live { color: var(--good-ink); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.journey .backup { margin-top: 8px; font-size: 0.9rem; color: var(--muted); }
+.ticket-bus { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.ticket-time { font: 700 1.5rem/1.2 var(--display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ticket-time span { font: 600 0.9rem var(--font); letter-spacing: 0; color: var(--muted); }
+.ticket-go { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); }
+.ticket-go .go { font: 700 1.25rem/1.2 var(--display); color: var(--accent); }
+.ticket-go.late { background: color-mix(in srgb, var(--bad-ink) 12%, transparent); }
+.ticket-go.late .go { color: var(--bad-ink); }
+.ticket-go .by { font-size: 0.8rem; color: var(--muted); }
+.ticket-go .by.late { color: var(--bad-ink); }
+.ticket-go .arrives { text-align: right; font-weight: 600; font-size: 0.9rem; }
+.journey .steps { list-style: none; margin: 14px 0 0; padding: 0; }
+.journey .steps li { position: relative; display: flex; gap: 12px; padding-bottom: 14px; }
+.journey .steps li.last { padding-bottom: 0; }
+.journey .steps .time { width: 76px; flex: none; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.journey .steps .what { display: grid; padding-left: 24px; }
+.journey .steps .what small { color: var(--muted); font-size: 0.8rem; }
+.journey .steps .what small.late { color: var(--bad-ink); }
+.journey .steps .what::before { content: ''; position: absolute; left: 88px; top: 4px; width: 8px; height: 8px; border: 2px solid var(--muted); border-radius: 50%; background: var(--surface); }
+.journey .steps li.first .what::before { border-color: var(--accent); background: var(--accent); }
+.journey .steps li:not(.last)::after { content: ''; position: absolute; left: 93px; top: 18px; bottom: 0; width: 2px; background: var(--line); }
+.journey .steps .bus-line { display: inline-flex; align-items: center; gap: 6px; }
+.journey .steps .live { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: var(--good-ink); }
+.journey .steps .live .dot, .journey .tag.live .dot { width: 7px; height: 7px; }
+
 .banner {
   border-radius: var(--radius); padding: 14px 16px; font-size: 0.95rem;
   background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
@@ -323,3 +368,12 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .ob-clock { margin-top: 18px; }
 @media (min-width: 640px) { .narrow-only { display: none; } }
 @media (max-width: 639.98px) { .nav-links #add-email, .nav-links #logout { display: none; } }
+
+/* Settings › Appearance: each card style with a made-up trip drawn in it. */
+.style-picker { display: grid; gap: 12px; }
+.style-choice { display: block; margin: 0; font-size: 1rem; color: var(--ink); cursor: pointer; border: 1px solid var(--line); }
+.style-choice.on { border: 2px solid var(--accent); }
+.style-choice .style-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.style-choice .style-head input { flex: none; width: auto; margin: 3px 0 0; accent-color: var(--accent); }
+.style-choice .style-head .hint { display: block; margin: 2px 0 0; }
+.style-choice .widget { box-shadow: none; border: 0; padding: 0; background: none; pointer-events: none; }

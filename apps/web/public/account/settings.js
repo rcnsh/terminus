@@ -7,9 +7,10 @@
 import { html, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { api, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
-import { About, Account, Devices, Feedback, Favourites, Language, Page, ThemeSwitch, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
+import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
+import { cardStyle, styleName } from './journey.js';
 
-/** The list, in groups; the theme is switched on its row, with no page. */
+/** The list, in groups. */
 const GROUPS = () => [
   { title: t('Your day'), ids: ['trips', 'timetable', 'favourites', 'notifications'] },
   { title: t('Account'), ids: ['account', 'devices'] },
@@ -56,6 +57,7 @@ function summaries({ p, me, notifyOn, devices, imported }) {
     devices: me.anonymous ? t('Add an email to use other devices') : devices === null ? '' : devices === 1 ? t('1 device') : t('{0} devices', devices),
     language: [{ en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'), { 12: t('12-hour'), 24: t('24-hour') }[p.clock]].filter(Boolean).join(' · '),
     account: me.email ?? t('No email'),
+    appearance: `${{ auto: t('Auto'), light: t('Light'), dark: t('Dark') }[theme.get()] ?? t('Auto')} · ${styleName(cardStyle.get())}`,
   };
 }
 
@@ -74,12 +76,13 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   const imported = useStore(importDone) > 0;
   const offer = useStore(importOffer);
   useStore(theme);
+  useStore(cardStyle);
   const wide = useMedia('(min-width: 900px)');
   const hash = useHash();
   const listHash = inApp ? '#settings' : '';
   const pageHash = inApp ? '#settings/' : '#';
   const groups = GROUPS().map((g) => ({ ...g, ids: g.ids.filter((x) => x !== 'notifications' || Notify) }));
-  const pages = [...groups.flatMap((g) => g.ids).filter((x) => x !== 'appearance'), ...FOOT];
+  const pages = [...groups.flatMap((g) => g.ids), ...FOOT];
 
   // The account's language (phase 10): one chosen on another device is used
   // here; one chosen here before the account had one goes to the account.
@@ -242,13 +245,8 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
             (g) => html`
               <h2 class="eyebrow settings-group" key=${`h-${g.title}`}>${g.title}</h2>
               <div class="settings-list card" key=${g.title}>
-                ${g.ids.map((id) =>
-                  id === 'appearance'
-                    ? html`<div class="settings-row inline" key=${id}>
-                        <span class="row-text"><span class="row-title" id="theme-label">${TITLES[id]}</span></span>
-                        <${ThemeSwitch} labelledBy="theme-label" />
-                      </div>`
-                    : html`
+                ${g.ids.map(
+                  (id) => html`
                         <button
                           type="button"
                           class="settings-row"
@@ -291,6 +289,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         ${Notify && page('notifications', html`<${Notify} />`)}
         ${page('devices', html`<${Devices} me=${me} />`)}
         ${page('language', html`<${Language} />`)}
+        ${page('appearance', html`<${Appearance} />`)}
         ${page('account', html`<${Account} me=${me} inApp=${inApp} onAddEmail=${onAddEmail} onSignOut=${onSignOut} />`)}
         ${page('about', html`<${About} />`)}
         ${page('feedback', html`<${Feedback} me=${me} />`)}

@@ -430,4 +430,31 @@
     <string name="reimport_text">This link is for %1$s, which has ended. Copy this semester\'s link from NUSMods and import it below.</string>
     <string name="reimport_needed">Re-import needed</string>
     <string name="change_stop">Stop for %1$s</string>
+
+    <!-- Card styles (CardStyle): how a trip by bus is drawn. -->
+    <string name="card_style">Card style</string>
+    <string name="card_style_hint">How the card and widgets show a trip by bus. Only on this phone.</string>
+    <string name="card_style_route">Route</string>
+    <string name="card_style_route_hint">The whole trip as a line, with the times under it.</string>
+    <string name="card_style_ticket">Ticket</string>
+    <string name="card_style_ticket_hint">The bus first, in its colour, then when to leave.</string>
+    <string name="card_style_steps">Steps</string>
+    <string name="card_style_steps_hint">Walk, bus and arrive, one under the other.</string>
+    <string name="leave_in_min">Leave in %1$d min</string>
+    <string name="leave_in_min_s">Leave in %1$d min %2$d s</string>
+    <string name="leave_in_s">Leave in %1$d s</string>
+    <string name="leave_by_short">by %1$s</string>
+    <string name="journey_to">To %1$s</string>
+    <string name="journey_you">You</string>
+    <string name="journey_now">now</string>
+    <string name="journey_walk_to">Walk to %1$s</string>
+    <string name="journey_walk">%1$s walk</string>
+    <string name="journey_from">from %1$s</string>
+    <string name="journey_ride">%1$s ride</string>
+    <string name="journey_arrive_place">Arrive at %1$s</string>
+    <string name="journey_arrive_time">Arrive %1$s</string>
+    <string name="journey_at">at %1$s</string>
+    <string name="journey_live">Live</string>
+    <string name="journey_backup">Or %1$s at %2$s from %3$s</string>
+    <string name="journey_backup_now">Or go now: %1$s at %2$s from %3$s</string>
 </resources>

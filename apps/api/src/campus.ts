@@ -92,6 +92,9 @@ export const ROUTE_COLORS: Record<string, string> = {
   R2: '#34a853', // green
 };
 
+/** A service's colour, grey for one NUS hasn't painted. */
+export const routeColor = (svc: string): string => ROUTE_COLORS[svc] ?? '#8b98a6';
+
 const VIEW_W = 1000;
 const PAD = 60;
 const METERS_PER_DEG_LAT = 111_320;
@@ -179,7 +182,7 @@ export function buildCampusMap(graph: Graph): CampusMap {
     routes[svc] = {
       seq: closes ? seq.slice(0, -1) : seq.slice(),
       loop,
-      color: ROUTE_COLORS[svc] ?? '#8b98a6',
+      color: routeColor(svc),
       line: shape?.line ?? seq.flatMap((c) => {
         const st = byCode.get(c);
         return st ? [[st.lon, st.lat] as [number, number]] : [];
