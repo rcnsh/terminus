@@ -99,15 +99,15 @@ export async function answerFor(
   if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));
   const crowdRisk = input.arriveBy && env.DB ? await loadCrowdRisk(env.DB, cands.map((c) => c.stop.code), nowMs) : undefined;
 
-  const options = scoreOptions(GRAPH, cands, byStop, nowMs);
+  // On from where a bus gets you off to the place itself, from that stop: a
+  // food court's other stop can be further from it than its first.
+  const endWalk = (o: ScoredOption) => input.endWalkByStopS?.[o.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
+  const options = scoreOptions(GRAPH, cands, byStop, nowMs, endWalk);
   const alt = pickAlt(options);
   const chosen = options[0]?.stop.code ?? fallbackStop?.code ?? '';
   const arrivals: Arrival[] = byStop.get(chosen)?.arrivals ?? [];
 
   const walkAllS = walkAllTheWayS(GRAPH, input, fallbackStop);
-  // On from where a bus gets you off to the place itself, from that stop: a
-  // food court's other stop can be further from it than its first.
-  const endWalk = (o: ScoredOption) => input.endWalkByStopS?.[o.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
   const answer = buildAnswer({
     options,
     alt,

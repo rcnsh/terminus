@@ -406,6 +406,9 @@ export function scoreOptions(
   candidates: Candidate[],
   arrivalsByStop: Map<string, StopArrivals>,
   nowMs: number,
+  /** The walk on from where an option gets you off to the place itself: a
+   *  food court's stops are different walks from it, so it counts in the ranking. */
+  endWalk: (o: ScoredOption) => number = () => 0,
 ): ScoredOption[] {
   const out: ScoredOption[] = [];
 
@@ -490,11 +493,11 @@ export function scoreOptions(
     }
   }
 
-  // Measurements beat estimates outright; within a tier, time decides.
+  // Measurements beat estimates outright; within a tier, time to the place itself decides.
   out.sort(
     (a, b) =>
       Number(isMeasured(b.quality)) - Number(isMeasured(a.quality)) ||
-      a.totalS - b.totalS ||
+      a.totalS + endWalk(a) - (b.totalS + endWalk(b)) ||
       a.walkS - b.walkS ||
       a.svc.localeCompare(b.svc),
   );

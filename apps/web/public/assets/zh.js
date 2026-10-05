@@ -263,7 +263,7 @@ window.TERMINUS_ZH = {
  "The Android home-screen widget: leave by 9:39 AM for GEA1000, with the trip drawn as a line from you to PGP to UTown, and buttons for favourites.": "Android 主屏幕小组件：上午 9:39 前出发去 GEA1000，行程画成一条线，从你到 PGP 再到 UTown，还有收藏按钮。",
  "The D2 never came, the walk is longer than that…": "D2 一直没来、步行比说的久…",
  "The Mac menu bar app: leave by 9:41 for CS2030 at 10:00, catch the 9:45 D2 at PGP.": "Mac 菜单栏应用：9:41 前出发去上 10:00 的 CS2030，在 PGP 搭 9:45 的 D2。",
- "The account page: the timetable, and a live preview of your card saying leave in 10 minutes, by 09:37: walk 5 minutes to PGP, take the 09:42 R2 and arrive at UTown at 09:52, 8 minutes early.": "账户页：课表，以及卡片的实时预览：10 分钟后出发，09:37 前：步行 5 分钟到 PGP，坐 09:42 的 R2，09:52 到达 UTown，早到 8 分钟。",
+ "The account page’s live preview of your card: leave in 10 minutes, by 09:37: walk 5 minutes to PGP, take the 09:42 R2 and arrive at UTown at 09:52, 8 minutes early.": "账户页上卡片的实时预览：10 分钟后出发，09:37 前：步行 5 分钟到 PGP，坐 09:42 的 R2，09:52 到达 UTown，早到 8 分钟。",
  "The start time must be before the end time": "开始时间必须早于结束时间",
  "The latest bus that still gets you there, walks along real campus paths at your pace, and a bus earlier when yours is usually busy.": "最晚还能让你准时到的那班巴士，按你的步速沿真实校园路线计算步行时间，你那班经常很挤时就提早一班。",
  "Which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable. Live bus times, a campus map, an Android widget, a Mac menu bar app and the web. Free, and not affiliated with NUS.": "根据你的 NUSMods 课表，告诉你该搭哪一班 NUS 校园巴士、在哪个车站搭，以及什么时候出发。实时巴士时间、校园地图、Android 小组件、Mac 菜单栏应用和网页版。免费，与 NUS 无关联。",

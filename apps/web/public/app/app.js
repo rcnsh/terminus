@@ -333,8 +333,8 @@ async function removeFromToday(it, at, before) {
   try {
     card.set({ a: await signal({ kind: 'skipped', trip: it.key }) });
   } catch {
-    // Said where it was done, in its row, which the refresh below leaves alone.
-    showUndo({ it, at, before, text: t("Couldn't remove that. Check your connection.") });
+    // Said where it was done, just above the entry (back in the list), which the refresh below leaves alone.
+    showUndo({ it, at, before: it.key, text: t("Couldn't remove that. Check your connection.") });
     removed.set((m) => {
       const next = new Map(m);
       next.delete(it.key);
@@ -831,7 +831,7 @@ function Today() {
   const bar = useStore(undo);
   const items = (plan?.items ?? []).filter((it) => !gone.has(it.key));
   // The entry just taken off keeps its place, as a row saying so with Undo.
-  // A failed removal's row sits just above the entry, which is back.
+  // A failed removal's row sits just above the entry it's about, which is back.
   const rows = items.map((it) => ({ it }));
   // Kept above the entry that followed it, so a refresh meanwhile doesn't move it.
   if (bar?.it) {
