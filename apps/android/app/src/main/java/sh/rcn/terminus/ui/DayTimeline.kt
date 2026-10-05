@@ -49,6 +49,7 @@ internal fun DayTimeline(
     day: DayPlan,
     removed: DayItem?,
     removedAt: Int,
+    removedBefore: String?,
     removeError: String?,
     hint: Boolean,
     peek: Boolean,
@@ -69,7 +70,8 @@ internal fun DayTimeline(
             }
         }
         if (removed == null && removeError != null) ErrorBar(removeError, onDismissUndo)
-        val at = removedAt.coerceIn(0, day.items.size)
+        // Above the entry that followed it, so a refresh meanwhile doesn't move it.
+        val at = if (removedBefore == null) day.items.size else day.items.indexOfFirst { it.key == removedBefore }.takeIf { it >= 0 } ?: removedAt.coerceIn(0, day.items.size)
         day.items.forEachIndexed { i, item ->
             if (i == at && removed != null) androidx.compose.runtime.key("removed:${removed.key}") { RemovedRow(removed, fmt, onUndo, onDismissUndo) }
             // Keyed, so a swiped row's state doesn't pass to the one moving up.

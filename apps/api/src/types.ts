@@ -142,6 +142,8 @@ export interface BusLeg {
   off?: string;
   /** Where you get off (short name): the destination stop this bus calls at, or `off`. */
   toStop?: string;
+  /** Seconds on foot from where you get off to the place itself (a room, a food court). Absent for a stop. */
+  endWalkS?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -228,6 +230,9 @@ export interface Leave {
   walkS?: number;
   rideS?: number;
   toStop?: string;
+  /** Without an arrive-by (whose `arrive` is at the venue): the walk on from
+   *  where you get off to the place itself, which `arrive` doesn't count. */
+  endWalkS?: number;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -375,6 +380,9 @@ export interface ResolveInput {
   /** Seconds on foot from the stop you get off at to the destination itself
    *  (a room, a building, a food court), for "LT3 in ~12 min". 0 for a stop. */
   endWalkS?: number;
+  /** A place with several stops (a food court): the walk from each, by stop
+   *  code, as the bus you take may not stop at the closest. */
+  endWalkByStopS?: Record<string, number>;
   /** Seconds per stop on a service, from measured rides (ridetimes.ts).
    *  RIDE.secondsPerHop where it has nothing. */
   hopS?: (svc: string) => number | null;

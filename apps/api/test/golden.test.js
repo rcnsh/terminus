@@ -62,6 +62,8 @@ const CASES = {
   'class-from-dorm': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, `/me/next?${DORM}`],
   'place': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=mrt'],
   'landmark': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=deck'],
+  // A class in a room a walk from its stop: the leave-by aims at the room, and the card shows the walk on.
+  'class-room': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown', 'TP-SR2')], places }, '/me/next'],
   // A room searched for (its code, as search sends it): the bus to its stop, then the walk on to the room.
   'room': [{ home: { stops: ['PGP'] }, places }, '/me/next?to=LT3'],
   'arrived': [{ home: { stops: ['PGP'] }, places }, `/me/next?to=COM3&${AT_COM3}`],

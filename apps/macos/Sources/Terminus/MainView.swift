@@ -90,7 +90,7 @@ struct Main: View {
 
             // Today, on the plan's tab: the rest of the day under the next trip.
             if !model.showNearby, model.target == .plan, let day = model.day, !day.items.isEmpty || model.removed != nil {
-                TodayList(day: day, removed: model.removed, removedAt: model.removedAt, onRemove: model.removeFromToday, onUndo: model.undoRemove).padding(.horizontal, 4)
+                TodayList(day: day, removed: model.removed, removedAt: model.removedAt, removedBefore: model.removedBefore, onRemove: model.removeFromToday, onUndo: model.undoRemove).padding(.horizontal, 4)
             }
 
             if model.reporting {

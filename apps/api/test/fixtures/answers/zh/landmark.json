@@ -78,7 +78,8 @@
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:09:10Z",
     "estimated": false,
-    "toStop": "Opp NUSS"
+    "toStop": "Opp NUSS",
+    "endWalkS": 191
   },
   "altBus": {
     "svc": "A1",
@@ -89,7 +90,8 @@
     "board": "2026-08-27T01:09:00Z",
     "arrive": "2026-08-27T01:23:15Z",
     "estimated": false,
-    "toStop": "AS 5"
+    "toStop": "AS 5",
+    "endWalkS": 162
   },
   "leave": null,
   "mode": "trip",
@@ -152,7 +154,7 @@
       "off": null,
       "to": "The Deck",
       "toStop": "Opp NUSS",
-      "arrive": "09:11",
+      "arrive": "09:12",
       "walkEnd": "3 分钟",
       "arriveStop": "09:09",
       "slack": null,

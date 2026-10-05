@@ -78,7 +78,8 @@
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:12:20Z",
     "estimated": false,
-    "toStop": "IT"
+    "toStop": "IT",
+    "endWalkS": 86
   },
   "altBus": {
     "svc": "A1",
@@ -90,7 +91,8 @@
     "arrive": "2026-08-27T01:19:28Z",
     "estimated": false,
     "off": "CLB",
-    "toStop": "CLB"
+    "toStop": "CLB",
+    "endWalkS": 86
   },
   "leave": null,
   "mode": "trip",

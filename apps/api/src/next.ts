@@ -162,6 +162,9 @@ export async function tripAnswer(
   const venueWalkS = Math.round((venueM || targetStops(dest.to).walkM) / speed);
   // Past this the room's stop is not really its stop (bad data): no walk at all.
   const endWalkS = venueWalkS <= MAX_VENUE_WALK_S ? venueWalkS : 0;
+  // A food court with several stops: the walk from each, for whichever the bus gets you off at.
+  const lm = venueM ? null : landmark(dest.to);
+  const endWalkByStopS = lm && Object.keys(lm.stops).length > 1 ? Object.fromEntries(Object.entries(lm.stops).map(([code, m]) => [code, Math.round(m / speed)])) : undefined;
   // A place served by several stops arrives at whichever is quicker.
   const target = targetStops(dest.to);
   const input: ResolveInput = {
@@ -175,6 +178,7 @@ export async function tripAnswer(
     walkSpeedMs: speed,
     arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS, fullBusMargin: profile.fullBusMargin, ...(oneEarlier ? { oneEarlier } : {}) } : null,
     endWalkS,
+    ...(endWalkByStopS ? { endWalkByStopS } : {}),
   };
   const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
   // For a class, say whether you'll make it: stop arrival plus the walk
