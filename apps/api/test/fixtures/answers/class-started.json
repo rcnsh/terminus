@@ -181,6 +181,8 @@
       "to": "GEA1000 @ UTown",
       "toStop": "UTown",
       "arrive": "09:15",
+      "walkEnd": null,
+      "arriveStop": "09:15",
       "slack": "~25 min late",
       "live": true,
       "backup": null

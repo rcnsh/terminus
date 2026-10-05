@@ -316,8 +316,14 @@ there, and a backup bus (the other bus on a trip; for a class, the sooner
 bus to go now on). A class takes the leave-by's bus, any other trip the
 headline bus, from the answer's `bus` and `altBus` legs and the leave-by's
 `walkS` and `rideS`. It's null on foot, on the bus, once there and with no
-time to give; at the stop it has no walk. Apps count down to `leave.at` and
-`journey.boardAt` themselves.
+time to give; at the stop it has no walk. When where you're going is a walk
+from its stop (a class's room, a room or building searched for by its code,
+a food court), `walkEnd` is that walk and `arrive` is when you reach the place
+itself, with `arriveStop` the bus's arrival at the stop; the detail line's
+"LT3 in ~14 min" counts the walk too. A class's leave-by already aims at the
+room (`leave.arrive` is there), a bus's arrival is at the stop: the answer's
+`endWalk` (kept off the response) says which, so the two are never added
+twice. Apps count down to `leave.at` and `journey.boardAt` themselves.
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
   last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
   again, once fewer than 23 days are left. However much it's used, a web

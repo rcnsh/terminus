@@ -87,10 +87,16 @@ export interface Journey {
   /** Where to get off, when that's across the road from the destination. */
   off: string | null;
   /** Where you're going ("GEA1000 @ UTown"), the stop you get off at
-   *  ("UTown", short enough for the end of a line), and when you get there ("4:08 PM"). */
+   *  ("UTown", short enough for the end of a line), and when you get there
+   *  ("4:08 PM"): to the room or building itself when it's a walk from the stop. */
   to: string;
   toStop: string;
   arrive: string | null;
+  /** The walk from `toStop` to where you're going ("2 min"): a class's room,
+   *  a building searched for, a food court. Null when it's at the stop. */
+  walkEnd: string | null;
+  /** When the bus gets to `toStop`; the same as `arrive` with no `walkEnd`. */
+  arriveStop: string | null;
   /** A class only: "3 min early", "2 min late". */
   slack: string | null;
   /** The bus's time is live, not a timetable estimate. */
@@ -257,6 +263,13 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
   const headlineDiffers = Boolean(planned && a.bus && !(a.bus.svc === planned.svc && a.bus.stop === planned.stop && a.bus.board === planned.board));
   const other = card.kind === 'class' ? (card.goNow ? a.bus : null) : headlineDiffers ? a.bus : a.altBus;
   const classAt = a.timing ? Date.parse(a.timing.classAt) : null;
+  // The walk on from the stop. A class's leave-by already counts it in its
+  // arrival (it aims at the room); a bus's arrival is at the stop.
+  const endS = a.endWalk?.s ?? 0;
+  const stopMs = leg.arrive ? Date.parse(leg.arrive) - (leg === planned && a.endWalk?.inLeave ? endS * 1000 : 0) : null;
+  const thereMs = stopMs != null ? stopMs + endS * 1000 : null;
+  const walkEnd = endS >= 45 ? mins(endS) : null;
+  const arrive = thereMs != null ? approx(leg.estimated, clockAt(thereMs, h12)) : null;
   return {
     leave: l && Date.parse(l.at) > Date.parse(a.asOf) ? at(l.at, l.estimated) : null,
     // At the stop, or close enough that the walk is nothing.
@@ -268,8 +281,10 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
     to: a.dest.label,
     // Where this bus stops, which for a place with several stops may not be its first.
     toStop: leg.off ?? leg.toStop ?? stopName(targetStops(a.dest.to).to) ?? a.dest.label,
-    arrive: leg.arrive ? at(leg.arrive, leg.estimated) : null,
-    slack: card.kind === 'class' && classAt != null && leg.arrive ? slackText((classAt - Date.parse(leg.arrive)) / 1000) : null,
+    arrive,
+    walkEnd,
+    arriveStop: walkEnd && stopMs != null ? approx(leg.estimated, clockAt(stopMs, h12)) : arrive,
+    slack: card.kind === 'class' && classAt != null && thereMs != null ? slackText((classAt - thereMs) / 1000) : null,
     live: a.quality === 'live' && !leg.estimated,
     backup: other ? busOf(other) : null,
   };

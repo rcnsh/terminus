@@ -158,6 +158,8 @@ a.settings-row { text-decoration: none; }
 .route-line { display: flex; align-items: flex-start; margin: 18px 0 4px; }
 .route-line .above { display: grid; place-items: center; height: 24px; }
 .route-line .point { display: grid; justify-items: center; width: 76px; flex: none; text-align: center; }
+/* Four points (the walk on from the stop to a room): each only as wide as its words, so the line still fits a phone. */
+.route-line.walk-on .point { width: auto; min-width: 44px; max-width: 72px; }
 .route-line .dot { width: 14px; height: 14px; margin: 2px 0; border-radius: 50%; background: var(--ink); }
 .route-line .you .dot { background: var(--accent); }
 .route-line .name { margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 0.9rem; }
