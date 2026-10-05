@@ -112,6 +112,7 @@ export async function answerFor(
     nearestStop: nearestStop(GRAPH, input.lat, input.lon),
     destLabel,
     walkAllS,
+    endWalkS: input.endWalkS ?? 0,
     confidence: confidence(options, input.lat != null),
     arrivals,
     nowMs,

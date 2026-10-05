@@ -12,7 +12,7 @@ private func golden(_ name: String) throws -> NextAnswer {
     return try JSONDecoder().decode(NextAnswer.self, from: data)
 }
 
-@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "place", "landmark", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup"])
+@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup"])
 func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect(try golden(name).card != nil)
 }

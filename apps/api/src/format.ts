@@ -85,6 +85,8 @@ export interface FormatInput {
   destLabel: string | null;
   /** Seconds to walk the entire way, when known. */
   walkAllS: number | null;
+  /** Seconds on foot from the stop to the destination itself (ResolveInput.endWalkS). */
+  endWalkS?: number;
   confidence: number;
   arrivals: Arrival[];
   nowMs: number;
@@ -157,7 +159,7 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     parts.push(
       best.quality === 'unknown'
         ? m().destStops(f.destLabel, best.hops)
-        : m().destIn(f.destLabel, mins(best.totalS)),
+        : m().destIn(f.destLabel, mins(best.totalS + (f.endWalkS ?? 0))),
     );
   } else if (f.destLabel) {
     parts.push(m().atDest(f.destLabel));
