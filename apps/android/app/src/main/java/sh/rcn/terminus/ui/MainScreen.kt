@@ -175,13 +175,16 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
                 // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
                 val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
                 OfflinePlanOr(offline, state.answer, state.fetchedAt, state.day) {
-                    AnswerCard(state.answer, state.loading, vm::signal, state.signalling, vm::choose)
+                    // Undo once: in the removed entry's row while it's there, not on the card as well.
+                    val undoing = state.removed?.key
+                    val answer = state.answer?.let { a -> if (undoing == null || a.card == null) a else a.copy(card = a.card.copy(actions = a.card.actions.filterNot { it.id == "reset" && it.trip == undoing })) }
+                    AnswerCard(answer, state.loading, vm::signal, state.signalling, vm::choose)
                 }
             }
         }
         // The rest of today under the planned answer.
         if (!state.showNearby && state.target == Target.Plan) state.day?.let {
-            DayTimeline(it, state.removed, state.removeError, state.swipeHint, state.swipePeek, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved, vm::swipePeeked)
+            DayTimeline(it, state.removed, state.removedAt, state.removeError, state.swipeHint, state.swipePeek, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved, vm::swipePeeked)
         }
         // Somewhere else: going there later today, planned like a class (phase 8.3).
         if (!state.showNearby && state.target != Target.Plan && state.paired) {
@@ -193,28 +196,29 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
             state.fetchedAt?.let { stringResource(R.string.updated_at, clock(ctx, it)) },
         ).joinToString(" · ")
         val refreshing = stringResource(R.string.refreshing)
-        Row(Modifier.padding(top = 8.dp).heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        // "Is this wrong?" on the left, "Updated 9:41" on the right, as the web shows them.
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (!state.showNearby && state.answer != null) {
+                var reporting by remember { mutableStateOf<String?>(null) }
+                var opened by remember { mutableStateOf(false) }
+                TextButton(onClick = { reporting = state.rawAnswers[state.target]; opened = true; vm.clearReportResult() }) { Text(stringResource(R.string.is_this_wrong)) }
+                if (opened) {
+                    ReportDialog(
+                        sending = state.reportSending,
+                        onSend = { note ->
+                            vm.report(note, reporting, BuildConfig.VERSION_NAME)
+                            opened = false
+                        },
+                        onDismiss = { opened = false },
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
             if (state.loading) {
                 CircularProgressIndicator(Modifier.size(12.dp).semantics { contentDescription = refreshing }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
             }
-            Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-
-        if (!state.showNearby && state.answer != null) {
-            var reporting by remember { mutableStateOf<String?>(null) }
-            var opened by remember { mutableStateOf(false) }
-            TextButton(onClick = { reporting = state.rawAnswers[state.target]; opened = true; vm.clearReportResult() }) { Text(stringResource(R.string.is_this_wrong)) }
-            if (opened) {
-                ReportDialog(
-                    sending = state.reportSending,
-                    onSend = { note ->
-                        vm.report(note, reporting, BuildConfig.VERSION_NAME)
-                        opened = false
-                    },
-                    onDismiss = { opened = false },
-                )
-            }
+            Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f, fill = false))
         }
         state.reportResult?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
