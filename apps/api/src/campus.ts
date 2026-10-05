@@ -335,18 +335,23 @@ export function buildDestinations(graph: Graph): Destination[] {
       aliases: lm.aliases,
     });
   }
-  // Several codes can name one building (CLB, CLIB): list it once.
+  // Several codes can name one building (CLB, CLIB): list it once. And a place
+  // already listed by its code and name (Kent Vale's stop, KV; LT3, a lecture
+  // theatre that is a building and a room) isn't listed again.
+  const listed = new Set(out.map((d) => `${d.code}|${d.label}`));
   const named = new Set<string>();
   for (const [code, v] of Object.entries(VENUES.venues).sort(([a], [b]) => a.length - b.length || a.localeCompare(b))) {
     const label = friendlyLabel(code);
-    if (!label || !stops.has(v.stop) || named.has(`${label}|${v.stop}`)) continue;
+    if (!label || !stops.has(v.stop) || named.has(`${label}|${v.stop}`) || listed.has(`${code}|${label}`)) continue;
     named.add(`${label}|${v.stop}`);
+    listed.add(`${code}|${label}`);
     const aliases = aliasesFor(code);
     out.push({ code, label, stopCode: v.stop, kind: 'building', walkM: v.m, ...(aliases ? { aliases } : {}) });
   }
   for (const [code, r] of Object.entries(ROOMS.rooms)) {
-    if (!stops.has(r.stop)) continue;
-    out.push({ code, label: r.name || code, stopCode: r.stop, kind: 'room', walkM: r.m });
+    const label = r.name || code;
+    if (!stops.has(r.stop) || listed.has(`${code}|${label}`)) continue;
+    out.push({ code, label, stopCode: r.stop, kind: 'room', walkM: r.m });
   }
   return out;
 }
