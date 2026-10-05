@@ -105,6 +105,9 @@ export function Journey({ a, style }) {
   `;
 }
 
+/** Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown". */
+const place = (j) => j.to.split(' @ ')[0];
+
 /** Route: you, the stop and where you're going on a line, the times under each point. */
 function Route({ a, j, now, late }) {
   const under = [by(a, j, now), arrive(j)].filter(Boolean).join(' · ');
@@ -112,7 +115,7 @@ function Route({ a, j, now, late }) {
     <div class="where">${to(a, j)}</div>
     <div class=${`big${late}`}>${leaveIn(a, j, now)}</div>
     ${under && html`<div class=${`under${late}`}>${under}</div>`}
-    <div class="route-line" role="img" aria-label=${routeLabel(a, j)}>
+    <div class=${j.walkEnd ? 'route-line walk-on' : 'route-line'} role="img" aria-label=${routeLabel(a, j)}>
       ${j.walk &&
       html`
         <${Point} name=${t('You')} time=${j.leave ?? t('now')} you />
@@ -124,7 +127,12 @@ function Route({ a, j, now, late }) {
         <span class="bar" style=${{ background: j.bus.color }}></span>
         <span class="takes">${j.ride}</span>
       </div>
-      <${Point} name=${j.toStop} time=${j.arrive ?? ''} />
+      <${Point} name=${j.toStop} time=${(j.walkEnd ? j.arriveStop : j.arrive) ?? ''} />
+      ${j.walkEnd &&
+      html`
+        <div class="stretch walk"><span class="above"></span><span class="bar"></span><span class="takes">${j.walkEnd}</span></div>
+        <${Point} name=${place(j)} time=${j.arrive ?? ''} />
+      `}
     </div>
     <${Tags} a=${a} j=${j} />
   `;
@@ -132,7 +140,9 @@ function Route({ a, j, now, late }) {
 
 /** The line read out: the same as Steps says it. */
 const routeLabel = (a, j) =>
-  [j.walk && `${t('Walk to {0}', j.bus.stop)} (${j.walk})`, `${j.bus.svc} ${t('from {0}', j.bus.stop)} ${j.bus.board}`, arrive(j)].filter(Boolean).join(', ');
+  [j.walk && `${t('Walk to {0}', j.bus.stop)} (${j.walk})`, `${j.bus.svc} ${t('from {0}', j.bus.stop)} ${j.bus.board}`, j.walkEnd && `${t('Walk to {0}', place(j))} (${j.walkEnd})`, arrive(j)]
+    .filter(Boolean)
+    .join(', ');
 
 const Point = ({ name, time, you = false }) => html`
   <div class=${you ? 'point you' : 'point'} aria-hidden="true">
@@ -160,7 +170,7 @@ function Ticket({ a, j, now, late }) {
       ${j.arrive &&
       html`<div class="arrives">
         <div>${t('Arrive {0}', j.arrive)}</div>
-        <div class=${`by${late}`}>${j.slack ?? t('at {0}', j.toStop)}</div>
+        <div class=${`by${late}`}>${j.slack ?? (j.walkEnd ? t('{0} walk from {1}', j.walkEnd, j.toStop) : t('at {0}', j.toStop))}</div>
       </div>`}
     </div>
     <${Tags} a=${a} j=${j} />
@@ -184,6 +194,7 @@ function Steps({ a, j, now, late }) {
           ><small>${[t('{0} ride', j.ride), j.off && t('off at {0}', j.off)].filter(Boolean).join(' · ')}</small></span
         >
       </li>
+      ${j.walkEnd && html`<li><span class="time">${j.arriveStop ?? ''}</span><span class="what">${t('Walk to {0}', place(j))}<small>${j.walkEnd}</small></span></li>`}
       <li class="last">
         <span class="time">${j.arrive ?? ''}</span>
         <span class="what"><strong>${t('Arrive at {0}', j.to)}</strong>${j.slack && html`<small class=${late.trim()}>${j.slack}</small>`}</span>

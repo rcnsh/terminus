@@ -186,6 +186,8 @@
       "to": "GEA1000 @ UTown",
       "toStop": "UTown",
       "arrive": "约 09:51",
+      "walkEnd": null,
+      "arriveStop": "约 09:51",
       "slack": "早到 9 分钟",
       "live": false,
       "backup": {

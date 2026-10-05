@@ -454,6 +454,7 @@
     <string name="journey_arrive_place">Arrive at %1$s</string>
     <string name="journey_arrive_time">Arrive %1$s</string>
     <string name="journey_at">at %1$s</string>
+    <string name="journey_walk_from">%1$s walk from %2$s</string>
     <string name="journey_live">Live</string>
     <string name="journey_backup">Or %1$s at %2$s from %3$s</string>
     <string name="journey_backup_now">Or go now: %1$s at %2$s from %3$s</string>

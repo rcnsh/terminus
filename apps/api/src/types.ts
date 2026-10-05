@@ -142,6 +142,8 @@ export interface BusLeg {
   off?: string;
   /** Where you get off (short name): the destination stop this bus calls at, or `off`. */
   toStop?: string;
+  /** Seconds on foot from where you get off to the place itself (a room, a food court). Absent for a stop. */
+  endWalkS?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -190,6 +192,11 @@ export interface MeAnswer extends Answer {
   refreshAt?: string;
   /** "Last D2 from UTown in 18 min", on the way home near the end of service. */
   warning?: string | null;
+  /** The walk from the stop you get off at to the destination itself (a
+   *  class's room, a building you searched for, a food court), in seconds,
+   *  and whether `leave.arrive` already counts it, as a class's leave-by
+   *  aims at the room. Absent when the destination is the stop. */
+  endWalk?: { s: number; inLeave: boolean };
   /** The user's walking speed in metres a second (their pace), for walk
    *  times an app shows itself, such as search results. Added by the route. */
   walkSpeedMs?: number;
@@ -223,6 +230,9 @@ export interface Leave {
   walkS?: number;
   rideS?: number;
   toStop?: string;
+  /** Without an arrive-by (whose `arrive` is at the venue): the walk on from
+   *  where you get off to the place itself, which `arrive` doesn't count. */
+  endWalkS?: number;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -367,6 +377,12 @@ export interface ResolveInput {
   walkSpeedMs?: number;
   /** Set for a class: leave-by then aims at this, not the next bus. */
   arriveBy?: ArriveBy | null;
+  /** Seconds on foot from the stop you get off at to the destination itself
+   *  (a room, a building, a food court), for "LT3 in ~12 min". 0 for a stop. */
+  endWalkS?: number;
+  /** A place with several stops (a food court): the walk from each, by stop
+   *  code, as the bus you take may not stop at the closest. */
+  endWalkByStopS?: Record<string, number>;
   /** Seconds per stop on a service, from measured rides (ridetimes.ts).
    *  RIDE.secondsPerHop where it has nothing. */
   hopS?: (svc: string) => number | null;

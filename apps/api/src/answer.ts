@@ -5,7 +5,7 @@
  */
 
 
-import type { Answer, Arrival, Env, ResolveInput, Stop, StopArrivals } from './types.ts';
+import type { Answer, Arrival, Env, ResolveInput, ScoredOption, Stop, StopArrivals } from './types.ts';
 import { WALK } from './config.ts';
 import { getArrivals } from './fms.ts';
 import { buildAnswer, shortStop } from './format.ts';
@@ -99,7 +99,10 @@ export async function answerFor(
   if (env.DB) ctx.waitUntil(recordCrowds(env.DB, byStop, nowMs));
   const crowdRisk = input.arriveBy && env.DB ? await loadCrowdRisk(env.DB, cands.map((c) => c.stop.code), nowMs) : undefined;
 
-  const options = scoreOptions(GRAPH, cands, byStop, nowMs);
+  // On from where a bus gets you off to the place itself, from that stop: a
+  // food court's other stop can be further from it than its first.
+  const endWalk = (o: ScoredOption) => input.endWalkByStopS?.[o.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
+  const options = scoreOptions(GRAPH, cands, byStop, nowMs, endWalk);
   const alt = pickAlt(options);
   const chosen = options[0]?.stop.code ?? fallbackStop?.code ?? '';
   const arrivals: Arrival[] = byStop.get(chosen)?.arrivals ?? [];
@@ -112,7 +115,9 @@ export async function answerFor(
     nearestStop: nearestStop(GRAPH, input.lat, input.lon),
     destLabel,
     walkAllS,
-    confidence: confidence(options, input.lat != null),
+    endWalk,
+    walkEndS: input.endWalkByStopS?.[input.to ?? ''] ?? input.endWalkS ?? 0,
+    confidence: confidence(options, input.lat != null, endWalk),
     arrivals,
     nowMs,
   });
@@ -125,6 +130,7 @@ export async function answerFor(
     graph: GRAPH,
     arriveBy: input.arriveBy,
     walkAllS: walking ? walkAllS : null,
+    endWalk,
     nowMs,
     crowdRisk,
   });

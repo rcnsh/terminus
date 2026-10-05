@@ -31,6 +31,8 @@ export interface LeaveInput {
   /** Seconds on foot when the answer is to walk the whole way (from home, when
    *  starting there); null otherwise. */
   walkAllS: number | null;
+  /** The walk on from where an option gets you off to the place itself (a room, a food court). */
+  endWalk?: (o: ScoredOption) => number;
   nowMs: number;
   /** How often a bus is packed at a stop around a time; null when unknown. */
   crowdRisk?: CrowdRisk;
@@ -68,7 +70,8 @@ export function leaveBy(f: LeaveInput): Leave | null {
     if (!b || b.quality === 'unknown') return null;
     const at = b.fetchedAt + b.boardS * 1000 - b.walkS * 1000 - BUFFER_MS;
     if (at - f.nowMs < NOW_S * 1000) return null;
-    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), stopCode: b.stop.code, board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000), note: null, walkS: b.walkS, rideS: b.rideS, ...offOf(b) };
+    const endWalkS = f.endWalk?.(b) ?? 0;
+    return { at: isoSeconds(at), estimated: b.quality === 'scheduled', svc: b.svc, stop: shortStop(b.stop.name), stopCode: b.stop.code, board: isoSeconds(b.fetchedAt + b.boardS * 1000), arrive: isoSeconds(b.fetchedAt + b.totalS * 1000), note: null, walkS: b.walkS, rideS: b.rideS, ...offOf(b), ...(endWalkS > 0 ? { endWalkS } : {}) };
   }
 
   const legs: Leg[] = f.options.length

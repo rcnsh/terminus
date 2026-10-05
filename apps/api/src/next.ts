@@ -59,6 +59,8 @@ interface Dest {
   from: string | null;
   trip?: ImportedTrip | null;
   fromVenue?: string | null;
+  /** A room or building searched for, reached on foot from its stop `to`. */
+  venue?: string | null;
 }
 
 export interface Planned {
@@ -66,8 +68,8 @@ export interface Planned {
   trip: TripView;
 }
 
-/** Stop code, or a NUSMods venue code resolved to its nearest stop. */
-export function resolveTo(graph: Graph, raw: string): { to: string; label: string } | null {
+/** Stop code, or a NUSMods venue code resolved to its nearest stop (kept as `venue`, for the walk from it). */
+export function resolveTo(graph: Graph, raw: string): { to: string; label: string; venue?: string } | null {
   const code = raw.trim().toUpperCase();
   const stop = indexGraph(graph).byCode.get(code);
   if (stop) return { to: stop.code, label: shortStop(stop.name, 14) };
@@ -75,7 +77,7 @@ export function resolveTo(graph: Graph, raw: string): { to: string; label: strin
   const lm = landmark(code);
   if (lm) return { to: code, label: lm.name };
   const v = venueToStop(code);
-  return v ? { to: v.stop, label: code.split('-')[0] } : null;
+  return v ? { to: v.stop, label: code.split('-')[0], venue: code } : null;
 }
 
 function base(nowMs: number, label: string, detail: string): Answer {
@@ -154,9 +156,15 @@ export async function tripAnswer(
       places,
     };
   }
-  const venueM = dest.trip?.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
-  // A class has its room's walk; a food court the walk from its nearest stop.
+  const venue = dest.trip?.venue || dest.venue;
+  const venueM = venue ? (venueToStop(venue)?.m ?? 0) : 0;
+  // A class or a room searched for has its room's walk; a food court the walk from its nearest stop.
   const venueWalkS = Math.round((venueM || targetStops(dest.to).walkM) / speed);
+  // Past this the room's stop is not really its stop (bad data): no walk at all.
+  const endWalkS = venueWalkS <= MAX_VENUE_WALK_S ? venueWalkS : 0;
+  // A food court with several stops: the walk from each, for whichever the bus gets you off at.
+  const lm = venueM ? null : landmark(dest.to);
+  const endWalkByStopS = lm && Object.keys(lm.stops).length > 1 ? Object.fromEntries(Object.entries(lm.stops).map(([code, m]) => [code, Math.round(m / speed)])) : undefined;
   // A place served by several stops arrives at whichever is quicker.
   const target = targetStops(dest.to);
   const input: ResolveInput = {
@@ -169,12 +177,15 @@ export async function tripAnswer(
     originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin, speed) : 0,
     walkSpeedMs: speed,
     arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS, fullBusMargin: profile.fullBusMargin, ...(oneEarlier ? { oneEarlier } : {}) } : null,
+    endWalkS,
+    ...(endWalkByStopS ? { endWalkByStopS } : {}),
   };
   const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
   // For a class, say whether you'll make it: stop arrival plus the walk
   // from the stop to the venue, against the start time.
   const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs, h12) : null;
-  return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, timing, places };
+  const endWalk = endWalkS > 0 ? { endWalk: { s: endWalkS, inLeave: input.arriveBy != null } } : {};
+  return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, timing, places, ...endWalk };
 }
 
 function onCampus(graph: Graph, lat: number, lon: number): boolean {

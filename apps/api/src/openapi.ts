@@ -1338,6 +1338,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
                 walkS: { type: 'integer', description: 'Seconds on foot to `stop`. Absent when walking.' },
                 rideS: { type: 'integer', description: 'Seconds on the bus. Absent when walking.' },
+                endWalkS: {
+                  type: 'integer',
+                  description: 'Without a class to aim at: seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. A class’s `arrive` is already at its room. Absent for a stop.',
+                },
               },
             },
             bus: {
@@ -1373,6 +1377,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             arrive: { type: ['string', 'null'], format: 'date-time', description: 'When you reach the destination stop. Null with no time.' },
             estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time.' },
             off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination. Absent otherwise.' },
+            toStop: { type: 'string', description: 'Where you get off, short name: the destination stop this bus calls at, or `off`.' },
+            endWalkS: { type: 'integer', description: 'Seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. Absent for a stop.' },
           },
         },
         Arrival: {
@@ -1697,9 +1703,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     journey: {
                       type: ['object', 'null'],
                       description:
-                        'The trip as steps, for apps that draw it (a line from you to the destination, a ticket, a list of steps): walk to the stop, take the bus, get there. ' +
+                        'The trip as steps, for apps that draw it (a line from you to the destination, a ticket, a list of steps): walk to the stop, take the bus, get there, and walk on when the destination is a room or building away from the stop. ' +
                         'Null on foot, on the bus, once there, and with no time to give. Count down to `leave.at` and `boardAt` yourself; show the strings as they are.',
-                      required: ['leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'slack', 'live', 'backup'],
+                      required: ['leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'walkEnd', 'arriveStop', 'slack', 'live', 'backup'],
                       properties: {
                         leave: { type: ['string', 'null'], description: 'When to set off ("4:01 PM", "~4:01 PM"). Null when it is now.' },
                         walk: { type: ['string', 'null'], description: 'The walk to the stop ("3 min"). Null at the stop.' },
@@ -1709,7 +1715,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         off: { type: ['string', 'null'], description: 'Where to get off, when that is across the road from the destination.' },
                         to: { type: 'string', description: 'Where you are going ("GEA1000 @ UTown").' },
                         toStop: { type: 'string', description: 'The stop you get off at ("UTown"), short enough for the end of a line.' },
-                        arrive: { type: ['string', 'null'], description: 'When you get there ("4:08 PM").' },
+                        arrive: { type: ['string', 'null'], description: 'When you get there ("4:08 PM"): to the room or building itself when `walkEnd` is set.' },
+                        walkEnd: {
+                          type: ['string', 'null'],
+                          description: 'The walk from `toStop` to where you are going ("2 min"): a class’s room, a building or room searched for, a food court. Null when the destination is the stop.',
+                        },
+                        arriveStop: { type: ['string', 'null'], description: 'When the bus gets to `toStop` ("4:06 PM"). The same as `arrive` when `walkEnd` is null.' },
                         slack: { type: ['string', 'null'], description: 'A class only: "3 min early", "2 min late".' },
                         live: { type: 'boolean', description: 'The bus’s time is live, not a timetable estimate.' },
                         backup: {

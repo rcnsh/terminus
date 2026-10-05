@@ -76,7 +76,7 @@ struct Main: View {
                     // Offline, the stale answer's details would mislead: how to the day plan's next thing.
                     OfflineDetail(pick: p).transition(.opacity.combined(with: .offset(y: 6)))
                 } else {
-                    AnswerDetail(answer: answer, busy: model.signalling, onAction: model.signal, onChoice: model.choose).transition(.opacity.combined(with: .offset(y: 6)))
+                    AnswerDetail(answer: answer, busy: model.signalling, undoShownFor: model.removed?.key, onAction: model.signal, onChoice: model.choose).transition(.opacity.combined(with: .offset(y: 6)))
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 120, alignment: .top)
@@ -90,7 +90,7 @@ struct Main: View {
 
             // Today, on the plan's tab: the rest of the day under the next trip.
             if !model.showNearby, model.target == .plan, let day = model.day, !day.items.isEmpty || model.removed != nil {
-                TodayList(day: day, removed: model.removed, onRemove: model.removeFromToday, onUndo: model.undoRemove).padding(.horizontal, 4)
+                TodayList(day: day, removed: model.removed, removedAt: model.removedAt, removedBefore: model.removedBefore, onRemove: model.removeFromToday, onUndo: model.undoRemove).padding(.horizontal, 4)
             }
 
             if model.reporting {

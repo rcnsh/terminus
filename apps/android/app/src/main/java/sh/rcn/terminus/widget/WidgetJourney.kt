@@ -6,6 +6,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
+import androidx.glance.LocalSize
 import androidx.glance.GlanceTheme
 import androidx.glance.LocalContext
 import androidx.glance.appwidget.cornerRadius
@@ -95,22 +96,35 @@ private fun Arrival(answer: NextAnswer, journey: Journey, top: Dp = 4.dp) {
 @Composable
 private fun Route(answer: NextAnswer, journey: Journey, large: Boolean, roomy: Boolean, note: String?) {
     // A compact class says its arrival on the line under the headline.
-    Head(answer, journey, note, withArrive = !roomy && !answer.isClassPlan)
+    // Too narrow for three points and the stretches between: the trip in one line instead.
+    val width = LocalSize.current.width
+    val line = roomy && width >= LINE_MIN
+    Head(answer, journey, note, withArrive = !line && !answer.isClassPlan)
     Headline(answer, large)
-    if (!roomy) {
+    if (!line) {
         Text(oneLine(answer, journey), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
         return
     }
     Spacer(GlanceModifier.height(6.dp))
     val colors = GlanceTheme.colors
+    // On from the stop to a room or building: a fourth point where there's room
+    // for it; otherwise the line ends at the place itself, when you get there.
+    val four = journey.walkEnd != null && width >= FOUR_MIN
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        val w = if (four) 46.dp else 56.dp
         journey.walk?.let { walk ->
-            Point(L.s(R.string.journey_you), journey.leave ?: L.s(R.string.journey_now), true)
+            Point(L.s(R.string.journey_you), journey.leave ?: L.s(R.string.journey_now), true, w)
             Stretch(walk, null, colors.outline, 2.dp)
         }
-        Point(journey.bus.stop, journey.bus.board, false)
+        Point(journey.bus.stop, journey.bus.board, false, w)
         Stretch(journey.ride, journey.bus.svc, fixed(journey.bus.color), 4.dp)
-        Point(journey.toStop, journey.arrive ?: "", false)
+        if (four) {
+            Point(journey.toStop, journey.arriveStop ?: "", false, w)
+            Stretch(journey.walkEnd!!, null, colors.outline, 2.dp)
+            Point(journey.place, journey.arrive ?: "", false, w)
+        } else {
+            Point(if (journey.walkEnd != null) journey.place else journey.toStop, journey.arrive ?: "", false, w)
+        }
     }
     Arrival(answer, journey)
     // One line under the line fits: for a class, whether it's on time beats the backup bus.
@@ -119,11 +133,14 @@ private fun Route(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
 
 private val CAPTION = 16.dp
 private val DOT = 10.dp
+/** Widths a line needs: three points (56 dp) and their stretches, and four (46 dp), with the widget's padding. */
+private val LINE_MIN = 230.dp
+private val FOUR_MIN = 300.dp
 
 @Composable
-private fun Point(name: String, time: String, you: Boolean) {
+private fun Point(name: String, time: String, you: Boolean, width: Dp = 56.dp) {
     val colors = GlanceTheme.colors
-    Column(GlanceModifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(GlanceModifier.width(width), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(GlanceModifier.height(CAPTION))
         Box(GlanceModifier.size(DOT).cornerRadius(DOT / 2).background(if (you) colors.primary else colors.onSurface)) {}
         Text(name, style = TextStyle(color = colors.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), maxLines = 1)
@@ -195,7 +212,8 @@ private fun Steps(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
     Spacer(GlanceModifier.height(4.dp))
     journey.walk?.let { StepLine(journey.leave ?: L.s(R.string.journey_now), "${L.s(R.string.journey_walk_to, journey.bus.stop)} · $it", null) }
     StepLine(journey.bus.board, "${L.s(R.string.journey_from, journey.bus.stop)} · ${L.s(R.string.journey_ride, journey.ride)}", journey)
-    if (large) StepLine(journey.arrive ?: "", listOfNotNull(L.s(R.string.journey_arrive_place, journey.to), journey.slack).joinToString(" · "), null, late = answer.leaveLate)
+    // The walk on from the stop shares the arrival's line, so the widget needs no more room.
+    if (large) StepLine(journey.arrive ?: "", listOfNotNull(L.s(R.string.journey_arrive_place, journey.to), journey.slack, journey.walkEnd?.let { L.s(R.string.journey_walk_from, it, journey.toStop) }).joinToString(" · "), null, late = answer.leaveLate)
 }
 
 @Composable
