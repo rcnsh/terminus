@@ -8,8 +8,8 @@
 # sets them) it packages "terminus beta.app" as
 # build/release/beta/<version>/terminus-<version>.dmg instead.
 #
-# The release workflow (.github/workflows/release.yml) runs this with the
-# terminus self-signed certificate. That certificate is not trusted by macOS
+# scripts/release.sh runs this with the terminus self-signed certificate,
+# from the login keychain. That certificate is not trusted by macOS
 # and the app is not notarised, so Gatekeeper still asks on first open; what
 # the signature buys is the same code identity on every version, so macOS
 # keeps the app's location permission and login item across updates.

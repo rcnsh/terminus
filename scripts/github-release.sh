@@ -2,9 +2,9 @@
 # Publish a GitHub release for a tagged version, with the APKs (one per CPU
 # type from 2.1) and the Mac DMG attached, the hand-written highlights in
 # RELEASE_NOTES.md (when it's for this version) and the commits since the
-# previous tag. The release workflow
-# runs it once both files are in build/release/<version>; run again, it
-# re-uploads the files to the existing release.
+# previous tag. scripts/release.sh runs it once every file is in
+# build/release/<version>; run again, it re-uploads the files to the
+# existing release.
 #
 # A pre-release version ("2.0.0-beta") is titled "terminus 2.0 beta" and
 # marked a pre-release on GitHub. The site's downloads are unaffected: they
