@@ -104,6 +104,16 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_NEEDS_SETUP, false)
         set(value) = prefs.edit { putBoolean(KEY_NEEDS_SETUP, value) }
 
+    /** A row has been swiped off Today: the app stops pointing out that rows can be. */
+    var swipedToday: Boolean
+        get() = prefs.getBoolean(KEY_SWIPED_TODAY, false)
+        set(value) = prefs.edit { putBoolean(KEY_SWIPED_TODAY, value) }
+
+    /** How many times a Today row has nudged aside to show it can be swiped. */
+    var swipePeeks: Int
+        get() = prefs.getInt(KEY_SWIPE_PEEKS, 0)
+        set(value) = prefs.edit { putInt(KEY_SWIPE_PEEKS, value) }
+
     /** The account's email as last seen, or null for an account without one. */
     var email: String?
         get() = prefs.getString(KEY_EMAIL, null)
@@ -212,5 +222,7 @@ class Store(context: Context) {
         const val KEY_EMAIL = "email"
         const val KEY_PUSH = "push-token"
         const val KEY_ALERTED = "leave-alerted"
+        const val KEY_SWIPED_TODAY = "swiped-today"
+        const val KEY_SWIPE_PEEKS = "swipe-peeks"
     }
 }

@@ -17,6 +17,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -33,51 +39,96 @@ import androidx.compose.foundation.layout.widthIn
  * Today at a glance, from /me/day: each class with its leave-by, and the
  * trips home. What's done is dimmed. Anything still to come can be swiped
  * away to take it off today, whether it's timetabled or one you added; it
- * goes at once, with Undo for a few seconds.
+ * goes at once, with Undo for a few seconds. Until a row has been swiped,
+ * the heading says so, and the first few times the first row nudges aside
+ * to show what's under it.
  */
 @Composable
-internal fun DayTimeline(day: DayPlan, removed: DayItem?, onRemove: (DayItem) -> Unit, onUndo: () -> Unit, onDismissUndo: () -> Unit) {
-    if (day.items.isEmpty() && removed == null) return
+internal fun DayTimeline(
+    day: DayPlan,
+    removed: DayItem?,
+    removeError: String?,
+    hint: Boolean,
+    peek: Boolean,
+    onRemove: (DayItem) -> Unit,
+    onUndo: () -> Unit,
+    onDismissUndo: () -> Unit,
+    onPeeked: () -> Unit,
+) {
+    if (day.items.isEmpty() && removed == null && removeError == null) return
     val ctx = LocalContext.current
     val fmt = { ms: Long -> clock(ctx, ms) }
+    val firstRemovable = day.items.firstOrNull { it.removable }?.key
     Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
-        Text(stringResource(R.string.today_heading), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+        Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.today_heading), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            if (hint && firstRemovable != null) {
+                Text(stringResource(R.string.swipe_to_remove), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         if (removed != null) UndoBar(removed, onUndo, onDismissUndo)
+        else if (removeError != null) ErrorBar(removeError, onDismissUndo)
         for (item in day.items) {
             // Keyed, so a swiped row's state doesn't pass to the one moving up.
             androidx.compose.runtime.key(item.key) {
-                if (item.removable) Swipeable(item, onRemove) { Row(item, fmt) } else Row(item, fmt)
+                if (item.removable) Swipeable(item, peek && item.key == firstRemovable, onRemove, onPeeked) { Row(item, fmt) } else Row(item, fmt)
             }
         }
     }
 }
 
-/** Swipe either way to take it off today. */
+/** Swipe either way to take it off today. With `peek`, it slides aside once by itself and back, showing what's under it. */
 @Composable
-private fun Swipeable(item: DayItem, onRemove: (DayItem) -> Unit, content: @Composable () -> Unit) {
+private fun Swipeable(item: DayItem, peek: Boolean, onRemove: (DayItem) -> Unit, onPeeked: () -> Unit, content: @Composable () -> Unit) {
     val state = androidx.compose.material3.rememberSwipeToDismissBoxState()
     val remove = stringResource(R.string.remove_from_today)
+    val nudge = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    val nudgePx = with(androidx.compose.ui.platform.LocalDensity.current) { 180.dp.toPx() }
     androidx.compose.runtime.LaunchedEffect(state.currentValue) {
         if (state.currentValue != androidx.compose.material3.SwipeToDismissBoxValue.Settled) onRemove(item)
     }
-    androidx.compose.material3.SwipeToDismissBox(
-        state = state,
-        backgroundContent = {
-            val toEnd = state.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd
-            // Only while swiping: otherwise it's hidden under the row, and screen readers would read it.
-            if (state.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.Settled) return@SwipeToDismissBox
-            Box(
-                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp)).padding(horizontal = 16.dp),
-                contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                Text(stringResource(R.string.remove_from_today), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.labelLarge)
-            }
-        },
-        modifier = Modifier.semantics {
-            customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction(remove) { onRemove(item); true })
+    // Wholly on screen: Today is often below the fold, and a nudge nobody sees teaches nothing.
+    var shown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(peek) {
+        if (!peek) return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { shown }.first { it }
+        // Once it has been on screen a moment, so it's seen.
+        kotlinx.coroutines.delay(600)
+        nudge.animateTo(-nudgePx, androidx.compose.animation.core.tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        kotlinx.coroutines.delay(700)
+        nudge.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 300f))
+        onPeeked()
+    }
+    Box(
+        if (!peek) Modifier else Modifier.onGloballyPositioned { c ->
+            shown = c.size.height > 0 && c.boundsInWindow().height >= c.size.height - 1
         },
     ) {
-        Box(Modifier.background(MaterialTheme.colorScheme.background)) { content() }
+        // Under the row while it nudges aside: the same as a swipe to the left shows.
+        if (nudge.value != 0f) RemoveBehind(remove, toEnd = false, Modifier.matchParentSize())
+        androidx.compose.material3.SwipeToDismissBox(
+            state = state,
+            backgroundContent = {
+                // Only while swiping: otherwise it's hidden under the row, and screen readers would read it.
+                if (state.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.Settled) return@SwipeToDismissBox
+                RemoveBehind(remove, toEnd = state.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd, Modifier.fillMaxSize())
+            },
+            modifier = Modifier.semantics {
+                customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction(remove) { onRemove(item); true })
+            },
+        ) {
+            Box(Modifier.graphicsLayer { translationX = nudge.value }.background(MaterialTheme.colorScheme.background)) { content() }
+        }
+    }
+}
+
+@Composable
+private fun RemoveBehind(text: String, toEnd: Boolean, modifier: Modifier) {
+    Box(
+        modifier.background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp)).padding(horizontal = 16.dp),
+        contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd,
+    ) {
+        Text(text, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -96,6 +147,21 @@ private fun UndoBar(item: DayItem, onUndo: () -> Unit, onDismiss: () -> Unit) {
         Text(stringResource(R.string.taken_off_today, name), color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         TextButton(onClick = onUndo) { Text(stringResource(R.string.undo), color = MaterialTheme.colorScheme.inversePrimary) }
     }
+}
+
+/** A swipe that didn't take: the row is back, and this says why, for a few seconds. */
+@Composable
+private fun ErrorBar(text: String, onDismiss: () -> Unit) {
+    androidx.compose.runtime.LaunchedEffect(text) {
+        kotlinx.coroutines.delay(6_000)
+        onDismiss()
+    }
+    Text(
+        text,
+        color = MaterialTheme.colorScheme.onErrorContainer,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+    )
 }
 
 @Composable
