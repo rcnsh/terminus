@@ -306,6 +306,17 @@ has NUS's feed down ("NUS's live bus times have been down since 9:14 AM"),
 on an answer that is an estimate or has no time (the feed may be back
 before the next check, and a day with no bus needs no notice). Each isolate reads the monitor's state from KV at most once a
 minute (`feedDownSince`).
+
+`journey` is the trip as steps, for the Android app's card styles (a line
+from you to the destination, a ticket, a list of steps; Settings ›
+Appearance, the line by default): when to leave, the walk to the stop, the
+bus with its colour and time, the ride, where you get off and when you get
+there, and a backup bus (the other bus on a trip; for a class, the sooner
+bus to go now on). A class takes the leave-by's bus, any other trip the
+headline bus, from the answer's `bus` and `altBus` legs and the leave-by's
+`walkS` and `rideS`. It's null on foot, on the bus, once there and with no
+time to give; at the stop it has no walk. Apps count down to `leave.at` and
+`journey.boardAt` themselves.
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
   last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
   again, once fewer than 23 days are left. However much it's used, a web

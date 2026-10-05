@@ -11,7 +11,7 @@
  * clock.ts; rest and timing text in profile.ts.
  */
 
-import type { Answer, Arrival, Quality, ScoredOption, Stop } from './types.ts';
+import type { Answer, Arrival, BusLeg, Quality, ScoredOption, Stop } from './types.ts';
 import { LABEL_MAX, WALK, isMeasured } from './config.ts';
 import { m } from './i18n.ts';
 
@@ -105,6 +105,22 @@ export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefi
   if (walkAllS + margin < best.totalS) return 'win';
   if (walkAllS < best.totalS + WALK.mentionWithinS) return 'close';
   return 'lose';
+}
+
+/** An option as a leg, for the card's journey. An 'unknown' option's times are sort keys, so it has none. */
+export function legOf(o: ScoredOption): BusLeg {
+  const timed = o.quality !== 'unknown';
+  return {
+    svc: o.svc,
+    stop: shortStop(o.stop.name),
+    stopCode: o.stop.code,
+    walkS: o.walkS,
+    rideS: o.rideS,
+    board: timed ? iso(o.fetchedAt + o.boardS * 1000) : null,
+    arrive: timed ? iso(o.fetchedAt + o.totalS * 1000) : null,
+    estimated: o.quality === 'scheduled',
+    ...(o.off ? { off: shortStop(o.off.name) } : {}),
+  };
 }
 
 /** One option rendered standalone, for the `alt` field. */
@@ -262,5 +278,7 @@ export function buildAnswer(f: FormatInput): Answer {
     alt: f.alt ? renderAlt(f.alt) : null,
     departsAt,
     arriveAt,
+    bus: legOf(best),
+    altBus: f.alt ? legOf(f.alt) : null,
   };
 }
