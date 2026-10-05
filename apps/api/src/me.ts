@@ -106,13 +106,14 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 const mailFailed = (e: unknown) => console.error('device email failed', e instanceof Error ? e.name : typeof e);
 
 /**
- * A trip key a client sent: one of the profile's classes, or a trip home.
- * The key becomes stored rows (signals, outcomes, choices), so anything
- * else would let a script make as many as it likes.
+ * A trip key a client sent: one of the profile's classes, today's usual
+ * times and one-off trips, or a trip home. The key becomes stored rows
+ * (signals, outcomes, choices), so anything else would let a script make as
+ * many as it likes.
  */
-function knownTrip(profile: Profile, key: string): boolean {
+function knownTrip(profile: Profile, key: string, nowMs: number): boolean {
   if (/^home:(\d{1,4}|evening)$/.test(key) || /^gap-home:[A-Za-z0-9_-]{1,24}$/.test(key)) return true;
-  return [...profile.trips, ...profile.manual].some((t) => classKey(t) === key);
+  return [...profile.trips, ...profile.manual, ...classesOn(profile, nowMs)].some((t) => classKey(t) === key);
 }
 
 /** "Pixel 8": what the app calls itself, shown in emails and the device list. */
@@ -642,7 +643,7 @@ export const ME_ROUTES: MeRoute[] = [
       const now = await planned(here, env, ctx, nowMs, deps, profile, day);
       const key = typeof body?.trip === 'string' && body.trip ? body.trip.slice(0, 80) : now.trip.key;
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
-      if (key !== now.trip.key && !knownTrip(profile, key)) return json({ error: 'no such trip today' }, 400);
+      if (key !== now.trip.key && !knownTrip(profile, key, nowMs)) return json({ error: 'no such trip today' }, 400);
       const current = key === now.trip.key;
       let followedDay: DayRecord | null = null;
       // After the planned bus has left, "On it" and "Missed it" are about that
@@ -770,7 +771,7 @@ export const ME_ROUTES: MeRoute[] = [
         return json({ error: "send id (from card.suggestion) or trip and pref ('earlier' or 'quiet'), and choice: accept, dismiss or undo" }, 400);
       }
       const profile = await getProfile(db, session.user.id, deps.graph);
-      if (!knownTrip(profile, trip)) return json({ error: 'no such trip today' }, 400);
+      if (!knownTrip(profile, trip, nowMs)) return json({ error: 'no such trip today' }, 400);
       const label = [...profile.trips, ...profile.manual].find((t) => classKey(t) === trip)?.label ?? null;
       await setPref(db, session.user.id, trip, pref as PrefKind, choice, label, nowMs);
       return json({ ok: true, choices: await listPrefs(db, session.user.id) });
