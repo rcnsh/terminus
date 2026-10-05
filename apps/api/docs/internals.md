@@ -320,10 +320,13 @@ time to give; at the stop it has no walk. When where you're going is a walk
 from its stop (a class's room, a room or building searched for by its code,
 a food court), `walkEnd` is that walk and `arrive` is when you reach the place
 itself, with `arriveStop` the bus's arrival at the stop; the detail line's
-"LT3 in ~14 min" counts the walk too. A class's leave-by already aims at the
-room (`leave.arrive` is there), a bus's arrival is at the stop: the answer's
-`endWalk` (kept off the response) says which, so the two are never added
-twice. Apps count down to `leave.at` and `journey.boardAt` themselves.
+"LT3 in ~14 min" counts the walk too. Each bus leg carries the walk from the
+stop it gets you off at (`endWalkS`), as a food court's stops are different
+walks from it, and walking the whole way is weighed against the bus all the
+way to the place ("Walk · 8 min"). The answer's own times (`arriveAt`, a
+leg's `arrive`) stay at the stop. A class's leave-by already aims at the
+room (`leave.arrive` is there): the answer's `endWalk` (kept off the
+response) says which, so the walk is never added twice. Apps count down to `leave.at` and `journey.boardAt` themselves.
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
   last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
   again, once fewer than 23 days are left. However much it's used, a web
