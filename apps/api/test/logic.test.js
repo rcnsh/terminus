@@ -157,6 +157,22 @@ test('on a loop route both sides reach UTown, but the wrong side loses on cost',
   assert.ok(confidence(options, true) > 0.9, 'a decisive margin should report high confidence');
 });
 
+test('the walk on from the stop counts in the ranking: the bus to the nearer side of a place wins', () => {
+  const input = { lat: KR_OPP.lat, lon: KR_OPP.lon, to: 'UTOWN', originCode: null };
+  const cands = candidateStops(GRAPH, input);
+  const arrivals = arrivalsFor(
+    Object.fromEntries([
+      sa('KR-MRT', [{ svc: 'D2', etaS: 180, crowd: null, plate: null }]),
+      sa('KR-MRT-OPP', [{ svc: 'D2', etaS: 180, crowd: null, plate: null }]),
+    ]),
+  );
+  // As above, KR-MRT gets there first...
+  assert.equal(scoreOptions(GRAPH, cands, arrivals, NOW)[0].stop.code, 'KR-MRT');
+  // ...but not once its trip ends with a long walk on to the place and the other's doesn't.
+  const options = scoreOptions(GRAPH, cands, arrivals, NOW, (o) => (o.stop.code === 'KR-MRT' ? 3_600 : 0));
+  assert.equal(options[0].stop.code, 'KR-MRT-OPP');
+});
+
 test('near PGP Foyer, trips it would reach the long way round board at PGP instead', () => {
   // Between the two stops, closer to Foyer (40 m against 78 m). Foyer's
   // services leave the wrong way for everything except COM3.
