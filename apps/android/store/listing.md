@@ -28,6 +28,7 @@ Import your NUSMods timetable once. From then on, terminus plans the whole trip:
 
 ONE ANSWER, ON YOUR HOME SCREEN
 • The widget shows when to leave for your next class. Its buttons switch it to the buses near you, or the quickest way to your favourite places, without opening the app.
+• The whole trip at a glance: you, the stop and your class on one line, with the bus in its colour and when you'll get there. Prefer it as a ticket or a list of steps? Choose in Settings › Appearance.
 • A heads-up five minutes before you need to set off.
 • Late? It says so, and offers the quickest way there.
 • If the bus you'd catch is often busy at that stop and time, it aims for one bus earlier.
@@ -88,6 +89,7 @@ terminus 告诉你什么时候该出发去上下一节课，以及该搭哪一�
 
 一个答案，就在主屏幕上
 • 小组件显示下一节课什么时候出发。点它上面的按钮，不用打开应用就能看附近的巴士，或去收藏地点最快的方式。
+• 整段行程一眼看完：你、车站和课室连成一条线，巴士用它的颜色标出，还有几点到达。想看成车票或逐条步骤？在“设置 › 外观”里选。
 • 需要出发前五分钟提醒你。
 • 要迟到了？它会直说，并给出最快的走法。
 • 如果你要搭的那班车在那个站、那个时间经常很挤，它会建议早一班。
@@ -127,9 +129,9 @@ terminus 是独立开发的应用，并非由新加坡国立大学（NUS）制�
 
 Upload in this order. English in `screenshots/`, Chinese in `screenshots/zh/`, all 1080×1920 (Play's phone limit is a 2:1 ratio, so the 1280×2856 emulator screen was set to `wm size 1080x1920`, density 420).
 
-1. `1-leave-by.png`: when to leave for the next class, the bus, and Today.
-2. `2-widget.png`: the widget on the home screen, with its buttons.
-3. `3-places.png`: a place from search keeps its tab (with ×).
+1. `1-leave-by.png`: when to leave for the next class, counting down, and the whole trip on a line: the walk, the bus in its colour, and when you get there.
+2. `2-widget.png`: the widget on the home screen, the trip on a line, with its buttons.
+3. `3-places.png`: a place from search keeps its tab (with ×), its trip drawn the same way.
 4. `4-on-the-bus.png`: on the bus, with how far along the ride you are, the next stop and the arrival.
 5. `5-nearby-widget.png`: Nearby on the widget, with the swap button for the stop across the road.
 
