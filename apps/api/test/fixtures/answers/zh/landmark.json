@@ -69,6 +69,28 @@
   "alt": "A1 · 9 分钟 · PGP",
   "departsAt": "2026-08-27T01:06:00Z",
   "arriveAt": "2026-08-27T01:09:10Z",
+  "bus": {
+    "svc": "R2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 300,
+    "rideS": 190,
+    "board": "2026-08-27T01:06:00Z",
+    "arrive": "2026-08-27T01:09:10Z",
+    "estimated": false,
+    "toStop": "Opp NUSS"
+  },
+  "altBus": {
+    "svc": "A1",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 300,
+    "rideS": 855,
+    "board": "2026-08-27T01:09:00Z",
+    "arrive": "2026-08-27T01:23:15Z",
+    "estimated": false,
+    "toStop": "AS 5"
+  },
   "leave": null,
   "mode": "trip",
   "dest": {
@@ -115,6 +137,30 @@
     "detected": false,
     "walkTo": null,
     "notice": null,
-    "h12": false
+    "h12": false,
+    "journey": {
+      "leave": null,
+      "walk": "5 分钟",
+      "bus": {
+        "svc": "R2",
+        "color": "#34a853",
+        "stop": "PGP",
+        "board": "09:06"
+      },
+      "boardAt": "2026-08-27T01:06:00Z",
+      "ride": "3 分钟",
+      "off": null,
+      "to": "The Deck",
+      "toStop": "Opp NUSS",
+      "arrive": "09:09",
+      "slack": null,
+      "live": true,
+      "backup": {
+        "svc": "A1",
+        "color": "#e53935",
+        "stop": "PGP",
+        "board": "09:09"
+      }
+    }
   }
 }

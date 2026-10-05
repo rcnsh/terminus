@@ -430,4 +430,31 @@
     <string name="reimport_text">此链接属于已结束的 %1$s。请从 NUSMods 复制本学期的链接并在下方导入。</string>
     <string name="reimport_needed">需要重新导入</string>
     <string name="change_stop">%1$s 的车站</string>
+
+    <!-- Card styles (CardStyle): how a trip by bus is drawn. -->
+    <string name="card_style">卡片样式</string>
+    <string name="card_style_hint">卡片和小组件如何显示坐车的行程。仅限这部手机。</string>
+    <string name="card_style_route">路线</string>
+    <string name="card_style_route_hint">整段行程画成一条线，时间写在下面。</string>
+    <string name="card_style_ticket">车票</string>
+    <string name="card_style_ticket_hint">先显示车和它的颜色，再显示何时出发。</string>
+    <string name="card_style_steps">步骤</string>
+    <string name="card_style_steps_hint">步行、坐车、到达，逐条列出。</string>
+    <string name="leave_in_min">%1$d 分钟后出发</string>
+    <string name="leave_in_min_s">%1$d 分 %2$d 秒后出发</string>
+    <string name="leave_in_s">%1$d 秒后出发</string>
+    <string name="leave_by_short">%1$s 前出发</string>
+    <string name="journey_to">去 %1$s</string>
+    <string name="journey_you">你</string>
+    <string name="journey_now">现在</string>
+    <string name="journey_walk_to">步行到 %1$s</string>
+    <string name="journey_walk">步行 %1$s</string>
+    <string name="journey_from">在 %1$s 上车</string>
+    <string name="journey_ride">乘车 %1$s</string>
+    <string name="journey_arrive_place">到达 %1$s</string>
+    <string name="journey_arrive_time">%1$s 到达</string>
+    <string name="journey_at">在 %1$s</string>
+    <string name="journey_live">实时</string>
+    <string name="journey_backup">或在 %3$s 坐 %2$s 的 %1$s</string>
+    <string name="journey_backup_now">或现在走：在 %3$s 坐 %2$s 的 %1$s</string>
 </resources>

@@ -47,6 +47,7 @@ import androidx.glance.semantics.semantics
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.R
@@ -282,6 +283,17 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         }
                         if (large) {
                             answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
+                            Spacer(GlanceModifier.defaultWeight())
+                            ModeRow(ctx, bottom)
+                            Spacer(GlanceModifier.height(6.dp))
+                        }
+                        Footer(ctx, fetchedAt, error, roomy)
+                    }
+                    answer.card?.journey != null && error != UPDATING && !isOld(answer, fetchedAt, now0) -> {
+                        // A trip by bus, in the card style chosen in Settings › Appearance.
+                        // Old times fall through to the layouts below, which dim them.
+                        WidgetJourney(answer, answer.card.journey, CardStyle.pref(ctx), large, roomy, error?.takeIf { !roomy })
+                        if (large) {
                             Spacer(GlanceModifier.defaultWeight())
                             ModeRow(ctx, bottom)
                             Spacer(GlanceModifier.height(6.dp))

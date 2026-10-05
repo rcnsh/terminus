@@ -172,6 +172,8 @@ data class Card(
     val walkTo: WalkTo? = null,
     /** "NUS's live bus times have been down since 9:14 AM", above the answer. */
     val notice: String? = null,
+    /** The trip as steps, for the card styles that draw it. */
+    val journey: Journey? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) = Card(
@@ -210,6 +212,7 @@ data class Card(
                     .takeIf { it.stops.size >= 2 && arrive > board }
             },
             walkTo = o.optJSONObject("walkTo")?.let { w -> WalkTo(w.getString("name"), w.getDouble("lat"), w.getDouble("lon")) },
+            journey = o.optJSONObject("journey")?.let(Journey::parse),
         )
 
         private fun parseActions(a: JSONArray?): List<CardAction> =
@@ -247,7 +250,63 @@ data class Ride(val svc: String, val stops: List<String>, val boardMs: Long, val
     }
 }
 
-/** The question at the bus's departure, with its buttons (On it · Missed it · Not going). */
+/**
+ * `card.journey`: the trip as steps (walk to the stop, take the bus, get
+ * there), worded on the server. The app draws it in the card style chosen in
+ * Settings › Appearance ([CardStyle]); only the countdowns tick here.
+ */
+data class Journey(
+    /** When to set off ("4:01 PM"); null when it's now. */
+    val leave: String?,
+    /** The walk to the stop ("3 min"); null at the stop. */
+    val walk: String?,
+    val bus: JourneyBus,
+    /** When the bus leaves, epoch ms, to count down to. */
+    val boardAtMs: Long,
+    val ride: String,
+    /** Where to get off, when it's across the road from the destination. */
+    val off: String?,
+    /** Where you're going ("GEA1000 @ UTown") and the stop you get off at ("UTown"). */
+    val to: String,
+    val toStop: String,
+    val arrive: String?,
+    /** A class: "3 min early". */
+    val slack: String?,
+    val live: Boolean,
+    val backup: JourneyBus?,
+) {
+    companion object {
+        fun parse(o: JSONObject): Journey? {
+            val bus = o.optJSONObject("bus")?.let(JourneyBus::parse) ?: return null
+            val board = o.optStringOrNull("boardAt")?.let(::parseInstant) ?: return null
+            return Journey(
+                leave = o.optStringOrNull("leave"),
+                walk = o.optStringOrNull("walk"),
+                bus = bus,
+                boardAtMs = board,
+                ride = o.optString("ride"),
+                off = o.optStringOrNull("off"),
+                to = o.optString("to"),
+                toStop = o.optString("toStop"),
+                arrive = o.optStringOrNull("arrive"),
+                slack = o.optStringOrNull("slack"),
+                live = o.optBoolean("live", false),
+                backup = o.optJSONObject("backup")?.let(JourneyBus::parse),
+            )
+        }
+    }
+}
+
+/** A bus in the journey: its service, colour (as painted on the bus, ARGB), stop and time. */
+data class JourneyBus(val svc: String, val color: Long, val stop: String, val board: String) {
+    companion object {
+        fun parse(o: JSONObject): JourneyBus? {
+            val svc = o.optStringOrNull("svc") ?: return null
+            return JourneyBus(svc, parseColor(o.optStringOrNull("color")), o.optString("stop"), o.optString("board"))
+        }
+    }
+}
+
 /** A stop to walk to, and where it is. */
 data class WalkTo(val name: String, val lat: Double, val lon: Double) {
     /** Walking directions there in the phone's maps app (Google Maps opens it; a browser otherwise). */

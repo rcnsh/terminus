@@ -57,6 +57,7 @@
     "detected": false,
     "walkTo": null,
     "notice": null,
-    "h12": false
+    "h12": false,
+    "journey": null
   }
 }

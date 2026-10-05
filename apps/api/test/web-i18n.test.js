@@ -26,6 +26,7 @@ const SCRIPTS = [
   'account/settings-pages.js',
   'account/onboarding.js',
   'account/preview.js',
+  'account/journey.js',
   'account/profile.js',
   'account/search.js',
   'account/search-box.js',

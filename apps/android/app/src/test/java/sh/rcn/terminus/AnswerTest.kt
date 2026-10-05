@@ -148,4 +148,48 @@ class AnswerTest {
         assertEquals("Not a valid NUSMods share link.", ApiError(400, "not a valid NUSMods share link").message)
         assertEquals("Nothing imported: no stop. Your timetable was not changed.", sentence("Nothing imported: no stop. Your timetable was not changed."))
     }
+
+    @Test fun theJourneyComesFromTheServer() {
+        val j = golden("class-bus").card!!.journey!!
+        assertEquals("R2", j.bus.svc)
+        assertEquals(0xFF34A853, j.bus.color)
+        assertEquals("PGP", j.bus.stop)
+        assertEquals("~09:36", j.leave)
+        assertEquals("5 min", j.walk)
+        assertEquals("UTown", j.toStop)
+        assertEquals("9 min early", j.slack)
+        assertEquals(ms("2026-08-27T01:42:00Z"), j.boardAtMs)
+        assertEquals("09:06", j.backup?.board)
+        // On foot, there's no journey to draw.
+        assertNull(golden("evening-home").card!!.journey)
+        assertNull(golden("class-walk").card!!.journey)
+    }
+
+    @Test fun theJourneyCountsDownToLeaving() {
+        val a = golden("place")
+        val j = a.card!!.journey!!
+        val at = a.leaveAtMs!!
+        assertEquals("Leave in 5 min", JourneyText.leaveIn(a, j, at - 5 * 60_000 + 10_000))
+        assertEquals("Leave in 1 min 5 s", JourneyText.leaveIn(a, j, at - 65_000))
+        assertEquals("Leave in 45 s", JourneyText.leaveIn(a, j, at - 45_000))
+        assertEquals("Leave now", JourneyText.leaveIn(a, j, at))
+        assertEquals("by 09:03", JourneyText.by(a, j, at - 45_000))
+        assertNull(JourneyText.by(a, j, at))
+        assertEquals("Or D2 at 09:14 from PGP", JourneyText.backup(a, j))
+        assertEquals("Arrive 09:10", JourneyText.arrive(j))
+    }
+
+    @Test fun aClassJourneyOffersTheSoonerBusToGoNowOn() {
+        val a = golden("class-bus")
+        assertEquals("Or go now: R2 at 09:06 from PGP", JourneyText.backup(a, a.card!!.journey!!))
+        assertEquals("Arrive ~09:51 · 9 min early", JourneyText.arrive(a.card.journey!!))
+    }
+
+    @Test fun aClassJourneySaysWhenTheClassStarts() {
+        val a = golden("class-bus")
+        assertEquals("To GEA1000 @ UTown · starts 10:00", JourneyText.to(a, a.card!!.journey!!) { "10:00" })
+        // Anything else is just where you're going.
+        val p = golden("place")
+        assertEquals("To KR MRT", JourneyText.to(p, p.card!!.journey!!) { "10:00" })
+    }
 }

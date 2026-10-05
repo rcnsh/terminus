@@ -118,6 +118,30 @@ export interface Answer {
    * it rests on a headway rather than a live time.
    */
   leave?: Leave | null;
+  /** The headline bus as a leg, for the card's journey (card.ts). Absent
+   *  when the answer is to walk or nothing runs. */
+  bus?: BusLeg | null;
+  /** The other bus worth knowing about (`alt`), the same way. */
+  altBus?: BusLeg | null;
+}
+
+/** A bus to catch: where, when, and how long the walk and the ride take. */
+export interface BusLeg {
+  svc: string;
+  /** Short stop name, and its code. */
+  stop: string;
+  stopCode: string;
+  walkS: number;
+  rideS: number;
+  /** When it leaves the stop, and when you reach the destination stop, ISO. Null with no time. */
+  board: string | null;
+  arrive: string | null;
+  /** Rests on a headway, not a live time. */
+  estimated: boolean;
+  /** Where to get off, when the bus only stops across the road from the destination. */
+  off?: string;
+  /** Where you get off (short name): the destination stop this bus calls at, or `off`. */
+  toStop?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -194,6 +218,11 @@ export interface Leave {
    *  road (otherwise the destination's own stop). For matching a bus in the feed. */
   stopCode?: string;
   offCode?: string;
+  /** Seconds on foot to the stop and on the bus, and the stop you get off
+   *  at (short name), for the card's journey. */
+  walkS?: number;
+  rideS?: number;
+  toStop?: string;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -272,6 +301,8 @@ export interface Leg {
   crossS?: number;
   /** Where to get off, when that's the twin rather than the destination. */
   off?: Stop;
+  /** Where you get off: the destination stop this bus calls at, or its twin. */
+  to?: Stop;
 }
 
 export interface Candidate {
@@ -312,6 +343,8 @@ export interface ScoredOption {
   ambiguousBerth: boolean;
   /** Where to get off, when the bus only stops across the road from the destination. */
   off?: Stop;
+  /** Where you get off: the destination stop this bus calls at, or its twin. */
+  to?: Stop;
 }
 
 export interface ResolveInput {

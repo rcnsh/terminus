@@ -1336,8 +1336,43 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 stopCode: { type: 'string', description: 'Stop code of `stop`. Absent when walking.' },
                 offCode: { type: 'string', description: 'Stop code of `off`. Absent without a crossing.' },
                 estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
+                walkS: { type: 'integer', description: 'Seconds on foot to `stop`. Absent when walking.' },
+                rideS: { type: 'integer', description: 'Seconds on the bus. Absent when walking.' },
               },
             },
+            bus: {
+              oneOf: [{ $ref: '#/components/schemas/BusLeg' }, { type: 'null' }],
+              description: 'The headline bus as a leg: where, when, and how long the walk and the ride take. Absent when the answer is to walk or nothing runs.',
+            },
+            altBus: {
+              oneOf: [{ $ref: '#/components/schemas/BusLeg' }, { type: 'null' }],
+              description: 'The bus in `alt`, the same way.',
+            },
+          },
+        },
+        JourneyBus: {
+          type: 'object',
+          required: ['svc', 'color', 'stop', 'board'],
+          properties: {
+            svc: { type: 'string' },
+            color: { type: 'string', description: 'The service’s colour as painted on the bus, `#rrggbb`.' },
+            stop: { type: 'string', description: 'Where to board, short name.' },
+            board: { type: 'string', description: 'When it leaves ("4:05 PM", "~4:05 PM").' },
+          },
+        },
+        BusLeg: {
+          type: 'object',
+          required: ['svc', 'stop', 'stopCode', 'walkS', 'rideS', 'board', 'arrive', 'estimated'],
+          properties: {
+            svc: { type: 'string' },
+            stop: { type: 'string', description: 'Where to board, short name.' },
+            stopCode: { type: 'string' },
+            walkS: { type: 'integer', description: 'Seconds on foot to the stop.' },
+            rideS: { type: 'integer', description: 'Seconds on the bus.' },
+            board: { type: ['string', 'null'], format: 'date-time', description: 'When the bus leaves the stop. Null with no time.' },
+            arrive: { type: ['string', 'null'], format: 'date-time', description: 'When you reach the destination stop. Null with no time.' },
+            estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time.' },
+            off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination. Absent otherwise.' },
           },
         },
         Arrival: {
@@ -1659,6 +1694,30 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   properties: {
                     notice: { type: ['string', 'null'] },
                     h12: { type: 'boolean', description: 'The card’s times are 12-hour. Write any time you show yourself the same way.' },
+                    journey: {
+                      type: ['object', 'null'],
+                      description:
+                        'The trip as steps, for apps that draw it (a line from you to the destination, a ticket, a list of steps): walk to the stop, take the bus, get there. ' +
+                        'Null on foot, on the bus, once there, and with no time to give. Count down to `leave.at` and `boardAt` yourself; show the strings as they are.',
+                      required: ['leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'slack', 'live', 'backup'],
+                      properties: {
+                        leave: { type: ['string', 'null'], description: 'When to set off ("4:01 PM", "~4:01 PM"). Null when it is now.' },
+                        walk: { type: ['string', 'null'], description: 'The walk to the stop ("3 min"). Null at the stop.' },
+                        bus: { $ref: '#/components/schemas/JourneyBus' },
+                        boardAt: { type: 'string', format: 'date-time', description: 'When the bus leaves, to count down to.' },
+                        ride: { type: 'string', description: 'Time on the bus ("3 min").' },
+                        off: { type: ['string', 'null'], description: 'Where to get off, when that is across the road from the destination.' },
+                        to: { type: 'string', description: 'Where you are going ("GEA1000 @ UTown").' },
+                        toStop: { type: 'string', description: 'The stop you get off at ("UTown"), short enough for the end of a line.' },
+                        arrive: { type: ['string', 'null'], description: 'When you get there ("4:08 PM").' },
+                        slack: { type: ['string', 'null'], description: 'A class only: "3 min early", "2 min late".' },
+                        live: { type: 'boolean', description: 'The bus’s time is live, not a timetable estimate.' },
+                        backup: {
+                          oneOf: [{ $ref: '#/components/schemas/JourneyBus' }, { type: 'null' }],
+                          description: 'Another bus: the next one for a trip, or for a class the sooner bus to go now on.',
+                        },
+                      },
+                    },
                   },
                 },
                 walkSpeedMs: { type: 'number', description: 'The user’s walking speed in metres a second, from their walking pace (1.1, 1.3 or 1.5). For walk times an app works out itself from metres, such as `walkM` in search results.' },

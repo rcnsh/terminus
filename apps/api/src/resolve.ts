@@ -194,7 +194,7 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
         const r = reach(idx, svc, stop.code, t.code);
         if (r && (!best || cost({ hops: r.hops, crossS: t.crossS }) < cost(best))) best = { hops: r.hops, crossS: t.crossS, code: t.code };
       }
-      if (best) legs.push({ svc, hops: best.hops, ...(perHop !== RIDE.secondsPerHop ? { rideS: Math.round(best.hops * perHop) } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}) });
+      if (best) legs.push({ svc, hops: best.hops, ...(perHop !== RIDE.secondsPerHop ? { rideS: Math.round(best.hops * perHop) } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}), to: idx.byCode.get(best.code)! });
     }
     // Starting from home or a room without coordinates: that walk comes first.
     const walkS = input.lat != null ? Math.round(foot / speed) : (input.originWalkS ?? 0);
@@ -485,6 +485,7 @@ export function scoreOptions(
         fetchedAt: sa?.fetchedAt ?? nowMs,
         ambiguousBerth,
         ...(leg.off ? { off: leg.off } : {}),
+        ...(leg.to ? { to: leg.to } : {}),
       });
     }
   }
