@@ -1,8 +1,8 @@
-<!-- 2.2.2 -->
-### terminus 2.2.2
+<!-- 2.2.3 -->
+### terminus 2.2.3
 
-**Fixes.** In the web app, a place you searched for and its × close button are the same height again, and so is the search button beside them.
+**Fixes.** A trip you planned for later today (with **Go later today at…**), or a favourite at its usual time, can be taken off Today again before it's the next trip. Swiping it away used to flash Undo and put it straight back. On Android, if taking something off Today fails, Today now says why.
 
-**About** now links to the [NUS Acceptable Use Policy for IT Resources](https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf), on every app.
+**Swipe to remove.** On Android, Today's heading says **Swipe to remove** until you've used it, and the first few times the first row slides aside by itself to show what's underneath.
 
-And on Android, try tapping the terminus name a few times, quickly.
+**About** lists its links as tidy rows, each saying where it goes, on Android and the web.
