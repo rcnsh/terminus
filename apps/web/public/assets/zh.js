@@ -347,6 +347,7 @@ window.TERMINUS_ZH = {
  "terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed.": "terminus 是一个独立的学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士数据。",
  "terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes use map data &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors.": "terminus 是一个独立的学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士数据。步行路线使用的地图数据 &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> 贡献者。",
  "Use terminus in line with the <a href=\"https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf\">NUS Acceptable Use Policy for IT Resources</a>.": "使用 terminus 时，请遵守 NUS 的 <a href=\"https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf\">IT 资源可接受使用政策</a>。",
+ "Links": "链接",
  "terminus reads your timetable and tells you when to leave for your next class: which shuttle, from which stop, and when walking is faster. On your home screen, in your menu bar and on the web.": "terminus 读取你的课表，告诉你什么时候出发去上下一节课：搭哪班巴士、在哪个车站上车，以及什么时候走路更快。在你的主屏幕、菜单栏和网页上都能看到。",
  "1 trip recorded.": "已记录 1 次行程。",
  "{0} trips recorded.": "已记录 {0} 次行程。",

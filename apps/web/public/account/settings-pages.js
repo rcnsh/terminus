@@ -1022,9 +1022,18 @@ function Keys() {
 
 /* ---------- About, Feedback ---------- */
 
+/** About's links, as rows like the Settings list: what each is, and where it goes. */
+const ABOUT_LINKS = () => [
+  { title: t('Get the apps'), href: '/' },
+  { title: t('Status'), href: '/status' },
+  { title: t('Privacy'), href: '/privacy' },
+  { title: t('API docs'), href: '/docs' },
+  { title: t('Source code'), href: 'https://github.com/rcnsh/terminus' },
+];
+
 export function About() {
   return html`
-    <div class="card">
+    <div class="card about-text">
       <p>${t('terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable.')}</p>
       <${Rich}
         as="p"
@@ -1036,14 +1045,17 @@ export function About() {
         class="hint"
         text=${t('Use terminus in line with the <a href="https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf">NUS Acceptable Use Policy for IT Resources</a>.')}
       />
-      <div class="actions">
-        <a class="btn ghost small" href="/">${t('Get the apps')}</a>
-        <a class="btn ghost small" href="/status">${t('Status')}</a>
-        <a class="btn ghost small" href="/privacy">${t('Privacy')}</a>
-        <a class="btn ghost small" href="/docs">${t('API docs')}</a>
-        <a class="btn ghost small" href="https://github.com/rcnsh/terminus">${t('Source code')}</a>
-      </div>
     </div>
+    <nav class="settings-list card about-links" aria-label=${t('Links')}>
+      ${ABOUT_LINKS().map(({ title, href }) => {
+        const away = href.startsWith('https:');
+        const where = away ? href.replace('https://', '') : location.host + href.replace(/\/$/, '');
+        return html`<a class="settings-row" href=${href} key=${href} rel=${away ? 'noopener' : undefined}>
+          <span class="row-text"><span class="row-title">${title}</span><span class="row-sum">${where}</span></span>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d=${away ? 'M7 17 17 7M8 7h9v9' : 'm9 6 6 6-6 6'} /></svg>
+        </a>`;
+      })}
+    </nav>
   `;
 }
 

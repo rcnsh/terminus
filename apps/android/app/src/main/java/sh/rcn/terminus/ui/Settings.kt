@@ -19,8 +19,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -365,23 +363,46 @@ private fun SettingsPageContent(
     }
 }
 
-/** What terminus is, that it isn't NUS's, where its data comes from, and links. */
-@OptIn(ExperimentalLayoutApi::class)
+/** What terminus is, that it isn't NUS's, where its data comes from, and links, as rows like the Settings list. */
 @Composable
 private fun AboutPage() {
     val ctx = LocalContext.current
     val open = { url: String -> ctx.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+    val host = BuildConfig.SITE.removePrefix("https://").removePrefix("http://")
+    // Each link's name, where it goes, and that place as shown under the name.
+    val links = listOf(
+        Triple(R.string.status, "${BuildConfig.SITE}/status", "$host/status"),
+        Triple(R.string.privacy, "${BuildConfig.SITE}/privacy", "$host/privacy"),
+        Triple(R.string.api_docs, "${BuildConfig.SITE}/docs", "$host/docs"),
+        Triple(R.string.source_code, "https://github.com/rcnsh/terminus", "github.com/rcnsh/terminus"),
+        Triple(R.string.map_data, "https://www.openstreetmap.org/copyright", "openstreetmap.org"),
+        Triple(R.string.aup, "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf", "nus.edu.sg"),
+    )
     Text(stringResource(R.string.about_what))
     Hint(stringResource(R.string.about_independent), Modifier.padding(top = 12.dp))
     Hint(stringResource(R.string.about_aup), Modifier.padding(top = 12.dp))
     Hint(stringResource(R.string.about_version, BuildConfig.VERSION_NAME), Modifier.padding(top = 12.dp))
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
-        OutlinedButton(onClick = { open("${BuildConfig.SITE}/status") }) { Text(stringResource(R.string.status)) }
-        OutlinedButton(onClick = { open("${BuildConfig.SITE}/privacy") }) { Text(stringResource(R.string.privacy)) }
-        OutlinedButton(onClick = { open("${BuildConfig.SITE}/docs") }) { Text(stringResource(R.string.api_docs)) }
-        OutlinedButton(onClick = { open("https://github.com/rcnsh/terminus") }) { Text(stringResource(R.string.source_code)) }
-        OutlinedButton(onClick = { open("https://www.openstreetmap.org/copyright") }) { Text(stringResource(R.string.map_data)) }
-        OutlinedButton(onClick = { open("https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf") }) { Text(stringResource(R.string.aup)) }
+    androidx.compose.material3.OutlinedCard(Modifier.fillMaxWidth().padding(top = 20.dp)) {
+        links.forEachIndexed { i, (title, url, where) ->
+            if (i > 0) androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { open(url) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(title), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        where,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                // Every one opens in the browser, out of the app.
+                Icon(painterResource(R.drawable.ic_open), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 
