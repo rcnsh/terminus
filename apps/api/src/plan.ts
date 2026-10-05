@@ -45,6 +45,8 @@ export function planOfLeave(l: Leave | null | undefined, located: boolean, aligh
     ...(l.estimated ? { estimated: true } : {}),
     ...(l.off ? { off: l.off } : {}),
     ...(l.stopCode ? { stopCode: l.stopCode } : {}),
+    ...(l.walkS != null ? { walkS: l.walkS } : {}),
+    ...(l.rideS != null ? { rideS: l.rideS } : {}),
     alightCode: l.offCode ?? alightCode,
   };
 }

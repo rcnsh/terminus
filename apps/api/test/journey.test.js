@@ -68,3 +68,33 @@ test('the journey ends at the stop the bus calls at, not the place\'s first stop
   assert.equal(j.off, null);
   assert.equal(j.toStop, 'Opp NUSS');
 });
+
+test('a trip kept as a plan keeps its journey on every device', async () => {
+  const { planOfLeave } = await import('../src/plan.ts');
+  const { leaveOf } = await import('../src/trip.ts');
+  const answer = await load('class-bus');
+  const fresh = cardFor(answer).journey;
+  // Another device reads the plan the first one kept (next.ts), not its own leave-by.
+  const kept = cardFor({ ...answer, leave: leaveOf(planOfLeave(answer.leave, false, 'UTOWN')) }).journey;
+  assert.deepEqual(kept, fresh);
+});
+
+test('a plan kept before it carried walk and ride times still has a journey', async () => {
+  const { planOfLeave } = await import('../src/plan.ts');
+  const { leaveOf } = await import('../src/trip.ts');
+  const answer = await load('class-bus');
+  const { walkS: _w, rideS: _r, ...old } = planOfLeave(answer.leave, false, 'UTOWN');
+  const j = cardFor({ ...answer, leave: leaveOf(old) }).journey;
+  assert.ok(j);
+  assert.equal(j.bus.svc, 'R2');
+  assert.equal(j.walk, '5 min');
+  assert.equal(j.toStop, 'UTown');
+});
+
+test('a planned trip home shows the planned bus, with the headline bus as its backup', async () => {
+  const answer = await load('place');
+  const planned = { ...answer.leave, svc: 'D2', board: '2026-08-27T01:14:00Z', at: '2026-08-27T01:08:00Z', walkS: 300, rideS: 120 };
+  const j = cardFor({ ...answer, leave: planned }).journey;
+  assert.equal(j.bus.svc, 'D2');
+  assert.equal(j.backup.svc, 'A1');
+});

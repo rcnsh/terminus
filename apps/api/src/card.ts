@@ -19,6 +19,7 @@ import { indexGraph } from './resolve.ts';
 import { targetStops } from './landmarks.ts';
 import { mins, shortStop } from './format.ts';
 import { routeColor } from './campus.ts';
+import { WALK } from './config.ts';
 import { m } from './i18n.ts';
 
 export type CardKind = 'class' | 'trip' | 'nearby' | 'rest' | 'arrived' | 'setup' | 'free';
@@ -229,18 +230,32 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
   if ((card.kind !== 'class' && card.kind !== 'trip') || !a.dest) return null;
   if (phase === 'riding' || phase === 'arrived') return null;
   const l = a.leave ?? null;
-  // A class takes the leave-by's bus; any other trip, the headline bus.
-  const leg: BusLeg | null =
-    card.kind === 'class'
-      ? l?.svc && l.stop && l.walkS != null && l.rideS != null
-        ? { svc: l.svc, stop: l.stop, stopCode: l.stopCode ?? '', walkS: l.walkS, rideS: l.rideS, board: l.board, arrive: l.arrive, estimated: l.estimated, ...(l.off ? { off: l.off } : {}), ...(l.toStop ? { toStop: l.toStop } : {}) }
-        : null
-      : (a.bus ?? null);
+  // The leave-by's bus, which a kept plan fixes for the trip (see next.ts);
+  // with no leave-by (a bus about to go), a trip's headline bus.
+  const planned: BusLeg | null =
+    l?.svc && l.stop && l.board
+      ? {
+          svc: l.svc,
+          stop: l.stop,
+          stopCode: l.stopCode ?? '',
+          // A plan kept from before the leave-by carried these: worked out from its own times.
+          walkS: l.walkS ?? Math.max(0, (Date.parse(l.board) - Date.parse(l.at)) / 1000 - WALK.boardBufferS),
+          rideS: l.rideS ?? (l.arrive ? Math.max(0, (Date.parse(l.arrive) - Date.parse(l.board)) / 1000) : 0),
+          board: l.board,
+          arrive: l.arrive,
+          estimated: l.estimated,
+          ...(l.off ? { off: l.off } : {}),
+          ...(l.toStop ? { toStop: l.toStop } : {}),
+        }
+      : null;
+  const leg = planned ?? (card.kind === 'class' ? null : (a.bus ?? null));
   if (!leg?.board) return null;
   const at = (iso: string, estimated: boolean) => approx(estimated, clockAt(Date.parse(iso), h12));
   const busOf = (b: BusLeg): JourneyBus | null => (b.board ? { svc: b.svc, color: routeColor(b.svc), stop: b.stop, board: at(b.board, b.estimated) } : null);
-  // A trip's backup is the other bus; a class's, the headline bus when it isn't the one to wait for.
-  const other = card.kind === 'class' ? (card.goNow ? a.bus : null) : a.altBus;
+  // A class's backup is the headline bus when it isn't the one to wait for;
+  // a trip's, the headline bus when a plan holds another, else the other bus.
+  const headlineDiffers = Boolean(planned && a.bus && !(a.bus.svc === planned.svc && a.bus.stop === planned.stop && a.bus.board === planned.board));
+  const other = card.kind === 'class' ? (card.goNow ? a.bus : null) : headlineDiffers ? a.bus : a.altBus;
   const classAt = a.timing ? Date.parse(a.timing.classAt) : null;
   return {
     leave: l && Date.parse(l.at) > Date.parse(a.asOf) ? at(l.at, l.estimated) : null,

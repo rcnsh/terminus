@@ -45,6 +45,9 @@ export interface Boarded {
   note?: string;
   estimated?: boolean;
   off?: string;
+  /** Seconds on foot to the stop and on the bus, for the card's journey. */
+  walkS?: number;
+  rideS?: number;
   /** Stop codes, and the bus's plate when the feed had one at the tap: its
    *  arrival at `alightCode` is then read from the feed while you ride. */
   stopCode?: string;
@@ -76,6 +79,9 @@ export function leaveOf(b: Boarded): Leave {
     ...(b.off ? { off: b.off } : {}),
     ...(b.stopCode ? { stopCode: b.stopCode } : {}),
     ...(b.alightCode ? { offCode: b.alightCode } : {}),
+    ...(b.walkS != null ? { walkS: b.walkS } : {}),
+    ...(b.rideS != null ? { rideS: b.rideS } : {}),
+    ...(offStop(b) ? { toStop: offStop(b)! } : {}),
   };
 }
 
