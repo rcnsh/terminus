@@ -168,9 +168,9 @@ private fun Ticket(answer: NextAnswer, journey: Journey, large: Boolean, roomy: 
                 style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 20.sp else 17.sp),
                 maxLines = 1,
             )
-            // A class's arrival and margin get a line of their own where there's
-            // room; on a compact widget, the arrival time after the headline.
-            val split = roomy && answer.isClassPlan
+            // A class's arrival and margin get a line of their own on the big
+            // widget; otherwise the arrival time goes after the headline.
+            val split = large && answer.isClassPlan
             Text(
                 listOfNotNull(headline(answer), journey.arrive?.takeIf { !split }?.let { L.s(R.string.journey_arrive_time, it) }).joinToString(" · "),
                 style = TextStyle(color = if (answer.leaveLate) colors.error else colors.primary, fontSize = 13.sp, fontWeight = FontWeight.Medium),
@@ -216,12 +216,12 @@ private fun StepLine(time: String, what: String, bus: Journey?, late: Boolean = 
 /**
  * The trip in one line, for a compact widget: "Walk to PGP · D2 4:05 PM", or
  * "D2 4:05 PM · at PGP" there. For a class, when it gets you there instead of
- * the walk: "D2 4:05 PM · arrive 4:15 PM".
+ * the walk, keeping the stop: "D2 4:05 PM from PGP · arrive 4:15 PM".
  */
 private fun oneLine(answer: NextAnswer, journey: Journey): String {
     val bus = "${journey.bus.svc} ${journey.bus.board}"
     return when {
-        answer.isClassPlan && journey.arrive != null -> "$bus · ${L.s(R.string.arrive_at, journey.arrive)}"
+        answer.isClassPlan && journey.arrive != null -> "$bus ${L.s(R.string.journey_from, journey.bus.stop)} · ${L.s(R.string.arrive_at, journey.arrive)}"
         journey.walk != null -> "${L.s(R.string.journey_walk_to, journey.bus.stop)} · $bus"
         else -> "$bus · ${L.s(R.string.journey_at, journey.bus.stop)}"
     }

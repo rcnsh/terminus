@@ -892,7 +892,15 @@ export function ThemeSwitch({ labelledBy }) {
  */
 export function Appearance() {
   const chosen = useStore(cardStyle);
-  const sample = useMemo(sampleAnswer, []);
+  // Made again each minute (and when the clock style changes), so the
+  // sample always leaves in a few minutes, however long Settings was open.
+  const p = useStore(profile);
+  const [minute, setMinute] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setMinute(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const sample = useMemo(() => sampleAnswer(minute), [minute, p?.clock]);
   return html`
     <div class="card">
       <span class="label" id="theme-label">${t('Theme')}</span>
@@ -917,8 +925,7 @@ export function Appearance() {
 }
 
 /** A D2 from PGP to UTown, leaving in a few minutes, in this browser's clock style. */
-function sampleAnswer() {
-  const now = Date.now();
+function sampleAnswer(now) {
   const iso = (ms) => new Date(ms).toISOString();
   const leave = now + 4 * 60_000;
   const board = leave + 4 * 60_000;

@@ -185,6 +185,7 @@ a.settings-row { text-decoration: none; }
 .journey .steps .time { width: 76px; flex: none; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 .journey .steps .what { display: grid; padding-left: 24px; }
 .journey .steps .what small { color: var(--muted); font-size: 0.8rem; }
+.journey .steps .what small.late { color: var(--bad-ink); }
 .journey .steps .what::before { content: ''; position: absolute; left: 88px; top: 4px; width: 8px; height: 8px; border: 2px solid var(--muted); border-radius: 50%; background: var(--surface); }
 .journey .steps li.first .what::before { border-color: var(--accent); background: var(--accent); }
 .journey .steps li:not(.last)::after { content: ''; position: absolute; left: 93px; top: 18px; bottom: 0; width: 2px; background: var(--line); }
