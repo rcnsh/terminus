@@ -128,6 +128,8 @@ struct Popover: View {
     /// this app has, so its key state is exactly "the popover is open".
     @State private var shown: Bool
     @State private var window: NSWindow?
+    /// The content is taller than the screen, so it scrolls.
+    @State private var overflows = false
 
     init(model: AppModel, startShown: Bool = false) {
         self.model = model
@@ -140,16 +142,18 @@ struct Popover: View {
                 if model.paired { Main(model: model) } else { Pair(model: model) }
             }
             .padding(14)
-            if model.isSnapshot {
-                // ImageRenderer can't draw a ScrollView (an NSScrollView).
-                content
-            } else {
+            if overflows, !model.isSnapshot {
                 // No taller than the screen: a long Today scrolls inside the
                 // popover, with the footer kept in view, instead of running
                 // off the bottom.
-                ScrollView { content }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(maxHeight: Self.maxContentHeight)
+                ScrollView { content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured($0) } }
+                    .frame(height: Self.maxContentHeight)
+            } else {
+                // Only then a scroll view: one around content that fits made
+                // switching tabs shake the popover, its scroll bar flickering,
+                // as the window's height changed. (A snapshot never scrolls:
+                // ImageRenderer can't draw an NSScrollView.)
+                content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measured($0) }
             }
             Footer(model: model)
         }
@@ -204,13 +208,22 @@ struct Popover: View {
         }
     }
 
+    private func measured(_ height: CGFloat) {
+        let over = height > Self.maxContentHeight
+        if over != overflows { overflows = over }
+    }
+
+    /// After SwiftUI's update, not inside it: resizing the window there lays
+    /// the popover out again in the middle of laying it out.
     private func fit(height: CGFloat) {
-        guard let window, height > 0 else { return }
-        let content = window.contentRect(forFrameRect: window.frame)
-        guard abs(content.height - height) > 0.5 else { return }
-        var frame = window.frameRect(forContentRect: NSRect(x: content.minX, y: content.minY, width: content.width, height: height))
-        frame.origin.y = window.frame.maxY - frame.height
-        window.setFrame(frame, display: true, animate: false)
+        DispatchQueue.main.async {
+            guard let window, height > 0 else { return }
+            let content = window.contentRect(forFrameRect: window.frame)
+            guard abs(content.height - height) > 0.5 else { return }
+            var frame = window.frameRect(forContentRect: NSRect(x: content.minX, y: content.minY, width: content.width, height: height))
+            frame.origin.y = window.frame.maxY - frame.height
+            window.setFrame(frame, display: true, animate: false)
+        }
     }
 }
 
