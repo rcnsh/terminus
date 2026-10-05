@@ -261,6 +261,21 @@ test('/me/day: anything not done yet can be taken off today, the trip home too, 
   assert.equal((await list()).at(-1).kind, 'home');
 });
 
+test('/me/day: a one-off trip later today can be taken off before it is the next trip, and put back', async () => {
+  const t = await setup();
+  // 18:00, after both classes: the card is about the first class, not this.
+  assert.equal((await t.call('/me/once', { method: 'POST', token: t.phone, body: { to: 'UTOWN', atMin: 1080, label: 'Dinner' } })).status, 200);
+  const list = async () => (await (await t.call('/me/day', { token: t.phone })).json()).items;
+  const once = (await list()).find((i) => i.label === 'Dinner');
+  assert.equal(once.removable, true);
+  assert.notEqual((await t.next(t.phone)).dest.label, 'Dinner');
+
+  assert.equal((await t.signal(t.phone, { kind: 'skipped', trip: once.key })).status, 200);
+  assert.equal((await list()).some((i) => i.key === once.key), false, 'taken off today');
+  assert.equal((await t.signal(t.phone, { kind: 'reset', trip: once.key })).status, 200);
+  assert.equal((await list()).some((i) => i.key === once.key), true, 'put back');
+});
+
 test('/me/day: what is done cannot be taken off', async () => {
   const t = await setup();
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
