@@ -165,7 +165,8 @@ apps/web/public/
   account/            The account page (app.js): sign-in, onboarding.js, settings.js +
                       settings-pages.js (Settings, shared with the app), preview.js (the
                       card), profile.js (the profile and /campus, shared), search.js
-                      (ranking, tested) + search-box.js; dom.js has t, api, clock
+                      (ranking, tested) + search-box.js; journey.js (the card styles,
+                      as on Android); dom.js has t, api, clock
   app/                Installed web app: app.js (Now, tabs), map.js (campus map), offline.js
   admin/, status/, pair/, privacy/
   assets/             ui.js (Preact, hooks, htm, stores), site.css (shared colours/type),
