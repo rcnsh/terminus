@@ -120,6 +120,7 @@ export function legOf(o: ScoredOption): BusLeg {
     arrive: timed ? iso(o.fetchedAt + o.totalS * 1000) : null,
     estimated: o.quality === 'scheduled',
     ...(o.off ? { off: shortStop(o.off.name) } : {}),
+    ...(o.to ? { toStop: shortStop(o.to.name) } : {}),
   };
 }
 

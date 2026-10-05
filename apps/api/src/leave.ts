@@ -46,10 +46,14 @@ interface Leg {
   walkS: number;
   rideS: number;
   off?: { code: string; name: string };
+  to?: { code: string; name: string };
 }
 
-/** `off` only when there is one, so answers without a crossing are unchanged. */
-const offOf = (leg: { off?: { code: string; name: string } }) => (leg.off ? { off: shortStop(leg.off.name), offCode: leg.off.code } : {});
+/** `off` only when there is one, so answers without a crossing are unchanged; `toStop` likewise. */
+const offOf = (leg: { off?: { code: string; name: string }; to?: { code: string; name: string } }) => ({
+  ...(leg.off ? { off: shortStop(leg.off.name), offCode: leg.off.code } : {}),
+  ...(leg.to ? { toStop: shortStop(leg.to.name) } : {}),
+});
 
 export function leaveBy(f: LeaveInput): Leave | null {
   if (f.walkAllS != null) {
@@ -68,7 +72,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
   }
 
   const legs: Leg[] = f.options.length
-    ? f.options.map((o) => ({ svc: o.svc, stop: o.stop, walkS: o.walkS, rideS: o.rideS, off: o.off }))
+    ? f.options.map((o) => ({ svc: o.svc, stop: o.stop, walkS: o.walkS, rideS: o.rideS, off: o.off, to: o.to }))
     : fallbackLegs(f.candidates);
   let onTime: (Leave & { ms: number }) | null = null;
   let late: (Leave & { ms: number }) | null = null;
@@ -158,5 +162,5 @@ function crowdCheck(leg: Leg, atMs: number, arriveBy: ArriveBy, risk?: CrowdRisk
 
 /** Every service from every candidate stop, ignoring service hours. */
 function fallbackLegs(cands: Candidate[]): Leg[] {
-  return cands.flatMap((c) => c.legs.map((l) => ({ svc: l.svc, stop: c.stop, walkS: c.walkS, rideS: legRideS(l), off: l.off })));
+  return cands.flatMap((c) => c.legs.map((l) => ({ svc: l.svc, stop: c.stop, walkS: c.walkS, rideS: legRideS(l), off: l.off, to: l.to })));
 }

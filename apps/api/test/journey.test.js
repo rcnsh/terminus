@@ -61,3 +61,10 @@ test('the journey gets off where the bus stops across the road', async () => {
   assert.equal(j.off, 'Opp NUSS');
   assert.equal(j.toStop, 'Opp NUSS');
 });
+
+test('the journey ends at the stop the bus calls at, not the place\'s first stop', async () => {
+  // The Deck has more than one stop; this R2 calls at Opp NUSS.
+  const j = cardFor(await load('landmark')).journey;
+  assert.equal(j.off, null);
+  assert.equal(j.toStop, 'Opp NUSS');
+});

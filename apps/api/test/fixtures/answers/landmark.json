@@ -77,7 +77,8 @@
     "rideS": 190,
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:09:10Z",
-    "estimated": false
+    "estimated": false,
+    "toStop": "Opp NUSS"
   },
   "altBus": {
     "svc": "A1",
@@ -87,7 +88,8 @@
     "rideS": 855,
     "board": "2026-08-27T01:09:00Z",
     "arrive": "2026-08-27T01:23:15Z",
-    "estimated": false
+    "estimated": false,
+    "toStop": "AS 5"
   },
   "leave": null,
   "mode": "trip",
@@ -149,7 +151,7 @@
       "ride": "3 min",
       "off": null,
       "to": "The Deck",
-      "toStop": "AS 5",
+      "toStop": "Opp NUSS",
       "arrive": "09:09",
       "slack": null,
       "live": true,

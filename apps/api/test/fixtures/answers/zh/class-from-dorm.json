@@ -77,7 +77,8 @@
     "rideS": 570,
     "board": "2026-08-27T01:06:00Z",
     "arrive": "2026-08-27T01:15:30Z",
-    "estimated": false
+    "estimated": false,
+    "toStop": "UTown"
   },
   "altBus": {
     "svc": "D2",
@@ -87,7 +88,8 @@
     "rideS": 950,
     "board": "2026-08-27T01:04:00Z",
     "arrive": "2026-08-27T01:19:50Z",
-    "estimated": false
+    "estimated": false,
+    "toStop": "UTown"
   },
   "leave": {
     "at": "2026-08-27T01:37:37Z",
@@ -99,7 +101,8 @@
     "arrive": "2026-08-27T01:51:30Z",
     "note": null,
     "walkS": 243,
-    "rideS": 570
+    "rideS": 570,
+    "toStop": "UTown"
   },
   "mode": "trip",
   "dest": {

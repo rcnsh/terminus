@@ -233,7 +233,7 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
   const leg: BusLeg | null =
     card.kind === 'class'
       ? l?.svc && l.stop && l.walkS != null && l.rideS != null
-        ? { svc: l.svc, stop: l.stop, stopCode: l.stopCode ?? '', walkS: l.walkS, rideS: l.rideS, board: l.board, arrive: l.arrive, estimated: l.estimated, ...(l.off ? { off: l.off } : {}) }
+        ? { svc: l.svc, stop: l.stop, stopCode: l.stopCode ?? '', walkS: l.walkS, rideS: l.rideS, board: l.board, arrive: l.arrive, estimated: l.estimated, ...(l.off ? { off: l.off } : {}), ...(l.toStop ? { toStop: l.toStop } : {}) }
         : null
       : (a.bus ?? null);
   if (!leg?.board) return null;
@@ -251,7 +251,8 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
     ride: mins(leg.rideS),
     off: leg.off ?? null,
     to: a.dest.label,
-    toStop: leg.off ?? stopName(targetStops(a.dest.to).to) ?? a.dest.label,
+    // Where this bus stops, which for a place with several stops may not be its first.
+    toStop: leg.off ?? leg.toStop ?? stopName(targetStops(a.dest.to).to) ?? a.dest.label,
     arrive: leg.arrive ? at(leg.arrive, leg.estimated) : null,
     slack: card.kind === 'class' && classAt != null && leg.arrive ? slackText((classAt - Date.parse(leg.arrive)) / 1000) : null,
     live: a.quality === 'live' && !leg.estimated,
