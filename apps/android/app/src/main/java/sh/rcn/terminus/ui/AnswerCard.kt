@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import sh.rcn.terminus.CardAction
+import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 import sh.rcn.terminus.widget.clock
@@ -84,6 +85,12 @@ internal fun AnswerCard(
             // On the bus: how far along the ride, and the next stop, as the live notification shows.
             answer.card?.ride?.let { RideProgress(it) }
             answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
+            // A trip by bus, drawn in the style chosen in Settings › Appearance.
+            answer.card?.journey?.takeIf { !answer.arrived }?.let { journey ->
+                JourneyCard(answer, journey, CardStyle.pref(LocalContext.current))
+                Actions(answer, onAction, busy, onSuggestion)
+                return@Column
+            }
             val heading = when {
                 answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
                 answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())

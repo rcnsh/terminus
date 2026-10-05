@@ -74,6 +74,7 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.Campus
+import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.Destination
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Device
@@ -261,7 +262,7 @@ private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (Sett
                             else -> null
                         },
                     ).joinToString(" · ")
-                    SettingsPage.Appearance -> stringResource(themeName(Theme.pref(ctx)))
+                    SettingsPage.Appearance -> "${stringResource(themeName(Theme.pref(ctx)))} · ${stringResource(CardStyle.name(CardStyle.pref(ctx)))}"
                     SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
                     SettingsPage.About, SettingsPage.Feedback -> null
                 }
@@ -356,7 +357,11 @@ private fun SettingsPageContent(
             ClockPicker(state.profile, account, stringResource(R.string.time_format), auto = true)
             Hint(stringResource(R.string.time_format_hint), Modifier.padding(top = 4.dp))
         }
-        SettingsPage.Appearance -> ThemePicker()
+        SettingsPage.Appearance -> {
+            ThemePicker()
+            Spacer(Modifier.height(24.dp))
+            CardStylePicker()
+        }
         SettingsPage.Account -> AccountSection(state, account, main, onAddEmail, onSignedOut)
         SettingsPage.About -> AboutPage()
         SettingsPage.Feedback -> FeedbackPage(state, account)
