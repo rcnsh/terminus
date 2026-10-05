@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.LocalContext
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
@@ -63,17 +64,37 @@ private fun Headline(answer: NextAnswer, large: Boolean) {
     )
 }
 
-/** "To UTown · arrive 4:13 PM", or a problem when there is one (a compact widget has no footer). */
+/**
+ * "To UTown · arrive 4:13 PM", or for a class "To GEA1000 @ UTown · starts
+ * 10:00", with "~5 min late" in red when it will be. A problem instead, when
+ * there is one (a compact widget has no footer).
+ */
 @Composable
-private fun Head(journey: Journey, note: String?, withArrive: Boolean) {
-    val text = note ?: listOfNotNull(L.s(R.string.journey_to, journey.to), journey.arrive?.takeIf { withArrive }?.let { L.s(R.string.journey_arrive_time, it) }).joinToString(" · ")
-    Text(text, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
+private fun Head(answer: NextAnswer, journey: Journey, note: String?, withArrive: Boolean) {
+    val ctx = LocalContext.current
+    val late = answer.isClassPlan && answer.leaveLate && note == null
+    val text = note ?: listOfNotNull(
+        JourneyText.to(answer, journey) { clock(ctx, it) },
+        journey.arrive?.takeIf { withArrive && !answer.isClassPlan }?.let { L.s(R.string.journey_arrive_time, it) },
+        journey.slack?.takeIf { late },
+    ).joinToString(" · ")
+    Text(text, style = TextStyle(color = if (late) GlanceTheme.colors.error else GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
+}
+
+/** A class's "Arrive ~9:51 AM · 9 min early", red when it's late. */
+@Composable
+private fun Arrival(answer: NextAnswer, journey: Journey) {
+    if (!answer.isClassPlan) return
+    val colors = GlanceTheme.colors
+    JourneyText.arrive(journey)?.let {
+        Text(it, style = TextStyle(color = if (answer.leaveLate) colors.error else colors.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(top = 4.dp))
+    }
 }
 
 /** Route: the headline, then you → the stop → where you're going on a line. */
 @Composable
 private fun Route(answer: NextAnswer, journey: Journey, large: Boolean, roomy: Boolean, note: String?) {
-    Head(journey, note, withArrive = !roomy)
+    Head(answer, journey, note, withArrive = !roomy)
     Headline(answer, large)
     if (!roomy) {
         Text(oneLine(journey), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
@@ -90,7 +111,9 @@ private fun Route(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
         Stretch(journey.ride, journey.bus.svc, fixed(journey.bus.color), 4.dp)
         Point(journey.toStop, journey.arrive ?: "", false)
     }
-    if (large) JourneyText.backup(answer, journey)?.let { Text(it, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.padding(top = 4.dp)) }
+    Arrival(answer, journey)
+    // One line under the line fits: for a class, whether it's on time beats the backup bus.
+    if (large && !answer.isClassPlan) JourneyText.backup(answer, journey)?.let { Text(it, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.padding(top = 4.dp)) }
 }
 
 private val CAPTION = 16.dp
@@ -131,7 +154,7 @@ private fun RowScope.Stretch(caption: String, svc: String?, color: androidx.glan
 @Composable
 private fun Ticket(answer: NextAnswer, journey: Journey, large: Boolean, roomy: Boolean, note: String?) {
     val colors = GlanceTheme.colors
-    if (roomy) Head(journey, note, withArrive = false)
+    if (roomy) Head(answer, journey, note, withArrive = false)
     Row(verticalAlignment = Alignment.CenterVertically, modifier = GlanceModifier.padding(top = if (roomy) 6.dp else 0.dp)) {
         val side = if (large) 52.dp else 44.dp
         Box(GlanceModifier.size(side).cornerRadius(12.dp).background(fixed(journey.bus.color)), contentAlignment = Alignment.Center) {
@@ -145,7 +168,8 @@ private fun Ticket(answer: NextAnswer, journey: Journey, large: Boolean, roomy: 
                 maxLines = 1,
             )
             Text(
-                listOfNotNull(headline(answer), journey.arrive?.let { L.s(R.string.journey_arrive_time, it) }).joinToString(" · "),
+                // A class's slack rather than the arrival: whether it's late is what matters.
+                listOfNotNull(headline(answer), if (answer.isClassPlan) journey.slack else journey.arrive?.let { L.s(R.string.journey_arrive_time, it) }).joinToString(" · "),
                 style = TextStyle(color = if (answer.leaveLate) colors.error else colors.primary, fontSize = 13.sp, fontWeight = FontWeight.Medium),
                 maxLines = 1,
             )
@@ -158,7 +182,7 @@ private fun Ticket(answer: NextAnswer, journey: Journey, large: Boolean, roomy: 
 @Composable
 private fun Steps(answer: NextAnswer, journey: Journey, large: Boolean, roomy: Boolean, note: String?) {
     // The big widget's last step is the arrival; the others say it at the top.
-    Head(journey, note, withArrive = !large)
+    Head(answer, journey, note, withArrive = !large)
     Headline(answer, large)
     if (!roomy) {
         Text(oneLine(journey), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1)
@@ -167,11 +191,11 @@ private fun Steps(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
     Spacer(GlanceModifier.height(4.dp))
     journey.walk?.let { StepLine(journey.leave ?: L.s(R.string.journey_now), "${L.s(R.string.journey_walk_to, journey.bus.stop)} · $it", null) }
     StepLine(journey.bus.board, "${L.s(R.string.journey_from, journey.bus.stop)} · ${L.s(R.string.journey_ride, journey.ride)}", journey)
-    if (large) StepLine(journey.arrive ?: "", L.s(R.string.journey_arrive_place, journey.to), null)
+    if (large) StepLine(journey.arrive ?: "", listOfNotNull(L.s(R.string.journey_arrive_place, journey.to), journey.slack).joinToString(" · "), null, late = answer.leaveLate)
 }
 
 @Composable
-private fun StepLine(time: String, what: String, bus: Journey?) {
+private fun StepLine(time: String, what: String, bus: Journey?, late: Boolean = false) {
     val colors = GlanceTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = GlanceModifier.padding(top = 3.dp)) {
         Text(time, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.width(64.dp))
@@ -181,7 +205,7 @@ private fun StepLine(time: String, what: String, bus: Journey?) {
             }
             Spacer(GlanceModifier.width(6.dp))
         }
-        Text(what, style = TextStyle(color = colors.onSurface, fontSize = 13.sp), maxLines = 1)
+        Text(what, style = TextStyle(color = if (late) colors.error else colors.onSurface, fontSize = 13.sp), maxLines = 1)
     }
 }
 

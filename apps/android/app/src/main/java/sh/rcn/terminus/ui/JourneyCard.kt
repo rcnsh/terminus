@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +44,7 @@ import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyText
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
+import sh.rcn.terminus.widget.clock
 
 /**
  * A trip by bus, drawn in the style chosen in Settings › Appearance
@@ -77,7 +79,7 @@ internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String) {
 @Composable
 private fun Route(answer: NextAnswer, journey: Journey, now: Long) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Text(stringResource(R.string.journey_to, journey.to), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     LeaveHead(answer, journey, now)
     val under = listOfNotNull(JourneyText.by(answer, journey, now), JourneyText.arrive(journey)).joinToString(" · ")
     if (under.isNotEmpty()) Text(under, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
@@ -134,7 +136,7 @@ private val DOT = 18.dp
 @Composable
 private fun Ticket(answer: NextAnswer, journey: Journey, now: Long) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Text(stringResource(R.string.journey_to, journey.to), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
         Box(Modifier.size(64.dp).background(Color(journey.bus.color), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
             Text(journey.bus.svc, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, maxLines = 1)
@@ -163,7 +165,8 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long) {
         journey.arrive?.let { arrive ->
             Column(horizontalAlignment = Alignment.End) {
                 Text(stringResource(R.string.journey_arrive_time, arrive), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(journey.slack ?: stringResource(R.string.journey_at, journey.toStop), style = MaterialTheme.typography.bodySmall, color = muted)
+                // Late is said in red, as on the line and in the steps.
+                Text(journey.slack ?: stringResource(R.string.journey_at, journey.toStop), style = MaterialTheme.typography.bodySmall, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
             }
         }
     }
@@ -175,7 +178,7 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long) {
 private fun Steps(answer: NextAnswer, journey: Journey, now: Long) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Text(
-        listOfNotNull(stringResource(R.string.journey_to, journey.to), journey.arrive?.let { stringResource(R.string.journey_arrive_time, it) }).joinToString(" · "),
+        listOfNotNull(JourneyText.to(answer, journey, clockOf()), journey.arrive?.takeIf { !answer.isClassPlan }?.let { stringResource(R.string.journey_arrive_time, it) }).joinToString(" · "),
         color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
     )
     LeaveHead(answer, journey, now)
@@ -195,7 +198,7 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long) {
             },
             listOfNotNull(stringResource(R.string.journey_ride, journey.ride), journey.off?.let { stringResource(R.string.off_at, it) }).joinToString(" · "),
         )
-        Step(journey.arrive ?: "", first = false, last = true, { Text(stringResource(R.string.journey_arrive_place, journey.to), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold) }, journey.slack)
+        Step(journey.arrive ?: "", first = false, last = true, { Text(stringResource(R.string.journey_arrive_place, journey.to), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold) }, journey.slack, late = answer.leaveLate)
     }
     JourneyText.backup(answer, journey)?.let {
         HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
@@ -205,7 +208,7 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long) {
 
 /** One step: its time, a dot on the rail (filled for the first), what to do and for how long. */
 @Composable
-private fun Step(time: String, first: Boolean, last: Boolean, title: @Composable () -> Unit, sub: String?) {
+private fun Step(time: String, first: Boolean, last: Boolean, title: @Composable () -> Unit, sub: String?, late: Boolean = false) {
     val rail = MaterialTheme.colorScheme.outlineVariant
     Row(Modifier.height(IntrinsicSize.Min)) {
         Text(time, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.width(76.dp).padding(top = 2.dp))
@@ -218,9 +221,16 @@ private fun Step(time: String, first: Boolean, last: Boolean, title: @Composable
         }
         Column(Modifier.padding(start = 12.dp, bottom = if (last) 0.dp else 14.dp)) {
             title()
-            sub?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            sub?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (late) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
+}
+
+/** Clock times in the account's style, for a class's start. */
+@Composable
+private fun clockOf(): (Long) -> String {
+    val ctx = LocalContext.current
+    return { clock(ctx, it) }
 }
 
 /** "Leave in 45 s" or "Leave now", red when it's too late to be on time. */

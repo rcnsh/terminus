@@ -184,4 +184,12 @@ class AnswerTest {
         assertEquals("Or go now: R2 at 09:06 from PGP", JourneyText.backup(a, a.card!!.journey!!))
         assertEquals("Arrive ~09:51 · 9 min early", JourneyText.arrive(a.card.journey!!))
     }
+
+    @Test fun aClassJourneySaysWhenTheClassStarts() {
+        val a = golden("class-bus")
+        assertEquals("To GEA1000 @ UTown · starts 10:00", JourneyText.to(a, a.card!!.journey!!) { "10:00" })
+        // Anything else is just where you're going.
+        val p = golden("place")
+        assertEquals("To KR MRT", JourneyText.to(p, p.card!!.journey!!) { "10:00" })
+    }
 }
