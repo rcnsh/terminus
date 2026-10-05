@@ -44,6 +44,11 @@
 .settings-group:first-child { margin-top: 0; }
 .settings-row.inline { cursor: default; flex-wrap: wrap; }
 .settings-row.inline:hover { background: none; }
+/* About: the words, then its links as rows like the list's. */
+.about-text { display: grid; gap: 10px; }
+.about-text p { margin: 0; }
+.about-links { margin-top: 12px; }
+a.settings-row { text-decoration: none; }
 /* Auto / Light / Dark on the Appearance row: radios drawn as one switch. */
 .segmented { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--surface-2); }
 .segmented label { margin: 0; }
