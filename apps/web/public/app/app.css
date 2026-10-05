@@ -8,7 +8,12 @@ body.app { padding-bottom: env(safe-area-inset-bottom); }
 .app-card { padding: 20px; }
 .app-card .widget { box-shadow: none; border: 0; padding: 0; background: none; }
 .app-card .widget .chips { display: none; }
-.app-card .updated { margin-top: 12px; font-size: 0.8rem; }
+/* "Is this wrong?" on the left, "Updated 9:41" in the bottom right corner. */
+.app-card .card-foot { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-top: 12px; }
+.app-card .updated { margin-left: auto; font-size: 0.8rem; }
+/* The report's form and its message under them, each on a line of its own. */
+.app-card .card-foot > :not(.report-open, .updated) { flex-basis: 100%; }
+.app-card .card-foot > p { order: 1; margin: 0; }
 body.is-offline .app-card .widget { opacity: 0.6; }
 /* The day plan's next thing, offline: still the thing to do, so not dimmed (the banner says offline). */
 body.is-offline .app-card .widget.offline-plan { opacity: 1; }
@@ -89,9 +94,8 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 /* Taking an entry off today: an × on each row still to come, and Undo after. */
 .remove-today { background: none; border: 0; color: var(--muted); font: inherit; font-size: 1.1rem; line-height: 1; padding: 6px 10px; margin: -6px -10px -6px 0; border-radius: 8px; cursor: pointer; }
 .remove-today:hover { color: var(--bad); }
-.today-undo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 14px; margin-bottom: 12px; border-radius: 10px; background: var(--ink); color: var(--bg); font-size: 0.9rem; }
-.today-undo[hidden] { display: none; }
-.today-undo .linkish { color: var(--bg); padding: 6px 8px; }
+.today-item.removed, .today-item.removed .at { color: var(--muted); }
+.today-item .undo-today { padding: 6px 8px; margin: -6px -8px -6px 0; color: var(--accent); font-weight: 600; }
 
 /* ---------- tabs: Now · Map · Settings ---------- */
 

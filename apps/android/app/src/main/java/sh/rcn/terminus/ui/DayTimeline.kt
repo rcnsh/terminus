@@ -39,7 +39,8 @@ import androidx.compose.foundation.layout.widthIn
  * Today at a glance, from /me/day: each class with its leave-by, and the
  * trips home. What's done is dimmed. Anything still to come can be swiped
  * away to take it off today, whether it's timetabled or one you added; it
- * goes at once, with Undo for a few seconds. Until a row has been swiped,
+ * goes at once, leaving a row in its place with Undo for a few seconds, so
+ * nothing below it moves. Until a row has been swiped,
  * the heading says so, and the first few times the first row nudges aside
  * to show what's under it.
  */
@@ -47,6 +48,7 @@ import androidx.compose.foundation.layout.widthIn
 internal fun DayTimeline(
     day: DayPlan,
     removed: DayItem?,
+    removedAt: Int,
     removeError: String?,
     hint: Boolean,
     peek: Boolean,
@@ -66,14 +68,16 @@ internal fun DayTimeline(
                 Text(stringResource(R.string.swipe_to_remove), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (removed != null) UndoBar(removed, onUndo, onDismissUndo)
-        else if (removeError != null) ErrorBar(removeError, onDismissUndo)
-        for (item in day.items) {
+        if (removed == null && removeError != null) ErrorBar(removeError, onDismissUndo)
+        val at = removedAt.coerceIn(0, day.items.size)
+        day.items.forEachIndexed { i, item ->
+            if (i == at && removed != null) androidx.compose.runtime.key("removed:${removed.key}") { RemovedRow(removed, fmt, onUndo, onDismissUndo) }
             // Keyed, so a swiped row's state doesn't pass to the one moving up.
             androidx.compose.runtime.key(item.key) {
                 if (item.removable) Swipeable(item, peek && item.key == firstRemovable, onRemove, onPeeked) { Row(item, fmt) } else Row(item, fmt)
             }
         }
+        if (at == day.items.size && removed != null) androidx.compose.runtime.key("removed:${removed.key}") { RemovedRow(removed, fmt, onUndo, onDismissUndo) }
     }
 }
 
@@ -132,20 +136,19 @@ private fun RemoveBehind(text: String, toEnd: Boolean, modifier: Modifier) {
     }
 }
 
-/** "GEA1000 taken off today · Undo", for a few seconds after a swipe. */
+/** Where a row was swiped off: "GEA1000 taken off today · Undo", for a few seconds, in the list's own colours. */
 @Composable
-private fun UndoBar(item: DayItem, onUndo: () -> Unit, onDismiss: () -> Unit) {
+private fun RemovedRow(item: DayItem, fmt: (Long) -> String, onUndo: () -> Unit, onDismiss: () -> Unit) {
     androidx.compose.runtime.LaunchedEffect(item.key) {
         kotlinx.coroutines.delay(6_000)
         onDismiss()
     }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val name = if (item.kind == "home") stringResource(R.string.trip_home) else item.label.substringBefore(" @ ")
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 6.dp).background(MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(10.dp)).padding(start = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(stringResource(R.string.taken_off_today, name), color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        TextButton(onClick = onUndo) { Text(stringResource(R.string.undo), color = MaterialTheme.colorScheme.inversePrimary) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(fmt(item.startsAtMs), style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.widthIn(min = 72.dp).padding(end = 8.dp))
+        Text(stringResource(R.string.taken_off_today, name), color = muted, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        TextButton(onClick = onUndo) { Text(stringResource(R.string.undo), fontWeight = FontWeight.SemiBold) }
     }
 }
 

@@ -67,6 +67,8 @@ data class UiState(
     val day: DayPlan? = null,
     /** Just swiped off Today, offered back with Undo. */
     val removed: DayItem? = null,
+    /** Where `removed` was in the list: its row stays there, so nothing below it moves. */
+    val removedAt: Int = 0,
     /** Why a swipe off Today didn't take, shown where the row was rather than in the footer. */
     val removeError: String? = null,
     /** "Swipe to remove" beside Today's heading, until a row has been swiped. */
@@ -323,7 +325,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun removeFromToday(item: DayItem) {
         val token = store.token ?: return
-        _state.update { s -> s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item, removeError = null) }
+        _state.update { s -> s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item, removedAt = s.day?.items?.indexOfFirst { it.key == item.key }?.coerceAtLeast(0) ?: 0, removeError = null) }
         viewModelScope.launch {
             val ctx = getApplication<Application>()
             try {

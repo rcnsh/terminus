@@ -45,7 +45,10 @@ const banner = store(null);
 const day = store(null);
 /** Taken off today here, by key, with the refresh that started after it: hidden until one comes back. */
 const removed = store(new Map());
-/** The bar above Today after taking something off it: its words, and Undo if there's one. */
+/**
+ * The row left where an entry was taken off Today: the entry (`it`), where it
+ * was (`at`), its words, and Undo if there's one. In the list, so nothing moves.
+ */
 const undo = store(null);
 /** The search under the chips is open. */
 const searching = store(false);
@@ -304,10 +307,12 @@ function showUndo(value) {
   undoTimer = setTimeout(() => undo.set(null), 6_000);
 }
 
-async function removeFromToday(it) {
+async function removeFromToday(it, at) {
   removed.set((m) => new Map(m).set(it.key, generation + 1));
   const name = it.kind === 'home' ? t('The trip home') : it.label.split(' @ ')[0];
   showUndo({
+    it,
+    at,
     text: t('{0} removed from today', name),
     undo: async () => {
       undo.set(null);
@@ -326,8 +331,8 @@ async function removeFromToday(it) {
   try {
     card.set({ a: await signal({ kind: 'skipped', trip: it.key }) });
   } catch {
-    // Said where it was done, in the undo bar, which the refresh below leaves alone.
-    showUndo({ text: t("Couldn't remove that. Check your connection.") });
+    // Said where it was done, in its row, which the refresh below leaves alone.
+    showUndo({ it, at, text: t("Couldn't remove that. Check your connection.") });
     removed.set((m) => {
       const next = new Map(m);
       next.delete(it.key);
@@ -743,12 +748,17 @@ function CardArea() {
   const to = useStore(target);
   const when = useStore(updated);
   const who = useStore(me);
-  const body = c.a ? html`<${Card} a=${c.a} onAnswer=${answered} onChoice=${refresh} />` : c.offline ? html`<${OfflineCard} ...${c.offline} />` : c.nearby ? html`<${NearbyCard} stops=${c.nearby} />` : html`<${Message} text=${c.text} />`;
+  const bar = useStore(undo);
+  // Undo once: in the removed entry's row while it's there, not on the card as well.
+  const a = c.a?.card && bar?.undo ? { ...c.a, card: { ...c.a.card, actions: c.a.card.actions.filter((x) => !(x.id === 'reset' && x.trip === bar.it.key)) } } : c.a;
+  const body = a ? html`<${Card} a=${a} onAnswer=${answered} onChoice=${refresh} />` : c.offline ? html`<${OfflineCard} ...${c.offline} />` : c.nearby ? html`<${NearbyCard} stops=${c.nearby} />` : html`<${Message} text=${c.text} />`;
   return html`
     <section class="card app-card">
       ${body}
-      <div class="updated hint">${when}</div>
-      ${to.kind !== 'nearby' && html`<${Report} answer=${c.a ?? null} anonymous=${who?.anonymous === true} />`}
+      <div class="card-foot">
+        ${to.kind !== 'nearby' && html`<${Report} answer=${c.a ?? null} anonymous=${who?.anonymous === true} />`}
+        <div class="updated hint">${when}</div>
+      </div>
     </section>
   `;
 }
@@ -818,16 +828,25 @@ function Today() {
   const gone = useStore(removed);
   const bar = useStore(undo);
   const items = (plan?.items ?? []).filter((it) => !gone.has(it.key));
-  if (!items.length && !bar) return null;
+  // The entry just taken off keeps its place, as a row saying so with Undo.
+  // A failed removal's row sits just above the entry, which is back.
+  const rows = items.map((it) => ({ it }));
+  if (bar?.it) rows.splice(Math.min(bar.at, rows.length), 0, { note: bar });
+  if (!rows.length) return null;
   return html`
     <section class="today">
       <h2 class="label">${t('Today')}</h2>
-      <div class="today-undo" role="status" hidden=${!bar}>
-        ${bar && html`<span>${bar.text}</span>`}
-        ${bar?.undo && html`<button type="button" class="linkish" onClick=${bar.undo}>${t('Undo')}</button>`}
-      </div>
       <ol class="today-list">
-        ${items.map((it) => {
+        ${rows.map(({ it, note }) => {
+          if (note) {
+            return html`
+              <li class="today-item removed" key=${`removed:${note.it.key}`} role="status">
+                <span class="at">${clock(note.it.startsAt)}</span>
+                <span class="what"><span class="title">${note.text}</span></span>
+                ${note.undo && html`<button type="button" class="linkish undo-today" onClick=${note.undo}>${t('Undo')}</button>`}
+              </li>
+            `;
+          }
           const title = it.kind === 'home' ? t('Home, from {0}', it.fromName ?? t('your last class')) : it.label;
           let sub = null;
           if (it.status === 'skipped') sub = t('Not going');
@@ -840,7 +859,7 @@ function Today() {
             <li class=${`today-item ${it.status}`} key=${it.key}>
               <span class="at">${clock(it.startsAt)}</span>
               <span class="what"><span class="title">${title}</span>${sub && html`<span class="sub">${sub}</span>`}</span>
-              ${it.removable && html`<button type="button" class="remove-today" aria-label=${t('Remove {0} from today', title)} onClick=${() => removeFromToday(it)}>×</button>`}
+              ${it.removable && html`<button type="button" class="remove-today" aria-label=${t('Remove {0} from today', title)} onClick=${() => removeFromToday(it, items.indexOf(it))}>×</button>`}
             </li>
           `;
         })}
