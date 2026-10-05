@@ -46,8 +46,9 @@ const day = store(null);
 /** Taken off today here, by key, with the refresh that started after it: hidden until one comes back. */
 const removed = store(new Map());
 /**
- * The row left where an entry was taken off Today: the entry (`it`), where it
- * was (`at`), its words, and Undo if there's one. In the list, so nothing moves.
+ * The row left where an entry was taken off Today: the entry (`it`), the one
+ * after it (`before`, its key, null at the end) and where it was (`at`, should
+ * that one go too), its words, and Undo if there's one. In the list, so nothing moves.
  */
 const undo = store(null);
 /** The search under the chips is open. */
@@ -307,12 +308,13 @@ function showUndo(value) {
   undoTimer = setTimeout(() => undo.set(null), 6_000);
 }
 
-async function removeFromToday(it, at) {
+async function removeFromToday(it, at, before) {
   removed.set((m) => new Map(m).set(it.key, generation + 1));
   const name = it.kind === 'home' ? t('The trip home') : it.label.split(' @ ')[0];
   showUndo({
     it,
     at,
+    before,
     text: t('{0} removed from today', name),
     undo: async () => {
       undo.set(null);
@@ -332,7 +334,7 @@ async function removeFromToday(it, at) {
     card.set({ a: await signal({ kind: 'skipped', trip: it.key }) });
   } catch {
     // Said where it was done, in its row, which the refresh below leaves alone.
-    showUndo({ it, at, text: t("Couldn't remove that. Check your connection.") });
+    showUndo({ it, at, before, text: t("Couldn't remove that. Check your connection.") });
     removed.set((m) => {
       const next = new Map(m);
       next.delete(it.key);
@@ -831,7 +833,11 @@ function Today() {
   // The entry just taken off keeps its place, as a row saying so with Undo.
   // A failed removal's row sits just above the entry, which is back.
   const rows = items.map((it) => ({ it }));
-  if (bar?.it) rows.splice(Math.min(bar.at, rows.length), 0, { note: bar });
+  // Kept above the entry that followed it, so a refresh meanwhile doesn't move it.
+  if (bar?.it) {
+    const next = bar.before === null ? rows.length : rows.findIndex((r) => r.it.key === bar.before);
+    rows.splice(next >= 0 ? next : Math.min(bar.at, rows.length), 0, { note: bar });
+  }
   if (!rows.length) return null;
   return html`
     <section class="today">
@@ -859,7 +865,7 @@ function Today() {
             <li class=${`today-item ${it.status}`} key=${it.key}>
               <span class="at">${clock(it.startsAt)}</span>
               <span class="what"><span class="title">${title}</span>${sub && html`<span class="sub">${sub}</span>`}</span>
-              ${it.removable && html`<button type="button" class="remove-today" aria-label=${t('Remove {0} from today', title)} onClick=${() => removeFromToday(it, items.indexOf(it))}>×</button>`}
+              ${it.removable && html`<button type="button" class="remove-today" aria-label=${t('Remove {0} from today', title)} onClick=${() => removeFromToday(it, items.indexOf(it), items[items.indexOf(it) + 1]?.key ?? null)}>×</button>`}
             </li>
           `;
         })}

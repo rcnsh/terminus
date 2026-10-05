@@ -234,13 +234,15 @@ struct FlowPills: View {
 struct TodayList: View {
     let day: DayPlan
     var removed: DayPlan.Item? = nil
-    /// Where `removed` was in the list: its row stays there, so nothing moves.
+    /// Where `removed` was: above the entry that followed it (nil at the end),
+    /// or at `removedAt` should that one go too. Its row stays there, so nothing moves.
     var removedAt = 0
+    var removedBefore: String? = nil
     var onRemove: (DayPlan.Item) -> Void = { _ in }
     var onUndo: () -> Void = {}
 
     var body: some View {
-        let at = min(removedAt, day.items.count)
+        let at = removedBefore.map { k in day.items.firstIndex { $0.key == k } ?? min(removedAt, day.items.count) } ?? day.items.count
         VStack(alignment: .leading, spacing: 6) {
             SectionLabel(text: L("Today"))
             ForEach(Array(day.items.enumerated()), id: \.element.id) { i, item in

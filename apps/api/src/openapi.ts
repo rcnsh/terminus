@@ -1338,6 +1338,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
                 walkS: { type: 'integer', description: 'Seconds on foot to `stop`. Absent when walking.' },
                 rideS: { type: 'integer', description: 'Seconds on the bus. Absent when walking.' },
+                endWalkS: {
+                  type: 'integer',
+                  description: 'Without a class to aim at: seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. A class’s `arrive` is already at its room. Absent for a stop.',
+                },
               },
             },
             bus: {
@@ -1373,6 +1377,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             arrive: { type: ['string', 'null'], format: 'date-time', description: 'When you reach the destination stop. Null with no time.' },
             estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time.' },
             off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination. Absent otherwise.' },
+            toStop: { type: 'string', description: 'Where you get off, short name: the destination stop this bus calls at, or `off`.' },
+            endWalkS: { type: 'integer', description: 'Seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. Absent for a stop.' },
           },
         },
         Arrival: {

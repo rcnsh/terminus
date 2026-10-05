@@ -252,6 +252,7 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
           estimated: l.estimated,
           ...(l.off ? { off: l.off } : {}),
           ...(l.toStop ? { toStop: l.toStop } : {}),
+          ...(l.endWalkS ? { endWalkS: l.endWalkS } : {}),
         }
       : null;
   const leg = planned ?? (card.kind === 'class' ? null : (a.bus ?? null));
@@ -263,9 +264,9 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
   const headlineDiffers = Boolean(planned && a.bus && !(a.bus.svc === planned.svc && a.bus.stop === planned.stop && a.bus.board === planned.board));
   const other = card.kind === 'class' ? (card.goNow ? a.bus : null) : headlineDiffers ? a.bus : a.altBus;
   const classAt = a.timing ? Date.parse(a.timing.classAt) : null;
-  // The walk on from the stop. A class's leave-by already counts it in its
-  // arrival (it aims at the room); a bus's arrival is at the stop.
-  const endS = a.endWalk?.s ?? 0;
+  // The walk on from the stop this bus gets you off at. A class's leave-by
+  // already counts it in its arrival (it aims at the room); a bus's arrival is at the stop.
+  const endS = leg.endWalkS ?? a.endWalk?.s ?? 0;
   const stopMs = leg.arrive ? Date.parse(leg.arrive) - (leg === planned && a.endWalk?.inLeave ? endS * 1000 : 0) : null;
   const thereMs = stopMs != null ? stopMs + endS * 1000 : null;
   const walkEnd = endS >= 45 ? mins(endS) : null;
