@@ -23,6 +23,10 @@ object JourneyText {
         }
     }
 
+    /** "To GEA1000 @ UTown · starts 10:00", the class's start being what the arrival and slack are about. */
+    fun to(answer: NextAnswer, journey: Journey, clock: (Long) -> String): String =
+        listOfNotNull(L.s(R.string.journey_to, journey.to), answer.classAtMs?.takeIf { answer.isClassPlan }?.let { L.s(R.string.starts_at, clock(it)) }).joinToString(" · ")
+
     /** "by 4:01 PM" under the countdown, until it's time to go. */
     fun by(answer: NextAnswer, journey: Journey, now: Long): String? {
         if (answer.card?.phase == "waiting") return null
