@@ -102,7 +102,9 @@ a.settings-row { text-decoration: none; }
   .settings.page-open .settings-side:not(.leaving) { display: none; }
 }
 @media (min-width: 900px) {
-  .settings { display: grid; grid-template-columns: 20rem minmax(0, 1fr); gap: 24px; align-items: start; }
+  /* At least 20rem, and wider when the card's trip line needs it: its stops
+     don't shrink, so a fixed 20rem let the card spill over the column beside. */
+  .settings { display: grid; grid-template-columns: minmax(20rem, min-content) minmax(0, 1fr); gap: 24px; align-items: start; }
   .settings-side { position: sticky; top: 16px; }
   .page-back { display: none; }
   .page-head { margin-left: 0; }
