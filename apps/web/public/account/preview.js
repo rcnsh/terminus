@@ -2,9 +2,10 @@
 // page ("Your widget right now") and on the web app's Now. Every line comes
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
-import { Icon, Rich, html, useEffect, useRef, useState } from '../assets/ui.js';
+import { Icon, Rich, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, t } from './dom.js';
 import { lists } from './profile.js';
+import { Journey, cardStyle } from './journey.js';
 
 const MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/>';
 /** This browser shows 12-hour times: ask for the card in that style. */
@@ -196,6 +197,7 @@ const Chips = ({ a }) => html`
  * `chips`: the widget's row of buttons under it (the account page's preview).
  */
 export function Card({ a, onAnswer, onChoice, chips = false }) {
+  const style = useStore(cardStyle);
   const actions = html`<${Actions} a=${a} onAnswer=${onAnswer} onChoice=${onChoice} />`;
   const row = chips && html`<${Chips} a=${a} />`;
   if (a.mode === 'rest') {
@@ -219,6 +221,11 @@ export function Card({ a, onAnswer, onChoice, chips = false }) {
     `;
   }
   const old = isStale(a);
+  // A trip by bus, in the style chosen in Settings › Appearance. Old times fall
+  // through to the cards below, which say they're updating.
+  if (a.card?.journey && !old && !a.arrived) {
+    return html`<div class="widget" aria-live="polite"><${Phase} a=${a} /><${Journey} a=${a} style=${style} />${actions}${row}</div>`;
+  }
   if (a.card?.kind === 'class' && !old) {
     return html`<div class="widget" aria-live="polite"><${Phase} a=${a} /><${ClassPlan} a=${a} />${actions}${row}</div>`;
   }

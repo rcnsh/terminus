@@ -307,9 +307,10 @@ on an answer that is an estimate or has no time (the feed may be back
 before the next check, and a day with no bus needs no notice). Each isolate reads the monitor's state from KV at most once a
 minute (`feedDownSince`).
 
-`journey` is the trip as steps, for the Android app's card styles (a line
-from you to the destination, a ticket, a list of steps; Settings ›
-Appearance, the line by default): when to leave, the walk to the stop, the
+`journey` is the trip as steps, for the card styles on Android and the
+web (`account/journey.js`): a line from you to the destination, a ticket,
+or a list of steps, chosen in Settings › Appearance per phone or browser,
+the line by default. It says when to leave, the walk to the stop, the
 bus with its colour and time, the ride, where you get off and when you get
 there, and a backup bus (the other bus on a trip; for a class, the sooner
 bus to go now on). A class takes the leave-by's bus, any other trip the
