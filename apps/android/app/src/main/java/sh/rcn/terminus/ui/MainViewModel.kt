@@ -67,6 +67,12 @@ data class UiState(
     val day: DayPlan? = null,
     /** Just swiped off Today, offered back with Undo. */
     val removed: DayItem? = null,
+    /** Why a swipe off Today didn't take, shown where the row was rather than in the footer. */
+    val removeError: String? = null,
+    /** "Swipe to remove" beside Today's heading, until a row has been swiped. */
+    val swipeHint: Boolean = false,
+    /** The first removable row nudges aside once, the first few times Today is shown. */
+    val swipePeek: Boolean = false,
     /** A card button's signal on its way. */
     val signalling: Boolean = false,
 ) {
@@ -78,7 +84,7 @@ data class PendingPair(val code: String, val account: String)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(
-        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first)
+        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first, swipeHint = !store.swipedToday, swipePeek = !store.swipedToday && store.swipePeeks < SWIPE_PEEKS)
             .let { s -> seen()?.let { (a, at) -> s.copy(answers = mapOf(Target.Plan to a), fetchedAt = at) } ?: s },
     )
 
@@ -317,15 +323,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun removeFromToday(item: DayItem) {
         val token = store.token ?: return
-        _state.update { s -> s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item) }
+        _state.update { s -> s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item, removeError = null) }
         viewModelScope.launch {
             val ctx = getApplication<Application>()
             try {
                 applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key))
+                store.swipedToday = true
+                _state.update { it.copy(swipeHint = false, swipePeek = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(removed = null, error = (e as? ApiError)?.message ?: L.s(R.string.cant_remove)) }
+                _state.update { it.copy(removed = null, removeError = (e as? ApiError)?.message ?: L.s(R.string.cant_remove)) }
             }
             dayJob?.cancel()
             loadDay()
@@ -346,7 +354,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun dismissRemoved() = _state.update { it.copy(removed = null) }
+    fun dismissRemoved() = _state.update { it.copy(removed = null, removeError = null) }
+
+    /** The row has nudged aside once: one fewer to go. */
+    fun swipePeeked() {
+        store.swipePeeks += 1
+        _state.update { it.copy(swipePeek = false) }
+    }
 
     /** A new plan from /me/signal: shown, cached for the widget, and the alarms moved. */
     private fun applyPlan(ctx: Application, json: org.json.JSONObject) {
@@ -522,3 +536,6 @@ internal fun installedFromPlay(ctx: android.content.Context): Boolean =
 
 /** Today is fetched again with the answer once it's this old. */
 private const val DAY_MAX_AGE_MS = 120_000L
+
+/** How many times, at most, a Today row nudges aside to show it can be swiped. */
+private const val SWIPE_PEEKS = 3

@@ -180,7 +180,9 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
             }
         }
         // The rest of today under the planned answer.
-        if (!state.showNearby && state.target == Target.Plan) state.day?.let { DayTimeline(it, state.removed, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved) }
+        if (!state.showNearby && state.target == Target.Plan) state.day?.let {
+            DayTimeline(it, state.removed, state.removeError, state.swipeHint, state.swipePeek, vm::removeFromToday, vm::undoRemove, vm::dismissRemoved, vm::swipePeeked)
+        }
         // Somewhere else: going there later today, planned like a class (phase 8.3).
         if (!state.showNearby && state.target != Target.Plan && state.paired) {
             TimeButton(stringResource(R.string.go_later), null, vm::goLater, Modifier.padding(top = 8.dp), initial = ::soonOnCampus)
