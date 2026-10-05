@@ -523,7 +523,7 @@ export function pickAlt(options: ScoredOption[]): ScoredOption | null {
  * option at a *different* stop. A tight margin means the hop-count guess in
  * RIDE.secondsPerHop is doing the deciding, which it is not good enough for.
  */
-export function confidence(options: ScoredOption[], hasCoords: boolean): number {
+export function confidence(options: ScoredOption[], hasCoords: boolean, endWalk: (o: ScoredOption) => number = () => 0): number {
   if (!options.length) return 0;
   const best = options[0];
   // Two passes of the same service through this stop and no way to tell which
@@ -532,7 +532,8 @@ export function confidence(options: ScoredOption[], hasCoords: boolean): number 
   if (!hasCoords) return Math.min(0.75, ceiling); // exact stop, but only an assumption about where you are
   const other = options.find((o) => o.stop.code !== best.stop.code);
   if (!other) return Math.min(0.9, ceiling);
-  const marginS = other.totalS - best.totalS;
+  // The margin to the place itself, as the options are ranked (scoreOptions).
+  const marginS = other.totalS + endWalk(other) - (best.totalS + endWalk(best));
   return Math.round(Math.max(0.5, Math.min(ceiling, 0.5 + marginS / 600)) * 100) / 100;
 }
 

@@ -117,7 +117,7 @@ export async function answerFor(
     walkAllS,
     endWalk,
     walkEndS: input.endWalkByStopS?.[input.to ?? ''] ?? input.endWalkS ?? 0,
-    confidence: confidence(options, input.lat != null),
+    confidence: confidence(options, input.lat != null, endWalk),
     arrivals,
     nowMs,
   });

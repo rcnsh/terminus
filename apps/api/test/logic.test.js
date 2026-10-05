@@ -169,8 +169,11 @@ test('the walk on from the stop counts in the ranking: the bus to the nearer sid
   // As above, KR-MRT gets there first...
   assert.equal(scoreOptions(GRAPH, cands, arrivals, NOW)[0].stop.code, 'KR-MRT');
   // ...but not once its trip ends with a long walk on to the place and the other's doesn't.
-  const options = scoreOptions(GRAPH, cands, arrivals, NOW, (o) => (o.stop.code === 'KR-MRT' ? 3_600 : 0));
+  const endWalk = (o) => (o.stop.code === 'KR-MRT' ? 3_600 : 0);
+  const options = scoreOptions(GRAPH, cands, arrivals, NOW, endWalk);
   assert.equal(options[0].stop.code, 'KR-MRT-OPP');
+  // And it's sure of that by the same measure: an hour's margin, not a coin flip.
+  assert.ok(confidence(options, true, endWalk) > 0.9, 'confidence uses the time to the place, as the ranking does');
 });
 
 test('near PGP Foyer, trips it would reach the long way round board at PGP instead', () => {
