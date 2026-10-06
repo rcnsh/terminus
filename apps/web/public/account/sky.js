@@ -64,8 +64,11 @@ const textW = (s, size) => [...s].reduce((n, c) => n + (/[⺀-鿿＀-￯]/.test(
 /** The flag's five stars, in a ring around its middle (px). */
 const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5), -0.85 * Math.cos((i * 2 * Math.PI) / 5)]);
 
-/** The horizon on screen now, for the sky to reach down to. */
-const ground = store(null);
+/**
+ * The horizon in each tab with a sky (Now, and Settings' list), for the sky
+ * to reach down to. Both tabs stay drawn while hidden, so each has its own.
+ */
+const grounds = { now: store(null), settings: store(null) };
 
 /**
  * Where the sky ends: the hills, a building or two, rain trees, Singapore's
@@ -75,13 +78,14 @@ const ground = store(null);
  * `svc`, `color`, `text`, `far` from 0 at the stop to 1 a quarter of an
  * hour away, and `live`) coming up to it, or a shuttle going by (`shuttle`).
  * A timetable guess is an outline, never a filled bus, so it doesn't pass
- * for live.
+ * for live. `on`: the tab it's in ('now' or 'settings').
  */
-export function Horizon({ stop = null, bus = null, shuttle = true }) {
+export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now' }) {
   const box = useRef(null);
   const [w, setW] = useState(0);
   useLayoutEffect(() => {
     const el = box.current;
+    const ground = grounds[on];
     ground.set(el);
     const seen = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
     seen.observe(el);
@@ -175,23 +179,47 @@ export function Horizon({ stop = null, bus = null, shuttle = true }) {
 }
 
 /**
+ * Keeps `name` (a CSS variable on the page) at the bottom of `on`'s horizon,
+ * down the page, while it's on screen; kept as it was while it's hidden or
+ * between one horizon and the next.
+ */
+function useSkyEnd(on, name) {
+  const el = useStore(grounds[on]);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const body = document.body;
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      if (r.height) body.style.setProperty(name, `${Math.round(r.bottom + window.scrollY)}px`);
+    };
+    place();
+    const seen = new ResizeObserver(place);
+    seen.observe(el);
+    seen.observe(body);
+    return () => seen.disconnect();
+  }, [el]);
+}
+
+/**
  * Now's sky, for as long as Now's card area is there: the page's
  * background from the top down to the horizon on screen, in the hour's
  * `phase` (app.css, body.sky). It stays put while the card changes, until
  * the next horizon says where it ends. The header and the chips take the
  * sky's colours over it, and so does the browser's own bar while Now is the
- * tab on screen.
+ * tab on screen. Settings' list has the same sky (body.set-sky, from
+ * settings.js), down to its own horizon.
  */
 export function useNowSky(phase) {
-  const el = useStore(ground);
   const bar = useRef(null);
   useLayoutEffect(() => {
     const body = document.body;
     const meta = Object.assign(document.createElement('meta'), { name: 'theme-color' });
     bar.current = meta;
-    // Map and Settings are drawn over a hidden Now (app.js sets on-map and on-settings).
+    // Map and Settings are drawn over a hidden Now (app.js sets on-map and
+    // on-settings); Settings has the sky only on its list.
     const tab = () => {
-      if (body.classList.contains('on-map') || body.classList.contains('on-settings')) return meta.remove();
+      const has = (c) => body.classList.contains(c);
+      if (has('on-map') || (has('on-settings') && !has('set-sky'))) return meta.remove();
       meta.content = getComputedStyle(body).getPropertyValue('--s0').trim() || '#121a33';
       if (meta.parentNode !== document.head || document.head.firstChild !== meta) document.head.prepend(meta);
     };
@@ -203,21 +231,14 @@ export function useNowSky(phase) {
       meta.remove();
       body.classList.remove('sky', ...PHASES.map((p) => `sky-${p}`));
       body.style.removeProperty('--sky-end');
+      body.style.removeProperty('--set-end');
     };
   }, []);
   useLayoutEffect(() => {
     for (const p of PHASES) document.body.classList.toggle(`sky-${p}`, p === phase);
   }, [phase]);
-  useLayoutEffect(() => {
-    if (!el) return;
-    const body = document.body;
-    const place = () => body.style.setProperty('--sky-end', `${Math.round(el.getBoundingClientRect().bottom + window.scrollY)}px`);
-    place();
-    const seen = new ResizeObserver(place);
-    seen.observe(el);
-    seen.observe(body);
-    return () => seen.disconnect();
-  }, [el]);
+  useSkyEnd('now', '--sky-end');
+  useSkyEnd('settings', '--set-end');
   // Depth as the page scrolls (daylight.js parallax): the sun, the clouds and
   // the far hills lag behind, as CSS variables on the page (app.css), so a
   // card that comes in as the chips switch has them at once. Off for anyone

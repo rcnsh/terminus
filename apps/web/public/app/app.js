@@ -939,7 +939,7 @@ function SettingsArea() {
   const Settings = s.mod.Settings;
   // "Notify me when to leave" in Settings, under Notifications, where this browser can do it.
   const canNotify = pushable && !(iPhone && !standalone);
-  return html`<${Settings} me=${who} inApp Notify=${canNotify ? Notify : null} notifyOn=${notify.on} />`;
+  return html`<${Settings} me=${who} inApp sky Notify=${canNotify ? Notify : null} notifyOn=${notify.on} />`;
 }
 
 const TABBAR = [

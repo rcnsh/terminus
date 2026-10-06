@@ -1,6 +1,18 @@
 package sh.rcn.terminus.ui
 
 import android.app.Activity
+import android.provider.Settings
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.ScrollState
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -485,6 +497,49 @@ internal fun SkyInk(on: Boolean, light: Boolean, content: @Composable () -> Unit
     }
 }
 
+/**
+ * A tab's sky ([SkyState]) that scrolls with [scroll], in [phase] and the
+ * page's theme: Now's, and Settings' list's. Still while the phone's
+ * "Remove animations" is on (checked again on coming back to the app).
+ */
+@Composable
+internal fun rememberSky(scroll: ScrollState, phase: Phase): SkyState {
+    val sky = remember(scroll) { SkyState().apply { this.scroll = { scroll.value } } }
+    val ctx = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(sky) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            sky.still = Settings.Global.getFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        }
+    }
+    val page = MaterialTheme.colorScheme.background
+    SideEffect {
+        sky.phase = phase
+        sky.dark = page.luminance() < 0.5f
+    }
+    return sky
+}
+
+/**
+ * The status bar's own strip, [top] high, over a tab whose content scrolls
+ * under it ([scroll]): clear at the top, so the sky (or the page) shows
+ * through, then filled as the content goes under it.
+ */
+@Composable
+internal fun StatusStrip(sky: SkyState, top: Dp, scroll: ScrollState) {
+    val page = MaterialTheme.colorScheme.background
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(top)
+            .graphicsLayer { alpha = if (top.toPx() > 0f) (scroll.value / top.toPx()).coerceIn(0f, 1f) else 0f }
+            .background(if (sky.end != null) sky.palette.sky[0] else page),
+    )
+}
+
+/** Which screen set the status bar's icons last, so one going away doesn't undo the next one's. */
+private var statusOwner: Any? = null
+
 /** Light status bar icons over a dark sky, back to the theme's when it goes. */
 @Composable
 internal fun NightStatusBar(night: Boolean) {
@@ -492,10 +547,15 @@ internal fun NightStatusBar(night: Boolean) {
     val dark = isSystemInDarkTheme()
     if (view.isInEditMode) return
     DisposableEffect(night, dark) {
+        val me = Any()
+        statusOwner = me
         val window = view.context.activity()?.window
         val bars = window?.let { WindowCompat.getInsetsController(it, view) }
         bars?.isAppearanceLightStatusBars = !dark && !night
-        onDispose { bars?.isAppearanceLightStatusBars = !dark }
+        onDispose {
+            // A tab fading out after the next one has set its own: leave them.
+            if (statusOwner === me) bars?.isAppearanceLightStatusBars = !dark
+        }
     }
 }
 
