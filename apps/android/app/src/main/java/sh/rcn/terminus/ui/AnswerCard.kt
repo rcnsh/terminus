@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import sh.rcn.terminus.Upcoming
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -19,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Row
@@ -85,12 +85,12 @@ internal fun AnswerCard(
         // What comes before any answer, in the sky with its top.
         val lead: @Composable ColumnScope.() -> Unit = {
             // NUS's live times are down: said once, above the answer.
-            answer.card?.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
+            answer.card?.notice?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, MaterialTheme.typography.bodySmall) }
             // Where the trip is, when one is under way: the same on every device.
-            answer.phaseText?.let { Pill(it, MaterialTheme.colorScheme.primary) }
+            answer.phaseText?.let { Pill(it, smallAccent()) }
             // On the bus: how far along the ride, and the next stop, as the live notification shows.
             answer.card?.ride?.let { RideProgress(it) }
-            answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
+            answer.card?.warning?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.SemiBold) }
         }
         // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
         answer.card?.journey?.takeIf { !answer.arrived }?.let { journey ->
@@ -212,7 +212,7 @@ internal fun ClassPlan(answer: NextAnswer) {
         Text(
             if (left >= 120) stringResource(R.string.in_min, ((left + 30) / 60).toInt()) else stringResource(R.string.in_min_s, (left / 60).toInt(), (left % 60).toInt()),
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
+            color = smallAccent(),
         )
     }
     // The bus to catch, and underneath when it gets you there. The stop is
@@ -323,14 +323,15 @@ private fun UpcomingCard(u: Upcoming, glass: Boolean) {
             .border(1.dp, if (!glass) c.outlineVariant else if (light) Color.White.copy(alpha = 0.14f) else Color(0x291C1917), shape)
             .padding(18.dp),
     ) {
-        Label(u.whenText, color = c.primary)
+        Label(u.whenText, color = smallAccent())
         Text(u.title, fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, color = c.onSurface, modifier = Modifier.padding(top = 6.dp))
         Text(u.where, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
+/** "On time" green: the sky's in the sky, else the one for the scheme's page (night's on a light phone too). */
 @Composable
-internal fun goodColor() = if (isSystemInDarkTheme()) GoodDark else GoodLight
+internal fun goodColor() = LocalSkyTones.current?.good ?: if (MaterialTheme.colorScheme.background.luminance() < 0.5f) GoodDark else GoodLight
 
 /** "Leave by 09:38 · D2 from PGP", turning into "Leave now" when the time comes. */
 @Composable
@@ -364,7 +365,7 @@ internal fun Countdown(answer: NextAnswer) {
         left > 0 -> stringResource(R.string.leaves_in_s, left.toInt())
         else -> stringResource(R.string.left_ago, ((-left + 59) / 60).toInt())
     }
-    Text(text, style = MaterialTheme.typography.titleSmall, color = if (left > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(text, style = MaterialTheme.typography.titleSmall, color = if (left > 0) smallAccent() else MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /** Three states, three colours: "tight" is the one that must not look calm. */
@@ -375,6 +376,19 @@ internal fun timingColor(status: String?) = when (status) {
     else -> goodColor()
 }
 
+/** Words in a colour of their own (a notice, a warning); in the sky, on its chip, so they read over any hour's colours. */
+@Composable
+private fun ToneText(text: String, color: Color, style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.LocalTextStyle.current, fontWeight: FontWeight? = null) {
+    val chip = LocalSkyTones.current?.chip
+    Text(
+        text,
+        style = style,
+        fontWeight = fontWeight,
+        color = color,
+        modifier = if (chip == null) Modifier else Modifier.background(chip, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+    )
+}
+
 @Composable
 internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) {
     Text(
@@ -382,7 +396,8 @@ internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) {
         style = MaterialTheme.typography.labelMedium,
         color = color,
         modifier = Modifier
-            .background(color.copy(alpha = 0.12f), androidx.compose.foundation.shape.RoundedCornerShape(50))
+            // In the sky, on its chip, so the colour reads over any hour's (SkyTones).
+            .background(LocalSkyTones.current?.chip ?: color.copy(alpha = 0.12f), androidx.compose.foundation.shape.RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }

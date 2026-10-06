@@ -243,41 +243,49 @@ body.sky { position: relative; overflow-x: clip;
   --s0: #121a33; --s1: #181a30; --s2: #24243a; --s3: #2e2a44; --h-far: #3a3550; --h-tree: #5b5568; --h-city: #45405f;
   --h-road: #d6cfc7; --h-post: #1c1917; --h-post-ink: #fafaf9; --sun: transparent; --glow: transparent; --cloud: transparent; --setting: transparent;
 }
-/* Light ink, for a dark sky; dark ink, for a light one. */
+/* Light ink, for a dark sky; dark ink, for a light one. Each colour, the
+   good, late and warning ones too, reads at 4.5:1 or more over the sky
+   between the words, large ones at 3:1 (the sun's end of the top is for the
+   wordmark and the chips). Small coloured words (Live, a notice) sit on a chip: darker than a
+   dark sky, lighter than a light one, so they read wherever they fall. */
 body.sky, body.sky-dusk, body.sky-night {
-  --k-bg: #121a33; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #d6d3d1; --k-faint: #a8a29e;
+  --k-bg: #121a33; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
   --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
+  --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
   --h-pill: #fff; --h-pill-ink: #1c1917; --h-win: #fde9c9;
 }
 body.sky-dawn, body.sky-day, body.sky-golden {
-  --k-bg: #fafaf9; --k-surface: rgb(255 255 255 / 0.5); --k-surface-2: rgb(255 255 255 / 0.65); --k-ink: #1c1917; --k-muted: #3f3a36; --k-faint: #57534e;
-  --k-line: rgb(28 25 23 / 0.16); --k-line-strong: rgb(28 25 23 / 0.3); --k-accent: #c2410c; --k-accent-soft: rgb(194 65 12 / 0.12); --k-scheme: light;
+  --k-bg: #fafaf9; --k-surface: rgb(255 255 255 / 0.5); --k-surface-2: rgb(255 255 255 / 0.65); --k-ink: #1c1917; --k-muted: #36312d; --k-faint: #44403c;
+  --k-line: rgb(28 25 23 / 0.16); --k-line-strong: rgb(28 25 23 / 0.3); --k-accent: #9a3412; --k-accent-soft: rgb(154 52 18 / 0.12); --k-scheme: light;
+  --k-good: #14532d; --k-warn: #78350f; --k-bad: #7f1d1d; --k-chip: rgb(255 255 255 / 0.65); --k-accent-small: #6c2710;
   --h-pill: #1c1917; --h-pill-ink: #fff; --h-win: #dbeafe;
 }
 body.sky-dawn { --s0: #8fc1e8; --s1: #b7d6ee; --s2: #f1d6c2; --s3: #f7c9a4; --h-far: #b3b0c3; --h-tree: #6a7568; --h-city: #cfc8d8; --sun: #fff1d6; --glow: rgb(255 214 170 / 0.75); }
-body.sky-day { --s0: #4f9ee0; --s1: #86bfeb; --s2: #c7e2f4; --s3: #e3f0f8; --h-far: #9fbcae; --h-tree: #4f6f58; --h-city: #b7cbd9; --sun: #fffbea; --glow: rgb(255 250 220 / 0.9); --cloud: rgb(255 255 255 / 0.85); }
-body.sky-golden { --s0: #6fa3d6; --s1: #a7c3dc; --s2: #f0cf9c; --s3: #f4b46c; --h-far: #c4a983; --h-tree: #5e5a42; --h-city: #dcc6a2; --sun: #ffe2a8; --glow: rgb(255 190 110 / 0.8); --cloud: rgb(255 255 255 / 0.8); }
-body.sky-dusk { --s0: #2c3566; --s1: #5b4f86; --s2: #c6708a; --s3: #f19a6c; --h-far: #4b3f62; --h-tree: #2c2440; --h-city: #7d6a90; --setting: #ffb37a; }
+body.sky-day { --s0: #5ea8e5; --s1: #8ec4ec; --s2: #c7e2f4; --s3: #e3f0f8; --h-far: #9fbcae; --h-tree: #4f6f58; --h-city: #b7cbd9; --sun: #fffbea; --glow: rgb(255 250 220 / 0.9); --cloud: rgb(255 255 255 / 0.85); }
+body.sky-golden { --s0: #78aadb; --s1: #a7c3dc; --s2: #f0cf9c; --s3: #f4b46c; --h-far: #c4a983; --h-tree: #5e5a42; --h-city: #dcc6a2; --sun: #ffe2a8; --glow: rgb(255 190 110 / 0.8); --cloud: rgb(255 255 255 / 0.8); }
+body.sky-dusk { --s0: #2c3566; --s1: #4a4275; --s2: #6c4260; --s3: #e08a62; --h-far: #4b3f62; --h-tree: #2c2440; --h-city: #7d6a90; --setting: #ffb37a; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.sky {
-    --k-bg: #0f0e0d; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #d6d3d1; --k-faint: #a8a29e;
+    --k-bg: #0f0e0d; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
     --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
+    --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
     --h-road: #2c2926; --h-post: #d6d3d1; --h-post-ink: #0f0e0d; --h-pill: #f5f3f0; --h-pill-ink: #0f0e0d; --h-far: #191826; --h-tree: #121110;
   }
-  :root:not([data-theme="light"]) body.sky-dawn { --s0: #1d3550; --s1: #2f4d68; --s2: #6b5a66; --s3: #8a6656; --h-far: #2a3446; --h-tree: #151c24; --h-city: #3d4658; --sun: #f3dcc0; --glow: rgb(243 220 192 / 0.3); --h-win: #b9c7d6; }
-  :root:not([data-theme="light"]) body.sky-day { --s0: #173350; --s1: #22486b; --s2: #35607f; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --sun: #fbe3a6; --glow: rgb(255 205 120 / 0.45); --cloud: rgb(220 230 240 / 0.16); --h-win: #b9c7d6; }
-  :root:not([data-theme="light"]) body.sky-golden { --s0: #1f3550; --s1: #3a4a5e; --s2: #7a6046; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --glow: rgb(243 210 154 / 0.35); --cloud: rgb(220 230 240 / 0.14); --h-win: #b9c7d6; }
-  :root:not([data-theme="light"]) body.sky-dusk { --s0: #1a1c3a; --s1: #362f5a; --s2: #7a4a6a; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --setting: #f0915e; }
+  :root:not([data-theme="light"]) body.sky-dawn { --s0: #1d3550; --s1: #2a465f; --s2: #5c4d58; --s3: #8a6656; --h-far: #2a3446; --h-tree: #151c24; --h-city: #3d4658; --sun: #f3dcc0; --glow: rgb(243 220 192 / 0.3); --h-win: #b9c7d6; }
+  :root:not([data-theme="light"]) body.sky-day { --s0: #173350; --s1: #1f4262; --s2: #2d5674; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --sun: #fbe3a6; --glow: rgb(255 205 120 / 0.45); --cloud: rgb(220 230 240 / 0.16); --h-win: #b9c7d6; }
+  :root:not([data-theme="light"]) body.sky-golden { --s0: #1f3550; --s1: #334356; --s2: #5e4a37; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --glow: rgb(243 210 154 / 0.35); --cloud: rgb(220 230 240 / 0.14); --h-win: #b9c7d6; }
+  :root:not([data-theme="light"]) body.sky-dusk { --s0: #1a1c3a; --s1: #322b54; --s2: #6c4260; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --setting: #f0915e; }
 }
 :root[data-theme="dark"] body.sky {
-  --k-bg: #0f0e0d; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #d6d3d1; --k-faint: #a8a29e;
+  --k-bg: #0f0e0d; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
   --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
+  --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
   --h-road: #2c2926; --h-post: #d6d3d1; --h-post-ink: #0f0e0d; --h-pill: #f5f3f0; --h-pill-ink: #0f0e0d; --h-far: #191826; --h-tree: #121110;
 }
-:root[data-theme="dark"] body.sky-dawn { --s0: #1d3550; --s1: #2f4d68; --s2: #6b5a66; --s3: #8a6656; --h-far: #2a3446; --h-tree: #151c24; --h-city: #3d4658; --sun: #f3dcc0; --glow: rgb(243 220 192 / 0.3); --h-win: #b9c7d6; }
-:root[data-theme="dark"] body.sky-day { --s0: #173350; --s1: #22486b; --s2: #35607f; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --sun: #fbe3a6; --glow: rgb(255 205 120 / 0.45); --cloud: rgb(220 230 240 / 0.16); --h-win: #b9c7d6; }
-:root[data-theme="dark"] body.sky-golden { --s0: #1f3550; --s1: #3a4a5e; --s2: #7a6046; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --glow: rgb(243 210 154 / 0.35); --cloud: rgb(220 230 240 / 0.14); --h-win: #b9c7d6; }
-:root[data-theme="dark"] body.sky-dusk { --s0: #1a1c3a; --s1: #362f5a; --s2: #7a4a6a; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --setting: #f0915e; }
+:root[data-theme="dark"] body.sky-dawn { --s0: #1d3550; --s1: #2a465f; --s2: #5c4d58; --s3: #8a6656; --h-far: #2a3446; --h-tree: #151c24; --h-city: #3d4658; --sun: #f3dcc0; --glow: rgb(243 220 192 / 0.3); --h-win: #b9c7d6; }
+:root[data-theme="dark"] body.sky-day { --s0: #173350; --s1: #1f4262; --s2: #2d5674; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --sun: #fbe3a6; --glow: rgb(255 205 120 / 0.45); --cloud: rgb(220 230 240 / 0.16); --h-win: #b9c7d6; }
+:root[data-theme="dark"] body.sky-golden { --s0: #1f3550; --s1: #334356; --s2: #5e4a37; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --glow: rgb(243 210 154 / 0.35); --cloud: rgb(220 230 240 / 0.14); --h-win: #b9c7d6; }
+:root[data-theme="dark"] body.sky-dusk { --s0: #1a1c3a; --s1: #322b54; --s2: #6c4260; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --setting: #f0915e; }
 /* On Now, and on Settings' list (settings.js sets set-sky) down to its own
    horizon. Map and Settings are drawn over a hidden Now, which keeps its sky. */
 body.sky { --end: var(--sky-end); }
@@ -289,12 +297,19 @@ body.sky:not(.on-map, .on-settings)::before, body.sky.on-settings.set-sky:not(.s
 body.sky:not(.on-map, .on-settings) > .nav, body.sky .app-chips, body.sky .where-box, body.sky .sky-head, body.sky.set-sky .settings-title {
   --bg: var(--k-bg); --surface: var(--k-surface); --surface-2: var(--k-surface-2); --ink: var(--k-ink); --muted: var(--k-muted); --faint: var(--k-faint);
   --line: var(--k-line); --line-strong: var(--k-line-strong); --accent: var(--k-accent); --accent-soft: var(--k-accent-soft);
+  --good: var(--k-good); --good-ink: var(--k-good); --warn: var(--k-warn); --warn-ink: var(--k-warn); --bad: var(--k-bad); --bad-ink: var(--k-bad);
   color-scheme: var(--k-scheme); color: var(--ink);
 }
 /* The card's top, with room above its words for the sun or the moon. */
 .sky-head { position: relative; isolation: isolate; padding-top: var(--room); --room: 66px; --moon: 40px; }
 .nearby-sky { --room: 44px; --moon: 34px; }
 .settings-sky { --room: 56px; --moon: 34px; }
+/* Small words in the accent (a countdown, the trip's phase, when the next
+   class is) take its stronger shade: the headline's is for large words. */
+body.sky .sky-head :is(.countdown:not(.gone), .phase, .upcoming .eyebrow) { color: var(--k-accent-small); }
+/* Small coloured words on the sky's chip (see its ink above). */
+body.sky .sky-head :is(.tag, .tag.live, .phase) { background: var(--k-chip); }
+body.sky .sky-head :is(.notice, .warning) { width: fit-content; padding: 4px 10px; border-radius: 10px; background: var(--k-chip); }
 /* A slim band of the sky at the top of each of Settings' pages: the title in
    it with a small sun or moon on the right, ending on the low horizon (just
    the hills). The page's controls stay on the plain page under it. The page
