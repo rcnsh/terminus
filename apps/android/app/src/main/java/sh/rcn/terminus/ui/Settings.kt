@@ -145,6 +145,7 @@ internal fun SettingsScreen(
     LaunchedEffect(state.email) { if (state.email != null) account.loadDevices() }
     LaunchedEffect(Unit) { account.loadChoices() }
     LaunchedEffect(Unit) { account.loadCampus() }
+    val ui by main.state.collectAsStateWithLifecycle()
 
     var open by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
     // A NUSMods link shared into the app: straight to Timetable, to import it.
@@ -201,16 +202,19 @@ internal fun SettingsScreen(
                         scaleY = scale
                         translationX = backProgress * size.width * 0.15f
                         alpha = 1f - backProgress * 0.3f
-                    }.padding(top = if (state.message != null) 0.dp else top, bottom = bottom).padding(horizontal = 16.dp),
+                    }.padding(bottom = bottom),
                 ) {
-                    TabHeader {
-                        // The arrow sits in the margin, so the title lines up with the list's.
-                        IconButton(onClick = { open = null }, modifier = Modifier.offset(x = (-12).dp)) {
-                            Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
+                    // The title in a slim band of the list's sky; the page itself plain.
+                    SkyBand(skyPhase(ui), if (state.message != null) 0.dp else top) {
+                        TabHeader {
+                            // The arrow sits in the margin, so the title lines up with the list's.
+                            IconButton(onClick = { open = null }, modifier = Modifier.offset(x = (-12).dp)) {
+                                Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
+                            }
+                            Text(stringResource(page.title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.offset(x = (-12).dp))
                         }
-                        Text(stringResource(page.title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.offset(x = (-12).dp))
                     }
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                         SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
                         Spacer(Modifier.height(32.dp))
                     }

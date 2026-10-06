@@ -1,6 +1,7 @@
 package sh.rcn.terminus.ui
 
 import android.app.Activity
+import androidx.compose.ui.text.rememberTextMeasurer
 import android.provider.Settings
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -546,6 +547,58 @@ internal fun StatusStrip(sky: SkyState, top: Dp, scroll: ScrollState) {
             .graphicsLayer { alpha = if (top.toPx() > 0f) (scroll.value / top.toPx()).coerceIn(0f, 1f) else 0f }
             .background(if (sky.end != null) sky.palette.sky[0] else page),
     )
+}
+
+/** How much of the horizon the band at the top of Settings' pages shows: the city's top to the near hill. */
+private val LOW = 52.dp
+
+/** A few stars beside a page's title in the band, clear of the title: across (0–1), down (0–1 of the title's row). */
+private val BAND_STARS = listOf(
+    floatArrayOf(0.56f, 0.2f, 0.6f), floatArrayOf(0.63f, 0.7f, 0.45f), floatArrayOf(0.7f, 0.35f, 0.7f),
+    floatArrayOf(0.78f, 0.8f, 0.4f), floatArrayOf(0.66f, 0.05f, 0.5f), floatArrayOf(0.95f, 0.85f, 0.45f),
+)
+
+/**
+ * A slim band of the sky at the top of one of Settings' pages, in [phase]:
+ * from the top of the screen, [top] for the status bar, then [content] (the
+ * back arrow and the title) in the sky's ink with a small sun or moon on the
+ * right, ending on the low horizon (just the hills, no road). The page's
+ * controls stay on the plain page under it. As the web's (.page-band).
+ */
+@Composable
+internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
+    val page = MaterialTheme.colorScheme.background
+    val p = palette(phase, page.luminance() < 0.5f)
+    val measurer = rememberTextMeasurer()
+    NightStatusBar(p.lightInk)
+    Column(
+        Modifier.fillMaxWidth().drawBehind {
+            val d = 1.dp.toPx()
+            val end = size.height
+            drawRect(Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end))
+            // Beside the title, on the right: its row is between the status bar and the hills.
+            val row = top.toPx()..(end - LOW.toPx())
+            val mid = (row.start + row.endInclusive) / 2
+            val r = 11 * d
+            val centre = Offset(size.width - 22 * d - r, mid)
+            if (phase == Phase.NIGHT) {
+                for ((x, y, a) in BAND_STARS) drawCircle(Color.White.copy(alpha = a), 1.1f * d, Offset(size.width * x, row.start + (row.endInclusive - row.start) * y))
+                crescent(centre, r + d)
+            } else p.sun?.let { sun ->
+                drawCircle(Brush.radialGradient(0.4f to p.glow, 1f to Color.Transparent, center = centre, radius = r * 2.4f), r * 2.4f, centre)
+                drawCircle(sun, r, centre)
+            }
+            // The low horizon: the strip's y 6 to 58 dp, at the band's foot.
+            val strip = end - 58 * d
+            clipRect(top = end - LOW.toPx(), bottom = end) {
+                horizon(strip, page, p, phase == Phase.DUSK || phase == Phase.NIGHT, Road(shuttle = false), measurer, 0f)
+            }
+        },
+    ) {
+        Spacer(Modifier.height(top))
+        SkyInk(true, p.lightInk) { Box(Modifier.padding(horizontal = 16.dp)) { content() } }
+        Spacer(Modifier.height(LOW))
+    }
 }
 
 /** Which screen set the status bar's icons last, so one going away doesn't undo the next one's. */
