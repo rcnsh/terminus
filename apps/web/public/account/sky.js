@@ -15,10 +15,14 @@ const STARS = [
   [0.72, 0.28, 0.7], [0.84, 0.88, 0.4], [0.92, 0.5, 0.55], [0.11, 0.95, 0.35], [0.33, 1, 0.4], [0.58, 0.98, 0.3],
 ];
 
-/** A few stars and a crescent moon. Fixed, so they never twinkle into a distraction. */
-export const NightSky = () => html`
+/**
+ * A few stars and a crescent moon. Fixed, so they never twinkle into a
+ * distraction. `from`: only the stars across from there (0–1), clear of a
+ * title on the left.
+ */
+export const NightSky = ({ from = 0 }) => html`
   <span class="night-sky" aria-hidden="true">
-    ${STARS.map(([x, y, a], i) => html`<span class="star" key=${i} style=${{ left: `${x * 100}%`, top: `calc(${(y * 0.82).toFixed(3)} * var(--room, 108px) + 4px)`, opacity: a }}></span>`)}
+    ${STARS.map(([x, y, a], i) => x >= from && html`<span class="star" key=${i} style=${{ left: `${x * 100}%`, top: `calc(${(y * 0.82).toFixed(3)} * var(--room, 108px) + 4px)`, opacity: a }}></span>`)}
     <span class="moon"></span>
   </span>
 `;
@@ -31,12 +35,14 @@ const cloud = (x, y, s) => html`
 /**
  * What's up in the room above the words: the sun, a few clouds, or the
  * stars and the moon. All of it is drawn; the hour's class shows its own.
+ * `band`: beside a page's title instead (Settings' pages), a small sun or
+ * moon on the right, with stars only there.
  */
-export const Celestial = () => html`
+export const Celestial = ({ band = false }) => html`
   <span class="celestial" aria-hidden="true">
     <span class="sun"></span>
-    <svg class="clouds" width="340" height="66" viewBox="0 0 340 66">${cloud(70, 34, 0.9)}${cloud(205, 48, 0.6)}${cloud(150, 14, 0.45)}</svg>
-    <${NightSky} />
+    ${!band && html`<svg class="clouds" width="340" height="66" viewBox="0 0 340 66">${cloud(70, 34, 0.9)}${cloud(205, 48, 0.6)}${cloud(150, 14, 0.45)}</svg>`}
+    <${NightSky} from=${band ? 0.5 : 0} />
   </span>
 `;
 
@@ -65,10 +71,11 @@ const textW = (s, size) => [...s].reduce((n, c) => n + (/[⺀-鿿＀-￯]/.test(
 const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5), -0.85 * Math.cos((i * 2 * Math.PI) / 5)]);
 
 /**
- * The horizon in each tab with a sky (Now, and Settings' list), for the sky
- * to reach down to. Both tabs stay drawn while hidden, so each has its own.
+ * The horizons in each tab with a sky (Now, Settings' list), for the sky to
+ * reach down to the one on screen. Hidden tabs stay drawn, and a card can
+ * hand over to the next, so there can be more than one.
  */
-const grounds = { now: store(null), settings: store(null) };
+const grounds = { now: store([]), settings: store([]) };
 
 /**
  * Where the sky ends: the hills, a building or two, rain trees, Singapore's
@@ -78,22 +85,27 @@ const grounds = { now: store(null), settings: store(null) };
  * `svc`, `color`, `text`, `far` from 0 at the stop to 1 a quarter of an
  * hour away, and `live`) coming up to it, or a shuttle going by (`shuttle`).
  * A timetable guess is an outline, never a filled bus, so it doesn't pass
- * for live. `on`: the tab it's in ('now' or 'settings').
+ * for live. `on`: the tab whose sky reaches down to it ('now' or
+ * 'settings'), or null for one in a sky of its own. `low`: just the hills,
+ * the trees and the city, with no road (the band at the top of Settings'
+ * pages).
  */
-export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now' }) {
+export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now', low = false }) {
   const box = useRef(null);
   const [w, setW] = useState(0);
   useLayoutEffect(() => {
     const el = box.current;
-    const ground = grounds[on];
-    ground.set(el);
+    const ground = on && grounds[on];
+    ground?.set([...ground.get(), el]);
     const seen = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
     seen.observe(el);
     return () => {
       seen.disconnect();
-      if (ground.get() === el) ground.set(null);
+      ground?.set(ground.get().filter((x) => x !== el));
     };
   }, []);
+  // The low one: the strip from the city's top to the near hill (y 6 to 58).
+  const [top, h] = low ? [6, 52] : [0, 92];
   const at = (f) => Math.round(w * f);
   // Your stop's sign left of the flag, whatever its name's length; the flag
   // right of anything on the road; the city clear of the flag and the edge.
@@ -109,9 +121,9 @@ export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now' })
   const lx = bus ? Math.max(4, Math.min(bx + 19 - lw / 2, sx - plate / 2 - 4 - lw)) : 0;
   const passing = at(0.58) - 19;
   return html`
-    <div class="horizon" ref=${box} aria-hidden="true">
+    <div class=${low ? 'horizon low' : 'horizon'} ref=${box} aria-hidden="true">
       ${w > 0 &&
-      html`<svg width=${w} height="92" viewBox=${`0 0 ${w} 92`}>
+      html`<svg width=${w} height=${h} viewBox=${`0 ${top} ${w} ${h}`}>
         <g class="depth">
         <circle class="setting" cx=${at(0.5)} cy="40" r="26" />
         ${mbs + 25 <= w &&
@@ -144,14 +156,16 @@ export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now' })
         <circle class="flag-red" cx=${flag + 3.8} cy=${pole - 22} r="1.3" />
         ${STARS5.map(([x, y]) => html`<circle class="flag-white" cx=${flag + 5.2 + x} cy=${pole - 22 + y} r="0.35" />`)}
         <path class="near" d=${ridge(w, nearY)} />
-        <line class="road" x1="0" y1="70" x2=${w} y2="70" />
-        ${stop &&
+        ${!low && html`<line class="road" x1="0" y1="70" x2=${w} y2="70" />`}
+        ${!low &&
+        stop &&
         html`<g class="sign">
           <line x1=${sx} y1="70" x2=${sx} y2="44" />
           <rect x=${sx - plate / 2} y="35" width=${plate} height="11" rx="2.5" />
           <text x=${sx} y="43.2">${stop}</text>
         </g>`}
-        ${bus &&
+        ${!low &&
+        bus &&
         html`<g class=${bus.live ? 'coming' : 'coming guess'} transform=${`translate(${bx} 57)`} style=${{ '--svc': bus.color }}>
             <rect class="body" x="0.75" y="0.75" width="36.5" height="10.5" rx="3" />
             <rect class="band" y="9.5" width="38" height="2.5" rx="1" />
@@ -163,7 +177,8 @@ export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now' })
             <rect x=${lx} y="42" width=${lw} height="12" rx="6" />
             <text x=${lx + lw / 2} y="50.6">${bus.text}</text>
           </g>`}
-        ${!bus &&
+        ${!low &&
+        !bus &&
         shuttle &&
         html`<g transform=${`translate(${passing} 57)`}>
           <path class="beam" d="M38 6L60 3L60 11Z" />
@@ -184,20 +199,21 @@ export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now' })
  * between one horizon and the next.
  */
 function useSkyEnd(on, name) {
-  const el = useStore(grounds[on]);
+  const els = useStore(grounds[on]);
   useLayoutEffect(() => {
-    if (!el) return;
+    if (!els.length) return;
     const body = document.body;
     const place = () => {
-      const r = el.getBoundingClientRect();
-      if (r.height) body.style.setProperty(name, `${Math.round(r.bottom + window.scrollY)}px`);
+      // The one on screen: hidden ones (another tab, a closed page) have no size.
+      const r = els.map((el) => el.getBoundingClientRect()).find((x) => x.height);
+      if (r) body.style.setProperty(name, `${Math.round(r.bottom + window.scrollY)}px`);
     };
     place();
     const seen = new ResizeObserver(place);
-    seen.observe(el);
+    for (const el of els) seen.observe(el);
     seen.observe(body);
     return () => seen.disconnect();
-  }, [el]);
+  }, [els]);
 }
 
 /**

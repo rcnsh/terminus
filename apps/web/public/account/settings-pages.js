@@ -22,6 +22,7 @@ import {
   withPlace,
 } from './profile.js';
 import { SearchBox } from './search-box.js';
+import { Celestial, Horizon } from './sky.js';
 import { pickedStop } from './search.js';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(d));
@@ -48,7 +49,15 @@ const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : n
 const shortDate = (ms) => new Date(ms).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
 
 /** A page of Settings: its heading with Back, then what's on it. */
-export function Page({ id, title, children, nodes, onBack, shown, leaving }) {
+export function Page({ id, title, children, nodes, onBack, shown, leaving, sky = false }) {
+  const head = html`
+    <header class="page-head">
+      <button type="button" class="page-back" aria-label=${t('Back')} onClick=${onBack}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+      </button>
+      <h2 id=${`page-${id}`} tabindex="-1">${title}</h2>
+    </header>
+  `;
   return html`
     <section
       class=${leaving ? 'settings-page leaving' : 'settings-page'}
@@ -58,12 +67,7 @@ export function Page({ id, title, children, nodes, onBack, shown, leaving }) {
       hidden=${!shown && !leaving}
       ref=${(n) => (nodes[id] = n)}
     >
-      <header class="page-head">
-        <button type="button" class="page-back" aria-label=${t('Back')} onClick=${onBack}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
-        </button>
-        <h2 id=${`page-${id}`} tabindex="-1">${title}</h2>
-      </header>
+      ${sky ? html`<div class="page-band"><div class="sky-head"><${Celestial} band />${head}</div><${Horizon} on=${null} low /></div>` : head}
       ${children}
     </section>
   `;

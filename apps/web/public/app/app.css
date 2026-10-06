@@ -282,7 +282,7 @@ body.sky-dusk { --s0: #2c3566; --s1: #5b4f86; --s2: #c6708a; --s3: #f19a6c; --h-
    horizon. Map and Settings are drawn over a hidden Now, which keeps its sky. */
 body.sky { --end: var(--sky-end); }
 body.sky.on-settings { --end: var(--set-end); }
-body.sky:not(.on-map, .on-settings)::before, body.sky.on-settings.set-sky::before {
+body.sky:not(.on-map, .on-settings)::before, body.sky.on-settings.set-sky:not(.set-page)::before {
   content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--end); pointer-events: none;
   background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--end) * 0.5), var(--s2) calc(var(--end) * 0.86), var(--s3) var(--end));
 }
@@ -295,6 +295,18 @@ body.sky:not(.on-map, .on-settings) > .nav, body.sky .app-chips, body.sky .where
 .sky-head { position: relative; isolation: isolate; padding-top: var(--room); --room: 66px; --moon: 40px; }
 .nearby-sky { --room: 44px; --moon: 34px; }
 .settings-sky { --room: 56px; --moon: 34px; }
+/* A slim band of the sky at the top of each of Settings' pages: the title in
+   it with a small sun or moon on the right, ending on the low horizon (just
+   the hills). The page's controls stay on the plain page under it. The page
+   has a background of its own (it slides over the list), so the band draws
+   its sky itself, across the window and up past the page's top. */
+.page-band { position: relative; isolation: isolate; margin: 0 calc(50% - 50vw); padding: 0 calc(50vw - 50%);
+  background: linear-gradient(var(--s0), var(--s1) 50%, var(--s2) 86%, var(--s3)); }
+.page-band::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
+.page-band .sky-head { --room: var(--header-h); --moon: 24px; padding-top: 0; }
+body.sky .page-band .celestial .sun { top: calc(50% - 11px); right: 6px; width: 22px; height: 22px; box-shadow: 0 0 16px 5px var(--glow); }
+body.sky .page-band .night-sky .moon { top: calc(50% - 12px); right: 5px; }
+.page-band .horizon.low { height: 52px; margin-top: 0; }
 .celestial { position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--room); pointer-events: none; }
 /* Depth as the page scrolls (sky.js sets the --par-* variables): the sun, the
    moon and the stars lag and fade behind the words, the clouds a little less,

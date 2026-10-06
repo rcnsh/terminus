@@ -77,8 +77,8 @@ function summaries({ p, me, notifyOn, devices, imported }) {
  * leave", for Notifications, and `notifyOn` whether it's on. `side` goes above
  * the list (the account page's preview). `onAddEmail` and `onSignOut` are
  * Account's buttons; by default, the web app's. `sky`: the list's top (the
- * title and your account) up in Now's sky, ending on a horizon (sky.js), on
- * a phone; the web app's.
+ * title and your account) up in Now's sky, ending on a horizon (sky.js), and
+ * each page's title in a slim band of it, on a phone; the web app's.
  */
 export function Settings({ me, inApp = false, Notify = null, notifyOn = false, side = null, sky = false, onAddEmail = addEmailFromApp, onSignOut = signOut }) {
   const p = useStore(profile);
@@ -239,15 +239,16 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
 
   const shown = view.shown;
   const leaving = view.leaving;
-  // The sky behind the list while it's what's shown (app.css body.set-sky).
+  // The sky behind the list, and a band of it at the top of each page (app.css body.set-sky).
   const skyHere = sky && !wide;
   useEffect(() => {
-    document.body.classList.toggle('set-sky', skyHere && shown === null);
-    return () => document.body.classList.remove('set-sky');
+    document.body.classList.toggle('set-sky', skyHere);
+    document.body.classList.toggle('set-page', skyHere && shown !== null);
+    return () => document.body.classList.remove('set-sky', 'set-page');
   }, [skyHere, shown]);
   const sum = summaries({ p, me, notifyOn, devices, imported });
   const page = (id, body) => html`
-    <${Page} id=${id} title=${TITLES[id]} nodes=${nodes} onBack=${closePage} shown=${shown === id} leaving=${leaving?.node === id ? leaving : null}>${body}<//>
+    <${Page} id=${id} title=${TITLES[id]} nodes=${nodes} onBack=${closePage} shown=${shown === id} leaving=${leaving?.node === id ? leaving : null} sky=${skyHere}>${body}<//>
   `;
   const onSide = leaving?.node === 'side';
   const account = html`
