@@ -92,8 +92,8 @@ pnpm run deploy
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
 | `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set, and the timelapse recorder's polls by what they cost NUS). Needs `x-health-token`; anything else gets a 404. |
-| `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`. |
-| `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store`. Needs `x-health-token`. |
+| `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
+| `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store`. Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
 | `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. |
 
@@ -1053,9 +1053,12 @@ than draw them on the wrong line.
 bucket) as `timelapse/YYYY-MM-DD.json.gz` (`DayFile`), deletes everything,
 its alarm included, and costs nothing from then on. If the write fails it
 keeps the day and tries again 10 minutes later; meanwhile `/timelapse/days`
-still lists it (the recorders of the past week are asked too). `/download/*` serves only
-release files, so the days are reachable only through `/timelapse/days`
-with the operator token.
+still lists it (the recorders of the past week are asked too). `/download/*`
+serves only release files, so the days are reachable only through
+`/timelapse/days`, with the operator token or `TIMELAPSE_TOKEN`. The second
+opens these routes and nothing else, so the machine that renders the videos
+unattended (`scripts/render-timelapse.mjs`, on a VPS) never holds the
+dashboard's key.
 
 **Replaying it.** The operator's page,
 [`/admin/timelapse/`](../../web/public/admin/timelapse), reads a day with

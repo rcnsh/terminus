@@ -18,6 +18,17 @@ export function isOperator(env: Env, req: Request): boolean {
   return Boolean(env.HEALTH_TOKEN && given && timingSafeEqual(given, env.HEALTH_TOKEN));
 }
 
+/**
+ * Whoever may read the timelapse days: the operator, or a holder of
+ * TIMELAPSE_TOKEN, sent in the same header. That token opens /timelapse/*
+ * and nothing else, so a machine that renders the videos (a VPS, unattended)
+ * never holds the key to the dashboard, its reports and their emails.
+ */
+export function canReadTimelapse(env: Env, req: Request): boolean {
+  const given = req.headers.get('x-health-token');
+  return isOperator(env, req) || Boolean(env.TIMELAPSE_TOKEN && given && timingSafeEqual(given, env.TIMELAPSE_TOKEN));
+}
+
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;

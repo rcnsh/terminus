@@ -43,6 +43,8 @@ export interface Env {
   RL_MAP?: RateLimit;
   /** Unlocks /health?probe=1 and the /admin dashboard via the x-health-token header. Unset: neither. */
   HEALTH_TOKEN?: string;
+  /** Opens /timelapse/* only (same header), for a machine that renders the videos. Unset: operator only. */
+  TIMELAPSE_TOKEN?: string;
   /** Optional. An API token with Account Analytics Read, so the dashboard can
    *  query Analytics Engine. Without it the dashboard skips those charts. */
   ANALYTICS_TOKEN?: string;
