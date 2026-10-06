@@ -1,0 +1,128 @@
+/**
+ * Fetch-on-demand through the edge cache, quiet under failure.
+ *
+ * Every live answer (a stop's arrivals from NUS, a service's buses, a stop's
+ * public buses from LTA) is fetched the same way: one upstream call per key
+ * per freshness window however many clients ask, concurrent misses in one
+ * isolate sharing a single fetch, and under failure less noise rather than
+ * more. A failed key is not asked again for a while; a failure that says the
+ * upstream will refuse everything trips a breaker shared by every key of
+ * that feed; and a stale answer on hand is served while the fresh one is
+ * fetched in the background, or when the fetch fails.
+ *
+ * Keyed on what the answer is for (the stop code, the service), never the
+ * request URL: a client's coordinates jitter on every call and would never
+ * hit.
+ */
+
+import type { FeedState } from './types.ts';
+
+export interface CachedOptions<T> {
+  ctx: ExecutionContext;
+  nowMs: number;
+  /** Where the answer lives in the cache, a URL on a private host. */
+  key: string;
+  /** Where "this key failed a moment ago" lives. */
+  failKey: string;
+  fetch: () => Promise<T>;
+  /** How long a cached answer is fresh. */
+  freshMs: number;
+  /** How long a stale answer stays usable as a fallback. */
+  staleMaxS: number;
+  /** After a failure, how long before the key is asked for again. */
+  failMemoS: number;
+  /**
+   * With a stale answer on hand, how long to wait for the fresh one before
+   * serving the stale. Absent: wait for the fetch (a client that polls every
+   * few seconds, like the map, is better served by a wait than a stale jump).
+   */
+  raceMs?: number;
+  /** The feed's breaker: tripped by a failure that `trips`, it quiets every key that names it. */
+  breaker?: { key: string; trips: (err: unknown) => boolean; maxAgeS: number };
+  /** One in-flight fetch per key per isolate. The caller owns the map, so each feed has its own. */
+  inflight: Map<string, Promise<T>>;
+}
+
+/** The host every edge-cache key lives on. Never fetched; only matched. */
+export const CACHE_BASE = 'https://terminus.internal';
+
+const memo = (reason: string, maxAgeS: number) =>
+  new Response(reason.slice(0, 200), { headers: { 'cache-control': `max-age=${maxAgeS}` } });
+
+/**
+ * The answer for `key`: cached and fresh, else fetched, else stale, in that
+ * order. Throws only with nothing to serve. `stale` and `available` on the
+ * result say which it was.
+ */
+export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOptions<T>): Promise<T & FeedState> {
+  const cache = caches.default;
+  const key = new Request(o.key);
+
+  // LANDMINE: a Response body is single-use. Parse it ONCE, here, into a
+  // variable. Reading `hit` again on the catch path below would turn
+  // "upstream is down" into "the Worker is down" at the worst possible moment.
+  let cached: T | null = null;
+  const hit = await cache.match(key);
+  if (hit) {
+    try {
+      cached = (await hit.json()) as T;
+    } catch {
+      cached = null;
+    }
+  }
+
+  if (cached && o.nowMs - cached.fetchedAt < o.freshMs) {
+    return { ...cached, stale: false, available: true };
+  }
+  const stale: (T & FeedState) | null = cached ? { ...cached, stale: true, available: true } : null;
+
+  const quiet = (o.breaker ? await cache.match(o.breaker.key) : undefined) ?? (await cache.match(o.failKey));
+  if (quiet) {
+    if (stale) return stale;
+    throw new Error(`upstream recently failed: ${(await quiet.text()).slice(0, 120)}`);
+  }
+
+  let job = o.inflight.get(o.key);
+  if (!job) {
+    job = o
+      .fetch()
+      .then(async (fresh) => {
+        await cache.put(key, new Response(JSON.stringify(fresh), {
+          headers: {
+            'content-type': 'application/json',
+            // Long max-age so the stale fallback survives; freshness is
+            // decided above from fetchedAt, not by the cache.
+            'cache-control': `max-age=${o.staleMaxS}`,
+          },
+        }));
+        return fresh;
+      })
+      .catch(async (err) => {
+        const reason = String((err as Error)?.message ?? err);
+        await cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {});
+        if (o.breaker?.trips(err)) await cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(() => {});
+        throw err;
+      })
+      .finally(() => o.inflight.delete(o.key));
+    o.inflight.set(o.key, job);
+  }
+  // The fetch finishes (and fills the cache) even when this request stops
+  // waiting for it.
+  o.ctx.waitUntil(job.catch(() => {}));
+
+  const fresh = (v: T): T & FeedState => ({ ...v, stale: false, available: true });
+  try {
+    if (!stale || o.raceMs === undefined) return fresh(await job);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const slow = new Promise<null>((r) => (timer = setTimeout(() => r(null), o.raceMs)));
+    try {
+      const won = await Promise.race([job, slow]);
+      return won ? fresh(won) : stale;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  } catch (err) {
+    if (stale) return stale;
+    throw err;
+  }
+}

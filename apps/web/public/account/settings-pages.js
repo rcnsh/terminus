@@ -269,6 +269,9 @@ export function Trips() {
         <${Field} id="full-bus" label=${t('Allow for busy buses')} sub=${t('Aim one bus earlier when yours is often full.')}>
           <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => edit((x) => (x.fullBusMargin = e.currentTarget.checked))} />
         <//>
+        <${Field} id="public-buses" label=${t('Public buses')} sub=${t('Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time.')}>
+          <input id="public-buses" class="switch" type="checkbox" role="switch" checked=${p.publicBuses === true} onChange=${(e) => edit((x) => (x.publicBuses = e.currentTarget.checked))} />
+        <//>
       <//>
       <${Choices} />
     </div>

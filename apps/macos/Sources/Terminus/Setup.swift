@@ -70,6 +70,8 @@ final class SetupModel {
     /// auto (each device's own), 12 or 24.
     var clock: String { profile?["clock"] as? String ?? "auto" }
     var fullBusMargin: Bool { profile?["fullBusMargin"] as? Bool ?? true }
+    /// Count the public buses (95, 151, ...) at the campus's stops too. Off until asked for: they have a fare.
+    var publicBuses: Bool { profile?["publicBuses"] as? Bool ?? false }
     /// The day's hours, in minutes after midnight, and the gap long enough to go home in.
     var dayStartMin: Int { profile?["dayStartMin"] as? Int ?? 360 }
     var dayEndMin: Int { profile?["dayEndMin"] as? Int ?? 1080 }
@@ -135,6 +137,7 @@ final class SetupModel {
     func setHomeWalk(_ min: Int) { edit { $0["homeWalkMin"] = Swift.min(30, Swift.max(0, min)) } }
     func setPace(_ pace: String) { edit { $0["walkPace"] = pace } }
     func setFullBusMargin(_ on: Bool) { edit { $0["fullBusMargin"] = on } }
+    func setPublicBuses(_ on: Bool) { edit { $0["publicBuses"] = on } }
     /// The start stays before the end; a change that would cross them is refused.
     func setDayStart(_ min: Int) { if min < dayEndMin { edit { $0["dayStartMin"] = min } } }
     func setDayEnd(_ min: Int) { if min > dayStartMin { edit { $0["dayEndMin"] = min } } }

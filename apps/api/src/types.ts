@@ -62,6 +62,8 @@ export interface Env {
   PUBLIC_ORIGIN?: string;
   /** The Analytics Engine dataset the dashboard queries. Unset: terminus. */
   AE_DATASET?: string;
+  /** LTA DataMall account key, for public buses (lta.ts). Unset: no public buses. */
+  LTA_ACCOUNT_KEY?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -90,6 +92,12 @@ export interface Arrival {
    * Null where the feed gives a bare code.
    */
   berth: string | null;
+  /**
+   * The time is from the operator's timetable, not a bus on the road (a
+   * public bus LTA reports as unmonitored). Absent for a live time, and for
+   * every shuttle: the shuttle feed only lists buses it sees.
+   */
+  scheduled?: true;
 }
 
 export interface Answer {
@@ -144,6 +152,8 @@ export interface BusLeg {
   toStop?: string;
   /** Seconds on foot from where you get off to the place itself (a room, a food court). Absent for a stop. */
   endWalkS?: number;
+  /** A public bus, with a fare, unlike the free shuttle. Absent for a shuttle. */
+  paid?: true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,6 +243,11 @@ export interface Leave {
   /** Without an arrive-by (whose `arrive` is at the venue): the walk on from
    *  where you get off to the place itself, which `arrive` doesn't count. */
   endWalkS?: number;
+  /** The bus is a public one, with a fare. Absent for a shuttle. */
+  paid?: true;
+  /** The graph's route for a public two-way service (`151/1`), which `svc`
+   *  (`151`) can't name, so a kept plan can be followed. Absent otherwise. */
+  route?: string;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -258,6 +273,13 @@ export interface Stop {
   lon: number;
   /** Code of the directional twin ("Opp X" <-> "X"), if any. */
   opposite?: string | null;
+  /**
+   * Public buses call at this shelter too, under LTA's five-digit code
+   * (data/public.json `merged`). Set only in the graph with public buses.
+   */
+  publicCode?: string;
+  /** A stop only public buses call at (its code is LTA's). */
+  public?: true;
 }
 
 /** [openHHMM, closeHHMM] in SGT, or null for "does not run". */
@@ -279,6 +301,30 @@ export interface Graph {
   serviceHours?: Record<string, ServiceHours>;
   /** service -> mean headway in seconds, when known. Falls back to config. */
   headwayS?: Record<string, number>;
+  /**
+   * service -> metres along the route at each stop of `routes[svc]`, where
+   * known (public buses, from LTA's route data). Ride time comes from these
+   * instead of a count of stops: a public route's stops are unevenly spaced,
+   * and two campus stops in a row can be a long way round the island apart.
+   */
+  along?: Record<string, number[]>;
+  /**
+   * The public bus services (data/public.json), by route key. A two-way
+   * service is two routes, `151/1` and `151/2`; `svc` is what it's called.
+   */
+  public?: Record<string, PublicService>;
+}
+
+/** A public bus service as the graph knows it. */
+export interface PublicService {
+  /** The number on the bus ("151"). */
+  svc: string;
+  /** SBST, SMRT, TTS or GAS. */
+  operator: string;
+  /** LTA codes of the first and last stop of the whole route, which the
+   *  arrivals feed names on each bus: they tell a two-way service's directions apart. */
+  origin: string;
+  dest: string;
 }
 
 export interface RouteIndex {
@@ -330,6 +376,20 @@ export interface StopArrivals {
   stale: boolean;
   /** False when the fetch failed outright: no data, as opposed to no bus. */
   available: boolean;
+  /**
+   * A shelter both the shuttle and public buses call at has two feeds, and
+   * one can fail or go stale without the other. Each feed's own state, where
+   * it was asked; the fields above describe the two together (available
+   * when either is, stale when either is).
+   */
+  feeds?: { shuttle?: FeedState; public?: FeedState };
+}
+
+/** One feed's answer for a stop, without the arrivals. */
+export interface FeedState {
+  fetchedAt: number;
+  stale: boolean;
+  available: boolean;
 }
 
 export interface ScoredOption {
@@ -355,6 +415,8 @@ export interface ScoredOption {
   off?: Stop;
   /** Where you get off: the destination stop this bus calls at, or its twin. */
   to?: Stop;
+  /** A public bus, with a fare (public.ts). */
+  paid?: true;
 }
 
 export interface ResolveInput {
@@ -388,4 +450,6 @@ export interface ResolveInput {
   /** Seconds per stop on a service, from measured rides (ridetimes.ts).
    *  RIDE.secondsPerHop where it has nothing. */
   hopS?: (svc: string) => number | null;
+  /** Count the public buses at the stops too (the profile's `publicBuses`). */
+  publicBuses?: boolean;
 }

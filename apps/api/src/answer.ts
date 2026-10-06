@@ -5,9 +5,11 @@
  */
 
 
-import type { Answer, Arrival, Env, ResolveInput, ScoredOption, Stop, StopArrivals } from './types.ts';
+import type { Answer, Arrival, Env, FeedState, Graph, ResolveInput, ScoredOption, Stop, StopArrivals } from './types.ts';
 import { WALK } from './config.ts';
 import { getArrivals } from './fms.ts';
+import { getPublicArrivals } from './lta.ts';
+import { publicCodeOf, shuttleCalls, svcName } from './public.ts';
 import { buildAnswer, shortStop } from './format.ts';
 import {
   candidateStops,
@@ -24,29 +26,60 @@ import { leaveBy } from './leave.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 import { hopSecondsFor, loadTable } from './ridetimes.ts';
 
-import { GRAPH } from './graph.ts';
+import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { m } from './i18n.ts';
 
+/** The feed could not be reached: no data, as opposed to no bus. */
+const unreached = (code: string, nowMs: number): StopArrivals => ({ code, arrivals: [], fetchedAt: nowMs, stale: false, available: false });
+
+/**
+ * Arrivals at each stop. In the graph with public buses, a stop is asked of
+ * the feeds that call there: the shuttle's, LTA's for its public code, or
+ * both at a shelter they share, whose answers are merged (`feeds` keeps each
+ * one's state, so one feed down doesn't read as the other saying "no bus").
+ */
 export async function collectArrivals(
   env: Env,
   ctx: ExecutionContext,
   codes: string[],
   nowMs: number,
+  graph: Graph = GRAPH,
 ): Promise<Map<string, StopArrivals>> {
-  const settled = await Promise.allSettled(codes.map((c) => getArrivals(env, ctx, c, nowMs)));
-  const out = new Map<string, StopArrivals>();
-  settled.forEach((r, i) => {
-    // A failed stop still gets an entry, marked unavailable. Dropping it here
-    // would make "we could not reach the feed" indistinguishable from "the
-    // feed says no bus is coming", and the second one gets a headway guess.
-    out.set(
-      codes[i],
-      r.status === 'fulfilled'
-        ? r.value
-        : { code: codes[i], arrivals: [], fetchedAt: nowMs, stale: false, available: false },
-    );
-  });
-  return out;
+  const idx = indexGraph(graph);
+  const settled = await Promise.all(
+    codes.map(async (code) => {
+      const stop = idx.byCode.get(code);
+      const pub = stop ? publicCodeOf(stop) : null;
+      const shuttle = stop ? shuttleCalls(stop) : true;
+      // A failed stop still gets an entry, marked unavailable. Dropping it here
+      // would make "we could not reach the feed" indistinguishable from "the
+      // feed says no bus is coming", and the second one gets a headway guess.
+      const [s, p] = await Promise.all([
+        shuttle ? getArrivals(env, ctx, code, nowMs).catch(() => null) : undefined,
+        pub ? getPublicArrivals(env, ctx, graph, code, pub, nowMs).catch(() => null) : undefined,
+      ]);
+      if (s === undefined) return p ?? unreached(code, nowMs);
+      if (p === undefined) return s ?? unreached(code, nowMs);
+      return mergeFeeds(code, nowMs, s, p);
+    }),
+  );
+  return new Map(codes.map((code, i) => [code, settled[i]]));
+}
+
+/** Two feeds' answers for one shelter as one board, each feed's state kept. */
+export function mergeFeeds(code: string, nowMs: number, shuttle: StopArrivals | null, pub: StopArrivals | null): StopArrivals {
+  const state = (sa: StopArrivals | null): FeedState => (sa ? { fetchedAt: sa.fetchedAt, stale: sa.stale, available: sa.available } : { fetchedAt: nowMs, stale: false, available: false });
+  const up = [shuttle, pub].filter((sa): sa is StopArrivals => sa !== null && sa.available);
+  return {
+    code,
+    arrivals: [...(shuttle?.arrivals ?? []), ...(pub?.arrivals ?? [])],
+    // The times count from each feed's own fetch (see scoreOptions); the
+    // whole takes the older, the honest "as of".
+    fetchedAt: up.length ? Math.min(...up.map((sa) => sa.fetchedAt)) : nowMs,
+    stale: up.some((sa) => sa.stale),
+    available: up.length > 0,
+    feeds: { shuttle: state(shuttle), public: state(pub) },
+  };
 }
 
 /** The one function that turns a request into an Answer. */
@@ -57,13 +90,15 @@ export async function answerFor(
   destLabel: string | null,
   nowMs: number,
 ): Promise<Answer> {
-  const idx = indexGraph(GRAPH);
+  // With public buses on, the graph that has them: more services at the same stops.
+  const graph = input.publicBuses ? GRAPH_PUBLIC : GRAPH;
+  const idx = indexGraph(graph);
   // Measured seconds between stops, where enough rides have been seen (phase 8.2).
   if (!input.hopS) {
     const hopS = hopSecondsFor(await loadTable(env, nowMs), nowMs);
     if (hopS) input = { ...input, hopS };
   }
-  const cands = candidateStops(GRAPH, input);
+  const cands = candidateStops(graph, input);
   const originStop = input.originCode ? (idx.byCode.get(input.originCode) ?? null) : null;
   const fallbackStop = cands[0]?.stop ?? originStop;
 
@@ -95,6 +130,7 @@ export async function answerFor(
     ctx,
     cands.map((c) => c.stop.code),
     nowMs,
+    graph,
   );
 
   // Tally who's packed for the full-bus risk, off the response path.
@@ -104,17 +140,18 @@ export async function answerFor(
   // On from where a bus gets you off to the place itself, from that stop: a
   // food court's other stop can be further from it than its first.
   const endWalk = (o: ScoredOption) => input.endWalkByStopS?.[o.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
-  const options = scoreOptions(GRAPH, cands, byStop, nowMs, endWalk);
+  const options = scoreOptions(graph, cands, byStop, nowMs, endWalk);
   const alt = pickAlt(options);
   const chosen = options[0]?.stop.code ?? fallbackStop?.code ?? '';
-  const arrivals: Arrival[] = byStop.get(chosen)?.arrivals ?? [];
+  // As the buses are named: a two-way public route's key carries its direction.
+  const arrivals: Arrival[] = (byStop.get(chosen)?.arrivals ?? []).map((a) => (a.svc === svcName(a.svc) ? a : { ...a, svc: svcName(a.svc) }));
 
-  const walkAllS = walkAllTheWayS(GRAPH, input, fallbackStop);
+  const walkAllS = walkAllTheWayS(graph, input, fallbackStop);
   const answer = buildAnswer({
     options,
     alt,
     fallbackStop,
-    nearestStop: nearestStop(GRAPH, input.lat, input.lon),
+    nearestStop: nearestStop(graph, input.lat, input.lon),
     destLabel,
     walkAllS,
     endWalk,
@@ -129,7 +166,7 @@ export async function answerFor(
     options,
     candidates: cands,
     byStop,
-    graph: GRAPH,
+    graph,
     arriveBy: input.arriveBy,
     walkAllS: walking ? walkAllS : null,
     endWalk,

@@ -12,6 +12,10 @@
   read by the Android and Mac tests too; `answers/zh/` the Chinese.
 - `offline-day.json`: what each app shows offline from a kept day plan, for
   the API, Android and Mac tests.
+- `lta-BusArrival-*.json`: real LTA DataMall `v3/BusArrival` replies for two
+  campus shelters (YIH, 16171; UHC, 18329), captured 2026-10-06 17:28 SGT.
+  The second has buses the feed marks `Monitored: 0` (timetabled, with no
+  position), which `normalizePublic()` reads as `scheduled`.
 
 ## The stop captures
 

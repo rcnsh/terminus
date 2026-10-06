@@ -308,11 +308,12 @@ data class Journey(
 }
 
 /** A bus in the journey: its service, colour (as painted on the bus, ARGB), stop and time. */
-data class JourneyBus(val svc: String, val color: Long, val stop: String, val board: String) {
+/** `paid`: a public bus, with a fare, unlike the free shuttle. */
+data class JourneyBus(val svc: String, val color: Long, val stop: String, val board: String, val paid: Boolean = false) {
     companion object {
         fun parse(o: JSONObject): JourneyBus? {
             val svc = o.optStringOrNull("svc") ?: return null
-            return JourneyBus(svc, parseColor(o.optStringOrNull("color")), o.optString("stop"), o.optString("board"))
+            return JourneyBus(svc, parseColor(o.optStringOrNull("color")), o.optString("stop"), o.optString("board"), o.optBoolean("paid", false))
         }
     }
 }

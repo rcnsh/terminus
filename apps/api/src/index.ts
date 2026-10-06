@@ -8,12 +8,12 @@
  */
 
 
-import type { Env, ResolveInput, StopArrivals } from './types.ts';
+import type { Env, ResolveInput } from './types.ts';
 import { sgt } from './config.ts';
 import { venueAt, venueToStop } from './nusmods.ts';
 import { appVersion, authConfigured, getSession } from './auth.ts';
 import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
-import { fmsConfigured, getArrivals, getBuses } from './fms.ts';
+import { fmsConfigured, getBuses } from './fms.ts';
 import { shortStop } from './format.ts';
 import { boardAt, indexGraph } from './resolve.ts';
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
@@ -25,7 +25,8 @@ import { DOCS_PAGE, openApiSpec } from './openapi.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
-import { readIncidents, readUpstream, runCron } from './monitor.ts';
+import { readIncidents, readPublicFeed, readUpstream, runCron } from './monitor.ts';
+import { ltaConfigured } from './lta.ts';
 import { calendarThrough } from './calendar.ts';
 import { llmsTxt, robotsTxt, SITEMAP } from './seo.ts';
 import { calendarSource, loadCalendar } from './calendarsync.ts';
@@ -35,7 +36,7 @@ import { landmark, targetStops } from './landmarks.ts';
 import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
 
-import { GRAPH } from './graph.ts';
+import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { isBeta, markBeta, siteOrigin } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { langOfRequest, m, withLang } from './i18n.ts';
@@ -89,8 +90,9 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   }
 
   // With coordinates but no destination, `to` stays null and the resolver
-  // simply reports the next buses at the nearest stop.
-  const input: ResolveInput = { lat, lon, to, toAlso: dest?.also, originCode, destAt: dest?.at ?? null };
+  // simply reports the next buses at the nearest stop. `?public=1` counts
+  // the public buses too, as an account's `publicBuses` does for /me/next.
+  const input: ResolveInput = { lat, lon, to, toAlso: dest?.also, originCode, destAt: dest?.at ?? null, ...(url.searchParams.get('public') === '1' ? { publicBuses: true } : {}) };
   return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs));
 }
 
@@ -159,18 +161,18 @@ async function handleCampus(req: Request): Promise<Response> {
  */
 async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
   const code = url.searchParams.get('stop')?.trim().toUpperCase() || '';
-  const idx = indexGraph(GRAPH);
+  // `?public=1`, or a stop only public buses call at (LTA's code): the board
+  // with the public buses on it.
+  const graph = url.searchParams.get('public') === '1' || !indexGraph(GRAPH).byCode.has(code) ? GRAPH_PUBLIC : GRAPH;
+  const idx = indexGraph(graph);
   const stop = idx.byCode.get(code);
   if (!stop) return json({ error: 'unknown stop', stop: code }, 400);
 
-  // Same failure handling as collectArrivals(): a rejected fetch means "we
-  // never reached the feed", not "no bus is coming" -- those are different
-  // answers, and /next never lets this surface as a 500, so /arrivals must
-  // not either.
-  const sa = await getArrivals(env, ctx, code, nowMs).catch(
-    () => ({ code, arrivals: [], fetchedAt: nowMs, stale: false, available: false }) as StopArrivals,
-  );
-  const board = boardAt(GRAPH, idx, code, sa, nowMs);
+  // Same failure handling as /next: a rejected fetch means "we never reached
+  // the feed", not "no bus is coming" -- those are different answers, and
+  // /next never lets this surface as a 500, so /arrivals must not either.
+  const sa = (await collectArrivals(env, ctx, [code], nowMs, graph)).get(code)!;
+  const board = boardAt(graph, idx, code, sa, nowMs);
   return json({
     stop: { code: stop.code, name: stop.name },
     board,
@@ -207,7 +209,7 @@ const CRON_STALE_MS = 40 * 60_000;
  * the cron sees it, and recent outages. Causes are a kind, never NUS's error.
  */
 async function handleStatus(env: Env, nowMs: number): Promise<Response> {
-  const [u, incidents] = await Promise.all([readUpstream(env), readIncidents(env)]);
+  const [u, incidents, pub] = await Promise.all([readUpstream(env), readIncidents(env), readPublicFeed(env)]);
   const iso = (ms: number | null) => (ms == null ? null : new Date(ms).toISOString());
   return json(
     {
@@ -217,6 +219,9 @@ async function handleStatus(env: Env, nowMs: number): Promise<Response> {
       // Checks every 15 minutes; if they've stopped, what's above is old news.
       checking: u ? nowMs - u.checkedAt <= CRON_STALE_MS : false,
       incidents: incidents.map((i) => ({ start: iso(i.start), end: iso(i.end), cause: i.cause })),
+      // LTA DataMall, for the public buses: extra, so no incidents and no alerts.
+      publicFeed: pub ? (pub.up ? 'up' : 'down') : 'unknown',
+      publicSince: pub ? iso(pub.since) : null,
     },
     200,
     { 'cache-control': 'public, max-age=60' },
@@ -255,6 +260,7 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
       config: {
         auth: authConfigured(env),
         proxy: fmsConfigured(env),
+        publicBuses: ltaConfigured(env),
         analytics: analyticsEnabled(env),
         accounts: accountsConfigured(env),
         email: Boolean(env.EMAIL && env.EMAIL_FROM),
@@ -282,7 +288,7 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
   };
 }
 
-const ME_DEPS: MeDeps = { graph: GRAPH, answerFor, collectArrivals };
+const ME_DEPS: MeDeps = { graph: GRAPH, publicGraph: GRAPH_PUBLIC, answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
 const KEYED = ['/next', '/trip', '/arrivals', '/buses', '/campus', '/stops/pairs'];
