@@ -67,7 +67,8 @@ export async function answerFor(
   const originStop = input.originCode ? (idx.byCode.get(input.originCode) ?? null) : null;
   const fallbackStop = cands[0]?.stop ?? originStop;
 
-  // Already there: two classes in a row at the same stop, or standing at it.
+  // Already there: two classes in a row at the same stop, standing at it, or
+  // in the room itself (a lecture theatre can be 100 m from its stop).
   // Without this the degrade ladder says "Walk · now" and marks it ended.
   const dest = input.to ? idx.byCode.get(input.to) : undefined;
   // Either side of the road counts as there, same as for routing, and so does
@@ -81,7 +82,8 @@ export async function answerFor(
       ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs < 45
       : input.originCode === d.code,
   );
-  if (dest && atDest) return arrivedAnswer(dest, destLabel, nowMs);
+  const atVenue = input.lat != null && input.destAt != null && haversineM(input.lat, input.lon!, input.destAt.lat, input.destAt.lon) <= WALK.atVenueM;
+  if (dest && (atDest || atVenue)) return arrivedAnswer(dest, destLabel, nowMs);
   // No coordinates and no origin stop: nothing to resolve from. Saying
   // "No buses running" here would be a claim about the network.
   if (!cands.length) {

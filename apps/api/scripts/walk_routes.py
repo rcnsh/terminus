@@ -277,11 +277,14 @@ def main():
             continue
         if straight > 40:
             ratios.setdefault(stop, []).append(m / straight)
+        # Where the building is (its rooms' mean point, 5 dp is about a
+        # metre), so the API can tell you're at it, not only at its stop.
+        at = {"lat": round(pt[0], 5), "lon": round(pt[1], 5)}
         if code in venues:
-            venues[code]["m"] = round(m)
+            venues[code].update(m=round(m), **at)
             updated += 1
         else:
-            venues[code] = {"stop": stop, "m": round(m)}
+            venues[code] = {"stop": stop, "m": round(m), **at}
             added += 1
 
     if suspect:
@@ -318,12 +321,16 @@ def main():
         if not b or not isinstance(loc.get("x"), (int, float)):
             continue
         stop = venues[b]["stop"]
-        m = routed(stop, (loc["y"], loc["x"]))
-        # Same guard as buildings: a room far past its building's walk is misplaced.
+        pt = (loc["y"], loc["x"])
+        m = routed(stop, pt)
+        # Same guard as buildings: a room far past its building's walk is
+        # misplaced, so its position is not kept either.
+        at = {"lat": round(pt[0], 5), "lon": round(pt[1], 5)}
         if m is None or m > 2 * max(venues[b]["m"], 60):
             m = venues[b]["m"]
+            at = {}
         name = " ".join(str(info.get("roomName") or "").split())
-        named[room] = {"name": name if name and name.upper() != room.upper() else "", "stop": stop, "m": round(m)}
+        named[room] = {"name": name if name and name.upper() != room.upper() else "", "stop": stop, "m": round(m), **at}
     emit("rooms.json", json.dumps({
         "generated": date.today().isoformat(),
         "source": "NUSMods room map (names, positions); stops as for imports; walks routed on OpenStreetMap paths",

@@ -19,6 +19,23 @@ object Locator {
     /** A last-known fix younger than this is good enough for the widget. */
     private const val MAX_AGE_MS = 10 * 60_000L
 
+    /** How far a fix drifts per second of age: a walking pace. */
+    private const val DRIFT_M_PER_S = 1.3
+
+    /**
+     * How far out a fix may be, in metres: its accuracy, plus how far you
+     * could have walked since it was taken. Sent to the API as `acc`, which
+     * drops a fix too rough to say where you are (a cell-tower fix, or one
+     * from ten minutes ago) and follows the timetable instead.
+     */
+    fun uncertaintyM(loc: Location, nowMs: Long = System.currentTimeMillis()): Double {
+        val ageS = ((nowMs - loc.time).coerceAtLeast(0)) / 1000.0
+        return (if (loc.hasAccuracy()) loc.accuracy.toDouble() else 0.0) + ageS * DRIFT_M_PER_S
+    }
+
+    /** `uncertaintyM` of a fix, rounded, for the API; null without one. */
+    fun accOf(loc: Location?): Double? = loc?.let { Math.round(uncertaintyM(it)).toDouble() }
+
     fun hasForeground(ctx: Context) = granted(ctx, Manifest.permission.ACCESS_COARSE_LOCATION)
 
     /** Precise location: what telling a bus from the road beside it needs (TripWatch). */
@@ -29,11 +46,14 @@ object Locator {
         if (!hasForeground(ctx)) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
         return try {
+            val now = System.currentTimeMillis()
+            // The one that could be least wrong now: a fresh network fix over
+            // a precise GPS fix from before the walk here.
             listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
                 .filter { lm.allProviders.contains(it) }
                 .mapNotNull { lm.getLastKnownLocation(it) }
-                .filter { System.currentTimeMillis() - it.time < maxAgeMs }
-                .minByOrNull { it.accuracy }
+                .filter { now - it.time < maxAgeMs }
+                .minByOrNull { uncertaintyM(it, now) }
         } catch (_: SecurityException) {
             null
         }

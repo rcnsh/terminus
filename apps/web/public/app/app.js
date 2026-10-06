@@ -152,7 +152,12 @@ async function here({ ask = false } = {}) {
   }
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude.toFixed(4), lon: p.coords.longitude.toFixed(4) }),
+      (p) => {
+        // How far out it may be: its accuracy, plus a walk's worth of its age.
+        // The API drops a fix too rough to say where you are.
+        const acc = Math.round((p.coords.accuracy || 0) + (Math.max(0, Date.now() - p.timestamp) / 1000) * 1.3);
+        resolve({ lat: p.coords.latitude.toFixed(4), lon: p.coords.longitude.toFixed(4), acc: String(acc) });
+      },
       () => resolve(null),
       { maximumAge: 60_000, timeout: 8_000 },
     );

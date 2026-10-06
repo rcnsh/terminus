@@ -183,8 +183,8 @@ object WidgetModes {
         val api = Api(token, fast = true, hour12 = hour12(ctx))
         val result = runCatching {
             when (mode) {
-                Mode.Nearby -> api.nearbyJson(loc?.latitude, loc?.longitude)
-                is Mode.To -> api.nextJson(mode.target, loc?.latitude, loc?.longitude)
+                Mode.Nearby -> api.nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
+                is Mode.To -> api.nextJson(mode.target, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                 Mode.Timetable -> JSONObject()
             }
         }

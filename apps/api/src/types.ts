@@ -383,6 +383,8 @@ export interface ResolveInput {
   /** A place with several stops (a food court): the walk from each, by stop
    *  code, as the bus you take may not stop at the closest. */
   endWalkByStopS?: Record<string, number>;
+  /** Where the room or building itself is, when known: within WALK.atVenueM of it you're there. */
+  destAt?: { lat: number; lon: number } | null;
   /** Seconds per stop on a service, from measured rides (ridetimes.ts).
    *  RIDE.secondsPerHop where it has nothing. */
   hopS?: (svc: string) => number | null;

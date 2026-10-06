@@ -33,6 +33,15 @@ const coordParams = [
     schema: { type: 'number', minimum: -180, maximum: 180 },
     example: 103.784556,
   },
+  {
+    name: 'acc',
+    in: 'query',
+    description:
+      'How far out the location may be, in metres: its accuracy, plus how far the caller could have walked since the fix if it is not fresh. ' +
+      'A location further out than 200 m is treated as none, and the answer follows the timetable instead.',
+    schema: { type: 'number', minimum: 0 },
+    example: 25,
+  },
 ];
 
 const errorResponse = (description: string, example?: Record<string, unknown>) => ({
