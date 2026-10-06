@@ -65,7 +65,7 @@ const arrive = (j) => (j.arrive ? [t('Arrive {0}', j.arrive), j.slack].filter(Bo
 
 /** "Or A1 at 4:05 PM from PGP"; for a class, the sooner bus to go now on. */
 const backup = (a, j) =>
-  j.backup ? (a.card.kind === 'class' ? t('Or go now: {0} at {1} from {2}', j.backup.svc, j.backup.board, j.backup.stop) : t('Or {0} at {1} from {2}', j.backup.svc, j.backup.board, j.backup.stop)) : null;
+  j.backup ? (a.card.kind === 'class' ? t('Or go now: {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop) : t('Or {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop)) : null;
 
 /** "in 4 min" to the bus leaving, or null once it has. */
 function busIn(j, now) {
@@ -75,7 +75,10 @@ function busIn(j, now) {
 }
 
 /** A service as it's painted on the bus. */
-const Badge = ({ bus, big = false }) => html`<span class=${big ? 'bus-badge big' : 'bus-badge'} style=${{ background: bus.color, color: inkOn(bus.color) }}>${bus.svc}</span>`;
+/** The service as painted on the bus; a public bus (with a fare) carries a $ so the fare is never a surprise. */
+const Badge = ({ bus, big = false }) => html`<span class=${big ? 'bus-badge big' : 'bus-badge'} style=${{ background: bus.color, color: inkOn(bus.color) }}>${bus.svc}${bus.paid ? html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>` : ''}</span>`;
+/** The service in running text: "95 ($)" for a public bus. */
+const named = (bus) => (bus.paid ? `${bus.svc} ($)` : bus.svc);
 
 /** Now, every second near the end (so "Leave in 45 s" is never a stale 45), else every 15. */
 function useNow(a, j) {
@@ -140,7 +143,7 @@ function Route({ a, j, now, late }) {
 
 /** The line read out: the same as Steps says it. */
 const routeLabel = (a, j) =>
-  [j.walk && `${t('Walk to {0}', j.bus.stop)} (${j.walk})`, `${j.bus.svc} ${t('from {0}', j.bus.stop)} ${j.bus.board}`, j.walkEnd && `${t('Walk to {0}', place(j))} (${j.walkEnd})`, arrive(j)]
+  [j.walk && `${t('Walk to {0}', j.bus.stop)} (${j.walk})`, `${named(j.bus)} ${t('from {0}', j.bus.stop)} ${j.bus.board}`, j.walkEnd && `${t('Walk to {0}', place(j))} (${j.walkEnd})`, arrive(j)]
     .filter(Boolean)
     .join(', ');
 

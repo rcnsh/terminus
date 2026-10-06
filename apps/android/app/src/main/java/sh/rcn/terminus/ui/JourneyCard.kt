@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -103,7 +105,7 @@ internal fun RouteLine(journey: Journey, modifier: Modifier = Modifier) {
             }
         }
         Point(journey.bus.stop, journey.bus.board, fg, narrow = journey.walkEnd != null)
-        Stretch(Modifier.weight(1.4f), { BusBadge(journey.bus.svc, journey.bus.color, 12.sp) }, journey.ride) {
+        Stretch(Modifier.weight(1.4f), { BusBadge(journey.bus.svc, journey.bus.color, 12.sp, paid = journey.bus.paid) }, journey.ride) {
             drawLine(bus, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 5.dp.toPx(), StrokeCap.Round)
         }
         Point(journey.toStop, (if (journey.walkEnd != null) journey.arriveStop else journey.arrive) ?: "", fg, narrow = journey.walkEnd != null)
@@ -149,7 +151,7 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long) {
     Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
         Box(Modifier.size(64.dp).background(Color(journey.bus.color), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-            Text(journey.bus.svc, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, maxLines = 1)
+            Text(badgeText(journey.bus.svc, journey.bus.paid), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, maxLines = 1)
         }
         Spacer(Modifier.width(14.dp))
         Column {
@@ -201,7 +203,7 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long) {
             journey.bus.board, first = journey.walk == null, last = false,
             {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BusBadge(journey.bus.svc, journey.bus.color, 14.sp)
+                    BusBadge(journey.bus.svc, journey.bus.color, 14.sp, paid = journey.bus.paid)
                     Text(stringResource(R.string.journey_from, journey.bus.stop), style = MaterialTheme.typography.bodyLarge)
                     if (journey.live) LiveTag()
                 }
@@ -280,15 +282,22 @@ private fun LiveTag() {
     }
 }
 
+/** The badge's text: the service, with a $ after a public bus's number so the fare is never a surprise. */
+internal fun badgeText(svc: String, paid: Boolean): String = if (paid) "$svc \$" else svc
+
 /** A service as it's painted on the bus: white on its colour. */
 @Composable
-internal fun BusBadge(svc: String, color: Long, size: TextUnit, pad: Dp = 6.dp) {
+internal fun BusBadge(svc: String, color: Long, size: TextUnit, pad: Dp = 6.dp, paid: Boolean = false) {
+    val fare = stringResource(R.string.public_bus_fare)
     Text(
-        svc,
+        badgeText(svc, paid),
         color = Color.White,
         fontWeight = FontWeight.ExtraBold,
         fontSize = size,
         maxLines = 1,
-        modifier = Modifier.background(Color(color), RoundedCornerShape(6.dp)).padding(horizontal = pad, vertical = 1.dp),
+        modifier = Modifier
+            .background(Color(color), RoundedCornerShape(6.dp))
+            .padding(horizontal = pad, vertical = 1.dp)
+            .semantics { contentDescription = if (paid) "$svc, $fare" else svc },
     )
 }

@@ -7,8 +7,10 @@
 import graphJson from '../data/stops.json' with { type: 'json' };
 import serviceHoursJson from '../data/service-hours.json' with { type: 'json' };
 import oppositesJson from '../data/opposites.json' with { type: 'json' };
+import publicJson from '../data/public.json' with { type: 'json' };
 import type { Graph, Stop } from './types.ts';
 import { mergeServiceHours } from './resolve.ts';
+import { type PublicData, withPublic } from './public.ts';
 
 /**
  * Hand-listed pairs over the scraped ones. The scrape can only pair stops by
@@ -41,6 +43,13 @@ export const GRAPH = {
     serviceHoursJson as Record<string, unknown>,
   ),
 } as Graph;
+
+/**
+ * The same graph with the public buses in it (public.ts), for accounts that
+ * turned them on. Everything built from GRAPH alone (the map, the search,
+ * the stop pairs) stays as it is: public buses are an answer, not a layer.
+ */
+export const GRAPH_PUBLIC: Graph = withPublic(GRAPH, publicJson as unknown as PublicData);
 
 
 /**

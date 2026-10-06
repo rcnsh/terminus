@@ -180,6 +180,7 @@ export async function tripAnswer(
     endWalkS,
     ...(endWalkByStopS ? { endWalkByStopS } : {}),
     destAt: venue ? venueAt(venue) : null,
+    ...(profile.publicBuses ? { publicBuses: true } : {}),
   };
   const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
   // For a class, say whether you'll make it: stop arrival plus the walk

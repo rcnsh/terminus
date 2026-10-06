@@ -15,6 +15,7 @@ import { termDay } from './calendar.ts';
 import type {
   Arrival,
   Candidate,
+  FeedState,
   Graph,
   GraphIndex,
   Leg,
@@ -26,8 +27,9 @@ import type {
   Stop,
   StopArrivals,
 } from './types.ts';
-import { DEFAULT_HEADWAY_S, RIDE, WALK, isMeasured, sgt } from './config.ts';
+import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK, isMeasured, sgt } from './config.ts';
 import { haversineM } from './geo.ts';
+import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
 import { footM, stopFootM } from './walk.ts';
 import { residenceStops } from './residences.ts';
 
@@ -186,15 +188,22 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
         continue;
       }
       // Where to get off: the stop that gets you there soonest, crossing included.
-      let best: { hops: number; crossS: number; code: string } | null = null;
+      let best: { hops: number; crossS: number; code: string; rideS?: number } | null = null;
       // Seconds a stop on this service: measured when there are enough rides (ridetimes.ts).
       const perHop = input.hopS?.(svc) ?? RIDE.secondsPerHop;
-      const cost = (b: { hops: number; crossS: number }) => b.hops * perHop + b.crossS;
+      // A public bus rides by the metres along its route (public.ts): its
+      // campus stops can be a long way round the island apart.
+      const pub = isPublic(graph, svc);
+      const cost = (b: { hops: number; crossS: number; rideS?: number }) => (b.rideS ?? b.hops * perHop) + b.crossS;
       for (const t of targets) {
         const r = reach(idx, svc, stop.code, t.code);
-        if (r && (!best || cost({ hops: r.hops, crossS: t.crossS }) < cost(best))) best = { hops: r.hops, crossS: t.crossS, code: t.code };
+        if (!r) continue;
+        const m = pub ? rideMetres(idx, svc, stop.code, t.code) : null;
+        const rideS = m !== null ? publicRideS(m) : perHop !== RIDE.secondsPerHop ? Math.round(r.hops * perHop) : undefined;
+        const cand = { hops: r.hops, crossS: t.crossS, code: t.code, ...(rideS !== undefined ? { rideS } : {}) };
+        if (!best || cost(cand) < cost(best)) best = cand;
       }
-      if (best) legs.push({ svc, hops: best.hops, ...(perHop !== RIDE.secondsPerHop ? { rideS: Math.round(best.hops * perHop) } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}), to: idx.byCode.get(best.code)! });
+      if (best) legs.push({ svc, hops: best.hops, ...(best.rideS !== undefined ? { rideS: best.rideS } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}), to: idx.byCode.get(best.code)! });
     }
     // Starting from home or a room without coordinates: that walk comes first.
     const walkS = input.lat != null ? Math.round(foot / speed) : (input.originWalkS ?? 0);
@@ -342,12 +351,26 @@ export function headwayFor(graph: Graph, svc: string): number {
   return graph.headwayS?.[svc] ?? DEFAULT_HEADWAY_S;
 }
 
+/**
+ * The state of the feed a service's arrivals came from. A shelter both the
+ * shuttle and public buses call at was asked of two feeds, and one can be
+ * down or stale while the other answers; a stop asked of one feed is that
+ * feed's state. Undefined when the stop was never asked.
+ */
+export function feedFor(sa: StopArrivals | undefined, pub: boolean): FeedState | undefined {
+  if (!sa) return undefined;
+  return sa.feeds?.[pub ? 'public' : 'shuttle'] ?? sa;
+}
+
 export interface BoardRow {
+  /** What's on the bus ("D2", "151"). */
   svc: string;
   /** Seconds until arrival. null means "no live time to show", never 0. */
   etaS: number | null;
   quality: Quality;
   ambiguousBerth: boolean;
+  /** A public bus, with a fare. Absent for a shuttle. */
+  paid?: true;
 }
 
 /**
@@ -360,10 +383,12 @@ export interface BoardRow {
  */
 export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: StopArrivals | undefined, nowMs: number): BoardRow[] {
   const services = idx.servingStop.get(stopCode) ?? [];
-  const available = sa !== undefined && sa.available !== false;
   const out: BoardRow[] = [];
 
   for (const svc of services) {
+    const pub = isPublic(graph, svc);
+    const feed = feedFor(sa, pub);
+    const available = feed !== undefined && feed.available !== false;
     const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === svc);
     const { usable, ambiguousBerth } = resolveBerths(forSvc);
     const etas = usable
@@ -373,7 +398,8 @@ export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: Sto
     let quality: Quality;
     let etaS: number | null = null;
     if (etas.length) {
-      quality = 'live';
+      // A time from the operator's timetable is an estimate, not a bus seen.
+      quality = etas[0].scheduled ? 'scheduled' : 'live';
       etaS = etas[0].etaS;
     } else if (!inService(graph, svc, nowMs)) {
       continue; // ended: do not list a service that is not running
@@ -383,9 +409,9 @@ export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: Sto
       quality = 'scheduled';
     }
     // Only a real arrival goes stale; a guess stays a guess.
-    if (sa?.stale && quality === 'live') quality = 'stale';
+    if (feed?.stale && quality === 'live') quality = 'stale';
 
-    out.push({ svc, etaS, quality, ambiguousBerth });
+    out.push({ svc: svcName(svc), etaS, quality, ambiguousBerth, ...(pub ? { paid: true as const } : {}) });
   }
 
   out.sort(
@@ -428,14 +454,19 @@ export function scoreOptions(
         .filter((a) => a.etaS != null)
         .sort((a, b) => (a.etaS as number) - (b.etaS as number));
 
+      // The feed this service's arrivals came from: at a shelter the shuttle
+      // and public buses share, each feed's own fetch time and state.
+      const pub = isPublic(graph, leg.svc);
+      const feed = feedFor(sa, pub);
       // Times here count from when the arrivals were fetched (departsAt is
       // fetchedAt + boardS), so the walk counts from then too: a bus that
       // left while a cached or stale answer aged can't be caught.
-      const ageS = Math.max(0, (nowMs - (sa?.fetchedAt ?? nowMs)) / 1000);
+      const fetchedAt = feed?.fetchedAt ?? nowMs;
+      const ageS = Math.max(0, (nowMs - fetchedAt) / 1000);
       const earliest = c.walkS + WALK.boardBufferS + ageS;
       // A missing entry means we never reached the feed -- not that no bus is
       // coming. Those are different answers and must not collapse into one.
-      const available = sa !== undefined && sa.available !== false;
+      const available = feed !== undefined && feed.available !== false;
       let boardS: number;
       let quality: ScoredOption['quality'];
       let arrival = null;
@@ -444,7 +475,9 @@ export function scoreOptions(
       const catchable = etas.find((a) => (a.etaS as number) >= earliest);
       if (catchable) {
         boardS = catchable.etaS as number;
-        quality = 'live';
+        // A time from the operator's timetable (a public bus not yet on the
+        // road) is an estimate, however exact it looks.
+        quality = catchable.scheduled ? 'scheduled' : 'live';
         arrival = catchable;
       } else if (etas.length) {
         // Every listed bus leaves before you can get there: the first one
@@ -471,7 +504,7 @@ export function scoreOptions(
 
       // Only a real arrival goes stale; a headway guess stays a guess, never
       // ranked or worded as measured.
-      if (sa?.stale && quality === 'live') quality = 'stale';
+      if (feed?.stale && quality === 'live') quality = 'stale';
 
       const rideS = legRideS(leg);
       out.push({
@@ -485,19 +518,23 @@ export function scoreOptions(
         totalS: Math.round(boardS) + rideS,
         quality,
         arrival,
-        fetchedAt: sa?.fetchedAt ?? nowMs,
+        fetchedAt,
         ambiguousBerth,
         ...(leg.off ? { off: leg.off } : {}),
         ...(leg.to ? { to: leg.to } : {}),
+        ...(pub ? { paid: true as const } : {}),
       });
     }
   }
 
-  // Measurements beat estimates outright; within a tier, time to the place itself decides.
+  // Measurements beat estimates outright; within a tier, time to the place
+  // itself decides, a public bus's fare counting as PUBLIC.fareWorthS of it:
+  // it wins only when it clearly saves time over the free shuttle.
+  const costS = (o: ScoredOption) => o.totalS + endWalk(o) + (o.paid ? PUBLIC.fareWorthS : 0);
   out.sort(
     (a, b) =>
       Number(isMeasured(b.quality)) - Number(isMeasured(a.quality)) ||
-      a.totalS + endWalk(a) - (b.totalS + endWalk(b)) ||
+      costS(a) - costS(b) ||
       a.walkS - b.walkS ||
       a.svc.localeCompare(b.svc),
   );

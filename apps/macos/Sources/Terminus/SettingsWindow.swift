@@ -430,6 +430,17 @@ struct TripsPane: View {
                 Hint(L("Aim one bus earlier when yours is often full."))
             }
         }
+        Divider()
+        LabeledContent {
+            Toggle(L("Public buses"), isOn: Binding(get: { setup.publicBuses }, set: { setup.setPublicBuses($0) }))
+                .toggleStyle(.switch)
+                .labelsHidden()
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("Public buses"))
+                Hint(L("Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time."))
+            }
+        }
     }
 
     /// Minutes after midnight as a time of day for a DatePicker, today on this Mac's calendar.

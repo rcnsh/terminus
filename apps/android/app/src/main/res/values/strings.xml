@@ -260,6 +260,9 @@
     <string name="pace_slow_hint">400 m in about 6 min. A relaxed pace, or if you often carry a bag.</string>
     <string name="pace_summary">%1$s pace</string>
     <string name="packed">Allow for busy buses</string>
+    <string name="public_buses">Public buses</string>
+    <string name="public_buses_hint">Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time.</string>
+    <string name="public_bus_fare">Public bus, fare applies</string>
     <string name="packed_hint">When the bus you\'d wait for is often full at that stop and time, aim one bus earlier.</string>
     <string name="pair">Pair</string>
     <string name="pair_instead">Pair with a code instead</string>

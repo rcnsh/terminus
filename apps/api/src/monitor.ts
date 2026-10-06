@@ -10,6 +10,8 @@
 import { KEEP_DAYS } from './outcomes.ts';
 import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
+import { fetchPublicArrivals, ltaConfigured } from './lta.ts';
+import { GRAPH_PUBLIC } from './graph.ts';
 import { KV_APP_VERSION, UpstreamRejected } from './auth.ts';
 import { autoUpdateVersion, type AutoResult } from './appversion.ts';
 import { calendarThrough, semesterSoon, termFrom, termName } from './calendar.ts';
@@ -380,6 +382,53 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
 }
 
 /** Each step on its own: a KV failure must not stop D1 cleanup, and the reverse. */
+/** The public feed's state, as the cron last saw it. No alerts: the shuttle is the product; this is extra. */
+export interface PublicFeedState {
+  up: boolean;
+  since: number;
+  reason: string | null;
+  checkedAt: number;
+}
+
+const PUBLIC_KEY = 'monitor:public';
+/** The Central Library's shelter, which the 95 and 151 call at all day. */
+export const PUBLIC_PROBE: [string, string] = ['CLB', '16181'];
+
+export async function readPublicFeed(env: Env): Promise<PublicFeedState | null> {
+  const raw = await env.KV.get(PUBLIC_KEY).catch(() => null);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PublicFeedState;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Probe LTA DataMall directly (past the cache) and record whether it
+ * answered, for /status.json and /health. Nothing is done without the key.
+ */
+export async function checkPublicFeed(
+  env: Env,
+  nowMs: number,
+  probe: () => Promise<unknown> = () => fetchPublicArrivals(env, GRAPH_PUBLIC, PUBLIC_PROBE[0], PUBLIC_PROBE[1], nowMs),
+): Promise<PublicFeedState | null> {
+  if (!ltaConfigured(env)) return null;
+  let up = true;
+  let reason: string | null = null;
+  try {
+    await probe();
+  } catch (err) {
+    up = false;
+    reason = String((err as Error)?.message ?? err).slice(0, 300);
+  }
+  const prev = await readPublicFeed(env);
+  const state: PublicFeedState = { up, since: prev && prev.up === up ? prev.since : nowMs, reason, checkedAt: nowMs };
+  await env.KV.put(PUBLIC_KEY, JSON.stringify(state));
+  if (!up) console.log('public feed down', reason);
+  return state;
+}
+
 export async function runCron(env: Env, nowMs: number): Promise<void> {
   const step = async (name: string, fn: () => Promise<unknown>) => {
     try {
@@ -389,6 +438,7 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
     }
   };
   await step('upstream', () => checkUpstream(env, nowMs));
+  await step('public feed', () => checkPublicFeed(env, nowMs));
   await step('calendar', async () => {
     await loadCalendar(env, nowMs);
     try {

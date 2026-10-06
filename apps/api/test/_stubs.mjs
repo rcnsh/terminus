@@ -153,8 +153,8 @@ export function makeAnalytics() {
  * so the forced-refresh retry can be exercised. Every proxy request is kept in
  * `requests` so tests can assert on headers and body.
  */
-export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null, fcm = null } = {}) {
-  const counts = { auth: 0, shuttle: 0 };
+export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null, fcm = null, publicStops = {}, publicStatus = 200, publicFail = false } = {}) {
+  const counts = { auth: 0, shuttle: 0, public: 0 };
   const requests = [];
   const mints = [];
   const fn = async (input, init = {}) => {
@@ -207,6 +207,16 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
       return Response.json(shuttlePayload(byStop[body.busstopname] ?? []));
     }
 
+    // LTA DataMall: a stop's public buses, by LTA's code (see ltaPayload).
+    if (url.startsWith('https://datamall2.mytransport.sg/')) {
+      counts.public++;
+      requests.push({ url, method: init.method ?? 'GET', headers: new Headers(init.headers), body: null });
+      if (publicFail) throw new TypeError('upstream unreachable');
+      if (publicStatus !== 200) return new Response('refused', { status: publicStatus });
+      const code = new URL(url).searchParams.get('BusStopCode') ?? '';
+      return Response.json(ltaPayload(code, publicStops[code] ?? []));
+    }
+
     // Firebase: an OAuth token, then messages (recorded in `fcm.sent`).
     if (fcm && url === 'https://oauth2.googleapis.com/token') {
       fcm.oauth = (fcm.oauth ?? 0) + 1;
@@ -230,6 +240,34 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
   fn.requests = requests;
   fn.mints = mints;
   return fn;
+}
+
+/**
+ * DataMall's BusArrival reply for one stop: `services` as [{ServiceNo, buses:
+ * [{etaS, monitored, load, dest}]}], up to three buses each, laid out as the
+ * feed lays them (NextBus, NextBus2, NextBus3; an empty slot has blank fields).
+ */
+export function ltaPayload(code, services) {
+  const slot = (b) =>
+    b
+      ? {
+          OriginCode: b.origin ?? b.dest ?? '',
+          DestinationCode: b.dest ?? '',
+          EstimatedArrival: new Date(FROZEN_NOW + b.etaS * 1000).toISOString().replace('Z', '+00:00'),
+          Monitored: b.monitored === false ? 0 : 1,
+          Latitude: b.monitored === false ? '0.0' : '1.2966',
+          Longitude: b.monitored === false ? '0.0' : '103.7724',
+          VisitNumber: '1',
+          Load: b.load ?? 'SEA',
+          Feature: 'WAB',
+          Type: 'SD',
+        }
+      : { OriginCode: '', DestinationCode: '', EstimatedArrival: '', Monitored: 0, Latitude: '0.0', Longitude: '0.0', VisitNumber: '', Load: '', Feature: '', Type: '' };
+  return {
+    'odata.metadata': 'https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival',
+    BusStopCode: code,
+    Services: services.map((s) => ({ ServiceNo: s.ServiceNo, Operator: s.Operator ?? 'SBST', NextBus: slot(s.buses[0]), NextBus2: slot(s.buses[1]), NextBus3: slot(s.buses[2]) })),
+  };
 }
 
 /**
