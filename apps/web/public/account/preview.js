@@ -212,13 +212,18 @@ function useSky(node, on) {
     const place = () => body.style.setProperty('--sky-end', `${Math.round(el.getBoundingClientRect().bottom + window.scrollY)}px`);
     place();
     body.classList.add('night');
+    // The browser's bar too, while Now is the tab on screen (app.js sets on-map and on-settings).
     const bar = Object.assign(document.createElement('meta'), { name: 'theme-color', content: '#121a33' });
-    document.head.prepend(bar);
+    const tab = () => (body.classList.contains('on-map') || body.classList.contains('on-settings') ? bar.remove() : document.head.prepend(bar));
+    tab();
+    const tabs = new MutationObserver(tab);
+    tabs.observe(body, { attributes: true, attributeFilter: ['class'] });
     const seen = new ResizeObserver(place);
     seen.observe(el);
     seen.observe(body);
     return () => {
       seen.disconnect();
+      tabs.disconnect();
       bar.remove();
       body.classList.remove('night');
       body.style.removeProperty('--sky-end');

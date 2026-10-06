@@ -232,7 +232,8 @@ body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 1
    page down to the end of the headline and the next class, then fading into
    the page. The header and the chips take night colours over it. */
 body.night { position: relative; }
-body.night::before {
+/* Now only: Map and Settings are drawn over a hidden Now, which still has it. */
+body.night:not(.on-map, .on-settings)::before {
   content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: calc(var(--sky-end) + 80px); pointer-events: none;
   background: linear-gradient(#121a33 0, #181a30 calc(var(--sky-end) * 0.55), #1c1b26 var(--sky-end), var(--bg) calc(var(--sky-end) + 80px));
 }
