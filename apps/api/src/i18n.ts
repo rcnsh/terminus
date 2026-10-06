@@ -620,6 +620,8 @@ export const ERRORS_ZH: Record<string, string> = {
   "share must be a NUSMods link": "share 必须是 NUSMods 链接",
   "term must be {acadYear: \"2026/2027\", semester: 1-4}": "term 必须是 {acadYear: \"2026/2027\", semester: 1-4}",
   "the day must start before it ends": "一天的开始时间必须早于结束时间",
+  "no timelapse for that day": "那天没有延时回放",
+  "timelapse storage is not configured": "延时回放存储未配置",
   "walkPace must be slow, normal or fast": "walkPace 必须是 slow、normal 或 fast",
 };
 

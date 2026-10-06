@@ -1,3 +1,5 @@
+import { DatabaseSync } from 'node:sqlite';
+
 /**
  * Test doubles for the Workers runtime. The suite must run with NO
  * credentials and no network, so everything the Worker touches is faked here.
@@ -276,7 +278,10 @@ export function ltaPayload(code, services) {
  * objects), head, and ETags that change with the content. `gets` counts the
  * reads that returned a body, which is what costs.
  */
-export function makeBucket(read) {
+export function makeBucket(readFrom) {
+  // What put() wrote, in front of [readFrom]: the timelapse days.
+  const written = new Map();
+  const read = async (key) => written.get(key) ?? (await readFrom(key));
   const etagOf = (data) => {
     let h = 0;
     for (const b of data) h = (h * 31 + b) >>> 0;
@@ -284,6 +289,16 @@ export function makeBucket(read) {
   };
   const bucket = {
     gets: 0,
+    _written: written,
+    async put(key, body) {
+      const data = body instanceof Uint8Array ? body : typeof body === 'string' ? new TextEncoder().encode(body) : new Uint8Array(await new Response(body).arrayBuffer());
+      written.set(key, data);
+      return { key, size: data.length };
+    },
+    async list({ prefix = '' } = {}) {
+      const objects = [...written.entries()].filter(([k]) => k.startsWith(prefix)).map(([key, data]) => ({ key, size: data.length }));
+      return { objects, truncated: false, cursor: undefined };
+    },
     async head(key) {
       const data = await read(key);
       if (!data) return null;
@@ -352,8 +367,25 @@ export function makeDurableObjects(Class, env = {}) {
   const alarms = new Map();
   const storageFor = (name) => {
     const m = new Map();
+    // SQLite-backed objects' storage.sql, on node:sqlite: exec() with a cursor's toArray() and one().
+    let db = null;
+    const sql = {
+      exec(query, ...bindings) {
+        db ??= new DatabaseSync(':memory:');
+        const stmt = db.prepare(query);
+        const rows = /^\s*select/i.test(query) ? stmt.all(...bindings).map((r) => ({ ...r })) : (stmt.run(...bindings), []);
+        return {
+          toArray: () => rows,
+          one() {
+            if (rows.length !== 1) throw new Error(`expected one row, got ${rows.length}`);
+            return rows[0];
+          },
+        };
+      },
+    };
     return {
       _map: m,
+      sql,
       async get(k) {
         return m.has(k) ? structuredClone(m.get(k)) : undefined;
       },
@@ -365,6 +397,8 @@ export function makeDurableObjects(Class, env = {}) {
       },
       async deleteAll() {
         m.clear();
+        db?.close();
+        db = null;
         alarms.delete(name);
       },
       async getAlarm() {

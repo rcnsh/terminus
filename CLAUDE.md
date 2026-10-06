@@ -36,6 +36,27 @@ affiliated with NUS.
    Upstream failures back off (`failMemoS`, `breakerS`). The same goes for
    LTA DataMall, the public buses' feed (`src/lta.ts`): one call per stop
    per 15 s, through the same cache (`src/edgecache.ts`).
+
+   **One exception, and only one: the timelapse recorder**
+   (`src/timelapse.ts`, `src/timelapsedo.ts`). It is the only code that
+   reads the NUS feed on a schedule rather than because someone asked.
+   Everything else fetches on demand. It is bounded on every side:
+   - **Rate:** each service's live buses once per `TIMELAPSE.pollMs` (30 s),
+     spread across that time, never below `MIN_POLL_MS` (15 s, enforced in
+     code). Arrivals are never polled.
+   - **Path:** `getBuses()`, the map's own path, so the 5 s cache,
+     `failMemoS` and the breaker all apply. An open breaker skips the poll.
+   - **Hours:** `TIMELAPSE.hours` (06:30 to 00:30 Singapore time), and only
+     services inside their own operating hours. It stops early when no bus
+     is out.
+   - **Kill switch:** KV `config:timelapse` = `off` stops it within a round,
+     without a deploy. Otherwise the `TIMELAPSE_ENABLED` var applies: on for
+     the stable site, off for the beta, off when unset.
+
+   At most 17,280 requests a day, every one counted on the dashboard. This
+   is not a precedent. Don't add another poller, don't widen this one's
+   hours or rate, don't point it at arrivals or LTA, and don't reuse its
+   alarm for anything else that calls NUS.
 3. **`normalize()` / `normalizeBuses()` in `src/fms.ts` are the only code that
    touches the raw feed shape.** The feed is undocumented and changes, so
    they're tolerant and everything downstream assumes clean types. When the
@@ -85,6 +106,9 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - an in-memory D1;
 - the test account `you@u.nus.edu`. Sign-in codes and links print to the
   stub's stdout.
+- the timelapse recorder on the fake buses. `POST /__stub/timelapse?minutes=N`
+  records N minutes at once, moving the clock ahead. Then open
+  `/admin/timelapse/` (token `dev`).
 
 It serves `apps/web/public` from disk, so a reload shows your change. Use it
 with a headless browser (Playwright plus Chromium) to check web UI changes,
@@ -143,6 +167,8 @@ apps/api/
   src/auth.ts         Guest token mint, KV memo, app-version breaker
   src/appversion.ts   Tracks the uNivUS app version the feed demands
   src/buses.ts        /buses: live buses placed on their route line (see below)
+  src/timelapse.ts, timelapsedo.ts  The timelapse recorder (rule 2's one exception)
+                      and /timelapse/days; one Durable Object per Singapore day
   src/campus.ts       /campus: stops, route lines, colours, destination search
   src/map.ts          /map/*: PMTiles street map, style, fonts, sprites from R2
   src/accounts.ts     Sign-in codes/links, sessions, anonymous accounts, pairing (D1)
@@ -177,10 +203,13 @@ apps/web/public/
                       as on Android); dom.js has t, api, clock
   app/                Installed web app: app.js (Now, tabs), map.js (campus map), offline.js
   admin/, status/, pair/, privacy/
+  admin/timelapse/    Replays a recorded day on the map and exports a video
+                      (replay.js, shared with the API tests; Mediabunny encodes)
   assets/             ui.js (Preact, hooks, htm, stores), site.css (shared colours/type),
                       i18n.js, zh.js (Chinese), theme.js, landing.js, shots/
   vendor/             Preact + htm (scripts/vendor-preact.sh), MapLibre GL + PMTiles
-                      (scripts/vendor-map.sh): never hand-edited, not linted
+                      (scripts/vendor-map.sh), Mediabunny (scripts/vendor-mediabunny.sh):
+                      never hand-edited, not linted
   sw.js               Service worker: offline app shell and map
 apps/android/app/src/main/java/sh/rcn/terminus/
   Api.kt              API client and answer types
@@ -196,7 +225,8 @@ apps/macos/
   Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings
 scripts/              release.sh, release-beta.sh, github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh,
-                      vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh
+                      vendor-map.sh, vendor-maplibre-mac.sh, vendor-preact.sh,
+                      vendor-mediabunny.sh
 .github/workflows/    ci.yml, scrape.yml (weekly data),
                       map-tiles.yml, probe-buses.yml (manual feed probe),
                       record-buses.yml (manual: no bus switches sides after a deploy)
@@ -269,6 +299,12 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
   only when it beats the free bus by `PUBLIC.fareWorthS`; its leg carries
   `paid: true`, and a timetabled time (LTA's `Monitored: 0`) is
   `scheduled`, never `live`. Nothing public reaches the map.
+- **Timelapse (`src/timelapse.ts`, `src/timelapsedo.ts`).** Rule 2's one
+  exception: a Durable Object per Singapore day records every service's
+  buses every 30 s through `getBuses()`, inside 06:30 to 00:30, and writes
+  the day to R2 (`timelapse/YYYY-MM-DD.json.gz`) at the close.
+  `/admin/timelapse/` replays a day (`replay.js`, which the tests share) and
+  exports a video with Mediabunny, frame by frame. Details in internals.md.
 - **Map.** `/campus` returns stops and route lines. The street map is a
   PMTiles extract on R2, in each site's own downloads bucket
   (`terminus-downloads`, `terminus-beta-downloads`), uploaded by the

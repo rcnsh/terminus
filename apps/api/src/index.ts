@@ -1,10 +1,12 @@
 /**
  * terminus -- answers one question: when is my bus, and should I run.
  *
- * Fetch-on-demand with a 15-second edge cache; no poll loop. Workers has no
- * long-lived process and Cron Triggers bottom out at one-minute granularity.
- * A Durable Object alarm could force sub-minute polling, but that means paying
- * to keep a DO pinned all day to serve a handful of taps.
+ * Fetch-on-demand with a 15-second edge cache; no poll loop for answers.
+ * Workers has no long-lived process and Cron Triggers bottom out at
+ * one-minute granularity. The one scheduled reader of the feed is the
+ * timelapse recorder (timelapse.ts): a Durable Object on its own alarm, at
+ * most one call per service per 30 s, through the same cache, inside fixed
+ * hours, behind a kill switch. It is the exception, not a pattern to copy.
  */
 
 
@@ -35,6 +37,7 @@ import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
+import { handleTimelapse } from './timelapse.ts';
 
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { isBeta, markBeta, siteOrigin } from './site.ts';
@@ -56,6 +59,8 @@ const RESIDENCE_LIST = allResidences()
 export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam };
 // The trip engine's Durable Object (one per user), bound as TRIPS.
 export { Trip } from './tripdo.ts';
+// The timelapse recorder (one per Singapore day), bound as TIMELAPSE.
+export { TimelapseRecorder } from './timelapsedo.ts';
 
 /** `?to=` as a stop code or a NUSMods venue code; `?from=` as an origin stop. */
 function resolveDestination(url: URL) {
@@ -325,7 +330,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // NUS; this protects the Worker from being a free proxy, and D1/R2 from
     // being a free bill.
     const keyed = KEYED.includes(url.pathname);
-    if (env.RL_PUBLIC && (url.pathname === '/health' || url.pathname === '/status.json' || url.pathname === '/admin/stats' || url.pathname.startsWith('/download/'))) {
+    if (env.RL_PUBLIC && (url.pathname === '/health' || url.pathname === '/status.json' || url.pathname === '/admin/stats' || url.pathname.startsWith('/download/') || url.pathname.startsWith('/timelapse/'))) {
       const { success } = await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` });
       if (!success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
     }
@@ -350,6 +355,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     }
     const dl = await handleDownload(url.pathname, env, url);
     if (dl) return dl;
+    // A recorded day of buses: operator only, like /admin/stats.
+    const timelapse = await handleTimelapse(req, url, env, nowMs);
+    if (timelapse) return timelapse;
     // The street map: open like the website, and served from R2 or built.
     const map = await handleMap(req, url, env, ctx);
     if (map) return map;
