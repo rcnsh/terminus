@@ -58,16 +58,6 @@ enum Snapshots {
                 return m
             }()),
             ("rest", model(nearbyTab: false, resting: true)),
-            ("riding", {
-                let m = model(nearbyTab: false)
-                let ridingJSON = """
-                {"label":"On the D2","detail":"Off at UTown · arrive ~\(t(900))","stop":{"code":"PGP","name":"PGP"},"quality":"live","mode":"trip",
-                 "card":{"kind":"trip","phase":"riding","phaseText":"On the bus","glance":"D2 · UTown",
-                  "ride":{"svc":"D2","board":"\(iso(-240))","arrive":"\(iso(600))","stops":[{"code":"PGP","name":"PGP"},{"code":"KR-MRT","name":"KR MRT"},{"code":"LT27","name":"LT27"},{"code":"S17","name":"S17"},{"code":"UTOWN","name":"UTown"}]}}}
-                """
-                m.answers = [.plan: try! JSONDecoder().decode(NextAnswer.self, from: Data(ridingJSON.utf8))]
-                return m
-            }()),
             ("later", {
                 let m = model(nearbyTab: false)
                 m.target = .code("COM3", label: "COM3")
