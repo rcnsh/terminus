@@ -186,13 +186,14 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         var searching by rememberSaveable { mutableStateOf(false) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).fadeEnd(chips).horizontalScroll(chips), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !state.showNearby && state.target == Target.Plan, onClick = { vm.select(Target.Plan) }, label = { Text(stringResource(R.string.chip_next)) })
-                FilterChip(selected = state.showNearby, onClick = vm::showNearby, label = { Text(stringResource(R.string.chip_nearby)) })
+                FilterChip(selected = !state.showNearby && state.target == Target.Plan, onClick = { vm.select(Target.Plan) }, label = { Text(stringResource(R.string.chip_next)) }, colors = chosenChip())
+                FilterChip(selected = state.showNearby, onClick = vm::showNearby, label = { Text(stringResource(R.string.chip_nearby)) }, colors = chosenChip())
                 for (p in state.places) {
                     FilterChip(
                         selected = !state.showNearby && state.target == Target.SavedPlace(p.key),
                         onClick = { vm.select(Target.SavedPlace(p.key)) },
                         label = { Text(p.label) },
+                        colors = chosenChip(),
                     )
                 }
                 for (d in state.added) {
@@ -408,6 +409,12 @@ private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: 
 }
 
 /** Fades the trailing edge out while [scroll] can still go further, so a cut-off row reads as scrollable. */
+/** The chip showing, filled in the ink (the web's too), so it stands out from the rest over any sky. */
+@Composable
+private fun chosenChip() = MaterialTheme.colorScheme.let {
+    androidx.compose.material3.FilterChipDefaults.filterChipColors(selectedContainerColor = it.onSurface, selectedLabelColor = it.background)
+}
+
 /**
  * A place added from "Go somewhere else": a tab with an X that removes it.
  * Scrolled into view when it's the one showing, as a new one is.
@@ -421,6 +428,9 @@ private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onR
         selected = selected,
         onClick = onClick,
         label = { Text(label) },
+        colors = MaterialTheme.colorScheme.let {
+            androidx.compose.material3.InputChipDefaults.inputChipColors(selectedContainerColor = it.onSurface, selectedLabelColor = it.background, selectedTrailingIconColor = it.background)
+        },
         trailingIcon = {
             androidx.compose.material3.Icon(
                 androidx.compose.ui.res.painterResource(R.drawable.ic_close),

@@ -197,16 +197,16 @@ internal fun palette(phase: Phase, dark: Boolean): Palette {
     )
     val day = c(if (dark) 0xFFB9C7D6 else 0xFFDBEAFE)
     return if (dark) when (phase) {
-        Phase.DAWN -> make(listOf(0xFF1D3550, 0xFF2F4D68, 0xFF6B5A66, 0xFF8A6656), 0xFF2A3446, 0xFF151C24, 0xFF3D4658, true, 0xFFF3DCC0, c(0x4DF3DCC0), window = day)
-        Phase.DAY -> make(listOf(0xFF173350, 0xFF22486B, 0xFF35607F, 0xFF3F6B86), 0xFF20384A, 0xFF132330, 0xFF35506A, true, 0xFFFBE3A6, c(0x73FFCD78), c(0x29DCE6F0), window = day)
-        Phase.GOLDEN -> make(listOf(0xFF1F3550, 0xFF3A4A5E, 0xFF7A6046, 0xFF9A6A3C), 0xFF3A3326, 0xFF1A1712, 0xFF4D4536, true, 0xFFF3D29A, c(0x59F3D29A), c(0x24DCE6F0), window = day)
-        Phase.DUSK -> make(listOf(0xFF1A1C3A, 0xFF362F5A, 0xFF7A4A6A, 0xFFB8644F), 0xFF2B2340, 0xFF17121F, 0xFF4F4266, true, setting = 0xFFF0915E, window = lit)
+        Phase.DAWN -> make(listOf(0xFF1D3550, 0xFF2A465F, 0xFF5C4D58, 0xFF8A6656), 0xFF2A3446, 0xFF151C24, 0xFF3D4658, true, 0xFFF3DCC0, c(0x4DF3DCC0), window = day)
+        Phase.DAY -> make(listOf(0xFF173350, 0xFF1F4262, 0xFF2D5674, 0xFF3F6B86), 0xFF20384A, 0xFF132330, 0xFF35506A, true, 0xFFFBE3A6, c(0x73FFCD78), c(0x29DCE6F0), window = day)
+        Phase.GOLDEN -> make(listOf(0xFF1F3550, 0xFF334356, 0xFF5E4A37, 0xFF9A6A3C), 0xFF3A3326, 0xFF1A1712, 0xFF4D4536, true, 0xFFF3D29A, c(0x59F3D29A), c(0x24DCE6F0), window = day)
+        Phase.DUSK -> make(listOf(0xFF1A1C3A, 0xFF322B54, 0xFF6C4260, 0xFFB8644F), 0xFF2B2340, 0xFF17121F, 0xFF4F4266, true, setting = 0xFFF0915E, window = lit)
         Phase.NIGHT -> make(listOf(0xFF121A33, 0xFF181A30, 0xFF24243A, 0xFF2E2A44), 0xFF191826, 0xFF121110, 0xFF45405F, true, window = lit)
     } else when (phase) {
         Phase.DAWN -> make(listOf(0xFF8FC1E8, 0xFFB7D6EE, 0xFFF1D6C2, 0xFFF7C9A4), 0xFFB3B0C3, 0xFF6A7568, 0xFFCFC8D8, false, 0xFFFFF1D6, c(0xBFFFD6AA), window = day)
-        Phase.DAY -> make(listOf(0xFF4F9EE0, 0xFF86BFEB, 0xFFC7E2F4, 0xFFE3F0F8), 0xFF9FBCAE, 0xFF4F6F58, 0xFFB7CBD9, false, 0xFFFFFBEA, c(0xE6FFFADC), c(0xD9FFFFFF), window = day)
-        Phase.GOLDEN -> make(listOf(0xFF6FA3D6, 0xFFA7C3DC, 0xFFF0CF9C, 0xFFF4B46C), 0xFFC4A983, 0xFF5E5A42, 0xFFDCC6A2, false, 0xFFFFE2A8, c(0xCCFFBE6E), c(0xCCFFFFFF), window = day)
-        Phase.DUSK -> make(listOf(0xFF2C3566, 0xFF5B4F86, 0xFFC6708A, 0xFFF19A6C), 0xFF4B3F62, 0xFF2C2440, 0xFF7D6A90, true, setting = 0xFFFFB37A, window = lit)
+        Phase.DAY -> make(listOf(0xFF5EA8E5, 0xFF8EC4EC, 0xFFC7E2F4, 0xFFE3F0F8), 0xFF9FBCAE, 0xFF4F6F58, 0xFFB7CBD9, false, 0xFFFFFBEA, c(0xE6FFFADC), c(0xD9FFFFFF), window = day)
+        Phase.GOLDEN -> make(listOf(0xFF78AADB, 0xFFA7C3DC, 0xFFF0CF9C, 0xFFF4B46C), 0xFFC4A983, 0xFF5E5A42, 0xFFDCC6A2, false, 0xFFFFE2A8, c(0xCCFFBE6E), c(0xCCFFFFFF), window = day)
+        Phase.DUSK -> make(listOf(0xFF2C3566, 0xFF4A4275, 0xFF6C4260, 0xFFE08A62), 0xFF4B3F62, 0xFF2C2440, 0xFF7D6A90, true, setting = 0xFFFFB37A, window = lit)
         Phase.NIGHT -> make(listOf(0xFF121A33, 0xFF181A30, 0xFF24243A, 0xFF2E2A44), 0xFF3A3550, 0xFF5B5568, 0xFF45405F, true, window = lit)
     }
 }
@@ -482,32 +482,58 @@ internal fun NightTheme(on: Boolean, content: @Composable () -> Unit) {
 }
 
 /**
+ * What [SkyInk] adds for words in the sky: the "on time" green, the chip
+ * small coloured words (Live, a notice) sit on, darker than a dark sky and
+ * lighter than a light one, and the accent for small words (a countdown,
+ * the trip's phase), stronger than the headline's. The web's --k-good,
+ * --k-chip and --k-accent-small.
+ */
+internal class SkyTones(val good: Color, val chip: Color, val smallAccent: Color)
+
+internal val LocalSkyTones = staticCompositionLocalOf<SkyTones?> { null }
+
+/**
  * [content] in the sky's ink when [on]: light words on a dark sky, dark on a
  * light one ([light]), with the muted words a shade stronger than the
- * page's, as they're over colour. Cards and tiles on it are glass, a faint
- * pane on a dark sky and frosted on a light one, so they take the sky's
- * colour at every hour rather than sitting on it as a block (the web's
- * --k-surface). Else as it is. Always the same tree, so nothing inside
- * loses its state as the hour or the sky changes.
+ * page's, as they're over colour. Every colour, the late red and the
+ * warning amber too, reads at 4.5:1 over any hour's sky (large words at
+ * 3:1). Cards and tiles on it are glass, a faint pane on a dark sky and
+ * frosted on a light one, so they take the sky's colour at every hour
+ * rather than sitting on it as a block (the web's --k-surface). Else as it
+ * is. Always the same tree, so nothing inside loses its state as the hour
+ * or the sky changes.
  */
 @Composable
 internal fun SkyInk(on: Boolean, light: Boolean, content: @Composable () -> Unit) {
     // A card takes its words' colour from matching its background in the
     // scheme, so the containers are the surface and surfaceVariant differs (Brand.kt).
-    fun glass(base: ColorScheme, pane: Color, raised: Color, line: Color, muted: Color) = base.copy(
+    fun glass(base: ColorScheme, pane: Color, raised: Color, line: Color, muted: Color, accent: Color, late: Color, warn: Color) = base.copy(
         surface = pane, surfaceContainerLowest = pane, surfaceContainerLow = pane, surfaceContainer = pane,
         surfaceContainerHigh = pane, surfaceContainerHighest = pane, surfaceVariant = raised,
-        outlineVariant = line, onSurfaceVariant = muted,
+        outlineVariant = line, onSurfaceVariant = muted, primary = accent, error = late, tertiary = warn,
     )
     val scheme = when {
         !on -> MaterialTheme.colorScheme
-        light -> glass(BrandDark, Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.18f), Color(0xFFD6D3D1))
-        else -> glass(BrandLight, Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.65f), Color(0x291C1917), Color(0xFF3F3A36))
+        light -> glass(BrandDark, Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.18f), c(0xFFE7E5E4), c(0xFFFB923C), c(0xFFFECACA), c(0xFFFCD34D))
+        else -> glass(BrandLight, Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.65f), c(0x291C1917), c(0xFF36312D), c(0xFF9A3412), c(0xFF7F1D1D), c(0xFF78350F))
+    }
+    val tones = when {
+        !on -> null
+        light -> SkyTones(good = c(0xFF86EFAC), chip = Color.Black.copy(alpha = 0.22f), smallAccent = c(0xFFFED7AA))
+        else -> SkyTones(good = c(0xFF14532D), chip = Color.White.copy(alpha = 0.65f), smallAccent = c(0xFF6C2710))
     }
     MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
-        CompositionLocalProvider(LocalContentColor provides if (on) scheme.onBackground else LocalContentColor.current, content = content)
+        CompositionLocalProvider(
+            LocalContentColor provides if (on) scheme.onBackground else LocalContentColor.current,
+            LocalSkyTones provides tones,
+            content = content,
+        )
     }
 }
+
+/** The accent for small words: in the sky, its stronger one ([SkyTones]). */
+@Composable
+internal fun smallAccent() = LocalSkyTones.current?.smallAccent ?: MaterialTheme.colorScheme.primary
 
 /**
  * A tab's sky ([SkyState]) that scrolls with [scroll], in [phase] and the
