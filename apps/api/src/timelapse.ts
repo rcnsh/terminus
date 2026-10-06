@@ -156,6 +156,22 @@ export function mapSnapshot(): Pick<DayFile, 'routes' | 'stops'> {
   };
 }
 
+/** A fingerprint of a line: equal for the same points, different otherwise. */
+function fingerprint(line: [number, number][]): string {
+  const text = JSON.stringify(line);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return `${line.length}:${h.toString(16)}`;
+}
+
+let current: Record<string, string> | null = null;
+
+/** Each route line's fingerprint in [map], or (null) in this deploy's map. */
+export function lineKeys(map: Pick<DayFile, 'routes'> | null): Record<string, string> {
+  if (!map) return (current ??= lineKeys(mapSnapshot()));
+  return Object.fromEntries(Object.entries(map.routes).map(([svc, r]) => [svc, fingerprint(r.line)]));
+}
+
 /** One stored row: ms since the row before, the service, its encoded buses. */
 export interface Row {
   dt: number;
@@ -255,6 +271,12 @@ export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: n
     const today = serviceDate(nowMs);
     const status = await recorderStatus(env, today);
     if (status && status.samples > 0 && !days.some((d) => d.date === today)) days.push({ date: today, closed: false, bytes: null, samples: status.samples });
+    // Yesterday's, while its recorder is still trying to write it to R2.
+    const yesterday = serviceDate(nowMs - DAY_MS);
+    if (!days.some((d) => d.date === yesterday)) {
+      const held = await recorderStatus(env, yesterday);
+      if (held && held.samples > 0) days.push({ date: yesterday, closed: false, bytes: null, samples: held.samples });
+    }
     days.sort((a, b) => b.date.localeCompare(a.date));
     return json({ days, recording: { date: today, enabled: await timelapseEnabled(env), state: status?.state ?? 'idle', samples: status?.samples ?? 0 } });
   }

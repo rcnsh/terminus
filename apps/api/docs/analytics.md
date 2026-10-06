@@ -81,8 +81,9 @@ A lot of `unknown` means upstream is flaky or auth is failing. A lot of
 
 The recorder (`src/timelapse.ts`) is the only scheduled reader of the feed,
 so every poll writes a `timelapse` row: `blob2` says what it cost
-(`upstream` a real request to NUS, `hit` an answer the edge cache already
-had, `stale` and `failed` nothing new, `skipped` the breaker was open),
+(`upstream` a real request to NUS that was answered, `error` one that
+failed, `hit` an answer the edge cache already had, `stale` and `failed`
+nothing new without asking, `skipped` the breaker was open),
 `blob3` the service, `double1` the buses the feed reported. The dashboard
 shows the same per day.
 
@@ -92,6 +93,6 @@ FROM terminus WHERE blob1 = 'timelapse'
 GROUP BY day, outcome ORDER BY day
 ```
 
-`upstream` per day is the recorder's real extra load. At the defaults it is
+`upstream` plus `error` per day is the recorder's real extra load. At the defaults it is
 at most 17,280 (8 services, one poll each per 30 s, 18 hours), and less on
 the days the services keep shorter hours.

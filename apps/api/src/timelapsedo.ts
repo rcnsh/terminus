@@ -25,7 +25,7 @@ import { breakerOpen, getBuses } from './fms.ts';
 import { trackedPlacement } from './buses.ts';
 import { inService } from './resolve.ts';
 import { logPoll } from './analytics.ts';
-import { buildDayFile, dayKey, encodeBus, gzip, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
+import { buildDayFile, dayKey, encodeBus, gzip, lineKeys, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
 import type { DayFile, RecorderStatus, Row } from './timelapse.ts';
 
 type State = 'polling' | 'resting' | 'off' | 'done';
@@ -38,8 +38,9 @@ interface Meta {
   lastT: number;
   state: State;
   /** The round in progress: the services to ask, when it began, the next
-   *  one, the buses seen and how many services answered. */
-  round: { list: string[]; start: number; i: number; buses: number; answered: number } | null;
+   *  one, the buses seen, how many services answered, and how many closed
+   *  for the day before their turn (not asked, and not expected to answer). */
+  round: { list: string[]; start: number; i: number; buses: number; answered: number; closed?: number } | null;
   /** Rounds in a row with no bus on any service. */
   idle: number;
   /** Whether any bus has been seen today. */
@@ -48,6 +49,14 @@ interface Meta {
   last: Record<string, number>;
   plates: string[];
   pollMs: number;
+  /** When each service was last asked for, whatever came of it: never again
+   *  within pollMs, across rounds too (a round with fewer services in it has
+   *  shorter slots). */
+  asked?: Record<string, number>;
+  /** Each route line's fingerprint when the day began (lineKeys): a deploy
+   *  that changes a line mid-day would measure `along` on a line the day
+   *  doesn't have. */
+  lines?: Record<string, string>;
 }
 
 /** After the day failed to reach R2, try again this much later. */
@@ -111,9 +120,10 @@ export class TimelapseRecorder {
     let meta = this.read<Meta>('meta');
     if (!meta) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || now >= close) return Response.json({ state: 'closed' });
-      meta = { date, t0: now, lastT: now, state: 'polling', round: null, idle: 0, seen: false, last: {}, plates: [], pollMs: pollInterval() };
+      const map = mapSnapshot();
+      meta = { date, t0: now, lastT: now, state: 'polling', round: null, idle: 0, seen: false, last: {}, plates: [], pollMs: pollInterval(), asked: {}, lines: lineKeys(map) };
       // The lines the day's `along`s are measured on, kept with it.
-      this.write('map', mapSnapshot());
+      this.write('map', map);
       this.write('meta', meta);
       await this.storage.setAlarm(Math.max(now, open));
     } else if (meta.state === 'off' && (await timelapseEnabled(this.env))) {
@@ -153,10 +163,24 @@ export class TimelapseRecorder {
     }
 
     if (round.i < round.list.length) {
-      const buses = await this.poll(meta, round.list[round.i], now);
-      if (buses !== null) {
-        round.buses += buses;
-        round.answered++;
+      const svc = round.list[round.i];
+      const since = now - (meta.asked?.[svc] ?? -Infinity);
+      if (since < meta.pollMs) {
+        // Asked too recently (at the end of the last round, when it had more
+        // services in it): this one waits its turn, and the rest with it.
+        this.write('meta', meta);
+        return this.storage.setAlarm(Math.min(close, now + meta.pollMs - since));
+      }
+      if (!inService(GRAPH, svc, now)) {
+        // Closed since the round began: not asked, and not expected to answer.
+        round.closed = (round.closed ?? 0) + 1;
+      } else {
+        (meta.asked ??= {})[svc] = now;
+        const buses = await this.poll(meta, svc, now);
+        if (buses !== null) {
+          round.buses += buses;
+          round.answered++;
+        }
       }
       round.i++;
     }
@@ -173,12 +197,13 @@ export class TimelapseRecorder {
   /**
    * After [round]: whether it now stops (and has set its alarm for when it
    * wakes). Idle long enough, it's done for the day once it has seen buses,
-   * or rests and tries again later if it hasn't. A round in which no service
-   * answered (the feed down, the breaker open) says nothing either way: an
-   * outage mustn't end the day.
+   * or rests and tries again later if it hasn't. Only a round in which every
+   * running service answered counts as idle: with any of them failing (the
+   * feed down, the breaker open, one service's calls refused), its buses
+   * could be out there, and an outage mustn't end the day.
    */
   private async idleAfter(meta: Meta, round: NonNullable<Meta['round']>, now: number): Promise<boolean> {
-    const idle = round.buses === 0 && (round.answered > 0 || round.list.length === 0);
+    const idle = round.buses === 0 && round.answered === round.list.length - (round.closed ?? 0);
     meta.seen ||= round.buses > 0;
     if (round.buses > 0) meta.idle = 0;
     else if (idle) meta.idle++;
@@ -206,19 +231,24 @@ export class TimelapseRecorder {
     try {
       let upstream = false;
       const live = await getBuses(env, ctx, svc, now, () => (upstream = true)).catch(() => null);
+      // A failed request that reached NUS still counts as a request (`error`).
       if (!live) {
-        logPoll(env, 'failed', svc, 0);
+        logPoll(env, upstream ? 'error' : 'failed', svc, 0);
         return null;
       }
       // An old answer served because the feed is failing isn't a new reading.
       if (live.stale || live.fetchedAt <= (meta.last[svc] ?? 0)) {
-        logPoll(env, live.stale ? 'stale' : 'hit', svc, 0);
+        logPoll(env, live.stale ? (upstream ? 'error' : 'stale') : 'hit', svc, 0);
         return live.stale ? null : live.buses.length;
       }
       logPoll(env, upstream ? 'upstream' : 'hit', svc, live.buses.length);
       // Placed as the map places them, so `along` is the bus's own place on its line.
       const placed = await trackedPlacement(GRAPH, svc, live, ctx);
-      const along = new Map(placed.buses.map((b) => [b.plate, placed.tracks[b.id]?.along ?? null]));
+      // Measured on today's line only: after a deploy that changed it, the
+      // positions are kept and the metres along aren't (the replay leaves
+      // those buses out rather than draw them in the wrong place).
+      const sameLine = !meta.lines || meta.lines[svc] === lineKeys(null)[svc];
+      const along = new Map(sameLine ? placed.buses.map((b) => [b.plate, placed.tracks[b.id]?.along ?? null]) : []);
       const buses: number[] = [];
       for (const b of live.buses) {
         let p = meta.plates.indexOf(b.plate);

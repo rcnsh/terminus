@@ -195,7 +195,7 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
       }
       const headers = new Headers(init.headers);
       const body = JSON.parse(init.body ?? '{}');
-      requests.push({ url, method: init.method, headers, body });
+      requests.push({ url, method: init.method, headers, body, at: Date.now() });
       if (reject > 0) {
         reject--;
         return Response.json({ code: rejectCode, msg: rejectCode === '10009' ? 'We have a new release of uNivUS' : 'token invalid', data: null });
