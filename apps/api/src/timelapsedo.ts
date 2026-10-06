@@ -1,0 +1,260 @@
+/**
+ * The `TimelapseRecorder` Durable Object: one per Singapore day (named by
+ * its date), recording where every shuttle is while the day's window is
+ * open (timelapse.ts has the rules it keeps to).
+ *
+ * Its alarm is its clock. Each round asks every service that's running for
+ * its buses once, spread evenly across TIMELAPSE.pollMs: with eight
+ * services and 30 s, one service every 3.75 s, never all at once. A round
+ * with no bus anywhere counts towards idleness; after idleRounds of them it
+ * stops for the day if it has seen buses (service is over), or rests for
+ * idleSleepMs if it hasn't yet (before the first bus of the morning).
+ *
+ * When the window closes it writes the day to R2 and deletes everything,
+ * its alarm included, so a finished day costs nothing.
+ *
+ * States: `polling`; `resting` (idle, asks again after idleSleepMs); `off`
+ * (the kill switch, until the cron finds it on again); `done` (idle after
+ * service, waiting to write the day at the close).
+ */
+
+import type { Env } from './types.ts';
+import { TIMELAPSE } from './config.ts';
+import { GRAPH } from './graph.ts';
+import { breakerOpen, getBuses } from './fms.ts';
+import { trackedPlacement } from './buses.ts';
+import { inService } from './resolve.ts';
+import { logPoll } from './analytics.ts';
+import { buildDayFile, dayKey, encodeBus, gzip, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
+import type { DayFile, RecorderStatus, Row } from './timelapse.ts';
+
+type State = 'polling' | 'resting' | 'off' | 'done';
+
+interface Meta {
+  date: string;
+  /** Epoch ms the first sample's dt counts from. */
+  t0: number;
+  /** The time of the last stored sample, which the next one's dt counts from. */
+  lastT: number;
+  state: State;
+  /** The round in progress: the services to ask, when it began, the next
+   *  one, the buses seen and how many services answered. */
+  round: { list: string[]; start: number; i: number; buses: number; answered: number } | null;
+  /** Rounds in a row with no bus on any service. */
+  idle: number;
+  /** Whether any bus has been seen today. */
+  seen: boolean;
+  /** Each service's last recorded reading (fetchedAt), so one is never kept twice. */
+  last: Record<string, number>;
+  plates: string[];
+  pollMs: number;
+}
+
+/** After the day failed to reach R2, try again this much later. */
+const RETRY_MS = 10 * 60_000;
+
+export class TimelapseRecorder {
+  private readonly state: DurableObjectState;
+  private readonly storage: DurableObjectStorage;
+  private readonly env: Env;
+
+  constructor(state: DurableObjectState, env: Env) {
+    this.state = state;
+    this.storage = state.storage;
+    this.env = env;
+  }
+
+  /** The tables, again after deleteAll() at the end of a day. */
+  private schema(): SqlStorage {
+    const sql = this.storage.sql;
+    sql.exec('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
+    sql.exec('CREATE TABLE IF NOT EXISTS samples (n INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER NOT NULL, svc TEXT NOT NULL, buses TEXT NOT NULL)');
+    return sql;
+  }
+
+  private read<T>(k: string): T | null {
+    const row = this.schema().exec<{ v: string }>('SELECT v FROM meta WHERE k = ?', k).toArray()[0];
+    return row ? (JSON.parse(row.v) as T) : null;
+  }
+
+  private write(k: string, v: unknown): void {
+    this.schema().exec('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', k, JSON.stringify(v));
+  }
+
+  private count(): number {
+    return this.schema().exec<{ n: number }>('SELECT COUNT(*) AS n FROM samples').one().n;
+  }
+
+  async fetch(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const date = url.searchParams.get('date') ?? '';
+    const meta = this.read<Meta>('meta');
+
+    if (req.method === 'POST' && url.pathname === '/start') {
+      return this.state.blockConcurrencyWhile(() => this.start(date));
+    }
+    if (req.method === 'GET' && url.pathname === '/status') {
+      const status: RecorderStatus = { date: meta?.date ?? null, samples: meta ? this.count() : 0, state: meta?.state ?? 'idle' };
+      return Response.json(status);
+    }
+    if (req.method === 'GET' && url.pathname === '/day') {
+      if (!meta || meta.date !== date) return new Response('not found', { status: 404 });
+      return new Response(await gzip(JSON.stringify(this.dayFile(meta))), { headers: { 'content-type': 'application/gzip' } });
+    }
+    return new Response('not found', { status: 404 });
+  }
+
+  /** Starts day [date] if it hasn't, or again after the kill switch. Nothing otherwise. */
+  private async start(date: string): Promise<Response> {
+    const now = Date.now();
+    const { open, close } = windowOf(date);
+    let meta = this.read<Meta>('meta');
+    if (!meta) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || now >= close) return Response.json({ state: 'closed' });
+      meta = { date, t0: now, lastT: now, state: 'polling', round: null, idle: 0, seen: false, last: {}, plates: [], pollMs: pollInterval() };
+      // The lines the day's `along`s are measured on, kept with it.
+      this.write('map', mapSnapshot());
+      this.write('meta', meta);
+      await this.storage.setAlarm(Math.max(now, open));
+    } else if (meta.state === 'off' && (await timelapseEnabled(this.env))) {
+      meta.state = 'polling';
+      meta.round = null;
+      this.write('meta', meta);
+      await this.storage.setAlarm(now);
+    } else if (meta.state === 'polling' && (await this.storage.getAlarm()) === null) {
+      // Never stranded: a polling day always has its next alarm.
+      await this.storage.setAlarm(now);
+    }
+    return Response.json({ state: meta.state });
+  }
+
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    const meta = this.read<Meta>('meta');
+    if (!meta) return;
+    const { close } = windowOf(meta.date);
+    if (now >= close) return this.close(meta);
+    if (meta.state === 'off' || meta.state === 'done') return this.storage.setAlarm(close);
+
+    let round = meta.round;
+    if (!round || round.i >= round.list.length) {
+      if (round && (await this.idleAfter(meta, round, now))) return;
+      // The switch is read once a round: off within pollMs of being turned off.
+      if (!(await timelapseEnabled(this.env))) {
+        meta.state = 'off';
+        meta.round = null;
+        this.write('meta', meta);
+        return this.storage.setAlarm(close);
+      }
+      // Only the services running now; none running is a round with no bus.
+      round = { list: Object.keys(GRAPH.routes ?? {}).filter((svc) => inService(GRAPH, svc, now)).sort(), start: now, i: 0, buses: 0, answered: 0 };
+      meta.state = 'polling';
+      meta.round = round;
+    }
+
+    if (round.i < round.list.length) {
+      const buses = await this.poll(meta, round.list[round.i], now);
+      if (buses !== null) {
+        round.buses += buses;
+        round.answered++;
+      }
+      round.i++;
+    }
+    this.write('meta', meta);
+    // The next service a slot later; after the last, the next round a whole
+    // pollMs after this one began. Never less than a slot after this poll:
+    // an alarm that ran late moves the rest later rather than bunching them
+    // up, so no service is asked twice within a round's length.
+    const slot = meta.pollMs / Math.max(1, round.list.length);
+    const next = round.i < round.list.length ? round.start + round.i * slot : round.start + meta.pollMs;
+    await this.storage.setAlarm(Math.min(close, Math.max(next, now + slot)));
+  }
+
+  /**
+   * After [round]: whether it now stops (and has set its alarm for when it
+   * wakes). Idle long enough, it's done for the day once it has seen buses,
+   * or rests and tries again later if it hasn't. A round in which no service
+   * answered (the feed down, the breaker open) says nothing either way: an
+   * outage mustn't end the day.
+   */
+  private async idleAfter(meta: Meta, round: NonNullable<Meta['round']>, now: number): Promise<boolean> {
+    const idle = round.buses === 0 && (round.answered > 0 || round.list.length === 0);
+    meta.seen ||= round.buses > 0;
+    if (round.buses > 0) meta.idle = 0;
+    else if (idle) meta.idle++;
+    if (meta.idle < TIMELAPSE.idleRounds) return false;
+    meta.idle = 0;
+    meta.round = null;
+    meta.state = meta.seen ? 'done' : 'resting';
+    this.write('meta', meta);
+    const { close } = windowOf(meta.date);
+    await this.storage.setAlarm(meta.seen ? close : Math.min(close, now + TIMELAPSE.idleSleepMs));
+    return true;
+  }
+
+  /** Asks for [svc]'s buses once, through the map's own path, and keeps the
+   *  reading. How many buses the feed reported; null when it didn't answer. */
+  private async poll(meta: Meta, svc: string, now: number): Promise<number | null> {
+    const env = this.env;
+    // The breaker is open: NUS refused us a moment ago. Don't ask at all.
+    if (await breakerOpen()) {
+      logPoll(env, 'skipped', svc, 0);
+      return null;
+    }
+    const pending: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (p: Promise<unknown>) => void pending.push(p), passThroughOnException() {} } as unknown as ExecutionContext;
+    try {
+      let upstream = false;
+      const live = await getBuses(env, ctx, svc, now, () => (upstream = true)).catch(() => null);
+      if (!live) {
+        logPoll(env, 'failed', svc, 0);
+        return null;
+      }
+      // An old answer served because the feed is failing isn't a new reading.
+      if (live.stale || live.fetchedAt <= (meta.last[svc] ?? 0)) {
+        logPoll(env, live.stale ? 'stale' : 'hit', svc, 0);
+        return live.stale ? null : live.buses.length;
+      }
+      logPoll(env, upstream ? 'upstream' : 'hit', svc, live.buses.length);
+      // Placed as the map places them, so `along` is the bus's own place on its line.
+      const placed = await trackedPlacement(GRAPH, svc, live, ctx);
+      const along = new Map(placed.buses.map((b) => [b.plate, placed.tracks[b.id]?.along ?? null]));
+      const buses: number[] = [];
+      for (const b of live.buses) {
+        let p = meta.plates.indexOf(b.plate);
+        if (p < 0) p = meta.plates.push(b.plate) - 1;
+        buses.push(...encodeBus({ plate: b.plate, lat: b.lat, lon: b.lon, along: along.get(b.plate) ?? null }, p));
+      }
+      this.schema().exec('INSERT INTO samples (dt, svc, buses) VALUES (?, ?, ?)', live.fetchedAt - meta.lastT, svc, JSON.stringify(buses));
+      meta.lastT = live.fetchedAt;
+      meta.last[svc] = live.fetchedAt;
+      return live.buses.length;
+    } finally {
+      await Promise.allSettled(pending);
+    }
+  }
+
+  private dayFile(meta: Meta): DayFile {
+    const rows = this.schema()
+      .exec<{ dt: number; svc: string; buses: string }>('SELECT dt, svc, buses FROM samples ORDER BY n')
+      .toArray()
+      .map((r): Row => ({ dt: r.dt, svc: r.svc, buses: JSON.parse(r.buses) as number[] }));
+    return buildDayFile({ date: meta.date, t0: meta.t0, pollMs: meta.pollMs, plates: meta.plates, rows, map: this.read<DayFile>('map') ?? mapSnapshot() });
+  }
+
+  /** The window has closed: the day to R2, then nothing left here. */
+  private async close(meta: Meta): Promise<void> {
+    if (this.count() > 0) {
+      try {
+        if (!this.env.DOWNLOADS) throw new Error('no DOWNLOADS bucket');
+        const body = await gzip(JSON.stringify(this.dayFile(meta)));
+        await this.env.DOWNLOADS.put(dayKey(meta.date), body, { httpMetadata: { contentType: 'application/gzip' }, customMetadata: { samples: String(this.count()) } });
+      } catch (err) {
+        // Kept, and tried again: losing a day to one failed write would be a waste.
+        console.error('timelapse', meta.date, err instanceof Error ? err.message : String(err));
+        return this.storage.setAlarm(Date.now() + RETRY_MS);
+      }
+    }
+    await this.storage.deleteAll();
+  }
+}

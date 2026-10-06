@@ -92,6 +92,8 @@ self.addEventListener('fetch', (event) => {
   }
   if (SHELL_FILES.includes(url.pathname)) event.respondWith(shellFile(req, url.pathname, event));
   else if (url.pathname === TILES) event.respondWith(tiles(req, event));
+  // The timelapse page's video encoder (admin/timelapse/) is the operator's, not the map's: never kept.
+  else if (url.pathname.startsWith('/vendor/mediabunny')) return;
   else if (url.pathname.startsWith('/vendor/') || url.pathname.startsWith('/map/fonts/') || url.pathname.startsWith('/map/sprites/')) event.respondWith(cacheFirst(req));
   else if (url.pathname === '/app/map.js' || url.pathname === '/campus' || url.pathname === '/map/style.json') event.respondWith(networkThenKept(req, event));
 });

@@ -399,6 +399,12 @@ const BREAKER = {
   maxAgeS: TTL.breakerS,
 };
 
+/** Whether the feed's breaker is open here: NUS refused our version or key a
+ *  moment ago, and nothing should ask it again until it closes. */
+export async function breakerOpen(): Promise<boolean> {
+  return Boolean(await caches.default.match(new Request(BREAKER.key)));
+}
+
 /** One upstream fetch per stop per isolate, however many requests want it. */
 const inflight = new Map<string, Promise<StopArrivals>>();
 
@@ -481,9 +487,11 @@ export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Da
  * One service's buses through the edge cache: one upstream call per service
  * per TTL.busesMs however many people watch it. The same quiet-under-failure
  * rules as getArrivals: a failed service waits failMemoS, the version
- * breaker stops everything, and a stale answer beats none.
+ * breaker stops everything, and a stale answer beats none. [onUpstream] is
+ * called when this call itself goes to NUS (not a cache hit, not a fetch
+ * another request started), so the timelapse recorder can count its real load.
  */
-export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, nowMs: number = Date.now()): Promise<ActiveBuses> {
+export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, nowMs: number = Date.now(), onUpstream?: () => void): Promise<ActiveBuses> {
   // No stale race: the map polls every few seconds and would rather wait
   // for the fresh positions than see a stale jump.
   return cachedFetch<ActiveBuses>({
@@ -491,7 +499,10 @@ export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, now
     nowMs,
     key: `${CACHE_BASE}/buses/${encodeURIComponent(svc)}`,
     failKey: `${CACHE_BASE}/failed-buses/${encodeURIComponent(svc)}`,
-    fetch: () => fetchActiveBuses(env, svc, nowMs),
+    fetch: () => {
+      onUpstream?.();
+      return fetchActiveBuses(env, svc, nowMs);
+    },
     freshMs: TTL.busesMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
