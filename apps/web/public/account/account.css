@@ -458,17 +458,18 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .livery-mark { position: absolute; left: 50%; bottom: 6px; width: 76px; height: 76px; transform: translateX(-50%); border-radius: 20px; box-shadow: 0 0 0 6px var(--surface); }
 
 /* A stop's sign (Nearby in the web app, your stops in setup): its name on a
-   plate in the sign's inverted colours, what's there under it. */
+   plate a shade off the card, the bus mark in the accent, what's there under
+   it. Not inverted: in the dark a near-white plate glared off every stop. */
 .stop-sign { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .stop-sign.big { border-radius: 18px; }
-.stop-sign .plate { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 8px 0 14px; background: var(--ink); color: var(--bg); }
+.stop-sign .plate { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 8px 0 14px; background: color-mix(in srgb, var(--ink) 5%, var(--surface)); border-bottom: 1px solid var(--line); color: var(--ink); }
 .stop-sign.big .plate { min-height: 46px; }
-.stop-sign .plate-bus { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.stop-sign .plate-bus { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .stop-sign .plate-name { flex: 1; min-width: 0; padding: 8px 0; border: 0; background: none; color: inherit; font: 700 0.95rem var(--font); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .stop-sign.big .plate-name { font-size: 1.05rem; }
 .stop-sign .plate-name:hover { text-decoration: underline; text-underline-offset: 3px; }
-.stop-sign .plate-walk { flex: none; padding-right: 6px; font-size: 0.85rem; font-weight: 600; }
-.stop-sign .swap { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
+.stop-sign .plate-walk { flex: none; padding-right: 6px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.stop-sign .swap { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
 .stop-sign .swap svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .sign-services { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 14px; }
 .sign-services .svc-tag, .ob-bus .svc-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 2.4em; padding: 2px 7px; border-radius: 6px; background: var(--svc); color: var(--svc-ink, #fff); font-weight: 700; font-size: 0.8rem; }
