@@ -178,8 +178,10 @@ private fun DrawScope.horizon(top: Float, page: Color) {
     box(x, 66.5f, 38f, 2.5f, Color(0xFFE53935), 1f)
     for (wx in floatArrayOf(3f, 10f, 17f, 24f)) box(x + wx, 59.5f, 5f, 4f, if (wx == 24f) dim else lit, 1f)
     box(x + 32, 59.5f, 4f, 6f, lit, 1f)
-    drawCircle(page, 2 * d, at(x + 8, 69f))
-    drawCircle(page, 2 * d, at(x + 30, 69f))
+    for (wx in floatArrayOf(8f, 30f)) {
+        drawCircle(Color(0xFF151311), 2.2f * d, at(x + wx, 69f))
+        drawCircle(Color(0xFF8A847D), 0.8f * d, at(x + wx, 69f))
+    }
 }
 
 /** The stars over the night section, in the room above its headline (clear of the chips, which show the sky through them), and the moon among them. */
