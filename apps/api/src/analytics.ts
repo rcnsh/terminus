@@ -143,13 +143,16 @@ export function logError(env: Env, path: string): void {
 /**
  * What one poll of the timelapse recorder cost NUS, for the dashboard:
  *
- * - `upstream`: it went to the feed (a real request to NUS);
+ * - `upstream`: it went to the feed (a real request to NUS) and got an answer;
+ * - `error`: it went to the feed and the request failed (still a request);
  * - `hit`: the edge cache had a fresh answer (a user's request paid for it);
  * - `stale`: the feed was failing and an older answer was all there was;
- * - `failed`: nothing to record (the feed failed, or failed a moment ago);
+ * - `failed`: nothing to record, without asking (it failed a moment ago);
  * - `skipped`: the breaker was open, so it didn't ask at all.
+ *
+ * Requests to NUS are `upstream` plus `error`.
  */
-export type PollOutcome = 'upstream' | 'hit' | 'stale' | 'failed' | 'skipped';
+export type PollOutcome = 'upstream' | 'error' | 'hit' | 'stale' | 'failed' | 'skipped';
 
 export function logPoll(env: Env, outcome: PollOutcome, svc: string, buses: number): void {
   if (!analyticsEnabled(env)) return;

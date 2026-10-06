@@ -49,6 +49,8 @@ const view = store({
   /** Where the preview is, 0 to 1 of the chosen range. */
   scrub: 0,
   job: null,
+  /** The map is being made or changed: nothing can be drawn from it yet. */
+  preparing: false,
   note: '',
 });
 
@@ -147,8 +149,37 @@ const sizeOf = () => PRESETS[view.get().preset];
 const scaleOf = ({ w, h }) => Math.min(w, h) / 1080;
 const styleUrl = () => `/map/style.json?theme=${view.get().theme}&lang=en`;
 
+/** The setup in progress, if any. One at a time; an export waits for it,
+ *  and the button stays off until it's done (`preparing`). */
+let setting = null;
+
 /** The map at the video's size, theme and day, made or changed to fit. */
-async function setUp() {
+function setUp() {
+  const run = (setting ?? Promise.resolve()).catch(() => {}).then(prepare);
+  setting = run;
+  view.set((v) => ({ ...v, preparing: true }));
+  run
+    .finally(() => {
+      if (setting !== run) return;
+      setting = null;
+      view.set((v) => ({ ...v, preparing: false }));
+    })
+    .catch(() => {});
+  return run;
+}
+
+/** [event] from the map, or an error after a minute: a style that never
+ *  loads mustn't hold every later setup (and the export) behind it. */
+const mapEvent = (event) =>
+  new Promise((ok, fail) => {
+    const timer = setTimeout(() => fail(new Error(`The map did not finish loading (${event}).`)), 60_000);
+    map.once(event, () => {
+      clearTimeout(timer);
+      ok();
+    });
+  });
+
+async function prepare() {
   const { day, theme } = view.get();
   if (!day) return;
   const { w, h } = sizeOf();
@@ -189,12 +220,12 @@ async function setUp() {
       localIdeographFontFamily: "'PingFang SC', 'Noto Sans SC', sans-serif",
     });
     map.on('style.load', () => addLayers());
-    await new Promise((ok) => map.once('load', ok));
+    await mapEvent('load');
   } else {
     map.resize();
     if (!shape.includes(` ${theme} `)) {
       map.setStyle(styleUrl());
-      await new Promise((ok) => map.once('style.load', ok));
+      await mapEvent('style.load');
     } else {
       addLayers();
     }
@@ -272,6 +303,7 @@ function settled() {
 /** Draws the moment [t] onto the composite canvas: the map with its buses, then the overlay. */
 async function frameAt(t) {
   const { day } = view.get();
+  if (!map?.getSource('buses')) throw new Error("The map isn't ready yet. Try again in a moment.");
   const buses = busesAt(day, t);
   // Listening before the change, so the map's "done" can't come and go unseen.
   const done = settled();
@@ -389,7 +421,8 @@ let wanted = null;
 
 async function preview() {
   const r = range();
-  if (!r || !map || view.get().job?.running) return;
+  // Not while the map is being set up: preview() runs again once it is.
+  if (!r || !map || setting || view.get().job?.running) return;
   wanted = r.a + (r.b - r.a) * view.get().scrub;
   if (drawing) return;
   while (wanted !== null) {
@@ -418,6 +451,8 @@ async function exportVideo() {
 
   let output = null;
   try {
+    // The map first: a frame needs its layers in place.
+    await setting;
     await drawing;
     const { BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, WebMOutputFormat, canEncodeVideo } = await import(MEDIABUNNY);
     const opts = { width: w, height: h, frameRate: FPS, quality: QUALITY_HIGH };
@@ -523,7 +558,7 @@ function Studio() {
   const busy = Boolean(v.job?.running);
   const set = (patch, redraw = 'frame') => {
     view.set((x) => ({ ...x, ...patch }));
-    if (redraw === 'setup') setUp().then(preview);
+    if (redraw === 'setup') setUp().then(preview, (err) => view.set((x) => ({ ...x, note: err.message })));
     else preview();
   };
   const r = range();
@@ -566,7 +601,7 @@ function Studio() {
           </label>
         </div>
         <p class="hint">${r ? `${clockAt(r.a)} to ${clockAt(r.b)} Singapore time, ${FPS} frames a second, ${Math.round(v.seconds * FPS)} frames. Leave the times empty for the whole day.` : v.day ? 'The end must be after the start, within the recording.' : ''}</p>
-        <button class="btn accent" type="button" disabled=${busy || !r || !v.day} onClick=${exportVideo}>Export the video</button>
+        <button class="btn accent" type="button" disabled=${busy || v.preparing || !r || !v.day} onClick=${exportVideo}>Export the video</button>
         <${Progress} job=${v.job} />
       </div>
       <div class="preview">

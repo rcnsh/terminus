@@ -998,11 +998,15 @@ bounds are the point:
 - **Hours.** Only inside `TIMELAPSE.hours`, 06:30 to 00:30 Singapore time.
   The window crosses midnight, so a day is the date its window opened, until
   it closes the next morning. Within it, only services inside their own
-  operating hours (`inService`). After `idleRounds` rounds (3 minutes) in
-  which the feed answered but no bus was out anywhere, it stops: for the
+  operating hours (`inService`), checked again before each poll. No service
+  is asked again within `pollMs` of its last ask, across rounds too (a round
+  with fewer services has shorter slots). After `idleRounds` rounds
+  in a row (3 minutes) in which every running service answered and no bus was out
+  anywhere, it stops: for the
   day if it has seen buses (service is over), else for `idleSleepMs`
-  (15 minutes; before the first bus of the morning). Rounds in which nothing
-  answered (an outage, the breaker) don't count towards that.
+  (15 minutes; before the first bus of the morning). A round in which any
+  service failed (an outage, the breaker, one service refused) doesn't count
+  towards that, and starts the count again.
 - **Kill switch.** KV `config:timelapse` set to `off` (or `on`) wins.
   Otherwise the `TIMELAPSE_ENABLED` var applies: `on` for the stable site,
   `off` for the beta (so the two never poll twice), and off when unset. The
@@ -1016,7 +1020,8 @@ is at most one `active-bus` call, plus the existing single retry with a
 fresh token on a rejection that a token can fix. The map alone, with one
 person watching one service, asks for it every 5 s: six times this rate.
 Every poll writes an Analytics Engine row saying what it cost (`upstream`,
-`hit`, `stale`, `failed`, `skipped`; analytics.md). The dashboard shows the
+`error`, `hit`, `stale`, `failed`, `skipped`; analytics.md). A request
+that reached NUS and failed is `error`, so an outage doesn't hide the load. The dashboard shows the
 real requests to NUS per day.
 
 **How it runs.** One `TimelapseRecorder` Durable Object per Singapore day,
@@ -1038,13 +1043,17 @@ route line. That is the bus's own place on the line from its track
 (`trackedPlacement`, the same placement the map uses), not the stop or
 midpoint the map draws it at; `-1` off the line. A poll with no buses is a
 row with none; a failed poll is no row. The route lines and stops are kept
-with the day, so the `along`s stay measured on the line they were measured
-on even if a deploy changes the shapes.
+with the day, so the replay draws each `along` on the line it was measured
+on. A deploy that changes a line mid-day is caught by a fingerprint of each
+line kept with the day (`lineKeys`): from then on that service's positions
+are kept without metres along, and the replay leaves those buses out rather
+than draw them on the wrong line.
 
 **At the close** the object writes the day to R2 (the site's downloads
 bucket) as `timelapse/YYYY-MM-DD.json.gz` (`DayFile`), deletes everything,
 its alarm included, and costs nothing from then on. If the write fails it
-keeps the day and tries again 10 minutes later. `/download/*` serves only
+keeps the day and tries again 10 minutes later; meanwhile `/timelapse/days`
+still lists it (the recorders of the past week are asked too). `/download/*` serves only
 release files, so the days are reachable only through `/timelapse/days`
 with the operator token.
 
