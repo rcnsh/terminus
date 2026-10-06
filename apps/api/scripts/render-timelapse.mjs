@@ -51,7 +51,9 @@ if (!token) fail('no token: set TIMELAPSE_TOKEN or TIMELAPSE_TOKEN_FILE');
 
 // The day must be listed before the page can pick it: closed and in R2, or
 // still being written (the recording closes at 00:30 Singapore time).
-const until = Date.now() + Number(o['wait-min']) * 60_000;
+const waitMin = Number(o['wait-min']);
+if (!Number.isFinite(waitMin) || waitMin < 0) fail('--wait-min must be a number of minutes, 0 or more');
+const until = Date.now() + waitMin * 60_000;
 for (;;) {
   const res = await fetch(`${o.base}/timelapse/days`, { headers: { 'x-health-token': token } }).catch((err) => ({ ok: false, status: err.message }));
   if (res.ok) {
@@ -72,6 +74,7 @@ for (;;) {
   await new Promise((r) => setTimeout(r, 60_000));
 }
 
+// From here a failure throws, so the browser is closed before the exit.
 const browser = await chromium.launch({ headless: true });
 try {
   const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: true, viewport: { width: 1280, height: 1000 } });
@@ -87,7 +90,8 @@ try {
     await page.waitForTimeout(500);
     await ready();
   };
-  await ready();
+  // The page opens the newest day by itself, which may be too short to
+  // export (Export stays off); pick the one asked for first.
   await pick(0, o.date);
   await pick(1, o.preset);
   await pick(2, o.theme);
@@ -105,9 +109,9 @@ try {
     const done = await page.waitForSelector('text=Download the video', { timeout: 60_000 }).catch(() => null);
     if (done) break;
     const failed = await page.locator('.controls .bad').textContent({ timeout: 1_000 }).catch(() => null);
-    if (failed) fail(failed);
+    if (failed) throw new Error(failed);
     log((await page.textContent('.progress .meta').catch(() => ''))?.trim() || 'starting');
-    if (Date.now() - started > 12 * 3_600_000) fail('still rendering after 12 hours');
+    if (Date.now() - started > 12 * 3_600_000) throw new Error('still rendering after 12 hours');
   }
   log((await page.textContent('.progress .meta'))?.trim());
   mkdirSync(o.out, { recursive: true });
@@ -115,6 +119,9 @@ try {
   const file = path.resolve(o.out, download.suggestedFilename());
   await download.saveAs(file);
   log('saved', file);
+} catch (err) {
+  log(`failed: ${err.message}`);
+  process.exitCode = 1;
 } finally {
   await browser.close();
 }

@@ -282,6 +282,23 @@ test('a deploy that changes a line mid-day keeps positions but not metres along'
   assert.equal(decodeDay(file).tracks.length, 0, 'and the replay leaves it out');
 });
 
+test('a day begun before line fingerprints were kept checks against its saved map', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  // As if begun by an older deploy: no fingerprints, and a saved map whose D2 line differs.
+  const inst = h.ns.instances.get(DATE);
+  const { lines, ...meta } = inst.read('meta');
+  assert.ok(lines);
+  inst.write('meta', meta);
+  const map = inst.read('map');
+  inst.write('map', { ...map, routes: { ...map.routes, D2: { ...map.routes.D2, line: map.routes.D2.line.slice(1) } } });
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  const res = await h.ns.get(DATE).fetch(`https://timelapse.internal/day?date=${DATE}`);
+  const file = await gunzip(new Uint8Array(await res.arrayBuffer()));
+  const d2 = file.samples.find((s) => file.services[s[1]] === 'D2');
+  assert.equal(d2[5], -1, 'no metres along on a line that has changed');
+});
+
 test('the switch turned off mid-day stops polling within a round; on again, the cron resumes it', async () => {
   const kv = makeKV();
   const h = harness({ kv, buses: { D2: [busOn('D2', 400)] } });
