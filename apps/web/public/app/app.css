@@ -5,7 +5,8 @@ body.app { padding-bottom: env(safe-area-inset-bottom); }
 .app .nav { padding-top: max(12px, env(safe-area-inset-top)); }
 .app-main { max-width: 560px; display: grid; align-content: start; gap: 16px; padding-bottom: 32px; }
 
-.app-card { padding: 20px; }
+/* On the page, not in a box: the answer is the screen. */
+.app-card { padding: 4px 0 0; background: none; border: 0; box-shadow: none; border-radius: 0; }
 .app-card .widget { box-shadow: none; border: 0; padding: 0; background: none; }
 .app-card .widget .chips { display: none; }
 /* "Is this wrong?" on the left, "Updated 9:41" in the bottom right corner. */
@@ -49,13 +50,23 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .go-later-form { margin-top: 10px; }
 .go-later-form .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 
-.nearby-stop + .nearby-stop { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-.nearby-stop header { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; margin-bottom: 6px; }
-.nearby-stop header span { font-weight: 400; color: var(--muted); margin-left: auto; }
-.nearby-stop header .swap { display: grid; place-items: center; padding: 2px 4px; border: 0; background: none; color: var(--muted); cursor: pointer; }
-.nearby-stop header .swap svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.nearby-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-variant-numeric: tabular-nums; }
-.nearby-stop header .linkish { padding: 0; font: inherit; font-weight: 600; color: var(--ink); text-align: left; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+/* Nearby: each stop as its sign (app.js NearbyCard). The plate is the
+   sign's inverted colours; under it a row per service, its bus on a road. */
+.nearby { display: grid; gap: 12px; }
+.stop-sign .detail { padding: 12px 14px; }
+.nearby-row { display: flex; align-items: center; gap: 10px; padding: 7px 14px; font-variant-numeric: tabular-nums; }
+.nearby-row + .nearby-row { border-top: 1px solid var(--line); }
+.stop-sign.big .nearby-row { padding-block: 10px; }
+/* A fixed column, so every road starts at the same place. */
+.nearby-row .svc-col { flex: none; display: flex; width: 3.4em; }
+.nearby-row .eta { flex: none; min-width: 3.6em; text-align: right; font-weight: 800; font-size: 0.95rem; white-space: nowrap; }
+.stop-sign.big .nearby-row .eta { font-size: 1.1rem; }
+/* The road to the stop (the ring at its end), and the bus on it, nearer the sooner it's due. */
+.road { position: relative; flex: 1; height: 18px; min-width: 40px; }
+.road::before { content: ''; position: absolute; left: 0; right: 10px; top: 8px; height: 2px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 10px); }
+.road::after { content: ''; position: absolute; right: 0; top: 3px; width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2.5px solid var(--ink); background: var(--surface); }
+.road-bus { position: absolute; top: 3px; left: calc((100% - 38px) * (1 - var(--far))); width: 18px; height: 12px; box-sizing: border-box; border-radius: 4px; border: 2px solid var(--svc); }
+.road.live .road-bus { background: var(--svc); }
 
 .offline {
   padding: 10px 14px;

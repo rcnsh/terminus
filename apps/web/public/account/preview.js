@@ -2,13 +2,11 @@
 // page ("Your widget right now") and on the web app's Now. Every line comes
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
-import { Icon, Rich, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
+import { Rich, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle } from './journey.js';
 
-const MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/>';
-/** This browser shows 12-hour times: ask for the card in that style. */
 
 /** Past the card's staleAt: its bus has gone, the plan has moved on, or it's 15 minutes old. */
 export const isStale = (a) => Boolean(a?.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
@@ -186,6 +184,48 @@ function Suggestion({ a, onChoice }) {
   `;
 }
 
+/** Where the stars sit on the night panel: across (0–1), down (0–1.2 of 80 px), and how bright. */
+const STARS = [
+  [0.08, 0.3, 0.7], [0.22, 0.9, 0.5], [0.35, 0.15, 0.8], [0.48, 0.7, 0.4],
+  [0.6, 0.2, 0.6], [0.15, 1.1, 0.35], [0.7, 1.05, 0.5], [0.92, 1.2, 0.4],
+];
+
+/** A few stars and a crescent moon, for the night panel. Fixed, so it never twinkles into a distraction. */
+const NightSky = () => html`
+  <span class="night-sky" aria-hidden="true">
+    ${STARS.map(([x, y, a]) => html`<span class="star" style=${{ left: `${x * 100}%`, top: `${14 + y * 80}px`, opacity: a }}></span>`)}
+    <span class="moon"></span>
+  </span>
+`;
+
+/**
+ * The day's done, or there's nothing to catch: the label large on a panel (a
+ * night sky after your day, plain otherwise), what's next under it, then your
+ * favourites to plan a trip to instead, where there's somewhere to show one
+ * (`onPlace`, the web app's Now).
+ */
+function DayDone({ a, night, onPlace, children }) {
+  const places = onPlace ? (a.places ?? []) : [];
+  return html`
+    <div class="widget day-done" aria-live="polite">
+      <div class=${night ? 'done-panel night' : 'done-panel'}>
+        ${night && html`<${NightSky} />`}
+        <div class="done-label">${a.label}</div>
+        ${a.detail && html`<div class="done-detail">${a.detail}</div>`}
+      </div>
+      ${places.length > 0 &&
+      html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>
+        <div class="place-tiles">
+          ${places.map(
+            (x) => html`<button type="button" class="place-tile" key=${x.key} onClick=${() => onPlace(x.key)}><strong>${x.label}</strong><span>${t('Plan a trip')}</span></button>`,
+          )}
+        </div>`}
+      ${onPlace && !places.length && html`<p class="hint done-hint">${night ? t('No buses are shown until your day starts. Tap Nearby to check anyway.') : t('Tap Nearby for buses around you.')}</p>`}
+      ${children}
+    </div>
+  `;
+}
+
 /** The large Android widget's row: Timetable and Nearby, then the usual places, as many as fit. */
 const Chips = ({ a }) => html`
   <div class="chips">${[t('Timetable'), t('Nearby'), ...(a.places ?? []).slice(0, 2).map((p) => p.label)].map((x) => html`<span>${x}</span>`)}</div>
@@ -195,31 +235,18 @@ const Chips = ({ a }) => html`
  * The card for answer `a` (from /me/next or a signal). `onAnswer` gets the
  * answer after a button; `onChoice` runs after a suggestion is answered.
  * `chips`: the widget's row of buttons under it (the account page's preview).
+ * `onPlace`: a favourite tapped on Done for today (its key), in the web app.
  */
-export function Card({ a, onAnswer, onChoice, chips = false }) {
+export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false }) {
   const style = useStore(cardStyle);
   const actions = html`<${Actions} a=${a} onAnswer=${onAnswer} onChoice=${onChoice} />`;
   const row = chips && html`<${Chips} a=${a} />`;
-  if (a.mode === 'rest') {
-    return html`
-      <div class="widget" aria-live="polite">
-        <div class="rest"><${Icon} paths=${MOON} size="22" /><div class="big">${a.label}</div></div>
-        <div class="detail">${a.detail}</div>
-        ${actions}${row}
-      </div>
-    `;
-  }
-  if (a.mode === 'free') {
-    // No classes today: said plainly, with no bus to mistake for advice. "Undo"
-    // when the class just taken off was the day's last, and "Back on campus".
-    return html`
-      <div class="widget" aria-live="polite">
-        <div class="big">${a.label}</div>
-        <div class="detail">${a.detail}</div>
-        ${actions}${row}
-      </div>
-    `;
-  }
+  // After your day, or no classes today: said plainly, with no bus to mistake
+  // for advice. "Undo" when the class just taken off was the day's last, and
+  // "Back on campus".
+  if (a.mode === 'rest' || a.mode === 'free') return html`<${DayDone} a=${a} night=${a.mode === 'rest'} onPlace=${onPlace}>${actions}${row}<//>`;
+  // There: the same panel, plain, with where else to go.
+  if (a.arrived) return html`<${DayDone} a=${a} night=${false} onPlace=${onPlace}>${actions}${row}<//>`;
   const old = isStale(a);
   // A trip by bus or on foot, in the style chosen in Settings › Appearance. Old
   // times fall through to the cards below, which say they're updating.

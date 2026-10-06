@@ -223,8 +223,6 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
 
 /* The widget preview's states, mirroring the apps. */
 .widget.old .big, .widget.old .detail { color: var(--muted); }
-.widget .rest { display: flex; align-items: center; gap: 10px; }
-.widget .rest svg { color: var(--accent); flex: none; }
 .widget .note { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
 
 @media (max-width: 640px) {
@@ -241,3 +239,9 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
   *, *::before, *::after { transition: none !important; animation: none !important; }
   .btn:hover { transform: none; }
 }
+
+/* A pairing code on six split-flap tiles, like a departure board's: dark in
+   light and dark, as the boards are (pair.js, Settings › Devices). */
+.flaps { display: flex; justify-content: center; gap: 7px; margin: 14px 0 6px; }
+.flap { display: grid; place-items: center; flex: 1; max-width: 56px; aspect-ratio: 0.72; border-radius: 9px; border: 1px solid #34302b; color: #f2efeb; font: 800 2rem/1 ui-monospace, "SF Mono", monospace; background: linear-gradient(#24211e 49%, #0a0908 49% 51%, #1c1a17 51%); }
+.flap.empty { background: #151311; }

@@ -1,20 +1,21 @@
 // A trip by bus, or on foot the whole way, drawn from the server's
 // card.journey (apps/api/src/card.ts) in the card style chosen in Settings ›
-// Appearance: Route (the default), Ticket or Steps, as the Android app draws
+// Appearance: Steps (the default), Route or Ticket, as the Android app draws
 // them. Every word and time is the server's; only the countdowns tick here.
 
 import { Icon, html, store, useEffect, useState } from '../assets/ui.js';
 import { clock, inkOn, t } from './dom.js';
 
 const KEY = 'terminus-card-style';
-export const STYLES = ['route', 'ticket', 'steps'];
+export const STYLES = ['steps', 'route', 'ticket'];
+const DEFAULT = 'steps';
 
 const saved = () => {
   try {
     const v = localStorage.getItem(KEY);
-    return STYLES.includes(v) ? v : 'route';
+    return STYLES.includes(v) ? v : DEFAULT;
   } catch {
-    return 'route';
+    return DEFAULT;
   }
 };
 
@@ -36,7 +37,7 @@ export const styleHint = (s) =>
   ({
     route: t('The whole trip as a line, with the times under it.'),
     ticket: t('The bus first, in its colour, then when to leave.'),
-    steps: t('Walk, bus and arrive, one under the other.'),
+    steps: t('The trip as a line down the card, as on a route map.'),
   })[s];
 
 /**
@@ -52,6 +53,34 @@ export function leaveIn(a, j, now) {
   if (left >= 120) return t('Leave in {0} min', Math.round(left / 60));
   if (left >= 60) return t('Leave in {0} min {1} s', Math.floor(left / 60), left % 60);
   return t('Leave in {0} s', Math.max(1, left));
+}
+
+/**
+ * The time in "Leave in 4 min" alone ("4 min"), drawn in the accent, or null
+ * for "Leave now" and at the stop. web-i18n.test.js checks each is inside its
+ * headline in Chinese too.
+ */
+function leaveTime(a, j, now) {
+  if (a.card.phase === 'waiting') return null;
+  const at = a.leave ? Date.parse(a.leave.at) : null;
+  if (at == null || j.leave == null || now >= at) return null;
+  const left = Math.floor((at - now) / 1000);
+  if (left >= 120) return t('{0} min', Math.round(left / 60));
+  if (left >= 60) return t('{0} min {1} s', Math.floor(left / 60), left % 60);
+  return t('{0} s', Math.max(1, left));
+}
+
+/**
+ * "Leave in 4 min" on one line, the time in the accent and the rest in ink,
+ * so the number reads first without being a size of its own. "Leave now" is
+ * all accent; late, all red.
+ */
+function LeaveHead({ a, j, now, late }) {
+  const text = leaveIn(a, j, now);
+  const time = leaveTime(a, j, now);
+  const at = time ? text.indexOf(time) : -1;
+  if (late || at < 0) return html`<div class=${`lead${late || (time ? '' : ' go')}`}>${text}</div>`;
+  return html`<div class="lead">${text.slice(0, at)}<span class="go">${time}</span>${text.slice(at + time.length)}</div>`;
 }
 
 /** "by 4:01 PM" under the countdown, until it's time to go. */
@@ -121,7 +150,7 @@ function Route({ a, j, now, late }) {
   const under = [by(a, j, now), arrive(j)].filter(Boolean).join(' · ');
   return html`
     <div class="where">${to(a, j)}</div>
-    <div class=${`big${late}`}>${leaveIn(a, j, now)}</div>
+    <${LeaveHead} a=${a} j=${j} now=${now} late=${late} />
     ${under && html`<div class=${`under${late}`}>${under}</div>`}
     ${j.bus ? html`<${BusLine} a=${a} j=${j} />` : html`<${WalkLine} j=${j} />`}
     <${Tags} a=${a} j=${j} />
@@ -211,39 +240,58 @@ function Ticket({ a, j, now, late }) {
   `;
 }
 
-/** Steps: walk, bus, arrive, one under the other, each with its time. */
+/**
+ * Steps: the trip as a line diagram, as on a bus's route map. Each point has
+ * its time on the left and a dot on the line; between them the walk is
+ * dotted and the ride is drawn in the bus's colour; the last point, where
+ * you're going, is ringed in the accent. On foot the whole way, the walk runs
+ * straight from leaving to the place.
+ */
 function Steps({ a, j, now, late }) {
-  const head = [to(a, j), a.card.kind !== 'class' && j.arrive ? t('Arrive {0}', j.arrive) : null].filter(Boolean).join(' · ');
   const b = backup(a, j);
+  const under = [by(a, j, now), j.slack].filter(Boolean).join(' · ');
+  // The crowd is the headline bus's: a class's leave-by bus can be another.
+  const crowd = a.card.kind !== 'class' ? a.card.crowd : null;
+  const soon = busIn(j, now);
   return html`
-    <div class="where">${head}</div>
-    <div class=${`big${late}`}>${leaveIn(a, j, now)}</div>
-    ${by(a, j, now) && html`<div class="countdown">${by(a, j, now)}</div>`}
-    <ol class="steps">
-      ${j.walk && html`<li class="first"><span class="time">${j.leave ?? t('now')}</span><span class="what">${t('Walk to {0}', j.bus ? j.bus.stop : place(j))}<small>${j.walk}</small></span></li>`}
-      ${j.bus && html`<${BusStep} j=${j} />`}
-      ${j.walkEnd && html`<li><span class="time">${j.arriveStop ?? ''}</span><span class="what">${t('Walk to {0}', place(j))}<small>${j.walkEnd}</small></span></li>`}
-      <li class="last">
-        <span class="time">${j.arrive ?? ''}</span>
-        <span class="what"><strong>${t('Arrive at {0}', j.to)}</strong>${j.slack && html`<small class=${late.trim()}>${j.slack}</small>`}</span>
-      </li>
+    <div class="where">${to(a, j)}</div>
+    <${LeaveHead} a=${a} j=${j} now=${now} late=${late} />
+    ${(under || j.live || crowd) &&
+    html`<div class="steps-under">
+      ${under && html`<span class=${`under${late}`}>${under}</span>`}
+      ${j.live && html`<span class="tag live"><span class="dot"></span>${t('Live')}</span>`}${crowd && html`<span class="tag">${crowd}</span>`}
+    </div>`}
+    <ol class="line">
+      ${j.walk &&
+      html`<${LinePoint} time=${j.leave ?? t('now')} dot="start" line="walk" below=${t('{0} walk', j.walk)}><strong>${t('Leave')}</strong><//>`}
+      ${j.bus &&
+      html`<${LinePoint}
+        time=${j.bus.board}
+        dot=${j.walk ? 'stop' : 'start'}
+        line="ride"
+        color=${j.bus.color}
+        below=${[j.ride && t('{0} ride', j.ride), j.off && t('off at {0}', j.off)].filter(Boolean).join(' · ')}
+        ><span class="bus-line"><strong>${j.bus.stop}</strong><${Badge} bus=${j.bus} />${soon && html`<small>${soon}</small>`}</span><//
+      >`}
+      ${j.bus && j.walkEnd && html`<${LinePoint} time=${j.arriveStop ?? ''} dot="stop" line="walk" below=${t('{0} walk', j.walkEnd)}><strong>${j.toStop}</strong><//>`}
+      <${LinePoint} time=${j.arrive ?? ''} dot="end" late=${Boolean(late)}><strong>${!j.bus || j.walkEnd ? place(j) : j.toStop}</strong><//>
     </ol>
-    ${b && html`<div class="go-now">${b}</div>`}
+    ${b && html`<div class="backup-box">${b}</div>`}
   `;
 }
 
-/** The bus's step: its badge, stop and time, the ride and where to get off. */
-function BusStep({ j }) {
-  return html`
-      <li class=${j.walk ? '' : 'first'}>
-        <span class="time">${j.bus.board}</span>
-        <span class="what"
-          ><span class="bus-line"><${Badge} bus=${j.bus} /> ${t('from {0}', j.bus.stop)}${j.live && html` <span class="live"><span class="dot"></span>${t('Live')}</span>`}</span
-          ><small>${[t('{0} ride', j.ride), j.off && t('off at {0}', j.off)].filter(Boolean).join(' · ')}</small></span
-        >
-      </li>
-  `;
-}
+/**
+ * One point on the line: its time, its dot (`start` filled, `stop` a ring,
+ * `end` the accent's ring), what's there, and what's under it (the walk or
+ * the ride on to the next point, drawn as the `line` below the dot).
+ */
+const LinePoint = ({ time, dot, line = null, color = null, below = '', late = false, children }) => html`
+  <li class=${['pt', dot, line, late ? 'late' : ''].filter(Boolean).join(' ')} style=${color ? { '--ride': color } : undefined}>
+    <span class="time">${time}</span>
+    <span class="rail" aria-hidden="true"></span>
+    <span class="what">${children}${below && html`<small>${below}</small>`}</span>
+  </li>
+`;
 
 /** Live, the crowd, and the backup bus, under the trip. */
 function Tags({ a, j }) {

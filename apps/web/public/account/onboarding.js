@@ -3,14 +3,14 @@
 // (profile.js), so leaving halfway loses nothing.
 
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, browserHour12, t } from './dom.js';
-import { campus, profile, residenceWalkMin, residencesByName, saveNow, stopsNear, toast } from './profile.js';
+import { api, browserHour12, clock, inkOn, t } from './dom.js';
+import { campus, profile, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast } from './profile.js';
 import { CLOCKS, StopSelect } from './settings-pages.js';
 
 const PACES = [
-  { value: 'slow', title: t('Slow'), hint: t('A relaxed pace, or if you often carry a bag'), min: 6 },
-  { value: 'normal', title: t('Normal'), hint: t('An average pace'), min: 5 },
-  { value: 'fast', title: t('Fast'), hint: t('A brisk pace'), min: 4 },
+  { value: 'slow', title: t('Slow'), min: 6 },
+  { value: 'normal', title: t('Normal'), min: 5 },
+  { value: 'fast', title: t('Fast'), min: 4 },
 ];
 
 const STEPS = [Welcome, TimetableStep, Home, Travel, Apps];
@@ -64,7 +64,7 @@ export function Onboarding({ onDone }) {
         <span class="ob-count">${n ? t('Step {0} of {1}', n, STEPS.length - 1) : t('Welcome')}</span>
         <button type="button" class="link-btn" onClick=${finish}>${t('Skip setup')}</button>
       </div>
-      <${Progress} n=${n} of=${STEPS.length} key=${n} />
+      <${StepLine} n=${n} />
       <div
         class=${cls}
         key=${n}
@@ -77,17 +77,19 @@ export function Onboarding({ onDone }) {
   `;
 }
 
-/** The bar, starting at the previous step's length so it grows into place. Scaled, not resized: a width change would re-lay out the page. */
-function Progress({ n, of }) {
-  const fill = useRef(null);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => requestAnimationFrame(() => fill.current && (fill.current.style.transform = `scaleX(${(n + 1) / of})`)));
-    return () => cancelAnimationFrame(id);
-  }, []);
+/** Each step after the welcome, by its stop on the line. */
+const STOPS = () => [t('Classes'), t('Your stop'), t('Pace'), t('Apps')];
+
+/**
+ * Where setup is, as a route: a stop per step, the line filled in the accent
+ * up to this one, the stops passed filled, this one ringed.
+ */
+function StepLine({ n }) {
+  const stops = STOPS();
   return html`
-    <div class="ob-progress" role="progressbar" aria-label=${t('Setup progress')} aria-valuemin="1" aria-valuemax=${String(of)} aria-valuenow=${String(n + 1)}>
-      <div class="ob-fill" ref=${fill} style=${{ transform: `scaleX(${n / of})` }}></div>
-    </div>
+    <ol class="ob-line" style=${{ '--done': Math.max(0, n - 1) / (stops.length - 1) }} aria-label=${n ? t('Step {0} of {1}', n, stops.length) : t('Setup progress')}>
+      ${stops.map((label, i) => html`<li key=${i} class=${i + 1 < n ? 'passed' : i + 1 === n ? 'here' : ''} aria-current=${i + 1 === n ? 'step' : undefined}><span class="ob-stop"></span>${label}</li>`)}
+    </ol>
   `;
 }
 
@@ -188,15 +190,27 @@ function TimetableStep({ nav }) {
   `;
 }
 
+/** How many halls show as tiles before "All of them". */
+const SHOWN = 7;
+
 function Home({ nav }) {
   const c = useStore(campus);
   const residences = useMemo(() => residencesByName(c), [c]);
   const current = profile.get().home?.stops ?? [];
   const [stop, setStop] = useState(current[0] ?? '');
   const [walk, setWalk] = useState(String(profile.get().homeWalkMin ?? 5));
-  // A residence's stops, when one is chosen.
-  const [picked, setPicked] = useState(null);
+  // A residence's stops, when one is chosen; else off campus, or the full list open.
+  const [picked, setPicked] = useState(() => residences.find((r) => r.stops[0] === current[0]) ?? null);
+  const [mode, setMode] = useState(picked ? 'hall' : current.length ? 'off' : null);
   const [msg, setMsg] = useState('');
+  const pick = (r) => {
+    setPicked(r);
+    setMode(r ? 'hall' : 'off');
+    if (!r) return;
+    setStop(r.stops[0]);
+    setWalk(String(residenceWalkMin(r)));
+    setMsg(t("Stops for {0} added. The app won't direct you home when you're already there.", r.name));
+  };
   const locate = () => {
     if (!navigator.geolocation) return setMsg(t('This browser cannot share its location.'));
     setMsg(t('Finding the nearest stop…'));
@@ -210,29 +224,31 @@ function Home({ nav }) {
       { enableHighAccuracy: true, timeout: 10_000 },
     );
   };
+  // The first few halls, and the one chosen if it's further down.
+  const tiles = residences.slice(0, SHOWN);
+  if (picked && !tiles.includes(picked)) tiles.push(picked);
+  const yours = mode === 'hall' && picked ? picked.stops : stop ? [stop] : [];
   return html`
     <${Heading} text=${t('Where your day starts')} sub=${t('Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved, never where you live.')} />
-    <label for="ob-residence">${t('Where do you live?')}</label>
-    <select
-      id="ob-residence"
-      aria-label=${t('Where you live')}
-      value=${picked?.code ?? ''}
-      onChange=${(e) => {
-        const r = residences.find((x) => x.code === e.currentTarget.value) ?? null;
-        setPicked(r);
-        if (!r) return;
-        setStop(r.stops[0]);
-        setWalk(String(residenceWalkMin(r)));
-        setMsg(t("Stops for {0} added. The app won't direct you home when you're already there.", r.name));
-      }}
-    >
-      <option value="">${t("Off campus, or I'll pick a stop")}</option>
-      ${residences.map((r) => html`<option value=${r.code} key=${r.code}>${r.name}</option>`)}
-    </select>
-    <label for="ob-stop">${t('Home stop')}</label>
-    <${StopSelect} id="ob-stop" aria-label=${t('Home stop')} value=${stop} onChange=${setStop} blank=${t('Choose a stop')} />
-    <button type="button" class="link-btn locate" onClick=${locate}>${t('Pick the stop nearest me')}</button>
+    <div class="ob-tiles" role="radiogroup" aria-label=${t('Where you live')}>
+      ${tiles.map((r) => html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`)}
+      <${Tile} on=${mode === 'more'} onClick=${() => setMode('more')}><strong>${t('All {0} halls and colleges', residences.length)}</strong><//>
+      <${Tile} on=${mode === 'off'} onClick=${() => pick(null)}><strong>${t('Off campus')}</strong><span class="hint">${t('Pick your stop')}</span><//>
+    </div>
+    ${mode === 'more' &&
+    html`<label for="ob-residence">${t('Where do you live?')}</label>
+      <select id="ob-residence" aria-label=${t('Where you live')} value=${picked?.code ?? ''} onChange=${(e) => pick(residences.find((x) => x.code === e.currentTarget.value) ?? null)}>
+        <option value="">${t('Choose')}</option>
+        ${residences.map((r) => html`<option value=${r.code} key=${r.code}>${r.name}</option>`)}
+      </select>`}
+    ${mode === 'off' &&
+    html`<label for="ob-stop">${t('Home stop')}</label>
+      <${StopSelect} id="ob-stop" aria-label=${t('Home stop')} value=${stop} onChange=${setStop} blank=${t('Choose a stop')} />
+      <button type="button" class="link-btn locate" onClick=${locate}>${t('Pick the stop nearest me')}</button>`}
     <p class="hint" role="status">${msg}</p>
+    ${yours.length > 0 &&
+    html`<p class="eyebrow ob-label">${t('Your stops')}</p>
+      <div class="ob-signs">${yours.map((code) => html`<${StopSign} code=${code} key=${code} />`)}</div>`}
     <label for="ob-walk">${t('Walk from home to that stop')}</label>
     <div class="row tight">
       <input id="ob-walk" type="number" min="0" max="30" step="1" aria-label=${t('Minutes from home to your stop')} value=${walk} onInput=${(e) => setWalk(e.currentTarget.value)} />
@@ -245,11 +261,33 @@ function Home({ nav }) {
         saveNow((x) => {
           const v = Number(walk);
           // A residence brings all its stops; otherwise the one chosen here first.
-          if (picked && stop === picked.stops[0]) x.home = { stops: [...picked.stops] };
+          if (mode === 'hall' && picked) x.home = { stops: [...picked.stops] };
           else if (stop) x.home = { stops: [stop, ...current.filter((code) => code !== stop)].slice(0, 3) };
           if (Number.isInteger(v) && v >= 0 && v <= 30) x.homeWalkMin = v;
         })}
     />
+  `;
+}
+
+/** One choice of several, as a tile: outlined, or filled with the accent's soft colour and ticked when chosen. */
+const Tile = ({ on, onClick, children }) => html`
+  <button type="button" role="radio" aria-checked=${String(on)} class=${on ? 'ob-tile on' : 'ob-tile'} onClick=${onClick}>${children}</button>
+`;
+
+/** A stop as its sign: the name on the plate, the services that call there under it, in their colours. */
+function StopSign({ code }) {
+  const c = useStore(campus);
+  const s = c?.stops.find((x) => x.code === code);
+  return html`
+    <div class="stop-sign">
+      <div class="plate"><span class="plate-name">${stopName(code)}</span></div>
+      <div class="sign-services">
+        ${(s?.services ?? []).map((svc) => {
+          const color = c?.routes?.[svc]?.color ?? '#8a939c';
+          return html`<span class="svc-tag" key=${svc} style=${`--svc:${color};--svc-ink:${inkOn(color)}`}>${svc}</span>`;
+        })}
+      </div>
+    </div>
   `;
 }
 
@@ -258,14 +296,24 @@ function Travel({ nav }) {
   const [full, setFull] = useState(profile.get().fullBusMargin !== false);
   return html`
     <${Heading} text=${t('How you get around')} sub=${t('Walks follow the real paths on campus. Your pace sets how long they take.')} />
+    <${Track} min=${PACES.find((x) => x.value === pace)?.min ?? 5} />
+    <p class="hint ob-lap">${t('One lap of a running track is 400 m.')}</p>
     <${PacePicker} value=${pace} onChange=${setPace} />
-    <label class="check ob-check">
-      <input type="checkbox" checked=${full} onChange=${(e) => setFull(e.currentTarget.checked)} />
-      <span>
-        <strong>${t('Allow for busy buses')}</strong>
-        <span class="hint">${t('When the bus you would wait for is often full at that stop and time, aim one bus earlier.')}</span>
-      </span>
-    </label>
+    <div class="ob-busy">
+      <label class="ob-busy-row">
+        <span>
+          <strong>${t('Allow for busy buses')}</strong>
+          <span class="hint">${t('When the bus you would wait for is often full at that stop and time, aim one bus earlier.')}</span>
+        </span>
+        <input type="checkbox" class="switch" checked=${full} onChange=${(e) => setFull(e.currentTarget.checked)} />
+      </label>
+      ${full &&
+      html`<div class="ob-busy-eg">
+        <span class="ob-bus on"><span class="svc-tag" style="--svc:#34a853;--svc-ink:#fff">R2</span>${clock('2026-01-05T09:38:00+08:00')}</span>
+        <span class="hint">${t('instead of')}</span>
+        <span class="ob-bus off"><span class="svc-tag" style="--svc:#34a853;--svc-ink:#fff">R2</span><s>${`${clock('2026-01-05T09:46:00+08:00')} · ${t('busy')}`}</s></span>
+      </div>`}
+    </div>
     <${Actions}
       nav=${nav}
       onNext=${() =>
@@ -276,6 +324,24 @@ function Travel({ nav }) {
     />
   `;
 }
+
+/**
+ * A running track, from above: the lap's time at your pace in the infield,
+ * and you on the far bend. The track's own red, the same in light and dark.
+ */
+const Track = ({ min }) => html`
+  <div class="ob-track">
+    <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <rect x="0" y="0" width="400" height="150" rx="75" fill="#b4533a" />
+      <rect x="7.5" y="7.5" width="385" height="135" rx="67.5" fill="none" stroke="rgb(255 255 255 / 0.45)" stroke-width="1" />
+      <rect x="15" y="15" width="370" height="120" rx="60" class="infield" />
+      <line x1="200" y1="0" x2="200" y2="15" stroke="#fff" stroke-width="3" />
+      <circle cx=${325 + 67.5 * Math.cos(-50 * Math.PI / 180)} cy=${75 + 67.5 * Math.sin(-50 * Math.PI / 180)} r="7.5" fill="#fff" />
+      <circle cx=${325 + 67.5 * Math.cos(-50 * Math.PI / 180)} cy=${75 + 67.5 * Math.sin(-50 * Math.PI / 180)} r="5" class="you" />
+    </svg>
+    <div class="ob-track-text"><strong>${t('{0} min', min)}</strong><span>${t('a lap at your pace')}</span></div>
+  </div>
+`;
 
 /** Three cards, one chosen, moved between with the arrow keys as a radio group is. */
 function PacePicker({ value, onChange }) {
@@ -304,8 +370,7 @@ function PacePicker({ value, onChange }) {
             onKeyDown=${keys}
           >
             <strong>${x.title}</strong>
-            <span class="ob-pace-eg">${t('400 m in about {0} min', x.min)}</span>
-            <span class="hint">${x.hint}</span>
+            <span class="ob-pace-eg">${t('{0} min a lap', x.min)}</span>
           </button>
         `,
       )}

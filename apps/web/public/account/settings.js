@@ -1,23 +1,29 @@
 // Settings: the signed-in part of the account page (/account/), and the web
-// app's Settings tab (/app/#settings). A list of groups, each opening its page
-// (settings-pages.js): one at a time on a phone, sliding in from the side;
-// side by side on a wide screen. The address names the page (#trips, or
+// app's Settings tab (/app/#settings). Your account, your day as a short
+// route (home stop, classes, pace), then the rest as tiles, each opening its
+// page (settings-pages.js): one at a time on a phone, sliding in from the
+// side; side by side on a wide screen. The address names the page (#trips, or
 // #settings/trips in the web app), so Back and a reload keep it.
 
-import { html, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
+import { Icon, html, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { api, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 import { cardStyle, styleName } from './journey.js';
 
-/** The list, in groups. */
-const GROUPS = () => [
-  { title: t('Your day'), ids: ['trips', 'timetable', 'favourites', 'notifications'] },
-  { title: t('Account'), ids: ['account', 'devices'] },
-  { title: t('Display'), ids: ['language', 'appearance'] },
-];
-/** Pages opened from the links under the list. */
-const FOOT = ['about', 'feedback'];
+/** The pages shown as tiles, two to a row, with their icons. */
+const TILES = ['favourites', 'notifications', 'language', 'appearance', 'devices', 'feedback'];
+const ICONS = {
+  favourites: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>',
+  notifications: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 21h4"/>',
+  language: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.6 3.5 5.4 3.5 8.5s-1.1 5.9-3.5 8.5c-2.4-2.6-3.5-5.4-3.5-8.5s1.1-5.9 3.5-8.5z"/>',
+  appearance: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/>',
+  devices: '<rect x="3" y="5" width="12.5" height="10" rx="1.5"/><path d="M6 19h6.5"/><rect x="17.5" y="9" width="4" height="10" rx="1"/>',
+  feedback: '<path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z"/>',
+};
+const CHEVRON = '<path d="m9 6 6 6-6 6" />';
+/** Pages opened from the links under the tiles. */
+const FOOT = ['about'];
 const TITLES = {
   trips: t('Your trips'),
   timetable: t('Timetable'),
@@ -57,6 +63,7 @@ function summaries({ p, me, notifyOn, devices, imported }) {
     devices: me.anonymous ? t('Add an email to use other devices') : devices === null ? '' : devices === 1 ? t('1 device') : t('{0} devices', devices),
     language: [{ en: 'English', zh: '中文' }[window.i18n?.pref()] ?? t('Follow this browser'), { 12: t('12-hour'), 24: t('24-hour') }[p.clock]].filter(Boolean).join(' · '),
     account: me.email ?? t('No email'),
+    feedback: t("Tell us what's wrong, or what you'd like"),
     appearance: `${{ auto: t('Auto'), light: t('Light'), dark: t('Dark') }[theme.get()] ?? t('Auto')} · ${styleName(cardStyle.get())}`,
   };
 }
@@ -81,8 +88,8 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   const hash = useHash();
   const listHash = inApp ? '#settings' : '';
   const pageHash = inApp ? '#settings/' : '#';
-  const groups = GROUPS().map((g) => ({ ...g, ids: g.ids.filter((x) => x !== 'notifications' || Notify) }));
-  const pages = [...groups.flatMap((g) => g.ids), ...FOOT];
+  const tiles = TILES.filter((x) => x !== 'notifications' || Notify);
+  const pages = ['account', 'trips', 'timetable', ...tiles, ...FOOT];
 
   // The account's language (phase 10): one chosen on another device is used
   // here; one chosen here before the account had one goes to the account.
@@ -241,29 +248,54 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         ${side}
         <h1 class="settings-title">${t('Settings')}</h1>
         <nav class="settings-groups" aria-label=${t('Settings')}>
-          ${groups.map(
-            (g) => html`
-              <h2 class="eyebrow settings-group" key=${`h-${g.title}`}>${g.title}</h2>
-              <div class="settings-list card" key=${g.title}>
-                ${g.ids.map(
-                  (id) => html`
-                        <button
-                          type="button"
-                          class="settings-row"
-                          data-page=${id}
-                          key=${id}
-                          ref=${(n) => (rows[id] = n)}
-                          aria-current=${shown === id ? 'page' : undefined}
-                          onClick=${() => (shown === id ? null : openPage(id))}
-                        >
-                          <span class="row-text"><span class="row-title">${TITLES[id]}</span><span class="row-sum">${sum[id]}</span></span>
-                          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-                        </button>
-                      `,
-                )}
-              </div>
-            `,
-          )}
+          <button
+            type="button"
+            class="settings-row set-account"
+            data-page="account"
+            ref=${(n) => (rows.account = n)}
+            aria-current=${shown === 'account' ? 'page' : undefined}
+            onClick=${() => (shown === 'account' ? null : openPage('account'))}
+          >
+            ${me.email ? html`<span class="avatar" aria-hidden="true">${me.email.slice(0, 1).toUpperCase()}</span>` : html`<img class="avatar" src="/assets/mark.svg" alt="" />`}
+            <span class="row-text"><span class="row-title">${sum.account}</span><span class="row-sum">${sum.devices}</span></span>
+            <${Icon} paths=${CHEVRON} class="chev" />
+          </button>
+          <section class="set-day" aria-labelledby="set-day-title">
+            <h2 class="eyebrow" id="set-day-title">${t('Your day')}</h2>
+            <div class="day-route">
+              ${[
+                ['trips', stopName(p.home?.stops?.[0] ?? '') || t('No home stop yet'), t('Home stop')],
+                ['timetable', sum.timetable, t('Timetable')],
+                ['trips', { slow: t('Slow'), normal: t('Normal'), fast: t('Fast') }[p.walkPace ?? 'normal'] ?? t('Normal'), t('Walking pace')],
+              ].map(
+                ([id, value, label], i) => html`<button
+                  type="button"
+                  class="day-stop"
+                  key=${i}
+                  ref=${i < 2 ? (n) => (rows[id] = n) : undefined}
+                  aria-current=${shown === id ? 'page' : undefined}
+                  onClick=${() => (shown === id ? null : openPage(id))}
+                ><span class="day-dot"></span><strong>${value}</strong><span>${label}</span></button>`,
+              )}
+            </div>
+          </section>
+          <div class="set-tiles">
+            ${tiles.map(
+              (id) => html`<button
+                type="button"
+                class="set-tile"
+                data-page=${id}
+                key=${id}
+                ref=${(n) => (rows[id] = n)}
+                aria-current=${shown === id ? 'page' : undefined}
+                onClick=${() => (shown === id ? null : openPage(id))}
+              >
+                <${Icon} paths=${ICONS[id]} />
+                <span class="row-title">${TITLES[id]}</span>
+                <span class=${id === 'notifications' && !notifyOn ? 'row-sum off' : 'row-sum'}>${sum[id]}</span>
+              </button>`,
+            )}
+          </div>
           <p class="settings-foot">
             ${FOOT.map(
               (id) => html`<a

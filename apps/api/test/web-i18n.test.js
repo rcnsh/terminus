@@ -52,6 +52,20 @@ test('every t() string in the scripts is translated', () => {
   assert.deepEqual(missing, []);
 });
 
+// The card colours the time in "Leave in 4 min" (journey.js LeaveHead) by
+// finding it in the headline, in either language.
+test('the leave time is inside its headline, in English and Chinese', () => {
+  const dict = zh();
+  for (const [head, time] of [
+    ['Leave in {0} min', '{0} min'],
+    ['Leave in {0} min {1} s', '{0} min {1} s'],
+    ['Leave in {0} s', '{0} s'],
+  ]) {
+    assert.ok(head.includes(time), head);
+    assert.ok(dict[head].includes(dict[time]), `${head}: ${dict[head]} / ${dict[time]}`);
+  }
+});
+
 test('every bit of text on the pages is translated', () => {
   const dict = zh();
   const htmlKeys = Object.keys(dict).filter((k) => k.includes('<')).map((k) => k.replace(/<[^>]+>/g, '\u0000'));
