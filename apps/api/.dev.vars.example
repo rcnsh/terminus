@@ -41,3 +41,9 @@ NEXTBUS_DEVICE_ID=""
 NEXTBUS_REQUESTED_BY=""
 NEXTBUS_SECURED_REQUEST=""
 
+
+# LTA DataMall account key, for public buses and train alerts. Sent as
+# the AccountKey header on datamall2.mytransport.sg. Free, from the
+# "Request for API Access" form on datamall.lta.gov.sg. Not the Extended
+# OBU Library SDK key, which the same portal also issues and is unrelated.
+LTA_ACCOUNT_KEY=

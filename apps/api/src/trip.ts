@@ -56,6 +56,10 @@ export interface Boarded {
   /** ISO: when the bus left, estimated from the fix that noticed you on it
    *  (detect.ts). Only for measuring the ride (ridetimes.ts). */
   departed?: string;
+  /** A public bus, with a fare, and the graph's route for it when its number
+   *  can't name it (`151/1`); detection follows it in the public graph. */
+  paid?: true;
+  route?: string;
 }
 
 /** A trip home (after the last class, or in a long gap), by its key: it has no name of its own. */
@@ -82,6 +86,8 @@ export function leaveOf(b: Boarded): Leave {
     ...(b.walkS != null ? { walkS: b.walkS } : {}),
     ...(b.rideS != null ? { rideS: b.rideS } : {}),
     ...(offStop(b) ? { toStop: offStop(b)! } : {}),
+    ...(b.paid ? { paid: true as const } : {}),
+    ...(b.route ? { route: b.route } : {}),
   };
 }
 

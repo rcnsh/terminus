@@ -260,6 +260,9 @@
     <string name="pace_slow_hint">400 米约 6 分钟。步伐从容，或经常背着包。</string>
     <string name="pace_summary">步速：%1$s</string>
     <string name="packed">考虑巴士很挤的情况</string>
+    <string name="public_buses">公共巴士</string>
+    <string name="public_buses_hint">也算上你车站的 95、151 等公共巴士。它们要收费，所以只有明显省时才会推荐。</string>
+    <string name="public_bus_fare">公共巴士，需付车费</string>
     <string name="packed_hint">如果你要等的巴士在那个车站和时间经常满员，就提早一班。</string>
     <string name="pair">配对</string>
     <string name="pair_instead">改用代码配对</string>

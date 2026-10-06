@@ -176,13 +176,17 @@ struct FlowPills: View {
         Flow(spacing: 6) {
             ForEach(rows, id: \.self) { r in
                 HStack(spacing: 5) {
-                    // In the service's colour, as on the buses and the map.
+                    // In the service's colour, as on the buses and the map. A
+                    // public bus carries a $ so the fare is never a surprise.
+                    let name = r.paid == true ? "\(r.svc) $" : r.svc
                     if let c = r.color.flatMap(Color.init(hex:)) {
-                        Text(r.svc).font(.system(size: 11, weight: .bold)).foregroundStyle(inkOn(r.color ?? ""))
+                        Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(inkOn(r.color ?? ""))
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c))
+                            .accessibilityLabel(r.paid == true ? "\(r.svc), \(L("Public bus, fare applies"))" : r.svc)
                     } else {
-                        Text(r.svc).font(.system(size: 11, weight: .bold))
+                        Text(name).font(.system(size: 11, weight: .bold))
+                            .accessibilityLabel(r.paid == true ? "\(r.svc), \(L("Public bus, fare applies"))" : r.svc)
                     }
                     Text(eta(r))
                         .font(.system(size: 11, weight: .medium).monospacedDigit())

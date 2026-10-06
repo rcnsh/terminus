@@ -33,14 +33,17 @@ affiliated with NUS.
 2. **Don't add load on NUS.** Arrivals are cached 15 s per stop
    (`TTL.arrivalsMs`), live buses 5 s per service (`TTL.busesMs`), all in
    `src/config.ts`. Never lower these, poll in bulk, or scan for endpoints.
-   Upstream failures back off (`failMemoS`, `breakerS`).
+   Upstream failures back off (`failMemoS`, `breakerS`). The same goes for
+   LTA DataMall, the public buses' feed (`src/lta.ts`): one call per stop
+   per 15 s, through the same cache (`src/edgecache.ts`).
 3. **`normalize()` / `normalizeBuses()` in `src/fms.ts` are the only code that
    touches the raw feed shape.** The feed is undocumented and changes, so
    they're tolerant and everything downstream assumes clean types. When the
-   feed shifts, edit only there.
-4. **Secrets never go in git or in output.** NUS feed keys live in
-   `apps/api/.dev.vars` locally and as Worker secrets in production. Both are
-   gitignored, along with `dev/` (captured traffic), `.private/`, keystores,
+   feed shifts, edit only there. `normalizePublic()` in `src/lta.ts` is the
+   same for DataMall's shape.
+4. **Secrets never go in git or in output.** NUS feed keys and the LTA DataMall
+   account key live in `apps/api/.dev.vars` locally and as Worker secrets in
+   production. All are gitignored, along with `dev/` (captured traffic), `.private/`, keystores,
    `*.p12`/`*.pem`/`*.key` and `apps/android/app/google-services.json`.
    Never print secret values, and never use NUSNET credentials: the feed uses
    a public guest token.
@@ -133,7 +136,10 @@ apps/api/
   src/next.ts         /me/next: the plan, free days, riding, the trip's phase
   src/resolve.ts      Stop + bus choice: haversine, directional pairing, scoring
   src/format.ts       Labels/details and the degrade ladder (live → scheduled)
-  src/fms.ts          NUS feed client + normalisation (see rule 3); edge caching
+  src/fms.ts          NUS feed client + normalisation (see rule 3)
+  src/lta.ts          LTA DataMall client: the public buses at a stop (see below)
+  src/public.ts       Public buses in the graph: GRAPH_PUBLIC, route keys, ride metres
+  src/edgecache.ts    Fetch through the edge cache, stale on failure, breaker: both feeds
   src/auth.ts         Guest token mint, KV memo, app-version breaker
   src/appversion.ts   Tracks the uNivUS app version the feed demands
   src/buses.ts        /buses: live buses placed on their route line (see below)
@@ -150,10 +156,12 @@ apps/api/
   src/i18n.ts         Server strings, m(), ERRORS_ZH
   src/config.ts       TTLs and tuning constants (WALK, RIDE, ...)
   data/               Bundled JSON: stops.json (graph), shapes.json (route lines),
-                      calendar.json, walks.json, venues/rooms/landmarks/residences
+                      public.json (public buses), calendar.json, walks.json,
+                      venues/rooms/landmarks/residences
   migrations/         D1 schema, numbered NNNN_name.sql
-  scripts/            dev-stub.mjs; scrapers (scrape_stops.py, route_shapes.py,
-                      fetch_calendar.py, walk_routes.py, check_scraped.py);
+  scripts/            dev-stub.mjs; scrapers (scrape_stops.py, scrape_lta.py,
+                      route_shapes.py, fetch_calendar.py, walk_routes.py,
+                      check_scraped.py);
                       probe_buses.py (feed update-rate probe); record_buses.mjs (checks /buses on a live site)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
   test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
@@ -249,6 +257,18 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
     workflow with `trace`); `buses.test.js` replays it.
   - Each bus comes with its number plate (`plate`, shown on its card on
     the map); `id` is a hash, stable while it runs.
+- **Public buses (`src/public.ts`, `src/lta.ts`, `data/public.json`).** Off
+  by default; an account turns them on (`publicBuses` in the profile). The
+  public buses that call at the campus's stops (95, 151, 96 and others, from
+  LTA DataMall via `scripts/scrape_lta.py`, weekly) join a second graph,
+  `GRAPH_PUBLIC`, used only when asked: a public stop on a shuttle stop's
+  shelter is the same stop with a `publicCode`; a stop of its own keeps
+  LTA's five-digit code. A two-way service is two routes, `151/1` and
+  `151/2`, shown as `151` (`svcName()`). Ride time comes from metres along
+  the route (`along`), not a count of stops. A public bus is the headline
+  only when it beats the free bus by `PUBLIC.fareWorthS`; its leg carries
+  `paid: true`, and a timetabled time (LTA's `Monitored: 0`) is
+  `scheduled`, never `live`. Nothing public reaches the map.
 - **Map.** `/campus` returns stops and route lines. The street map is a
   PMTiles extract on R2, in each site's own downloads bucket
   (`terminus-downloads`, `terminus-beta-downloads`), uploaded by the

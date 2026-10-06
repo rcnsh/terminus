@@ -158,7 +158,8 @@ function sides(s: Stop, byCode: Map<string, Stop>): Stop[] {
  */
 export function onRoute(graph: Graph, bus: Boarded, fix: Fix, tolM: number): boolean {
   const idx = indexGraph(graph);
-  const codes = (bus.stopCode && bus.alightCode ? rideStops(idx, bus.svc, bus.stopCode, bus.alightCode) : null) ?? [bus.stopCode!];
+  // A public two-way service is named by its number but routed by its key.
+  const codes = (bus.stopCode && bus.alightCode ? rideStops(idx, bus.route ?? bus.svc, bus.stopCode, bus.alightCode) : null) ?? [bus.stopCode!];
   const pts = codes.map((c) => idx.byCode.get(c)).filter((s): s is Stop => Boolean(s));
   if (!pts.length) return false;
   if (pts.length === 1) return haversineM(fix.lat, fix.lon, pts[0].lat, pts[0].lon) <= tolM;

@@ -82,6 +82,24 @@ export const RIDE = {
 /** Used when the feed returns no ETA but the service is within its hours. */
 export const DEFAULT_HEADWAY_S = 12 * 60;
 
+/** Public buses (public.ts, lta.ts). */
+export const PUBLIC = {
+  /**
+   * Metres a second on a public bus between campus stops, the stops
+   * themselves included: about 20 km/h. Public routes' stops are unevenly
+   * spaced and two campus stops in a row can be a long way round the island
+   * apart, so a count of stops (RIDE.secondsPerHop) would mislead.
+   */
+  speedMs: 5.5,
+  /**
+   * Seconds a public bus must save over the best free bus before it is the
+   * answer rather than the alternative. A fare to save thirty seconds is a
+   * worse deal than it looks, so a public bus is the headline only when it
+   * clearly wins.
+   */
+  fareWorthS: 180,
+} as const;
+
 /** Hard cap from the API contract. `format.ts` targets much shorter. */
 export const LABEL_MAX = 40;
 

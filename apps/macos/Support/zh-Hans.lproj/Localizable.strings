@@ -22,6 +22,9 @@
 "Add where you live and your timetable" = "添加你住在哪里和你的课表";
 "Allow" = "允许";
 "Allow for busy buses" = "考虑巴士很挤的情况";
+"Public buses" = "公共巴士";
+"Count the 95, 151 and other public buses at your stops too. They have a fare, so one is the answer only when it clearly saves time." = "也算上你车站的 95、151 等公共巴士。它们要收费，所以只有明显省时才会推荐。";
+"Public bus, fare applies" = "公共巴士，需付车费";
 "Allow location" = "允许定位";
 "Allow terminus in System Settings → General → Login Items" = "请在“系统设置”→“通用”→“登录项”中允许 terminus";
 "Allow terminus in System Settings → Notifications" = "请在“系统设置”→“通知”中允许 terminus";

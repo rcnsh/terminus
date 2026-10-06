@@ -740,7 +740,7 @@ test('/status.json: the feed state and outages, public and cached', async () => 
   const env = makeEnv(kv);
   let res = (await call('/status.json', { fetchImpl: makeFetch({}), env })).res;
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { feed: 'unknown', since: null, checkedAt: null, checking: false, incidents: [] });
+  assert.deepEqual(await res.json(), { feed: 'unknown', since: null, checkedAt: null, checking: false, incidents: [], publicFeed: 'unknown', publicSince: null });
 
   const now = Date.now();
   await kv.put('monitor:upstream', JSON.stringify({ up: false, since: now - 3_600_000, reason: 'auth rejected: code=10009 secret detail', checkedAt: now - 60_000 }));
