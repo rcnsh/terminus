@@ -172,6 +172,8 @@ function site(mode: string | undefined) {
 				ASSETS: bindings.assets(),
 				ALERT_EMAIL: bindings.secret(),
 				HEALTH_TOKEN: bindings.secret(),
+				// Opens /timelapse/* only, for the VPS that renders the videos (scripts/render-timelapse.mjs).
+				TIMELAPSE_TOKEN: bindings.secret(),
 				NEXTBUS_APP_API: bindings.secret(),
 				NEXTBUS_APP_VERSION: bindings.secret(),
 				NEXTBUS_AUTH_BASE: bindings.secret(),

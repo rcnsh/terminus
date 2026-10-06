@@ -1196,7 +1196,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Service'],
           summary: 'Recorded days of shuttles, for the timelapse',
           description:
-            'The days the timelapse recorder has kept, newest first: closed days from storage, and today’s while it records. `recording` says whether the recorder is switched on and what it is doing today. Operator only: answers 404 without the operator token.',
+            'The days the timelapse recorder has kept, newest first: closed days from storage, and today’s while it records. `recording` says whether the recorder is switched on and what it is doing today. Needs the operator token, or the timelapse token (which opens these two routes and nothing else), in `x-health-token`: answers 404 without one.',
           operationId: 'timelapseDays',
           security: [{ operator: [] }],
           responses: {
@@ -1241,7 +1241,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Service'],
           summary: 'One recorded day of shuttles',
           description:
-            'The day’s readings as one gzipped JSON file: every service’s buses about every 30 s, as service, number plate, position (whole steps of 1/q degree from `origin`) and metres along the route line, with the route lines and stops they were measured on. Times are deltas from `t0`. A closed day never changes and is cached for a year; today’s is built from what the recorder holds so far and is not cached. The timelapse page (/admin/timelapse/) reads it. Operator only.',
+            'The day’s readings as one gzipped JSON file: every service’s buses about every 30 s, as service, number plate, position (whole steps of 1/q degree from `origin`) and metres along the route line, with the route lines and stops they were measured on. Times are deltas from `t0`. A closed day never changes and is cached for a year; today’s is built from what the recorder holds so far and is not cached. The timelapse page (/admin/timelapse/) reads it. Needs the operator token or the timelapse token.',
           operationId: 'timelapseDay',
           security: [{ operator: [] }],
           parameters: [{ name: 'date', in: 'path', required: true, description: 'A Singapore date, YYYY-MM-DD.', example: '2026-10-06', schema: { type: 'string', format: 'date' } }],

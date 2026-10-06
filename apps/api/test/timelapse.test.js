@@ -574,3 +574,20 @@ test("an earlier day stays in the list while its write to R2 is being retried", 
   const { days } = await res.json();
   assert.deepEqual(days.map((d) => [d.date, d.closed, d.samples]), [[DATE, false, RUNNING.length]]);
 });
+
+test('TIMELAPSE_TOKEN opens the timelapse routes and nothing else', async () => {
+  const h = harness();
+  const env = { ...h.env, TIMELAPSE_TOKEN: 'render-only' };
+  const call = async (path, token) => {
+    const ctx = { waitUntil() {}, passThroughOnException() {} };
+    return worker.fetch(new Request(`https://bus.example.test${path}`, { headers: { 'x-health-token': token } }), env, ctx);
+  };
+  assert.equal((await call('/timelapse/days', 'render-only')).status, 200);
+  assert.equal((await call('/timelapse/days', 'op')).status, 200, 'the operator still can');
+  assert.equal((await call('/admin/stats', 'render-only')).status, 404, 'not the dashboard');
+  assert.equal((await (await call('/health?probe=1', 'render-only')).json()).auth, undefined, 'nor the auth probe');
+  // Unset, it opens nothing.
+  const none = { ...h.env, TIMELAPSE_TOKEN: undefined };
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+  assert.equal((await worker.fetch(new Request('https://bus.example.test/timelapse/days', { headers: { 'x-health-token': '' } }), none, ctx)).status, 404);
+});
