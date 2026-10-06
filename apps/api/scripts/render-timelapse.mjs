@@ -7,7 +7,8 @@
  *
  * For a machine of its own (a VPS), not the repo's tests: it needs
  * Playwright and its Chromium where it runs (npm i playwright, then
- * npx playwright install --with-deps chromium).
+ * npx playwright install --with-deps chromium). Slow: on one small CPU with
+ * software WebGL a frame takes about 6 s, so a 60 s video is about 3 hours.
  *
  *   TIMELAPSE_TOKEN=... node render-timelapse.mjs --date 2026-10-08 \
  *     [--preset story|wide] [--theme dark|light] [--seconds 60] \
@@ -106,7 +107,7 @@ try {
     const failed = await page.locator('.controls .bad').textContent({ timeout: 1_000 }).catch(() => null);
     if (failed) fail(failed);
     log((await page.textContent('.progress .meta').catch(() => ''))?.trim() || 'starting');
-    if (Date.now() - started > 6 * 3_600_000) fail('still rendering after 6 hours');
+    if (Date.now() - started > 12 * 3_600_000) fail('still rendering after 12 hours');
   }
   log((await page.textContent('.progress .meta'))?.trim());
   mkdirSync(o.out, { recursive: true });
