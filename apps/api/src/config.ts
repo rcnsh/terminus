@@ -100,6 +100,28 @@ export const PUBLIC = {
   fareWorthS: 180,
 } as const;
 
+/**
+ * The timelapse recorder (timelapse.ts, timelapsedo.ts): the ONE scheduled
+ * reader of the NUS feed. Everything else fetches on demand. It asks for each
+ * service's buses through the same edge cache as the map, so a poll a user
+ * already paid for costs NUS nothing, and it never asks faster than this.
+ */
+export const TIMELAPSE = {
+  /** Each service is asked once per this, the services spread across it.
+   *  Never below MIN_POLL_MS, whatever this says (pollInterval()). */
+  pollMs: 30_000,
+  /** The Singapore-time window it records in. It may cross midnight: the
+   *  day is the date the window opened, until it closes the next morning. */
+  hours: { start: '06:30', end: '00:30' },
+  /** Rounds in a row with no bus on any service before it stops: for the
+   *  day once it has seen buses, else for idleSleepMs (before the first bus). */
+  idleRounds: 6,
+  idleSleepMs: 15 * 60_000,
+} as const;
+
+/** The floor under TIMELAPSE.pollMs, enforced in code. */
+export const MIN_POLL_MS = 15_000;
+
 /** Hard cap from the API contract. `format.ts` targets much shorter. */
 export const LABEL_MAX = 40;
 

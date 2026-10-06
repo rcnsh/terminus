@@ -20,6 +20,13 @@
  * light and dark screenshots of the same moment. POST /__stub/skip?min=N
  * moves it ahead, to walk through a trip (phase 8: detection on the emulator).
  *
+ * The timelapse recorder runs too, on the fake buses, as it would in its
+ * window (the cron that starts it is a timer here). POST
+ * /__stub/timelapse?minutes=N records N minutes at once, moving the clock
+ * ahead with it (from the window's opening if it's closed now): an hour of
+ * buses for the timelapse page (/admin/timelapse/, token "dev") in a few
+ * seconds. Past the window's close, the day is written to the fake R2.
+ *
  * Point a debug Android build at it:
  *   ./gradlew installStableDebug -PapiBase=http://localhost:8787
  *   adb reverse tcp:8787 tcp:8787
@@ -32,6 +39,8 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { installGlobals, makeBucket, makeDurableObjects, makeEnv, makeCtx, shuttlePayload } from '../test/_stubs.mjs';
 import { Trip } from '../src/tripdo.ts';
+import { TimelapseRecorder } from '../src/timelapsedo.ts';
+import { ensureRecorder, inWindow, nextOpen } from '../src/timelapse.ts';
 import { SESSION_COOKIE as DEV_COOKIE } from '../src/accounts.ts';
 import { makeD1, makeEmail } from '../test/_d1.mjs';
 
@@ -213,16 +222,43 @@ const FCM = await readFile(new URL('../../../.private/fcm-service-account.json',
 let env;
 // The trip engine's Durable Object, in-process; its alarms fire on time below.
 const TRIPS = makeDurableObjects(Trip, () => env);
+// The timelapse recorder, in-process too, on the fake feed.
+const TIMELAPSE = makeDurableObjects(TimelapseRecorder, () => env);
 // Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
 const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
-env = { ...makeEnv(), LTA_ACCOUNT_KEY: 'dev', [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, DOWNLOADS, HEALTH_TOKEN: 'dev', TRIPS, VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
+env = { ...makeEnv(), LTA_ACCOUNT_KEY: 'dev', [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, DOWNLOADS, HEALTH_TOKEN: 'dev', TRIPS, TIMELAPSE, TIMELAPSE_ENABLED: 'on', VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;
   if (due) console.log(`trips: ${due} alarm(s) due`);
   TRIPS.fireDue(stubNow()).catch((e) => console.error('trip alarm', e));
 }, 5_000);
+// The recorder's alarms (one service every few seconds), and the cron that
+// starts each day's recorder, every minute here rather than every 15.
+setInterval(() => TIMELAPSE.fireDue(stubNow()).catch((e) => console.error('timelapse alarm', e)), 1_000);
+const startTimelapse = () => ensureRecorder(env, stubNow()).catch((e) => console.error('timelapse start', e));
+setInterval(startTimelapse, 60_000);
+startTimelapse();
+
+/** Records [minutes] of buses at once: the clock jumps from one alarm to the next. */
+async function fastForward(minutes) {
+  if (!inWindow(stubNow())) skipMs += nextOpen(stubNow()) - stubNow();
+  await ensureRecorder(env, stubNow());
+  const until = stubNow() + minutes * 60_000;
+  let polls = 0;
+  for (;;) {
+    const due = [...TIMELAPSE.alarms.values()];
+    const next = Math.min(...due);
+    if (!due.length || next > until) break;
+    if (next > stubNow()) skipMs += next - stubNow();
+    await TIMELAPSE.fireDue(stubNow());
+    polls++;
+  }
+  if (until > stubNow()) skipMs += until - stubNow();
+  await ensureRecorder(env, stubNow());
+  return polls;
+}
 
 async function serve(req, res) {
   const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await new Promise((r) => {
@@ -253,6 +289,12 @@ async function serve(req, res) {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(rows.map((r) => ({ name: r.name, token: `${r.push_token.slice(0, 8)}…` }))));
     return;
+  }
+  if (req.method === 'POST' && req.url.startsWith('/__stub/timelapse')) {
+    const minutes = Number(new URL(req.url, 'http://x').searchParams.get('minutes') ?? 60);
+    const polls = await fastForward(minutes);
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    return res.end(`recorded ${minutes} min (${polls} polls); now ${new Date(stubNow()).toISOString()}\n`);
   }
   if (req.method === 'POST' && req.url.startsWith('/__stub/skip')) {
     skipMs += Number(new URL(req.url, 'http://x').searchParams.get('min') ?? 0) * 60_000;

@@ -25,8 +25,9 @@
  * never reorder, never repurpose, or every query written before the change
  * starts lying.
  *
- *   blob1   kind        'answer' | 'arrival' | 'error'
- *   blob2   stop        boarding stop code; for 'error', the route (no query)
+ *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse'
+ *   blob2   stop        boarding stop code; for 'error', the route (no query);
+ *                       for 'timelapse', the poll's outcome (see logPoll)
  *   blob3   svc         service, '' on an ended answer
  *   blob4   dest        destination stop code, '' for a bare /next
  *   blob5   quality     live | scheduled | unknown | stale | ended
@@ -35,7 +36,7 @@
  *   blob8   trip        unused since configured trips were removed; always ''
  *   blob9   berth       raw busStopCode, arrival rows only
  *
- *   double1  etaS            arrival rows: seconds to arrival
+ *   double1  etaS            arrival rows: seconds to arrival; timelapse rows: buses seen
  *   double2  boardS          answer rows: seconds until you can board
  *   double3  rideS
  *   double4  totalS
@@ -46,7 +47,7 @@
  *   double9  hadCoords       0 | 1
  *   double10 walkAllS        whole-way walk, -1 when unknown
  *
- *   index1  stop code (the sampling key)
+ *   index1  stop code (the sampling key); 'error' and 'timelapse' rows use their kind
  * ---------------------------------------------------------------------------
  */
 
@@ -136,5 +137,25 @@ export function logError(env: Env, path: string): void {
     env.AE!.writeDataPoint({ blobs: ['error', route], doubles: [], indexes: ['error'] });
   } catch {
     // Same rule as above: logging never breaks a response.
+  }
+}
+
+/**
+ * What one poll of the timelapse recorder cost NUS, for the dashboard:
+ *
+ * - `upstream`: it went to the feed (a real request to NUS);
+ * - `hit`: the edge cache had a fresh answer (a user's request paid for it);
+ * - `stale`: the feed was failing and an older answer was all there was;
+ * - `failed`: nothing to record (the feed failed, or failed a moment ago);
+ * - `skipped`: the breaker was open, so it didn't ask at all.
+ */
+export type PollOutcome = 'upstream' | 'hit' | 'stale' | 'failed' | 'skipped';
+
+export function logPoll(env: Env, outcome: PollOutcome, svc: string, buses: number): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    env.AE!.writeDataPoint({ blobs: ['timelapse', outcome, svc], doubles: [buses], indexes: ['timelapse'] });
+  } catch {
+    // Same rule as above: a lost count never stops a poll.
   }
 }

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Timelapse · terminus</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts.css">
+<script src="/assets/theme.js"></script>
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/admin/admin.css">
+<link rel="stylesheet" href="/admin/timelapse/timelapse.css">
+</head>
+<body>
+<header class="wrap nav">
+  <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
+  <nav class="nav-links"><a href="/admin/">Dashboard</a></nav>
+</header>
+
+<main class="wrap">
+  <h1>Timelapse</h1>
+  <!-- The token form, or the day picker, preview and export: drawn by timelapse.js. -->
+  <div id="timelapse"></div>
+</main>
+<!-- The map renders here at the video's exact size, off screen; the preview shows its frames. -->
+<div id="stage" aria-hidden="true"></div>
+<script type="module" src="/admin/timelapse/timelapse.js"></script>
+</body>
+</html>

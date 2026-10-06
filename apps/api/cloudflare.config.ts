@@ -27,7 +27,11 @@ function site(mode: string | undefined) {
 			dataset: "terminus",
 			// Rate limit counters are per namespace; the beta has its own.
 			rl: { auth: "1001", public: "1002", me: "1003", mail: "1004", anon: "1005", map: "1006" },
-			env: {},
+			// The timelapse recorder polls NUS (src/timelapse.ts): on here, off on
+			// the beta, so the two sites never poll twice.
+			env: {
+				TIMELAPSE_ENABLED: bindings.text("on"),
+			},
 		};
 	}
 	if (mode !== "beta") throw new Error(`unknown mode ${mode}: use --mode beta, or none for the stable site`);
@@ -43,6 +47,7 @@ function site(mode: string | undefined) {
 			env: {
 				PUBLIC_ORIGIN: bindings.text("https://beta.terminus.rcn.sh"),
 				AE_DATASET: bindings.text("terminus_beta"),
+				TIMELAPSE_ENABLED: bindings.text("off"),
 			},
 		};
 	}
@@ -80,9 +85,11 @@ function site(mode: string | undefined) {
 			domains: [
 				s.domain,
 			],
-			// The trip engine: one Durable Object per user with today's trip signals.
+			// The trip engine: one Durable Object per user with today's trip signals,
+			// and the timelapse recorder, one per Singapore day (src/timelapsedo.ts).
 			exports: {
 				Trip: exports.durableObject({ storage: "sqlite" }),
+				TimelapseRecorder: exports.durableObject({ storage: "sqlite" }),
 			},
 			triggers: [
 				triggers.scheduled({
@@ -97,6 +104,10 @@ function site(mode: string | undefined) {
 				TRIPS: bindings.durableObject({
 					worker: s.name,
 					exportName: "Trip",
+				}),
+				TIMELAPSE: bindings.durableObject({
+					worker: s.name,
+					exportName: "TimelapseRecorder",
 				}),
 				AE: bindings.analyticsEngineDataset({
 					name: s.dataset,

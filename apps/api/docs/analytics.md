@@ -76,3 +76,22 @@ FROM terminus WHERE blob1 = 'answer' GROUP BY quality ORDER BY n DESC
 
 A lot of `unknown` means upstream is flaky or auth is failing. A lot of
 `stale` means the 15-second cache is doing its job during outages.
+
+## What the timelapse recorder costs NUS
+
+The recorder (`src/timelapse.ts`) is the only scheduled reader of the feed,
+so every poll writes a `timelapse` row: `blob2` says what it cost
+(`upstream` a real request to NUS, `hit` an answer the edge cache already
+had, `stale` and `failed` nothing new, `skipped` the breaker was open),
+`blob3` the service, `double1` the buses the feed reported. The dashboard
+shows the same per day.
+
+```sql
+SELECT toDate(timestamp) AS day, blob2 AS outcome, SUM(_sample_interval) AS n
+FROM terminus WHERE blob1 = 'timelapse'
+GROUP BY day, outcome ORDER BY day
+```
+
+`upstream` per day is the recorder's real extra load. At the defaults it is
+at most 17,280 (8 services, one poll each per 30 s, 18 hours), and less on
+the days the services keep shorter hours.

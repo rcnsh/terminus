@@ -126,7 +126,8 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   };
 }
 
-/** Answers, their quality, and errors per day for 14 days, from Analytics Engine's SQL API. */
+/** Answers, their quality, and errors per day for 14 days, and the timelapse
+ *  recorder's polls by what each cost NUS (logPoll), from Analytics Engine's SQL API. */
 async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record<string, unknown> | null> {
   if (!env.ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) return null;
   const sql = async (q: string) => {
@@ -140,7 +141,7 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
   };
   const dataset = env.AE_DATASET || 'terminus';
   try {
-    const [daily, quality, errors] = await Promise.all([
+    const [daily, quality, errors, timelapse] = await Promise.all([
       // _sample_interval: each row may stand for several, at high volume.
       sql(`SELECT toDate(timestamp) AS day, blob1 AS kind, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 IN ('answer', 'error')
@@ -149,8 +150,10 @@ async function analyticsStats(env: Env, fetchImpl: typeof fetch): Promise<Record
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'answer' GROUP BY quality ORDER BY n DESC`),
       sql(`SELECT blob2 AS route, SUM(_sample_interval) AS n FROM ${dataset}
            WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'error' GROUP BY route ORDER BY n DESC LIMIT 10`),
+      sql(`SELECT toDate(timestamp) AS day, blob2 AS outcome, SUM(_sample_interval) AS n FROM ${dataset}
+           WHERE timestamp > NOW() - INTERVAL '14' DAY AND blob1 = 'timelapse' GROUP BY day, outcome ORDER BY day`),
     ]);
-    return { daily, quality, errors };
+    return { daily, quality, errors, timelapse };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }

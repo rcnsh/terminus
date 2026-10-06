@@ -91,7 +91,9 @@ pnpm run deploy
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
-| `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set). Needs `x-health-token`; anything else gets a 404. |
+| `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set, and the timelapse recorder's polls by what they cost NUS). Needs `x-health-token`; anything else gets a 404. |
+| `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`. |
+| `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store`. Needs `x-health-token`. |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
 | `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. |
 
@@ -100,8 +102,8 @@ pnpm run deploy
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
-for buses every 5 s. `/health`, `/status.json`, `/admin/stats` and
-`/download/*` stay limited by IP. `/map/*` is limited by IP only where it
+for buses every 5 s. `/health`, `/status.json`, `/admin/stats`,
+`/timelapse/*` and `/download/*` stay limited by IP. `/map/*` is limited by IP only where it
 reads R2 (`RL_MAP`, 300 a minute): a piece already in the edge cache is
 never refused, so a lecture hall can open the map at once.
 
@@ -629,7 +631,10 @@ the card, in walking the whole way, and on the Nearby tab.
 long-lived process and Cron Triggers bottom out at one-minute granularity. The
 cache entry is keyed on the **resolved stop code**, not the request URL —
 `getLastKnownLocation` jitters the coordinates on every call and the tile
-appends a cache-buster, so a URL-keyed cache would never hit.
+appends a cache-buster, so a URL-keyed cache would never hit. The one
+exception is the timelapse recorder (below): one bounded, switchable poller
+of live bus positions, through the same cache. It is not a pattern for
+anything else (CLAUDE.md, rule 2).
 
 **KV holds small, slow-changing state, never the arrivals.** The guest token
 and device id, the `config:appVersion` override, the monitor's view of the
@@ -970,6 +975,99 @@ A tapped bus is ringed. Between stops, its `stretch` is drawn over the
 route, wider, with the rest of the route faded well back, and its card
 says "Between LT13 and COM 3".
 
+### The timelapse recorder
+
+A day of every shuttle, for a timelapse video
+([`src/timelapse.ts`](../src/timelapse.ts),
+[`src/timelapsedo.ts`](../src/timelapsedo.ts)). It is the **only scheduled
+access to the NUS feed** and the one exception to "don't add load on NUS"
+(CLAUDE.md, rule 2). Everything else fetches because someone asked. Its
+bounds are the point:
+
+- **Rate.** Each service's live buses (`active-bus`, the map's call; the feed
+  has no call for every service at once) once per `TIMELAPSE.pollMs`, 30 s
+  by default and never below `MIN_POLL_MS`, 15 s (`pollInterval()` enforces
+  it). The services are spread across the interval: with eight running, one
+  every 3.75 s, never a burst. Arrivals are never polled.
+- **Path.** Through `getBuses()` and `trackedPlacement()`, exactly as `/buses`
+  asks: the 5 s edge cache, one fetch in flight per service, `failMemoS`
+  after a failure and the breaker after a refusal. When the map has just
+  asked for a service, the poll is a cache hit and costs NUS nothing. With
+  the breaker open the poll is skipped, not retried. A stale answer (the
+  feed failing) is not recorded.
+- **Hours.** Only inside `TIMELAPSE.hours`, 06:30 to 00:30 Singapore time.
+  The window crosses midnight, so a day is the date its window opened, until
+  it closes the next morning. Within it, only services inside their own
+  operating hours (`inService`). After `idleRounds` rounds (3 minutes) in
+  which the feed answered but no bus was out anywhere, it stops: for the
+  day if it has seen buses (service is over), else for `idleSleepMs`
+  (15 minutes; before the first bus of the morning). Rounds in which nothing
+  answered (an outage, the breaker) don't count towards that.
+- **Kill switch.** KV `config:timelapse` set to `off` (or `on`) wins.
+  Otherwise the `TIMELAPSE_ENABLED` var applies: `on` for the stable site,
+  `off` for the beta (so the two never poll twice), and off when unset. The
+  switch is read once a round, so `off` stops it within 30 s, without a
+  deploy. On again, the cron restarts it within 15 minutes.
+
+At the defaults that is at most 17,280 requests a day (8 services × 2 a
+minute × 18 hours). The services' real hours make it about 13,300 on a
+weekday, 9,000 on a Saturday and 6,700 on a Sunday or holiday. Each poll
+is at most one `active-bus` call, plus the existing single retry with a
+fresh token on a rejection that a token can fix. The map alone, with one
+person watching one service, asks for it every 5 s: six times this rate.
+Every poll writes an Analytics Engine row saying what it cost (`upstream`,
+`hit`, `stale`, `failed`, `skipped`; analytics.md). The dashboard shows the
+real requests to NUS per day.
+
+**How it runs.** One `TimelapseRecorder` Durable Object per Singapore day,
+named by its date, created in Asia (`locationHint: 'apac'`), so the edge
+cache it reads is likely the one Singapore's map users fill. The 15-minute
+cron (`ensureRecorder`) starts the day's recorder inside the window with
+the switch on, and does nothing if it is already running. From then on the
+object's own alarm is its clock, since a cron can't run more often than
+once a minute. It never runs inside a user's request, so it can't slow or
+fail one.
+
+**What it keeps.** Each poll that brought a new reading is one row in the
+object's SQLite storage: milliseconds since the row before (it can be
+negative: a cached answer can be a moment older than the last row), the
+service, and four whole numbers per bus. Those are the plate's index in a
+day's list of plates, latitude and longitude in steps of 1/100,000 of a
+degree (about 1.1 m) from a fixed point by campus, and metres along the
+route line. That is the bus's own place on the line from its track
+(`trackedPlacement`, the same placement the map uses), not the stop or
+midpoint the map draws it at; `-1` off the line. A poll with no buses is a
+row with none; a failed poll is no row. The route lines and stops are kept
+with the day, so the `along`s stay measured on the line they were measured
+on even if a deploy changes the shapes.
+
+**At the close** the object writes the day to R2 (the site's downloads
+bucket) as `timelapse/YYYY-MM-DD.json.gz` (`DayFile`), deletes everything,
+its alarm included, and costs nothing from then on. If the write fails it
+keeps the day and tries again 10 minutes later. `/download/*` serves only
+release files, so the days are reachable only through `/timelapse/days`
+with the operator token.
+
+**Replaying it.** The operator's page,
+[`/admin/timelapse/`](../../web/public/admin/timelapse), reads a day with
+[`replay.js`](../../web/public/admin/timelapse/replay.js). The API's tests
+read it with the same module. Between two readings a bus moves along its
+route line from one `along` to the next (forward past the end of a loop),
+not in a straight line. Readings more than 2 minutes apart are not joined:
+the bus fades out after the first and in before the next. A reading
+further on than a bus could have driven fades out and in too. After its
+last reading a bus stays for one poll, then fades. The page draws the map
+at the video's exact size with `preserveDrawingBuffer` and no label fades.
+For each frame it sets the time, gives the buses' GeoJSON source their
+places, waits for the map's `idle`, and draws the map and the overlay
+(clock, date, buses per service, wordmark, map credit) onto one canvas.
+Mediabunny then encodes that canvas, H.264 in MP4 (`fastStart:
+'in-memory'`) or VP9 in WebM where the browser can't do H.264. Awaiting
+each frame's `add()` respects the encoder's backpressure, so the video is
+the same however fast the machine is. Mediabunny is vendored
+(`scripts/vendor-mediabunny.sh`, MPL-2.0 with its licence), and the service
+worker never keeps it.
+
 ## Layout
 
 ```
@@ -987,6 +1085,8 @@ src/calendarsync.ts  The calendar fetched weekly by the cron into KV, between de
 src/nusmods.ts    NUSMods share URL -> trips
 src/campus.ts     /campus: stops, route lines and colours, destination search
 src/buses.ts      /buses: live buses placed on their route, next stop
+src/timelapse.ts  The timelapse recorder's rules, day file and /timelapse/days
+src/timelapsedo.ts  The recorder's Durable Object: one per Singapore day
 src/map.ts        /map/*: the street map file, its style, fonts and icons
 src/pairs.ts      /stops/pairs
 src/analytics.ts  Analytics Engine decision + arrival logging
@@ -1046,7 +1146,9 @@ noticed (an alert) rather than read as an empty board.
 ## Acceptable use
 
 This reads a public, unauthenticated endpoint the uNivUS app itself uses,
-at roughly one request per stop per 15 seconds. Use it in line with the
+at roughly one request per stop per 15 seconds, and, for the timelapse
+recorder only, each service's bus positions at most once per 30 seconds
+inside fixed hours, behind a kill switch. Use it in line with the
 [NUS Acceptable Use Policy for IT Resources](https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf).
 Do not commit captured credentials, do not use NUSNET credentials with it, and
 do not raise the request rate.
