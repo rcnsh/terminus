@@ -172,8 +172,9 @@ function site(mode: string | undefined) {
 				ASSETS: bindings.assets(),
 				ALERT_EMAIL: bindings.secret(),
 				HEALTH_TOKEN: bindings.secret(),
-				// Opens /timelapse/* only, for the VPS that renders the videos (scripts/render-timelapse.mjs).
-				TIMELAPSE_TOKEN: bindings.secret(),
+				// TIMELAPSE_TOKEN, which opens /timelapse/* only for the VPS that renders
+				// the videos (scripts/render-timelapse.mjs), is an optional secret like
+				// ANALYTICS_TOKEN: not declared, so a site without one (the beta) deploys.
 				NEXTBUS_APP_API: bindings.secret(),
 				NEXTBUS_APP_VERSION: bindings.secret(),
 				NEXTBUS_AUTH_BASE: bindings.secret(),
