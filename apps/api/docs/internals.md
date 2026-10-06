@@ -260,7 +260,12 @@ account into another one.
 - **The ride from the feed.** Boarding records the plate of the bus due at
   the boarding stop within five minutes; while riding, the same plate in the
   alighting stop's arrivals gives the arrival (quality `live`). Without a
-  plate, the arrival is an estimate, marked `~`.
+  plate, the arrival is an estimate, marked `~`. Once that arrival has
+  passed with nothing saying you're there (you caught the bus after it, or
+  it's late), the card never shows the past time: the next bus of the
+  service due at your stop is the guess, marked `~`, or with nothing due
+  only where to get off; ten minutes after the arrival (`RIDE_GRACE_MS`)
+  you're taken to be there.
 - **Outcomes** ([src/outcomes.ts](../src/outcomes.ts), `trip_outcomes`, 35
   days): what detection saw (boarded, missed, arrived) and "Not going";
   three misses of one class in 30 days suggest a bus earlier (`ArriveBy.oneEarlier`);

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { ASSUME_MS, endOfDayMs, phaseFor, sgtDate } from '../src/trip.ts';
+import { ASSUME_MS, RIDE_GRACE_MS, endOfDayMs, phaseFor, sgtDate } from '../src/trip.ts';
 import { Trip } from '../src/tripdo.ts';
 import { GRAPH } from '../src/graph.ts';
 import { indexGraph, rideStops, serviceEndsAt } from '../src/resolve.ts';
@@ -477,6 +477,43 @@ test('"On it" without a plate in the feed keeps the estimate, marked as one', as
   const riding = await (await signal(phone, { kind: 'boarded', trip: FIRST })).json();
   assert.equal(riding.quality, 'scheduled');
   assert.match(riding.detail, /arrive ~/);
+});
+
+test('once the arrival has passed, the card never says you arrive in the past', async () => {
+  // Caught the bus after the one you tapped "On it" for: its arrival comes
+  // and goes, and nothing says you're there. The feed's next bus of the
+  // service at your stop is the guess.
+  const { phone, next, signal, clock } = await setup();
+  const riding = await (await signal(phone, { kind: 'boarded', trip: FIRST })).json();
+  const arrive = Date.parse(riding.arriveAt);
+  clock(arrive + 60_000);
+  const later = await next(phone);
+  assert.equal(later.card.phase, 'riding');
+  assert.equal(later.label, riding.label);
+  assert.ok(Date.parse(later.arriveAt) > arrive + 60_000, `${later.arriveAt} is after now`);
+  assert.equal(later.quality, 'scheduled');
+  assert.match(later.detail, /arrive ~/);
+  assert.doesNotMatch(later.detail, new RegExp(clockAt(arrive)));
+  assert.ok(later.timing && Date.parse(later.timing.reachAt) > arrive, 'the timing follows the new estimate');
+  // Ten minutes on, with still nothing from the phone: there.
+  clock(arrive + RIDE_GRACE_MS);
+  assert.equal((await next(phone)).card.phase, 'arrived');
+});
+
+test('once the arrival has passed and no bus is due, the card says only where to get off', async () => {
+  const feed = {};
+  for (const code of Object.keys(FEED)) feed[code] = [{ name: 'D2', arrivalTime: '4', nextArrivalTime: '14', passengers: 'low' }];
+  feed.PGP = [{ name: 'R2', arrivalTime: '2', nextArrivalTime: '-', passengers: 'low' }];
+  const { phone, next, signal, clock } = await setup(PROFILE, { feed });
+  const riding = await (await signal(phone, { kind: 'boarded', trip: FIRST })).json();
+  assert.equal(riding.label, 'On the R2');
+  clock(Date.parse(riding.arriveAt) + 60_000);
+  const later = await next(phone);
+  assert.equal(later.card.phase, 'riding');
+  assert.equal(later.label, 'On the R2');
+  assert.equal(later.arriveAt, undefined);
+  assert.equal(later.timing, null);
+  assert.match(later.detail, /^Off at UTown$/);
 });
 
 /* Phase 3: what terminus learns from the answers (outcomes.ts). */
