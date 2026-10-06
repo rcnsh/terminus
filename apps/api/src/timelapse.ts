@@ -252,6 +252,10 @@ export interface RecorderStatus {
  * R2, unchanged from then on, so it's cached for a year; today's is built
  * from what the recorder holds so far, and not cached.
  */
+/** How many days back /timelapse/days looks for a recorder still holding
+ *  its day, R2 having refused it. Its retries go on; a week is plenty to notice. */
+const HELD_DAYS = 7;
+
 export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: number): Promise<Response | null> {
   if (!url.pathname.startsWith('/timelapse/')) return null;
   if (!isOperator(env, req) || req.method !== 'GET') return json({ error: 'not found' }, 404);
@@ -271,12 +275,13 @@ export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: n
     const today = serviceDate(nowMs);
     const status = await recorderStatus(env, today);
     if (status && status.samples > 0 && !days.some((d) => d.date === today)) days.push({ date: today, closed: false, bytes: null, samples: status.samples });
-    // Yesterday's, while its recorder is still trying to write it to R2.
-    const yesterday = serviceDate(nowMs - DAY_MS);
-    if (!days.some((d) => d.date === yesterday)) {
-      const held = await recorderStatus(env, yesterday);
-      if (held && held.samples > 0) days.push({ date: yesterday, closed: false, bytes: null, samples: held.samples });
-    }
+    // Earlier days whose recorders are still trying to write them to R2.
+    const held = await Promise.all(
+      Array.from({ length: HELD_DAYS }, (_, i) => serviceDate(nowMs - (i + 1) * DAY_MS))
+        .filter((date) => !days.some((d) => d.date === date))
+        .map(async (date) => ({ date, status: await recorderStatus(env, date) })),
+    );
+    for (const { date, status: s } of held) if (s && s.samples > 0) days.push({ date, closed: false, bytes: null, samples: s.samples });
     days.sort((a, b) => b.date.localeCompare(a.date));
     return json({ days, recording: { date: today, enabled: await timelapseEnabled(env), state: status?.state ?? 'idle', samples: status?.samples ?? 0 } });
   }

@@ -1001,12 +1001,12 @@ bounds are the point:
   operating hours (`inService`), checked again before each poll. No service
   is asked again within `pollMs` of its last ask, across rounds too (a round
   with fewer services has shorter slots). After `idleRounds` rounds
-  (3 minutes) in which every running service answered and no bus was out
+  in a row (3 minutes) in which every running service answered and no bus was out
   anywhere, it stops: for the
   day if it has seen buses (service is over), else for `idleSleepMs`
   (15 minutes; before the first bus of the morning). A round in which any
   service failed (an outage, the breaker, one service refused) doesn't count
-  towards that.
+  towards that, and starts the count again.
 - **Kill switch.** KV `config:timelapse` set to `off` (or `on`) wins.
   Otherwise the `TIMELAPSE_ENABLED` var applies: `on` for the stable site,
   `off` for the beta (so the two never poll twice), and off when unset. The
@@ -1053,7 +1053,7 @@ than draw them on the wrong line.
 bucket) as `timelapse/YYYY-MM-DD.json.gz` (`DayFile`), deletes everything,
 its alarm included, and costs nothing from then on. If the write fails it
 keeps the day and tries again 10 minutes later; meanwhile `/timelapse/days`
-still lists it (yesterday's recorder is asked too). `/download/*` serves only
+still lists it (the recorders of the past week are asked too). `/download/*` serves only
 release files, so the days are reachable only through `/timelapse/days`
 with the operator token.
 

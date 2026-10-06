@@ -321,6 +321,30 @@ test('no buses for idleRounds rounds: before any bus it rests, after service it 
   assert.equal(h.ns.alarms.get(DATE), windowOf(DATE).close);
 });
 
+test('only empty rounds in a row stop it: one that could not confirm starts the count again', async () => {
+  const buses = { D2: [busOn('D2', 400)] };
+  const h = harness({ buses });
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  delete buses.D2;
+  // Empty rounds, one short of stopping; then one where D2 fails; then more empty ones.
+  await runUntil(h, FROZEN_NOW + TIMELAPSE.idleRounds * 30_000 - 1);
+  const real = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') throw new TypeError('upstream unreachable');
+    return real(input, init);
+  };
+  try {
+    await runUntil(h, FROZEN_NOW + (TIMELAPSE.idleRounds + 1) * 30_000 - 1);
+  } finally {
+    globalThis.fetch = real;
+  }
+  await runUntil(h, FROZEN_NOW + (TIMELAPSE.idleRounds + 3) * 30_000 - 1);
+  assert.equal((await status(h)).state, 'polling', 'two empty rounds since the outage, not six');
+  await runUntil(h, FROZEN_NOW + (2 * TIMELAPSE.idleRounds + 1) * 30_000);
+  assert.equal((await status(h)).state, 'done');
+});
+
 test('an outage is not an idle day: rounds where nothing answered do not stop it', async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400)] } });
   await start(h);
@@ -538,12 +562,12 @@ test("start and end times on the day's timeline: after midnight is the next morn
   assert.equal(timeOn('2026-10-07', '06:30'), sgt('2026-10-07', '06:30'));
 });
 
-test("yesterday's day stays in the list while its write to R2 is being retried", async () => {
+test("an earlier day stays in the list while its write to R2 is being retried", async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400)] } });
   await start(h);
   await runUntil(h, FROZEN_NOW + 30_000 - 1);
-  // The next morning: the 27th's recorder still holds its day (R2 refused it).
-  const next = sgt('2026-08-28', '09:00');
+  // Three mornings later: the 27th's recorder still holds its day (R2 refused it).
+  const next = sgt('2026-08-30', '09:00');
   Date.now = () => next;
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const res = await worker.fetch(new Request('https://bus.example.test/timelapse/days', { headers: { 'x-health-token': 'op' } }), h.env, ctx);
