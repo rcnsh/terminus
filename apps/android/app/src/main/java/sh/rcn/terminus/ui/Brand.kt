@@ -33,9 +33,8 @@ import sh.rcn.terminus.BuildConfig
  * card's text colour by matching its background against the scheme, and a
  * tie with surfaceVariant turns every card's text grey.
  *
- * The inverse colours are the other mode's: a snackbar (Undo after a swipe
- * off Today) is drawn in them, so it's the dark stone with the dark mode's
- * orange in light mode and the reverse in dark, not Material's purple.
+ * The inverse colours are the other mode's, not Material's purple, should
+ * anything still draw in them; the app's own bars are NoticeBar's.
  */
 val BrandLight = lightColorScheme(
     primary = Color(0xFFC2410C), onPrimary = Color.White,
