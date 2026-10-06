@@ -562,7 +562,8 @@ and one-off trips end when they say.
 
 **Taking something off today.** Every `/me/day` entry not done yet is
 `removable`. The apps take it off with `skipped` and its key (swipe on
-Android, × in the web app and on the Mac), then show Undo for six seconds,
+Android, × in the web app and on the Mac), then show Undo for a few seconds
+(Android in a bar at the foot of the screen, the others where the entry was),
 which sends `reset`. It's the same whatever the entry is: a timetabled class,
 one entered by hand, a usual time or a one-off trip is skipped for today only
 (deleting a weekly one is in Settings), and a trip home skipped means staying:

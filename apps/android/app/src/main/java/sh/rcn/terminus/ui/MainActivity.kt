@@ -33,6 +33,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.rcn.terminus.BuildConfig
+import sh.rcn.terminus.DayItem
+import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Store
@@ -269,7 +275,10 @@ private fun Tabs(
     onSignedOut: () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val snackbars = remember { SnackbarHostState() }
+    RemovedBar(state.removed, state.removeError, snackbars, vm)
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbars) },
         bottomBar = {
             NavigationBar {
                 for ((t, label, icon) in listOf(
@@ -331,6 +340,26 @@ private fun Tabs(
                 }
             }
         }
+    }
+}
+
+/**
+ * After a swipe off Today: "GEA1000 removed from today · Undo" in a bar at
+ * the foot of the screen, above the tabs, for a few seconds; and why a
+ * swipe didn't take, the same way. A second swipe replaces the bar.
+ */
+@Composable
+private fun RemovedBar(removed: DayItem?, error: String?, host: SnackbarHostState, vm: MainViewModel) {
+    val undo = stringResource(R.string.undo)
+    LaunchedEffect(removed?.key) {
+        val item = removed ?: return@LaunchedEffect
+        val result = host.showSnackbar(L.s(R.string.taken_off_today, item.shortName()), actionLabel = undo, duration = SnackbarDuration.Long)
+        if (result == SnackbarResult.ActionPerformed) vm.undoRemove() else vm.dismissRemoved(item.key)
+    }
+    LaunchedEffect(error) {
+        if (error == null) return@LaunchedEffect
+        host.showSnackbar(error, duration = SnackbarDuration.Short)
+        vm.dismissRemoveError()
     }
 }
 

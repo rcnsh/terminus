@@ -28,6 +28,10 @@ import sh.rcn.terminus.BuildConfig
  * Keep surfaceVariant different from the container colours: Material picks a
  * card's text colour by matching its background against the scheme, and a
  * tie with surfaceVariant turns every card's text grey.
+ *
+ * The inverse colours are the other mode's: a snackbar (Undo after a swipe
+ * off Today) is drawn in them, so it's the dark stone with the dark mode's
+ * orange in light mode and the reverse in dark, not Material's purple.
  */
 val BrandLight = lightColorScheme(
     primary = Color(0xFFC2410C), onPrimary = Color.White,
@@ -42,6 +46,7 @@ val BrandLight = lightColorScheme(
     surfaceContainerHighest = Color(0xFFF5F4F2), surfaceContainerHigh = Color(0xFFF5F4F2),
     surfaceContainer = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFFFFFFF),
     outline = Color(0xFF8A847E), outlineVariant = Color(0xFFE7E5E2),
+    inverseSurface = Color(0xFF1C1917), inverseOnSurface = Color(0xFFF2EFEB), inversePrimary = Color(0xFFFB923C),
 )
 
 val BrandDark = darkColorScheme(
@@ -57,6 +62,7 @@ val BrandDark = darkColorScheme(
     surfaceContainerHighest = Color(0xFF211F1C), surfaceContainerHigh = Color(0xFF211F1C),
     surfaceContainer = Color(0xFF1A1816), surfaceContainerLow = Color(0xFF1A1816),
     outline = Color(0xFF6F6964), outlineVariant = Color(0xFF2C2926),
+    inverseSurface = Color(0xFFF2EFEB), inverseOnSurface = Color(0xFF1C1917), inversePrimary = Color(0xFFC2410C),
 )
 
 /** "termi" + "nus" in the accent, as on the site. */

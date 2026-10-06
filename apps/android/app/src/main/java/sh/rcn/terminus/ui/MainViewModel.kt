@@ -65,14 +65,9 @@ data class UiState(
     val reportResult: String? = null,
     /** Today's timeline (/me/day), for under the planned answer. */
     val day: DayPlan? = null,
-    /** Just swiped off Today, offered back with Undo. */
+    /** Just swiped off Today, offered back with Undo in a bar at the foot of the screen. */
     val removed: DayItem? = null,
-    /** Where `removed` was: above the entry that followed it (its key, null at the
-     *  end), or at `removedAt` should that one go too. Its row stays there, so
-     *  nothing below it moves, whatever a refresh does meanwhile. */
-    val removedAt: Int = 0,
-    val removedBefore: String? = null,
-    /** Why a swipe off Today didn't take, shown where the row was rather than in the footer. */
+    /** Why a swipe off Today didn't take, in the same bar rather than the footer. */
     val removeError: String? = null,
     /** "Swipe to remove" beside Today's heading, until a row has been swiped. */
     val swipeHint: Boolean = false,
@@ -329,9 +324,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun removeFromToday(item: DayItem) {
         val token = store.token ?: return
         _state.update { s ->
-            val items = s.day?.items.orEmpty()
-            val at = items.indexOfFirst { it.key == item.key }.coerceAtLeast(0)
-            s.copy(day = s.day?.let { d -> d.copy(items = items.filter { it.key != item.key }) }, removed = item, removedAt = at, removedBefore = items.getOrNull(at + 1)?.key, removeError = null)
+            s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item, removeError = null)
         }
         viewModelScope.launch {
             val ctx = getApplication<Application>()
@@ -363,7 +356,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun dismissRemoved() = _state.update { it.copy(removed = null, removeError = null) }
+    /** The Undo bar has gone (timed out or swiped away): only for the entry it was for, not a newer one that replaced it. */
+    fun dismissRemoved(key: String) = _state.update { if (it.removed?.key == key) it.copy(removed = null) else it }
+
+    fun dismissRemoveError() = _state.update { it.copy(removeError = null) }
 
     /** The row has nudged aside once: one fewer to go. */
     fun swipePeeked() {
