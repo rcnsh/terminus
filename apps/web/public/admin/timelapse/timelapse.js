@@ -168,6 +168,17 @@ function setUp() {
   return run;
 }
 
+/** [event] from the map, or an error after a minute: a style that never
+ *  loads mustn't hold every later setup (and the export) behind it. */
+const mapEvent = (event) =>
+  new Promise((ok, fail) => {
+    const timer = setTimeout(() => fail(new Error(`The map did not finish loading (${event}).`)), 60_000);
+    map.once(event, () => {
+      clearTimeout(timer);
+      ok();
+    });
+  });
+
 async function prepare() {
   const { day, theme } = view.get();
   if (!day) return;
@@ -209,12 +220,12 @@ async function prepare() {
       localIdeographFontFamily: "'PingFang SC', 'Noto Sans SC', sans-serif",
     });
     map.on('style.load', () => addLayers());
-    await new Promise((ok) => map.once('load', ok));
+    await mapEvent('load');
   } else {
     map.resize();
     if (!shape.includes(` ${theme} `)) {
       map.setStyle(styleUrl());
-      await new Promise((ok) => map.once('style.load', ok));
+      await mapEvent('style.load');
     } else {
       addLayers();
     }
@@ -547,7 +558,7 @@ function Studio() {
   const busy = Boolean(v.job?.running);
   const set = (patch, redraw = 'frame') => {
     view.set((x) => ({ ...x, ...patch }));
-    if (redraw === 'setup') setUp().then(preview);
+    if (redraw === 'setup') setUp().then(preview, (err) => view.set((x) => ({ ...x, note: err.message })));
     else preview();
   };
   const r = range();

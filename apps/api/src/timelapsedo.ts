@@ -200,13 +200,14 @@ export class TimelapseRecorder {
    * or rests and tries again later if it hasn't. Only a round in which every
    * running service answered counts as idle: with any of them failing (the
    * feed down, the breaker open, one service's calls refused), its buses
-   * could be out there, and an outage mustn't end the day.
+   * could be out there, and an outage mustn't end the day. Such a round
+   * also resets the count, so the rounds that stop it are in a row.
    */
   private async idleAfter(meta: Meta, round: NonNullable<Meta['round']>, now: number): Promise<boolean> {
     const idle = round.buses === 0 && round.answered === round.list.length - (round.closed ?? 0);
     meta.seen ||= round.buses > 0;
-    if (round.buses > 0) meta.idle = 0;
-    else if (idle) meta.idle++;
+    // Only empty rounds in a row count: one that couldn't confirm it starts again.
+    meta.idle = idle ? meta.idle + 1 : 0;
     if (meta.idle < TIMELAPSE.idleRounds) return false;
     meta.idle = 0;
     meta.round = null;
