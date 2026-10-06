@@ -239,6 +239,9 @@ function useSky(node, on) {
  */
 const farY = (x) => 30 + 6 * Math.sin(x / 47 + 0.6) + 4 * Math.sin(x / 19 + 2.1);
 const nearY = (x) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
+/** The flag's five stars, in a ring around its middle (px). */
+const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5), -0.85 * Math.cos((i * 2 * Math.PI) / 5)]);
+
 /** The lowest point of the far hills within 40 px of `x`, where the city shows above them. */
 const dip = (x) => {
   let best = x;
@@ -253,9 +256,9 @@ const ridge = (w, y) => {
 
 /**
  * Where the night sky ends: the hills, a building or two with a light still
- * on, rain trees, a flag by the road, a shuttle on it, and Marina Bay Sands
- * far off in the city. The near hill is the page's own colour, so the sky
- * meets the ground instead of fading into the page.
+ * on, rain trees, Singapore's flag by the road, a shuttle on it, and Marina
+ * Bay Sands far off in the city. The near hill is the page's own colour, so
+ * the sky meets the ground instead of fading into the page.
  */
 function Horizon({ ground }) {
   const [w, setW] = useState(0);
@@ -295,8 +298,11 @@ function Horizon({ ground }) {
           </g>`;
         })}
         <line class="pole" x1=${flag} y1=${pole + 2} x2=${flag} y2=${pole - 24} />
-        <rect class="flag-red" x=${flag + 0.6} y=${pole - 24} width="9" height="3" />
-        <rect class="flag-white" x=${flag + 0.6} y=${pole - 21} width="9" height="3" />
+        <rect class="flag-red" x=${flag + 0.6} y=${pole - 24} width="12" height="4" />
+        <rect class="flag-white" x=${flag + 0.6} y=${pole - 20} width="12" height="4" />
+        <circle class="flag-white" cx=${flag + 3.2} cy=${pole - 22} r="1.5" />
+        <circle class="flag-red" cx=${flag + 3.8} cy=${pole - 22} r="1.3" />
+        ${STARS5.map(([x, y]) => html`<circle class="flag-white" cx=${flag + 5.2 + x} cy=${pole - 22 + y} r="0.35" />`)}
         <path class="near" d=${ridge(w, nearY)} />
         <line class="road" x1="0" y1="70" x2=${w} y2="70" />
         <g transform=${`translate(${bus} 57)`}>
