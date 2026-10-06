@@ -212,13 +212,74 @@ test('with the breaker open, a poll is skipped, not retried harder', async () =>
   assert.equal((await status(h)).samples, 0);
 });
 
-test('a failed poll records nothing', async () => {
+test('a failed poll records nothing, but a request that reached NUS still counts as one', async () => {
   const h = harness();
   globalThis.fetch = makeFetch({ fail: true });
   await start(h);
   await h.ns.fireDue(FROZEN_NOW);
-  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['failed']);
+  // It asked, and the request failed: an `error`, counted with the requests.
+  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['error']);
   assert.equal((await status(h)).samples, 0);
+  // The same service again within failMemoS isn't asked: `failed`, no request.
+  const inst = h.ns.instances.get(DATE);
+  const meta = inst.read('meta');
+  inst.write('meta', { ...meta, round: { ...meta.round, i: 0 }, asked: {} });
+  Date.now = () => FROZEN_NOW + 1_000;
+  await h.ns.get(DATE).fetch(`https://timelapse.internal/status?date=${DATE}`);
+  h.ns.alarms.set(DATE, FROZEN_NOW + 1_000);
+  await h.ns.fireDue(FROZEN_NOW + 1_000);
+  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['error', 'failed']);
+});
+
+test('no service is asked twice within pollMs, even when the next round has fewer services', async () => {
+  // 22:59:30 on a Thursday: most services close at 23:00, so the round
+  // after has fewer services in it, and shorter slots.
+  const from = sgt(DATE, '22:59') + 30_000;
+  const before = Object.keys(GRAPH.routes).filter((svc) => inService(GRAPH, svc, from)).length;
+  const after = Object.keys(GRAPH.routes).filter((svc) => inService(GRAPH, svc, from + 60_000)).length;
+  assert.ok(after > 0 && after < before, `services running: ${before} then ${after}`);
+  const h = harness({ buses: { K: [busOn('K', 400)] } });
+  Date.now = () => from;
+  await start(h);
+  await runUntil(h, from + 3 * 60_000);
+  // Every service's asks are at least pollMs apart, and none after it closed.
+  const stamps = h.fetchImpl.requests.filter((r) => r.url.endsWith('/active-bus')).map((r) => [r.body.route_code, r.at]);
+  for (const [svc, t] of stamps) assert.ok(inService(GRAPH, svc, t), `${svc} asked at ${new Date(t).toISOString()} after it closed`);
+  const bySvc = {};
+  for (const [svc, t] of stamps) (bySvc[svc] ??= []).push(t);
+  for (const [svc, ts] of Object.entries(bySvc)) {
+    for (let j = 1; j < ts.length; j++) assert.ok(ts[j] - ts[j - 1] >= 30_000, `${svc} asked again after ${ts[j] - ts[j - 1]} ms`);
+  }
+});
+
+test('a partial outage is not an idle day: one service failing while the rest have no buses', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  // D2, the only service with buses out, fails from now on; the rest answer empty.
+  const real = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') throw new TypeError('upstream unreachable');
+    return real(input, init);
+  };
+  await runUntil(h, FROZEN_NOW + 12 * 30_000);
+  assert.equal((await status(h)).state, 'polling', 'still recording: D2 may well have buses out');
+});
+
+test('a deploy that changes a line mid-day keeps positions but not metres along', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  // As if the day began on an older D2 line.
+  const inst = h.ns.instances.get(DATE);
+  const meta = inst.read('meta');
+  inst.write('meta', { ...meta, lines: { ...meta.lines, D2: 'an older line' } });
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  const res = await h.ns.get(DATE).fetch(`https://timelapse.internal/day?date=${DATE}`);
+  const file = await gunzip(new Uint8Array(await res.arrayBuffer()));
+  const d2 = file.samples.find((s) => file.services[s[1]] === 'D2');
+  assert.equal(d2.length, 2 + 4, 'the bus is kept');
+  assert.equal(d2[5], -1, 'without metres along');
+  assert.equal(decodeDay(file).tracks.length, 0, 'and the replay leaves it out');
 });
 
 test('the switch turned off mid-day stops polling within a round; on again, the cron resumes it', async () => {
@@ -258,6 +319,30 @@ test('no buses for idleRounds rounds: before any bus it rests, after service it 
   await runUntil(h, FROZEN_NOW + (TIMELAPSE.idleRounds + 1) * 30_000);
   assert.equal((await status(h)).state, 'done');
   assert.equal(h.ns.alarms.get(DATE), windowOf(DATE).close);
+});
+
+test('only empty rounds in a row stop it: one that could not confirm starts the count again', async () => {
+  const buses = { D2: [busOn('D2', 400)] };
+  const h = harness({ buses });
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  delete buses.D2;
+  // Empty rounds, one short of stopping; then one where D2 fails; then more empty ones.
+  await runUntil(h, FROZEN_NOW + TIMELAPSE.idleRounds * 30_000 - 1);
+  const real = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') throw new TypeError('upstream unreachable');
+    return real(input, init);
+  };
+  try {
+    await runUntil(h, FROZEN_NOW + (TIMELAPSE.idleRounds + 1) * 30_000 - 1);
+  } finally {
+    globalThis.fetch = real;
+  }
+  await runUntil(h, FROZEN_NOW + (TIMELAPSE.idleRounds + 3) * 30_000 - 1);
+  assert.equal((await status(h)).state, 'polling', 'two empty rounds since the outage, not six');
+  await runUntil(h, FROZEN_NOW + (2 * TIMELAPSE.idleRounds + 1) * 30_000);
+  assert.equal((await status(h)).state, 'done');
 });
 
 test('an outage is not an idle day: rounds where nothing answered do not stop it', async () => {
@@ -475,4 +560,17 @@ test("start and end times on the day's timeline: after midnight is the next morn
   assert.equal(timeOn('2026-10-07', '08:00'), sgt('2026-10-07', '08:00'));
   assert.equal(timeOn('2026-10-07', '00:15'), sgt('2026-10-08', '00:15'));
   assert.equal(timeOn('2026-10-07', '06:30'), sgt('2026-10-07', '06:30'));
+});
+
+test("an earlier day stays in the list while its write to R2 is being retried", async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  // Three mornings later: the 27th's recorder still holds its day (R2 refused it).
+  const next = sgt('2026-08-30', '09:00');
+  Date.now = () => next;
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+  const res = await worker.fetch(new Request('https://bus.example.test/timelapse/days', { headers: { 'x-health-token': 'op' } }), h.env, ctx);
+  const { days } = await res.json();
+  assert.deepEqual(days.map((d) => [d.date, d.closed, d.samples]), [[DATE, false, RUNNING.length]]);
 });
