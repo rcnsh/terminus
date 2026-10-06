@@ -175,6 +175,7 @@ export async function tripAnswer(
     originCode: lat === null && dest.from ? targetStops(dest.from).to : null,
     preferStops: profile.home?.stops ?? [],
     originWalkS: lat === null ? originWalkS(dest, homeStop, profile.homeWalkMin, speed) : 0,
+    ...(profile.home ? { homeWalkS: profile.homeWalkMin * 60 } : {}),
     walkSpeedMs: speed,
     arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS, fullBusMargin: profile.fullBusMargin, ...(oneEarlier ? { oneEarlier } : {}) } : null,
     endWalkS,

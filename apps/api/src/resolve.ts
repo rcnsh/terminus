@@ -31,7 +31,7 @@ import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK, isMeasured, sgt } from './config
 import { haversineM } from './geo.ts';
 import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
 import { footM, stopFootM } from './walk.ts';
-import { residenceStops } from './residences.ts';
+import { type HomeWalk, residenceStops } from './residences.ts';
 
 export { haversineM };
 
@@ -127,6 +127,12 @@ export function rideStops(idx: GraphIndex, svc: string, from: string, to: string
   return Array.from({ length: best.hops + 1 }, (_, k) => r.seq[(best.i + k) % n]);
 }
 
+/** The user's walk from home to their home stops, in metres at their pace, when they've said it. */
+function homeWalk(input: ResolveInput): HomeWalk | null {
+  if (input.homeWalkS == null || !input.preferStops?.length) return null;
+  return { stops: input.preferStops, m: input.homeWalkS * (input.walkSpeedMs ?? WALK.speedMs) };
+}
+
 /**
  * Stops worth fetching arrivals for. Bounded by WALK.maxCandidates so one
  * request never fans out into a dozen upstream calls.
@@ -136,7 +142,7 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
   const { to } = input;
 
   let base: Array<{ stop: Stop; distM: number; footM: number }>;
-  const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode) : null;
+  const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode, homeWalk(input)) : null;
   if (home) {
     base = home;
   } else if (input.lat != null && input.lon != null) {
@@ -620,7 +626,7 @@ export function walkAllTheWayS(
   if (input.lat != null && input.lon != null) {
     // In a residence, walk out by its own stops: the straight line can cross
     // a hill the path goes round.
-    const home = residenceStops(input.lat, input.lon, idx.byCode);
+    const home = residenceStops(input.lat, input.lon, idx.byCode, homeWalk(input));
     if (home) {
       const via = Math.min(...home.map((h) => (h.stop.code === dest.code ? h.footM : h.footM + stopFootM(h.stop, dest))));
       return Math.round(Math.max(via, footM(input.lat, input.lon, dest)) / speed);
