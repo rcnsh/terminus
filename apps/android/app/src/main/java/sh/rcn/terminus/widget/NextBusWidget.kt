@@ -289,16 +289,20 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         }
                         Footer(ctx, fetchedAt, error, roomy)
                     }
-                    answer.card?.journey != null && error != UPDATING && !isOld(answer, fetchedAt, now0) -> {
+                    answer.card?.journey != null && !isOld(answer, fetchedAt, now0) -> {
                         // A trip by bus, in the card style chosen in Settings › Appearance.
                         // Old times fall through to the layouts below, which dim them.
-                        WidgetJourney(answer, answer.card.journey, CardStyle.pref(ctx), large, roomy, error?.takeIf { !roomy })
+                        // A refresh keeps this layout, with "Updating…" on the head
+                        // line (compact) or in the footer: switching layouts for a
+                        // second after a tap on ↻ looked like the widget breaking.
+                        val note = error?.takeIf { !roomy }?.let { if (it == UPDATING) L.s(R.string.updating) else it }
+                        WidgetJourney(answer, answer.card.journey, CardStyle.pref(ctx), large, roomy, note)
                         if (large) {
                             Spacer(GlanceModifier.defaultWeight())
                             ModeRow(ctx, bottom)
                             Spacer(GlanceModifier.height(6.dp))
                         }
-                        Footer(ctx, fetchedAt, error, roomy)
+                        Footer(ctx, fetchedAt, error, roomy, updating = true)
                     }
                     answer.isClassPlan -> {
                         // A class: when to leave leads, the next bus is the fallback.
@@ -420,9 +424,11 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
     /** "Updated 17:14", with any problem in front, where there's room. */
     @Composable
-    private fun Footer(ctx: Context, fetchedAt: Long?, error: String?, roomy: Boolean) {
+    /** [updating]: say "Updating…" here; the other layouts say it on a line of their own. */
+    private fun Footer(ctx: Context, fetchedAt: Long?, error: String?, roomy: Boolean, updating: Boolean = false) {
         val stamp = fetchedAt?.let { L.s(R.string.updated_at, clock(ctx, it)) }
-        val foot = listOfNotNull(error?.takeIf { it != UPDATING }, stamp).joinToString(" · ")
+        val problem = error?.let { if (it == UPDATING) L.s(R.string.updating).takeIf { updating } else it }
+        val foot = listOfNotNull(problem, stamp).joinToString(" · ")
         if (roomy && foot.isNotEmpty()) Text(foot, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp), maxLines = 1)
     }
 
