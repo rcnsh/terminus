@@ -2,10 +2,11 @@
 // page ("Your widget right now") and on the web app's Now. Every line comes
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
-import { Rich, html, useEffect, useLayoutEffect, useRef, useState, useStore } from '../assets/ui.js';
+import { Rich, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle } from './journey.js';
+import { Celestial, Horizon, NightSky } from './sky.js';
 
 
 /** Past the card's staleAt: its bus has gone, the plan has moved on, or it's 15 minutes old. */
@@ -184,143 +185,6 @@ function Suggestion({ a, onChoice }) {
   `;
 }
 
-/** Where the stars sit over the night: across (0–1), down (0–1 of the room above the headline), and how bright. */
-const STARS = [
-  [0.06, 0.3, 0.7], [0.17, 0.62, 0.5], [0.29, 0.18, 0.8], [0.38, 0.8, 0.4], [0.47, 0.42, 0.6], [0.55, 0.1, 0.5], [0.63, 0.68, 0.45],
-  [0.72, 0.28, 0.7], [0.84, 0.88, 0.4], [0.92, 0.5, 0.55], [0.11, 0.95, 0.35], [0.33, 1, 0.4], [0.58, 0.98, 0.3],
-];
-
-/** A few stars and a crescent moon. Fixed, so they never twinkle into a distraction. */
-const NightSky = () => html`
-  <span class="night-sky" aria-hidden="true">
-    ${STARS.map(([x, y, a], i) => html`<span class="star" key=${i} style=${{ left: `${x * 100}%`, top: `${4 + y * 88}px`, opacity: a }}></span>`)}
-    <span class="moon"></span>
-  </span>
-`;
-
-/**
- * The page's night sky, on the web app's Now: from the top of the page down
- * to the end of `node` (the horizon under the headline and the next class;
- * app.css, body.night). The header and the chips take night colours over
- * it, and so does the browser's own bar where it has one.
- */
-function useSky(node, on) {
-  useLayoutEffect(() => {
-    const el = node.current;
-    if (!on || !el) return;
-    const body = document.body;
-    const place = () => body.style.setProperty('--sky-end', `${Math.round(el.getBoundingClientRect().bottom + window.scrollY)}px`);
-    place();
-    body.classList.add('night');
-    // The browser's bar too, while Now is the tab on screen (app.js sets on-map and on-settings).
-    const bar = Object.assign(document.createElement('meta'), { name: 'theme-color', content: '#121a33' });
-    const tab = () => (body.classList.contains('on-map') || body.classList.contains('on-settings') ? bar.remove() : document.head.prepend(bar));
-    tab();
-    const tabs = new MutationObserver(tab);
-    tabs.observe(body, { attributes: true, attributeFilter: ['class'] });
-    const seen = new ResizeObserver(place);
-    seen.observe(el);
-    seen.observe(body);
-    return () => {
-      seen.disconnect();
-      tabs.disconnect();
-      bar.remove();
-      body.classList.remove('night');
-      body.style.removeProperty('--sky-end');
-    };
-  }, [on]);
-}
-
-/**
- * The hills along the horizon, more or less Kent Ridge: how far down the
- * strip (92 px) each is, `x` px across. Fixed waves in pixels, so a wider
- * page shows more hills rather than stretched ones. Android draws the same
- * (NightSky.kt).
- */
-const farY = (x) => 30 + 6 * Math.sin(x / 47 + 0.6) + 4 * Math.sin(x / 19 + 2.1);
-const nearY = (x) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
-/** The flag's five stars, in a ring around its middle (px). */
-const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5), -0.85 * Math.cos((i * 2 * Math.PI) / 5)]);
-
-/** The lowest point of the far hills between `lo` and `hi` px, where the city shows above them. */
-const dip = (lo, hi) => {
-  let best = lo;
-  for (let x = lo; x <= hi; x += 2) if (farY(x) > farY(best)) best = x;
-  return best;
-};
-const ridge = (w, y) => {
-  let d = `M0 92L0 ${y(0).toFixed(1)}`;
-  for (let x = 4; x < w + 4; x += 4) d += `L${x} ${y(x).toFixed(1)}`;
-  return `${d}L${w} 92Z`;
-};
-
-/**
- * Where the night sky ends: the hills, a building or two with a light still
- * on, rain trees, Singapore's flag by the road, a shuttle on it, and Marina
- * Bay Sands far off in the city. The near hill is the page's own colour, so
- * the sky meets the ground instead of fading into the page.
- */
-function Horizon({ ground }) {
-  const [w, setW] = useState(0);
-  useLayoutEffect(() => {
-    const el = ground.current;
-    const seen = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
-    seen.observe(el);
-    return () => seen.disconnect();
-  }, []);
-  const at = (f) => Math.round(w * f);
-  // The flag stands right of the shuttle, clear of it and of anything over
-  // it; the city keeps clear of the flag and of the window's edge.
-  const [b1, b2, bus, flag] = [at(0.18), at(0.62), at(0.58) - 19, at(0.76)];
-  const mbs = dip(Math.max(at(0.8) - 40, flag + 30), Math.min(at(0.8) + 40, w - 29));
-  const city = farY(mbs) + 3;
-  const pole = nearY(flag);
-  return html`
-    <div class="horizon" ref=${ground} aria-hidden="true">
-      ${w > 0 &&
-      html`<svg width=${w} height="92" viewBox=${`0 0 ${w} 92`}>
-        <g class="city">
-          ${[-13, -2, 9].map((x) => html`<path d=${`M${mbs + x} ${city}L${mbs + x + 1} ${city - 26}H${mbs + x + 5}L${mbs + x + 6} ${city}Z`} />`)}
-          <path d=${`M${mbs - 15} ${city - 28}L${mbs + 25} ${city - 29.2}L${mbs + 23} ${city - 26}H${mbs - 14}Z`} />
-        </g>
-        <path class="far" d=${ridge(w, farY)} />
-        <rect class="far" x=${b1 - 8} y=${farY(b1) - 14} width="16" height="20" />
-        <rect class="lit dim" x=${b1 - 3} y=${farY(b1) - 9} width="3" height="3" />
-        <rect class="far" x=${b2 - 13} y=${farY(b2) - 22} width="26" height="28" />
-        <rect class="lit" x=${b2 - 5} y=${farY(b2) - 16} width="3" height="3" />
-        <rect class="lit dim" x=${b2 + 3} y=${farY(b2) - 8} width="3" height="3" />
-        ${[0.06, 0.45, 0.9].map((f) => {
-          // A rain tree: a trunk forking low under a wide, flat crown.
-          const c = at(f);
-          const g = nearY(c);
-          return html`<g class="tree">
-            <path d=${`M${c - 1.5} ${g + 2}V${g - 7}L${c - 7} ${g - 13}H${c - 4.5}L${c} ${g - 9}L${c + 4.5} ${g - 13}H${c + 7}L${c + 1.5} ${g - 7}V${g + 2}Z`} />
-            <ellipse cx=${c} cy=${g - 18} rx="21" ry="5.5" />
-            <ellipse cx=${c - 8} cy=${g - 21.5} rx="11" ry="4.5" />
-            <ellipse cx=${c + 8} cy=${g - 22} rx="12" ry="4.5" />
-          </g>`;
-        })}
-        <line class="pole" x1=${flag} y1=${pole + 2} x2=${flag} y2=${pole - 24} />
-        <rect class="flag-red" x=${flag + 0.6} y=${pole - 24} width="12" height="4" />
-        <rect class="flag-white" x=${flag + 0.6} y=${pole - 20} width="12" height="4" />
-        <circle class="flag-white" cx=${flag + 3.2} cy=${pole - 22} r="1.5" />
-        <circle class="flag-red" cx=${flag + 3.8} cy=${pole - 22} r="1.3" />
-        ${STARS5.map(([x, y]) => html`<circle class="flag-white" cx=${flag + 5.2 + x} cy=${pole - 22 + y} r="0.35" />`)}
-        <path class="near" d=${ridge(w, nearY)} />
-        <line class="road" x1="0" y1="70" x2=${w} y2="70" />
-        <g transform=${`translate(${bus} 57)`}>
-          <path class="lit beam" d="M38 6L60 3L60 11Z" />
-          <rect class="bus" width="38" height="12" rx="3" />
-          <rect class="stripe" y="9.5" width="38" height="2.5" rx="1" />
-          ${[3, 10, 17, 24].map((x) => html`<rect class=${x === 24 ? 'lit dim' : 'lit'} x=${x} y="2.5" width="5" height="4" rx="1" />`)}
-          <rect class="lit" x="32" y="2.5" width="4" height="6" rx="1" />
-          ${[8, 30].map((x) => html`<circle class="tyre" cx=${x} cy="12" r="2.2" /><circle class="hub" cx=${x} cy="12" r="0.8" />`)}
-        </g>
-      </svg>`}
-    </div>
-  `;
-}
-
 /** The next class on a card of its own: when in the accent, what, then where. */
 const UpcomingCard = ({ u }) => html`
   <div class="upcoming">
@@ -333,28 +197,26 @@ const UpcomingCard = ({ u }) => html`
 /**
  * The day's done, or there's nothing to catch: the label large, what's next
  * on a card of its own, then your favourites to plan a trip to instead,
- * where there's somewhere to show one (`onPlace`, the web app's Now). After
- * your day it's night: on Now, the page's sky; on the account page's
- * preview, a panel.
+ * where there's somewhere to show one (`onPlace`, the web app's Now). On
+ * Now (`sky`) the words are up in the page's sky, above the horizon, the
+ * favourites on the ground; after your day that sky is the night. On the
+ * account page's preview it's a panel, the night's after your day.
  */
-function DayDone({ a, night, onPlace, children }) {
+function DayDone({ a, night, sky, onPlace, children }) {
   const places = onPlace ? (a.places ?? []) : [];
   const u = a.card?.upcoming ?? null;
   // The line under the label: why today's empty on a break, or what's next when there's no card for it.
   const sub = u ? u.off : a.detail || null;
-  const open = night && Boolean(onPlace);
-  const ground = useRef(null);
-  useSky(ground, open);
   return html`
-    <div class=${open ? 'widget day-done open' : 'widget day-done'} aria-live="polite">
-      <div class=${night ? 'done-panel night' : 'done-panel'}>
-        ${night && html`<${NightSky} />`}
+    <div class=${sky ? 'widget day-done open' : 'widget day-done'} aria-live="polite">
+      <div class=${sky ? 'done-panel sky-head' : night ? 'done-panel night' : 'done-panel'}>
+        ${sky ? html`<${Celestial} />` : night && html`<${NightSky} />`}
         <div class="done-label">${a.label}</div>
         ${sub && html`<div class="done-detail">${sub}</div>`}
-        ${open && u && html`<${UpcomingCard} u=${u} />`}
+        ${sky && u && html`<${UpcomingCard} u=${u} />`}
       </div>
-      ${open && html`<${Horizon} ground=${ground} />`}
-      ${!open && u && html`<${UpcomingCard} u=${u} />`}
+      ${sky && html`<${Horizon} />`}
+      ${!sky && u && html`<${UpcomingCard} u=${u} />`}
       ${places.length > 0 && html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>`}
       ${places.length > 0 &&
       html`<div class="place-tiles">
@@ -368,6 +230,13 @@ function DayDone({ a, night, onPlace, children }) {
   `;
 }
 
+/**
+ * On Now (`sky`), `top` up in the page's sky with the sun or the stars over
+ * it, then the horizon; elsewhere `top` as it is.
+ */
+export const InSky = ({ sky, children }) =>
+  sky ? html`<div class="sky-head"><${Celestial} />${children}</div><${Horizon} />` : children;
+
 /** The large Android widget's row: Timetable and Nearby, then the usual places, as many as fit. */
 const Chips = ({ a }) => html`
   <div class="chips">${[t('Timetable'), t('Nearby'), ...(a.places ?? []).slice(0, 2).map((p) => p.label)].map((x) => html`<span>${x}</span>`)}</div>
@@ -378,25 +247,27 @@ const Chips = ({ a }) => html`
  * answer after a button; `onChoice` runs after a suggestion is answered.
  * `chips`: the widget's row of buttons under it (the account page's preview).
  * `onPlace`: a favourite tapped on Done for today (its key), in the web app.
+ * `sky`: on the web app's Now, where the card's top is in the page's sky
+ * and the rest on the ground below the horizon (sky.js).
  */
-export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false }) {
+export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky = false }) {
   const style = useStore(cardStyle);
   const actions = html`<${Actions} a=${a} onAnswer=${onAnswer} onChoice=${onChoice} />`;
   const row = chips && html`<${Chips} a=${a} />`;
   // After your day, or no classes today: said plainly, with no bus to mistake
   // for advice. "Undo" when the class just taken off was the day's last, and
   // "Back on campus".
-  if (a.mode === 'rest' || a.mode === 'free') return html`<${DayDone} a=${a} night=${a.mode === 'rest'} onPlace=${onPlace}>${actions}${row}<//>`;
+  if (a.mode === 'rest' || a.mode === 'free') return html`<${DayDone} a=${a} night=${a.mode === 'rest'} sky=${sky} onPlace=${onPlace}>${actions}${row}<//>`;
   // There: the same panel, plain, with where else to go.
-  if (a.arrived) return html`<${DayDone} a=${a} night=${false} onPlace=${onPlace}>${actions}${row}<//>`;
+  if (a.arrived) return html`<${DayDone} a=${a} night=${false} sky=${sky} onPlace=${onPlace}>${actions}${row}<//>`;
   const old = isStale(a);
   // A trip by bus or on foot, in the style chosen in Settings › Appearance. Old
   // times fall through to the cards below, which say they're updating.
   if (a.card?.journey && !old && !a.arrived) {
-    return html`<div class="widget" aria-live="polite"><${Phase} a=${a} /><${Journey} a=${a} style=${style} />${actions}${row}</div>`;
+    return html`<div class="widget" aria-live="polite"><${Journey} a=${a} style=${style} sky=${sky} lead=${html`<${Phase} a=${a} />`} />${actions}${row}</div>`;
   }
   if (a.card?.kind === 'class' && !old) {
-    return html`<div class="widget" aria-live="polite"><${Phase} a=${a} /><${ClassPlan} a=${a} />${actions}${row}</div>`;
+    return html`<div class="widget" aria-live="polite"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${actions}${row}</div>`;
   }
   const where =
     a.mode === 'nearby' ? t('Nearby') : a.dest?.why === 'class' ? t('Next class · {0}', a.dest.label) : a.dest?.why === 'gap-home' ? t('Long gap · {0}', a.dest.label) : (a.dest?.label ?? t('Next bus'));
@@ -409,13 +280,15 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false }) {
   const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');
   return html`
     <div class=${old ? 'widget old' : 'widget'} aria-live="polite">
-      <${Phase} a=${a} />
-      <div class="where">${where}</div>
-      <div class="big">${big}</div>
-      ${timed && !old && html`<${Countdown} at=${a.departsAt} />`}
-      <div class="detail">${old ? t('Updating times…') : a.detail}</div>
-      ${a.leave && a.card && !old && html`<div class="leave">${leaveText(a)}</div>`}
-      ${a.timing && !old && !a.detail?.includes(a.timing.text) && html`<span class=${`ontime ${a.timing.status}`}>${a.timing.text}</span>`}
+      <${InSky} sky=${sky}>
+        <${Phase} a=${a} />
+        <div class="where">${where}</div>
+        <div class="big">${big}</div>
+        ${timed && !old && html`<${Countdown} at=${a.departsAt} />`}
+        <div class="detail">${old ? t('Updating times…') : a.detail}</div>
+        ${a.leave && a.card && !old && html`<div class="leave">${leaveText(a)}</div>`}
+        ${a.timing && !old && !a.detail?.includes(a.timing.text) && html`<span class=${`ontime ${a.timing.status}`}>${a.timing.text}</span>`}
+      <//>
       ${notes && html`<div class="note">${notes}</div>`}
       ${actions}${row}
     </div>

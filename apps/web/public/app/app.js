@@ -13,7 +13,8 @@
 
 import { Icon, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { api, clock, hour12, inkOn, send, t } from '/account/dom.js';
-import { Card, Message, Report, isStale, signal } from '/account/preview.js';
+import { Card, InSky, Message, Report, isStale, signal } from '/account/preview.js';
+import { Celestial, Horizon, phaseAt, useNowSky } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
@@ -771,6 +772,11 @@ function NearbyCard({ stops }) {
   `;
 }
 
+/**
+ * The card for what's chosen, under Now's sky (sky.js): whatever it shows,
+ * its top is up in the sky and it ends on the horizon, so the sky stays as
+ * the chips switch. The sky is the hour's; after your day, the night.
+ */
 function CardArea() {
   const c = useStore(card);
   const to = useStore(target);
@@ -779,7 +785,15 @@ function CardArea() {
   const bar = useStore(undo);
   // Undo once: in the removed entry's row while it's there, not on the card as well.
   const a = c.a?.card && bar?.undo ? { ...c.a, card: { ...c.a.card, actions: c.a.card.actions.filter((x) => !(x.id === 'reset' && x.trip === bar.it.key)) } } : c.a;
-  const body = a ? html`<${Card} a=${a} onAnswer=${answered} onChoice=${refresh} onPlace=${(key) => choose({ kind: 'place', key })} />` : c.offline ? html`<${OfflineCard} ...${c.offline} />` : c.nearby ? html`<${NearbyCard} stops=${c.nearby} />` : html`<${Message} text=${c.text} />`;
+  const clockNow = new Date();
+  useNowSky(a?.mode === 'rest' ? 'night' : phaseAt(clockNow.getHours() * 60 + clockNow.getMinutes()));
+  const body = a
+    ? html`<${Card} a=${a} sky onAnswer=${answered} onChoice=${refresh} onPlace=${(key) => choose({ kind: 'place', key })} />`
+    : c.offline
+      ? html`<${InSky} sky><${OfflineCard} ...${c.offline} /><//>`
+      : c.nearby
+        ? html`<div class="sky-head nearby-sky"><${Celestial} /></div><${Horizon} /><${NearbyCard} stops=${c.nearby} />`
+        : html`<${InSky} sky><${Message} text=${c.text} /><//>`;
   return html`
     <section class="card app-card">
       ${body}

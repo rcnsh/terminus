@@ -43,6 +43,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +59,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -78,6 +82,9 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
+
+/** Minutes past midnight on the phone's clock, for the sky's hour. */
+private fun minuteOfDay(): Int = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
 
 @Composable
 internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, onOpenStop: (String) -> Unit) {
@@ -108,24 +115,39 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         }
     }
 
-    // Done for today's sky: the night section says where it ends; the header,
-    // chips and status bar take night colours over it.
+    // Now's sky, by the hour (always night after your day): whatever's shown
+    // under the chips says where it ends, and the header, chips and status
+    // bar take its ink over it. One sky for the tab, so it stays as the
+    // chips switch.
     val sky = remember { SkyState() }
-    val night = sky.end != null
-    NightStatusBar(night)
-    val scroll = rememberScrollState()
     val page = MaterialTheme.colorScheme.background
+    val minute by produceState(minuteOfDay()) {
+        while (true) {
+            delay(60_000 - System.currentTimeMillis() % 60_000)
+            value = minuteOfDay()
+        }
+    }
+    val rest = !state.showNearby && state.answer?.mode == "rest"
+    SideEffect {
+        sky.phase = if (rest) Phase.NIGHT else phaseAt(minute)
+        sky.dark = page.luminance() < 0.5f
+    }
+    val shown = sky.end != null
+    val light = sky.palette.lightInk
+    NightStatusBar(shown && light)
+    val scroll = rememberScrollState()
+    val measurer = rememberTextMeasurer()
     CompositionLocalProvider(LocalSky provides sky) { Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(scroll)
             .onGloballyPositioned { sky.contentTop = it.positionInRoot().y }
-            .nightSky(sky, page)
+            .skyBehind(sky, page, measurer)
             .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())
             .padding(horizontal = 16.dp),
     ) {
-        NightTheme(night) { Column {
+        SkyInk(shown, light) { Column {
         TabHeader { HeaderWordmark() }
 
         state.update?.let { v ->
@@ -191,7 +213,9 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         // A minimum height keeps the chips and search from jumping as views
         // switch or data arrives.
         Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
-            if (state.showNearby) {
+            if (state.showNearby) Column {
+                SkyHead(44.dp) {}
+                SkyGround()
                 NearbyList(state.nearby, state.loading, onOpenStop)
             } else {
                 // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
@@ -256,7 +280,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
             .fillMaxWidth()
             .height(top)
             .graphicsLayer { alpha = if (top.toPx() > 0f) (scroll.value / top.toPx()).coerceIn(0f, 1f) else 0f }
-            .background(if (night) NIGHT[0] else page),
+            .background(if (shown) sky.palette.sky[0] else page),
     )
     } }
 }

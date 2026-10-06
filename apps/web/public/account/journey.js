@@ -5,6 +5,7 @@
 
 import { Icon, html, store, useEffect, useState } from '../assets/ui.js';
 import { clock, inkOn, t } from './dom.js';
+import { Celestial, Horizon } from './sky.js';
 
 const KEY = 'terminus-card-style';
 export const STYLES = ['steps', 'route', 'ticket'];
@@ -126,16 +127,39 @@ function useNow(a, j) {
   return now;
 }
 
-/** The card's trip, in `style` (by default this browser's). */
-export function Journey({ a, style }) {
+/**
+ * Your bus on the horizon's road (sky.js): coming up to your stop's sign,
+ * nearer the sooner it's due, with when ("D2 · 8 min"; "~8 min" for a
+ * timetable guess). Nothing on foot.
+ */
+function onTheRoad(j, now) {
+  if (!j.bus) return {};
+  const left = j.boardAt ? Math.floor((Date.parse(j.boardAt) - now) / 1000) : 0;
+  const min = t('{0} min', Math.round(left / 60));
+  const when = left <= 0 ? null : left < 60 ? t('Arriving') : j.live ? min : t('~{0}', min);
+  const text = when ? `${named(j.bus)} · ${when}` : named(j.bus);
+  return { stop: j.bus.stop, bus: { color: j.bus.color, live: j.live, far: Math.max(0, left) / 900, text } };
+}
+
+/**
+ * The card's trip, in `style` (by default this browser's), with `lead` (where
+ * the trip is, a notice) first. With `sky`, on the web app's Now, the top
+ * of it is up in the page's sky and the horizon under it has your bus on
+ * its way to your stop; the steps are on the ground.
+ */
+export function Journey({ a, style, sky = false, lead = null }) {
   const j = a.card.journey;
   const now = useNow(a, j);
   const late = a.card.late ? ' late' : '';
   const body = style === 'ticket' ? Ticket : style === 'steps' ? Steps : Route;
   const small = [a.leave?.note, a.card.estimate].filter(Boolean).join(' ');
+  const top = (head) =>
+    sky
+      ? html`<div class="sky-head"><${Celestial} />${lead}${head}</div><${Horizon} ...${onTheRoad(j, now)} shuttle=${false} />`
+      : html`${lead}${head}`;
   return html`
     <div class=${`journey ${style}`}>
-      <${body} a=${a} j=${j} now=${now} late=${late} />
+      <${body} a=${a} j=${j} now=${now} late=${late} top=${top} />
       ${small && html`<div class="small-print">${small}</div>`}
       ${j.bus && !j.live && a.card.quality && html`<div class="note">${a.card.quality}</div>`}
     </div>
@@ -146,12 +170,14 @@ export function Journey({ a, style }) {
 const place = (j) => j.to.split(' @ ')[0];
 
 /** Route: you, the stop and where you're going on a line, the times under each point. */
-function Route({ a, j, now, late }) {
+function Route({ a, j, now, late, top }) {
   const under = [by(a, j, now), arrive(j)].filter(Boolean).join(' · ');
   return html`
-    <div class="where">${to(a, j)}</div>
-    <${LeaveHead} a=${a} j=${j} now=${now} late=${late} />
-    ${under && html`<div class=${`under${late}`}>${under}</div>`}
+    ${top(html`
+      <div class="where">${to(a, j)}</div>
+      <${LeaveHead} a=${a} j=${j} now=${now} late=${late} />
+      ${under && html`<div class=${`under${late}`}>${under}</div>`}
+    `)}
     ${j.bus ? html`<${BusLine} a=${a} j=${j} />` : html`<${WalkLine} j=${j} />`}
     <${Tags} a=${a} j=${j} />
   `;
@@ -206,9 +232,10 @@ const Point = ({ name, time, you = false }) => html`
 `;
 
 /** Ticket: the bus first, as you'd look for it on the road, then when to leave and when you get there. On foot, the walk in its place. */
-function Ticket({ a, j, now, late }) {
+function Ticket({ a, j, now, late, top }) {
   const soon = busIn(j, now);
   return html`
+    ${top(html`
     <div class="where">${to(a, j)}</div>
     ${j.bus
       ? html`<div class="ticket-bus">
@@ -236,6 +263,7 @@ function Ticket({ a, j, now, late }) {
         <div class=${`by${late}`}>${j.slack ?? (j.walkEnd ? t('{0} walk from {1}', j.walkEnd, j.toStop) : t('at {0}', j.toStop))}</div>
       </div>`}
     </div>
+    `)}
     ${j.bus && html`<${Tags} a=${a} j=${j} />`}
   `;
 }
@@ -247,20 +275,22 @@ function Ticket({ a, j, now, late }) {
  * you're going, is ringed in the accent. On foot the whole way, the walk runs
  * straight from leaving to the place.
  */
-function Steps({ a, j, now, late }) {
+function Steps({ a, j, now, late, top }) {
   const b = backup(a, j);
   const under = [by(a, j, now), j.slack].filter(Boolean).join(' · ');
   // The crowd is the headline bus's: a class's leave-by bus can be another.
   const crowd = a.card.kind !== 'class' ? a.card.crowd : null;
   const soon = busIn(j, now);
   return html`
-    <div class="where">${to(a, j)}</div>
-    <${LeaveHead} a=${a} j=${j} now=${now} late=${late} />
-    ${(under || j.live || crowd) &&
-    html`<div class="steps-under">
-      ${under && html`<span class=${`under${late}`}>${under}</span>`}
-      ${j.live && html`<span class="tag live"><span class="dot"></span>${t('Live')}</span>`}${crowd && html`<span class="tag">${crowd}</span>`}
-    </div>`}
+    ${top(html`
+      <div class="where">${to(a, j)}</div>
+      <${LeaveHead} a=${a} j=${j} now=${now} late=${late} />
+      ${(under || j.live || crowd) &&
+      html`<div class="steps-under">
+        ${under && html`<span class=${`under${late}`}>${under}</span>`}
+        ${j.live && html`<span class="tag live"><span class="dot"></span>${t('Live')}</span>`}${crowd && html`<span class="tag">${crowd}</span>`}
+      </div>`}
+    `)}
     <ol class="line">
       ${j.walk &&
       html`<${LinePoint} time=${j.leave ?? t('now')} dot="start" line="walk" below=${t('{0} walk', j.walk)}><strong>${t('Leave')}</strong><//>`}
