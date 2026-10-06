@@ -260,6 +260,8 @@ body.night > .nav, body.night .app-chips, body.night .where-box, body.night .day
 .horizon .near { fill: var(--bg); }
 .horizon .road { stroke: #d6cfc7; stroke-width: 1.5; stroke-dasharray: 6 6; }
 .horizon .bus { fill: #24211e; }
+.horizon .tyre { fill: #151311; }
+.horizon .hub { fill: #8a847d; }
 .horizon .stripe { fill: #e53935; }
 .horizon .lit { fill: #fde9c9; }
 .horizon .dim { opacity: 0.6; }

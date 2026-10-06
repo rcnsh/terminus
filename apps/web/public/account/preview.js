@@ -305,8 +305,7 @@ function Horizon({ ground }) {
           <rect class="stripe" y="9.5" width="38" height="2.5" rx="1" />
           ${[3, 10, 17, 24].map((x) => html`<rect class=${x === 24 ? 'lit dim' : 'lit'} x=${x} y="2.5" width="5" height="4" rx="1" />`)}
           <rect class="lit" x="32" y="2.5" width="4" height="6" rx="1" />
-          <circle class="near" cx="8" cy="12" r="2" />
-          <circle class="near" cx="30" cy="12" r="2" />
+          ${[8, 30].map((x) => html`<circle class="tyre" cx=${x} cy="12" r="2.2" /><circle class="hub" cx=${x} cy="12" r="0.8" />`)}
         </g>
       </svg>`}
     </div>
