@@ -285,9 +285,16 @@ body.sky:not(.on-map, .on-settings) > .nav, body.sky .app-chips, body.sky .where
   color-scheme: var(--k-scheme); color: var(--ink);
 }
 /* The card's top, with room above its words for the sun or the moon. */
-.sky-head { position: relative; padding-top: var(--room); --room: 66px; --moon: 40px; }
+.sky-head { position: relative; isolation: isolate; padding-top: var(--room); --room: 66px; --moon: 40px; }
 .nearby-sky { --room: 44px; --moon: 34px; }
-.celestial { position: absolute; inset: 0 0 auto 0; height: var(--room); pointer-events: none; }
+.celestial { position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--room); pointer-events: none; }
+/* Depth as the page scrolls (sky.js sets the --par-* variables): the sun, the
+   moon and the stars lag and fade behind the words, the clouds a little less,
+   and the far hills sink behind the near one (.horizon .depth). */
+.celestial :is(.sun, .clouds, .night-sky) { opacity: var(--par-fade, 1); }
+.celestial :is(.sun, .night-sky) { transform: translateY(var(--par-sky, 0px)); }
+.celestial .clouds { transform: translateY(var(--par-cloud, 0px)); }
+.horizon .depth { transform: translateY(var(--par-far, 0px)); }
 .celestial .sun { display: none; position: absolute; border-radius: 50%; background: var(--sun); box-shadow: 0 0 30px 10px var(--glow); }
 body.sky-dawn .celestial .sun { display: block; top: 10px; right: 30px; width: 40px; height: 40px; }
 body.sky-day .celestial .sun { display: block; top: 4px; right: 44px; width: 34px; height: 34px; }

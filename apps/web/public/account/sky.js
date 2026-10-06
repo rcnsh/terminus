@@ -4,8 +4,8 @@
 // ends on a <Horizon>, and the sky reaches down to it. The hour only picks
 // classes (app.css draws the colours, the sun or the stars). Android draws
 // the same scene from the same numbers (NightSky.kt).
-import { html, store, useLayoutEffect, useRef, useState, useStore } from '../assets/ui.js';
-import { PHASES } from './daylight.js';
+import { html, reducedMotion, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '../assets/ui.js';
+import { PHASES, parallax } from './daylight.js';
 
 export { phaseAt } from './daylight.js';
 
@@ -108,6 +108,7 @@ export function Horizon({ stop = null, bus = null, shuttle = true }) {
     <div class="horizon" ref=${box} aria-hidden="true">
       ${w > 0 &&
       html`<svg width=${w} height="92" viewBox=${`0 0 ${w} 92`}>
+        <g class="depth">
         <circle class="setting" cx=${at(0.5)} cy="40" r="26" />
         ${mbs + 25 <= w &&
         html`<g class="city">
@@ -120,6 +121,7 @@ export function Horizon({ stop = null, bus = null, shuttle = true }) {
         <rect class="far" x=${b2 - 13} y=${farY(b2) - 22} width="26" height="28" />
         <rect class="lit" x=${b2 - 5} y=${farY(b2) - 16} width="3" height="3" />
         <rect class="lit dim" x=${b2 + 3} y=${farY(b2) - 8} width="3" height="3" />
+        </g>
         ${[0.06, 0.45, 0.9].map((f) => {
           // A rain tree: a trunk forking low under a wide, flat crown.
           const c = at(f);
@@ -216,4 +218,36 @@ export function useNowSky(phase) {
     seen.observe(body);
     return () => seen.disconnect();
   }, [el]);
+  // Depth as the page scrolls (daylight.js parallax): the sun, the clouds and
+  // the far hills lag behind, as CSS variables on the page (app.css), so a
+  // card that comes in as the chips switch has them at once. Off for anyone
+  // who asks for less motion.
+  useEffect(() => {
+    const body = document.body;
+    const VARS = ['--par-sky', '--par-cloud', '--par-far', '--par-fade'];
+    let frame = 0;
+    const apply = () => {
+      frame = 0;
+      if (reducedMotion()) return VARS.forEach((v) => body.style.removeProperty(v));
+      const p = parallax(window.scrollY);
+      body.style.setProperty('--par-sky', `${p.sky.toFixed(1)}px`);
+      body.style.setProperty('--par-cloud', `${p.clouds.toFixed(1)}px`);
+      body.style.setProperty('--par-far', `${p.far.toFixed(1)}px`);
+      body.style.setProperty('--par-fade', p.fade.toFixed(3));
+    };
+    const soon = () => {
+      if (!frame) frame = requestAnimationFrame(apply);
+    };
+    apply();
+    window.addEventListener('scroll', soon, { passive: true });
+    // Back from Map or Settings, at whatever the page's scroll is now.
+    const tabs = new MutationObserver(soon);
+    tabs.observe(body, { attributes: true, attributeFilter: ['class'] });
+    return () => {
+      window.removeEventListener('scroll', soon);
+      tabs.disconnect();
+      cancelAnimationFrame(frame);
+      VARS.forEach((v) => body.style.removeProperty(v));
+    };
+  }, []);
 }
