@@ -1,12 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { clientKey, withSecurityHeaders } from '../src/http.ts';
+import { clientKey, coordsFrom, withSecurityHeaders } from '../src/http.ts';
 import { landmark, targetStops } from '../src/landmarks.ts';
 import { termDay } from '../src/calendar.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
 
 const req = (ip) => new Request('https://x.test/', { headers: ip ? { 'cf-connecting-ip': ip } : {} });
+
+test('coordsFrom: a fix the phone says is hundreds of metres out is no location', () => {
+  const at = (q) => coordsFrom(new URL(`https://x.test/me/next?${q}`));
+  assert.deepEqual(at('lat=1.2955&lon=103.7714'), { lat: 1.2955, lon: 103.7714 });
+  assert.deepEqual(at('lat=1.2955&lon=103.7714&acc=35'), { lat: 1.2955, lon: 103.7714 }, 'a usual fix');
+  assert.deepEqual(at('lat=1.2955&lon=103.7714&acc=200'), { lat: 1.2955, lon: 103.7714 }, 'at the limit');
+  assert.deepEqual(at('lat=1.2955&lon=103.7714&acc=640'), { lat: null, lon: null }, 'a cell-tower fix, or one from ten minutes ago');
+  assert.deepEqual(at('lat=1.2955&lon=103.7714&acc=x'), { lat: 1.2955, lon: 103.7714 }, 'an unreadable accuracy is ignored');
+});
 
 test('rate-limit keys: IPv4 as is, IPv6 by its /64', () => {
   assert.equal(clientKey(req('203.0.113.9')), '203.0.113.9');

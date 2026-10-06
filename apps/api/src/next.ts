@@ -22,7 +22,7 @@ import {
   restLabel,
   timingFor,
 } from './profile.ts';
-import { type ImportedTrip, venueToStop } from './nusmods.ts';
+import { type ImportedTrip, venueAt, venueToStop } from './nusmods.ts';
 import { indexGraph, serviceEndsAt } from './resolve.ts';
 import { haversineM } from './geo.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
@@ -179,6 +179,7 @@ export async function tripAnswer(
     arriveBy: dest.trip && venueWalkS <= MAX_VENUE_WALK_S ? { atMs: classStartMs(dest.trip, nowMs), venueWalkS, fullBusMargin: profile.fullBusMargin, ...(oneEarlier ? { oneEarlier } : {}) } : null,
     endWalkS,
     ...(endWalkByStopS ? { endWalkByStopS } : {}),
+    destAt: venue ? venueAt(venue) : null,
   };
   const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
   // For a class, say whether you'll make it: stop arrival plus the walk
@@ -222,7 +223,25 @@ export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
   const etas = sa.arrivals.filter((x) => x.plate === b.plate && x.svc === b.svc && x.etaS !== null).map((x) => x.etaS!);
   if (!etas.length) return null;
   const at = sa.fetchedAt + Math.min(...etas) * 1000;
-  return at > nowMs ? new Date(Math.round(at / 1000) * 1000).toISOString().replace('.000Z', 'Z') : null;
+  return at > nowMs ? isoAt(at) : null;
+}
+
+/**
+ * When the next bus of the service reaches the stop you get off at, from the
+ * feed, whichever bus it is. The guess once the bus you said you were on
+ * should have got you there and nothing says you're there: you may have
+ * caught the one after it. Null without the feed, or with nothing due.
+ */
+export async function nextArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<string | null> {
+  if (!b.alightCode) return null;
+  const sa = (await deps.collectArrivals(env, ctx, [b.alightCode], nowMs)).get(b.alightCode);
+  if (!sa?.available || sa.stale) return null;
+  const due = sa.arrivals.filter((x) => x.svc === b.svc && x.etaS !== null).map((x) => sa.fetchedAt + x.etaS! * 1000).filter((at) => at > nowMs);
+  return due.length ? isoAt(Math.min(...due)) : null;
+}
+
+function isoAt(ms: number): string {
+  return new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 }
 
 /** On the bus you said you'd caught: where it gets you, not the next bus. */
@@ -416,8 +435,15 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     const live = await liveArrival(env, ctx, deps, b, nowMs);
     const cur = live ? { ...b, arrive: live } : b;
     const arrive = cur.arrive ? Date.parse(cur.arrive) : null;
-    if (arrive !== null && nowMs >= arrive + RIDE_GRACE_MS) return null;
-    return { answer: ridingAnswer(nowMs, dest, cur, live !== null, places, h12, profile), b: cur };
+    if (arrive === null || nowMs < arrive) return { answer: ridingAnswer(nowMs, dest, cur, live !== null, places, h12, profile), b: cur };
+    if (nowMs >= arrive + RIDE_GRACE_MS) return null;
+    // That arrival has passed and nothing says you're there: you caught the
+    // bus after it, or it's running late. A time in the past is no answer,
+    // so the next bus of the service due at your stop is the guess, marked
+    // as one; with nothing due, the card says only where to get off.
+    const later = await nextArrival(env, ctx, deps, b, nowMs);
+    const guess = { ...b, arrive: later };
+    return { answer: ridingAnswer(nowMs, dest, guess, false, places, h12, profile), b: guess };
   }
 }
 

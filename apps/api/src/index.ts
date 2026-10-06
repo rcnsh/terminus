@@ -10,7 +10,7 @@
 
 import type { Env, ResolveInput, StopArrivals } from './types.ts';
 import { sgt } from './config.ts';
-import { venueToStop } from './nusmods.ts';
+import { venueAt, venueToStop } from './nusmods.ts';
 import { appVersion, authConfigured, getSession } from './auth.ts';
 import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
 import { fmsConfigured, getArrivals, getBuses } from './fms.ts';
@@ -62,15 +62,16 @@ function resolveDestination(url: URL) {
 
   const stop = idx.byCode.get(raw);
   // Abbreviated like every other stop name ("Information Technology" -> "IT").
-  if (stop) return { to: stop.code, also: [] as string[], from, label: shortStop(stop.name, 14) };
+  if (stop) return { to: stop.code, also: [] as string[], from, label: shortStop(stop.name, 14), at: null };
   const lm = landmark(raw);
   if (lm) {
     const t = targetStops(raw);
-    return { to: t.to, also: t.also, from, label: lm.name };
+    return { to: t.to, also: t.also, from, label: lm.name, at: null };
   }
 
+  // A room or building: where it is too, so standing in it counts as there.
   const venue = venueToStop(raw);
-  if (venue) return { to: venue.stop, also: [] as string[], from, label: raw.split('-')[0] };
+  if (venue) return { to: venue.stop, also: [] as string[], from, label: raw.split('-')[0], at: venueAt(raw) };
   return null;
 }
 
@@ -89,7 +90,7 @@ async function handleNext(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
 
   // With coordinates but no destination, `to` stays null and the resolver
   // simply reports the next buses at the nearest stop.
-  const input: ResolveInput = { lat, lon, to, toAlso: dest?.also, originCode };
+  const input: ResolveInput = { lat, lon, to, toAlso: dest?.also, originCode, destAt: dest?.at ?? null };
   return json(await answerFor(env, ctx, input, dest?.label ?? null, nowMs));
 }
 
@@ -100,7 +101,7 @@ async function handleTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   if (lat === null && !dest.from) {
     return json({ error: 'pass lat and lon, or ?from= a stop code' }, 400);
   }
-  return json(await answerFor(env, ctx, { lat, lon, to: dest.to, toAlso: dest.also, originCode: lat === null ? dest.from : null }, dest.label, nowMs));
+  return json(await answerFor(env, ctx, { lat, lon, to: dest.to, toAlso: dest.also, originCode: lat === null ? dest.from : null, destAt: dest.at }, dest.label, nowMs));
 }
 
 /**

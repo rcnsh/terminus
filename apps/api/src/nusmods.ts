@@ -19,10 +19,14 @@
  */
 
 import venuesJson from '../data/venues.json' with { type: 'json' };
+import roomsJson from '../data/rooms.json' with { type: 'json' };
 import { type LessonWeeks, type Term, termsForImport } from './calendar.ts';
 import { m } from './i18n.ts';
 
-const VENUES = venuesJson as { venues: Record<string, { stop: string; m: number }> };
+/** Stop, routed walk and, from the NUSMods room map, where the building is (its rooms' mean point). */
+type VenueEntry = { stop: string; m: number; lat?: number; lon?: number };
+const VENUES = venuesJson as { venues: Record<string, VenueEntry> };
+const ROOMS = roomsJson as { rooms: Record<string, VenueEntry & { name: string }> };
 
 /** NUSMods lesson-type abbreviations, as used in the share URL. */
 const LESSON_TYPES: Record<string, string> = {
@@ -104,6 +108,11 @@ interface TimetableRow {
 /** Venue code -> nearest ISB stop code. Tries the full code, then the building
  *  prefix ("AS3-0307" -> "AS3"), then progressively shorter prefixes. */
 export function venueToStop(venue: string): { stop: string; m: number } | null {
+  const v = venueEntry(venue);
+  return v ? { stop: v.stop, m: v.m } : null;
+}
+
+function venueEntry(venue: string): VenueEntry | null {
   const v = venue.trim().toUpperCase();
   if (VENUES.venues[v]) return VENUES.venues[v];
   const building = v.split('-')[0];
@@ -112,6 +121,16 @@ export function venueToStop(venue: string): { stop: string; m: number } | null {
   const stripped = building.replace(/\d+$/, '');
   if (stripped && VENUES.venues[stripped]) return VENUES.venues[stripped];
   return null;
+}
+
+/**
+ * Where a venue is: the room itself when the room map places it, else its
+ * building; null for a code the map has no position for.
+ */
+export function venueAt(venue: string): { lat: number; lon: number } | null {
+  const v = venue.trim().toUpperCase();
+  const e = ROOMS.rooms[v] ?? venueEntry(v);
+  return e?.lat !== undefined && e.lon !== undefined ? { lat: e.lat, lon: e.lon } : null;
 }
 
 export interface ImportedTrip {

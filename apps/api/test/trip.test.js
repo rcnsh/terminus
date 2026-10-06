@@ -161,6 +161,27 @@ test('a location at the class counts as arrived; the location itself is not kept
   assert.doesNotMatch(stored, /103\.77|1\.294/, 'no coordinates in the trip state');
 });
 
+// Inside LT11, on the NUSMods room map: 88 m from its stop (Ventus), further than "at the stop" reaches.
+const IN_LT11 = 'lat=1.29546&lon=103.7714';
+
+test('sitting in the lecture theatre counts as there, though its stop is 90 m away', async () => {
+  const profile = { home: { stops: ['PGP'] }, manual: [{ ...cls(600, 'LT13-OPP', 'EC1101E @ LT11'), venue: 'LT11' }] };
+  const { phone, next, clock } = await setup(profile);
+  clock(FROZEN_NOW + 50 * 60_000); // 09:50, ten minutes before it starts
+  // A fix the phone says is 600 m out is no location: planned from home, not from the wrong stop.
+  const rough = await next(phone, `?${IN_LT11}&acc=600`);
+  assert.notEqual(rough.arrived, true);
+  assert.notEqual(rough.card.phase, 'arrived');
+  const there = await next(phone, `?${IN_LT11}`);
+  assert.equal(there.arrived, true);
+  assert.equal(there.card.phase, 'arrived');
+  assert.equal(there.dest.label, 'EC1101E @ LT11');
+  // Seen there once, every device says so, located or not.
+  assert.equal((await next(phone)).card.phase, 'arrived');
+  // The same place asked for by code.
+  assert.equal((await next(phone, `?to=LT11&${IN_LT11}`)).arrived, true);
+});
+
 test('/me/signal: needs the Durable Object, a known kind, and a trip', async () => {
   const noTrips = await setup(PROFILE, { trips: false });
   assert.equal((await noTrips.signal(noTrips.phone, { kind: 'boarded' })).status, 503);

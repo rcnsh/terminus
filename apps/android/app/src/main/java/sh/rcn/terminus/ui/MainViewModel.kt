@@ -387,7 +387,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         dayJob = viewModelScope.launch {
             // Where the phone was a moment ago (no new fix): the next class from there, as the card has it.
             val loc = Locator.lastKnown(getApplication(), maxAgeMs = 60_000)
-            runCatching { Api(token, hour12 = hour12(getApplication())).dayJson(loc?.latitude, loc?.longitude) }.onSuccess { json ->
+            runCatching { Api(token, hour12 = hour12(getApplication())).dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)) }.onSuccess { json ->
                 // Kept for when the phone goes offline (OfflineDay).
                 store.saveDay(json, System.currentTimeMillis())
                 _state.update { it.copy(day = DayPlan.parse(json)) }
@@ -476,10 +476,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val s = _state.value
             try {
                 if (s.showNearby) {
-                    val stops = api.nearby(loc?.latitude, loc?.longitude)
+                    val stops = api.nearby(loc?.latitude, loc?.longitude, Locator.accOf(loc))
                     _state.update { it.copy(nearby = stops, loading = false, error = null, fetchedAt = System.currentTimeMillis()) }
                 } else {
-                    val json = api.nextJson(s.target, loc?.latitude, loc?.longitude)
+                    val json = api.nextJson(s.target, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                     val answer = NextAnswer.parse(json)
                     val now = System.currentTimeMillis()
                     // The planned answer is exactly what the widget shows, so

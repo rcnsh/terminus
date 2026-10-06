@@ -286,6 +286,13 @@ The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 - On the trip home, `card.warning` says "Last D2 from UTown in 18 min" from
   45 minutes before the service's published end (`data/service-hours.json`).
 
+A location comes as `lat`/`lon`, with `acc`: how far out it may be, in
+metres, its accuracy plus a walking pace times its age (the apps and the web
+app work this out, `Locator.uncertaintyM`). Over 200 m (`MAX_FIX_ACC_M`) the
+fix is dropped and the answer follows the timetable: a cell-tower fix, or a
+precise one from ten minutes ago, planned the trip from the wrong side of
+campus and said so with confidence.
+
 `GET /me/day` is today's timeline, worked out with the same planner. A
 class you're on the bus to carries `onBus` (the bus, where to get off, the
 arrival) instead of a leave-by that has passed. Apps send it the same
@@ -507,7 +514,11 @@ judged and dropped; only what it means is kept on the trip record, marked
   whichever service it is.
 - **There:** on the bus (tapped, detected or assumed), within 100 m of the
   stop you get off at, either side of the road; or the answer planned from the
-  fix says you're at the destination.
+  fix says you're at the destination: within 45 s on foot of its stop (either
+  side), or within 80 m (`WALK.atVenueM`) of the room or building itself,
+  whose position `data/rooms.json` and `data/venues.json` carry from the
+  NUSMods room map. A lecture theatre can be 100 m from its stop, so the stop
+  alone missed someone sitting in it.
 
 A tap always wins: detection only changes a trip nobody has answered, or one
 it answered itself, except that it notices the end of a ride someone said they

@@ -1,4 +1,4 @@
-import { TTL } from './config.ts';
+import { MAX_FIX_ACC_M, TTL } from './config.ts';
 import { errorText } from './i18n.ts';
 /** Response helpers and query parsing shared by every route. */
 
@@ -47,11 +47,17 @@ export function numParam(url: URL, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * The caller's location from `lat`, `lon` and, when sent, `acc` (metres):
+ * a fix too rough to say where you are counts as none (MAX_FIX_ACC_M).
+ */
 export function coordsFrom(url: URL): { lat: number | null; lon: number | null } {
   const lat = numParam(url, 'lat');
   const lon = numParam(url, 'lon');
   if (lat === null || lon === null) return { lat: null, lon: null };
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { lat: null, lon: null };
+  const acc = numParam(url, 'acc');
+  if (acc !== null && acc > MAX_FIX_ACC_M) return { lat: null, lon: null };
   return { lat, lon };
 }
 

@@ -51,7 +51,22 @@ export const WALK = {
   beatsBusByS: 120,
   /** Within this much of the bus, walking is worth mentioning, not recommending. */
   mentionWithinS: 240,
+  /**
+   * Within this of the room or building itself (its point on the NUSMods
+   * room map) you're there, however far its stop is: a lecture theatre is
+   * 40 m across, and a fix indoors is 20-50 m out.
+   */
+  atVenueM: 80,
 } as const;
+
+/**
+ * A fix the phone itself says is further out than this (`acc`, in metres,
+ * its accuracy plus how far you could have walked since) is no location at
+ * all: picked as "where you are", a cell-tower fix or one from ten minutes
+ * ago plans the trip from the wrong side of campus. The answer then comes
+ * from the timetable, which says so.
+ */
+export const MAX_FIX_ACC_M = 200;
 
 export const RIDE = {
   /**

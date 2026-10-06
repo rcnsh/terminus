@@ -4,6 +4,7 @@ import {
   acadYear,
   parseShareUrl,
   resolveTrips,
+  venueAt,
   venueToStop,
 } from '../src/nusmods.ts';
 
@@ -126,4 +127,16 @@ test('a network failure is reported per module, never thrown', async () => {
   const f = async () => { throw new TypeError('network down'); };
   const r = await resolveTrips(parseShareUrl(SHARE), Date.UTC(2026, 7, 28), f);
   assert.deepEqual(r.failed.sort(), ['EC1101E', 'MA1100']);
+});
+
+test('venueAt: the room itself from the room map, else its building, else nothing', () => {
+  // LT11 is 96 m from its stop (Ventus), too far for "at the stop" alone.
+  const lt11 = venueAt('LT11');
+  assert.ok(lt11 && Math.abs(lt11.lat - 1.29546) < 1e-5 && Math.abs(lt11.lon - 103.7714) < 1e-5);
+  assert.deepEqual(venueAt('lt11 '), lt11, 'case and spaces do not matter');
+  const room = venueAt('AS1-0201');
+  const building = venueAt('AS1');
+  assert.ok(room && building);
+  assert.notDeepEqual(room, building, 'a room has its own point, not its building\'s mean');
+  assert.equal(venueAt('NOT-A-PLACE'), null);
 });

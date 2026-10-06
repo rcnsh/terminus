@@ -557,15 +557,16 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         request("DELETE", "/me")
     }
 
-    suspend fun next(target: Target, lat: Double?, lon: Double?): NextAnswer =
-        NextAnswer.parse(nextJson(target, lat, lon))
+    suspend fun next(target: Target, lat: Double?, lon: Double?, acc: Double? = null): NextAnswer =
+        NextAnswer.parse(nextJson(target, lat, lon, acc))
 
-    /** Raw form, for the widget cache. */
-    suspend fun nextJson(target: Target, lat: Double?, lon: Double?): JSONObject {
+    /** Raw form, for the widget cache. `acc` is how far out the fix may be ([Locator.accOf]). */
+    suspend fun nextJson(target: Target, lat: Double?, lon: Double?, acc: Double? = null): JSONObject {
         val q = buildList {
             if (lat != null && lon != null) {
                 add("lat=${coord(lat)}")
                 add("lon=${coord(lon)}")
+                acc?.let { add("acc=${Math.round(it)}") }
             }
             when (target) {
                 Target.Plan -> {}
@@ -578,10 +579,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return request("GET", "/me/next" + query(q))
     }
 
-    suspend fun nearby(lat: Double?, lon: Double?): List<NearbyStop> = parseNearby(nearbyJson(lat, lon))
+    suspend fun nearby(lat: Double?, lon: Double?, acc: Double? = null): List<NearbyStop> = parseNearby(nearbyJson(lat, lon, acc))
 
-    suspend fun nearbyJson(lat: Double?, lon: Double?): JSONObject {
-        val q = if (lat != null && lon != null) listOf("lat=${coord(lat)}", "lon=${coord(lon)}") else emptyList()
+    suspend fun nearbyJson(lat: Double?, lon: Double?, acc: Double? = null): JSONObject {
+        val q = if (lat != null && lon != null) listOfNotNull("lat=${coord(lat)}", "lon=${coord(lon)}", acc?.let { "acc=${Math.round(it)}" }) else emptyList()
         return request("GET", "/me/nearby" + query(q))
     }
 
@@ -643,17 +644,18 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** Today's timeline. */
-    suspend fun day(lat: Double? = null, lon: Double? = null): DayPlan = DayPlan.parse(dayJson(lat, lon))
+    suspend fun day(lat: Double? = null, lon: Double? = null, acc: Double? = null): DayPlan = DayPlan.parse(dayJson(lat, lon, acc))
 
     /**
      * /me/day as it came: kept for when the phone is offline ([Store.saveDay]).
      * With a location, the next class is planned from there, as the card is.
      */
-    suspend fun dayJson(lat: Double? = null, lon: Double? = null): JSONObject {
+    suspend fun dayJson(lat: Double? = null, lon: Double? = null, acc: Double? = null): JSONObject {
         val q = buildList {
             if (lat != null && lon != null) {
                 add("lat=${coord(lat)}")
                 add("lon=${coord(lon)}")
+                acc?.let { add("acc=${Math.round(it)}") }
             }
             if (hour12) add("h12=1")
         }
