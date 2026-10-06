@@ -33,7 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -281,7 +280,7 @@ private fun Tabs(
     val snackbars = remember { SnackbarHostState() }
     RemovedBar(state.removed, state.removeError, snackbars, vm)
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbars) },
+        snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
         bottomBar = {
             NavigationBar {
                 for ((t, label, icon) in listOf(
@@ -348,20 +347,21 @@ private fun Tabs(
 
 /**
  * After a swipe off Today: "GEA1000 removed from today · Undo" in a bar at
- * the foot of the screen, above the tabs, for a few seconds; and why a
- * swipe didn't take, the same way. A second swipe replaces the bar.
+ * the foot of the screen, above the tabs, for a few seconds (NoticeBar); and
+ * why a swipe didn't take, the same way, marked in red. A second swipe
+ * replaces the bar.
  */
 @Composable
 private fun RemovedBar(removed: DayItem?, error: String?, host: SnackbarHostState, vm: MainViewModel) {
     val undo = stringResource(R.string.undo)
     LaunchedEffect(removed?.key) {
         val item = removed ?: return@LaunchedEffect
-        val result = host.showSnackbar(L.s(R.string.taken_off_today, item.shortName()), actionLabel = undo, duration = SnackbarDuration.Long)
+        val result = host.showSnackbar(Notice(L.s(R.string.taken_off_today, item.shortName()), actionLabel = undo))
         if (result == SnackbarResult.ActionPerformed) vm.undoRemove() else vm.dismissRemoved(item.key)
     }
     LaunchedEffect(error) {
         if (error == null) return@LaunchedEffect
-        host.showSnackbar(error, duration = SnackbarDuration.Short)
+        host.showSnackbar(Notice(error, error = true))
         vm.dismissRemoveError()
     }
 }
