@@ -117,7 +117,7 @@ echo "== released beta $VERSION at $SITE"
 
 if [ $BETA -eq 1 ]; then
   echo "== GitHub"
-  git tag "v$VERSION"
+  git tag -a "v$VERSION" -m "terminus $VERSION"
   git push -q origin "v$VERSION"
   CHANNEL=beta scripts/github-release.sh "$VERSION"
 fi
