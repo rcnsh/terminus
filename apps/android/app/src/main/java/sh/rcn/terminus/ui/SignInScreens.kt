@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
@@ -42,30 +43,124 @@ import sh.rcn.terminus.R
 import sh.rcn.terminus.Lang
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 
-/** First launch: start straight away, or sign in to an account you already have. */
+/**
+ * First launch: start straight away, or sign in to an account you already
+ * have. A bus's livery sweeps across the top, a stripe in each service's
+ * colour, with the mark where the fleet number would be. It runs edge to
+ * edge, so this screen keeps the insets itself instead of the host's padding.
+ */
 @Composable
 internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit, onSignIn: () -> Unit, onPair: () -> Unit, onLang: (String) -> Unit) {
     val ctx = LocalContext.current
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) { Wordmark(MaterialTheme.typography.headlineMedium) }
-            LanguageSwitch(onLang)
+    val bg = MaterialTheme.colorScheme.background
+    BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+        // The livery grows with the screen, so a tall phone isn't left with a gap.
+        val livery = (maxHeight * 0.4f).coerceIn(240.dp, 360.dp)
+        // At least the screen's height, so the buttons sit at the bottom
+        // under the thumb, and scrolls when large text needs more.
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) { LanguageSwitch(onLang) }
+            Box(Modifier.fillMaxWidth().height(livery)) {
+                Livery(Modifier.matchParentSize())
+                Box(Modifier.align(Alignment.BottomCenter).background(bg, RoundedCornerShape(30.dp)).padding(6.dp)) {
+                    BrandMark(Modifier.size(92.dp).shadow(16.dp, RoundedCornerShape(24.dp)))
+                }
+            }
+            Box(Modifier.padding(top = 16.dp)) { Wordmark(MaterialTheme.typography.displaySmall.copy(fontSize = 46.sp, letterSpacing = (-1).sp)) }
+            Text(
+                stringResource(R.string.tagline),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 40.dp, vertical = 8.dp),
+            )
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                LIVERY.forEach { (svc, color) -> BusBadge(svc, color, 13.sp, pad = 7.dp) }
+            }
+            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.weight(1f))
+            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp)) }
+                Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    Text(if (busy) stringResource(R.string.starting) else stringResource(R.string.get_started))
+                }
+                Text(
+                    stringResource(R.string.welcome_caption),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                OutlinedButton(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    Text(stringResource(R.string.have_account))
+                }
+                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onPair) { Text(stringResource(R.string.pair_instead)) }
+                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/privacy".toUri())) }) {
+                        Text(stringResource(R.string.privacy), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
         }
-        Text(stringResource(R.string.tagline), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.welcome_text))
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(if (busy) stringResource(R.string.starting) else stringResource(R.string.get_started))
-        }
-        OutlinedButton(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.have_account))
-        }
-        TextButton(onClick = onPair, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(stringResource(R.string.pair_instead)) }
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Spacer(Modifier.height(8.dp))
-        TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/privacy".toUri())) }) {
-            Text(stringResource(R.string.privacy_link))
+    }
+}
+
+/**
+ * The services as NUS paints them, for the livery. The API's ROUTE_COLORS
+ * (campus.ts) is the source, and every other screen takes the colours from
+ * /campus; this one shows before there's an account to ask with.
+ */
+private val LIVERY = listOf(
+    "A1" to 0xFFE53935, "A2" to 0xFFD9A000, "D1" to 0xFFEC4FA0, "D2" to 0xFF8E44C9,
+    "K" to 0xFF2B9AD6, "R1" to 0xFFF57C1F, "R2" to 0xFF34A853, "P" to 0xFF8A939C,
+)
+
+/**
+ * The stripes down a bus's side, rising to the right: one per service (P's
+ * grey would dull it), then a gap and a thin line in the accent. They're
+ * sized by the height they're given, and the rise is capped so a tablet's
+ * wide screen gets a flatter band, not a steeper cut.
+ */
+@Composable
+private fun Livery(modifier: Modifier) {
+    val accent = MaterialTheme.colorScheme.primary
+    Canvas(modifier.clipToBounds()) {
+        val rise = minOf(size.width * 0.25f, 110.dp.toPx())
+        val unit = size.height / 300f
+        // The band's lower edge, a fifth of the way up in the middle: the mark sits on it.
+        val left = size.height - 60 * unit + rise / 2
+        val right = left - rise
+        // A strip between two heights above the lower edge. Each overlaps the
+        // next by a pixel, so no hairline of background shows between them.
+        fun strip(from: Float, to: Float, color: Color) = drawPath(
+            Path().apply {
+                moveTo(0f, left - from); lineTo(size.width, right - from)
+                lineTo(size.width, right - to - 1f); lineTo(0f, left - to - 1f); close()
+            },
+            color,
+        )
+        strip(0f, 6 * unit, accent)
+        val stripe = 20 * unit
+        var at = 16 * unit
+        LIVERY.filter { it.first != "P" }.asReversed().forEach { (_, color) ->
+            strip(at, at + stripe, Color(color))
+            at += stripe
         }
     }
 }

@@ -266,7 +266,6 @@
     <string name="packed_hint">如果你要等的巴士在那个车站和时间经常满员，就提早一班。</string>
     <string name="pair">配对</string>
     <string name="pair_instead">改用代码配对</string>
-    <string name="pair_intro">把这部手机与你的账户配对。在已登录的手机上，进入“设置”，然后选“添加设备”；或在 %1$s/account 选择“配对设备”。然后在这里输入 6 位代码，或用相机扫描二维码。</string>
     <string name="pair_phone_text">此链接会将这部手机与 %1$s 配对。仅当这个代码是你在自己的账户页面上创建的才继续。他人的代码会把你的行程和位置发送到他们的账户。</string>
     <string name="pair_phone_title">配对这部手机？</string>
     <string name="pair_share_text">用这个链接配对 terminus，或输入代码 %1$s：%2$s</string>
@@ -278,7 +277,6 @@
     <string name="preview_arrive">09:52 到达 · 早到 8 分钟</string>
     <string name="preview_detail">PGP · 步行 3 分钟 · 约 9 分钟到 COM3</string>
     <string name="preview_heading">下一节课 · CS2030 @ COM1</string>
-    <string name="privacy_link">隐私：保留什么、保留多久</string>
     <string name="qr_desc">配对代码 %1$s 的二维码</string>
     <string name="refresh">刷新</string>
     <string name="refreshing">正在刷新</string>
@@ -377,7 +375,7 @@
     <string name="walk_one_more">多一分钟</string>
     <string name="wednesday">星期三</string>
     <string name="wednesday_short">周三</string>
-    <string name="welcome_text">设置大约只要一分钟：你住哪里、你的 NUSMods 课表，以及你走路多快。不需要邮箱，也不用登录。</string>
+    <string name="welcome_caption">设置大约只要一分钟，不需要邮箱，也不用登录。</string>
     <string name="where">地点</string>
     <string name="where_live">你住在哪里？</string>
     <string name="where_live_sub">早上在哪里搭巴士、晚上回到哪里。只保存车站，绝不保存你住在哪里。</string>
@@ -442,7 +440,7 @@
     <string name="card_style_ticket">车票</string>
     <string name="card_style_ticket_hint">先显示车和它的颜色，再显示何时出发。</string>
     <string name="card_style_steps">步骤</string>
-    <string name="card_style_steps_hint">步行、坐车、到达，逐条列出。</string>
+    <string name="card_style_steps_hint">整段行程画成一条竖线，像路线图一样。</string>
     <string name="leave_in_min">%1$d 分钟后出发</string>
     <string name="leave_in_min_s">%1$d 分 %2$d 秒后出发</string>
     <string name="leave_in_s">%1$d 秒后出发</string>
@@ -461,4 +459,33 @@
     <string name="journey_live">实时</string>
     <string name="journey_backup">或在 %3$s 坐 %2$s 的 %1$s</string>
     <string name="journey_backup_now">或现在走：在 %3$s 坐 %2$s 的 %1$s</string>
+    <string name="step_home">住处</string>
+    <string name="step_classes">课</string>
+    <string name="step_pace">步速</string>
+    <string name="step_alerts">提醒</string>
+    <string name="all_residences">全部 %1$d 个宿舍和学院</string>
+    <string name="pace_lap">跑道一圈是 400 米。</string>
+    <string name="pace_lap_min">一圈 %1$d 分钟</string>
+    <string name="pace_lap_yours">按你的步速走一圈</string>
+    <string name="packed_instead">而不是</string>
+    <string name="packed_word">很挤</string>
+    <string name="start_using">开始使用 terminus</string>
+    <string name="alerts_title">该出发时提醒你</string>
+    <string name="location_title">从你所在的地方出发</string>
+    <string name="alert_preview_title">5 分钟后出发去上 GEA1000</string>
+    <string name="alert_preview_text">%1$s 在 PGP 搭 R2</string>
+    <string name="your_stops_heading">你的车站</string>
+    <string name="pair_title">配对这部手机</string>
+    <string name="pair_sub">输入已登录的手机或电脑上显示的代码。</string>
+    <string name="pair_on_phone">在手机上</string>
+    <string name="pair_on_phone_how">进入“设置”，然后选“添加设备”</string>
+    <string name="pair_on_web">在网页上</string>
+    <string name="pair_on_web_how">在 %1$s/account 选择“配对设备”</string>
+    <string name="pair_scan">也可以用手机相机扫描二维码。</string>
+    <string name="dur_min_s">%1$d 分 %2$d 秒</string>
+    <string name="dur_s">%1$d 秒</string>
+    <string name="journey_leave">出发</string>
+    <string name="going_anyway">还是要去别的地方？</string>
+    <string name="plan_trip">规划行程</string>
+    <string name="feedback_short">告诉我们哪里有问题，或你想要什么</string>
 </resources>

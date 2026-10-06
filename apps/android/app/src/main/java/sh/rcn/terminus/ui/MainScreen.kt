@@ -178,7 +178,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
                     // Undo once: in the removed entry's row while it's there, not on the card as well.
                     val undoing = state.removed?.key
                     val answer = state.answer?.let { a -> if (undoing == null || a.card == null) a else a.copy(card = a.card.copy(actions = a.card.actions.filterNot { it.id == "reset" && it.trip == undoing })) }
-                    AnswerCard(answer, state.loading, vm::signal, state.signalling, vm::choose)
+                    AnswerCard(answer, state.loading, vm::signal, state.signalling, vm::choose, onPlace = { vm.select(Target.SavedPlace(it)) })
                 }
             }
         }

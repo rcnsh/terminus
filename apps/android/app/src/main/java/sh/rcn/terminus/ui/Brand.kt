@@ -1,5 +1,6 @@
 package sh.rcn.terminus.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +12,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -78,6 +82,24 @@ fun Wordmark(style: TextStyle) {
         },
         style = style.copy(fontWeight = FontWeight.Bold),
     )
+}
+
+/**
+ * The mark, as the site draws it (assets/mark.svg): an orange T and a white
+ * stop on the dark stone, the same in both modes, like the launcher icon.
+ * Decoration only: the wordmark beside it says the name.
+ */
+@Composable
+fun BrandMark(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        // mark.svg's 64-unit grid.
+        val u = size.minDimension / 64f
+        val orange = Color(0xFFFB923C)
+        drawRoundRect(Color(0xFF1C1917), cornerRadius = CornerRadius(15 * u))
+        drawRoundRect(orange, Offset(14 * u, 14 * u), Size(36 * u, 9 * u), CornerRadius(4.5f * u))
+        drawRoundRect(orange, Offset(27.5f * u, 14 * u), Size(9 * u, 36 * u), CornerRadius(4.5f * u))
+        drawCircle(Color(0xFFFAFAF9), radius = 4.5f * u, center = Offset(44 * u, 37 * u))
+    }
 }
 
 /**

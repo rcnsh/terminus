@@ -4,7 +4,19 @@ import sh.rcn.terminus.Suggestion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,84 +59,60 @@ internal fun AnswerCard(
     onAction: (CardAction) -> Unit = {},
     busy: Boolean = false,
     onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> },
+    onPlace: (String) -> Unit = {},
 ) {
-    // The card fills the space kept for it, so a short answer ("You're home",
-    // the rest screen) doesn't leave a gap under it; short ones sit centred.
-    val short = answer == null || answer.arrived || answer.mode == "rest" || answer.isFree
-    Card(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
-        Column(
-            Modifier.fillMaxWidth().heightIn(min = 180.dp).padding(16.dp),
-            verticalArrangement = if (short) Arrangement.spacedBy(4.dp, Alignment.CenterVertically) else Arrangement.spacedBy(4.dp),
-        ) {
-            if (answer == null) {
-                Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.no_answer_yet), style = MaterialTheme.typography.titleLarge)
-                return@Column
-            }
-            if (answer.mode == "rest") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ic_moon), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                }
-                Text(answer.detail)
-                Text(if (answer.places.isEmpty()) stringResource(R.string.rest_hint_none) else stringResource(R.string.rest_hint_places), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                return@Column
-            }
-            if (answer.isFree) {
-                // Nothing to catch: said plainly, with no bus to mistake for advice.
-                Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text(answer.detail)
-                Text(if (answer.places.isEmpty()) stringResource(R.string.free_hint_none) else stringResource(R.string.free_hint_places), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Actions(answer, onAction, busy, onSuggestion)
-                return@Column
-            }
-            // NUS's live times are down: said once, above the answer.
-            answer.card?.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
-            // Where the trip is, when one is under way: the same on every device.
-            answer.phaseText?.let { Pill(it, MaterialTheme.colorScheme.primary) }
-            // On the bus: how far along the ride, and the next stop, as the live notification shows.
-            answer.card?.ride?.let { RideProgress(it) }
-            answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
-            // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
-            answer.card?.journey?.takeIf { !answer.arrived }?.let { journey ->
-                JourneyCard(answer, journey, CardStyle.pref(LocalContext.current))
-                Actions(answer, onAction, busy, onSuggestion)
-                return@Column
-            }
-            val heading = when {
-                answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
-                answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())
-                else -> answer.destLabel
-            }
-            if (!answer.isClassPlan) heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            if (answer.arrived) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ic_check), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(answer.label, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                }
-                Text(answer.detail)
-                Actions(answer, onAction, busy, onSuggestion)
-                return@Column
-            }
-            if (answer.isClassPlan) {
-                ClassPlan(answer)
-                Actions(answer, onAction, busy, onSuggestion)
-                return@Column
-            }
-            val ctx = LocalContext.current
-            Text(answer.clockLabel { clock(ctx, it) }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Countdown(answer)
-            Text(answer.detail)
-            LeaveLine(answer)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-                answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
-                answer.crowdText?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            // The alternative is already at the end of `detail`.
-            answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Actions(answer, onAction, busy, onSuggestion)
+    // On the page, not in a box: the answer is the screen. A minimum height
+    // keeps what's under it from jumping as answers come and go.
+    Column(
+        Modifier.fillMaxWidth().heightIn(min = 180.dp).padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (answer == null) {
+            Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.no_answer_yet), style = MaterialTheme.typography.titleLarge)
+            return@Column
         }
+        if (answer.mode == "rest" || answer.isFree || answer.arrived) {
+            // Nothing to catch: said plainly, with no bus to mistake for advice.
+            DayDone(answer, night = answer.mode == "rest", onPlace)
+            if (answer.mode != "rest") Actions(answer, onAction, busy, onSuggestion)
+            return@Column
+        }
+        // NUS's live times are down: said once, above the answer.
+        answer.card?.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
+        // Where the trip is, when one is under way: the same on every device.
+        answer.phaseText?.let { Pill(it, MaterialTheme.colorScheme.primary) }
+        // On the bus: how far along the ride, and the next stop, as the live notification shows.
+        answer.card?.ride?.let { RideProgress(it) }
+        answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
+        // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
+        answer.card?.journey?.takeIf { !answer.arrived }?.let { journey ->
+            JourneyCard(answer, journey, CardStyle.pref(LocalContext.current))
+            Actions(answer, onAction, busy, onSuggestion)
+            return@Column
+        }
+        val heading = when {
+            answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
+            answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())
+            else -> answer.destLabel
+        }
+        if (!answer.isClassPlan) heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (answer.isClassPlan) {
+            ClassPlan(answer)
+            Actions(answer, onAction, busy, onSuggestion)
+            return@Column
+        }
+        val ctx = LocalContext.current
+        Text(answer.clockLabel { clock(ctx, it) }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Countdown(answer)
+        Text(answer.detail)
+        LeaveLine(answer)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+            answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
+            answer.crowdText?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        // The alternative is already at the end of `detail`.
+        answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Actions(answer, onAction, busy, onSuggestion)
     }
 }
 
@@ -136,19 +124,25 @@ internal fun AnswerCard(
  */
 @Composable
 internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: Boolean, onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> }) {
-    // "Catch the D2 at Museum", and you don't know where Museum is: walking directions there.
-    answer.card?.walkTo?.let { w ->
-        val ctx = LocalContext.current
-        TextButton(
-            onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, w.mapsUri())) } },
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-        ) { Text(stringResource(R.string.directions_to, w.name)) }
-    }
+    // "Catch the D2 at Museum", and you don't know where Museum is: walking
+    // directions there, as the one filled button; the server's go beside it.
+    val walkTo = answer.card?.walkTo
     val actions = answer.card?.actions.orEmpty()
-    if (actions.isNotEmpty()) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
-            actions.forEachIndexed { i, a ->
-                if (i == 0 && a.id != "skipped" && a.id != "reset") {
+    walkTo?.let { w ->
+        val ctx = LocalContext.current
+        Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, w.mapsUri())) } },
+                modifier = Modifier.weight(1f).height(48.dp),
+            ) { Text(stringResource(R.string.directions_to, w.name), maxLines = 1) }
+            actions.firstOrNull()?.let { a -> OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.height(48.dp)) { Text(a.label, maxLines = 1) } }
+        }
+    }
+    val rest = if (walkTo != null) actions.drop(1) else actions
+    if (rest.isNotEmpty()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = if (walkTo != null) 6.dp else 10.dp)) {
+            rest.forEachIndexed { i, a ->
+                if (i == 0 && walkTo == null && a.id != "skipped" && a.id != "reset") {
                     Button(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
                 } else {
                     OutlinedButton(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
@@ -224,6 +218,71 @@ internal fun ClassPlan(answer: NextAnswer) {
     }
     answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 6.dp)) }
 }
+
+/**
+ * The day's done, or there's nothing to catch: the label large on a panel
+ * (a night sky after your day, plain otherwise), what's next under it, then
+ * your favourites to plan a trip to instead.
+ */
+@Composable
+private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Unit) {
+    val c = MaterialTheme.colorScheme
+    val ink = if (night) NIGHT_INK else c.onSurface
+    val sub = if (night) NIGHT_SUB else c.onSurfaceVariant
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(if (night) Brush.verticalGradient(NIGHT) else Brush.verticalGradient(listOf(c.surfaceVariant, c.surfaceVariant))),
+    ) {
+        if (night) NightSky(Modifier.matchParentSize())
+        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = if (night) 104.dp else 28.dp, bottom = 24.dp)) {
+            Text(answer.label, color = ink, fontSize = 38.sp, lineHeight = 42.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
+            if (answer.detail.isNotEmpty()) Text(answer.detail, color = sub, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+    if (answer.places.isNotEmpty()) {
+        Label(stringResource(R.string.going_anyway), Modifier.padding(top = 22.dp, bottom = 10.dp))
+        for (row in answer.places.chunked(3)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (p in row) {
+                    LinkTile({ onPlace(p.key) }, Modifier.weight(1f).fillMaxHeight()) {
+                        Text(p.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(18.dp))
+                        Text(stringResource(R.string.plan_trip), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
+                    }
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    } else {
+        Text(
+            stringResource(if (night) R.string.rest_hint_none else R.string.free_hint_none),
+            style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp),
+        )
+    }
+}
+
+/** A few stars and a crescent moon, for the night panel. Fixed, so it never twinkles into a distraction. */
+@Composable
+private fun NightSky(modifier: Modifier) {
+    Canvas(modifier) {
+        val w = size.width
+        for ((x, y, a) in STARS) drawCircle(Color.White.copy(alpha = a), 1.3.dp.toPx(), Offset(w * x, 14.dp.toPx() + y * 80.dp.toPx()))
+        val moon = Offset(w - 60.dp.toPx(), 52.dp.toPx())
+        drawCircle(MOON, 24.dp.toPx(), moon)
+        drawCircle(NIGHT.first(), 22.dp.toPx(), moon + Offset(11.dp.toPx(), -7.dp.toPx()))
+    }
+}
+
+private val NIGHT = listOf(Color(0xFF121A33), Color(0xFF181A30), Color(0xFF1C1B26))
+private val NIGHT_INK = Color(0xFFF2EFEB)
+private val NIGHT_SUB = Color(0xFFC9C3BD)
+private val MOON = Color(0xFFFDE9C9)
+private val STARS = listOf(
+    Triple(0.08f, 0.3f, 0.7f), Triple(0.22f, 0.9f, 0.5f), Triple(0.35f, 0.15f, 0.8f), Triple(0.48f, 0.7f, 0.4f),
+    Triple(0.6f, 0.2f, 0.6f), Triple(0.15f, 1.1f, 0.35f), Triple(0.7f, 1.05f, 0.5f), Triple(0.92f, 1.2f, 0.4f),
+)
 
 @Composable
 internal fun goodColor() = if (isSystemInDarkTheme()) GoodDark else GoodLight

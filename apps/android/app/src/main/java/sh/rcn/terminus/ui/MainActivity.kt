@@ -195,6 +195,16 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
     // Signed in and set up: Now · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
         Tabs(tab, { tab = it }, vm, account, map, acct, onAddEmail = { account.beginSignIn(); screen = Screen.SignIn }, onSignedOut = signedOut)
+    } else if (!state.paired && screen == Screen.Main) {
+        // Edge to edge for its livery: it keeps the insets itself.
+        WelcomeScreen(
+            busy = acct.busy,
+            message = acct.message ?: state.pairError,
+            onStart = { account.start { store.needsSetup = true; signedIn() } },
+            onSignIn = { account.beginSignIn(); screen = Screen.SignIn },
+            onPair = { screen = Screen.Pair },
+            onLang = { pref -> Lang.set(ctx, pref); recreateOn12(ctx) },
+        )
     } else Column(
         Modifier
             .fillMaxSize()
@@ -216,16 +226,8 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
             }
             !state.paired && screen == Screen.Pair -> {
                 BackHandler { screen = Screen.Main }
-                PairScreen(state, vm::pair)
+                PairScreen(state, vm::pair, onBack = { screen = Screen.Main })
             }
-            !state.paired -> WelcomeScreen(
-                busy = acct.busy,
-                message = acct.message ?: state.pairError,
-                onStart = { account.start { store.needsSetup = true; signedIn() } },
-                onSignIn = { account.beginSignIn(); screen = Screen.SignIn },
-                onPair = { screen = Screen.Pair },
-                onLang = { pref -> Lang.set(ctx, pref); recreateOn12(ctx) },
-            )
             else -> OnboardingScreen(acct, account, vm) { setup = false; vm.load(restart = true) }
         }
     }
