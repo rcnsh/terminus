@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Row
@@ -39,26 +38,19 @@ import androidx.compose.foundation.layout.widthIn
  * Today at a glance, from /me/day: each class with its leave-by, and the
  * trips home. What's done is dimmed. Anything still to come can be swiped
  * away to take it off today, whether it's timetabled or one you added; it
- * goes at once, leaving a row in its place with Undo for a few seconds, so
- * nothing below it moves. Until a row has been swiped,
- * the heading says so, and the first few times the first row nudges aside
- * to show what's under it.
+ * goes at once, and a bar at the foot of the screen offers Undo for a few
+ * seconds (MainActivity). Until a row has been swiped, the heading says so,
+ * and the first few times the first row nudges aside to show what's under it.
  */
 @Composable
 internal fun DayTimeline(
     day: DayPlan,
-    removed: DayItem?,
-    removedAt: Int,
-    removedBefore: String?,
-    removeError: String?,
     hint: Boolean,
     peek: Boolean,
     onRemove: (DayItem) -> Unit,
-    onUndo: () -> Unit,
-    onDismissUndo: () -> Unit,
     onPeeked: () -> Unit,
 ) {
-    if (day.items.isEmpty() && removed == null && removeError == null) return
+    if (day.items.isEmpty()) return
     val ctx = LocalContext.current
     val fmt = { ms: Long -> clock(ctx, ms) }
     val firstRemovable = day.items.firstOrNull { it.removable }?.key
@@ -69,19 +61,17 @@ internal fun DayTimeline(
                 Text(stringResource(R.string.swipe_to_remove), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (removed == null && removeError != null) ErrorBar(removeError, onDismissUndo)
-        // Above the entry that followed it, so a refresh meanwhile doesn't move it.
-        val at = if (removedBefore == null) day.items.size else day.items.indexOfFirst { it.key == removedBefore }.takeIf { it >= 0 } ?: removedAt.coerceIn(0, day.items.size)
-        day.items.forEachIndexed { i, item ->
-            if (i == at && removed != null) androidx.compose.runtime.key("removed:${removed.key}") { RemovedRow(removed, fmt, onUndo, onDismissUndo) }
+        for (item in day.items) {
             // Keyed, so a swiped row's state doesn't pass to the one moving up.
             androidx.compose.runtime.key(item.key) {
                 if (item.removable) Swipeable(item, peek && item.key == firstRemovable, onRemove, onPeeked) { Row(item, fmt) } else Row(item, fmt)
             }
         }
-        if (at == day.items.size && removed != null) androidx.compose.runtime.key("removed:${removed.key}") { RemovedRow(removed, fmt, onUndo, onDismissUndo) }
     }
 }
+
+/** What a removed entry is called in the Undo bar: the trip home, or the class without its venue. */
+internal fun DayItem.shortName(): String = if (kind == "home") L.s(R.string.trip_home) else label.substringBefore(" @ ")
 
 /** Swipe either way to take it off today. With `peek`, it slides aside once by itself and back, showing what's under it. */
 @Composable
@@ -136,37 +126,6 @@ private fun RemoveBehind(text: String, toEnd: Boolean, modifier: Modifier) {
     ) {
         Text(text, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.labelLarge)
     }
-}
-
-/** Where a row was swiped off: "GEA1000 taken off today · Undo", for a few seconds, in the list's own colours. */
-@Composable
-private fun RemovedRow(item: DayItem, fmt: (Long) -> String, onUndo: () -> Unit, onDismiss: () -> Unit) {
-    androidx.compose.runtime.LaunchedEffect(item.key) {
-        kotlinx.coroutines.delay(6_000)
-        onDismiss()
-    }
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val name = if (item.kind == "home") stringResource(R.string.trip_home) else item.label.substringBefore(" @ ")
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(fmt(item.startsAtMs), style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.widthIn(min = 72.dp).padding(end = 8.dp))
-        Text(stringResource(R.string.taken_off_today, name), color = muted, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        TextButton(onClick = onUndo) { Text(stringResource(R.string.undo), fontWeight = FontWeight.SemiBold) }
-    }
-}
-
-/** A swipe that didn't take: the row is back, and this says why, for a few seconds. */
-@Composable
-private fun ErrorBar(text: String, onDismiss: () -> Unit) {
-    androidx.compose.runtime.LaunchedEffect(text) {
-        kotlinx.coroutines.delay(6_000)
-        onDismiss()
-    }
-    Text(
-        text,
-        color = MaterialTheme.colorScheme.onErrorContainer,
-        style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
-    )
 }
 
 @Composable
