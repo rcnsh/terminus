@@ -48,6 +48,8 @@ export function planOfLeave(l: Leave | null | undefined, located: boolean, aligh
     ...(l.walkS != null ? { walkS: l.walkS } : {}),
     ...(l.rideS != null ? { rideS: l.rideS } : {}),
     alightCode: l.offCode ?? alightCode,
+    ...(l.paid ? { paid: true as const } : {}),
+    ...(l.route ? { route: l.route } : {}),
   };
 }
 

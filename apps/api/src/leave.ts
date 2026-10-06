@@ -57,8 +57,8 @@ interface Leg {
 
 /** The fare on a public bus, as the time a free bus may cost instead (PUBLIC.fareWorthS). */
 const fareMs = (leg: { paid?: true }) => (leg.paid ? PUBLIC.fareWorthS * 1000 : 0);
-/** `paid` only on a public bus, so shuttle answers are unchanged. */
-const paidOf = (leg: { paid?: true }) => (leg.paid ? { paid: true as const } : {});
+/** `paid` only on a public bus, so shuttle answers are unchanged; with it the route key a two-way service's number can't name. */
+const paidOf = (leg: { svc: string; paid?: true }) => (leg.paid ? { paid: true as const, ...(leg.svc !== svcName(leg.svc) ? { route: leg.svc } : {}) } : {});
 
 /** `off` only when there is one, so answers without a crossing are unchanged; `toStop` likewise. */
 const offOf = (leg: { off?: { code: string; name: string }; to?: { code: string; name: string } }) => ({

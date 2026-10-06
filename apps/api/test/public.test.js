@@ -12,6 +12,10 @@ import { GRAPH, GRAPH_PUBLIC } from '../src/graph.ts';
 import { isPublic, publicCodeOf, rideMetres, shuttleCalls, svcName } from '../src/public.ts';
 import { boardAt, candidateStops, feedFor, indexGraph, scoreOptions } from '../src/resolve.ts';
 import { collectArrivals, mergeFeeds } from '../src/answer.ts';
+import { planOfLeave } from '../src/plan.ts';
+import { leaveOf } from '../src/trip.ts';
+import { onRoute } from '../src/detect.ts';
+import { leaveBy } from '../src/leave.ts';
 import { PUBLIC, WALK } from '../src/config.ts';
 
 const idx = indexGraph(GRAPH_PUBLIC);
@@ -279,4 +283,56 @@ test('an account with publicBuses on gets public buses on /me/next and /me/nearb
   assert.deepEqual([row.etaS, row.paid, row.color], [90, true, null]);
   // Within walking range, up to the usual number of stops, so no extra load on either feed.
   assert.ok(nearby.stops.length <= WALK.maxCandidates + 1);
+});
+
+test('a live public bus does not outrank a free bus with only a headway guess unless the fare is worth it', () => {
+  const cands = candidateStops(GRAPH_PUBLIC, AT_CLB).filter((c) => c.stop.code === 'CLB');
+  // The shuttle feed answered with nothing for A1 (a headway guess); the 95 is live, 3 min away.
+  const byStop = new Map([['CLB', arrivals('CLB', [{ svc: '95', etaS: 180, crowd: null, plate: null, berth: null }])]]);
+  const opts = scoreOptions(GRAPH_PUBLIC, cands, byStop, FROZEN_NOW);
+  const a1 = opts.find((o) => o.svc === 'A1');
+  const bus95 = opts.find((o) => o.svc === '95');
+  assert.equal(a1.quality, 'scheduled');
+  assert.equal(bus95.quality, 'live');
+  // Here the guess for A1 is quicker than the 95 plus its fare: A1 stays first despite its tier.
+  const costA1 = a1.totalS;
+  const cost95 = bus95.totalS + PUBLIC.fareWorthS;
+  assert.equal(opts[0].svc, costA1 <= cost95 ? 'A1' : '95');
+  // A 95 pulling in now, saving well over the fare's worth: it wins.
+  const soon = new Map([['CLB', arrivals('CLB', [{ svc: '95', etaS: 30, crowd: null, plate: null, berth: null }])]]);
+  const o2 = scoreOptions(GRAPH_PUBLIC, cands, soon, FROZEN_NOW);
+  assert.equal(o2[0].svc, o2.find((o) => o.svc === '95').totalS + PUBLIC.fareWorthS < costA1 ? '95' : 'A1');
+});
+
+test('turning public buses on never crowds a shuttle stop out of the candidates', () => {
+  // Between the terminal and LT13, where two public-only stops on Kent Ridge Crescent are the nearest of all.
+  const here = { lat: 1.2947, lon: 103.7707, to: 'UTOWN', originCode: null };
+  const plain = candidateStops(GRAPH, here).map((c) => c.stop.code);
+  const withPub = candidateStops(GRAPH_PUBLIC, here).map((c) => c.stop.code);
+  for (const code of plain) assert.ok(withPub.includes(code), `${code} lost`);
+  // At most one public-only stop joins them.
+  assert.ok(withPub.filter((c) => idx.byCode.get(c).public).length <= 1);
+  assert.ok(withPub.length <= plain.length + 1);
+});
+
+test('a kept plan for a public bus keeps its fare mark and its route, and detection follows it', () => {
+  const cands = candidateStops(GRAPH_PUBLIC, { lat: 1.293619, lon: 103.771475, to: 'IT', originCode: null }).filter((c) => c.stop.code === '16009');
+  assert.ok(cands.length, 'Kent Ridge Terminal public stop is a candidate');
+  const byStop = new Map([['16009', arrivals('16009', [{ svc: '151/2', etaS: 240, crowd: null, plate: null, berth: null }])]]);
+  const opts = scoreOptions(GRAPH_PUBLIC, cands, byStop, FROZEN_NOW);
+  const leave = leaveBy({ options: opts, candidates: cands, byStop, graph: GRAPH_PUBLIC, arriveBy: null, walkAllS: null, nowMs: FROZEN_NOW - 600_000 });
+  assert.equal(leave.svc, '151');
+  assert.equal(leave.paid, true);
+  assert.equal(leave.route, '151/2');
+  const plan = planOfLeave(leave, true, 'IT');
+  assert.equal(plan.paid, true);
+  assert.equal(plan.route, '151/2');
+  const again = leaveOf(plan);
+  assert.equal(again.paid, true);
+  assert.equal(again.route, '151/2');
+  // On Kent Ridge Crescent between the terminal and IT: on the 151's way, in the public graph.
+  const fix = { lat: 1.2962, lon: 103.7714, accM: 20 };
+  assert.equal(onRoute(GRAPH_PUBLIC, plan, fix, 60), true);
+  // The shuttle graph can't follow it, which is why detection is given the public graph.
+  assert.equal(onRoute(GRAPH, plan, fix, 60), false);
 });

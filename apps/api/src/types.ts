@@ -245,6 +245,9 @@ export interface Leave {
   endWalkS?: number;
   /** The bus is a public one, with a fare. Absent for a shuttle. */
   paid?: true;
+  /** The graph's route for a public two-way service (`151/1`), which `svc`
+   *  (`151`) can't name, so a kept plan can be followed. Absent otherwise. */
+  route?: string;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */

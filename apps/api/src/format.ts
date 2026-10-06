@@ -134,8 +134,11 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
 }
 
 /** One option rendered standalone, for the `alt` field. */
+/** The bus as it's named in text: "95 ($)" for a public bus, so the fare shows wherever the badge doesn't. */
+export const named = (o: { svc: string; paid?: true }): string => (o.paid ? `${svcName(o.svc)} ($)` : svcName(o.svc));
+
 export function renderAlt(o: ScoredOption): string {
-  return `${svcName(o.svc)} · ${etaPhrase(o)} · ${shortStop(o.stop.name)}`;
+  return `${named(o)} · ${etaPhrase(o)} · ${shortStop(o.stop.name)}`;
 }
 
 function buildLabel(best: ScoredOption, nowMs: number): string {
@@ -196,7 +199,7 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     // "or A1 in 14 min": when it comes, not how long it takes.
     const raw = etaPhrase(f.alt);
     const plain = raw === m().now || raw === m().noTimes;
-    parts.push(m().orAlt(f.alt.svc === best.svc ? shortStop(f.alt.stop.name) : svcName(f.alt.svc), raw, plain));
+    parts.push(m().orAlt(f.alt.svc === best.svc ? shortStop(f.alt.stop.name) : named(f.alt), raw, plain));
   }
 
   return parts.join(' · ');
