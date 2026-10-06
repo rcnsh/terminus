@@ -229,7 +229,8 @@ internal fun ClassPlan(answer: NextAnswer) {
  * The day's done, or there's nothing to catch: the label large, what's next
  * on a card of its own, then your favourites to plan a trip to instead.
  * After your day it's night: on Now, the sky behind the top of the screen
- * goes down to the end of this section ([LocalSky]); elsewhere, a panel.
+ * goes down to the end of this section ([LocalSky]), which leaves room at
+ * its foot for the horizon; elsewhere, a panel.
  */
 @Composable
 private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Unit) {
@@ -249,14 +250,17 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
                     // With no sky to sit in (not on Now), the night is a panel of its own.
                     .then(if (sky == null) Modifier.clip(RoundedCornerShape(28.dp)).background(Brush.verticalGradient(NIGHT)).padding(horizontal = 22.dp) else Modifier)
                     .drawBehind { starsAndMoon(108.dp.toPx()) }
-                    .padding(top = 108.dp, bottom = if (places) 0.dp else 24.dp),
+                    .padding(top = 108.dp, bottom = if (sky == null && !places) 24.dp else 0.dp),
             ) {
                 Text(answer.label, color = NIGHT_INK, fontSize = 46.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
                 sub?.let { Text(it, color = NIGHT_SUB, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
                 upcoming?.let { UpcomingCard(it, night = true) }
-                if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 24.dp, bottom = 10.dp), color = NIGHT_SUB)
+                if (sky != null) Spacer(Modifier.height(10.dp + HORIZON))
+                else if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 24.dp, bottom = 10.dp), color = NIGHT_SUB)
             }
         }
+        // On the ground, in the page's colours.
+        if (sky != null && places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 4.dp, bottom = 10.dp))
     } else {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.surfaceVariant).padding(start = 22.dp, end = 22.dp, top = 28.dp, bottom = 24.dp)) {
             Text(answer.label, color = c.onSurface, fontSize = 38.sp, lineHeight = 42.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
