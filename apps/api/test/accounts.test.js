@@ -879,6 +879,18 @@ test('the bus answers need a key or an account; downloads, health and docs stay 
   assert.equal((await call(env, '/arrivals?stop=COM3', { cookie })).status, 200);
 });
 
+test('/campus lists PGP and UTown Residence first, marked common, then the rest by name', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const { residences } = await (await call(env, '/campus', { cookie })).json();
+  const common = residences.filter((r) => r.common);
+  assert.deepEqual(common.map((r) => r.code), ['PGP', 'UTR']);
+  assert.deepEqual(residences.slice(0, 2), common, 'the common ones lead');
+  const rest = residences.slice(2).map((r) => r.name);
+  assert.deepEqual(rest, [...rest].sort((a, b) => a.localeCompare(b)));
+  assert.ok(residences.slice(2).every((r) => r.common === false));
+});
+
 test('API keys: made on the account page, shown once, work anywhere, revocable', async () => {
   const { env, db, email } = setup();
   delete env[Symbol.for('terminus.testOpen')];

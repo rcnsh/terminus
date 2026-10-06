@@ -4,7 +4,7 @@
 
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { api, browserHour12, clock, inkOn, t } from './dom.js';
-import { campus, profile, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast } from './profile.js';
+import { campus, profile, ResidenceOptions, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast } from './profile.js';
 import { CLOCKS, StopSelect } from './settings-pages.js';
 
 const PACES = [
@@ -190,8 +190,8 @@ function TimetableStep({ nav }) {
   `;
 }
 
-/** How many halls show as tiles before "All of them". */
-const SHOWN = 7;
+/** How many of the other halls show as tiles before "All of them". */
+const SHOWN = 4;
 
 function Home({ nav }) {
   const c = useStore(campus);
@@ -224,22 +224,32 @@ function Home({ nav }) {
       { enableHighAccuracy: true, timeout: 10_000 },
     );
   };
-  // The first few halls, and the one chosen if it's further down.
-  const tiles = residences.slice(0, SHOWN);
-  if (picked && !tiles.includes(picked)) tiles.push(picked);
+  // Where most students live, on their own at the top; then a few of the
+  // other halls, and the one chosen if it's further down.
+  const common = residences.filter((r) => r.common);
+  const others = residences.filter((r) => !r.common);
+  const tiles = others.slice(0, SHOWN);
+  if (picked && !picked.common && !tiles.includes(picked)) tiles.push(picked);
+  const tile = (r) => html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`;
   const yours = mode === 'hall' && picked ? picked.stops : stop ? [stop] : [];
   return html`
     <${Heading} text=${t('Where your day starts')} sub=${t('Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved, never where you live.')} />
-    <div class="ob-tiles" role="radiogroup" aria-label=${t('Where you live')}>
-      ${tiles.map((r) => html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`)}
-      <${Tile} on=${mode === 'more'} onClick=${() => setMode('more')}><strong>${t('All {0} halls and colleges', residences.length)}</strong><//>
-      <${Tile} on=${mode === 'off'} onClick=${() => pick(null)}><strong>${t('Off campus')}</strong><span class="hint">${t('Pick your stop')}</span><//>
+    <div role="radiogroup" aria-label=${t('Where you live')}>
+      ${common.length > 0 &&
+      html`<p class="eyebrow ob-label">${t('Most common')}</p>
+        <div class="ob-tiles ob-common">${common.map(tile)}</div>
+        <p class="eyebrow ob-label">${t('Elsewhere')}</p>`}
+      <div class=${common.length ? 'ob-tiles ob-rest' : 'ob-tiles'}>
+        ${tiles.map(tile)}
+        <${Tile} on=${mode === 'more'} onClick=${() => setMode('more')}><strong>${t('All {0} halls and colleges', residences.length)}</strong><//>
+        <${Tile} on=${mode === 'off'} onClick=${() => pick(null)}><strong>${t('Off campus')}</strong><span class="hint">${t('Pick your stop')}</span><//>
+      </div>
     </div>
     ${mode === 'more' &&
     html`<label for="ob-residence">${t('Where do you live?')}</label>
       <select id="ob-residence" aria-label=${t('Where you live')} value=${picked?.code ?? ''} onChange=${(e) => pick(residences.find((x) => x.code === e.currentTarget.value) ?? null)}>
         <option value="">${t('Choose')}</option>
-        ${residences.map((r) => html`<option value=${r.code} key=${r.code}>${r.name}</option>`)}
+        <${ResidenceOptions} residences=${residences} />
       </select>`}
     ${mode === 'off' &&
     html`<label for="ob-stop">${t('Home stop')}</label>

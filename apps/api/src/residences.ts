@@ -14,6 +14,8 @@ import type { Stop } from './types.ts';
 
 export interface Residence {
   name: string;
+  /** Where most students live: the pickers show it first. */
+  common?: boolean;
   /** Stop code -> metres on foot from the residence, nearest first. */
   stops: Record<string, number>;
   /** Outlines, each a ring of [lat, lon]. */

@@ -105,8 +105,24 @@ export async function loadCampus() {
 /** Every stop, by name, for menus. */
 export const stopsByName = (c = campus.get()) => (c?.stops ?? []).map(({ code, name, lat, lon }) => ({ code, name, lat, lon })).sort((a, b) => a.name.localeCompare(b.name));
 
-/** Residences on campus, by name. */
-export const residencesByName = (c = campus.get()) => [...(c?.residences ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+/**
+ * Residences on campus: the common ones (PGP, UTown Residence) first, then by
+ * name. Common first also settles home stops several share (every UTown
+ * college is UTOWN's) on the likelier one.
+ */
+export const residencesByName = (c = campus.get()) =>
+  [...(c?.residences ?? [])].sort((a, b) => Number(b.common === true) - Number(a.common === true) || a.name.localeCompare(b.name));
+
+/** A residence menu's options after its blank one: where most students live in a group of their own at the top. */
+export function ResidenceOptions({ residences }) {
+  const option = (r) => html`<option value=${r.code} key=${r.code}>${r.name}</option>`;
+  const common = residences.filter((r) => r.common);
+  if (!common.length) return residences.map(option);
+  return html`
+    <optgroup label=${t('Most common')}>${common.map(option)}</optgroup>
+    <optgroup label=${t('Other residences')}>${residences.filter((r) => !r.common).map(option)}</optgroup>
+  `;
+}
 
 /** A stop's name, or a food court's (favourites and classes can go to one). */
 export function stopName(code) {

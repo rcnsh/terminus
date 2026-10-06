@@ -224,13 +224,22 @@ private fun ColumnScope.HomeStep(profile: ProfileDoc, state: AccountState, accou
 /** The walk from a residence to its stop, at an easy pace. */
 private fun Residence.walkMin() = maxOf(1, Math.round(walkM / 1.3 / 60).toInt())
 
-/** How many residences show before "All 15 halls and colleges". */
-private const val FEW_RESIDENCES = 7
+/** The residence menu's groups: where most students live, then the rest (residences come common first). */
+@Composable
+internal fun residenceHeadings(residences: List<Residence>): Map<Int, String> {
+    val common = residences.count { it.common }
+    if (common == 0) return emptyMap()
+    return mapOf(0 to stringResource(R.string.most_common), common to stringResource(R.string.other_residences))
+}
+
+/** How many of the other residences show before "All 15 halls and colleges". */
+private const val FEW_RESIDENCES = 4
 private const val MORE = "more"
 private const val OFF = "off"
 
 /**
- * Residences as tiles (the chosen one always among those showing), then
+ * Residences as tiles: where most students live on their own at the top,
+ * then a few of the others (the chosen one always among those showing) and
  * off campus. Your stops follow as their signs, with the buses that call
  * there, so the choice shows what it does.
  */
@@ -240,29 +249,39 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
     val scope = rememberCoroutineScope()
     val stops = profile.homeStops
     // The residence whose stops these are, if they're exactly one residence's.
+    // The common ones come first, so stops several share (UTOWN) find the likelier.
     val residence = campus.residences.firstOrNull { it.stops == stops }
     var offCampus by rememberSaveable { mutableStateOf(stops.isNotEmpty() && residence == null) }
     var all by rememberSaveable { mutableStateOf(false) }
     var locating by remember { mutableStateOf<String?>(null) }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
 
-    val few = campus.residences.size > FEW_RESIDENCES + 1 && !all
-    val shown = if (!few) campus.residences else campus.residences.take(FEW_RESIDENCES).let { if (residence != null && residence !in it) it.dropLast(1) + residence else it }
+    val (common, others) = campus.residences.partition { it.common }
+    val few = others.size > FEW_RESIDENCES + 1 && !all
+    val shown = if (!few) others else others.take(FEW_RESIDENCES).let { if (residence != null && !residence.common && residence !in it) it.dropLast(1) + residence else it }
+    val tile: @Composable (Residence, Modifier) -> Unit = { r, mod ->
+        ChoiceTile(residence == r && !offCampus, {
+            offCampus = false
+            account.edit {
+                it.setHomeStops(r.stops)
+                it.homeWalkMin = r.walkMin()
+            }
+        }, mod) {
+            Text(r.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                listOfNotNull(r.stops.firstOrNull()?.let(campus::stopName), stringResource(R.string.min_walk, r.walkMin())).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+    if (common.isNotEmpty()) {
+        Label(stringResource(R.string.most_common), Modifier.padding(bottom = 8.dp))
+        TwoColumns(common, cell = tile)
+        Label(stringResource(R.string.elsewhere), Modifier.padding(top = 18.dp, bottom = 8.dp))
+    }
     TwoColumns(shown + listOfNotNull(if (few) MORE else null, OFF)) { cell, mod ->
         when (cell) {
-            is Residence -> ChoiceTile(residence == cell && !offCampus, {
-                offCampus = false
-                account.edit {
-                    it.setHomeStops(cell.stops)
-                    it.homeWalkMin = cell.walkMin()
-                }
-            }, mod) {
-                Text(cell.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(
-                    listOfNotNull(cell.stops.firstOrNull()?.let(campus::stopName), stringResource(R.string.min_walk, cell.walkMin())).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
+            is Residence -> tile(cell, mod)
             MORE -> ChoiceTile(false, { all = true }, mod) {
                 Text(stringResource(R.string.all_residences, campus.residences.size), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
             }

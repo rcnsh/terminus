@@ -100,7 +100,7 @@ enum Snapshots {
     static func renderSetup(to dir: String) {
         let campusJSON = """
         {"stops":[{"code":"PGP","name":"Prince George's Park","lat":1.2917,"lon":103.7803},{"code":"COM3","name":"COM 3","lat":1.2948,"lon":103.7747},{"code":"UTOWN","name":"University Town","lat":1.3036,"lon":103.7747}],
-         "residences":[{"code":"PGPR","name":"Prince George's Park Residences","stops":["PGP"],"walkM":300},{"code":"RVRC","name":"Ridge View Residential College","stops":["COM3"],"walkM":420}]}
+         "residences":[{"code":"PGPR","name":"Prince George's Park Residences","stops":["PGP"],"walkM":300,"common":true},{"code":"RVRC","name":"Ridge View Residential College","stops":["COM3"],"walkM":420}]}
         """
         let campus = try! JSONDecoder().decode(Campus.self, from: Data(campusJSON.utf8))
         let profile: [String: Any] = ["home": ["stops": ["PGP"]], "homeWalkMin": 4, "walkPace": "normal", "fullBusMargin": true, "trips": [["day": 1, "arriveByMin": 600, "endMin": 720, "to": "COM3", "label": "CS2030 @ COM1"], ["day": 3, "arriveByMin": 840, "to": "UTOWN", "label": "GEA1000 @ UTown"], ["day": 4, "arriveByMin": 540, "to": "COM3", "label": "MA1100 @ LT21", "weeks": [1, 2, 3, 4, 5, 6]]], "manual": [["day": 5, "arriveByMin": 1080, "to": "UTOWN", "label": "Gym", "venue": ""]], "share": "https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1", "places": [["key": "mrt", "label": "KR MRT", "to": "KR-MRT"], ["key": "deck", "label": "The Deck", "to": "COM3"]]]

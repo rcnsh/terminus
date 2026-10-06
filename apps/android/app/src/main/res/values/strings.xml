@@ -464,6 +464,9 @@
     <string name="step_pace">Pace</string>
     <string name="step_alerts">Alerts</string>
     <string name="all_residences">All %1$d halls and colleges</string>
+    <string name="most_common">Most common</string>
+    <string name="elsewhere">Elsewhere</string>
+    <string name="other_residences">Other residences</string>
     <string name="pace_lap">One lap of a running track is 400 m.</string>
     <string name="pace_lap_min">%1$d min a lap</string>
     <string name="pace_lap_yours">a lap at your pace</string>

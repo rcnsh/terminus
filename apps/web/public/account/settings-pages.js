@@ -10,6 +10,7 @@ import {
   edit,
   lists,
   profile,
+  ResidenceOptions,
   residenceFor,
   residenceWalkMin,
   residencesByName,
@@ -214,7 +215,7 @@ export function Trips() {
             }}
           >
             <option value="">${t('Off campus')}</option>
-            ${residences.map((r) => html`<option value=${r.code} key=${r.code}>${r.name}</option>`)}
+            <${ResidenceOptions} residences=${residences} />
           </select>
         <//>
         ${picking
