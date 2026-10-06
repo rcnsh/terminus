@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -482,15 +483,25 @@ internal fun NightTheme(on: Boolean, content: @Composable () -> Unit) {
 /**
  * [content] in the sky's ink when [on]: light words on a dark sky, dark on a
  * light one ([light]), with the muted words a shade stronger than the
- * page's, as they're over colour. Else as it is. Always the same tree, so
- * nothing inside loses its state as the hour or the sky changes.
+ * page's, as they're over colour. Cards and tiles on it are glass, a faint
+ * pane on a dark sky and frosted on a light one, so they take the sky's
+ * colour at every hour rather than sitting on it as a block (the web's
+ * --k-surface). Else as it is. Always the same tree, so nothing inside
+ * loses its state as the hour or the sky changes.
  */
 @Composable
 internal fun SkyInk(on: Boolean, light: Boolean, content: @Composable () -> Unit) {
+    // A card takes its words' colour from matching its background in the
+    // scheme, so the containers are the surface and surfaceVariant differs (Brand.kt).
+    fun glass(base: ColorScheme, pane: Color, raised: Color, line: Color, muted: Color) = base.copy(
+        surface = pane, surfaceContainerLowest = pane, surfaceContainerLow = pane, surfaceContainer = pane,
+        surfaceContainerHigh = pane, surfaceContainerHighest = pane, surfaceVariant = raised,
+        outlineVariant = line, onSurfaceVariant = muted,
+    )
     val scheme = when {
         !on -> MaterialTheme.colorScheme
-        light -> BrandDark.copy(onSurfaceVariant = Color(0xFFD6D3D1), outlineVariant = Color.White.copy(alpha = 0.18f))
-        else -> BrandLight.copy(onSurfaceVariant = Color(0xFF3F3A36), outlineVariant = Color(0x291C1917))
+        light -> glass(BrandDark, Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.18f), Color(0xFFD6D3D1))
+        else -> glass(BrandLight, Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.65f), Color(0x291C1917), Color(0xFF3F3A36))
     }
     MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
         CompositionLocalProvider(LocalContentColor provides if (on) scheme.onBackground else LocalContentColor.current, content = content)
