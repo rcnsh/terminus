@@ -15,8 +15,6 @@ struct AnswerDetail: View {
         VStack(alignment: .leading, spacing: 8) {
             if let a = answer {
                 if let n = a.card?.notice { Row(icon: "antenna.radiowaves.left.and.right.slash", text: n).foregroundStyle(Color.warn) }
-                // On the bus: how far along, and the next stop, as the phone and the web show it.
-                if let ride = a.card?.ride { RideProgress(ride: ride) }
                 if let w = a.card?.warning { Row(icon: "exclamationmark.triangle.fill", text: w).fontWeight(.semibold).foregroundStyle(Color.warn) }
                 if a.isFree {
                     // Nothing to catch: no bus to mistake for advice.
@@ -102,30 +100,6 @@ struct Pill: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(Capsule().fill(color.opacity(0.14)))
-    }
-}
-
-/// On the bus: a bar from boarding to getting off, and the next stop.
-struct RideProgress: View {
-    let ride: NextAnswer.Ride
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { t in
-            VStack(alignment: .leading, spacing: 4) {
-                // Drawn, not a ProgressView: the same in the popover and in snapshots.
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(.primary.opacity(0.1))
-                        Capsule().fill(Color.brand).frame(width: max(6, g.size.width * ride.progress(t.date)))
-                    }
-                }
-                .frame(height: 6)
-                .accessibilityElement()
-                .accessibilityLabel(L("Ride progress"))
-                .accessibilityValue("\(Int(ride.progress(t.date) * 100))%")
-                Text(ride.nextText(t.date)).font(.callout)
-            }
-        }
     }
 }
 

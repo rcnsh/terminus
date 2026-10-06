@@ -71,36 +71,6 @@ struct NextAnswer: Decodable {
         let suggestion: Suggestion?
         /// "NUS's live bus times have been down since 9:14 AM", above the answer.
         let notice: String?
-        /// On the bus: the stops from boarding to getting off, for a progress bar.
-        let ride: Ride?
-    }
-
-    /// The ride, from boarding to getting off. Stops are taken as evenly spaced
-    /// between the two times, as on the phone's live notification.
-    struct Ride: Decodable {
-        struct Stop: Decodable { let code: String; let name: String }
-        let svc: String
-        let stops: [Stop]
-        let board: String
-        let arrive: String
-
-        /// 0 to 1 along the ride.
-        func progress(_ now: Date) -> Double {
-            guard let b = parseISODate(board), let a = parseISODate(arrive), a > b else { return 0 }
-            return min(1, max(0, now.timeIntervalSince(b) / a.timeIntervalSince(b)))
-        }
-
-        /// "Next: Opp NUSS · 3 stops to go", the same as the phone and the web.
-        func nextText(_ now: Date) -> String {
-            let hops = stops.count - 1
-            guard hops > 0 else { return "" }
-            let passed = Int(progress(now) * Double(hops))
-            let left = max(0, hops - passed)
-            let off = stops[hops].name
-            if passed + 1 > hops || left == 0 { return L("Getting off at %@", off) }
-            if left == 1 { return L("Next: %@, where you get off", off) }
-            return L("Next: %@ · %@ stops to go", stops[passed + 1].name, "\(left)")
-        }
     }
 
     enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card, walkSpeedMs }

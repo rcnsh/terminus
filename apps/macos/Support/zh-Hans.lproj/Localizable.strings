@@ -317,13 +317,9 @@
 "Starting…" = "正在开始…";
 "Use terminus without an email" = "不用邮箱使用 terminus";
 "Your setup stays on this Mac. Add an email any time in Settings to use it on your other devices, or to keep it if this Mac is lost." = "你的设置保存在这台 Mac 上。随时可以在设置里添加邮箱，以便在其他设备上使用，或在这台 Mac 丢失时保留设置。";
-"Getting off at %@" = "在 %@ 下车";
-"Next: %@, where you get off" = "下一站：%@，在这里下车";
-"Next: %@ · %@ stops to go" = "下一站：%@ · 还有 %@ 站";
 "Go later today at…" = "今天晚些时候出发…";
 "Plan it" = "安排";
 "Couldn't save your data. %@" = "无法保存你的数据。%@";
-"Ride progress" = "行程进度";
 
 /* The map window */
 "Map" = "地图";
