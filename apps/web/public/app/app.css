@@ -230,13 +230,13 @@ body.app > .nav { height: var(--header-h); padding-top: 0; padding-bottom: 0; }
 body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); }
 
 /* Done for today on Now (preview.js useSky): a night sky from the top of the
-   page down to the end of the headline and the next class, then fading into
-   the page. The header and the chips take night colours over it. */
-body.night { position: relative; }
+   page down to the horizon under the headline and the next class, glowing a
+   little towards it. The header and the chips take night colours over it. */
+body.night { position: relative; overflow-x: clip; }
 /* Now only: Map and Settings are drawn over a hidden Now, which still has it. */
 body.night:not(.on-map, .on-settings)::before {
-  content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: calc(var(--sky-end) + 80px); pointer-events: none;
-  background: linear-gradient(#121a33 0, #181a30 calc(var(--sky-end) * 0.55), #1c1b26 var(--sky-end), var(--bg) calc(var(--sky-end) + 80px));
+  content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--sky-end); pointer-events: none;
+  background: linear-gradient(#121a33 0, #181a30 calc(var(--sky-end) * 0.55), #24243a calc(var(--sky-end) - 110px), #2e2a44 var(--sky-end));
 }
 body.night > .nav, body.night .app-chips, body.night .where-box, body.night .day-done.open .done-panel {
   --bg: #121a33; --surface: #1d2036; --surface-2: #262a44; --ink: #f2efeb; --muted: #c9c3bd; --faint: #8d8aa0;
@@ -246,4 +246,26 @@ body.night > .nav, body.night .app-chips, body.night .where-box, body.night .day
 /* Open on the page, not a panel: the sky is the page's. */
 .day-done.open .done-panel.night { overflow: visible; padding: 108px 0 0; border-radius: 0; background: none; }
 .day-done.open .done-label { font-size: 2.9rem; letter-spacing: -0.03em; }
-.day-done.open .going { margin-bottom: 0; padding-bottom: 10px; }
+/* The horizon (preview.js Horizon): across the whole window, the near hill in
+   the page's colour. The rest in the theme's: dark hills, or dusky ones on a
+   light page. */
+.horizon { width: 100vw; height: 92px; margin: 10px calc(50% - 50vw) 0; }
+.horizon svg { display: block; }
+.horizon .far { fill: #3a3550; }
+.horizon .tree { fill: #5b5568; }
+.horizon .near { fill: var(--bg); }
+.horizon .road { stroke: #d6cfc7; stroke-width: 1.5; stroke-dasharray: 6 6; }
+.horizon .bus { fill: #24211e; }
+.horizon .stripe { fill: #e53935; }
+.horizon .lit { fill: #fde9c9; }
+.horizon .dim { opacity: 0.6; }
+.horizon .beam { opacity: 0.12; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .horizon .far { fill: #191826; }
+  :root:not([data-theme="light"]) .horizon .tree { fill: #121110; }
+  :root:not([data-theme="light"]) .horizon .road { stroke: #2c2926; }
+}
+:root[data-theme="dark"] .horizon .far { fill: #191826; }
+:root[data-theme="dark"] .horizon .tree { fill: #121110; }
+:root[data-theme="dark"] .horizon .road { stroke: #2c2926; }
+.day-done.open .going { margin-top: 4px; }

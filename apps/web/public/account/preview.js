@@ -200,9 +200,9 @@ const NightSky = () => html`
 
 /**
  * The page's night sky, on the web app's Now: from the top of the page down
- * to the end of `node` (the headline and the next class), then fading into
- * the page (app.css, body.night). The header and the chips take night
- * colours over it, and so does the browser's own bar where it has one.
+ * to the end of `node` (the horizon under the headline and the next class;
+ * app.css, body.night). The header and the chips take night colours over
+ * it, and so does the browser's own bar where it has one.
  */
 function useSky(node, on) {
   useLayoutEffect(() => {
@@ -231,6 +231,65 @@ function useSky(node, on) {
   }, [on]);
 }
 
+/**
+ * The hills along the horizon, more or less Kent Ridge: how far down the
+ * strip (92 px) each is, `x` px across. Fixed waves in pixels, so a wider
+ * page shows more hills rather than stretched ones. Android draws the same
+ * (NightSky.kt).
+ */
+const farY = (x) => 30 + 6 * Math.sin(x / 47 + 0.6) + 4 * Math.sin(x / 19 + 2.1);
+const nearY = (x) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
+const ridge = (w, y) => {
+  let d = `M0 92L0 ${y(0).toFixed(1)}`;
+  for (let x = 4; x < w + 4; x += 4) d += `L${x} ${y(x).toFixed(1)}`;
+  return `${d}L${w} 92Z`;
+};
+
+/**
+ * Where the night sky ends: the hills, a building or two with a light still
+ * on, and a shuttle on the road. The near hill is the page's own colour, so
+ * the sky meets the ground instead of fading into the page.
+ */
+function Horizon({ ground }) {
+  const [w, setW] = useState(0);
+  useLayoutEffect(() => {
+    const el = ground.current;
+    const seen = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, []);
+  const at = (f) => Math.round(w * f);
+  const [b1, b2, bus] = [at(0.18), at(0.68), at(0.58) - 19];
+  return html`
+    <div class="horizon" ref=${ground} aria-hidden="true">
+      ${w > 0 &&
+      html`<svg width=${w} height="92" viewBox=${`0 0 ${w} 92`}>
+        <path class="far" d=${ridge(w, farY)} />
+        <rect class="far" x=${b1 - 8} y=${farY(b1) - 14} width="16" height="20" />
+        <rect class="lit dim" x=${b1 - 3} y=${farY(b1) - 9} width="3" height="3" />
+        <rect class="far" x=${b2 - 13} y=${farY(b2) - 22} width="26" height="28" />
+        <rect class="lit" x=${b2 - 5} y=${farY(b2) - 16} width="3" height="3" />
+        <rect class="lit dim" x=${b2 + 3} y=${farY(b2) - 8} width="3" height="3" />
+        ${[0.06, 0.45, 0.9].map((f) => {
+          const c = at(f);
+          return html`<circle class="tree" cx=${c - 7} cy=${nearY(c - 7) - 5} r="10" /><circle class="tree" cx=${c + 7} cy=${nearY(c + 7) - 8} r="12" />`;
+        })}
+        <path class="near" d=${ridge(w, nearY)} />
+        <line class="road" x1="0" y1="70" x2=${w} y2="70" />
+        <g transform=${`translate(${bus} 57)`}>
+          <path class="lit beam" d="M38 6L60 3L60 11Z" />
+          <rect class="bus" width="38" height="12" rx="3" />
+          <rect class="stripe" y="9.5" width="38" height="2.5" rx="1" />
+          ${[3, 10, 17, 24].map((x) => html`<rect class=${x === 24 ? 'lit dim' : 'lit'} x=${x} y="2.5" width="5" height="4" rx="1" />`)}
+          <rect class="lit" x="32" y="2.5" width="4" height="6" rx="1" />
+          <circle class="near" cx="8" cy="12" r="2" />
+          <circle class="near" cx="30" cy="12" r="2" />
+        </g>
+      </svg>`}
+    </div>
+  `;
+}
+
 /** The next class on a card of its own: when in the accent, what, then where. */
 const UpcomingCard = ({ u }) => html`
   <div class="upcoming">
@@ -253,19 +312,19 @@ function DayDone({ a, night, onPlace, children }) {
   // The line under the label: why today's empty on a break, or what's next when there's no card for it.
   const sub = u ? u.off : a.detail || null;
   const open = night && Boolean(onPlace);
-  const top = useRef(null);
-  useSky(top, open);
+  const ground = useRef(null);
+  useSky(ground, open);
   return html`
     <div class=${open ? 'widget day-done open' : 'widget day-done'} aria-live="polite">
-      <div class=${night ? 'done-panel night' : 'done-panel'} ref=${top}>
+      <div class=${night ? 'done-panel night' : 'done-panel'}>
         ${night && html`<${NightSky} />`}
         <div class="done-label">${a.label}</div>
         ${sub && html`<div class="done-detail">${sub}</div>`}
         ${open && u && html`<${UpcomingCard} u=${u} />`}
-        ${open && places.length > 0 && html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>`}
       </div>
+      ${open && html`<${Horizon} ground=${ground} />`}
       ${!open && u && html`<${UpcomingCard} u=${u} />`}
-      ${!open && places.length > 0 && html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>`}
+      ${places.length > 0 && html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>`}
       ${places.length > 0 &&
       html`<div class="place-tiles">
         ${places.map(

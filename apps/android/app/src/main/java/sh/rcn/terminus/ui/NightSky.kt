@@ -17,21 +17,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /*
  * Done for today's night: a sky behind the top of Now, from the status bar
  * down to the end of the night section (the headline and the next class),
- * then fading into the page. The section says where it ends ([SkyState]);
+ * where it meets the ground: a horizon of hills in the page's colour. The section says where it ends ([SkyState]);
  * Now draws the sky and puts what's over it (the header, the chips, the
  * status bar's icons) in night colours while it's there.
  */
@@ -66,18 +71,83 @@ private val STARS = listOf(
     floatArrayOf(0.58f, 0.98f, 0.3f, 1.0f), floatArrayOf(0.97f, 0.16f, 0.45f, 1.1f),
 )
 
-/** Under the sky's end, the fade into the page. */
-private val FADE = 72.dp
+/** The strip at the foot of the sky where the horizon is drawn; the night section ends with room for it. */
+internal val HORIZON = 92.dp
 
-/** The sky behind the content, while the night section is shown; nothing otherwise. */
+/** The sky behind the content down to the horizon, while the night section is shown; nothing otherwise. */
 internal fun Modifier.nightSky(sky: SkyState, page: Color): Modifier = drawBehind {
     val end = sky.end ?: return@drawBehind
-    val fade = FADE.toPx()
-    val h = end + fade
+    // Glowing a little towards the horizon.
+    val glow = (end - 110.dp.toPx()).coerceAtLeast(end * 0.6f)
     drawRect(
-        Brush.verticalGradient(0f to NIGHT[0], (end * 0.55f / h) to NIGHT[1], (end / h) to NIGHT[2], 1f to page, endY = h),
-        size = Size(size.width, h),
+        Brush.verticalGradient(0f to NIGHT[0], 0.55f * glow / end to NIGHT[1], glow / end to Color(0xFF24243A), 1f to Color(0xFF2E2A44), endY = end),
+        size = Size(size.width, end),
     )
+    horizon(end - HORIZON.toPx(), page)
+}
+
+/*
+ * The hills along the horizon, more or less Kent Ridge: how far down the
+ * strip (92 dp) each is, x dp across. Fixed waves in dp, so a wider screen
+ * shows more hills rather than stretched ones. The web draws the same
+ * (preview.js Horizon).
+ */
+private fun farY(x: Float) = 30f + 6f * sin(x / 47f + 0.6f) + 4f * sin(x / 19f + 2.1f)
+private fun nearY(x: Float) = 52f + 3f * sin(x / 61f + 1.3f) + 1.5f * sin(x / 27f)
+
+/**
+ * Where the sky ends, from [top] down: the hills, a building or two with a
+ * light still on, and a shuttle on the road. The near hill is [page]'s own
+ * colour, so the sky meets the ground instead of fading into the page.
+ */
+private fun DrawScope.horizon(top: Float, page: Color) {
+    val d = 1.dp.toPx()
+    val w = size.width / d
+    val dark = page.luminance() < 0.5f
+    val far = Color(if (dark) 0xFF191826 else 0xFF3A3550)
+    val tree = Color(if (dark) 0xFF121110 else 0xFF5B5568)
+    val road = Color(if (dark) 0xFF2C2926 else 0xFFD6CFC7)
+    fun at(x: Float, y: Float) = Offset(x * d, top + y * d)
+    fun box(x: Float, y: Float, bw: Float, bh: Float, color: Color, r: Float = 0f) =
+        drawRoundRect(color, at(x, y), Size(bw * d, bh * d), CornerRadius(r * d))
+    fun ridge(y: (Float) -> Float, color: Color) = drawPath(
+        Path().apply {
+            moveTo(0f, top + 92 * d)
+            lineTo(0f, top + y(0f) * d)
+            var x = 4f
+            while (x < w + 4) { lineTo(x * d, top + y(x) * d); x += 4f }
+            lineTo(size.width, top + 92 * d)
+            close()
+        },
+        color,
+    )
+    val lit = MOON
+    val dim = MOON.copy(alpha = 0.6f)
+    ridge(::farY, far)
+    val b1 = (w * 0.18f).roundToInt().toFloat()
+    val b2 = (w * 0.68f).roundToInt().toFloat()
+    box(b1 - 8, farY(b1) - 14, 16f, 20f, far)
+    box(b1 - 3, farY(b1) - 9, 3f, 3f, dim)
+    box(b2 - 13, farY(b2) - 22, 26f, 28f, far)
+    box(b2 - 5, farY(b2) - 16, 3f, 3f, lit)
+    box(b2 + 3, farY(b2) - 8, 3f, 3f, dim)
+    for (f in floatArrayOf(0.06f, 0.45f, 0.9f)) {
+        val c = (w * f).roundToInt().toFloat()
+        drawCircle(tree, 10 * d, at(c - 7, nearY(c - 7) - 5))
+        drawCircle(tree, 12 * d, at(c + 7, nearY(c + 7) - 8))
+    }
+    ridge(::nearY, page)
+    drawLine(road, at(0f, 70f), at(w, 70f), 1.5f * d, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6 * d, 6 * d)))
+    // The shuttle, heading right with its headlights on: lit windows, A1's red along the bottom.
+    val x = (w * 0.58f).roundToInt() - 19f
+    val beam = listOf(at(x + 38, 63f), at(x + 60, 60f), at(x + 60, 68f))
+    drawPath(Path().apply { moveTo(beam[0].x, beam[0].y); beam.drop(1).forEach { lineTo(it.x, it.y) }; close() }, MOON.copy(alpha = 0.12f))
+    box(x, 57f, 38f, 12f, Color(0xFF24211E), 3f)
+    box(x, 66.5f, 38f, 2.5f, Color(0xFFE53935), 1f)
+    for (wx in floatArrayOf(3f, 10f, 17f, 24f)) box(x + wx, 59.5f, 5f, 4f, if (wx == 24f) dim else lit, 1f)
+    box(x + 32, 59.5f, 4f, 6f, lit, 1f)
+    drawCircle(page, 2 * d, at(x + 8, 69f))
+    drawCircle(page, 2 * d, at(x + 30, 69f))
 }
 
 /** The stars over the night section, in the room above its headline (clear of the chips, which show the sky through them), and the moon among them. */
