@@ -514,7 +514,7 @@ function Unlock() {
         <button class="btn accent" type="submit">Unlock</button>
       </div>
       ${v.msg && html`<p class="bad">${v.msg}</p>`}
-      <p class="hint">The HEALTH_TOKEN secret, as on the dashboard.</p>
+      <p class="hint">The HEALTH_TOKEN secret, as on the dashboard, or TIMELAPSE_TOKEN, which opens only this page.</p>
     </form>
   `;
 }

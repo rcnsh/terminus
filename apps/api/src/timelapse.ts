@@ -24,7 +24,7 @@
 
 import type { Env } from './types.ts';
 import { MIN_POLL_MS, TIMELAPSE } from './config.ts';
-import { isOperator } from './admin.ts';
+import { canReadTimelapse } from './admin.ts';
 import { json } from './http.ts';
 import { buildCampusMap } from './campus.ts';
 import { GRAPH } from './graph.ts';
@@ -247,8 +247,8 @@ export interface RecorderStatus {
 }
 
 /**
- * GET /timelapse/days and /timelapse/days/:date, for the operator only
- * (anything else is a 404, as /admin/stats). A closed day is its file from
+ * GET /timelapse/days and /timelapse/days/:date, for the operator or a
+ * holder of TIMELAPSE_TOKEN only (anything else is a 404, as /admin/stats). A closed day is its file from
  * R2, unchanged from then on, so it's cached for a year; today's is built
  * from what the recorder holds so far, and not cached.
  */
@@ -258,7 +258,7 @@ const HELD_DAYS = 7;
 
 export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: number): Promise<Response | null> {
   if (!url.pathname.startsWith('/timelapse/')) return null;
-  if (!isOperator(env, req) || req.method !== 'GET') return json({ error: 'not found' }, 404);
+  if (!canReadTimelapse(env, req) || req.method !== 'GET') return json({ error: 'not found' }, 404);
   if (!env.DOWNLOADS) return json({ error: 'timelapse storage is not configured' }, 503);
 
   if (url.pathname === '/timelapse/days') {
