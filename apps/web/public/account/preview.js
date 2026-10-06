@@ -2,7 +2,7 @@
 // page ("Your widget right now") and on the web app's Now. Every line comes
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
-import { Rich, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
+import { Rich, html, useEffect, useLayoutEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle } from './journey.js';
@@ -184,42 +184,89 @@ function Suggestion({ a, onChoice }) {
   `;
 }
 
-/** Where the stars sit on the night panel: across (0–1), down (0–1.2 of 80 px), and how bright. */
+/** Where the stars sit over the night: across (0–1), down (0–1 of the room above the headline), and how bright. */
 const STARS = [
-  [0.08, 0.3, 0.7], [0.22, 0.9, 0.5], [0.35, 0.15, 0.8], [0.48, 0.7, 0.4],
-  [0.6, 0.2, 0.6], [0.15, 1.1, 0.35], [0.7, 1.05, 0.5], [0.92, 1.2, 0.4],
+  [0.06, 0.3, 0.7], [0.17, 0.62, 0.5], [0.29, 0.18, 0.8], [0.38, 0.8, 0.4], [0.47, 0.42, 0.6], [0.55, 0.1, 0.5], [0.63, 0.68, 0.45],
+  [0.72, 0.28, 0.7], [0.84, 0.88, 0.4], [0.92, 0.5, 0.55], [0.11, 0.95, 0.35], [0.33, 1, 0.4], [0.58, 0.98, 0.3],
 ];
 
-/** A few stars and a crescent moon, for the night panel. Fixed, so it never twinkles into a distraction. */
+/** A few stars and a crescent moon. Fixed, so they never twinkle into a distraction. */
 const NightSky = () => html`
   <span class="night-sky" aria-hidden="true">
-    ${STARS.map(([x, y, a]) => html`<span class="star" style=${{ left: `${x * 100}%`, top: `${14 + y * 80}px`, opacity: a }}></span>`)}
+    ${STARS.map(([x, y, a], i) => html`<span class="star" key=${i} style=${{ left: `${x * 100}%`, top: `${4 + y * 88}px`, opacity: a }}></span>`)}
     <span class="moon"></span>
   </span>
 `;
 
 /**
- * The day's done, or there's nothing to catch: the label large on a panel (a
- * night sky after your day, plain otherwise), what's next under it, then your
- * favourites to plan a trip to instead, where there's somewhere to show one
- * (`onPlace`, the web app's Now).
+ * The page's night sky, on the web app's Now: from the top of the page down
+ * to the end of `node` (the headline and the next class), then fading into
+ * the page (app.css, body.night). The header and the chips take night
+ * colours over it, and so does the browser's own bar where it has one.
+ */
+function useSky(node, on) {
+  useLayoutEffect(() => {
+    const el = node.current;
+    if (!on || !el) return;
+    const body = document.body;
+    const place = () => body.style.setProperty('--sky-end', `${Math.round(el.getBoundingClientRect().bottom + window.scrollY)}px`);
+    place();
+    body.classList.add('night');
+    const bar = Object.assign(document.createElement('meta'), { name: 'theme-color', content: '#121a33' });
+    document.head.prepend(bar);
+    const seen = new ResizeObserver(place);
+    seen.observe(el);
+    seen.observe(body);
+    return () => {
+      seen.disconnect();
+      bar.remove();
+      body.classList.remove('night');
+      body.style.removeProperty('--sky-end');
+    };
+  }, [on]);
+}
+
+/** The next class on a card of its own: when in the accent, what, then where. */
+const UpcomingCard = ({ u }) => html`
+  <div class="upcoming">
+    <p class="eyebrow">${u.when}</p>
+    <strong>${u.title}</strong>
+    <span>${u.where}</span>
+  </div>
+`;
+
+/**
+ * The day's done, or there's nothing to catch: the label large, what's next
+ * on a card of its own, then your favourites to plan a trip to instead,
+ * where there's somewhere to show one (`onPlace`, the web app's Now). After
+ * your day it's night: on Now, the page's sky; on the account page's
+ * preview, a panel.
  */
 function DayDone({ a, night, onPlace, children }) {
   const places = onPlace ? (a.places ?? []) : [];
+  const u = a.card?.upcoming ?? null;
+  // The line under the label: why today's empty on a break, or what's next when there's no card for it.
+  const sub = u ? u.off : a.detail || null;
+  const open = night && Boolean(onPlace);
+  const top = useRef(null);
+  useSky(top, open);
   return html`
-    <div class="widget day-done" aria-live="polite">
-      <div class=${night ? 'done-panel night' : 'done-panel'}>
+    <div class=${open ? 'widget day-done open' : 'widget day-done'} aria-live="polite">
+      <div class=${night ? 'done-panel night' : 'done-panel'} ref=${top}>
         ${night && html`<${NightSky} />`}
         <div class="done-label">${a.label}</div>
-        ${a.detail && html`<div class="done-detail">${a.detail}</div>`}
+        ${sub && html`<div class="done-detail">${sub}</div>`}
+        ${open && u && html`<${UpcomingCard} u=${u} />`}
+        ${open && places.length > 0 && html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>`}
       </div>
+      ${!open && u && html`<${UpcomingCard} u=${u} />`}
+      ${!open && places.length > 0 && html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>`}
       ${places.length > 0 &&
-      html`<p class="eyebrow going">${t('Going somewhere anyway?')}</p>
-        <div class="place-tiles">
-          ${places.map(
-            (x) => html`<button type="button" class="place-tile" key=${x.key} onClick=${() => onPlace(x.key)}><strong>${x.label}</strong><span>${t('Plan a trip')}</span></button>`,
-          )}
-        </div>`}
+      html`<div class="place-tiles">
+        ${places.map(
+          (x) => html`<button type="button" class="place-tile" key=${x.key} onClick=${() => onPlace(x.key)}><strong>${x.label}</strong><span>${t('Plan a trip')}</span></button>`,
+        )}
+      </div>`}
       ${onPlace && !places.length && html`<p class="hint done-hint">${night ? t('No buses are shown until your day starts. Tap Nearby to check anyway.') : t('Tap Nearby for buses around you.')}</p>`}
       ${children}
     </div>

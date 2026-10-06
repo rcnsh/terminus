@@ -437,8 +437,7 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .night-sky { position: absolute; inset: 0; pointer-events: none; }
 .night-sky .star { position: absolute; width: 2.6px; height: 2.6px; border-radius: 50%; background: #fff; }
 /* A crescent: the moon, with the sky's own colour over most of it. */
-.night-sky .moon { position: absolute; top: 28px; right: 36px; width: 48px; height: 48px; border-radius: 50%; background: #fde9c9; }
-.night-sky .moon::after { content: ''; position: absolute; top: -7px; left: 11px; width: 44px; height: 44px; border-radius: 50%; background: #121a33; }
+.night-sky .moon { position: absolute; top: 28px; right: 36px; width: 56px; height: 56px; border-radius: 50%; background: #fde9c9; -webkit-mask: radial-gradient(circle at 76% 28%, transparent 25px, #000 26px); mask: radial-gradient(circle at 76% 28%, transparent 25px, #000 26px); }
 .day-done .going { margin: 22px 0 10px; }
 .place-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .place-tile {
@@ -527,3 +526,13 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 .add-email .btn { margin-top: 6px; }
 /* In the list, the line under "No email" says what to do, in the accent. */
 .set-account .row-sum.add { color: var(--accent); font-weight: 600; }
+
+/* The next class on a card of its own (preview.js UpcomingCard). */
+.upcoming { display: grid; gap: 4px; margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); }
+.upcoming .eyebrow { margin: 0 0 2px; color: var(--accent); }
+.upcoming strong { font: 700 1.35rem/1.25 var(--font); }
+.upcoming span { color: var(--muted); }
+.done-panel.night .upcoming { background: rgb(255 255 255 / 0.06); border-color: rgb(255 255 255 / 0.14); }
+.done-panel.night .upcoming strong { color: #f2efeb; }
+.done-panel.night .upcoming span { color: #c9c3bd; }
+.done-panel.night .upcoming .eyebrow { color: #fb923c; }

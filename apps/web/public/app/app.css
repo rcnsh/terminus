@@ -227,3 +227,21 @@ body.on-settings > .nav { display: none; }
 body.app > .nav { height: var(--header-h); padding-top: 0; padding-bottom: 0; }
 .settings-tab .settings-title, .settings-tab .page-head { display: flex; align-items: center; height: var(--header-h); margin-bottom: -4px; }
 body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); }
+
+/* Done for today on Now (preview.js useSky): a night sky from the top of the
+   page down to the end of the headline and the next class, then fading into
+   the page. The header and the chips take night colours over it. */
+body.night { position: relative; }
+body.night::before {
+  content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: calc(var(--sky-end) + 80px); pointer-events: none;
+  background: linear-gradient(#121a33 0, #181a30 calc(var(--sky-end) * 0.55), #1c1b26 var(--sky-end), var(--bg) calc(var(--sky-end) + 80px));
+}
+body.night > .nav, body.night .app-chips, body.night .where-box, body.night .day-done.open .done-panel {
+  --bg: #121a33; --surface: #1d2036; --surface-2: #262a44; --ink: #f2efeb; --muted: #c9c3bd; --faint: #8d8aa0;
+  --line: rgb(255 255 255 / 0.14); --line-strong: rgb(255 255 255 / 0.32); --accent: #fb923c; --accent-soft: #2a1a0e;
+  color-scheme: dark; color: var(--ink);
+}
+/* Open on the page, not a panel: the sky is the page's. */
+.day-done.open .done-panel.night { overflow: visible; padding: 108px 0 0; border-radius: 0; background: none; }
+.day-done.open .done-label { font-size: 2.9rem; letter-spacing: -0.03em; }
+.day-done.open .going { margin-bottom: 0; padding-bottom: 10px; }

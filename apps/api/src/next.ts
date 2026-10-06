@@ -21,6 +21,7 @@ import {
   restDetail,
   restLabel,
   timingFor,
+  upcomingClass,
 } from './profile.ts';
 import { type ImportedTrip, venueAt, venueToStop } from './nusmods.ts';
 import { indexGraph, serviceEndsAt } from './resolve.ts';
@@ -80,14 +81,21 @@ export function resolveTo(graph: Graph, raw: string): { to: string; label: strin
   return v ? { to: v.stop, label: code.split('-')[0], venue: code } : null;
 }
 
+/** The next class's card, with stop codes named from the graph. */
+function upcoming(graph: Graph, profile: Profile, nowMs: number, h12: boolean, skipped?: ReadonlySet<string>) {
+  const idx = indexGraph(graph);
+  return upcomingClass(profile, nowMs, h12, (code) => shortStop(idx.byCode.get(code)?.name ?? code), skipped);
+}
+
 function base(nowMs: number, label: string, detail: string): Answer {
   return { label, detail, alt: null, stop: { code: '', name: '', confidence: 0 }, quality: 'unknown', asOf: new Date(nowMs).toISOString(), arrivals: [] };
 }
 
 /** In your residence with nothing left today: no bus, and what's next. */
-function youreHome(profile: Profile, nowMs: number, homeStop: string | null, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>): MeAnswer {
+function youreHome(graph: Graph, profile: Profile, nowMs: number, homeStop: string | null, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>): MeAnswer {
   return {
     ...base(nowMs, m().youreHome, restDetail(profile, nowMs, h12, skipped)),
+    upcoming: upcoming(graph, profile, nowMs, h12, skipped),
     stop: { code: homeStop ?? '', name: '', confidence: 1 },
     quality: 'live',
     arrived: true,
@@ -103,16 +111,16 @@ function youreHome(profile: Profile, nowMs: number, homeStop: string | null, pla
  * headline: a bus you have no reason to take reads like advice. Departures
  * near you are on the Nearby tab.
  */
-function freeAnswer(profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>, away = false): MeAnswer {
+function freeAnswer(graph: Graph, profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean, skipped?: ReadonlySet<string>, away = false): MeAnswer {
   const hadClasses = classesOn(profile, nowMs).length > 0;
   const empty = !profile.trips.length && !profile.manual.length && !profile.usual.length && !profile.once.length;
   const label = away ? m().notOnCampus : empty ? m().noTimetableYet : hadClasses ? m().noMoreClassesToday : m().noClassesToday;
   const detail = empty ? m().addTimetableHint : restDetail(profile, nowMs, h12, skipped);
-  return { ...base(nowMs, label, detail), quality: 'ended', mode: 'free', dest: null, places };
+  return { ...base(nowMs, label, detail), quality: 'ended', mode: 'free', dest: null, places, upcoming: empty ? null : upcoming(graph, profile, nowMs, h12, skipped) };
 }
 
-function restAnswer(profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean): MeAnswer {
-  return { ...base(nowMs, restLabel(profile, nowMs, h12), restDetail(profile, nowMs, h12)), quality: 'ended', mode: 'rest', dest: null, places };
+function restAnswer(graph: Graph, profile: Profile, nowMs: number, places: PlaceChip[], h12: boolean): MeAnswer {
+  return { ...base(nowMs, restLabel(profile, nowMs, h12), restDetail(profile, nowMs, h12)), quality: 'ended', mode: 'rest', dest: null, places, upcoming: upcoming(graph, profile, nowMs, h12) };
 }
 
 /**
@@ -334,7 +342,7 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
       if (r) dest = { ...r, why: 'place', from: homeStop };
     }
     if (dest) return idle(await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12));
-    return idle(freeAnswer(profile, nowMs, places, h12));
+    return idle(freeAnswer(deps.graph, profile, nowMs, places, h12));
   }
 
   const homeHere = atHome(lat, lon, profile.home?.stops ?? []);
@@ -345,13 +353,13 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
       const answer = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12);
       return withPhase({ ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) }, 'home:evening');
     }
-    return idle(restAnswer(profile, nowMs, places, h12));
+    return idle(restAnswer(deps.graph, profile, nowMs, places, h12));
   }
 
   const state = dayState(day);
   const plan = planFor(profile, nowMs, state);
   if (!plan) {
-    const free = freeAnswer(profile, nowMs, places, h12, state.skipped, state.away);
+    const free = freeAnswer(deps.graph, profile, nowMs, places, h12, state.skipped, state.away);
     return { answer: free, trip: { key: null, phase: 'idle', undo, ...(state.away ? { away: true } : {}) } };
   }
 
@@ -372,13 +380,13 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     if (homeHere || state.done.has(key)) {
       // The next class still on today: not one taken off.
       const next = nextClass(profile, nowMs, state.skipped);
-      if (plan.why !== 'gap-home' || next?.daysAhead !== 0) return idle(youreHome(profile, nowMs, homeStop, places, h12, state.skipped));
+      if (plan.why !== 'gap-home' || next?.daysAhead !== 0) return idle(youreHome(deps.graph, profile, nowMs, homeStop, places, h12, state.skipped));
       // Between classes: when to leave home for the next one.
       dest = { to: next.trip.to, label: next.trip.label, why: 'class', from: homeStop, trip: next.trip, fromVenue: null };
       key = classKey(next.trip);
     } else if (plan.why === 'home' && lat === null && plan.lastEndMin !== undefined && sgt(nowMs).minutes >= plan.lastEndMin + HOME_BY_MIN) {
       // No location, and long enough since the last class to be home by now.
-      return idle(youreHome(profile, nowMs, homeStop, places, h12, state.skipped));
+      return idle(youreHome(deps.graph, profile, nowMs, homeStop, places, h12, state.skipped));
     }
   }
 

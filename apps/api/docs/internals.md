@@ -344,6 +344,14 @@ way to the place ("Walk · 8 min"). The answer's own times (`arriveAt`, a
 leg's `arrive`) stay at the stop. A class's leave-by already aims at the
 room (`leave.arrive` is there): the answer's `endWalk` (kept off the
 response) says which, so the walk is never added twice. Apps count down to `leave.at` and `journey.boardAt` themselves.
+
+`upcoming` is the next class on its own card, under Done for today, a day
+with no classes, and You're home: when ("Tomorrow · Tue"), what ("CS2030
+at 10:00"), where ("At COM1 · get off at COM 3"), and why today has none
+when it's a break. It's the timetable alone, with no bus or leave-by:
+tomorrow's buses aren't known, and a guess there would read as a plan.
+`detail` still says the same in a line, for the widgets and the Mac. The
+route moves it from the answer into the card (`profile.ts` `upcomingClass`).
 - Tokens are stored as SHA-256 hashes. A web session lasts 30 days from its
   last use: `GET /me` pushes the expiry back 30 days, and sends the cookie
   again, once fewer than 23 days are left. However much it's used, a web

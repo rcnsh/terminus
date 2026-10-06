@@ -2,6 +2,12 @@ package sh.rcn.terminus.ui
 
 import sh.rcn.terminus.Suggestion
 import androidx.compose.foundation.background
+import sh.rcn.terminus.Upcoming
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.Canvas
@@ -220,29 +226,46 @@ internal fun ClassPlan(answer: NextAnswer) {
 }
 
 /**
- * The day's done, or there's nothing to catch: the label large on a panel
- * (a night sky after your day, plain otherwise), what's next under it, then
- * your favourites to plan a trip to instead.
+ * The day's done, or there's nothing to catch: the label large, what's next
+ * on a card of its own, then your favourites to plan a trip to instead.
+ * After your day it's night: on Now, the sky behind the top of the screen
+ * goes down to the end of this section ([LocalSky]); elsewhere, a panel.
  */
 @Composable
 private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Unit) {
     val c = MaterialTheme.colorScheme
-    val ink = if (night) NIGHT_INK else c.onSurface
-    val sub = if (night) NIGHT_SUB else c.onSurfaceVariant
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(if (night) Brush.verticalGradient(NIGHT) else Brush.verticalGradient(listOf(c.surfaceVariant, c.surfaceVariant))),
-    ) {
-        if (night) NightSky(Modifier.matchParentSize())
-        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = if (night) 104.dp else 28.dp, bottom = 24.dp)) {
-            Text(answer.label, color = ink, fontSize = 38.sp, lineHeight = 42.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
-            if (answer.detail.isNotEmpty()) Text(answer.detail, color = sub, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+    val upcoming = answer.card?.upcoming
+    // The line under the label: why today's empty on a break, or what's next when there's no card for it.
+    val sub = upcoming?.off ?: answer.detail.takeIf { upcoming == null && it.isNotEmpty() }
+    val places = answer.places.isNotEmpty()
+    if (night) {
+        val sky = LocalSky.current
+        DisposableEffect(sky) { onDispose { sky?.sectionBottom = null } }
+        NightTheme(true) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { sky?.sectionBottom = it.positionInRoot().y + it.size.height }
+                    // With no sky to sit in (not on Now), the night is a panel of its own.
+                    .then(if (sky == null) Modifier.clip(RoundedCornerShape(28.dp)).background(Brush.verticalGradient(NIGHT)).padding(horizontal = 22.dp) else Modifier)
+                    .drawBehind { starsAndMoon(108.dp.toPx()) }
+                    .padding(top = 108.dp, bottom = if (places) 0.dp else 24.dp),
+            ) {
+                Text(answer.label, color = NIGHT_INK, fontSize = 46.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
+                sub?.let { Text(it, color = NIGHT_SUB, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
+                upcoming?.let { UpcomingCard(it, night = true) }
+                if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 24.dp, bottom = 10.dp), color = NIGHT_SUB)
+            }
         }
+    } else {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.surfaceVariant).padding(start = 22.dp, end = 22.dp, top = 28.dp, bottom = 24.dp)) {
+            Text(answer.label, color = c.onSurface, fontSize = 38.sp, lineHeight = 42.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
+            sub?.let { Text(it, color = c.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
+        }
+        upcoming?.let { UpcomingCard(it, night = false) }
+        if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 22.dp, bottom = 10.dp))
     }
-    if (answer.places.isNotEmpty()) {
-        Label(stringResource(R.string.going_anyway), Modifier.padding(top = 22.dp, bottom = 10.dp))
+    if (places) {
         for (row in answer.places.chunked(3)) {
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (p in row) {
@@ -263,26 +286,25 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
     }
 }
 
-/** A few stars and a crescent moon, for the night panel. Fixed, so it never twinkles into a distraction. */
+/** The next class on a card of its own: when in the accent, what, then where. Translucent on the night sky. */
 @Composable
-private fun NightSky(modifier: Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        for ((x, y, a) in STARS) drawCircle(Color.White.copy(alpha = a), 1.3.dp.toPx(), Offset(w * x, 14.dp.toPx() + y * 80.dp.toPx()))
-        val moon = Offset(w - 60.dp.toPx(), 52.dp.toPx())
-        drawCircle(MOON, 24.dp.toPx(), moon)
-        drawCircle(NIGHT.first(), 22.dp.toPx(), moon + Offset(11.dp.toPx(), -7.dp.toPx()))
+private fun UpcomingCard(u: Upcoming, night: Boolean) {
+    val c = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(22.dp)
+    Column(
+        Modifier
+            .padding(top = 22.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (night) Color.White.copy(alpha = 0.06f) else c.surface)
+            .border(1.dp, if (night) Color.White.copy(alpha = 0.14f) else c.outlineVariant, shape)
+            .padding(18.dp),
+    ) {
+        Label(u.whenText, color = c.primary)
+        Text(u.title, fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, color = if (night) NIGHT_INK else c.onSurface, modifier = Modifier.padding(top = 6.dp))
+        Text(u.where, style = MaterialTheme.typography.bodyMedium, color = if (night) NIGHT_SUB else c.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 }
-
-private val NIGHT = listOf(Color(0xFF121A33), Color(0xFF181A30), Color(0xFF1C1B26))
-private val NIGHT_INK = Color(0xFFF2EFEB)
-private val NIGHT_SUB = Color(0xFFC9C3BD)
-private val MOON = Color(0xFFFDE9C9)
-private val STARS = listOf(
-    Triple(0.08f, 0.3f, 0.7f), Triple(0.22f, 0.9f, 0.5f), Triple(0.35f, 0.15f, 0.8f), Triple(0.48f, 0.7f, 0.4f),
-    Triple(0.6f, 0.2f, 0.6f), Triple(0.15f, 1.1f, 0.35f), Triple(0.7f, 1.05f, 0.5f), Triple(0.92f, 1.2f, 0.4f),
-)
 
 @Composable
 internal fun goodColor() = if (isSystemInDarkTheme()) GoodDark else GoodLight

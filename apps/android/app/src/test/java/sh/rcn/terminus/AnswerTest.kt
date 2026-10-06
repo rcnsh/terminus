@@ -73,6 +73,14 @@ class AnswerTest {
         assertEquals("No classes", a.card!!.glance)
     }
 
+    @Test fun theNextClassComesWithItsOwnCard() {
+        val u = golden("rest").card?.upcoming
+        assertEquals(Upcoming("Today", "CS2030 at 13:00", "At COM 3", null), u)
+        assertEquals("CS2030，10:00 开始", golden("zh/free").card?.upcoming?.title)
+        // A trip has none.
+        assertNull(golden("class-bus").card?.upcoming)
+    }
+
     @Test fun cardV2CarriesThePhaseAndOnlyPlans() {
         val a = golden("class-late")
         assertEquals("heading", a.card!!.phase)

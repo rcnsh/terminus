@@ -52,6 +52,12 @@
     "walkTo": null,
     "notice": null,
     "h12": false,
-    "journey": null
+    "journey": null,
+    "upcoming": {
+      "when": "Today",
+      "title": "CS2030 at 13:00",
+      "where": "At COM 3",
+      "off": null
+    }
   }
 }

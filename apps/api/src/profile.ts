@@ -8,6 +8,7 @@
 import type { ImportedTrip } from './nusmods.ts';
 import { sgt } from './config.ts';
 import type { Timing, Why } from './types.ts';
+import type { Upcoming } from './card.ts';
 
 export type { Timing };
 import { isoSeconds } from './format.ts';
@@ -558,6 +559,36 @@ export function restDetail(profile: Profile, nowMs: number, h12 = false, skipped
           ? m().dayNames[n.trip.day]
           : shortDate(nowMs + n.daysAhead * 86_400_000);
   return m().nextClass(off, n.trip.label, when, clockMin(n.trip.arriveByMin, h12));
+}
+
+/**
+ * The next class as its own card's lines (card.upcoming): when, what and
+ * where, from the timetable alone. Null when nothing is coming, or the
+ * timetable has ended. `stopName` names a stop code.
+ */
+export function upcomingClass(profile: Profile, nowMs: number, h12: boolean, stopName: (code: string) => string, skipped: ReadonlySet<string> = NO_DAY_STATE.skipped): Upcoming | null {
+  if (reimportReason(profile, nowMs) === 'ended') return null;
+  const n = nextClass(profile, nowMs, skipped);
+  if (!n) return null;
+  const day = nowMs + n.daysAhead * 86_400_000;
+  const when =
+    n.daysAhead === 0
+      ? m().upcomingToday
+      : n.daysAhead === 1
+        ? m().upcomingTomorrow(new Date(day + 8 * 3_600_000).getUTCDay())
+        : n.daysAhead < 7
+          ? m().dayNames[n.trip.day]
+          : shortDate(day);
+  // "CS2030 @ COM1": the module, without the room the line under it gives.
+  const name = n.trip.label.split(' @ ')[0];
+  const stop = stopName(n.trip.to);
+  const venue = n.trip.venue?.trim();
+  return {
+    when,
+    title: m().classAt(name, clockMin(n.trip.arriveByMin, h12)),
+    where: venue && venue.toUpperCase() !== n.trip.to.toUpperCase() ? m().atVenueGetOff(venue, stop) : m().atPlace(stop),
+    off: classesOn(profile, nowMs).length ? null : dayOffReason(nowMs),
+  };
 }
 
 /* ------------------------------------------------------------------ */

@@ -112,6 +112,22 @@ export interface Journey {
   why: string | null;
 }
 
+/**
+ * The next class, for the card under Done for today (or no classes today):
+ * when, what and where, each a line ready to show. Only what the timetable
+ * says: no bus, since tomorrow's buses aren't known yet.
+ */
+export interface Upcoming {
+  /** "Tomorrow · Tue", "Today", "Wednesday", "Mon 28 Sep". */
+  when: string;
+  /** "CS2030 at 10:00". */
+  title: string;
+  /** "At COM1 · get off at COM 3", or "At COM 3" when the room is at the stop. */
+  where: string;
+  /** Why today has none, when it's a break: "Recess week", a holiday. */
+  off: string | null;
+}
+
 export interface Card {
   kind: CardKind;
   /** Dim the answer from this instant: the bus has gone, the plan has moved
@@ -184,6 +200,9 @@ export interface Card {
   /** The trip as steps, when there's a bus to catch and you're not on it
    *  yet, or a walk the whole way. */
   journey: Journey | null;
+  /** Rest, free and home: the next class, for its own card. Null with none
+   *  coming, and on every other kind. */
+  upcoming: Upcoming | null;
 }
 
 /** Answers older than this are dimmed even if nothing else says so. */
@@ -224,7 +243,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
 type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
-type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey'>;
+type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey' | 'upcoming'>;
 
 /** `feedDownSince`: when the monitor confirmed NUS's feed down, or null while it's up. */
 export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, phase: 'idle' }, feedDownSince: number | null = null): Card {
@@ -236,7 +255,7 @@ export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, 
   // Only on an answer that wanted a live time and has none: the feed may be
   // back before the monitor's next check, and a day with no bus needs none.
   const notice = feedDownSince !== null && QUALITY[a.quality] ? m().feedDown(clockAt(feedDownSince, h12)) : null;
-  return { ...card, ...v2(a, card, h12, trip), notice, h12, journey: journeyOf(a, card, h12, trip.phase) };
+  return { ...card, ...v2(a, card, h12, trip), notice, h12, journey: journeyOf(a, card, h12, trip.phase), upcoming: a.upcoming ?? null };
 }
 
 /** The journey (see Journey): null on the bus, once there, and with no time to give. */

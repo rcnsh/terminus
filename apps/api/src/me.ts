@@ -1190,7 +1190,7 @@ async function nextWithTrip(
   }
   // The user's walking speed, for walk times the apps show themselves (search).
   // The walk from the stop is in the card's journey; the raw seconds stay here.
-  const { endWalk: _endWalk, ...shown } = full;
+  const { endWalk: _endWalk, upcoming: _upcoming, ...shown } = full;
   return { body: { ...shown, walkSpeedMs: paceSpeed(profile.walkPace), card }, trip };
 }
 

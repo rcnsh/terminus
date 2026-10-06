@@ -214,6 +214,9 @@ export interface MeAnswer extends Answer {
   /** The user's walking speed in metres a second (their pace), for walk
    *  times an app shows itself, such as search results. Added by the route. */
   walkSpeedMs?: number;
+  /** Resting or free: the next class, for its card (card.upcoming). Moved
+   *  into the card by the route, not sent at the top level. */
+  upcoming?: import('./card.ts').Upcoming | null;
   /** Display-ready text and the stale time (card.ts). Added last, by the route. */
   card?: import('./card.ts').Card;
 }
