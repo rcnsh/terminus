@@ -326,15 +326,16 @@ private fun Tabs(
                             ),
                         )
                     }
-                    Tab.Settings -> Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding().padding(horizontal = 16.dp)) {
+                    // Edge to edge too, the insets inside, so the list's sky can reach the top.
+                    Tab.Settings -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
                         SettingsScreen(
-                            acct, account, vm,
+                            acct, account, vm, inner,
                             onAddEmail = onAddEmail,
                             onSignedOut = onSignedOut,
                             onClose = { onTab(Tab.Now); vm.load(restart = true) },
                         )
                     }
-                    // Edge to edge, the insets inside its scrolling, so Done for today's sky can reach the top.
+                    // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
                     Tab.Now -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
                         // A stop tapped in Nearby: open on the map, with its sheet.
                         MainScreen(state, vm, insets = inner, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })

@@ -225,6 +225,10 @@ button.svc-tag { cursor: pointer; }
 .settings-tab { padding-bottom: 32px; }
 body.on-settings > .nav { display: none; }
 .settings-tab .settings { padding-top: 0; }
+/* Its list's horizon runs the width of the window (and pages slide in from
+   the window's edge), clipped by the page rather than the column. */
+body.app { overflow-x: clip; }
+.settings-tab .settings { overflow-x: visible; }
 body.app > .nav { height: var(--header-h); padding-top: 0; padding-bottom: 0; }
 .settings-tab .settings-title, .settings-tab .page-head { display: flex; align-items: center; height: var(--header-h); margin-bottom: -4px; }
 body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); }
@@ -274,12 +278,15 @@ body.sky-dusk { --s0: #2c3566; --s1: #5b4f86; --s2: #c6708a; --s3: #f19a6c; --h-
 :root[data-theme="dark"] body.sky-day { --s0: #173350; --s1: #22486b; --s2: #35607f; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --sun: #fbe3a6; --glow: rgb(255 205 120 / 0.45); --cloud: rgb(220 230 240 / 0.16); --h-win: #b9c7d6; }
 :root[data-theme="dark"] body.sky-golden { --s0: #1f3550; --s1: #3a4a5e; --s2: #7a6046; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --glow: rgb(243 210 154 / 0.35); --cloud: rgb(220 230 240 / 0.14); --h-win: #b9c7d6; }
 :root[data-theme="dark"] body.sky-dusk { --s0: #1a1c3a; --s1: #362f5a; --s2: #7a4a6a; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --setting: #f0915e; }
-/* Now only: Map and Settings are drawn over a hidden Now, which still has it. */
-body.sky:not(.on-map, .on-settings)::before {
-  content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--sky-end); pointer-events: none;
-  background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--sky-end) * 0.5), var(--s2) calc(var(--sky-end) * 0.86), var(--s3) var(--sky-end));
+/* On Now, and on Settings' list (settings.js sets set-sky) down to its own
+   horizon. Map and Settings are drawn over a hidden Now, which keeps its sky. */
+body.sky { --end: var(--sky-end); }
+body.sky.on-settings { --end: var(--set-end); }
+body.sky:not(.on-map, .on-settings)::before, body.sky.on-settings.set-sky::before {
+  content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--end); pointer-events: none;
+  background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--end) * 0.5), var(--s2) calc(var(--end) * 0.86), var(--s3) var(--end));
 }
-body.sky:not(.on-map, .on-settings) > .nav, body.sky .app-chips, body.sky .where-box, body.sky .sky-head {
+body.sky:not(.on-map, .on-settings) > .nav, body.sky .app-chips, body.sky .where-box, body.sky .sky-head, body.sky.set-sky .settings-title {
   --bg: var(--k-bg); --surface: var(--k-surface); --surface-2: var(--k-surface-2); --ink: var(--k-ink); --muted: var(--k-muted); --faint: var(--k-faint);
   --line: var(--k-line); --line-strong: var(--k-line-strong); --accent: var(--k-accent); --accent-soft: var(--k-accent-soft);
   color-scheme: var(--k-scheme); color: var(--ink);
@@ -287,6 +294,7 @@ body.sky:not(.on-map, .on-settings) > .nav, body.sky .app-chips, body.sky .where
 /* The card's top, with room above its words for the sun or the moon. */
 .sky-head { position: relative; isolation: isolate; padding-top: var(--room); --room: 66px; --moon: 40px; }
 .nearby-sky { --room: 44px; --moon: 34px; }
+.settings-sky { --room: 56px; --moon: 34px; }
 .celestial { position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--room); pointer-events: none; }
 /* Depth as the page scrolls (sky.js sets the --par-* variables): the sun, the
    moon and the stars lag and fade behind the words, the clouds a little less,

@@ -10,6 +10,7 @@ import { api, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 import { cardStyle, styleName } from './journey.js';
+import { Celestial, Horizon } from './sky.js';
 
 /** The pages shown as tiles, two to a row, with their icons. */
 const TILES = ['favourites', 'notifications', 'language', 'appearance', 'devices', 'feedback'];
@@ -75,9 +76,11 @@ function summaries({ p, me, notifyOn, devices, imported }) {
  * in the address. `Notify` (a component) is the app's "Notify me when to
  * leave", for Notifications, and `notifyOn` whether it's on. `side` goes above
  * the list (the account page's preview). `onAddEmail` and `onSignOut` are
- * Account's buttons; by default, the web app's.
+ * Account's buttons; by default, the web app's. `sky`: the list's top (the
+ * title and your account) up in Now's sky, ending on a horizon (sky.js), on
+ * a phone; the web app's.
  */
-export function Settings({ me, inApp = false, Notify = null, notifyOn = false, side = null, onAddEmail = addEmailFromApp, onSignOut = signOut }) {
+export function Settings({ me, inApp = false, Notify = null, notifyOn = false, side = null, sky = false, onAddEmail = addEmailFromApp, onSignOut = signOut }) {
   const p = useStore(profile);
   const devices = useStore(deviceCount);
   const imported = useStore(importDone) > 0;
@@ -236,11 +239,31 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
 
   const shown = view.shown;
   const leaving = view.leaving;
+  // The sky behind the list while it's what's shown (app.css body.set-sky).
+  const skyHere = sky && !wide;
+  useEffect(() => {
+    document.body.classList.toggle('set-sky', skyHere && shown === null);
+    return () => document.body.classList.remove('set-sky');
+  }, [skyHere, shown]);
   const sum = summaries({ p, me, notifyOn, devices, imported });
   const page = (id, body) => html`
     <${Page} id=${id} title=${TITLES[id]} nodes=${nodes} onBack=${closePage} shown=${shown === id} leaving=${leaving?.node === id ? leaving : null}>${body}<//>
   `;
   const onSide = leaving?.node === 'side';
+  const account = html`
+    <button
+      type="button"
+      class="settings-row set-account"
+      data-page="account"
+      ref=${(n) => (rows.account = n)}
+      aria-current=${shown === 'account' ? 'page' : undefined}
+      onClick=${() => (shown === 'account' ? null : openPage('account'))}
+    >
+      ${me.email ? html`<span class="avatar" aria-hidden="true">${me.email.slice(0, 1).toUpperCase()}</span>` : html`<img class="avatar" src="/assets/mark.svg" alt="" />`}
+      <span class="row-text"><span class="row-title">${sum.account}</span><span class=${me.anonymous ? 'row-sum add' : 'row-sum'}>${sum.devices}</span></span>
+      <${Icon} paths=${CHEVRON} class="chev" />
+    </button>
+  `;
 
   return html`
     <div class=${shown !== null ? 'settings page-open' : 'settings'} ref=${root}>
@@ -248,18 +271,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         ${side}
         <h1 class="settings-title">${t('Settings')}</h1>
         <nav class="settings-groups" aria-label=${t('Settings')}>
-          <button
-            type="button"
-            class="settings-row set-account"
-            data-page="account"
-            ref=${(n) => (rows.account = n)}
-            aria-current=${shown === 'account' ? 'page' : undefined}
-            onClick=${() => (shown === 'account' ? null : openPage('account'))}
-          >
-            ${me.email ? html`<span class="avatar" aria-hidden="true">${me.email.slice(0, 1).toUpperCase()}</span>` : html`<img class="avatar" src="/assets/mark.svg" alt="" />`}
-            <span class="row-text"><span class="row-title">${sum.account}</span><span class=${me.anonymous ? 'row-sum add' : 'row-sum'}>${sum.devices}</span></span>
-            <${Icon} paths=${CHEVRON} class="chev" />
-          </button>
+          ${skyHere ? html`<div class="sky-head settings-sky"><${Celestial} />${account}</div><${Horizon} on="settings" />` : account}
           <section class="set-day" aria-labelledby="set-day-title">
             <h2 class="eyebrow" id="set-day-title">${t('Your day')}</h2>
             <div class="day-route">

@@ -1,6 +1,12 @@
 package sh.rcn.terminus.ui
 
 import android.content.Intent
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.PaddingValues
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -130,6 +136,7 @@ internal fun SettingsScreen(
     state: AccountState,
     account: AccountViewModel,
     main: MainViewModel,
+    insets: PaddingValues,
     onAddEmail: () -> Unit,
     onSignedOut: () -> Unit,
     onClose: () -> Unit,
@@ -157,9 +164,12 @@ internal fun SettingsScreen(
         }
     }
 
+    // Edge to edge, the insets inside, so the list's sky can reach the top.
+    val top = insets.calculateTopPadding()
+    val bottom = insets.calculateBottomPadding()
     Column(Modifier.fillMaxSize()) {
         state.message?.let {
-            Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Card(Modifier.fillMaxWidth().padding(top = top).padding(horizontal = 16.dp).padding(top = 8.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(it, modifier = Modifier.weight(1f))
                     TextButton(onClick = account::clearMessage) { Text(stringResource(R.string.ok)) }
@@ -181,7 +191,7 @@ internal fun SettingsScreen(
             label = "settings page",
         ) { page ->
             if (page == null) {
-                SettingsList(state, main) { open = it }
+                SettingsList(state, main, if (state.message != null) 0.dp else top, bottom) { open = it }
             } else {
                 Column(
                     Modifier.fillMaxSize().graphicsLayer {
@@ -191,7 +201,7 @@ internal fun SettingsScreen(
                         scaleY = scale
                         translationX = backProgress * size.width * 0.15f
                         alpha = 1f - backProgress * 0.3f
-                    },
+                    }.padding(top = if (state.message != null) 0.dp else top, bottom = bottom).padding(horizontal = 16.dp),
                 ) {
                     TabHeader {
                         // The arrow sits in the margin, so the title lines up with the list's.
@@ -215,90 +225,124 @@ internal fun SettingsScreen(
  * short route (home, classes, pace), each stop opening its page; then the
  * rest as tiles, each saying what's set. Notifications all off shows in
  * amber: it's the setting that changes the most. About is under them.
+ * The title and who you are are up in Now's sky (the same hour), which ends
+ * on a horizon with a shuttle going by; the rest is on the ground. [top] and
+ * [bottom]: the status bar's and the tab bar's room, inside the scrolling.
  */
 @Composable
-private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (SettingsPage) -> Unit) {
+private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bottom: Dp, onOpen: (SettingsPage) -> Unit) {
     val ctx = LocalContext.current
     val ui by main.state.collectAsStateWithLifecycle()
     val profile = state.profile
+    val scroll = rememberScrollState()
+    val sky = rememberSky(scroll, skyPhase(ui))
+    val shown = sky.end != null
+    val light = sky.palette.lightInk
+    NightStatusBar(shown && light)
+    val page = MaterialTheme.colorScheme.background
+    val measurer = rememberTextMeasurer()
+    CompositionLocalProvider(LocalSky provides sky) { Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(scroll)
+                .onGloballyPositioned { sky.contentTop = it.positionInRoot().y }
+                .skyBehind(sky, page, measurer)
+                .padding(top = top, bottom = bottom)
+                .padding(horizontal = 16.dp),
+        ) {
+            SkyInk(shown, light) { TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) } }
+            // Who you are, up in the sky.
+            SkyHead(56.dp) { AccountTile(state, ui, onOpen) }
+            SkyGround()
+            SettingsGround(state, ui, profile, onOpen)
+        }
+        StatusStrip(sky, top, scroll)
+    } }
+}
+
+/** Who you are: your email (or that you're not signed in) and your devices, opening Account. */
+@Composable
+private fun AccountTile(state: AccountState, ui: UiState, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
-    Column(Modifier.fillMaxSize()) {
-        TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            // Who you are.
-            LinkTile({ onOpen(SettingsPage.Account) }, Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val email = state.email
-                    if (email != null) {
-                        Box(Modifier.size(44.dp).background(c.primary, CircleShape), contentAlignment = Alignment.Center) {
-                            Text(email.take(1).uppercase(), color = c.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                        }
-                    } else {
-                        BrandMark(Modifier.size(44.dp))
-                    }
-                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                        Text(email ?: stringResource(R.string.not_signed_in), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        summary(SettingsPage.Devices, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips)?.let {
-                            Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = muted)
+    LinkTile({ onOpen(SettingsPage.Account) }, Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val email = state.email
+            if (email != null) {
+                Box(Modifier.size(44.dp).background(c.primary, CircleShape), contentAlignment = Alignment.Center) {
+                    Text(email.take(1).uppercase(), color = c.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                }
+            } else {
+                BrandMark(Modifier.size(44.dp))
+            }
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                Text(email ?: stringResource(R.string.not_signed_in), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                summary(SettingsPage.Devices, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips)?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            // Your day, as a route.
-            Column(
-                Modifier.padding(top = 12.dp).fillMaxWidth().background(c.surface, RoundedCornerShape(18.dp))
-                    .border(1.dp, c.outlineVariant, RoundedCornerShape(18.dp)).padding(top = 14.dp, bottom = 8.dp),
-            ) {
-                Label(stringResource(R.string.heading_your_day), Modifier.padding(horizontal = 14.dp).semantics { heading() })
-                val home = profile?.homeStops?.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code } ?: stringResource(R.string.no_home_stop)
-                val classes = summary(SettingsPage.Timetable, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips).orEmpty()
-                val pace = profile?.let { stringResource(paceName(it.walkPace)) }.orEmpty()
-                DayRoute(
-                    listOf(
-                        Triple(home, stringResource(R.string.step_home), SettingsPage.Trips),
-                        Triple(classes, stringResource(R.string.timetable), SettingsPage.Timetable),
-                        Triple(pace, stringResource(R.string.walking_pace), SettingsPage.Trips),
-                    ),
-                    onOpen,
-                )
-            }
-            // The rest, as tiles.
-            TwoColumns(
-                listOf(
-                    SettingsPage.Favourites to R.drawable.ic_heart,
-                    SettingsPage.Notifications to R.drawable.ic_bell,
-                    SettingsPage.Language to R.drawable.ic_globe,
-                    SettingsPage.Appearance to R.drawable.ic_contrast,
-                    SettingsPage.Devices to R.drawable.ic_devices,
-                    SettingsPage.Feedback to R.drawable.ic_chat,
-                ),
-                Modifier.padding(top = 12.dp),
-                gap = 10.dp,
-            ) { (page, icon), mod ->
-                LinkTile({ onOpen(page) }, mod.heightIn(min = 112.dp)) {
-                    Icon(painterResource(icon), contentDescription = null, tint = c.primary, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.weight(1f).heightIn(min = 14.dp))
-                    Text(stringResource(page.title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    val said = when (page) {
-                        SettingsPage.Feedback -> stringResource(R.string.feedback_short)
-                        SettingsPage.Language, SettingsPage.Appearance -> displaySummary(page, state)
-                        else -> summary(page, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips)
-                    }
-                    val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates && !ui.detectTrips
-                    said?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = if (off) c.tertiary else muted, fontWeight = if (off) FontWeight.SemiBold else null, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-            // About, as a link under the tiles.
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Center) {
-                TextButton(onClick = { onOpen(SettingsPage.About) }) { Text(stringResource(R.string.about)) }
-            }
-            Spacer(Modifier.height(16.dp))
+            Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = muted)
         }
     }
+}
+
+/** Under the horizon: your day as a route, the tiles, and About. */
+@Composable
+private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc?, onOpen: (SettingsPage) -> Unit) {
+    val c = MaterialTheme.colorScheme
+    val muted = c.onSurfaceVariant
+    // Your day, as a route.
+    Column(
+        Modifier.padding(top = 12.dp).fillMaxWidth().background(c.surface, RoundedCornerShape(18.dp))
+            .border(1.dp, c.outlineVariant, RoundedCornerShape(18.dp)).padding(top = 14.dp, bottom = 8.dp),
+    ) {
+        Label(stringResource(R.string.heading_your_day), Modifier.padding(horizontal = 14.dp).semantics { heading() })
+        val home = profile?.homeStops?.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code } ?: stringResource(R.string.no_home_stop)
+        val classes = summary(SettingsPage.Timetable, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips).orEmpty()
+        val pace = profile?.let { stringResource(paceName(it.walkPace)) }.orEmpty()
+        DayRoute(
+            listOf(
+                Triple(home, stringResource(R.string.step_home), SettingsPage.Trips),
+                Triple(classes, stringResource(R.string.timetable), SettingsPage.Timetable),
+                Triple(pace, stringResource(R.string.walking_pace), SettingsPage.Trips),
+            ),
+            onOpen,
+        )
+    }
+    // The rest, as tiles.
+    TwoColumns(
+        listOf(
+            SettingsPage.Favourites to R.drawable.ic_heart,
+            SettingsPage.Notifications to R.drawable.ic_bell,
+            SettingsPage.Language to R.drawable.ic_globe,
+            SettingsPage.Appearance to R.drawable.ic_contrast,
+            SettingsPage.Devices to R.drawable.ic_devices,
+            SettingsPage.Feedback to R.drawable.ic_chat,
+        ),
+        Modifier.padding(top = 12.dp),
+        gap = 10.dp,
+    ) { (page, icon), mod ->
+        LinkTile({ onOpen(page) }, mod.heightIn(min = 112.dp)) {
+            Icon(painterResource(icon), contentDescription = null, tint = c.primary, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.weight(1f).heightIn(min = 14.dp))
+            Text(stringResource(page.title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            val said = when (page) {
+                SettingsPage.Feedback -> stringResource(R.string.feedback_short)
+                SettingsPage.Language, SettingsPage.Appearance -> displaySummary(page, state)
+                else -> summary(page, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips)
+            }
+            val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates && !ui.detectTrips
+            said?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = if (off) c.tertiary else muted, fontWeight = if (off) FontWeight.SemiBold else null, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+    // About, as a link under the tiles.
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Center) {
+        TextButton(onClick = { onOpen(SettingsPage.About) }) { Text(stringResource(R.string.about)) }
+    }
+    Spacer(Modifier.height(16.dp))
 }
 
 /** Home, classes, pace: three stops on a line, each opening its page. */
