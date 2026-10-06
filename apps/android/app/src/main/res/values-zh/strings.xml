@@ -464,6 +464,9 @@
     <string name="step_pace">步速</string>
     <string name="step_alerts">提醒</string>
     <string name="all_residences">全部 %1$d 个宿舍和学院</string>
+    <string name="most_common">最常见</string>
+    <string name="elsewhere">其他地方</string>
+    <string name="other_residences">其他宿舍</string>
     <string name="pace_lap">跑道一圈是 400 米。</string>
     <string name="pace_lap_min">一圈 %1$d 分钟</string>
     <string name="pace_lap_yours">按你的步速走一圈</string>

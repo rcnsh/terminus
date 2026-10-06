@@ -37,7 +37,7 @@ import sh.rcn.terminus.rankDestinations
 import androidx.compose.ui.res.stringResource
 import sh.rcn.terminus.R
 
-/** One choice from a list, as a dropdown field. `null` is the blank option. */
+/** One choice from a list, as a dropdown field. `null` is the blank option; [headings] go before the option at their index. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun <T> Choice(
@@ -46,6 +46,7 @@ internal fun <T> Choice(
     selected: T?,
     onSelect: (T?) -> Unit,
     blank: String? = null,
+    headings: Map<Int, String> = emptyMap(),
     modifier: Modifier = Modifier.fillMaxWidth(),
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
@@ -61,7 +62,9 @@ internal fun <T> Choice(
         )
         ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (blank != null) DropdownMenuItem(text = { Text(blank) }, onClick = { onSelect(null); open = false })
-            for ((value, text) in options) {
+            for ((i, option) in options.withIndex()) {
+                headings[i]?.let { Label(it, Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp)) }
+                val (value, text) = option
                 DropdownMenuItem(text = { Text(text) }, onClick = { onSelect(value); open = false })
             }
         }

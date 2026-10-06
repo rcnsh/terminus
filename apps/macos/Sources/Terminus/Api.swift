@@ -281,14 +281,18 @@ enum Target: Hashable {
 /// `/campus`: every stop, and the residences with the stops that serve them.
 struct Campus: Decodable {
     struct Stop: Decodable, Hashable { let code: String; let name: String; let lat: Double?; let lon: Double? }
-    struct Residence: Decodable, Hashable { let code: String; let name: String; let stops: [String]; let walkM: Double? }
+    /// `common`: where most students live (PGP, UTown Residence), shown first in the pickers.
+    struct Residence: Decodable, Hashable { let code: String; let name: String; let stops: [String]; let walkM: Double?; var common: Bool? }
     let stops: [Stop]
     let residences: [Residence]
 
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         stops = try c.decode([Stop].self, forKey: .stops).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        residences = ((try? c.decodeIfPresent([Residence].self, forKey: .residences)) ?? []).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        // The common ones first, so home stops several share (every UTown college is UTOWN's) match the likelier one.
+        residences = ((try? c.decodeIfPresent([Residence].self, forKey: .residences)) ?? []).sorted {
+            ($0.common == true) != ($1.common == true) ? $0.common == true : $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
     }
     enum CodingKeys: String, CodingKey { case stops, residences }
 

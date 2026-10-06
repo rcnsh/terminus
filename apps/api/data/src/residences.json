@@ -1,8 +1,9 @@
 {
- "_help": "Hand-maintained. On-campus residences as OpenStreetMap way ids, grouped the way students name them. scripts/walk_routes.py fetches the outlines and writes data/residences.json.",
+ "_help": "Hand-maintained. On-campus residences as OpenStreetMap way ids, grouped the way students name them. scripts/walk_routes.py fetches the outlines and writes data/residences.json. \"common\": shown first in the pickers, where most students live.",
  "residences": {
   "PGP": {
    "name": "Prince George's Park (PGP)",
+   "common": true,
    "ways": [
     92357575,
     1166266719,
@@ -96,6 +97,7 @@
   },
   "UTR": {
    "name": "UTown Residence",
+   "common": true,
    "ways": [
     750775690
    ]

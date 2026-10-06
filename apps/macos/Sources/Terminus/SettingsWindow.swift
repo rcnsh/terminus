@@ -340,7 +340,7 @@ struct TripsPane: View {
                     }
                 )) {
                     Text(L("Off campus")).tag("")
-                    ForEach(campus.residences, id: \.code) { Text($0.name).tag($0.code) }
+                    ResidenceItems(residences: campus.residences)
                 }
                 .labelsHidden()
                 .fixedSize()

@@ -47,7 +47,11 @@ const CAMPUS_MAP = buildCampusMap(GRAPH);
 const DESTINATIONS = buildDestinations(GRAPH);
 const STOP_PAIRS = stopPairs(GRAPH);
 // For "Where do you live?": names and stops only. The outlines stay here.
-const RESIDENCE_LIST = allResidences().map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0] }));
+// The common ones come first, so a client matching home stops back to a
+// residence (every UTown college shares UTOWN) lands on the likelier one.
+const RESIDENCE_LIST = allResidences()
+  .map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0], common: r.common === true }))
+  .sort((a, b) => Number(b.common) - Number(a.common) || a.name.localeCompare(b.name));
 
 export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam };
 // The trip engine's Durable Object (one per user), bound as TRIPS.

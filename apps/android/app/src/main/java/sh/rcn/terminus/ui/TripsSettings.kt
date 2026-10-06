@@ -120,6 +120,7 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
                 options = campus.residences.map { it.code to it.name },
                 selected = if (picking) null else residence?.code,
                 blank = stringResource(R.string.off_campus_short),
+                headings = residenceHeadings(campus.residences),
                 onSelect = { code ->
                     val r = campus.residences.firstOrNull { it.code == code }
                     if (r == null) {

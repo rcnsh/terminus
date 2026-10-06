@@ -500,6 +500,21 @@ struct Hint: View {
     var body: some View { Text(text).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
 }
 
+/// A residence menu's items: where most students live in a section of their own at the top.
+struct ResidenceItems: View {
+    let residences: [Campus.Residence]
+
+    var body: some View {
+        let common = residences.filter { $0.common == true }
+        if common.isEmpty {
+            ForEach(residences, id: \.code) { Text($0.name).tag($0.code) }
+        } else {
+            Section(L("Most common")) { ForEach(common, id: \.code) { Text($0.name).tag($0.code) } }
+            Section(L("Other residences")) { ForEach(residences.filter { $0.common != true }, id: \.code) { Text($0.name).tag($0.code) } }
+        }
+    }
+}
+
 /// Where do you live? A residence brings all its stops; off campus, pick one.
 struct HomeStep: View {
     let setup: SetupModel
@@ -524,7 +539,7 @@ struct HomeStep: View {
                 }
             )) {
                 Text(L("Off campus, or I'll pick a stop")).tag("")
-                ForEach(campus.residences, id: \.code) { Text($0.name).tag($0.code) }
+                ResidenceItems(residences: campus.residences)
             }
             if let r = residence, !offCampus {
                 Hint(L("Stops for %@: %@. terminus won't direct you home when you're already there.", r.name, r.stops.map(campus.stopName).joined(separator: ", ")))

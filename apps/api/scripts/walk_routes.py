@@ -368,7 +368,7 @@ def main():
             best = walks[0][0]
             serving = {c: round(m) for m, c in walks if m <= best + 150}
             serving = dict(list(serving.items())[:2])
-            res[code] = {"name": r["name"], "stops": serving, "areas": areas}
+            res[code] = {"name": r["name"], **({"common": True} if r.get("common") else {}), "stops": serving, "areas": areas}
         emit("residences.json", json.dumps({
             "generated": date.today().isoformat(),
             "source": "outlines from OpenStreetMap (ODbL); serving stops by path distance; scripts/walk_routes.py",

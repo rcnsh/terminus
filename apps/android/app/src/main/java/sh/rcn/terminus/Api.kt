@@ -778,7 +778,8 @@ data class Device(val id: String, val name: String, val platform: String?, val c
 /** A stop, with the services that call there (for its sign in setup). */
 data class Stop(val code: String, val name: String, val lat: Double, val lon: Double, val services: List<String> = emptyList())
 
-data class Residence(val code: String, val name: String, val stops: List<String>, val walkM: Int)
+/** `common`: where most students live (PGP, UTown Residence), shown first in the pickers. */
+data class Residence(val code: String, val name: String, val stops: List<String>, val walkM: Int, val common: Boolean = false)
 
 /** `colors`: each service's colour as NUS paints it, from /campus's routes. */
 data class Campus(val stops: List<Stop>, val residences: List<Residence>, val destinations: List<Destination>, val colors: Map<String, Long> = emptyMap()) {
@@ -799,8 +800,8 @@ data class Campus(val stops: List<Stop>, val residences: List<Residence>, val de
                 residences = (0 until r.length()).map {
                     val x = r.getJSONObject(it)
                     val st = x.getJSONArray("stops")
-                    Residence(x.getString("code"), x.getString("name"), (0 until st.length()).map { i -> st.getString(i) }, x.optInt("walkM"))
-                }.sortedBy { it.name },
+                    Residence(x.getString("code"), x.getString("name"), (0 until st.length()).map { i -> st.getString(i) }, x.optInt("walkM"), x.optBoolean("common"))
+                }.sortedWith(compareByDescending<Residence> { it.common }.thenBy { it.name }),
                 destinations = (0 until d.length()).map { parseDestination(d.getJSONObject(it)) },
                 colors = routes?.keys()?.asSequence()?.associateWith { parseColor(routes.getJSONObject(it).optString("color")) }.orEmpty(),
             )
