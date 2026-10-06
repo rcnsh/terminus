@@ -239,6 +239,12 @@ function useSky(node, on) {
  */
 const farY = (x) => 30 + 6 * Math.sin(x / 47 + 0.6) + 4 * Math.sin(x / 19 + 2.1);
 const nearY = (x) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
+/** The lowest point of the far hills within 40 px of `x`, where the city shows above them. */
+const dip = (x) => {
+  let best = x;
+  for (let d = -40; d <= 40; d += 2) if (farY(x + d) > farY(best)) best = x + d;
+  return best;
+};
 const ridge = (w, y) => {
   let d = `M0 92L0 ${y(0).toFixed(1)}`;
   for (let x = 4; x < w + 4; x += 4) d += `L${x} ${y(x).toFixed(1)}`;
@@ -247,8 +253,9 @@ const ridge = (w, y) => {
 
 /**
  * Where the night sky ends: the hills, a building or two with a light still
- * on, and a shuttle on the road. The near hill is the page's own colour, so
- * the sky meets the ground instead of fading into the page.
+ * on, rain trees, a flag by the road, a shuttle on it, and Marina Bay Sands
+ * far off in the city. The near hill is the page's own colour, so the sky
+ * meets the ground instead of fading into the page.
  */
 function Horizon({ ground }) {
   const [w, setW] = useState(0);
@@ -259,11 +266,17 @@ function Horizon({ ground }) {
     return () => seen.disconnect();
   }, []);
   const at = (f) => Math.round(w * f);
-  const [b1, b2, bus] = [at(0.18), at(0.68), at(0.58) - 19];
+  const [b1, b2, bus, mbs, flag] = [at(0.18), at(0.62), at(0.58) - 19, dip(at(0.8)), at(0.3)];
+  const city = farY(mbs) + 3;
+  const pole = nearY(flag);
   return html`
     <div class="horizon" ref=${ground} aria-hidden="true">
       ${w > 0 &&
       html`<svg width=${w} height="92" viewBox=${`0 0 ${w} 92`}>
+        <g class="city">
+          ${[-13, -2, 9].map((x) => html`<path d=${`M${mbs + x} ${city}L${mbs + x + 1} ${city - 26}H${mbs + x + 5}L${mbs + x + 6} ${city}Z`} />`)}
+          <path d=${`M${mbs - 15} ${city - 28}L${mbs + 25} ${city - 29.2}L${mbs + 23} ${city - 26}H${mbs - 14}Z`} />
+        </g>
         <path class="far" d=${ridge(w, farY)} />
         <rect class="far" x=${b1 - 8} y=${farY(b1) - 14} width="16" height="20" />
         <rect class="lit dim" x=${b1 - 3} y=${farY(b1) - 9} width="3" height="3" />
@@ -271,9 +284,19 @@ function Horizon({ ground }) {
         <rect class="lit" x=${b2 - 5} y=${farY(b2) - 16} width="3" height="3" />
         <rect class="lit dim" x=${b2 + 3} y=${farY(b2) - 8} width="3" height="3" />
         ${[0.06, 0.45, 0.9].map((f) => {
+          // A rain tree: a trunk forking low under a wide, flat crown.
           const c = at(f);
-          return html`<circle class="tree" cx=${c - 7} cy=${nearY(c - 7) - 5} r="10" /><circle class="tree" cx=${c + 7} cy=${nearY(c + 7) - 8} r="12" />`;
+          const g = nearY(c);
+          return html`<g class="tree">
+            <path d=${`M${c - 1.5} ${g + 2}V${g - 7}L${c - 7} ${g - 13}H${c - 4.5}L${c} ${g - 9}L${c + 4.5} ${g - 13}H${c + 7}L${c + 1.5} ${g - 7}V${g + 2}Z`} />
+            <ellipse cx=${c} cy=${g - 18} rx="21" ry="5.5" />
+            <ellipse cx=${c - 8} cy=${g - 21.5} rx="11" ry="4.5" />
+            <ellipse cx=${c + 8} cy=${g - 22} rx="12" ry="4.5" />
+          </g>`;
         })}
+        <line class="pole" x1=${flag} y1=${pole + 2} x2=${flag} y2=${pole - 24} />
+        <rect class="flag-red" x=${flag + 0.6} y=${pole - 24} width="9" height="3" />
+        <rect class="flag-white" x=${flag + 0.6} y=${pole - 21} width="9" height="3" />
         <path class="near" d=${ridge(w, nearY)} />
         <line class="road" x1="0" y1="70" x2=${w} y2="70" />
         <g transform=${`translate(${bus} 57)`}>

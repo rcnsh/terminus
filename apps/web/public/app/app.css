@@ -253,6 +253,10 @@ body.night > .nav, body.night .app-chips, body.night .where-box, body.night .day
 .horizon svg { display: block; }
 .horizon .far { fill: #3a3550; }
 .horizon .tree { fill: #5b5568; }
+.horizon .city { fill: #45405f; }
+.horizon .pole { stroke: #5b5568; stroke-width: 1.2; }
+.horizon .flag-red { fill: #ef3340; }
+.horizon .flag-white { fill: #f2efeb; }
 .horizon .near { fill: var(--bg); }
 .horizon .road { stroke: #d6cfc7; stroke-width: 1.5; stroke-dasharray: 6 6; }
 .horizon .bus { fill: #24211e; }
@@ -263,9 +267,11 @@ body.night > .nav, body.night .app-chips, body.night .where-box, body.night .day
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .horizon .far { fill: #191826; }
   :root:not([data-theme="light"]) .horizon .tree { fill: #121110; }
+  :root:not([data-theme="light"]) .horizon .pole { stroke: #121110; }
   :root:not([data-theme="light"]) .horizon .road { stroke: #2c2926; }
 }
 :root[data-theme="dark"] .horizon .far { fill: #191826; }
 :root[data-theme="dark"] .horizon .tree { fill: #121110; }
+:root[data-theme="dark"] .horizon .pole { stroke: #121110; }
 :root[data-theme="dark"] .horizon .road { stroke: #2c2926; }
 .day-done.open .going { margin-top: 4px; }
