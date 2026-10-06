@@ -257,7 +257,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
             onClick=${() => (shown === 'account' ? null : openPage('account'))}
           >
             ${me.email ? html`<span class="avatar" aria-hidden="true">${me.email.slice(0, 1).toUpperCase()}</span>` : html`<img class="avatar" src="/assets/mark.svg" alt="" />`}
-            <span class="row-text"><span class="row-title">${sum.account}</span><span class="row-sum">${sum.devices}</span></span>
+            <span class="row-text"><span class="row-title">${sum.account}</span><span class=${me.anonymous ? 'row-sum add' : 'row-sum'}>${sum.devices}</span></span>
             <${Icon} paths=${CHEVRON} class="chev" />
           </button>
           <section class="set-day" aria-labelledby="set-day-title">

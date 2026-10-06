@@ -991,15 +991,20 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
     }
   };
   const email = html`<span class="field-email">${me.email ? breakAfterAt(me.email) : t('No email')}</span>`;
-  const first = me.anonymous === true
-    ? html`<button type="button" class="btn small ghost" onClick=${onAddEmail}>${t('Add an email')}</button>`
-    : html`<button type="button" class="btn small ghost" onClick=${onSignOut}>${t('Sign out')}</button>`;
+  // No email yet: adding one is the first thing here, not a small button beside "No email".
+  const first = me.anonymous === true ? null : html`<button type="button" class="btn small ghost" onClick=${onSignOut}>${t('Sign out')}</button>`;
   const who = html`<div class=${inApp ? 'account-who' : 'account-who narrow-only'}>${email}${first}</div>`;
   const status = msg && html`<p class="hint" role="status">${msg}</p>`;
   return html`
     <div class="trips">
+      ${me.anonymous === true &&
+      html`<div class="card add-email">
+        <h3>${t('Add an email')}</h3>
+        <p class="hint">${t("Your setup stays in this browser. Add an email any time to use it on your other devices, or to keep it if this browser's data is cleared.")}</p>
+        <button type="button" class="btn accent wide" onClick=${onAddEmail}>${t('Add an email')}</button>
+      </div>`}
       <div class="card account-card">
-        ${who}
+        ${me.anonymous !== true && who}
         <div class="account-actions">
           <a class="btn ghost small" href="/me/export" download>${t('Download my data')}</a>
           <button type="button" class="btn ghost small" onClick=${everywhere}>${t('Sign out everywhere')}</button>
