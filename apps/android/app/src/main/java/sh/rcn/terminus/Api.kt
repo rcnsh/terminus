@@ -174,6 +174,8 @@ data class Card(
     val notice: String? = null,
     /** The trip as steps, for the card styles that draw it. */
     val journey: Journey? = null,
+    /** Done for today, no classes, home: the next class, for its own card. */
+    val upcoming: Upcoming? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) = Card(
@@ -213,12 +215,22 @@ data class Card(
             },
             walkTo = o.optJSONObject("walkTo")?.let { w -> WalkTo(w.getString("name"), w.getDouble("lat"), w.getDouble("lon")) },
             journey = o.optJSONObject("journey")?.let(Journey::parse),
+            upcoming = o.optJSONObject("upcoming")?.let { u ->
+                Upcoming(u.optString("when"), u.optString("title"), u.optString("where"), u.optStringOrNull("off"))
+            },
         )
 
         private fun parseActions(a: JSONArray?): List<CardAction> =
             a?.let { (0 until it.length()).map { i -> it.getJSONObject(i).let { x -> CardAction(x.getString("id"), x.getString("label"), x.getString("trip")) } } }.orEmpty()
     }
 }
+
+/**
+ * `card.upcoming`: the next class, worded on the server, from the timetable
+ * alone: when ("Tomorrow · Tue"), what ("CS2030 at 10:00"), where ("At COM1
+ * · get off at COM 3"), and why today has none when it's a break.
+ */
+data class Upcoming(val whenText: String, val title: String, val where: String, val off: String?)
 
 /**
  * The ride, from boarding to getting off. Where the bus is comes from the

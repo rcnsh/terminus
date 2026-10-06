@@ -11,6 +11,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -76,7 +80,7 @@ import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
 
 @Composable
-internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) -> Unit) {
+internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, onOpenStop: (String) -> Unit) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
@@ -104,7 +108,24 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
         }
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    // Done for today's sky: the night section says where it ends; the header,
+    // chips and status bar take night colours over it.
+    val sky = remember { SkyState() }
+    val night = sky.end != null
+    NightStatusBar(night)
+    val scroll = rememberScrollState()
+    val page = MaterialTheme.colorScheme.background
+    CompositionLocalProvider(LocalSky provides sky) { Box(Modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(scroll)
+            .onGloballyPositioned { sky.contentTop = it.positionInRoot().y }
+            .nightSky(sky, page)
+            .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())
+            .padding(horizontal = 16.dp),
+    ) {
+        NightTheme(night) { Column {
         TabHeader { HeaderWordmark() }
 
         state.update?.let { v ->
@@ -164,6 +185,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
             }
         }
         if (searching) Search(state, vm) { searching = false }
+        } }
         Spacer(Modifier.height(12.dp))
 
         // A minimum height keeps the chips and search from jumping as views
@@ -226,6 +248,17 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, onOpenStop: (String) 
 
         Spacer(Modifier.height(24.dp))
     }
+    // The status bar's own strip: clear at the top, so the sky (or the page)
+    // shows through, then filled as the content scrolls under it.
+    val top = insets.calculateTopPadding()
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(top)
+            .graphicsLayer { alpha = if (top.toPx() > 0f) (scroll.value / top.toPx()).coerceIn(0f, 1f) else 0f }
+            .background(if (night) NIGHT[0] else page),
+    )
+    } }
 }
 
 /** Asks for notification permission on the way to "on", and says so when it's refused. */

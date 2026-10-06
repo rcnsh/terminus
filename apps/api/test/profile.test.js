@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFAULT_PROFILE, GAP_RETURN_MIN, MAX_VENUE_WALK_S, isResting, nextClass, parseProfile, planFor, restDetail, restLabel, timingFor } from '../src/profile.ts';
+import { DEFAULT_PROFILE, GAP_RETURN_MIN, MAX_VENUE_WALK_S, isResting, nextClass, parseProfile, planFor, restDetail, restLabel, timingFor, upcomingClass } from '../src/profile.ts';
+import { withLang } from '../src/i18n.ts';
 
 const STOPS = new Set(['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27']);
 const isStop = (c) => STOPS.has(c);
@@ -133,6 +134,21 @@ test('the rest message names the next class', () => {
   assert.equal(restDetail(profile(monOnly), thu(20)), 'Next: CS2030 @ COM1, Monday 10:00');
   assert.equal(restDetail(profile([]), thu(20)), 'Nothing on your timetable');
   assert.equal(nextClass(profile([]), thu(20)), null);
+});
+
+test("the next class's card: when, what, and where to get off", () => {
+  const name = (code) => ({ COM3: 'COM 3', UTOWN: 'UTown' })[code] ?? code;
+  // Its room isn't at the stop: both, so you know where to get off.
+  const tt = [cls(10, 12, 'COM3', 'CS2030 @ COM1'), { ...cls(9, 10, 'UTOWN', 'GEA1000 @ UTown'), day: 5, venue: 'UT-AUD1' }];
+  assert.deepEqual(upcomingClass(profile(tt), thu(20), false, name), { when: 'Tomorrow · Fri', title: 'GEA1000 at 09:00', where: 'At UT-AUD1 · get off at UTown', off: null });
+  // Later today, at its stop, in the 12-hour style.
+  const today = upcomingClass(profile(tt), thu(5), true, name);
+  // (The 12-hour clock has a narrow space before AM.)
+  assert.deepEqual({ ...today, title: today.title.replace(/\s/g, ' ') }, { when: 'Today', title: 'CS2030 at 10:00 AM', where: 'At COM 3', off: null });
+  assert.equal(upcomingClass(profile(tt), thu(20), false, name, new Set()).when, 'Tomorrow · Fri');
+  assert.equal(withLang('zh', () => upcomingClass(profile(tt), thu(20), false, name).where), '在 UT-AUD1 · 在 UTown 下车');
+  // Nothing coming: no card.
+  assert.equal(upcomingClass(profile([]), thu(20), false, name), null);
 });
 
 test('day hours must be ordered', () => {

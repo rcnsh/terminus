@@ -1776,6 +1776,19 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         why: { type: ['string', 'null'], description: 'On foot: why not a bus ("D1 would be 16 min"). Null with a bus.' },
                       },
                     },
+                    upcoming: {
+                      type: ['object', 'null'],
+                      description:
+                        'Outside your day, on a day with no classes, and at home: the next class, for a card of its own. From the timetable alone, with no bus, since later buses are not known yet. ' +
+                        'Null with no class coming, and on every other kind of card. Show the strings as they are.',
+                      required: ['when', 'title', 'where', 'off'],
+                      properties: {
+                        when: { type: 'string', example: 'Tomorrow · Tue', description: '"Today", "Tomorrow · Tue", a weekday, or a date ("Mon 28 Sep").' },
+                        title: { type: 'string', example: 'CS2030 at 10:00' },
+                        where: { type: 'string', example: 'At COM1 · get off at COM 3', description: 'The room and the stop to get off at, or the stop alone when the room is at it.' },
+                        off: { type: ['string', 'null'], description: 'Why today has no classes, when it is a break ("Recess week", a holiday).' },
+                      },
+                    },
                   },
                 },
                 walkSpeedMs: { type: 'number', description: 'The user’s walking speed in metres a second, from their walking pace (1.1, 1.3 or 1.5). For walk times an app works out itself from metres, such as `walkM` in search results.' },

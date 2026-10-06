@@ -204,6 +204,11 @@ const en = {
   /** "Mon 28 Sep". */
   shortDate: ((dow: number, date: number, month: number) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow]} ${date} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month]}`) as Fn<[number, number, number]>,
   nextClass: ((off: string | null, label: string, when: string, t: string) => `${off ? `${off} · ` : ''}Next: ${label}, ${when} ${t}`) as Fn<[string | null, string, string, string]>,
+  // The next class, on its own card under Done for today (card.upcoming).
+  upcomingToday: 'Today',
+  upcomingTomorrow: ((dow: number) => `Tomorrow · ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow]}`) as Fn<[number]>,
+  classAt: ((name: string, t: string) => `${name} at ${t}`) as Fn<[string, string]>,
+  atVenueGetOff: ((venue: string, stop: string) => `At ${venue} · get off at ${stop}`) as Fn<[string, string]>,
   termSem: ((n: number, ay: string) => `Sem ${n} ${ay}`) as Fn<[number, string]>,
   termSpecial: ((roman: string, ay: string) => `Special Term ${roman} ${ay}`) as Fn<[string, string]>,
   recessWeek: 'Recess week',
@@ -429,6 +434,10 @@ const zh: Msgs = {
   dayNames: zhDays,
   shortDate: (dow, date, month) => `${month + 1}月${date}日（${zhDays[dow].replace('星期', '周')}）`,
   nextClass: (off, label, when, t) => `${off ? `${off} · ` : ''}下一节：${label}，${when} ${t}`,
+  upcomingToday: '今天',
+  upcomingTomorrow: (dow) => `明天 · ${zhDays[dow].replace('星期', '周')}`,
+  classAt: (name, t) => `${name}，${t} 开始`,
+  atVenueGetOff: (venue, stop) => `在 ${venue} · 在 ${stop} 下车`,
   termSem: (n, ay) => `${ay} 第 ${n} 学期`,
   termSpecial: (roman, ay) => `${ay} 特别学期 ${roman}`,
   recessWeek: '休息周',

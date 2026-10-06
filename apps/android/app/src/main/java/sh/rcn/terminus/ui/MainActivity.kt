@@ -262,8 +262,9 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
 }
 
 /**
- * Now · Map · Settings. Now and Settings sit inside the safe area; the map
- * runs under the status bar, with its pills below it.
+ * Now · Map · Settings. Settings sits inside the safe area; Now scrolls
+ * under the status bar (its sky reaches the top), and the map runs under
+ * it, with its pills below it.
  */
 @Composable
 private fun Tabs(
@@ -326,18 +327,18 @@ private fun Tabs(
                             ),
                         )
                     }
-                    else -> Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding().padding(horizontal = 16.dp)) {
-                        if (t == Tab.Settings) {
-                            SettingsScreen(
-                                acct, account, vm,
-                                onAddEmail = onAddEmail,
-                                onSignedOut = onSignedOut,
-                                onClose = { onTab(Tab.Now); vm.load(restart = true) },
-                            )
-                        } else {
-                            // A stop tapped in Nearby: open on the map, with its sheet.
-                            MainScreen(state, vm, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })
-                        }
+                    Tab.Settings -> Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding().padding(horizontal = 16.dp)) {
+                        SettingsScreen(
+                            acct, account, vm,
+                            onAddEmail = onAddEmail,
+                            onSignedOut = onSignedOut,
+                            onClose = { onTab(Tab.Now); vm.load(restart = true) },
+                        )
+                    }
+                    // Edge to edge, the insets inside its scrolling, so Done for today's sky can reach the top.
+                    Tab.Now -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                        // A stop tapped in Nearby: open on the map, with its sheet.
+                        MainScreen(state, vm, insets = inner, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })
                     }
                 }
             }

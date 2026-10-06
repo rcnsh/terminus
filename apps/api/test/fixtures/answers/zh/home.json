@@ -58,6 +58,12 @@
     "walkTo": null,
     "notice": null,
     "h12": false,
-    "journey": null
+    "journey": null,
+    "upcoming": {
+      "when": "9月3日（周四）",
+      "title": "CS2030，07:00 开始",
+      "where": "在 COM 3",
+      "off": null
+    }
   }
 }
