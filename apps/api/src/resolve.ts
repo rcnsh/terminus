@@ -145,7 +145,13 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
       .map((stop) => ({ stop, distM: haversineM(input.lat!, input.lon!, stop.lat, stop.lon) }))
       .sort((a, b) => a.distM - b.distM)
       .map((c) => ({ ...c, footM: footM(input.lat!, input.lon!, c.stop) }));
-    const near = all.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
+    const inRange = all.filter((c) => c.distM <= WALK.maxRadiusM);
+    // The nearest few shuttle stops, as ever, and the nearest stop only
+    // public buses call at as one more: turning public buses on adds
+    // options and never crowds a shuttle stop out of the answer.
+    const near = inRange.filter((c) => !c.stop.public).slice(0, WALK.maxCandidates);
+    const publicOnly = inRange.find((c) => c.stop.public);
+    if (publicOnly) near.push(publicOnly);
     // A user's usual stops (near home) join the set when in range, so a dense
     // cluster of closer stops cannot push out the one they actually use.
     for (const code of input.preferStops ?? []) {
@@ -538,6 +544,13 @@ export function scoreOptions(
       a.walkS - b.walkS ||
       a.svc.localeCompare(b.svc),
   );
+  // A live public bus outranks a free bus that only has a headway guess by
+  // tier, but the fare still has to be worth it: unless it beats the best
+  // free option's time by what the fare is worth, the free bus is the answer.
+  if (out[0]?.paid) {
+    const free = out.findIndex((o) => !o.paid);
+    if (free > 0 && costS(out[free]) <= costS(out[0])) out.unshift(...out.splice(free, 1));
+  }
   return out;
 }
 

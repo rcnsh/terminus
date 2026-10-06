@@ -38,9 +38,9 @@ object JourneyText {
     fun arrive(journey: Journey): String? =
         journey.arrive?.let { listOfNotNull(L.s(R.string.journey_arrive_time, it), journey.slack).joinToString(" · ") }
 
-    /** "Or A1 at 4:05 PM from PGP"; for a class, the sooner bus to go now on. */
+    /** "Or A1 at 4:05 PM from PGP"; for a class, the sooner bus to go now on. A public bus is "95 ($)": the fare shows here too. */
     fun backup(answer: NextAnswer, journey: Journey): String? = journey.backup?.let {
-        L.s(if (answer.isClassPlan) R.string.journey_backup_now else R.string.journey_backup, it.svc, it.board, it.stop)
+        L.s(if (answer.isClassPlan) R.string.journey_backup_now else R.string.journey_backup, if (it.paid) "${it.svc} ($)" else it.svc, it.board, it.stop)
     }
 
     /** "in 4 min" to the bus leaving, or null once it has. */

@@ -350,7 +350,9 @@ async function recordFromFix(x: {
   // The bus it's about: the plan; after a miss at the stop, whichever
   // bus from that stop to the same place this fix is on the road of.
   const bus: Boarded | null = prev?.kind === 'missed' && prev.atStop ? nextBusFrom(deps.graph, now.trip.plan ?? null, fix, nowMs) : (now.trip.plan ?? null);
-  const seen = detect({ phase: now.trip.phase, rec: prev, bus, arrivedHere: Boolean(now.answer.arrived), fix, homeStops: x.homeStops, graph: deps.graph, nowMs });
+  // A public bus's route is only in the public graph.
+  const graph = bus?.paid ? (deps.publicGraph ?? deps.graph) : deps.graph;
+  const seen = detect({ phase: now.trip.phase, rec: prev, bus, arrivedHere: Boolean(now.answer.arrived), fix, homeStops: x.homeStops, graph, nowMs });
   if (seen === 'arrived') {
     const onBus = prev?.kind === 'boarded' ? prev.boarded : now.trip.phase === 'riding' ? (now.trip.plan ?? undefined) : undefined;
     // A ride seen from start to end: how long it really took (phase 8.2).
