@@ -185,7 +185,8 @@
       "arriveStop": "09:15",
       "slack": "~25 min late",
       "live": true,
-      "backup": null
+      "backup": null,
+      "why": null
     }
   }
 }

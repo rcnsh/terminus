@@ -150,7 +150,7 @@ a.settings-row { text-decoration: none; }
 .widget .notice { margin-bottom: 10px; font-size: 0.9rem; color: var(--warn-ink); }
 .widget .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
-/* A trip by bus (journey.js): Route, Ticket or Steps, as on Android. */
+/* A trip by bus or on foot (journey.js): Route, Ticket or Steps, as on Android. */
 .journey .big.late, .journey .under.late, .journey .late { color: var(--bad-ink); }
 .journey .under { color: var(--muted); font-size: 0.95rem; font-variant-numeric: tabular-nums; }
 .bus-badge { display: inline-block; padding: 1px 7px; border-radius: 6px; font-weight: 800; font-size: 0.8rem; line-height: 1.4; }
@@ -158,6 +158,8 @@ a.settings-row { text-decoration: none; }
 /* A public bus: the fare sign after its number, a touch lighter than the number. */
 .bus-badge .fare { margin-left: 0.3em; font-weight: 600; opacity: 0.8; }
 .bus-badge.big .fare { font-size: 0.6em; vertical-align: 0.35em; }
+/* On foot: someone walking where the bus's badge would be. */
+.bus-badge.big.walk { color: var(--ink); background: var(--surface-2); }
 .route-line { display: flex; align-items: flex-start; margin: 18px 0 4px; }
 .route-line .above { display: grid; place-items: center; height: 24px; }
 .route-line .point { display: grid; justify-items: center; width: 76px; flex: none; text-align: center; }

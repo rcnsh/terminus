@@ -69,6 +69,10 @@
   "alt": "D1 · 7 min · CLB",
   "departsAt": null,
   "arriveAt": "2026-08-27T01:05:18Z",
+  "foot": {
+    "s": 490,
+    "why": "D1 would be 16 min"
+  },
   "leave": {
     "at": "2026-08-27T01:48:50Z",
     "estimated": false,
@@ -145,6 +149,22 @@
     },
     "notice": null,
     "h12": false,
-    "journey": null
+    "journey": {
+      "leave": "09:48",
+      "walk": "8 min",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "CS2030 @ COM1",
+      "toStop": "COM 3",
+      "arrive": "09:57",
+      "walkEnd": null,
+      "arriveStop": "09:57",
+      "slack": "3 min early",
+      "live": false,
+      "backup": null,
+      "why": "D1 would be 16 min"
+    }
   }
 }

@@ -9,7 +9,7 @@
  * dimming once `card.staleAt` passes.
  */
 
-import type { BusLeg, Crowd, MeAnswer, Quality } from './types.ts';
+import type { BusLeg, Crowd, Dest, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
 import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
@@ -73,19 +73,22 @@ export interface JourneyBus {
 /**
  * The trip as steps, for the card styles that draw it (a line from you to
  * the destination, a ticket, a list of steps): walk to the stop, take the
- * bus, get there. Every client draws the same steps from this; only the
- * leave countdown ticks on the client, from `leave.at` (and `boardAt`).
+ * bus, get there. On foot the whole way it's the walk alone, with no bus.
+ * Every client draws the same steps from this; only the leave countdown
+ * ticks on the client, from `leave.at` (and `boardAt`).
  */
 export interface Journey {
   /** When to set off ("4:01 PM", "~4:01 PM"); null when it's now. */
   leave: string | null;
-  /** The walk to the stop ("3 min"); null when you're at it. */
+  /** The walk to the stop ("3 min"); null when you're at it. On foot, the
+   *  whole walk there. */
   walk: string | null;
-  bus: JourneyBus;
-  /** When the bus leaves, ISO, to count down to. */
-  boardAt: string;
-  /** Time on the bus ("3 min"). */
-  ride: string;
+  /** The bus to catch; null on foot. */
+  bus: JourneyBus | null;
+  /** When the bus leaves, ISO, to count down to; null on foot. */
+  boardAt: string | null;
+  /** Time on the bus ("3 min"); null on foot. */
+  ride: string | null;
   /** Where to get off, when that's across the road from the destination. */
   off: string | null;
   /** Where you're going ("GEA1000 @ UTown"), the stop you get off at
@@ -105,6 +108,8 @@ export interface Journey {
   live: boolean;
   /** Another bus: the next one for a trip, the one to go now on for a class. */
   backup: JourneyBus | null;
+  /** On foot: why not a bus ("D1 would be 16 min"). Null with a bus. */
+  why: string | null;
 }
 
 export interface Card {
@@ -176,7 +181,8 @@ export interface Card {
    *  account's choice, else the request's. Clients write their own times
    *  (a class's start, "Updated") the same way. */
   h12: boolean;
-  /** The trip as steps, when there's a bus to catch and you're not on it yet. */
+  /** The trip as steps, when there's a bus to catch and you're not on it
+   *  yet, or a walk the whole way. */
   journey: Journey | null;
 }
 
@@ -233,7 +239,7 @@ export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, 
   return { ...card, ...v2(a, card, h12, trip), notice, h12, journey: journeyOf(a, card, h12, trip.phase) };
 }
 
-/** The journey (see Journey): null on the bus, once there, on foot, and with no time to give. */
+/** The journey (see Journey): null on the bus, once there, and with no time to give. */
 export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Journey | null {
   if ((card.kind !== 'class' && card.kind !== 'trip') || !a.dest) return null;
   if (phase === 'riding' || phase === 'arrived') return null;
@@ -258,6 +264,8 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
           ...(l.paid ? { paid: true as const } : {}),
         }
       : null;
+  // On foot the whole way, unless a kept plan still has a bus to catch.
+  if (!planned && a.foot) return footJourney(a, a.dest, a.foot, card, h12);
   const leg = planned ?? (card.kind === 'class' ? null : (a.bus ?? null));
   if (!leg?.board) return null;
   const at = (iso: string, estimated: boolean) => approx(estimated, clockAt(Date.parse(iso), h12));
@@ -291,6 +299,38 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
     slack: card.kind === 'class' && classAt != null && thereMs != null ? slackText((classAt - thereMs) / 1000) : null,
     live: a.quality === 'live' && !leg.estimated,
     backup: other ? busOf(other) : null,
+    why: null,
+  };
+}
+
+/**
+ * The walk the whole way, as a journey with no bus. A class leaves at its
+ * leave-by and gets to the room as the leave-by says; anything else is now,
+ * for the walk the answer says.
+ */
+function footJourney(a: MeAnswer, dest: Dest, foot: NonNullable<MeAnswer['foot']>, card: V1, h12: boolean): Journey {
+  const l = a.leave ?? null;
+  const nowMs = Date.parse(a.asOf);
+  const fromMs = l ? Date.parse(l.at) : nowMs;
+  const thereMs = l?.arrive ? Date.parse(l.arrive) : nowMs + foot.s * 1000;
+  const classAt = a.timing ? Date.parse(a.timing.classAt) : null;
+  const arrive = clockAt(thereMs, h12);
+  return {
+    leave: fromMs > nowMs ? clockAt(fromMs, h12) : null,
+    walk: mins((thereMs - fromMs) / 1000),
+    bus: null,
+    boardAt: null,
+    ride: null,
+    off: null,
+    to: dest.label,
+    toStop: stopName(targetStops(dest.to).to) ?? dest.label,
+    arrive,
+    walkEnd: null,
+    arriveStop: arrive,
+    slack: card.kind === 'class' && classAt != null ? slackText((classAt - thereMs) / 1000) : null,
+    live: false,
+    backup: null,
+    why: foot.why,
   };
 }
 

@@ -131,6 +131,10 @@ export interface Answer {
   bus?: BusLeg | null;
   /** The other bus worth knowing about (`alt`), the same way. */
   altBus?: BusLeg | null;
+  /** The answer is to walk the whole way: seconds on foot to the place
+   *  itself, and why not a bus ("D1 would be 16 min", "Services ended for
+   *  the night"), for the card's journey. Absent otherwise. */
+  foot?: { s: number; why: string | null };
 }
 
 /** A bus to catch: where, when, and how long the walk and the ride take. */

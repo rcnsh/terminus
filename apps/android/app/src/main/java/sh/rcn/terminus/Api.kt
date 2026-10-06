@@ -252,18 +252,21 @@ data class Ride(val svc: String, val stops: List<String>, val boardMs: Long, val
 
 /**
  * `card.journey`: the trip as steps (walk to the stop, take the bus, get
- * there), worded on the server. The app draws it in the card style chosen in
- * Settings › Appearance ([CardStyle]); only the countdowns tick here.
+ * there), worded on the server; on foot the whole way, the walk alone, with
+ * no [bus]. The app draws it in the card style chosen in Settings ›
+ * Appearance ([CardStyle]); only the countdowns tick here.
  */
 data class Journey(
     /** When to set off ("4:01 PM"); null when it's now. */
     val leave: String?,
-    /** The walk to the stop ("3 min"); null at the stop. */
+    /** The walk to the stop ("3 min"); null at the stop. On foot, the whole walk there. */
     val walk: String?,
-    val bus: JourneyBus,
-    /** When the bus leaves, epoch ms, to count down to. */
-    val boardAtMs: Long,
-    val ride: String,
+    /** The bus to catch; null on foot. */
+    val bus: JourneyBus?,
+    /** When the bus leaves, epoch ms, to count down to; null on foot. */
+    val boardAtMs: Long?,
+    /** Time on the bus ("8 min"); null on foot. */
+    val ride: String?,
     /** Where to get off, when it's across the road from the destination. */
     val off: String?,
     /** Where you're going ("GEA1000 @ UTown") and the stop you get off at ("UTown"). */
@@ -279,20 +282,25 @@ data class Journey(
     val slack: String?,
     val live: Boolean,
     val backup: JourneyBus?,
+    /** On foot: why not a bus ("D1 would be 16 min"). */
+    val why: String? = null,
 ) {
     /** Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown". */
     val place: String get() = to.substringBefore(" @ ")
 
     companion object {
         fun parse(o: JSONObject): Journey? {
-            val bus = o.optJSONObject("bus")?.let(JourneyBus::parse) ?: return null
-            val board = o.optStringOrNull("boardAt")?.let(::parseInstant) ?: return null
+            val bus = o.optJSONObject("bus")?.let(JourneyBus::parse)
+            val board = o.optStringOrNull("boardAt")?.let(::parseInstant)
+            // A bus needs its time to count down to; on foot there's neither.
+            if (bus != null && board == null) return null
+            if (bus == null && o.optStringOrNull("walk") == null) return null
             return Journey(
                 leave = o.optStringOrNull("leave"),
                 walk = o.optStringOrNull("walk"),
                 bus = bus,
-                boardAtMs = board,
-                ride = o.optString("ride"),
+                boardAtMs = board?.takeIf { bus != null },
+                ride = o.optStringOrNull("ride")?.takeIf { bus != null },
                 off = o.optStringOrNull("off"),
                 to = o.optString("to"),
                 toStop = o.optString("toStop"),
@@ -302,6 +310,7 @@ data class Journey(
                 slack = o.optStringOrNull("slack"),
                 live = o.optBoolean("live", false),
                 backup = o.optJSONObject("backup")?.let(JourneyBus::parse),
+                why = o.optStringOrNull("why"),
             )
         }
     }

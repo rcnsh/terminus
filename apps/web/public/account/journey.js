@@ -1,9 +1,9 @@
-// A trip by bus, drawn from the server's card.journey (apps/api/src/card.ts)
-// in the card style chosen in Settings › Appearance: Route (the default),
-// Ticket or Steps, as the Android app draws them. Every word and time is the
-// server's; only the countdowns tick here.
+// A trip by bus, or on foot the whole way, drawn from the server's
+// card.journey (apps/api/src/card.ts) in the card style chosen in Settings ›
+// Appearance: Route (the default), Ticket or Steps, as the Android app draws
+// them. Every word and time is the server's; only the countdowns tick here.
 
-import { html, store, useEffect, useState } from '../assets/ui.js';
+import { Icon, html, store, useEffect, useState } from '../assets/ui.js';
 import { clock, inkOn, t } from './dom.js';
 
 const KEY = 'terminus-card-style';
@@ -63,22 +63,27 @@ const to = (a, j) => [t('To {0}', j.to), a.card.kind === 'class' && a.timing ? t
 /** "Arrive 4:08 PM", with a class's "9 min early". */
 const arrive = (j) => (j.arrive ? [t('Arrive {0}', j.arrive), j.slack].filter(Boolean).join(' · ') : null);
 
-/** "Or A1 at 4:05 PM from PGP"; for a class, the sooner bus to go now on. */
+/** "Or A1 at 4:05 PM from PGP"; for a class, the sooner bus to go now on. On foot, the bus it beats: "D1 would be 16 min". */
 const backup = (a, j) =>
-  j.backup ? (a.card.kind === 'class' ? t('Or go now: {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop) : t('Or {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop)) : null;
+  !j.bus ? j.why : j.backup ? (a.card.kind === 'class' ? t('Or go now: {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop) : t('Or {0} at {1} from {2}', named(j.backup), j.backup.board, j.backup.stop)) : null;
 
-/** "in 4 min" to the bus leaving, or null once it has. */
+/** "in 4 min" to the bus leaving, or null once it has (or on foot, with no bus). */
 function busIn(j, now) {
+  if (!j.boardAt) return null;
   const left = Math.floor((Date.parse(j.boardAt) - now) / 1000);
   if (left <= 0) return null;
   return left >= 120 ? t('in {0} min', Math.round(left / 60)) : t('in {0} min {1} s', Math.floor(left / 60), left % 60);
 }
 
-/** A service as it's painted on the bus. */
 /** The service as painted on the bus; a public bus (with a fare) carries a $ so the fare is never a surprise. */
 const Badge = ({ bus, big = false }) => html`<span class=${big ? 'bus-badge big' : 'bus-badge'} style=${{ background: bus.color, color: inkOn(bus.color) }}>${bus.svc}${bus.paid ? html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>` : ''}</span>`;
 /** The service in running text: "95 ($)" for a public bus. */
 const named = (bus) => (bus.paid ? `${bus.svc} ($)` : bus.svc);
+
+/** Someone walking, for a trip on foot where a bus would have its badge. */
+const WALKER =
+  '<circle cx="13" cy="4" r="2" fill="currentColor"/><path d="M12 8l-2 6-3 7M10 14l3 3v4M7 12l2-4h3l2 3 3 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+const WalkBadge = () => html`<span class="bus-badge big walk"><${Icon} paths=${WALKER} size="34" /></span>`;
 
 /** Now, every second near the end (so "Leave in 45 s" is never a stale 45), else every 15. */
 function useNow(a, j) {
@@ -103,7 +108,7 @@ export function Journey({ a, style }) {
     <div class=${`journey ${style}`}>
       <${body} a=${a} j=${j} now=${now} late=${late} />
       ${small && html`<div class="small-print">${small}</div>`}
-      ${!j.live && a.card.quality && html`<div class="note">${a.card.quality}</div>`}
+      ${j.bus && !j.live && a.card.quality && html`<div class="note">${a.card.quality}</div>`}
     </div>
   `;
 }
@@ -118,6 +123,23 @@ function Route({ a, j, now, late }) {
     <div class="where">${to(a, j)}</div>
     <div class=${`big${late}`}>${leaveIn(a, j, now)}</div>
     ${under && html`<div class=${`under${late}`}>${under}</div>`}
+    ${j.bus ? html`<${BusLine} a=${a} j=${j} />` : html`<${WalkLine} j=${j} />`}
+    <${Tags} a=${a} j=${j} />
+  `;
+}
+
+/** On foot: you and where you're going, the walk between. */
+const WalkLine = ({ j }) => html`
+  <div class="route-line" role="img" aria-label=${routeLabel(null, j)}>
+    <${Point} name=${t('You')} time=${j.leave ?? t('now')} you />
+    <div class="stretch walk"><span class="above"></span><span class="bar"></span><span class="takes">${j.walk}</span></div>
+    <${Point} name=${place(j)} time=${j.arrive ?? ''} />
+  </div>
+`;
+
+/** By bus: you, the stop, where you get off, and the walk on to the place. */
+function BusLine({ a, j }) {
+  return html`
     <div class=${j.walkEnd ? 'route-line walk-on' : 'route-line'} role="img" aria-label=${routeLabel(a, j)}>
       ${j.walk &&
       html`
@@ -137,13 +159,14 @@ function Route({ a, j, now, late }) {
         <${Point} name=${place(j)} time=${j.arrive ?? ''} />
       `}
     </div>
-    <${Tags} a=${a} j=${j} />
   `;
 }
 
 /** The line read out: the same as Steps says it. */
 const routeLabel = (a, j) =>
-  [j.walk && `${t('Walk to {0}', j.bus.stop)} (${j.walk})`, `${named(j.bus)} ${t('from {0}', j.bus.stop)} ${j.bus.board}`, j.walkEnd && `${t('Walk to {0}', place(j))} (${j.walkEnd})`, arrive(j)]
+  !j.bus
+    ? [`${t('Walk to {0}', place(j))} (${j.walk})`, arrive(j)].filter(Boolean).join(', ')
+    : [j.walk && `${t('Walk to {0}', j.bus.stop)} (${j.walk})`, `${named(j.bus)} ${t('from {0}', j.bus.stop)} ${j.bus.board}`, j.walkEnd && `${t('Walk to {0}', place(j))} (${j.walkEnd})`, arrive(j)]
     .filter(Boolean)
     .join(', ');
 
@@ -153,18 +176,26 @@ const Point = ({ name, time, you = false }) => html`
   </div>
 `;
 
-/** Ticket: the bus first, as you'd look for it on the road, then when to leave and when you get there. */
+/** Ticket: the bus first, as you'd look for it on the road, then when to leave and when you get there. On foot, the walk in its place. */
 function Ticket({ a, j, now, late }) {
   const soon = busIn(j, now);
   return html`
     <div class="where">${to(a, j)}</div>
-    <div class="ticket-bus">
-      <${Badge} bus=${j.bus} big />
-      <div>
-        <div class="ticket-time">${j.bus.board}${soon && html` <span>${soon}</span>`}</div>
-        <div>${[t('from {0}', j.bus.stop), j.walk && t('{0} walk', j.walk)].filter(Boolean).join(' · ')}</div>
-      </div>
-    </div>
+    ${j.bus
+      ? html`<div class="ticket-bus">
+          <${Badge} bus=${j.bus} big />
+          <div>
+            <div class="ticket-time">${j.bus.board}${soon && html` <span>${soon}</span>`}</div>
+            <div>${[t('from {0}', j.bus.stop), j.walk && t('{0} walk', j.walk)].filter(Boolean).join(' · ')}</div>
+          </div>
+        </div>`
+      : html`<div class="ticket-bus">
+          <${WalkBadge} />
+          <div>
+            <div class="ticket-time">${t('{0} walk', j.walk)}</div>
+            <div>${j.why ?? t('Walk to {0}', place(j))}</div>
+          </div>
+        </div>`}
     <div class=${`ticket-go${late}`}>
       <div>
         <div class="go">${leaveIn(a, j, now)}</div>
@@ -176,7 +207,7 @@ function Ticket({ a, j, now, late }) {
         <div class=${`by${late}`}>${j.slack ?? (j.walkEnd ? t('{0} walk from {1}', j.walkEnd, j.toStop) : t('at {0}', j.toStop))}</div>
       </div>`}
     </div>
-    <${Tags} a=${a} j=${j} />
+    ${j.bus && html`<${Tags} a=${a} j=${j} />`}
   `;
 }
 
@@ -189,14 +220,8 @@ function Steps({ a, j, now, late }) {
     <div class=${`big${late}`}>${leaveIn(a, j, now)}</div>
     ${by(a, j, now) && html`<div class="countdown">${by(a, j, now)}</div>`}
     <ol class="steps">
-      ${j.walk && html`<li class="first"><span class="time">${j.leave ?? t('now')}</span><span class="what">${t('Walk to {0}', j.bus.stop)}<small>${j.walk}</small></span></li>`}
-      <li class=${j.walk ? '' : 'first'}>
-        <span class="time">${j.bus.board}</span>
-        <span class="what"
-          ><span class="bus-line"><${Badge} bus=${j.bus} /> ${t('from {0}', j.bus.stop)}${j.live && html` <span class="live"><span class="dot"></span>${t('Live')}</span>`}</span
-          ><small>${[t('{0} ride', j.ride), j.off && t('off at {0}', j.off)].filter(Boolean).join(' · ')}</small></span
-        >
-      </li>
+      ${j.walk && html`<li class="first"><span class="time">${j.leave ?? t('now')}</span><span class="what">${t('Walk to {0}', j.bus ? j.bus.stop : place(j))}<small>${j.walk}</small></span></li>`}
+      ${j.bus && html`<${BusStep} j=${j} />`}
       ${j.walkEnd && html`<li><span class="time">${j.arriveStop ?? ''}</span><span class="what">${t('Walk to {0}', place(j))}<small>${j.walkEnd}</small></span></li>`}
       <li class="last">
         <span class="time">${j.arrive ?? ''}</span>
@@ -204,6 +229,19 @@ function Steps({ a, j, now, late }) {
       </li>
     </ol>
     ${b && html`<div class="go-now">${b}</div>`}
+  `;
+}
+
+/** The bus's step: its badge, stop and time, the ride and where to get off. */
+function BusStep({ j }) {
+  return html`
+      <li class=${j.walk ? '' : 'first'}>
+        <span class="time">${j.bus.board}</span>
+        <span class="what"
+          ><span class="bus-line"><${Badge} bus=${j.bus} /> ${t('from {0}', j.bus.stop)}${j.live && html` <span class="live"><span class="dot"></span>${t('Live')}</span>`}</span
+          ><small>${[t('{0} ride', j.ride), j.off && t('off at {0}', j.off)].filter(Boolean).join(' · ')}</small></span
+        >
+      </li>
   `;
 }
 

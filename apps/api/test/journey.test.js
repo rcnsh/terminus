@@ -47,10 +47,46 @@ test('the journey leaves now once the leave-by has passed, and drops the walk at
   assert.equal(waiting.walk, null);
 });
 
-test('no journey on foot, on the bus, once there, or for what is nearby', async () => {
-  assert.equal(cardFor(await load('evening-home')).journey, null);
-  assert.equal(cardFor(await load('class-walk')).journey, null);
+test('on foot to a class, the journey is the walk alone: when to leave, how long, and the bus it beats', async () => {
+  const j = cardFor(await load('class-walk')).journey;
+  assert.equal(j.bus, null);
+  assert.equal(j.boardAt, null);
+  assert.equal(j.ride, null);
+  // The leave-by and its arrival at the room, as the class card says them.
+  assert.equal(j.leave, '09:48');
+  assert.equal(j.walk, '8 min');
+  assert.equal(j.arrive, '09:57');
+  assert.equal(j.slack, '3 min early');
+  assert.equal(j.to, 'CS2030 @ COM1');
+  assert.equal(j.why, 'D1 would be 16 min');
+  assert.equal(j.live, false);
+  assert.equal(j.backup, null);
+});
+
+test('on foot with no class, the journey leaves now and arrives after the whole walk', async () => {
+  const answer = await load('evening-home');
+  const j = cardFor(answer).journey;
+  assert.equal(j.bus, null);
+  assert.equal(j.leave, null);
+  assert.equal(j.walk, '16 min');
+  assert.equal(j.arrive, '09:15');
+  assert.equal(j.slack, null);
+  assert.equal(j.why, 'A1 would be 19 min');
+  // 12-hour, as the account asks.
+  assert.match(cardFor(answer, true).journey.arrive, /^9:15\sAM$/);
+});
+
+test('a kept plan with a bus to catch keeps its bus, though walking now looks faster', async () => {
+  const bus = await load('class-bus');
+  const walk = await load('class-walk');
+  const j = cardFor({ ...bus, foot: walk.foot }).journey;
+  assert.equal(j.bus.svc, 'R2');
+  assert.equal(j.why, null);
+});
+
+test('no journey on the bus, once there, or for what is nearby', async () => {
   assert.equal(cardFor(await load('arrived')).journey, null);
+  assert.equal(cardFor(await load('class-walk'), false, { key: 'k', phase: 'arrived' }).journey, null);
   assert.equal(cardFor({ ...(await load('place')), mode: 'nearby' }).journey, null);
   assert.equal(cardFor(await load('place'), false, { key: 'mrt', phase: 'riding' }).journey, null);
 });

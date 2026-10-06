@@ -151,7 +151,7 @@ class AnswerTest {
 
     @Test fun theJourneyComesFromTheServer() {
         val j = golden("class-bus").card!!.journey!!
-        assertEquals("R2", j.bus.svc)
+        assertEquals("R2", j.bus!!.svc)
         assertEquals(0xFF34A853, j.bus.color)
         assertEquals("PGP", j.bus.stop)
         assertEquals("~09:36", j.leave)
@@ -160,9 +160,31 @@ class AnswerTest {
         assertEquals("9 min early", j.slack)
         assertEquals(ms("2026-08-27T01:42:00Z"), j.boardAtMs)
         assertEquals("09:06", j.backup?.board)
-        // On foot, there's no journey to draw.
-        assertNull(golden("evening-home").card!!.journey)
-        assertNull(golden("class-walk").card!!.journey)
+        assertNull(j.why)
+    }
+
+    @Test fun onFootTheJourneyIsTheWalkAlone() {
+        // A class: the leave-by, the walk, and the bus it beats.
+        val c = golden("class-walk")
+        val j = c.card!!.journey!!
+        assertNull(j.bus)
+        assertNull(j.boardAtMs)
+        assertNull(j.ride)
+        assertEquals("09:48", j.leave)
+        assertEquals("8 min", j.walk)
+        assertEquals("09:57", j.arrive)
+        assertEquals("3 min early", j.slack)
+        assertEquals("CS2030", j.place)
+        assertNull(JourneyText.busIn(j, 0))
+        // Where the backup bus goes, why not a bus.
+        assertEquals("D1 would be 16 min", JourneyText.backup(c, j))
+        // Anything else leaves now.
+        val h = golden("evening-home")
+        val home = h.card!!.journey!!
+        assertNull(home.leave)
+        assertEquals("16 min", home.walk)
+        assertEquals("Leave now", JourneyText.leaveIn(h, home, ms("2026-08-27T01:00:00Z")))
+        assertEquals("A1 would be 19 min", JourneyText.backup(h, home))
     }
 
     @Test fun theJourneyCountsDownToLeaving() {

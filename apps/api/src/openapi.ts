@@ -1377,6 +1377,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               oneOf: [{ $ref: '#/components/schemas/BusLeg' }, { type: 'null' }],
               description: 'The bus in `alt`, the same way.',
             },
+            foot: {
+              type: 'object',
+              required: ['s', 'why'],
+              description: 'The answer is to walk the whole way. Absent otherwise.',
+              properties: {
+                s: { type: 'integer', description: 'Seconds on foot to the place itself (a room, a building, a food court).' },
+                why: { type: ['string', 'null'], description: 'Why not a bus ("D1 would be 16 min", "Services ended for the night"). Null for a short walk with nothing to board.' },
+              },
+            },
           },
         },
         JourneyBus: {
@@ -1734,14 +1743,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       type: ['object', 'null'],
                       description:
                         'The trip as steps, for apps that draw it (a line from you to the destination, a ticket, a list of steps): walk to the stop, take the bus, get there, and walk on when the destination is a room or building away from the stop. ' +
-                        'Null on foot, on the bus, once there, and with no time to give. Count down to `leave.at` and `boardAt` yourself; show the strings as they are.',
-                      required: ['leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'walkEnd', 'arriveStop', 'slack', 'live', 'backup'],
+                        'On foot the whole way it is the walk alone: `bus`, `boardAt` and `ride` are null, `walk` is the whole walk and `why` says why not a bus. ' +
+                        'Null on the bus, once there, and with no time to give. Count down to `leave.at` and `boardAt` yourself; show the strings as they are.',
+                      required: ['leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'walkEnd', 'arriveStop', 'slack', 'live', 'backup', 'why'],
                       properties: {
                         leave: { type: ['string', 'null'], description: 'When to set off ("4:01 PM", "~4:01 PM"). Null when it is now.' },
-                        walk: { type: ['string', 'null'], description: 'The walk to the stop ("3 min"). Null at the stop.' },
-                        bus: { $ref: '#/components/schemas/JourneyBus' },
-                        boardAt: { type: 'string', format: 'date-time', description: 'When the bus leaves, to count down to.' },
-                        ride: { type: 'string', description: 'Time on the bus ("3 min").' },
+                        walk: { type: ['string', 'null'], description: 'The walk to the stop ("3 min"). Null at the stop. On foot, the whole walk there.' },
+                        bus: { oneOf: [{ $ref: '#/components/schemas/JourneyBus' }, { type: 'null' }], description: 'The bus to catch. Null on foot.' },
+                        boardAt: { type: ['string', 'null'], format: 'date-time', description: 'When the bus leaves, to count down to. Null on foot.' },
+                        ride: { type: ['string', 'null'], description: 'Time on the bus ("3 min"). Null on foot.' },
                         off: { type: ['string', 'null'], description: 'Where to get off, when that is across the road from the destination.' },
                         to: { type: 'string', description: 'Where you are going ("GEA1000 @ UTown").' },
                         toStop: { type: 'string', description: 'The stop you get off at ("UTown"), short enough for the end of a line.' },
@@ -1757,6 +1767,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                           oneOf: [{ $ref: '#/components/schemas/JourneyBus' }, { type: 'null' }],
                           description: 'Another bus: the next one for a trip, or for a class the sooner bus to go now on.',
                         },
+                        why: { type: ['string', 'null'], description: 'On foot: why not a bus ("D1 would be 16 min"). Null with a bus.' },
                       },
                     },
                   },

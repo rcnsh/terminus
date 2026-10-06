@@ -221,8 +221,8 @@ export function Card({ a, onAnswer, onChoice, chips = false }) {
     `;
   }
   const old = isStale(a);
-  // A trip by bus, in the style chosen in Settings › Appearance. Old times fall
-  // through to the cards below, which say they're updating.
+  // A trip by bus or on foot, in the style chosen in Settings › Appearance. Old
+  // times fall through to the cards below, which say they're updating.
   if (a.card?.journey && !old && !a.arrived) {
     return html`<div class="widget" aria-live="polite"><${Phase} a=${a} /><${Journey} a=${a} style=${style} />${actions}${row}</div>`;
   }

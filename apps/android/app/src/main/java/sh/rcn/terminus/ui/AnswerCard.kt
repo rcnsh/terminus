@@ -85,7 +85,7 @@ internal fun AnswerCard(
             // On the bus: how far along the ride, and the next stop, as the live notification shows.
             answer.card?.ride?.let { RideProgress(it) }
             answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
-            // A trip by bus, drawn in the style chosen in Settings › Appearance.
+            // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
             answer.card?.journey?.takeIf { !answer.arrived }?.let { journey ->
                 JourneyCard(answer, journey, CardStyle.pref(LocalContext.current))
                 Actions(answer, onAction, busy, onSuggestion)

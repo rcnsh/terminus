@@ -431,6 +431,8 @@ test('an ended service offers a walking time rather than a blank tile', () => {
   assert.match(answer.detail, /walk/i);
   assert.ok(answer.label.length <= LABEL_MAX);
   assert.ok(walkAllS > 300, 'a real walking estimate, not a placeholder');
+  // The card draws it as a walk, and says why there's no bus.
+  assert.deepEqual(answer.foot, { s: walkAllS, why: 'Services ended for the night' });
 });
 
 test('"the feed said no bus" is scheduled; "we never reached the feed" is not', () => {
@@ -653,6 +655,8 @@ test('walking wins outright when it is genuinely faster', () => {
   assert.match(a.alt, /^D2 · 10 min · KR MRT$/);
   assert.equal(a.quality, 'live', 'quality still describes the feed, not the advice');
   assert.ok(a.label.length <= LABEL_MAX);
+  // For the card's journey: the walk, and the bus it beats.
+  assert.deepEqual(a.foot, { s: 600, why: 'D2 would be 15 min' });
 });
 
 test('walking does not win on thirty seconds', () => {
@@ -682,6 +686,7 @@ test('walking beats an unknown bus and says why', () => {
   assert.equal(a.label, 'Walk · 12 min');
   assert.match(a.detail, /D2 has no live times/);
   assert.ok(!/would be/.test(a.detail), 'no invented bus time in the walking answer either');
+  assert.equal(a.foot.why, 'D2 has no live times');
 });
 
 test('with no destination there is nothing to walk to', () => {
