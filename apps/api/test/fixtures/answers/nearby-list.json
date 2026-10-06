@@ -7,7 +7,7 @@
       },
       "opposite": "PGP",
       "distM": 192,
-      "walkS": 175,
+      "walkS": 235,
       "available": true,
       "board": [
         {
@@ -40,7 +40,7 @@
       },
       "opposite": "PGPR",
       "distM": 266,
-      "walkS": 243,
+      "walkS": 300,
       "available": true,
       "board": [
         {

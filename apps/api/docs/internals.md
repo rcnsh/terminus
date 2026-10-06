@@ -604,6 +604,15 @@ and riding in the same unit (seconds) so the trade-off is legible. On a loop
 route both sides technically reach the destination; the wrong side loses on hop
 count rather than on a special case.
 
+**In a residence, the walk is from the building, then from your room.** A
+location inside a residence's outline ([`residences.ts`](../src/residences.ts))
+starts from that residence's own stops, at the path distance from the
+building or from the fix, whichever is longer. When the residence is one your
+home stops serve, the walk to the nearest of them is your own `homeWalkMin`
+(the lift, the stairs, the far block, which a phone indoors can't see), and
+its other stops are as much further as the paths say. The same walk counts on
+the card, in walking the whole way, and on the Nearby tab.
+
 **Fetch-on-demand with a 15-second edge cache; no poll loop.** Workers has no
 long-lived process and Cron Triggers bottom out at one-minute granularity. The
 cache entry is keyed on the **resolved stop code**, not the request URL —

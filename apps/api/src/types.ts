@@ -435,6 +435,12 @@ export interface ResolveInput {
   preferStops?: string[];
   /** Walk to `originCode` when there are no coordinates (home to home stop). */
   originWalkS?: number;
+  /**
+   * The user's own walk from home to their nearest home stop. Counts over
+   * the residence's outline when the location is inside the residence
+   * `preferStops` serve.
+   */
+  homeWalkS?: number;
   /** Metres per second on foot (the user's pace). Defaults to WALK.speedMs. */
   walkSpeedMs?: number;
   /** Set for a class: leave-by then aims at this, not the next bus. */

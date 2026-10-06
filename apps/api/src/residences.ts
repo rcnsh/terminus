@@ -79,22 +79,37 @@ export interface NearStop {
   footM: number;
 }
 
+/** The user's home stops and their own walk to the nearest one, in metres at their pace. */
+export interface HomeWalk {
+  stops: string[];
+  m: number;
+}
+
 /**
  * Inside a residence: its own stops, and the far side of each one's road,
  * with the walk to each. Those stops were picked by path distance from the
  * building, so a stop that is close as the crow flies but a hill and a
  * link-way away (PGP to KR MRT) never shows up as a short walk. Null
  * outside every residence: then the nearest stops by distance, as before.
+ *
+ * With `home` and the residence one of its stops serves, the walk to the
+ * nearest of those is the user's own (`home.m`), and every other stop of the
+ * residence is as much further as the paths say.
  */
-export function residenceStops(lat: number, lon: number, byCode: Map<string, Stop>): NearStop[] | null {
+export function residenceStops(lat: number, lon: number, byCode: Map<string, Stop>, home?: HomeWalk | null): NearStop[] | null {
   const r = residenceAt(lat, lon);
   if (!r) return null;
+  // The building's edge isn't where you start: the lift, the stairs and the
+  // far block are what the "walk to your stop" setting is for, and a phone
+  // indoors can't tell which floor or wing you're in.
+  const homeM = home ? Object.entries(r[1].stops).filter(([code]) => home.stops.includes(code)).map(([, m]) => m) : [];
+  const extraM = home && homeM.length ? home.m - Math.min(...homeM) : 0;
   const out: NearStop[] = [];
   for (const [code, metres] of Object.entries(r[1].stops)) {
     const stop = byCode.get(code);
     if (!stop) continue;
     // From deep inside a big hall the stop is further than from its edge.
-    const foot = Math.max(metres, footM(lat, lon, stop));
+    const foot = Math.max(metres + extraM, footM(lat, lon, stop));
     out.push({ stop, distM: haversineM(lat, lon, stop.lat, stop.lon), footM: foot });
     const opp = stop.opposite ? byCode.get(stop.opposite) : undefined;
     if (opp && !r[1].stops[opp.code]) {

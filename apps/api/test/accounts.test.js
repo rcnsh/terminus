@@ -845,6 +845,23 @@ test('/me/next in your residence: "You\'re home" after the last class, leave-by 
 });
 
 
+test('/me/next from inside your residence counts your own walk to your stop', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const ring = residencesJson.residences.PGP.areas[0];
+  const [lat, lon] = [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length].map((v) => v.toFixed(4));
+  const { PGPR, PGP } = residencesJson.residences.PGP.stops;
+  // To PGP Foyer, the nearer: your own walk. To PGP, as much further as the paths say.
+  const walkTo = async (homeWalkMin) => {
+    await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['PGPR', 'PGP'] }, homeWalkMin } });
+    const { leave } = await (await call(env, `/me/next?to=UTOWN&lat=${lat}&lon=${lon}`, { cookie })).json();
+    return leave.walkS - (leave.stopCode === 'PGP' ? Math.round((PGP - PGPR) / 1.3) : 0);
+  };
+  assert.equal(await walkTo(6), 360, 'six minutes, as set, not the hall\'s outline');
+  assert.equal(await walkTo(9), 540);
+});
+
+
 test('the bus answers need a key or an account; downloads, health and docs stay open', async () => {
   const { env, email } = setup();
   delete env[Symbol.for('terminus.testOpen')]; // locked, as in production

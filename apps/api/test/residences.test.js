@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GPS_MARGIN_M, atHome, residenceAt } from '../src/residences.ts';
+import { GPS_MARGIN_M, atHome, residenceAt, residenceStops } from '../src/residences.ts';
+import { GRAPH } from '../src/graph.ts';
+import { indexGraph } from '../src/resolve.ts';
 import residences from '../data/residences.json' with { type: 'json' };
 
 // The middle of PGP's main outline, and a point just past its edge.
@@ -27,3 +29,17 @@ test('home only when one of your home stops serves the residence you are in', ()
   assert.equal(atHome(null, null, ['PGP']), false);
 });
 
+
+test('at home, the walk to your stop is your own, and the hall\'s other stops as much further', () => {
+  const { byCode } = indexGraph(GRAPH);
+  const pgp = residences.residences.PGP.stops;
+  const foot = (out) => Object.fromEntries(out.map((c) => [c.stop.code, Math.round(c.footM)]));
+  const own = foot(residenceStops(mid[0], mid[1], byCode));
+  // Six minutes at 1.3 m/s to PGP Foyer, the nearest home stop.
+  const home = foot(residenceStops(mid[0], mid[1], byCode, { stops: ['PGPR', 'PGP'], m: 468 }));
+  assert.equal(home.PGPR, 468);
+  assert.equal(home.PGP, 468 + pgp.PGP - pgp.PGPR);
+  assert.ok(home.PGPR > own.PGPR, 'longer than the outline alone says');
+  // Visiting someone else's residence: the outline, as before.
+  assert.deepEqual(foot(residenceStops(mid[0], mid[1], byCode, { stops: ['UTOWN'], m: 468 })), own);
+});
