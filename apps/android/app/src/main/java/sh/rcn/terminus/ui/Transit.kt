@@ -31,6 +31,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -49,29 +51,32 @@ import sh.rcn.terminus.R
  */
 
 /**
- * A stop's name plate, as on the pole: inverted colours, the bus mark, the
- * name, and anything to say about it at the end (the walk there, a button).
+ * A stop's name plate, as on the pole: a shade off the card with a hairline
+ * under it, the bus mark in the accent, the name, and anything to say about
+ * it at the end (the walk there, a button), quieter. Not inverted: in the
+ * dark a near-white plate glared off every stop.
  */
 @Composable
 internal fun StopPlate(name: String, modifier: Modifier = Modifier, big: Boolean = false, trailing: @Composable RowScope.() -> Unit = {}) {
-    val ink = MaterialTheme.colorScheme.onSurface
-    val paper = MaterialTheme.colorScheme.surface
+    val c = MaterialTheme.colorScheme
     Row(
-        modifier.fillMaxWidth().background(ink).padding(start = 14.dp, end = 8.dp).heightIn(min = if (big) 46.dp else 38.dp),
+        modifier.fillMaxWidth().background(c.secondaryContainer).drawBehind {
+            drawLine(c.outlineVariant, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
+        }.padding(start = 14.dp, end = 8.dp).heightIn(min = if (big) 46.dp else 38.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = paper, modifier = Modifier.size(if (big) 18.dp else 16.dp))
+        Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = c.primary, modifier = Modifier.size(if (big) 18.dp else 16.dp))
         Text(
             name,
-            color = paper,
+            color = c.onSurface,
             fontWeight = FontWeight.Bold,
             fontSize = if (big) 17.sp else 15.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        CompositionLocalProvider(LocalContentColor provides paper) { trailing() }
+        CompositionLocalProvider(LocalContentColor provides c.onSurfaceVariant) { trailing() }
     }
 }
 
