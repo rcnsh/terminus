@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -100,9 +102,9 @@ private fun dip(x: Float): Float = (-40..40 step 2).map { x + it }.fold(x) { bes
 
 /**
  * Where the sky ends, from [top] down: the hills, a building or two with a
- * light still on, rain trees, a flag by the road, a shuttle on it, and
- * Marina Bay Sands far off in the city. The near hill is [page]'s own
- * colour, so the sky meets the ground instead of fading into the page.
+ * light still on, rain trees, Singapore's flag by the road, a shuttle on
+ * it, and Marina Bay Sands far off in the city. The near hill is [page]'s
+ * own colour, so the sky meets the ground instead of fading into the page.
  */
 private fun DrawScope.horizon(top: Float, page: Color) {
     val d = 1.dp.toPx()
@@ -166,8 +168,17 @@ private fun DrawScope.horizon(top: Float, page: Color) {
     val flag = across(0.3f)
     val pole = nearY(flag)
     drawLine(tree, at(flag, pole + 2), at(flag, pole - 24), 1.2f * d)
-    box(flag + 0.6f, pole - 24, 9f, 3f, Color(0xFFEF3340))
-    box(flag + 0.6f, pole - 21, 9f, 3f, Color(0xFFF2EFEB))
+    val red = Color(0xFFEF3340)
+    val white = Color(0xFFF2EFEB)
+    box(flag + 0.6f, pole - 24, 12f, 4f, red)
+    box(flag + 0.6f, pole - 20, 12f, 4f, white)
+    // The crescent and its five stars, which tell it from Indonesia's.
+    drawCircle(white, 1.5f * d, at(flag + 3.2f, pole - 22))
+    drawCircle(red, 1.3f * d, at(flag + 3.8f, pole - 22))
+    for (i in 0 until 5) {
+        val a = i * 2 * PI.toFloat() / 5
+        drawCircle(white, 0.35f * d, at(flag + 5.2f + 0.85f * sin(a), pole - 22 - 0.85f * cos(a)))
+    }
     ridge(::nearY, page)
     drawLine(road, at(0f, 70f), at(w, 70f), 1.5f * d, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6 * d, 6 * d)))
     // The shuttle, heading right with its headlights on: lit windows, A1's red along the bottom.
