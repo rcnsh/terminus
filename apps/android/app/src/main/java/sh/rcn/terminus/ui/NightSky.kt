@@ -95,9 +95,13 @@ internal fun Modifier.nightSky(sky: SkyState, page: Color): Modifier = drawBehin
 private fun farY(x: Float) = 30f + 6f * sin(x / 47f + 0.6f) + 4f * sin(x / 19f + 2.1f)
 private fun nearY(x: Float) = 52f + 3f * sin(x / 61f + 1.3f) + 1.5f * sin(x / 27f)
 
+/** The lowest point of the far hills within 40 dp of [x], where the city shows above them. */
+private fun dip(x: Float): Float = (-40..40 step 2).map { x + it }.fold(x) { best, c -> if (farY(c) > farY(best)) c else best }
+
 /**
  * Where the sky ends, from [top] down: the hills, a building or two with a
- * light still on, and a shuttle on the road. The near hill is [page]'s own
+ * light still on, rain trees, a flag by the road, a shuttle on it, and
+ * Marina Bay Sands far off in the city. The near hill is [page]'s own
  * colour, so the sky meets the ground instead of fading into the page.
  */
 private fun DrawScope.horizon(top: Float, page: Color) {
@@ -110,6 +114,13 @@ private fun DrawScope.horizon(top: Float, page: Color) {
     fun at(x: Float, y: Float) = Offset(x * d, top + y * d)
     fun box(x: Float, y: Float, bw: Float, bh: Float, color: Color, r: Float = 0f) =
         drawRoundRect(color, at(x, y), Size(bw * d, bh * d), CornerRadius(r * d))
+    fun shape(color: Color, vararg pts: Pair<Float, Float>) = drawPath(
+        Path().apply {
+            pts.forEachIndexed { i, (x, y) -> at(x, y).let { if (i == 0) moveTo(it.x, it.y) else lineTo(it.x, it.y) } }
+            close()
+        },
+        color,
+    )
     fun ridge(y: (Float) -> Float, color: Color) = drawPath(
         Path().apply {
             moveTo(0f, top + 92 * d)
@@ -123,19 +134,40 @@ private fun DrawScope.horizon(top: Float, page: Color) {
     )
     val lit = MOON
     val dim = MOON.copy(alpha = 0.6f)
+    fun across(f: Float) = (w * f).roundToInt().toFloat()
+    // Marina Bay Sands, far off and pale: three towers and the SkyPark across them, out over the right.
+    val mbs = dip(across(0.8f))
+    val city = farY(mbs) + 3
+    val haze = Color(0xFF45405F)
+    for (x in floatArrayOf(-13f, -2f, 9f)) shape(haze, mbs + x to city, mbs + x + 1 to city - 26, mbs + x + 5 to city - 26, mbs + x + 6 to city)
+    shape(haze, mbs - 15 to city - 28, mbs + 25 to city - 29.2f, mbs + 23 to city - 26, mbs - 14 to city - 26)
     ridge(::farY, far)
-    val b1 = (w * 0.18f).roundToInt().toFloat()
-    val b2 = (w * 0.68f).roundToInt().toFloat()
+    val b1 = across(0.18f)
+    val b2 = across(0.62f)
     box(b1 - 8, farY(b1) - 14, 16f, 20f, far)
     box(b1 - 3, farY(b1) - 9, 3f, 3f, dim)
     box(b2 - 13, farY(b2) - 22, 26f, 28f, far)
     box(b2 - 5, farY(b2) - 16, 3f, 3f, lit)
     box(b2 + 3, farY(b2) - 8, 3f, 3f, dim)
+    fun oval(cx: Float, cy: Float, rx: Float, ry: Float) = drawOval(tree, at(cx - rx, cy - ry), Size(2 * rx * d, 2 * ry * d))
     for (f in floatArrayOf(0.06f, 0.45f, 0.9f)) {
-        val c = (w * f).roundToInt().toFloat()
-        drawCircle(tree, 10 * d, at(c - 7, nearY(c - 7) - 5))
-        drawCircle(tree, 12 * d, at(c + 7, nearY(c + 7) - 8))
+        // A rain tree: a trunk forking low under a wide, flat crown.
+        val c = across(f)
+        val g = nearY(c)
+        shape(
+            tree, c - 1.5f to g + 2, c - 1.5f to g - 7, c - 7 to g - 13, c - 4.5f to g - 13, c to g - 9,
+            c + 4.5f to g - 13, c + 7 to g - 13, c + 1.5f to g - 7, c + 1.5f to g + 2,
+        )
+        oval(c, g - 18, 21f, 5.5f)
+        oval(c - 8, g - 21.5f, 11f, 4.5f)
+        oval(c + 8, g - 22, 12f, 4.5f)
     }
+    // A Singapore flag on its pole by the road.
+    val flag = across(0.3f)
+    val pole = nearY(flag)
+    drawLine(tree, at(flag, pole + 2), at(flag, pole - 24), 1.2f * d)
+    box(flag + 0.6f, pole - 24, 9f, 3f, Color(0xFFEF3340))
+    box(flag + 0.6f, pole - 21, 9f, 3f, Color(0xFFF2EFEB))
     ridge(::nearY, page)
     drawLine(road, at(0f, 70f), at(w, 70f), 1.5f * d, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6 * d, 6 * d)))
     // The shuttle, heading right with its headlights on: lit windows, A1's red along the bottom.
