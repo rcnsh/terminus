@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalView
@@ -79,6 +81,20 @@ internal fun phaseAt(min: Int): Phase = when {
 }
 
 /**
+ * How far each layer of the sky lags, in dp, as Now scrolls down by [s] dp:
+ * the sun, the moon and the stars at half speed, fading out by 160 dp; the
+ * clouds a little faster; the far hills and the city sinking behind the near
+ * hill, by 18 dp at most. The near hill, the road and your bus stay with the
+ * page. The web's numbers (daylight.js parallax).
+ */
+internal data class Parallax(val sky: Float, val clouds: Float, val far: Float, val fade: Float)
+
+internal fun parallax(s: Float): Parallax {
+    val y = s.coerceAtLeast(0f)
+    return Parallax(y * 0.5f, y * 0.35f, minOf(y * 0.12f, 18f), (1 - y / 160f).coerceAtLeast(0f))
+}
+
+/**
  * Your bus on the horizon's road: when it's due ("D2 · 8 min"), its colour,
  * how far off it is (0 at the stop, 1 a quarter of an hour away), and
  * whether that's live. A timetable guess is drawn as an outline.
@@ -104,6 +120,15 @@ internal class SkyState {
     var phase by mutableStateOf(Phase.NIGHT)
     var dark by mutableStateOf(false)
     var road by mutableStateOf(Road())
+
+    /** How far Now has scrolled, in pixels: read while drawing, so scrolling only redraws. */
+    var scroll: () -> Int = { 0 }
+
+    /** No depth as it scrolls: the phone's "Remove animations" is on. */
+    var still by mutableStateOf(false)
+
+    /** Each layer's lag at the current scroll, in dp ([parallax]). */
+    fun depth(dp: Float): Parallax = parallax(if (still) 0f else scroll() / dp)
 
     /** How far down the content the sky goes, in pixels, or null for none yet. */
     val end: Float? get() = groundBottom?.let { it - contentTop }
@@ -192,7 +217,7 @@ internal fun Modifier.skyBehind(sky: SkyState, page: Color, measurer: TextMeasur
         Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end),
         size = Size(size.width, end),
     )
-    horizon(end - HORIZON.toPx(), page, p, sky.phase == Phase.DUSK || sky.phase == Phase.NIGHT, sky.road, measurer)
+    horizon(end - HORIZON.toPx(), page, p, sky.phase == Phase.DUSK || sky.phase == Phase.NIGHT, sky.road, measurer, sky.depth(1.dp.toPx()).far)
 }
 
 /**
@@ -209,7 +234,7 @@ internal fun SkyHead(room: Dp = 66.dp, content: @Composable ColumnScope.() -> Un
     }
     SkyInk(true, sky.palette.lightInk) {
         Column(
-            Modifier.fillMaxWidth().drawBehind { celestial(sky.phase, sky.palette, room.toPx()) }.padding(top = room),
+            Modifier.fillMaxWidth().drawBehind { celestial(sky.phase, sky.palette, room.toPx(), sky.depth(1.dp.toPx())) }.padding(top = room),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             content = content,
         )
@@ -227,10 +252,17 @@ internal fun SkyGround(road: Road = Road()) {
     Spacer(Modifier.fillMaxWidth().height(10.dp + HORIZON).onGloballyPositioned { sky.groundBottom = it.positionInRoot().y + it.size.height })
 }
 
-/** What's up in the room above the words at [phase]: the sun and a few clouds, the stars and the moon, or (at dusk) nothing, the sun setting behind the hills. */
-private fun DrawScope.celestial(phase: Phase, p: Palette, room: Float) {
+/**
+ * What's up in the room above the words at [phase]: the sun and a few
+ * clouds, the stars and the moon, or (at dusk) nothing, the sun setting
+ * behind the hills. Lagging behind the page as it scrolls, by [depth], and
+ * fading behind the words.
+ */
+private fun DrawScope.celestial(phase: Phase, p: Palette, room: Float, depth: Parallax) {
     val d = 1.dp.toPx()
-    if (phase == Phase.NIGHT) return starsAndMoon(room)
+    val fade = depth.fade
+    if (fade <= 0f) return
+    if (phase == Phase.NIGHT) return translate(top = depth.sky * d) { starsAndMoon(room, fade) }
     val sun = p.sun ?: return
     // Top and right edge, then size, in dp: low at dawn, high at noon, lower again.
     val (top, right, across) = when (phase) {
@@ -239,17 +271,17 @@ private fun DrawScope.celestial(phase: Phase, p: Palette, room: Float) {
         else -> Triple(14f, 24f, 40f)
     }
     val r = across / 2 * d
-    val centre = Offset(size.width - right * d - r, top * d + r)
-    drawCircle(Brush.radialGradient(0.4f to p.glow, 1f to Color.Transparent, center = centre, radius = r * 2.4f), r * 2.4f, centre)
-    drawCircle(sun, r, centre)
+    val centre = Offset(size.width - right * d - r, (top + depth.sky) * d + r)
+    drawCircle(Brush.radialGradient(0.4f to p.glow, 1f to Color.Transparent, center = centre, radius = r * 2.4f), r * 2.4f, centre, alpha = fade)
+    drawCircle(sun, r, centre, alpha = fade)
     // Singapore's heaped-up afternoon clouds.
     val cloud = p.cloud ?: return
     for ((x, y, s) in listOf(Triple(70f, 34f, 0.9f), Triple(205f, 48f, 0.6f), Triple(150f, 14f, 0.45f))) {
-        fun at(cx: Float, cy: Float) = Offset((x + cx * s) * d, (y + cy * s) * d)
-        drawOval(cloud, at(-26f, 1f), Size(52 * s * d, 14 * s * d))
-        drawCircle(cloud, 8 * s * d, at(-10f, 3f))
-        drawCircle(cloud, 11 * s * d, at(4f, -1f))
-        drawCircle(cloud, 7 * s * d, at(16f, 4f))
+        fun at(cx: Float, cy: Float) = Offset((x + cx * s) * d, (y + depth.clouds + cy * s) * d)
+        drawOval(cloud, at(-26f, 1f), Size(52 * s * d, 14 * s * d), alpha = fade)
+        drawCircle(cloud, 8 * s * d, at(-10f, 3f), alpha = fade)
+        drawCircle(cloud, 11 * s * d, at(4f, -1f), alpha = fade)
+        drawCircle(cloud, 7 * s * d, at(16f, 4f), alpha = fade)
     }
 }
 
@@ -277,7 +309,7 @@ private fun dip(lo: Float, hi: Float): Float {
  * [page]'s own colour, so the sky meets the ground instead of fading into
  * the page. On the road, [road]'s sign and bus, or a shuttle going by.
  */
-private fun DrawScope.horizon(top: Float, page: Color, p: Palette, lights: Boolean, road: Road, measurer: TextMeasurer) {
+private fun DrawScope.horizon(top: Float, page: Color, p: Palette, lights: Boolean, road: Road, measurer: TextMeasurer, far: Float) {
     val d = 1.dp.toPx()
     val w = size.width / d
     fun at(x: Float, y: Float) = Offset(x * d, top + y * d)
@@ -311,6 +343,8 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, lights: Boole
     val plate = name?.let { it.size.width / d + 10 } ?: 0f
     val sx = if (name != null) minOf(across(0.7f), across(0.74f) - plate / 2) else 0f
     val flag = across(0.76f)
+    // The far layer sinks behind the near hill as Now scrolls ([far] dp), kept to the strip.
+    clipRect(top = top, bottom = top + 92 * d) { translate(top = far * d) {
     p.setting?.let { drawCircle(it, 26 * d, at(across(0.5f), 40f)) }
     // Marina Bay Sands, far off and pale: three towers and the SkyPark across them, out over the right.
     val mbs = dip(maxOf(across(0.8f) - 40, flag + 30), minOf(across(0.8f) + 40, w - 29))
@@ -329,6 +363,7 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, lights: Boole
         box(b2 - 5, farY(b2) - 16, 3f, 3f, lit)
         box(b2 + 3, farY(b2) - 8, 3f, 3f, dim)
     }
+    } }
     fun oval(cx: Float, cy: Float, rx: Float, ry: Float) = drawOval(p.tree, at(cx - rx, cy - ry), Size(2 * rx * d, 2 * ry * d))
     for (f in floatArrayOf(0.06f, 0.45f, 0.9f)) {
         // A rain tree: a trunk forking low under a wide, flat crown.
@@ -404,19 +439,19 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, lights: Boole
 }
 
 /** The stars across the room above the words, and the moon among them. */
-internal fun DrawScope.starsAndMoon(room: Float) {
-    for ((x, y, a, r) in STARS) drawCircle(Color.White.copy(alpha = a), r.dp.toPx(), Offset(size.width * x, room * 0.85f * y / 1.05f + 4.dp.toPx()))
+internal fun DrawScope.starsAndMoon(room: Float, alpha: Float = 1f) {
+    for ((x, y, a, r) in STARS) drawCircle(Color.White.copy(alpha = a * alpha), r.dp.toPx(), Offset(size.width * x, room * 0.85f * y / 1.05f + 4.dp.toPx()))
     val r = minOf(28.dp.toPx(), room * 0.3f)
-    crescent(Offset(size.width - 16.dp.toPx() - r, room * 0.48f), r)
+    crescent(Offset(size.width - 16.dp.toPx() - r, room * 0.48f), r, alpha)
 }
 
 private operator fun FloatArray.component4() = this[3]
 
 /** A crescent moon centred at [c], of radius [r]: a disc with a slightly smaller one taken out up and to the right. */
-internal fun DrawScope.crescent(c: Offset, r: Float) {
+internal fun DrawScope.crescent(c: Offset, r: Float, alpha: Float = 1f) {
     val moon = Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, r)) }
     val bite = Path().apply { addOval(androidx.compose.ui.geometry.Rect(c + Offset(r * 0.46f, -r * 0.3f), r * 0.9f)) }
-    drawPath(Path.combine(PathOperation.Difference, moon, bite), MOON)
+    drawPath(Path.combine(PathOperation.Difference, moon, bite), MOON, alpha = alpha)
 }
 
 /**

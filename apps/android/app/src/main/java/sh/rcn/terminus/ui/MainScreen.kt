@@ -119,7 +119,14 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
     // under the chips says where it ends, and the header, chips and status
     // bar take its ink over it. One sky for the tab, so it stays as the
     // chips switch.
-    val sky = remember { SkyState() }
+    val scroll = rememberScrollState()
+    val sky = remember { SkyState().apply { this.scroll = { scroll.value } } }
+    // Depth as Now scrolls, unless the phone's "Remove animations" is on (checked again on coming back).
+    LaunchedEffect(Unit) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            sky.still = Settings.Global.getFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        }
+    }
     val page = MaterialTheme.colorScheme.background
     val minute by produceState(minuteOfDay()) {
         while (true) {
@@ -135,7 +142,6 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
     val shown = sky.end != null
     val light = sky.palette.lightInk
     NightStatusBar(shown && light)
-    val scroll = rememberScrollState()
     val measurer = rememberTextMeasurer()
     CompositionLocalProvider(LocalSky provides sky) { Box(Modifier.fillMaxSize()) {
     Column(
