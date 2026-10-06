@@ -68,6 +68,13 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      # Keeps the Gradle distribution, the dependencies, the configuration
+      # cache and the build cache between runs; without it every run spent a
+      # minute downloading and configuring before the first task. Only runs
+      # on main write the cache; pull requests read it.
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       # Lint and the JVM unit tests (which parse apps/api/test/fixtures/answers).
       # Release signing isn't needed: debug tasks only.
       - run: ./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin --console=plain
