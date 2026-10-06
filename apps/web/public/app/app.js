@@ -703,26 +703,41 @@ function nearbyOrder(stops, swap, now) {
   return { twin, active, shown: active ? [twin, first, ...stops.slice(1).filter((s) => s !== twin)] : stops };
 }
 
-/** Nearby: each stop around you with what's coming, its name opening it on the map. */
+/** A bus from the side, for a stop's name plate. */
+const BUS = '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/>';
+/** How far up the road a bus is drawn: this many seconds away is the far end. */
+const ROAD_S = 15 * 60;
+
+/** "4 min", "Arriving", "~6 min" for a timetable guess, or "–". */
+const etaText = (b) => (b.etaS == null ? '–' : b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
+
+/**
+ * Nearby: the stops around you as their signs, the name plate with the walk
+ * there, then a row per service, its next bus coming up a short road towards
+ * the stop, nearer the sooner it's due. The nearest stop is drawn larger. A
+ * timetable guess is an outline, never a filled bus, so it doesn't pass for
+ * live. The name opens the stop on the map.
+ */
 function NearbyCard({ stops }) {
   const swap = useStore(swapped);
   const { twin, active, shown } = nearbyOrder(stops, swap, Date.now());
   return html`
-    <div class="widget" aria-live="polite">
+    <div class="widget nearby" aria-live="polite">
       ${shown.map(
         (s, i) => html`
-          <section class="nearby-stop" key=${s.stop.code}>
-            <header>
+          <section class=${i === 0 ? 'stop-sign big' : 'stop-sign'} key=${s.stop.code}>
+            <header class="plate">
+              <${Icon} paths=${BUS} class="plate-bus" />
               <button
                 type="button"
-                class="linkish"
+                class="plate-name"
                 aria-label=${t('{0} on the map', s.stop.name)}
                 onClick=${() => {
                   stopToShow.set(s.stop.code);
                   location.hash = '#map';
                 }}
               >${s.stop.name}</button>
-              <span>${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
+              <span class="plate-walk">${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
               ${i === 0 &&
               twin &&
               html`<button
@@ -737,8 +752,14 @@ function NearbyCard({ stops }) {
               ? s.board.map(
                   (b) => html`
                     <div class="nearby-row" key=${b.svc}>
-                      <span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}>${b.svc}</span>
-                      <span>${b.etaS == null ? '–' : b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS))}</span>
+                      <span class="svc-col"><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}>${b.svc}</span></span>
+                      <span
+                        class=${b.quality === 'live' ? 'road live' : 'road'}
+                        style=${{ '--svc': b.color ?? 'var(--muted)', '--far': b.etaS == null ? 1 : Math.min(1, Math.max(0, b.etaS / ROAD_S)) }}
+                        aria-hidden="true"
+                        >${b.etaS != null && html`<span class="road-bus"></span>`}</span
+                      >
+                      <span class="eta">${etaText(b)}</span>
                     </div>
                   `,
                 )
@@ -758,7 +779,7 @@ function CardArea() {
   const bar = useStore(undo);
   // Undo once: in the removed entry's row while it's there, not on the card as well.
   const a = c.a?.card && bar?.undo ? { ...c.a, card: { ...c.a.card, actions: c.a.card.actions.filter((x) => !(x.id === 'reset' && x.trip === bar.it.key)) } } : c.a;
-  const body = a ? html`<${Card} a=${a} onAnswer=${answered} onChoice=${refresh} />` : c.offline ? html`<${OfflineCard} ...${c.offline} />` : c.nearby ? html`<${NearbyCard} stops=${c.nearby} />` : html`<${Message} text=${c.text} />`;
+  const body = a ? html`<${Card} a=${a} onAnswer=${answered} onChoice=${refresh} onPlace=${(key) => choose({ kind: 'place', key })} />` : c.offline ? html`<${OfflineCard} ...${c.offline} />` : c.nearby ? html`<${NearbyCard} stops=${c.nearby} />` : html`<${Message} text=${c.text} />`;
   return html`
     <section class="card app-card">
       ${body}

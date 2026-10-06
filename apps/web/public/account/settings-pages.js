@@ -792,6 +792,7 @@ function Pairing({ count, reload }) {
           return;
         }
         setState({
+          code: made.code,
           text: `${made.code.slice(0, 3)} ${made.code.slice(3)}`,
           hint: t("Scan with your phone's camera, or type the code in the app. Expires in {0}.", `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`),
         });
@@ -814,7 +815,9 @@ function Pairing({ count, reload }) {
   return html`
     <div class="pairing">
       <div class="qr" ref=${qr} aria-label=${t('QR code to pair a phone')}></div>
-      <p class="code">${state.text}</p>
+      ${state.code
+        ? html`<p class="flaps" role="img" aria-label=${state.text}>${[...state.code].map((c, i) => html`<span class="flap" key=${i}>${c}</span>`)}</p>`
+        : html`<p class="code">${state.text}</p>`}
       <p class="hint">${state.hint || t("Scan with your phone's camera, or type the code in the app.")}</p>
     </div>
   `;
