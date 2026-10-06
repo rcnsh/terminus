@@ -248,7 +248,9 @@ export class TimelapseRecorder {
       // Measured on today's line only: after a deploy that changed it, the
       // positions are kept and the metres along aren't (the replay leaves
       // those buses out rather than draw them in the wrong place).
-      const sameLine = !meta.lines || meta.lines[svc] === lineKeys(null)[svc];
+      // A day begun before the fingerprints were kept: they're its saved map's.
+      meta.lines ??= lineKeys(this.read<DayFile>('map') ?? mapSnapshot());
+      const sameLine = meta.lines[svc] === lineKeys(null)[svc];
       const along = new Map(sameLine ? placed.buses.map((b) => [b.plate, placed.tracks[b.id]?.along ?? null]) : []);
       const buses: number[] = [];
       for (const b of live.buses) {

@@ -192,6 +192,10 @@ async function prepare() {
   }
   const want = `${w}x${h} ${theme} ${day.date}`;
   if (shape === want && map) return;
+  // Unknown until this finishes: a change that fails part way leaves the map
+  // in neither shape, and the next setup redoes it in full.
+  const was = shape;
+  shape = '';
   if (!ml) {
     const css = document.createElement('link');
     css.rel = 'stylesheet';
@@ -223,7 +227,7 @@ async function prepare() {
     await mapEvent('load');
   } else {
     map.resize();
-    if (!shape.includes(` ${theme} `)) {
+    if (!was.includes(` ${theme} `)) {
       map.setStyle(styleUrl());
       await mapEvent('style.load');
     } else {
@@ -514,7 +518,7 @@ function Unlock() {
         <button class="btn accent" type="submit">Unlock</button>
       </div>
       ${v.msg && html`<p class="bad">${v.msg}</p>`}
-      <p class="hint">The HEALTH_TOKEN secret, as on the dashboard.</p>
+      <p class="hint">The HEALTH_TOKEN secret, as on the dashboard, or TIMELAPSE_TOKEN, which opens only this page.</p>
     </form>
   `;
 }

@@ -188,7 +188,8 @@ apps/api/
   scripts/            dev-stub.mjs; scrapers (scrape_stops.py, scrape_lta.py,
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
                       check_scraped.py);
-                      probe_buses.py (feed update-rate probe); record_buses.mjs (checks /buses on a live site)
+                      probe_buses.py (feed update-rate probe); record_buses.mjs (checks /buses on a live site);
+                      render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
   test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
