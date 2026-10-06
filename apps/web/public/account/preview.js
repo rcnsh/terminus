@@ -242,10 +242,10 @@ const nearY = (x) => 52 + 3 * Math.sin(x / 61 + 1.3) + 1.5 * Math.sin(x / 27);
 /** The flag's five stars, in a ring around its middle (px). */
 const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5), -0.85 * Math.cos((i * 2 * Math.PI) / 5)]);
 
-/** The lowest point of the far hills within 40 px of `x`, where the city shows above them. */
-const dip = (x) => {
-  let best = x;
-  for (let d = -40; d <= 40; d += 2) if (farY(x + d) > farY(best)) best = x + d;
+/** The lowest point of the far hills between `lo` and `hi` px, where the city shows above them. */
+const dip = (lo, hi) => {
+  let best = lo;
+  for (let x = lo; x <= hi; x += 2) if (farY(x) > farY(best)) best = x;
   return best;
 };
 const ridge = (w, y) => {
@@ -269,7 +269,10 @@ function Horizon({ ground }) {
     return () => seen.disconnect();
   }, []);
   const at = (f) => Math.round(w * f);
-  const [b1, b2, bus, mbs, flag] = [at(0.18), at(0.62), at(0.58) - 19, dip(at(0.8)), at(0.3)];
+  // The flag stands right of the shuttle, clear of it and of anything over
+  // it; the city keeps clear of the flag and of the window's edge.
+  const [b1, b2, bus, flag] = [at(0.18), at(0.62), at(0.58) - 19, at(0.76)];
+  const mbs = dip(Math.max(at(0.8) - 40, flag + 30), Math.min(at(0.8) + 40, w - 29));
   const city = farY(mbs) + 3;
   const pole = nearY(flag);
   return html`

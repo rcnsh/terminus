@@ -97,8 +97,13 @@ internal fun Modifier.nightSky(sky: SkyState, page: Color): Modifier = drawBehin
 private fun farY(x: Float) = 30f + 6f * sin(x / 47f + 0.6f) + 4f * sin(x / 19f + 2.1f)
 private fun nearY(x: Float) = 52f + 3f * sin(x / 61f + 1.3f) + 1.5f * sin(x / 27f)
 
-/** The lowest point of the far hills within 40 dp of [x], where the city shows above them. */
-private fun dip(x: Float): Float = (-40..40 step 2).map { x + it }.fold(x) { best, c -> if (farY(c) > farY(best)) c else best }
+/** The lowest point of the far hills between [lo] and [hi] dp, where the city shows above them. */
+private fun dip(lo: Float, hi: Float): Float {
+    var best = lo
+    var x = lo
+    while (x <= hi) { if (farY(x) > farY(best)) best = x; x += 2f }
+    return best
+}
 
 /**
  * Where the sky ends, from [top] down: the hills, a building or two with a
@@ -137,8 +142,11 @@ private fun DrawScope.horizon(top: Float, page: Color) {
     val lit = MOON
     val dim = MOON.copy(alpha = 0.6f)
     fun across(f: Float) = (w * f).roundToInt().toFloat()
+    // The flag stands right of the shuttle, clear of it and of anything over
+    // it; the city keeps clear of the flag and of the screen's edge.
+    val flag = across(0.76f)
     // Marina Bay Sands, far off and pale: three towers and the SkyPark across them, out over the right.
-    val mbs = dip(across(0.8f))
+    val mbs = dip(maxOf(across(0.8f) - 40, flag + 30), minOf(across(0.8f) + 40, w - 29))
     val city = farY(mbs) + 3
     val haze = Color(0xFF45405F)
     for (x in floatArrayOf(-13f, -2f, 9f)) shape(haze, mbs + x to city, mbs + x + 1 to city - 26, mbs + x + 5 to city - 26, mbs + x + 6 to city)
@@ -165,7 +173,6 @@ private fun DrawScope.horizon(top: Float, page: Color) {
         oval(c + 8, g - 22, 12f, 4.5f)
     }
     // A Singapore flag on its pole by the road.
-    val flag = across(0.3f)
     val pole = nearY(flag)
     drawLine(tree, at(flag, pole + 2), at(flag, pole - 24), 1.2f * d)
     val red = Color(0xFFEF3340)
