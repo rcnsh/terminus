@@ -107,6 +107,8 @@ const en = {
   directionUnconfirmed: 'direction unconfirmed',
   minOld: ((n: number) => `${n} min old`) as Fn<[number]>,
   estimated: 'estimated',
+  /** The headline bus is a public one, with a fare. */
+  publicBus: 'public bus',
   liveUnavailable: 'live times unavailable',
   /** "or A1 in 14 min", "or A1 now", "or UTown in 3 min" (the same bus from another stop). */
   orAlt: ((name: string, eta: string, plain: boolean) => `or ${name} ${plain ? eta : `in ${eta}`}`) as Fn<[string, string, boolean]>,
@@ -342,6 +344,7 @@ const zh: Msgs = {
   directionUnconfirmed: '方向未确认',
   minOld: (n) => `${n} 分钟前的数据`,
   estimated: '估计',
+  publicBus: '公共巴士',
   liveUnavailable: '暂无实时时间',
   orAlt: (name, eta, plain) => (plain ? `或 ${name}，${eta}` : `或 ${name}，${eta}后`),
 
@@ -594,6 +597,7 @@ export const ERRORS_ZH: Record<string, string> = {
   "context is too large": "context 太大了",
   "downloads are not configured": "下载未配置",
   "fullBusMargin must be true or false": "fullBusMargin 必须是 true 或 false",
+  "publicBuses must be true or false": "publicBuses 必须是 true 或 false",
   "gapHours must be between 0.5 and 12": "gapHours 必须在 0.5 到 12 之间",
   "home must be {stops: [...]}": "home 必须是 {stops: [...]}",
   "homeWalkMin must be 0 to 30 minutes": "homeWalkMin 必须是 0 到 30 分钟",

@@ -41,6 +41,11 @@ class ProfileDoc(val json: JSONObject) {
         get() = json.optBoolean("fullBusMargin", true)
         set(v) { json.put("fullBusMargin", v) }
 
+    /** Count the public buses (95, 151, ...) at the campus's stops too. Off until asked for: they have a fare. */
+    var publicBuses: Boolean
+        get() = json.optBoolean("publicBuses", false)
+        set(v) { json.put("publicBuses", v) }
+
     var gapHours: Double
         get() = json.optDouble("gapHours", 2.0)
         set(v) { json.put("gapHours", v.coerceIn(0.5, 12.0)) }

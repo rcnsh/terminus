@@ -2,7 +2,7 @@
 """Sanity checks on a freshly scraped stop graph and calendar, before the
 scrape workflow commits them to main with no review.
 
-The data comes from third parties (the NUS feed, NUSMods, data.gov.sg). The
+The data comes from third parties (the NUS feed, LTA DataMall, NUSMods, data.gov.sg). The
 test suite catches a graph the code can't use; this catches one that is
 well-formed but wrong: half the stops gone, coordinates off campus, a file
 ten times its usual size. Each is compared with the version in git.
@@ -29,6 +29,7 @@ MAX_DROP = 0.10
 MAX_SIZE = 200_000
 CODE = re.compile(r"^[A-Z0-9][A-Z0-9-]{0,23}$")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+LTA_CODE = re.compile(r"^\d{5}$")
 
 
 def committed(name):
@@ -111,6 +112,53 @@ def _metres(a, b):
     return math.hypot((b[0] - a[0]) * 111320 * math.cos(lat), (b[1] - a[1]) * 110540)
 
 
+def check_public(problems):
+    """The public buses (scrape_lta.py): LTA codes on campus, shared shelters
+    that name real shuttle stops, routes through known stops with a distance
+    at each. Compared with git like the stop graph: this too is committed
+    unseen."""
+    path = ROOT / DATA / "public.json"
+    if not path.exists():
+        return
+    if path.stat().st_size > MAX_SIZE:
+        problems.append(f"public.json is {path.stat().st_size} bytes")
+    p = json.loads(path.read_text())
+    shuttle = {s.get("code") for s in json.loads((ROOT / DATA / "stops.json").read_text()).get("stops", [])}
+    stops, merged, routes, along = p.get("stops"), p.get("merged"), p.get("routes"), p.get("along")
+    if not (isinstance(stops, list) and isinstance(merged, dict) and isinstance(routes, dict) and isinstance(along, dict)):
+        problems.append("public.json has no stops, merged, routes or along")
+        return
+    codes = set(shuttle)
+    for s in stops:
+        code, lat, lon = s.get("code"), s.get("lat"), s.get("lon")
+        if not (isinstance(code, str) and LTA_CODE.match(code)):
+            problems.append(f"public stop code {code!r} is not an LTA code")
+            continue
+        codes.add(code)
+        if not (isinstance(lat, (int, float)) and isinstance(lon, (int, float)) and LAT[0] <= lat <= LAT[1] and LON[0] <= lon <= LON[1]):
+            problems.append(f"public stop {code} is at {lat}, {lon}: not on campus")
+    for code, sh in merged.items():
+        if not LTA_CODE.match(str(code)) or sh not in shuttle:
+            problems.append(f"shared shelter {code} -> {sh} names an unknown stop")
+    for key, seq in routes.items():
+        if not isinstance(seq, list) or len(seq) < 2:
+            problems.append(f"public route {key} has fewer than two stops")
+            continue
+        missing = [c for c in seq if c not in codes]
+        if missing:
+            problems.append(f"public route {key} goes through unknown stops {missing}")
+        m = along.get(key)
+        if not isinstance(m, list) or len(m) != len(seq) or any(b < a for a, b in zip(m, m[1:])):
+            problems.append(f"public route {key} has no usable distances")
+    old = committed("public.json")
+    if old:
+        dropped(stops, old.get("stops", []), "public stops", problems)
+        dropped(list(routes), list(old.get("routes", {})), "public routes", problems)
+        for key in ("95", "151/1", "151/2", "96"):
+            if key in old.get("routes", {}) and key not in routes:
+                problems.append(f"public route {key} vanished")
+
+
 def check_calendar(problems):
     path = ROOT / DATA / "calendar.json"
     if path.stat().st_size > MAX_SIZE:
@@ -136,6 +184,7 @@ def main():
     problems = []
     check_stops(problems)
     check_shapes(problems)
+    check_public(problems)
     check_calendar(problems)
     if problems:
         print("The scraped data looks wrong, so it was not committed:", file=sys.stderr)

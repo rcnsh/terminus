@@ -52,6 +52,14 @@ const servingStop = new Map();
 for (const [svc, seq] of Object.entries(graph.routes)) for (const code of new Set(seq)) servingStop.set(code, [...(servingStop.get(code) ?? []), svc]);
 
 const crowds = ['low', 'medium', 'high'];
+// The public buses (data/public.json): which call at each LTA stop code, and
+// which way a two-way service is going there, for the fake DataMall below.
+const pub = (await import('../data/public.json', { with: { type: 'json' } })).default;
+const ltaToGraph = new Map([...Object.entries(pub.merged), ...pub.stops.map((s) => [s.code, s.code])]);
+const publicAt = (ltaCode) => {
+  const code = ltaToGraph.get(ltaCode);
+  return Object.entries(pub.routes).filter(([, seq]) => seq.includes(code)).map(([key]) => pub.public[key]);
+};
 const shapes = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes;
 
 /** Three buses per service, a third of the route apart, at 20 km/h along its
@@ -90,6 +98,19 @@ async function feed(input, init = {}) {
   if (url.endsWith('/active-bus')) {
     const svc = JSON.parse(init.body ?? '{}').route_code;
     return Response.json({ code: '00000', msg: '', data: { ActiveBusCount: 3, TimeStamp: '', activebus: fakeBuses(svc) } });
+  }
+  // LTA DataMall: each public bus at the stop every 10 min or so, the third
+  // of them from the timetable (Monitored 0), as the real feed does at night.
+  if (url.startsWith('https://datamall2.mytransport.sg/')) {
+    const ltaCode = new URL(url).searchParams.get('BusStopCode') ?? '';
+    const nowMin = stubNow() / 60_000;
+    const Services = publicAt(ltaCode).map((p, i) => {
+      const offset = (p.svc.charCodeAt(0) * 3 + i * 4) % 10;
+      const eta = Math.max(1, Math.round(((offset - nowMin) % 10 + 10) % 10) + 1);
+      const bus = (n, monitored) => ({ OriginCode: p.origin, DestinationCode: p.dest, EstimatedArrival: new Date(stubNow() + (eta + n * 10) * 60_000).toISOString(), Monitored: monitored ? 1 : 0, Latitude: monitored ? '1.2966' : '0.0', Longitude: monitored ? '103.7724' : '0.0', VisitNumber: '1', Load: ['SEA', 'SDA', 'LSD'][(eta + n) % 3], Feature: 'WAB', Type: 'DD' });
+      return { ServiceNo: p.svc, Operator: p.operator, NextBus: bus(0, true), NextBus2: bus(1, true), NextBus3: bus(2, false) };
+    });
+    return Response.json({ 'odata.metadata': 'https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival', BusStopCode: ltaCode, Services });
   }
   if (url.includes('bus-proxy')) {
     const stop = JSON.parse(init.body ?? '{}').busstopname;
@@ -195,7 +216,7 @@ const TRIPS = makeDurableObjects(Trip, () => env);
 // Web Push: a fresh VAPID key each run (browsers subscribed to an old one just subscribe again).
 const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 const VAPID = JSON.stringify(await crypto.subtle.exportKey('jwk', vapid.privateKey));
-env = { ...makeEnv(), [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, DOWNLOADS, HEALTH_TOKEN: 'dev', TRIPS, VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
+env = { ...makeEnv(), LTA_ACCOUNT_KEY: 'dev', [Symbol.for('terminus.testOpen')]: false, DB: db, EMAIL: email, EMAIL_FROM: 'login@example.test', ASSETS, DOWNLOADS, HEALTH_TOKEN: 'dev', TRIPS, VAPID_PRIVATE_KEY: VAPID, ...(FCM ? { FCM_SERVICE_ACCOUNT: FCM } : {}) };
 console.log(FCM ? 'push: on (Firebase project from .private/)' : 'push: off (no .private/fcm-service-account.json)');
 setInterval(() => {
   const due = [...TRIPS.alarms.values()].filter((at) => at <= stubNow()).length;

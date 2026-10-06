@@ -51,6 +51,7 @@ student's credentials.
 
 | Variable | Purpose |
 | --- | --- |
+| `LTA_ACCOUNT_KEY` | LTA DataMall account key, for the public buses (free, from datamall.lta.gov.sg). Unset: accounts can turn public buses on and get the shuttle alone |
 | `NEXTBUS_AUTH_BASE` | uNivUS auth host for the public token |
 | `NEXTBUS_PROXY_BASE` | The uNivUS bus proxy, `https://inetapps.nus.edu.sg/univus/api/bus-proxy` |
 | `NEXTBUS_PROXY_API_KEY` | Sent as `x-api-key` to the proxy |
@@ -641,6 +642,48 @@ and dark icons, under `map/` in each site's downloads bucket (stable and
 beta have their own; the workflow does both by default). Twice a year is
 plenty; run it by hand once after a first deploy.
 
+**Public buses are more services at the same stops** ([`public.ts`](../src/public.ts),
+[`lta.ts`](../src/lta.ts), `data/public.json`). Singapore's public buses stop
+at the shuttles' shelters along Kent Ridge Crescent and Lower Kent Ridge
+Road, and a 95 or 151 is often the first bus to a stop the shuttle also
+serves. `scripts/scrape_lta.py` takes LTA DataMall's stops, routes and
+services, keeps the stops within 200 m of a shuttle stop (the campus, not
+Pasir Panjang Road or the AYE) and trims each public service to its stops
+there; the weekly scrape runs it, with the `LTA_ACCOUNT_KEY` secret, and
+`check_scraped.py` checks the result. `withPublic()` merges it into a second
+graph, `GRAPH_PUBLIC`: a public stop within 20 m of a shuttle stop is that
+stop, which gains a `publicCode`; one further off is a stop of its own under
+LTA's five-digit code. Everything built from `GRAPH` alone (the map, the
+search, the stop pairs) is untouched, and so are the golden answers: the
+public graph is used only when a profile's `publicBuses` is on (off by
+default, a switch in every client's Settings) or `?public=1` is sent.
+
+Three things about public buses are their own. A two-way service is two
+routes, `151/1` and `151/2`, and shows as `151` (`svcName()`); LTA's
+arrivals name each bus's destination, which tells the directions apart at
+the one stop both call at. Ride time comes from metres along the route
+(`along`, from LTA's distances), not a count of stops: a public route's
+campus stops can be a long way round the island apart (the 95 goes out to
+Holland Village between Opp Kent Ridge MRT and Kent Ridge MRT). And a fare
+counts: a public bus is the headline only when it beats the free bus by
+`PUBLIC.fareWorthS`, and otherwise is the alternative; its leg carries
+`paid: true`, the detail says "public bus", and the clients draw a `$` on
+its badge. A time LTA marks unmonitored (from the operator's timetable) is
+`scheduled`, never `live`.
+
+A shelter both feeds answer for is asked of both (`collectArrivals`), and
+`StopArrivals.feeds` keeps each feed's own state, so the shuttle feed being
+down reads as "no data" for the shuttles and not as "no bus", while the 95
+stays live, and the other way round. DataMall is called like NUS is: one
+call per stop per 15 s through the edge cache (`edgecache.ts`, which both
+feeds now use), a failed stop not asked again for `failMemoS`, a refused
+key (401) tripping a breaker for `breakerS`. The cron probes it once a run
+for `/status.json` (`publicFeed`) and `/health`; it raises no alerts, since
+the shuttle is the product and this is extra. LTA has no live train feed,
+so the MRT is not here; nor are live public buses on the map, which the
+per-stop feed cannot give without polling every stop. Contains information
+from LTA DataMall accessed via the Singapore Open Data Licence.
+
 **Failure degrades in public.** `quality` walks `live → scheduled → stale →
 ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-
 old answer honestly labelled beats a spinner, and beats an empty tile that
@@ -913,6 +956,9 @@ src/index.ts      Router
 src/resolve.ts    Haversine, directional pairing, downstream reachability, scoring
 src/format.ts     label/detail strings, the degrade ladder
 src/fms.ts        ShuttleService client + defensive response normalisation
+src/lta.ts        LTA DataMall client: the public buses at a stop
+src/public.ts     Public buses in the graph (GRAPH_PUBLIC), route keys, ride metres
+src/edgecache.ts  Fetch through the edge cache, stale on failure, breaker: both feeds
 src/auth.ts       Public token, lazy refresh, KV + in-memory memo
 src/config.ts     Cache TTLs and tuning constants
 src/calendar.ts   NUS teaching weeks and public holidays

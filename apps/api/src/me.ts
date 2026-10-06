@@ -68,8 +68,10 @@ import { LANG_PREFS, lang, m, useProfileLang } from './i18n.ts';
 
 export interface MeDeps {
   graph: Graph;
+  /** The graph with the public buses in it, for accounts that turned them on. Absent: `graph`. */
+  publicGraph?: Graph;
   answerFor: (env: Env, ctx: ExecutionContext, input: ResolveInput, label: string | null, nowMs: number) => Promise<Answer>;
-  collectArrivals: (env: Env, ctx: ExecutionContext, codes: string[], nowMs: number) => Promise<Map<string, StopArrivals>>;
+  collectArrivals: (env: Env, ctx: ExecutionContext, codes: string[], nowMs: number, graph?: Graph) => Promise<Map<string, StopArrivals>>;
 }
 
 const html = (body: string, status = 200, extra: Record<string, string> = {}) =>
@@ -236,6 +238,7 @@ export function salvageProfile(p: Profile, ok: (code: string) => boolean): Profi
     homeWalkMin: typeof p.homeWalkMin === 'number' ? p.homeWalkMin : DEFAULT_PROFILE.homeWalkMin,
     walkPace: p.walkPace ?? DEFAULT_PROFILE.walkPace,
     fullBusMargin: p.fullBusMargin ?? DEFAULT_PROFILE.fullBusMargin,
+    publicBuses: p.publicBuses === true,
     ...(hours ? { dayStartMin: p.dayStartMin, dayEndMin: p.dayEndMin } : {}),
     seen: Array.isArray(p.seen) ? p.seen : [],
     home: p.home?.stops?.some(ok) ? { stops: p.home.stops.filter(ok) } : null,
@@ -1255,13 +1258,16 @@ export function onboardingFor(hasProfile: boolean, seen: string[]): 'full' | nul
 
 async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: number, deps: MeDeps, profile: Profile) {
   let { lat, lon } = coordsFrom(url);
+  // With public buses on, the graph that has them: the same stops with more
+  // services, and the public stops of their own.
+  const graph = profile.publicBuses ? (deps.publicGraph ?? deps.graph) : deps.graph;
   // Without a location, start from the first home stop.
-  const homeStop = profile.home ? indexGraph(deps.graph).byCode.get(profile.home.stops[0]) : undefined;
+  const homeStop = profile.home ? indexGraph(graph).byCode.get(profile.home.stops[0]) : undefined;
   if (lat === null && homeStop) ({ lat, lon } = homeStop);
   if (lat === null || lon === null) return json({ error: 'send lat and lon, or set a home' }, 400);
 
-  const idx = indexGraph(deps.graph);
-  const ranked = deps.graph.stops
+  const idx = indexGraph(graph);
+  const ranked = graph.stops
     .map((stop) => ({ stop, distM: haversineM(lat!, lon!, stop.lat, stop.lon), footM: footM(lat!, lon!, stop) }))
     .sort((a, b) => a.distM - b.distM);
   const near = ranked.filter((c) => c.distM <= WALK.maxRadiusM).slice(0, WALK.maxCandidates);
@@ -1274,7 +1280,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   const twin = twinCode ? ranked.find((c) => c.stop.code === twinCode) : undefined;
   if (twin && !picked.some((c) => c.stop.code === twin.stop.code)) picked.push(twin);
 
-  const byStop = await deps.collectArrivals(env, ctx, picked.map((c) => c.stop.code), nowMs);
+  const byStop = await deps.collectArrivals(env, ctx, picked.map((c) => c.stop.code), nowMs, graph);
   const stops = picked.map(({ stop, distM, footM: foot }) => {
     const sa = byStop.get(stop.code)!;
     return {
@@ -1284,7 +1290,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
       // Each service in its colour, as on the buses and the map.
-      board: boardAt(deps.graph, idx, stop.code, sa, nowMs).map((r) => ({ ...r, color: ROUTE_COLORS[r.svc] ?? null })),
+      board: boardAt(graph, idx, stop.code, sa, nowMs).map((r) => ({ ...r, color: ROUTE_COLORS[r.svc] ?? null })),
     };
   });
   return json({ stops, asOf: new Date(nowMs).toISOString() });

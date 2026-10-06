@@ -13,6 +13,7 @@
 
 import type { Answer, Arrival, BusLeg, Quality, ScoredOption, Stop } from './types.ts';
 import { LABEL_MAX, WALK, isMeasured } from './config.ts';
+import { svcName } from './public.ts';
 import { m } from './i18n.ts';
 
 /**
@@ -117,7 +118,7 @@ export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefi
 export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
   const timed = o.quality !== 'unknown';
   return {
-    svc: o.svc,
+    svc: svcName(o.svc),
     stop: shortStop(o.stop.name),
     stopCode: o.stop.code,
     walkS: o.walkS,
@@ -128,16 +129,18 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
     ...(o.off ? { off: shortStop(o.off.name) } : {}),
     ...(o.to ? { toStop: shortStop(o.to.name) } : {}),
     ...(endWalkS > 0 ? { endWalkS } : {}),
+    ...(o.paid ? { paid: true as const } : {}),
   };
 }
 
 /** One option rendered standalone, for the `alt` field. */
 export function renderAlt(o: ScoredOption): string {
-  return `${o.svc} · ${etaPhrase(o)} · ${shortStop(o.stop.name)}`;
+  return `${svcName(o.svc)} · ${etaPhrase(o)} · ${shortStop(o.stop.name)}`;
 }
 
 function buildLabel(best: ScoredOption, nowMs: number): string {
-  const svc = best.svc.length > 6 ? best.svc.slice(0, 6) : best.svc;
+  const name = svcName(best.svc);
+  const svc = name.length > 6 ? name.slice(0, 6) : name;
   if (best.quality === 'stale') {
     return clampLabel(m().staleLabel(svc, mins(best.boardS), ageMin(nowMs, best.fetchedAt)));
   }
@@ -176,6 +179,9 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   const crowd = crowdWord(best.arrival?.crowd ?? null);
   if (crowd) parts.push(crowd);
 
+  // A public bus has a fare, which the shuttle doesn't: say which this is.
+  if (best.paid) parts.push(m().publicBus);
+
   // Degrade in public: an unresolvable direction is worse than a stale time,
   // because it is the failure that walks you onto the wrong bus.
   if (best.ambiguousBerth) parts.push(m().directionUnconfirmed);
@@ -190,7 +196,7 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     // "or A1 in 14 min": when it comes, not how long it takes.
     const raw = etaPhrase(f.alt);
     const plain = raw === m().now || raw === m().noTimes;
-    parts.push(m().orAlt(f.alt.svc === best.svc ? shortStop(f.alt.stop.name) : f.alt.svc, raw, plain));
+    parts.push(m().orAlt(f.alt.svc === best.svc ? shortStop(f.alt.stop.name) : svcName(f.alt.svc), raw, plain));
   }
 
   return parts.join(' · ');
@@ -267,8 +273,8 @@ export function buildAnswer(f: FormatInput): Answer {
   if (verdict === 'win' && f.walkAllS != null) {
     const busPhrase =
       best.quality === 'unknown'
-        ? m().busNoLive(best.svc)
-        : m().busWouldBe(best.svc, mins(best.totalS + bestEndS));
+        ? m().busNoLive(svcName(best.svc))
+        : m().busWouldBe(svcName(best.svc), mins(best.totalS + bestEndS));
     return {
       ...common,
       label: clampLabel(m().walkLabel(mins(walkThereS ?? f.walkAllS))),

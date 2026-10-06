@@ -66,6 +66,8 @@ export interface JourneyBus {
   stop: string;
   /** "4:05 PM", "~4:05 PM" for an estimate. */
   board: string;
+  /** A public bus, with a fare. Absent for a shuttle. */
+  paid?: true;
 }
 
 /**
@@ -253,12 +255,13 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase): Jo
           ...(l.off ? { off: l.off } : {}),
           ...(l.toStop ? { toStop: l.toStop } : {}),
           ...(l.endWalkS ? { endWalkS: l.endWalkS } : {}),
+          ...(l.paid ? { paid: true as const } : {}),
         }
       : null;
   const leg = planned ?? (card.kind === 'class' ? null : (a.bus ?? null));
   if (!leg?.board) return null;
   const at = (iso: string, estimated: boolean) => approx(estimated, clockAt(Date.parse(iso), h12));
-  const busOf = (b: BusLeg): JourneyBus | null => (b.board ? { svc: b.svc, color: routeColor(b.svc), stop: b.stop, board: at(b.board, b.estimated) } : null);
+  const busOf = (b: BusLeg): JourneyBus | null => (b.board ? { svc: b.svc, color: routeColor(b.svc), stop: b.stop, board: at(b.board, b.estimated), ...(b.paid ? { paid: true as const } : {}) } : null);
   // A class's backup is the headline bus when it isn't the one to wait for;
   // a trip's, the headline bus when a plan holds another, else the other bus.
   const headlineDiffers = Boolean(planned && a.bus && !(a.bus.svc === planned.svc && a.bus.stop === planned.stop && a.bus.board === planned.board));

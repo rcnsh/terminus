@@ -64,6 +64,8 @@ export interface Profile {
   walkPace: Pace;
   /** Aim one bus earlier when the bus you'd wait for is often busy. */
   fullBusMargin: boolean;
+  /** Count the public buses (95, 151, ...) at the campus's stops too. They have a fare, so off until asked for. */
+  publicBuses: boolean;
   /** One-time screens already shown (the web onboarding, "new: walking pace"). */
   seen: string[];
   /** From the NUSMods import. Replaced wholesale on re-import. */
@@ -101,6 +103,7 @@ export const DEFAULT_PROFILE: Profile = {
   homeWalkMin: 5,
   walkPace: 'normal',
   fullBusMargin: true,
+  publicBuses: false,
   seen: [],
   trips: [],
   manual: [],
@@ -164,6 +167,11 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean, is
   if (raw.fullBusMargin !== undefined) {
     if (typeof raw.fullBusMargin !== 'boolean') return { ok: false, error: 'fullBusMargin must be true or false' };
     p.fullBusMargin = raw.fullBusMargin;
+  }
+
+  if (raw.publicBuses !== undefined) {
+    if (typeof raw.publicBuses !== 'boolean') return { ok: false, error: 'publicBuses must be true or false' };
+    p.publicBuses = raw.publicBuses;
   }
 
   if (raw.seen !== undefined) {

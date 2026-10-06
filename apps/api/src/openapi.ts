@@ -18,6 +18,16 @@ const quality = {
     '`ended`: the service is outside its operating hours.',
 };
 
+/** `?public=1`: the public buses too, as an account's `publicBuses` does for `/me/*`. */
+const publicParam = {
+  name: 'public',
+  in: 'query',
+  description:
+    'Set to `1` to count the public buses (95, 151, 96 and others) that call at the campus’s stops as well as the shuttles. ' +
+    'They have a fare, so one is the answer only when it clearly saves time; a public bus leg carries `paid: true`. Default: shuttles only.',
+  schema: { type: 'string', enum: ['1'] },
+};
+
 const coordParams = [
   {
     name: 'lat',
@@ -135,6 +145,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               schema: { type: 'string' },
               example: 'UTOWN',
             },
+            publicParam,
           ],
           responses: {
             '200': {
@@ -220,10 +231,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               name: 'stop',
               in: 'query',
               required: true,
-              description: 'Stop code, case-insensitive.',
+              description: 'Stop code, case-insensitive. A public stop of its own (LTA’s five-digit code, such as `16009` for Kent Ridge Terminal on Clementi Road) lists its public buses.',
               schema: { type: 'string' },
               example: 'COM3',
             },
+            publicParam,
           ],
           responses: {
             '200': {
@@ -371,6 +383,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   since: { type: ['string', 'null'], format: 'date-time' },
                   checkedAt: { type: ['string', 'null'], format: 'date-time' },
                   checking: { type: 'boolean', description: 'False when the checks have stopped running.' },
+                  publicFeed: { type: 'string', enum: ['up', 'down', 'unknown'], description: 'LTA DataMall, for the public buses. Extra to the shuttle feed: it has no incidents and raises no alerts.' },
+                  publicSince: { type: ['string', 'null'], format: 'date-time' },
                   incidents: {
                     type: 'array',
                     items: {
@@ -1344,6 +1358,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination (e.g. `Opp NUSS` for AS 5). `arrive` includes the walk back across. Absent otherwise.' },
                 stopCode: { type: 'string', description: 'Stop code of `stop`. Absent when walking.' },
                 offCode: { type: 'string', description: 'Stop code of `off`. Absent without a crossing.' },
+                paid: { type: 'boolean', enum: [true], description: 'The bus is a public one, with a fare. Absent for a shuttle.' },
                 estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
                 walkS: { type: 'integer', description: 'Seconds on foot to `stop`. Absent when walking.' },
                 rideS: { type: 'integer', description: 'Seconds on the bus. Absent when walking.' },
@@ -1371,6 +1386,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             color: { type: 'string', description: 'The service’s colour as painted on the bus, `#rrggbb`.' },
             stop: { type: 'string', description: 'Where to board, short name.' },
             board: { type: 'string', description: 'When it leaves ("4:05 PM", "~4:05 PM").' },
+            paid: { type: 'boolean', enum: [true], description: 'A public bus, with a fare. Absent for a shuttle. Clients mark it, so a fare is never a surprise.' },
           },
         },
         BusLeg: {
@@ -1388,6 +1404,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination. Absent otherwise.' },
             toStop: { type: 'string', description: 'Where you get off, short name: the destination stop this bus calls at, or `off`.' },
             endWalkS: { type: 'integer', description: 'Seconds on foot from where you get off to the place itself (a room, a building, a food court), which `arrive` does not count. Absent for a stop.' },
+            paid: { type: 'boolean', enum: [true], description: 'A public bus (95, 151, …), with a fare, unlike the free shuttle. Absent for a shuttle.' },
           },
         },
         Arrival: {
@@ -1397,8 +1414,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             svc: { type: 'string', example: 'D2' },
             etaS: { type: ['integer', 'null'], description: 'Seconds until arrival. `null` means no bus, never 0.' },
             crowd: { type: ['string', 'null'], enum: ['low', 'medium', 'high', null] },
-            plate: { type: ['string', 'null'], example: 'PD726D' },
-            berth: { type: ['string', 'null'], description: 'Raw feed stop code. At a terminus, `-S` marks the departing run and `-E` the terminating one.' },
+            plate: { type: ['string', 'null'], example: 'PD726D', description: 'Null for a public bus: LTA does not publish plates.' },
+            berth: { type: ['string', 'null'], description: 'Raw feed stop code. At a terminus, `-S` marks the departing run and `-E` the terminating one. Null for a public bus.' },
+            scheduled: { type: 'boolean', enum: [true], description: 'The time is from the operator’s timetable, not a bus on the road (a public bus LTA reports as unmonitored). Absent for a live time.' },
           },
         },
         BoardRow: {
@@ -1409,6 +1427,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             etaS: { type: ['integer', 'null'] },
             quality: { $ref: '#/components/schemas/Quality' },
             ambiguousBerth: { type: 'boolean', description: 'True when the direction of this service at this stop could not be confirmed.' },
+            paid: { type: 'boolean', enum: [true], description: 'A public bus, with a fare. Absent for a shuttle.' },
           },
         },
         StopBoard: {
@@ -1650,6 +1669,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             dayEndMin: { type: 'integer', default: 1080, description: 'End of your day. Later, `/me/next` rests, unless a class runs late.' },
             walkPace: { type: 'string', enum: ['slow', 'normal', 'fast'], default: 'normal', description: 'How fast you walk: 1.1, 1.3 or 1.5 m/s. Scales every walk except `homeWalkMin`.' },
             fullBusMargin: { type: 'boolean', default: true, description: 'Aim one bus earlier when the bus to wait for is often busy at that stop and time.' },
+            publicBuses: { type: 'boolean', default: false, description: 'Count the public buses (95, 151, 96 and others) at the campus’s stops too, on `/me/next` and `/me/nearby`. They have a fare, so one is the answer only when it clearly saves time over the free shuttle, and its leg carries `paid: true`. Off until the user turns it on.' },
             seen: { type: 'array', items: { type: 'string' }, description: 'One-time screens already shown, e.g. `onboarding`.' },
             homeWalkMin: { type: 'integer', minimum: 0, maximum: 30, default: 5, description: 'Minutes from home to your home stop. Counts when a trip starts from home without a location.' },
             lang: { type: 'string', enum: ['auto', 'en', 'zh'], default: 'auto', description: "The language terminus writes in: answers, cards, emails and errors. `auto` follows each request's `Accept-Language` (any `zh*` is Simplified Chinese); `?lang=en|zh` on a request overrides it, and a set `lang` here overrides both." },

@@ -11,6 +11,7 @@
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { TTL } from './config.ts';
 import { timedFetch } from './http.ts';
+import { CACHE_BASE, cachedFetch } from './edgecache.ts';
 import { UpstreamRejected, getSession, mintWith, proxyEnvelope, proxyHeaders } from './auth.ts';
 import type { Session } from './auth.ts';
 import graphJson from '../data/stops.json' with { type: 'json' };
@@ -360,19 +361,15 @@ export function hasList(data: unknown): boolean {
 }
 
 /**
- * Fetch-on-demand with a 15-second edge cache.
+ * One stop's arrivals, fetched on demand through the edge cache (edgecache.ts).
  *
  * Keyed on the STOP CODE, not the request URL. The tile sends
  * getLastKnownLocation, whose coordinates jitter on every call, so a cache
  * keyed on the raw URL would never hit. Keying on the resolved stop is what
  * makes "one upstream call per stop per 15 seconds however hard the tile
  * refreshes" true per location, and it shares the entry between /next and
- * /trip. Concurrent misses in one isolate share one fetch (`inflight`).
- *
- * Under failure it gets quieter, not louder: a failed stop is not asked
- * again for failMemoS, and a refused version or key trips a breaker that
- * stops every stop for breakerS. A slow fetch with a stale answer on hand
- * serves the stale one and lets the fetch land in the cache in the background.
+ * /trip. A refused version or key (NO_REMINT_CODES) trips the feed's
+ * breaker, which stops every stop for breakerS: a fresh token can't fix it.
  */
 export async function getArrivals(
   env: Env,
@@ -380,82 +377,27 @@ export async function getArrivals(
   code: string,
   nowMs: number = Date.now(),
 ): Promise<StopArrivals> {
-  const cache = caches.default;
-  const key = new Request(`${CACHE_BASE}/arrivals/${encodeURIComponent(code)}`);
-
-  // LANDMINE: a Response body is single-use. Parse it ONCE, here, into a
-  // variable. Reading `hit` again on the catch path below would turn
-  // "upstream is down" into "the Worker is down" at the worst possible moment.
-  let cached: StopArrivals | null = null;
-  const hit = await cache.match(key);
-  if (hit) {
-    try {
-      cached = (await hit.json()) as StopArrivals;
-    } catch {
-      cached = null;
-    }
-  }
-
-  if (cached && nowMs - cached.fetchedAt < TTL.arrivalsMs) {
-    return { ...cached, stale: false, available: true };
-  }
-  const stale = cached ? { ...cached, stale: true, available: true } : null;
-
-  const quiet = (await cache.match(BREAKER)) ?? (await cache.match(failKey(code)));
-  if (quiet) {
-    if (stale) return stale;
-    throw new Error(`upstream recently failed: ${(await quiet.text()).slice(0, 120)}`);
-  }
-
-  let job = inflight.get(code);
-  if (!job) {
-    job = fetchArrivals(env, code, nowMs)
-      .then(async (fresh) => {
-        await cache.put(key, new Response(JSON.stringify(fresh), {
-          headers: {
-            'content-type': 'application/json',
-            // Long max-age so the stale fallback survives; freshness is
-            // decided above from fetchedAt, not by the cache.
-            'cache-control': `max-age=${TTL.staleMaxS}`,
-          },
-        }));
-        return fresh;
-      })
-      .catch(async (err) => {
-        const reason = String((err as Error)?.message ?? err);
-        await cache.put(failKey(code), memo(reason, TTL.failMemoS)).catch(() => {});
-        if (err instanceof UpstreamRejected && NO_REMINT_CODES.has(err.code)) {
-          await cache.put(BREAKER, memo(reason, TTL.breakerS)).catch(() => {});
-        }
-        throw err;
-      })
-      .finally(() => inflight.delete(code));
-    inflight.set(code, job);
-  }
-  // The fetch finishes (and fills the cache) even when this request stops
-  // waiting for it.
-  ctx.waitUntil(job.catch(() => {}));
-
-  try {
-    if (!stale) return await job;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const slow = new Promise<null>((r) => (timer = setTimeout(() => r(null), TTL.staleRaceMs)));
-    try {
-      return (await Promise.race([job, slow])) ?? stale;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  } catch (err) {
-    if (stale) return stale;
-    throw err;
-  }
+  return cachedFetch<StopArrivals>({
+    ctx,
+    nowMs,
+    key: `${CACHE_BASE}/arrivals/${encodeURIComponent(code)}`,
+    failKey: `${CACHE_BASE}/failed/${encodeURIComponent(code)}`,
+    fetch: () => fetchArrivals(env, code, nowMs),
+    freshMs: TTL.arrivalsMs,
+    staleMaxS: TTL.staleMaxS,
+    failMemoS: TTL.failMemoS,
+    raceMs: TTL.staleRaceMs,
+    breaker: BREAKER,
+    inflight,
+  });
 }
 
-const CACHE_BASE = 'https://terminus.internal';
-const BREAKER = new Request(`${CACHE_BASE}/breaker`);
-const failKey = (code: string) => new Request(`${CACHE_BASE}/failed/${encodeURIComponent(code)}`);
-const memo = (reason: string, maxAgeS: number) =>
-  new Response(reason.slice(0, 200), { headers: { 'cache-control': `max-age=${maxAgeS}` } });
+/** The shuttle feed's breaker: a refused version or key stops every call for breakerS. */
+const BREAKER = {
+  key: `${CACHE_BASE}/breaker`,
+  trips: (err: unknown) => err instanceof UpstreamRejected && NO_REMINT_CODES.has(err.code),
+  maxAgeS: TTL.breakerS,
+};
 
 /** One upstream fetch per stop per isolate, however many requests want it. */
 const inflight = new Map<string, Promise<StopArrivals>>();
@@ -542,54 +484,20 @@ export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Da
  * breaker stops everything, and a stale answer beats none.
  */
 export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, nowMs: number = Date.now()): Promise<ActiveBuses> {
-  const cache = caches.default;
-  const key = new Request(`${CACHE_BASE}/buses/${encodeURIComponent(svc)}`);
-  let cached: ActiveBuses | null = null;
-  const hit = await cache.match(key);
-  if (hit) {
-    try {
-      cached = (await hit.json()) as ActiveBuses;
-    } catch {
-      cached = null;
-    }
-  }
-  if (cached && nowMs - cached.fetchedAt < TTL.busesMs) return { ...cached, stale: false };
-  const stale = cached ? { ...cached, stale: true } : null;
-
-  const failed = new Request(`${CACHE_BASE}/failed-buses/${encodeURIComponent(svc)}`);
-  const quiet = (await cache.match(BREAKER)) ?? (await cache.match(failed));
-  if (quiet) {
-    if (stale) return stale;
-    throw new Error(`upstream recently failed: ${(await quiet.text()).slice(0, 120)}`);
-  }
-
-  let job = inflightBuses.get(svc);
-  if (!job) {
-    job = fetchActiveBuses(env, svc, nowMs)
-      .then(async (fresh) => {
-        await cache.put(key, new Response(JSON.stringify(fresh), {
-          headers: { 'content-type': 'application/json', 'cache-control': `max-age=${TTL.staleMaxS}` },
-        }));
-        return fresh;
-      })
-      .catch(async (err) => {
-        const reason = String((err as Error)?.message ?? err);
-        await cache.put(failed, memo(reason, TTL.failMemoS)).catch(() => {});
-        if (err instanceof UpstreamRejected && NO_REMINT_CODES.has(err.code)) {
-          await cache.put(BREAKER, memo(reason, TTL.breakerS)).catch(() => {});
-        }
-        throw err;
-      })
-      .finally(() => inflightBuses.delete(svc));
-    inflightBuses.set(svc, job);
-  }
-  ctx.waitUntil(job.catch(() => {}));
-  try {
-    return await job;
-  } catch (err) {
-    if (stale) return stale;
-    throw err;
-  }
+  // No stale race: the map polls every few seconds and would rather wait
+  // for the fresh positions than see a stale jump.
+  return cachedFetch<ActiveBuses>({
+    ctx,
+    nowMs,
+    key: `${CACHE_BASE}/buses/${encodeURIComponent(svc)}`,
+    failKey: `${CACHE_BASE}/failed-buses/${encodeURIComponent(svc)}`,
+    fetch: () => fetchActiveBuses(env, svc, nowMs),
+    freshMs: TTL.busesMs,
+    staleMaxS: TTL.staleMaxS,
+    failMemoS: TTL.failMemoS,
+    breaker: BREAKER,
+    inflight: inflightBuses,
+  });
 }
 
 const inflightBuses = new Map<string, Promise<ActiveBuses>>();
