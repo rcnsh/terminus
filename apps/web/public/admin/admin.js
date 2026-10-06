@@ -112,9 +112,15 @@ function Timelapse({ an }) {
   if (an.error || !an.timelapse) return null;
   const days = lastDays(14);
   const sum = (outcome) => an.timelapse.filter((r) => r.outcome === outcome).reduce((t, r) => t + Number(r.n), 0);
-  const upstream = new Map(an.timelapse.filter((r) => r.outcome === 'upstream').map((r) => [String(r.day).slice(0, 10), Number(r.n)]));
+  // A request to NUS is one that got an answer (upstream) or failed on the way (error).
+  const upstream = new Map();
+  for (const r of an.timelapse) {
+    if (r.outcome !== 'upstream' && r.outcome !== 'error') continue;
+    const day = String(r.day).slice(0, 10);
+    upstream.set(day, (upstream.get(day) ?? 0) + Number(r.n));
+  }
   return html`
-    <p class="hint">${`${fmt(sum('upstream'))} requests to NUS, ${fmt(sum('hit'))} answered from the cache, ${fmt(sum('stale') + sum('failed'))} failed, ${fmt(sum('skipped'))} skipped with the breaker open.`}</p>
+    <p class="hint">${`${fmt(sum('upstream') + sum('error'))} requests to NUS (${fmt(sum('error'))} of them failed), ${fmt(sum('hit'))} answered from the cache, ${fmt(sum('stale') + sum('failed'))} not asked after a failure, ${fmt(sum('skipped'))} skipped with the breaker open.`}</p>
     <${Bars} rows=${days.map((d) => ({ label: d.slice(5), n: upstream.get(d) ?? 0 }))} />
     <p class="hint">Requests to NUS per day. The only scheduled reads of the feed (CLAUDE.md, rule 2).</p>
   `;
