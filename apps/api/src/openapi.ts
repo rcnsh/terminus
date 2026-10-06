@@ -59,9 +59,9 @@ const errorResponse = (description: string, example?: Record<string, unknown>) =
   content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' }, ...(example ? { example } : {}) } },
 });
 
-const ok = (schema: Record<string, unknown>) => ({
+const ok = (schema: Record<string, unknown>, example?: Record<string, unknown>) => ({
   description: 'OK',
-  content: { 'application/json': { schema } },
+  content: { 'application/json': { schema, ...(example ? { example } : {}) } },
 });
 
 const jsonBody = (schema: Record<string, unknown>, example?: Record<string, unknown>) => ({
@@ -1189,6 +1189,66 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           operationId: 'adminStats',
           security: [{ operator: [] }],
           responses: { '200': ok({ type: 'object' }), '404': errorResponse('No operator token, or the wrong one.') },
+        },
+      },
+      '/timelapse/days': {
+        get: {
+          tags: ['Service'],
+          summary: 'Recorded days of shuttles, for the timelapse',
+          description:
+            'The days the timelapse recorder has kept, newest first: closed days from storage, and today’s while it records. `recording` says whether the recorder is switched on and what it is doing today. Operator only: answers 404 without the operator token.',
+          operationId: 'timelapseDays',
+          security: [{ operator: [] }],
+          responses: {
+            '200': ok(
+              {
+                type: 'object',
+                required: ['days', 'recording'],
+                properties: {
+                  days: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['date', 'closed'],
+                      properties: {
+                        date: { type: 'string', format: 'date', description: 'The Singapore date the day’s window opened on.' },
+                        closed: { type: 'boolean', description: 'true once the window closed and the day was written to storage; false for today, still recording.' },
+                        bytes: { type: ['integer', 'null'], description: 'The stored file’s size; null while recording.' },
+                        samples: { type: ['integer', 'null'], description: 'Readings so far, while recording; null once closed.' },
+                      },
+                    },
+                  },
+                  recording: {
+                    type: 'object',
+                    required: ['date', 'enabled', 'state', 'samples'],
+                    properties: {
+                      date: { type: 'string', format: 'date' },
+                      enabled: { type: 'boolean', description: 'The kill switch: KV config:timelapse, else the TIMELAPSE_ENABLED var.' },
+                      state: { type: 'string', enum: ['idle', 'polling', 'resting', 'off', 'done'] },
+                      samples: { type: 'integer' },
+                    },
+                  },
+                },
+              },
+              { days: [{ date: '2026-10-07', closed: false, bytes: null, samples: 1520 }, { date: '2026-10-06', closed: true, bytes: 412_903, samples: null }], recording: { date: '2026-10-07', enabled: true, state: 'polling', samples: 1520 } },
+            ),
+            '404': errorResponse('No operator token, or the wrong one.'),
+          },
+        },
+      },
+      '/timelapse/days/{date}': {
+        get: {
+          tags: ['Service'],
+          summary: 'One recorded day of shuttles',
+          description:
+            'The day’s readings as one gzipped JSON file: every service’s buses about every 30 s, as service, number plate, position (whole steps of 1/q degree from `origin`) and metres along the route line, with the route lines and stops they were measured on. Times are deltas from `t0`. A closed day never changes and is cached for a year; today’s is built from what the recorder holds so far and is not cached. The timelapse page (/admin/timelapse/) reads it. Operator only.',
+          operationId: 'timelapseDay',
+          security: [{ operator: [] }],
+          parameters: [{ name: 'date', in: 'path', required: true, description: 'A Singapore date, YYYY-MM-DD.', example: '2026-10-06', schema: { type: 'string', format: 'date' } }],
+          responses: {
+            '200': { description: 'The day file, gzipped JSON.', content: { 'application/gzip': {} } },
+            '404': errorResponse('No operator token, or no recording for that day.'),
+          },
         },
       },
       '/map/style.json': {

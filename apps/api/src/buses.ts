@@ -472,7 +472,7 @@ export async function placeBuses(
 }
 
 /** One service's placed buses and tracks, as kept in the edge cache. */
-interface Placed {
+export interface Placed {
   fetchedAt: number;
   buses: LiveBus[];
   tracks: Record<string, Track>;
@@ -492,6 +492,21 @@ export async function trackedBuses(
   live: { buses: RawBus[]; fetchedAt: number },
   ctx: { waitUntil(p: Promise<unknown>): void },
 ): Promise<LiveBus[]> {
+  return (await trackedPlacement(graph, svc, live, ctx)).buses;
+}
+
+/**
+ * trackedBuses with the tracks too: each bus's own place on its line
+ * (tracks[id].along), not the stop or midpoint it's drawn at. The timelapse
+ * recorder keeps that, so a replay can move a bus along the road between
+ * readings.
+ */
+export async function trackedPlacement(
+  graph: Graph,
+  svc: string,
+  live: { buses: RawBus[]; fetchedAt: number },
+  ctx: { waitUntil(p: Promise<unknown>): void },
+): Promise<Placed> {
   const cache = caches.default;
   const key = placedKey(svc);
   let kept: Placed | null = null;
@@ -502,7 +517,7 @@ export async function trackedBuses(
     kept = null;
   }
   // This update, or a newer one, placed already.
-  if (kept && kept.fetchedAt >= live.fetchedAt) return kept.buses;
+  if (kept && kept.fetchedAt >= live.fetchedAt) return kept;
   const placed = await placeBuses(graph, svc, live.buses, live.fetchedAt, kept?.tracks ?? {});
   const body: Placed = { fetchedAt: live.fetchedAt, ...placed };
   ctx.waitUntil(
@@ -510,5 +525,5 @@ export async function trackedBuses(
       .put(key, new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json', 'cache-control': `max-age=${TRACK_MS / 1000}` } }))
       .catch(() => {}),
   );
-  return body.buses;
+  return body;
 }

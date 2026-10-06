@@ -235,7 +235,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     .sort();
   const routed = [
     ...ME_ROUTES.map((r) => `${r.method} ${r.path.endsWith('/') ? r.path + '*' : r.path}`),
-    ...['/next', '/trip', '/arrivals', '/buses', '/campus', '/stops/pairs', '/health', '/status.json', '/admin/stats', '/docs', '/openapi.json'].map((p) => `GET ${p}`),
+    ...['/next', '/trip', '/arrivals', '/buses', '/campus', '/stops/pairs', '/health', '/status.json', '/admin/stats', '/docs', '/openapi.json', '/timelapse/days', '/timelapse/days/*'].map((p) => `GET ${p}`),
     ...['/auth/config', '/auth/verify', '/auth/approve'].map((p) => `GET ${p}`),
     ...['/auth/login', '/auth/code', '/auth/verify', '/auth/anon', '/auth/anon/web', '/auth/app/start', '/auth/app/poll', '/auth/app/code', '/auth/app/merge', '/auth/approve', '/auth/logout', '/pair', '/pair/check'].map((p) => `POST ${p}`),
     ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),

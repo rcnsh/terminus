@@ -64,6 +64,11 @@ export interface Env {
   AE_DATASET?: string;
   /** LTA DataMall account key, for public buses (lta.ts). Unset: no public buses. */
   LTA_ACCOUNT_KEY?: string;
+  /** The timelapse recorder: one Durable Object per Singapore day (timelapsedo.ts). */
+  TIMELAPSE?: DurableObjectNamespace;
+  /** "on" lets the timelapse recorder poll; anything else, or unset, is off.
+   *  KV config:timelapse overrides it without a deploy (timelapse.ts). */
+  TIMELAPSE_ENABLED?: string;
 }
 
 /* ------------------------------------------------------------------ */

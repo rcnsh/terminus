@@ -1,0 +1,286 @@
+/**
+ * A day of NUS shuttles, recorded for a timelapse (the operator's page at
+ * /admin/timelapse/ replays it and exports a video).
+ *
+ * This is the one place terminus reads the NUS feed on a schedule rather
+ * than because someone asked (CLAUDE.md rule 2 has the exception). It is
+ * bounded on every side:
+ *
+ * - one Durable Object per Singapore day (timelapsedo.ts), driven by its own
+ *   alarm, asks for each service's buses once per TIMELAPSE.pollMs (never
+ *   below MIN_POLL_MS), the services spread across that time, never in a
+ *   burst;
+ * - only inside TIMELAPSE.hours, and only for services inside their own
+ *   operating hours;
+ * - through getBuses(), the map's own path: the 5 s edge cache, failMemoS
+ *   and the breaker all apply, so a poll the map already paid for costs NUS
+ *   nothing, and an open breaker skips the poll altogether;
+ * - only while the kill switch is on (timelapseEnabled()).
+ *
+ * The day is kept in the object's SQLite storage as it's recorded, then
+ * written to R2 as one gzipped JSON file (DayFile) when the window closes,
+ * and the object is emptied.
+ */
+
+import type { Env } from './types.ts';
+import { MIN_POLL_MS, TIMELAPSE } from './config.ts';
+import { isOperator } from './admin.ts';
+import { json } from './http.ts';
+import { buildCampusMap } from './campus.ts';
+import { GRAPH } from './graph.ts';
+
+/* ------------------------------------------------------------------ */
+/* When it records                                                     */
+/* ------------------------------------------------------------------ */
+
+/** The poll interval actually used: [ms], but never below MIN_POLL_MS. */
+export function pollInterval(ms: number = TIMELAPSE.pollMs): number {
+  return Number.isFinite(ms) ? Math.max(MIN_POLL_MS, ms) : TIMELAPSE.pollMs;
+}
+
+export interface Hours {
+  start: string;
+  end: string;
+}
+
+const minutesOf = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+
+const DAY_MS = 86_400_000;
+const SGT_MS = 8 * 3_600_000;
+
+/** The Singapore date [ms] falls on, YYYY-MM-DD. */
+export const sgtDate = (ms: number) => new Date(ms + SGT_MS).toISOString().slice(0, 10);
+
+/** Midnight at the start of Singapore date [date], epoch ms. */
+const midnightOf = (date: string) => Date.parse(`${date}T00:00:00Z`) - SGT_MS;
+
+/** When day [date]'s window opens and closes, epoch ms. One that crosses
+ *  midnight (06:30 to 00:30) closes the next morning. */
+export function windowOf(date: string, hours: Hours = TIMELAPSE.hours): { open: number; close: number } {
+  const start = minutesOf(hours.start);
+  const end = minutesOf(hours.end);
+  const midnight = midnightOf(date);
+  return { open: midnight + start * 60_000, close: midnight + (end <= start ? DAY_MS : 0) + end * 60_000 };
+}
+
+/**
+ * The day [ms] belongs to: the date its window opened on. 00:10 on the 8th
+ * is still the 7th's day while a 06:30 to 00:30 window runs, and so is 03:00
+ * (closed, waiting for the 8th's window to open).
+ */
+export function serviceDate(ms: number, hours: Hours = TIMELAPSE.hours): string {
+  return sgtDate(ms - minutesOf(hours.start) * 60_000);
+}
+
+/** Whether [ms] is inside a recording window. */
+export function inWindow(ms: number, hours: Hours = TIMELAPSE.hours): boolean {
+  const w = windowOf(serviceDate(ms, hours), hours);
+  return ms >= w.open && ms < w.close;
+}
+
+/** [ms] when it's inside a window, else when the next one opens. */
+export function nextOpen(ms: number, hours: Hours = TIMELAPSE.hours): number {
+  if (inWindow(ms, hours)) return ms;
+  const next = sgtDate(midnightOf(serviceDate(ms, hours)) + DAY_MS + SGT_MS);
+  return windowOf(next, hours).open;
+}
+
+/**
+ * The kill switch. KV `config:timelapse` ("on" or "off") wins, so the
+ * recorder can be stopped at once without a deploy; without it, the
+ * TIMELAPSE_ENABLED var. Unset everywhere is off: nothing polls NUS unless
+ * someone turned it on.
+ */
+export async function timelapseEnabled(env: Env): Promise<boolean> {
+  const kv = await env.KV.get('config:timelapse').catch(() => null);
+  const v = (kv ?? env.TIMELAPSE_ENABLED ?? '').trim().toLowerCase();
+  return v === 'on' || v === 'true' || v === '1';
+}
+
+/* ------------------------------------------------------------------ */
+/* What it keeps                                                       */
+/* ------------------------------------------------------------------ */
+
+/** Coordinates are kept as whole steps of 1/Q degree (about 1.1 m) from ORIGIN. */
+export const Q = 100_000;
+export const ORIGIN = { lat: 1.29, lon: 103.77 };
+
+/** One bus in one reading. */
+export interface SampleBus {
+  plate: string;
+  lat: number;
+  lon: number;
+  /** Metres along its route line (the track buses.ts placed it on); null off it. */
+  along: number | null;
+}
+
+/** A bus as four whole numbers: its plate's index, latitude and longitude
+ *  in steps from ORIGIN, and metres along its line (-1 off it). */
+export function encodeBus(b: SampleBus, plateIndex: number): [number, number, number, number] {
+  return [plateIndex, Math.round((b.lat - ORIGIN.lat) * Q), Math.round((b.lon - ORIGIN.lon) * Q), b.along == null ? -1 : Math.round(b.along)];
+}
+
+/**
+ * The day as one file. Each sample is `[dt, service, ...buses]`: ms since
+ * the sample before it (the first counts from t0), the index of its service
+ * in `services`, then four numbers per bus (encodeBus). A service polled
+ * with no bus out is a sample with no buses; a poll that failed is no
+ * sample. The route lines are the ones the `along`s were measured on.
+ * apps/web/public/admin/timelapse/replay.js reads it.
+ */
+export interface DayFile {
+  v: 1;
+  date: string;
+  /** Epoch ms the first sample's dt counts from. */
+  t0: number;
+  q: number;
+  origin: [number, number];
+  pollMs: number;
+  services: string[];
+  plates: string[];
+  routes: Record<string, { color: string; loop: boolean; line: [number, number][] }>;
+  /** `core`: on campus proper, not out along P's route (the page frames these). */
+  stops: { code: string; name: string; lat: number; lon: number; core: boolean }[];
+  samples: number[][];
+}
+
+/** The routes and stops a day is drawn with: the map's, as /campus has them now. */
+export function mapSnapshot(): Pick<DayFile, 'routes' | 'stops'> {
+  const campus = buildCampusMap(GRAPH);
+  return {
+    routes: Object.fromEntries(Object.entries(campus.routes).map(([svc, r]) => [svc, { color: r.color, loop: r.loop, line: r.line }])),
+    stops: campus.stops.map((s) => ({ code: s.code, name: s.name, lat: s.lat, lon: s.lon, core: s.core })),
+  };
+}
+
+/** One stored row: ms since the row before, the service, its encoded buses. */
+export interface Row {
+  dt: number;
+  svc: string;
+  buses: number[];
+}
+
+export function buildDayFile(o: {
+  date: string;
+  t0: number;
+  pollMs: number;
+  plates: string[];
+  rows: Row[];
+  map: Pick<DayFile, 'routes' | 'stops'>;
+}): DayFile {
+  const services = [...new Set(o.rows.map((r) => r.svc))].sort();
+  const index = new Map(services.map((s, i) => [s, i]));
+  return {
+    v: 1,
+    date: o.date,
+    t0: o.t0,
+    q: Q,
+    origin: [ORIGIN.lon, ORIGIN.lat],
+    pollMs: o.pollMs,
+    services,
+    plates: o.plates,
+    ...o.map,
+    samples: o.rows.map((r) => [r.dt, index.get(r.svc)!, ...r.buses]),
+  };
+}
+
+export async function gzip(text: string): Promise<Uint8Array> {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+export const dayKey = (date: string) => `timelapse/${date}.json.gz`;
+
+/* ------------------------------------------------------------------ */
+/* The recorder, from the Worker                                        */
+/* ------------------------------------------------------------------ */
+
+/** The recorder for day [date]. In Asia, near the feed and most of its users,
+ *  so the edge cache it reads is likely the one the map fills. */
+export function recorderFor(env: Env, date: string): DurableObjectStub | null {
+  if (!env.TIMELAPSE) return null;
+  return env.TIMELAPSE.get(env.TIMELAPSE.idFromName(date), { locationHint: 'apac' });
+}
+
+/**
+ * From the 15-minute cron: inside a window with the switch on, makes sure
+ * today's recorder is running (it does nothing when it already is). The
+ * recorder keeps itself going with its alarm from then on; this only starts
+ * it each morning, and again after the switch comes back on.
+ */
+export async function ensureRecorder(env: Env, nowMs: number): Promise<void> {
+  if (!env.TIMELAPSE || !inWindow(nowMs) || !(await timelapseEnabled(env))) return;
+  const date = serviceDate(nowMs);
+  await recorderFor(env, date)!.fetch(`https://timelapse.internal/start?date=${date}`, { method: 'POST' });
+}
+
+/* ------------------------------------------------------------------ */
+/* /timelapse/days                                                     */
+/* ------------------------------------------------------------------ */
+
+const DAY_PATH = /^\/timelapse\/days\/(\d{4}-\d{2}-\d{2})$/;
+
+/** What the recorder says about the day it holds (timelapsedo.ts /status). */
+export interface RecorderStatus {
+  date: string | null;
+  samples: number;
+  state: string;
+}
+
+/**
+ * GET /timelapse/days and /timelapse/days/:date, for the operator only
+ * (anything else is a 404, as /admin/stats). A closed day is its file from
+ * R2, unchanged from then on, so it's cached for a year; today's is built
+ * from what the recorder holds so far, and not cached.
+ */
+export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: number): Promise<Response | null> {
+  if (!url.pathname.startsWith('/timelapse/')) return null;
+  if (!isOperator(env, req) || req.method !== 'GET') return json({ error: 'not found' }, 404);
+  if (!env.DOWNLOADS) return json({ error: 'timelapse storage is not configured' }, 503);
+
+  if (url.pathname === '/timelapse/days') {
+    const days: { date: string; closed: boolean; bytes: number | null; samples: number | null }[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await env.DOWNLOADS.list({ prefix: 'timelapse/', cursor });
+      for (const o of page.objects) {
+        const date = /^timelapse\/(\d{4}-\d{2}-\d{2})\.json\.gz$/.exec(o.key)?.[1];
+        if (date) days.push({ date, closed: true, bytes: o.size, samples: null });
+      }
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+    const today = serviceDate(nowMs);
+    const status = await recorderStatus(env, today);
+    if (status && status.samples > 0 && !days.some((d) => d.date === today)) days.push({ date: today, closed: false, bytes: null, samples: status.samples });
+    days.sort((a, b) => b.date.localeCompare(a.date));
+    return json({ days, recording: { date: today, enabled: await timelapseEnabled(env), state: status?.state ?? 'idle', samples: status?.samples ?? 0 } });
+  }
+
+  const date = DAY_PATH.exec(url.pathname)?.[1];
+  if (!date) return json({ error: 'not found' }, 404);
+  const stored = await env.DOWNLOADS.get(dayKey(date));
+  if (stored) {
+    return new Response(stored.body, {
+      headers: { 'content-type': 'application/gzip', 'cache-control': 'private, max-age=31536000, immutable', etag: stored.httpEtag },
+    });
+  }
+  // Not closed yet: the recorder's day so far.
+  const open = recorderFor(env, date);
+  const res = open ? await open.fetch(`https://timelapse.internal/day?date=${date}`) : null;
+  if (!res || !res.ok) return json({ error: 'no timelapse for that day' }, 404);
+  return new Response(res.body, { headers: { 'content-type': 'application/gzip', 'cache-control': 'no-store' } });
+}
+
+async function recorderStatus(env: Env, date: string): Promise<RecorderStatus | null> {
+  const stub = recorderFor(env, date);
+  if (!stub) return null;
+  try {
+    const res = await stub.fetch(`https://timelapse.internal/status?date=${date}`);
+    return res.ok ? ((await res.json()) as RecorderStatus) : null;
+  } catch {
+    return null;
+  }
+}

@@ -106,6 +106,20 @@ function Analytics({ an }) {
   `;
 }
 
+/** The timelapse recorder's polls per day, by what each cost NUS (analytics.ts logPoll). */
+function Timelapse({ an }) {
+  if (!an) return html`<p class="hint">Needs ANALYTICS_TOKEN, as the answers do.</p>`;
+  if (an.error || !an.timelapse) return null;
+  const days = lastDays(14);
+  const sum = (outcome) => an.timelapse.filter((r) => r.outcome === outcome).reduce((t, r) => t + Number(r.n), 0);
+  const upstream = new Map(an.timelapse.filter((r) => r.outcome === 'upstream').map((r) => [String(r.day).slice(0, 10), Number(r.n)]));
+  return html`
+    <p class="hint">${`${fmt(sum('upstream'))} requests to NUS, ${fmt(sum('hit'))} answered from the cache, ${fmt(sum('stale') + sum('failed'))} failed, ${fmt(sum('skipped'))} skipped with the breaker open.`}</p>
+    <${Bars} rows=${days.map((d) => ({ label: d.slice(5), n: upstream.get(d) ?? 0 }))} />
+    <p class="hint">Requests to NUS per day. The only scheduled reads of the feed (CLAUDE.md, rule 2).</p>
+  `;
+}
+
 function Dashboard({ s, note }) {
   const a = s.accounts ?? {};
   const pct = (n) => (a.total ? ` (${Math.round((n / a.total) * 100)}%)` : '');
@@ -171,6 +185,11 @@ function Dashboard({ s, note }) {
         <p class="hint"><a href="/status">Public status page</a></p>
       </section>
     </div>
+    <section class="card">
+      <h2>Timelapse recorder, last 14 days</h2>
+      <${Timelapse} an=${s.analytics} />
+      <p class="hint"><a href="/admin/timelapse/">Replay a day and export a video</a></p>
+    </section>
     <section class="card">
       <h2>Reports <span class="hint">${`· ${fmt(fb.last7d)} this week`}</span></h2>
       <ul class="list reports">
