@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyText
@@ -58,10 +60,13 @@ import sh.rcn.terminus.widget.clock
  * A trip by bus, or on foot the whole way, drawn in the style chosen in
  * Settings › Appearance ([CardStyle]). All three lead with when to leave and
  * end with when you get there; the words and times are the server's
- * (`card.journey`), and only the countdowns tick here.
+ * (`card.journey`), and only the countdowns tick here. [lead] (where the
+ * trip is, a notice) goes first. On Now the top of it is up in the sky
+ * ([SkyHead]), and the horizon under it has your bus on its way to your
+ * stop; the rest is on the ground.
  */
 @Composable
-internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String) {
+internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, lead: @Composable ColumnScope.() -> Unit = {}) {
     // Every second near the end, so "Leave in 45 s" is never a stale 45.
     val now by produceState(System.currentTimeMillis(), answer.leaveAtMs, journey.boardAtMs) {
         while (true) {
@@ -70,10 +75,15 @@ internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String) {
             delay(if (soonest != null && soonest - value < 150_000) 1_000 else 15_000)
         }
     }
+    val road = roadFor(journey, now)
+    val top: Top = { head ->
+        SkyHead { lead(); head() }
+        SkyGround(road)
+    }
     when (style) {
-        CardStyle.TICKET -> Ticket(answer, journey, now)
-        CardStyle.STEPS -> Steps(answer, journey, now)
-        else -> Route(answer, journey, now)
+        CardStyle.TICKET -> Ticket(answer, journey, now, top)
+        CardStyle.STEPS -> Steps(answer, journey, now, top)
+        else -> Route(answer, journey, now, top)
     }
     // A busy bus and an estimate are small print, not more headlines.
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -86,12 +96,14 @@ internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String) {
 
 /** Route: you, the stop and where you're going on a line, the times under each. */
 @Composable
-private fun Route(answer: NextAnswer, journey: Journey, now: Long) {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    LeaveHead(answer, journey, now)
-    val under = listOfNotNull(JourneyText.by(answer, journey, now), JourneyText.arrive(journey)).joinToString(" · ")
-    if (under.isNotEmpty()) Text(under, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
+private fun Route(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
+    top {
+        val muted = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        LeaveHead(answer, journey, now)
+        val under = listOfNotNull(JourneyText.by(answer, journey, now), JourneyText.arrive(journey)).joinToString(" · ")
+        if (under.isNotEmpty()) Text(under, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
+    }
     RouteLine(journey, Modifier.padding(top = 16.dp, bottom = 4.dp))
     Tags(answer, journey)
 }
@@ -159,52 +171,54 @@ private val DOT = 18.dp
 
 /** Ticket: the bus first, as you'd look for it on the road, then when to leave and when you get there. On foot, the walk in its place. */
 @Composable
-private fun Ticket(answer: NextAnswer, journey: Journey, now: Long) {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun Ticket(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     val bus = journey.bus
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
-        if (bus != null) {
-            Box(Modifier.size(64.dp).background(Color(bus.color), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                Text(badgeText(bus.svc, bus.paid), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, maxLines = 1)
-            }
-        } else {
-            Box(Modifier.size(64.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                Icon(painterResource(R.drawable.ic_walk), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(34.dp))
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Column {
+    top {
+        val muted = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
             if (bus != null) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(bus.board, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    JourneyText.busIn(journey, now)?.let { Text(" $it", style = MaterialTheme.typography.titleSmall, color = muted, modifier = Modifier.padding(bottom = 2.dp)) }
+                Box(Modifier.size(64.dp).background(Color(bus.color), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                    Text(badgeText(bus.svc, bus.paid), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, maxLines = 1)
                 }
-                Text(
-                    listOfNotNull(stringResource(R.string.journey_from, bus.stop), journey.walk?.let { stringResource(R.string.journey_walk, it) }).joinToString(" · "),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
             } else {
-                Text(stringResource(R.string.journey_walk, journey.walk.orEmpty()), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                // Why not the bus, which the others say under the trip.
-                Text(journey.why ?: stringResource(R.string.journey_walk_to, journey.place), style = MaterialTheme.typography.bodyLarge)
+                Box(Modifier.size(64.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_walk), contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(34.dp))
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column {
+                if (bus != null) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(bus.board, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        JourneyText.busIn(journey, now)?.let { Text(" $it", style = MaterialTheme.typography.titleSmall, color = muted, modifier = Modifier.padding(bottom = 2.dp)) }
+                    }
+                    Text(
+                        listOfNotNull(stringResource(R.string.journey_from, bus.stop), journey.walk?.let { stringResource(R.string.journey_walk, it) }).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                } else {
+                    Text(stringResource(R.string.journey_walk, journey.walk.orEmpty()), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    // Why not the bus, which the others say under the trip.
+                    Text(journey.why ?: stringResource(R.string.journey_walk_to, journey.place), style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
-    }
-    val tint = if (answer.leaveLate) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    Row(
-        Modifier.padding(top = 14.dp).fillMaxWidth().background(tint.copy(alpha = 0.12f), RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(JourneyText.leaveIn(answer, journey, now), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = tint)
-            JourneyText.by(answer, journey, now)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
-        }
-        journey.arrive?.let { arrive ->
-            Column(horizontalAlignment = Alignment.End) {
-                Text(stringResource(R.string.journey_arrive_time, arrive), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                // Late is said in red, as on the line and in the steps.
-                Text(journey.slack ?: journey.walkEnd?.let { stringResource(R.string.journey_walk_from, it, journey.toStop) } ?: stringResource(R.string.journey_at, journey.toStop), style = MaterialTheme.typography.bodySmall, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
+        val tint = if (answer.leaveLate) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+        Row(
+            Modifier.padding(top = 14.dp).fillMaxWidth().background(tint.copy(alpha = 0.12f), RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(JourneyText.leaveIn(answer, journey, now), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = tint)
+                JourneyText.by(answer, journey, now)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+            }
+            journey.arrive?.let { arrive ->
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(stringResource(R.string.journey_arrive_time, arrive), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    // Late is said in red, as on the line and in the steps.
+                    Text(journey.slack ?: journey.walkEnd?.let { stringResource(R.string.journey_walk_from, it, journey.toStop) } ?: stringResource(R.string.journey_at, journey.toStop), style = MaterialTheme.typography.bodySmall, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
+                }
             }
         }
     }
@@ -218,18 +232,21 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long) {
  * you're going, is ringed in the accent.
  */
 @Composable
-private fun Steps(answer: NextAnswer, journey: Journey, now: Long) {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     val late = answer.leaveLate
-    Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    LeaveHead(answer, journey, now)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOfNotNull(JourneyText.by(answer, journey, now), journey.slack).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
-            Text(it, color = if (late) MaterialTheme.colorScheme.error else muted, modifier = Modifier.weight(1f, fill = false))
+    top {
+        val muted = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        LeaveHead(answer, journey, now)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOfNotNull(JourneyText.by(answer, journey, now), journey.slack).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
+                Text(it, color = if (late) MaterialTheme.colorScheme.error else muted, modifier = Modifier.weight(1f, fill = false))
+            }
+            if (journey.live) Pill(stringResource(R.string.journey_live), goodColor())
+            if (!answer.isClassPlan) answer.card?.crowd?.let { Pill(it, muted) }
         }
-        if (journey.live) Pill(stringResource(R.string.journey_live), goodColor())
-        if (!answer.isClassPlan) answer.card?.crowd?.let { Pill(it, muted) }
     }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val bus = journey.bus
     Column(Modifier.padding(top = 18.dp)) {
         val walk = journey.walk
@@ -327,6 +344,29 @@ private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, late:
             }
         }
     }
+}
+
+/** The top of the card, up in Now's sky with the horizon under it. */
+private typealias Top = @Composable (@Composable ColumnScope.() -> Unit) -> Unit
+
+/**
+ * Your bus on the horizon's road: coming up to your stop's sign, nearer the
+ * sooner it's due, with when ("D2 · 8 min"; "~8 min" for a timetable
+ * guess). On foot, an empty road. As the web draws it (journey.js onTheRoad).
+ */
+@Composable
+private fun roadFor(journey: Journey, now: Long): Road {
+    val bus = journey.bus ?: return Road(shuttle = false)
+    val left = journey.boardAtMs?.let { ((it - now) / 1000).toInt() } ?: 0
+    val min = stringResource(R.string.n_min, (left / 60f).roundToInt())
+    val due = when {
+        left <= 0 -> null
+        left < 60 -> stringResource(R.string.map_arriving)
+        journey.live -> min
+        else -> stringResource(R.string.approx, min)
+    }
+    val name = badgeText(bus.svc, bus.paid)
+    return Road(bus.stop, RoadBus(due?.let { "$name · $it" } ?: name, bus.color, left.coerceAtLeast(0) / 900f, journey.live), shuttle = false)
 }
 
 /** Clock times in the account's style, for a class's start. */

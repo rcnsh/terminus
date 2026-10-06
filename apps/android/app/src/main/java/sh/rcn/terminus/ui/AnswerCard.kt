@@ -3,16 +3,14 @@ package sh.rcn.terminus.ui
 import sh.rcn.terminus.Suggestion
 import androidx.compose.foundation.background
 import sh.rcn.terminus.Upcoming
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -74,7 +72,8 @@ internal fun AnswerCard(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (answer == null) {
-            Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.no_answer_yet), style = MaterialTheme.typography.titleLarge)
+            SkyHead { Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.no_answer_yet), style = MaterialTheme.typography.titleLarge) }
+            SkyGround()
             return@Column
         }
         if (answer.mode == "rest" || answer.isFree || answer.arrived) {
@@ -83,16 +82,25 @@ internal fun AnswerCard(
             if (answer.mode != "rest") Actions(answer, onAction, busy, onSuggestion)
             return@Column
         }
-        // NUS's live times are down: said once, above the answer.
-        answer.card?.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
-        // Where the trip is, when one is under way: the same on every device.
-        answer.phaseText?.let { Pill(it, MaterialTheme.colorScheme.primary) }
-        // On the bus: how far along the ride, and the next stop, as the live notification shows.
-        answer.card?.ride?.let { RideProgress(it) }
-        answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
+        // What comes before any answer, in the sky with its top.
+        val lead: @Composable ColumnScope.() -> Unit = {
+            // NUS's live times are down: said once, above the answer.
+            answer.card?.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
+            // Where the trip is, when one is under way: the same on every device.
+            answer.phaseText?.let { Pill(it, MaterialTheme.colorScheme.primary) }
+            // On the bus: how far along the ride, and the next stop, as the live notification shows.
+            answer.card?.ride?.let { RideProgress(it) }
+            answer.card?.warning?.let { Text(it, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
+        }
         // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
         answer.card?.journey?.takeIf { !answer.arrived }?.let { journey ->
-            JourneyCard(answer, journey, CardStyle.pref(LocalContext.current))
+            JourneyCard(answer, journey, CardStyle.pref(LocalContext.current), lead)
+            Actions(answer, onAction, busy, onSuggestion)
+            return@Column
+        }
+        if (answer.isClassPlan) {
+            SkyHead { lead(); ClassPlan(answer) }
+            SkyGround()
             Actions(answer, onAction, busy, onSuggestion)
             return@Column
         }
@@ -101,23 +109,22 @@ internal fun AnswerCard(
             answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())
             else -> answer.destLabel
         }
-        if (!answer.isClassPlan) heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        if (answer.isClassPlan) {
-            ClassPlan(answer)
-            Actions(answer, onAction, busy, onSuggestion)
-            return@Column
+        SkyHead {
+            lead()
+            heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            val ctx = LocalContext.current
+            Text(answer.clockLabel { clock(ctx, it) }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Countdown(answer)
+            Text(answer.detail)
+            LeaveLine(answer)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
+                answer.crowdText?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            // The alternative is already at the end of `detail`.
+            answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        val ctx = LocalContext.current
-        Text(answer.clockLabel { clock(ctx, it) }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Countdown(answer)
-        Text(answer.detail)
-        LeaveLine(answer)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-            answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
-            answer.crowdText?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        // The alternative is already at the end of `detail`.
-        answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        SkyGround()
         Actions(answer, onAction, busy, onSuggestion)
     }
 }
@@ -227,10 +234,10 @@ internal fun ClassPlan(answer: NextAnswer) {
 
 /**
  * The day's done, or there's nothing to catch: the label large, what's next
- * on a card of its own, then your favourites to plan a trip to instead.
- * After your day it's night: on Now, the sky behind the top of the screen
- * goes down to the end of this section ([LocalSky]), which leaves room at
- * its foot for the horizon; elsewhere, a panel.
+ * on a card of its own, then your favourites to plan a trip to instead. On
+ * Now it's all up in the sky ([SkyHead]), the favourites on the ground
+ * below the horizon; after your day that sky is the night. Elsewhere, a
+ * panel: the night's after your day, else a plain one.
  */
 @Composable
 private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Unit) {
@@ -239,34 +246,41 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
     // The line under the label: why today's empty on a break, or what's next when there's no card for it.
     val sub = upcoming?.off ?: answer.detail.takeIf { upcoming == null && it.isNotEmpty() }
     val places = answer.places.isNotEmpty()
-    if (night) {
-        val sky = LocalSky.current
-        DisposableEffect(sky) { onDispose { sky?.sectionBottom = null } }
+    val sky = LocalSky.current
+    if (sky != null) {
+        SkyHead(108.dp) {
+            Text(answer.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 46.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
+            sub?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 4.dp)) }
+            upcoming?.let { UpcomingCard(it, glass = true) }
+        }
+        SkyGround()
+        // On the ground, in the page's colours.
+        if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 4.dp, bottom = 10.dp))
+    } else if (night) {
+        // With no sky to sit in, the night is a panel of its own.
         NightTheme(true) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .onGloballyPositioned { sky?.sectionBottom = it.positionInRoot().y + it.size.height }
-                    // With no sky to sit in (not on Now), the night is a panel of its own.
-                    .then(if (sky == null) Modifier.clip(RoundedCornerShape(28.dp)).background(Brush.verticalGradient(NIGHT)).padding(horizontal = 22.dp) else Modifier)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Brush.verticalGradient(NIGHT))
+                    .padding(horizontal = 22.dp)
                     .drawBehind { starsAndMoon(108.dp.toPx()) }
-                    .padding(top = 108.dp, bottom = if (sky == null && !places) 24.dp else 0.dp),
+                    .padding(top = 108.dp, bottom = if (!places) 24.dp else 0.dp),
             ) {
-                Text(answer.label, color = NIGHT_INK, fontSize = 46.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
-                sub?.let { Text(it, color = NIGHT_SUB, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
-                upcoming?.let { UpcomingCard(it, night = true) }
-                if (sky != null) Spacer(Modifier.height(10.dp + HORIZON))
-                else if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 24.dp, bottom = 10.dp), color = NIGHT_SUB)
+                val ink = MaterialTheme.colorScheme
+                Text(answer.label, color = ink.onSurface, fontSize = 46.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
+                sub?.let { Text(it, color = ink.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
+                upcoming?.let { UpcomingCard(it, glass = true) }
+                if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 24.dp, bottom = 10.dp), color = ink.onSurfaceVariant)
             }
         }
-        // On the ground, in the page's colours.
-        if (sky != null && places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 4.dp, bottom = 10.dp))
     } else {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.surfaceVariant).padding(start = 22.dp, end = 22.dp, top = 28.dp, bottom = 24.dp)) {
             Text(answer.label, color = c.onSurface, fontSize = 38.sp, lineHeight = 42.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
             sub?.let { Text(it, color = c.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
         }
-        upcoming?.let { UpcomingCard(it, night = false) }
+        upcoming?.let { UpcomingCard(it, glass = false) }
         if (places) Label(stringResource(R.string.going_anyway), Modifier.padding(top = 22.dp, bottom = 10.dp))
     }
     if (places) {
@@ -290,23 +304,28 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
     }
 }
 
-/** The next class on a card of its own: when in the accent, what, then where. Translucent on the night sky. */
+/**
+ * The next class on a card of its own: when in the accent, what, then
+ * where. On the sky ([glass]) it's see-through: frosted on a light sky, a
+ * faint pane on a dark one.
+ */
 @Composable
-private fun UpcomingCard(u: Upcoming, night: Boolean) {
+private fun UpcomingCard(u: Upcoming, glass: Boolean) {
     val c = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(22.dp)
+    val light = LocalSky.current?.palette?.lightInk ?: true
     Column(
         Modifier
-            .padding(top = 22.dp)
+            .padding(top = 18.dp)
             .fillMaxWidth()
             .clip(shape)
-            .background(if (night) Color.White.copy(alpha = 0.06f) else c.surface)
-            .border(1.dp, if (night) Color.White.copy(alpha = 0.14f) else c.outlineVariant, shape)
+            .background(if (!glass) c.surface else if (light) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.5f))
+            .border(1.dp, if (!glass) c.outlineVariant else if (light) Color.White.copy(alpha = 0.14f) else Color(0x291C1917), shape)
             .padding(18.dp),
     ) {
         Label(u.whenText, color = c.primary)
-        Text(u.title, fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, color = if (night) NIGHT_INK else c.onSurface, modifier = Modifier.padding(top = 6.dp))
-        Text(u.where, style = MaterialTheme.typography.bodyMedium, color = if (night) NIGHT_SUB else c.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        Text(u.title, fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, color = c.onSurface, modifier = Modifier.padding(top = 6.dp))
+        Text(u.where, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

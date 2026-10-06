@@ -44,6 +44,13 @@ internal fun OfflinePlanOr(offline: Boolean, answer: NextAnswer?, fetchedAt: Lon
     }
     val ctx = LocalContext.current
     val lines = OfflineDay.lines(pick) { clock(ctx, it) }
+    // Up in Now's sky, as any answer is.
+    SkyHead { OfflinePlan(lines) }
+    SkyGround()
+}
+
+@Composable
+private fun OfflinePlan(lines: OfflineDay.Lines) {
     Card(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
         Column(Modifier.fillMaxWidth().heightIn(min = 180.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
