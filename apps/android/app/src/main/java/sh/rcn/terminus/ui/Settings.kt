@@ -15,7 +15,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -113,13 +119,6 @@ internal enum class SettingsPage(val title: Int) {
     Feedback(R.string.send_feedback),
 }
 
-/** The list's groups, under their headings, as on the website and the Mac. */
-private val SETTINGS_GROUPS = listOf(
-    R.string.heading_your_day to listOf(SettingsPage.Trips, SettingsPage.Timetable, SettingsPage.Favourites, SettingsPage.Notifications),
-    R.string.heading_account to listOf(SettingsPage.Account, SettingsPage.Devices),
-    R.string.display to listOf(SettingsPage.Language, SettingsPage.Appearance),
-)
-
 /**
  * Everything the account page has, so the website is optional for daily
  * use: a list of groups, each with a line saying what's set, opening a page
@@ -211,85 +210,172 @@ internal fun SettingsScreen(
     }
 }
 
-/** The groups, each with a line saying what's set now. */
+/**
+ * Settings at a glance, in three levels: who you are; your day, drawn as a
+ * short route (home, classes, pace), each stop opening its page; then the
+ * rest as tiles, each saying what's set. Notifications all off shows in
+ * amber: it's the setting that changes the most. About is under them.
+ */
 @Composable
 private fun SettingsList(state: AccountState, main: MainViewModel, onOpen: (SettingsPage) -> Unit) {
     val ctx = LocalContext.current
     val ui by main.state.collectAsStateWithLifecycle()
     val profile = state.profile
+    val c = MaterialTheme.colorScheme
+    val muted = c.onSurfaceVariant
     Column(Modifier.fillMaxSize()) {
         TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            for ((heading, pages) in SETTINGS_GROUPS) {
-            Text(
-                stringResource(heading),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 16.dp, bottom = 2.dp).semantics { heading() },
-            )
-            for (page in pages) {
-                val summary = when (page) {
-                    SettingsPage.Trips -> profile?.let {
-                        val home = it.homeStops.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
-                        listOf(home ?: stringResource(R.string.no_home_stop), stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))).joinToString(" · ")
+            // Who you are.
+            LinkTile({ onOpen(SettingsPage.Account) }, Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val email = state.email
+                    if (email != null) {
+                        Box(Modifier.size(44.dp).background(c.primary, CircleShape), contentAlignment = Alignment.Center) {
+                            Text(email.take(1).uppercase(), color = c.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                        }
+                    } else {
+                        BrandMark(Modifier.size(44.dp))
                     }
-                    SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let {
-                        when (val n = it.trips.size + it.manual.size) {
-                            0 -> stringResource(R.string.no_classes_yet)
-                            1 -> stringResource(R.string.one_class)
-                            else -> stringResource(R.string.n_classes, n)
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Text(email ?: stringResource(R.string.not_signed_in), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        summary(SettingsPage.Devices, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips)?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    SettingsPage.Favourites -> profile?.let { p -> p.places.joinToString(", ") { it.label }.ifEmpty { stringResource(R.string.none_yet) } }
-                    SettingsPage.Notifications -> listOfNotNull(
-                        if (ui.leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
-                        if (ui.liveUpdates) stringResource(R.string.short_live) else null,
-                        if (ui.detectTrips) stringResource(R.string.short_detect) else null,
-                    ).joinToString(", ").ifEmpty { stringResource(R.string.all_off) }
-                    SettingsPage.Devices -> when {
-                        state.email == null -> stringResource(R.string.devices_need_email)
-                        else -> state.devices?.let { if (it.size == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, it.size) }
-                    }
-                    SettingsPage.Language -> listOfNotNull(
-                        when (Lang.pref(ctx)) {
-                            Lang.EN -> "English"
-                            Lang.ZH -> "中文"
-                            else -> stringResource(R.string.follow_device)
-                        },
-                        when (state.profile?.clock) {
-                            Clock.H12 -> stringResource(R.string.clock_12)
-                            Clock.H24 -> stringResource(R.string.clock_24)
-                            else -> null
-                        },
-                    ).joinToString(" · ")
-                    SettingsPage.Appearance -> "${stringResource(themeName(Theme.pref(ctx)))} · ${stringResource(CardStyle.name(CardStyle.pref(ctx)))}"
-                    SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
-                    SettingsPage.About, SettingsPage.Feedback -> null
-                }
-                Row(
-                    Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(page) }.padding(vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(page.title), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            summary.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = muted)
                 }
             }
+            // Your day, as a route.
+            Column(
+                Modifier.padding(top = 12.dp).fillMaxWidth().background(c.surface, RoundedCornerShape(18.dp))
+                    .border(1.dp, c.outlineVariant, RoundedCornerShape(18.dp)).padding(top = 14.dp, bottom = 8.dp),
+            ) {
+                Label(stringResource(R.string.heading_your_day), Modifier.padding(horizontal = 14.dp).semantics { heading() })
+                val home = profile?.homeStops?.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code } ?: stringResource(R.string.no_home_stop)
+                val classes = summary(SettingsPage.Timetable, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips).orEmpty()
+                val pace = profile?.let { stringResource(paceName(it.walkPace)) }.orEmpty()
+                DayRoute(
+                    listOf(
+                        Triple(home, stringResource(R.string.step_home), SettingsPage.Trips),
+                        Triple(classes, stringResource(R.string.timetable), SettingsPage.Timetable),
+                        Triple(pace, stringResource(R.string.walking_pace), SettingsPage.Trips),
+                    ),
+                    onOpen,
+                )
             }
-            // About and Send feedback, as links under the list.
-            Row(Modifier.padding(top = 16.dp).offset(x = (-12).dp)) {
+            // The rest, as tiles.
+            TwoColumns(
+                listOf(
+                    SettingsPage.Favourites to R.drawable.ic_heart,
+                    SettingsPage.Notifications to R.drawable.ic_bell,
+                    SettingsPage.Language to R.drawable.ic_globe,
+                    SettingsPage.Appearance to R.drawable.ic_contrast,
+                    SettingsPage.Devices to R.drawable.ic_devices,
+                    SettingsPage.Feedback to R.drawable.ic_chat,
+                ),
+                Modifier.padding(top = 12.dp),
+                gap = 10.dp,
+            ) { (page, icon), mod ->
+                LinkTile({ onOpen(page) }, mod.heightIn(min = 112.dp)) {
+                    Icon(painterResource(icon), contentDescription = null, tint = c.primary, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.weight(1f).heightIn(min = 14.dp))
+                    Text(stringResource(page.title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    val said = when (page) {
+                        SettingsPage.Feedback -> stringResource(R.string.feedback_short)
+                        SettingsPage.Language, SettingsPage.Appearance -> displaySummary(page, state)
+                        else -> summary(page, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips)
+                    }
+                    val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates && !ui.detectTrips
+                    said?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = if (off) c.tertiary else muted, fontWeight = if (off) FontWeight.SemiBold else null, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            // About, as a link under the tiles.
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Center) {
                 TextButton(onClick = { onOpen(SettingsPage.About) }) { Text(stringResource(R.string.about)) }
-                TextButton(onClick = { onOpen(SettingsPage.Feedback) }) { Text(stringResource(R.string.send_feedback)) }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+/** Home, classes, pace: three stops on a line, each opening its page. */
+@Composable
+private fun DayRoute(stops: List<Triple<String, String, SettingsPage>>, onOpen: (SettingsPage) -> Unit) {
+    val c = MaterialTheme.colorScheme
+    Box(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Canvas(Modifier.matchParentSize()) {
+            val cell = size.width / stops.size
+            val y = 15.dp.toPx()
+            drawLine(c.primary, androidx.compose.ui.geometry.Offset(cell / 2, y), androidx.compose.ui.geometry.Offset(size.width - cell / 2, y), 4.dp.toPx())
+        }
+        Row(Modifier.fillMaxWidth()) {
+            for ((value, label, page) in stops) {
+                Column(
+                    Modifier.weight(1f).clickable(role = Role.Button) { onOpen(page) }.padding(top = 6.dp, bottom = 8.dp, start = 4.dp, end = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(Modifier.size(18.dp).background(c.surface, CircleShape).border(4.dp, c.primary, CircleShape))
+                    Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                    Text(label, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, maxLines = 1)
+                }
             }
         }
+    }
+}
+
+/** What's set on a page, in a line: the same words the list had. */
+@Composable
+private fun summary(page: SettingsPage, state: AccountState, leaveAlerts: Boolean, liveUpdates: Boolean, detectTrips: Boolean): String? {
+    val profile = state.profile
+    return when (page) {
+        SettingsPage.Trips -> profile?.let {
+            val home = it.homeStops.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
+            listOf(home ?: stringResource(R.string.no_home_stop), stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))).joinToString(" · ")
+        }
+        SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let {
+            when (val n = it.trips.size + it.manual.size) {
+                0 -> stringResource(R.string.no_classes_yet)
+                1 -> stringResource(R.string.one_class)
+                else -> stringResource(R.string.n_classes, n)
+            }
+        }
+        SettingsPage.Favourites -> profile?.let { p -> p.places.joinToString(", ") { it.label }.ifEmpty { stringResource(R.string.none_yet) } }
+        SettingsPage.Notifications -> listOfNotNull(
+            if (leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
+            if (liveUpdates) stringResource(R.string.short_live) else null,
+            if (detectTrips) stringResource(R.string.short_detect) else null,
+        ).joinToString(", ").ifEmpty { stringResource(R.string.all_off) }
+        SettingsPage.Devices -> when {
+            state.email == null -> stringResource(R.string.devices_need_email)
+            else -> state.devices?.let { if (it.size == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, it.size) }
+        }
+        SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
+        else -> null
+    }
+}
+
+/** Language and time, and Appearance: what each is set to. */
+@Composable
+private fun displaySummary(page: SettingsPage, state: AccountState): String {
+    val ctx = LocalContext.current
+    return if (page == SettingsPage.Language) {
+        listOfNotNull(
+            when (Lang.pref(ctx)) {
+                Lang.EN -> "English"
+                Lang.ZH -> "中文"
+                else -> stringResource(R.string.follow_device)
+            },
+            when (state.profile?.clock) {
+                Clock.H12 -> stringResource(R.string.clock_12)
+                Clock.H24 -> stringResource(R.string.clock_24)
+                else -> null
+            },
+        ).joinToString(" · ")
+    } else {
+        "${stringResource(themeName(Theme.pref(ctx)))} · ${stringResource(CardStyle.name(CardStyle.pref(ctx)))}"
     }
 }
 

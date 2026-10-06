@@ -408,7 +408,8 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
 }
 
 /** A service due at a stop. `color` (#rrggbb), the service's colour, comes with /me/nearby's rows. */
-data class BoardRow(val svc: String, val etaS: Int?, val quality: String, val color: String? = null)
+/** A service at a stop and its next bus. `paid`: a public bus, with a fare. */
+data class BoardRow(val svc: String, val etaS: Int?, val quality: String, val color: String? = null, val paid: Boolean = false)
 
 data class NearbyStop(
     val code: String,
@@ -774,22 +775,26 @@ data class SignInPoll(val status: String, val token: String?, val email: String?
 
 data class Device(val id: String, val name: String, val platform: String?, val createdMs: Long, val lastSeenMs: Long, val current: Boolean)
 
-data class Stop(val code: String, val name: String, val lat: Double, val lon: Double)
+/** A stop, with the services that call there (for its sign in setup). */
+data class Stop(val code: String, val name: String, val lat: Double, val lon: Double, val services: List<String> = emptyList())
 
 data class Residence(val code: String, val name: String, val stops: List<String>, val walkM: Int)
 
-data class Campus(val stops: List<Stop>, val residences: List<Residence>, val destinations: List<Destination>) {
+/** `colors`: each service's colour as NUS paints it, from /campus's routes. */
+data class Campus(val stops: List<Stop>, val residences: List<Residence>, val destinations: List<Destination>, val colors: Map<String, Long> = emptyMap()) {
     fun stopName(code: String) = stops.firstOrNull { it.code == code }?.name ?: code
+    fun stop(code: String) = stops.firstOrNull { it.code == code }
 
     companion object {
         fun parse(o: JSONObject): Campus {
             val s = o.getJSONArray("stops")
             val r = o.optJSONArray("residences") ?: JSONArray()
             val d = o.optJSONArray("destinations") ?: JSONArray()
+            val routes = o.optJSONObject("routes")
             return Campus(
                 stops = (0 until s.length()).map {
                     val x = s.getJSONObject(it)
-                    Stop(x.getString("code"), x.optString("name", x.getString("code")), x.optDouble("lat"), x.optDouble("lon"))
+                    Stop(x.getString("code"), x.optString("name", x.getString("code")), x.optDouble("lat"), x.optDouble("lon"), x.optJSONArray("services").stringList())
                 }.sortedBy { it.name },
                 residences = (0 until r.length()).map {
                     val x = r.getJSONObject(it)
@@ -797,6 +802,7 @@ data class Campus(val stops: List<Stop>, val residences: List<Residence>, val de
                     Residence(x.getString("code"), x.getString("name"), (0 until st.length()).map { i -> st.getString(i) }, x.optInt("walkM"))
                 }.sortedBy { it.name },
                 destinations = (0 until d.length()).map { parseDestination(d.getJSONObject(it)) },
+                colors = routes?.keys()?.asSequence()?.associateWith { parseColor(routes.getJSONObject(it).optString("color")) }.orEmpty(),
             )
         }
     }
@@ -921,7 +927,7 @@ fun parseNearby(json: JSONObject): List<NearbyStop> {
             opposite = if (s.isNull("opposite")) null else s.optString("opposite").ifEmpty { null },
             board = (0 until board.length()).map { j ->
                 val r = board.getJSONObject(j)
-                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"), if (r.isNull("color")) null else r.optString("color").ifEmpty { null })
+                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"), if (r.isNull("color")) null else r.optString("color").ifEmpty { null }, r.optBoolean("paid", false))
             },
         )
     }

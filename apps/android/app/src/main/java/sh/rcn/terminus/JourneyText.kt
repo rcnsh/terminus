@@ -23,6 +23,22 @@ object JourneyText {
         }
     }
 
+    /**
+     * The time inside [leaveIn]'s headline ("6 min" of "Leave in 6 min", "6 分钟"
+     * of "6 分钟后出发"), for the card to colour; null when there's none ("Leave now").
+     */
+    fun leaveTime(answer: NextAnswer, journey: Journey, now: Long): String? {
+        if (answer.card?.phase == "waiting") return null
+        val at = answer.leaveAtMs
+        if (at == null || journey.leave == null || now >= at) return null
+        val left = (at - now) / 1000
+        return when {
+            left >= 120 -> L.s(R.string.n_min, ((left + 30) / 60).toInt())
+            left >= 60 -> L.s(R.string.dur_min_s, (left / 60).toInt(), (left % 60).toInt())
+            else -> L.s(R.string.dur_s, left.coerceAtLeast(1).toInt())
+        }
+    }
+
     /** "To GEA1000 @ UTown · starts 10:00", the class's start being what the arrival and slack are about. */
     fun to(answer: NextAnswer, journey: Journey, clock: (Long) -> String): String =
         listOfNotNull(L.s(R.string.journey_to, journey.to), answer.classAtMs?.takeIf { answer.isClassPlan }?.let { L.s(R.string.starts_at, clock(it)) }).joinToString(" · ")

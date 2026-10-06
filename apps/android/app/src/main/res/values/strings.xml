@@ -266,7 +266,6 @@
     <string name="packed_hint">When the bus you\'d wait for is often full at that stop and time, aim one bus earlier.</string>
     <string name="pair">Pair</string>
     <string name="pair_instead">Pair with a code instead</string>
-    <string name="pair_intro">Pair this phone with your account. On a phone that\'s signed in, go to Settings, then Add a device; or on %1$s/account, choose Pair a device. Then enter the 6-character code here, or scan the QR code with your camera.</string>
     <string name="pair_phone_text">This link pairs this phone with %1$s. Only continue if you created this code on your own account page. A code from someone else would send your trips and location to their account.</string>
     <string name="pair_phone_title">Pair this phone?</string>
     <string name="pair_share_text">Pair terminus with this link, or enter code %1$s: %2$s</string>
@@ -278,7 +277,6 @@
     <string name="preview_arrive">Arrive 09:52 · 8 min early</string>
     <string name="preview_detail">PGP · 3 min walk · COM3 ~9 min</string>
     <string name="preview_heading">Next class · CS2030 @ COM1</string>
-    <string name="privacy_link">Privacy: what\'s kept, and for how long</string>
     <string name="qr_desc">QR code for pairing code %1$s</string>
     <string name="refresh">Refresh</string>
     <string name="refreshing">Refreshing</string>
@@ -377,7 +375,7 @@
     <string name="walk_one_more">One minute more</string>
     <string name="wednesday">Wednesday</string>
     <string name="wednesday_short">Wed</string>
-    <string name="welcome_text">Setting up takes about a minute: where you live, your NUSMods timetable, and how fast you walk. No email or sign-in needed.</string>
+    <string name="welcome_caption">About a minute to set up. No email or sign-in needed.</string>
     <string name="where">Where</string>
     <string name="where_live">Where do you live?</string>
     <string name="where_live_sub">Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live.</string>
@@ -442,7 +440,7 @@
     <string name="card_style_ticket">Ticket</string>
     <string name="card_style_ticket_hint">The bus first, in its colour, then when to leave.</string>
     <string name="card_style_steps">Steps</string>
-    <string name="card_style_steps_hint">Walk, bus and arrive, one under the other.</string>
+    <string name="card_style_steps_hint">The trip as a line down the card, as on a route map.</string>
     <string name="leave_in_min">Leave in %1$d min</string>
     <string name="leave_in_min_s">Leave in %1$d min %2$d s</string>
     <string name="leave_in_s">Leave in %1$d s</string>
@@ -461,4 +459,33 @@
     <string name="journey_live">Live</string>
     <string name="journey_backup">Or %1$s at %2$s from %3$s</string>
     <string name="journey_backup_now">Or go now: %1$s at %2$s from %3$s</string>
+    <string name="step_home">Home</string>
+    <string name="step_classes">Classes</string>
+    <string name="step_pace">Pace</string>
+    <string name="step_alerts">Alerts</string>
+    <string name="all_residences">All %1$d halls and colleges</string>
+    <string name="pace_lap">One lap of a running track is 400 m.</string>
+    <string name="pace_lap_min">%1$d min a lap</string>
+    <string name="pace_lap_yours">a lap at your pace</string>
+    <string name="packed_instead">instead of</string>
+    <string name="packed_word">busy</string>
+    <string name="start_using">Start using terminus</string>
+    <string name="alerts_title">A nudge when it\'s time</string>
+    <string name="location_title">Start from where you are</string>
+    <string name="alert_preview_title">Leave in 5 min for GEA1000</string>
+    <string name="alert_preview_text">R2 from PGP at %1$s</string>
+    <string name="your_stops_heading">Your stops</string>
+    <string name="pair_title">Pair this phone</string>
+    <string name="pair_sub">Type the code from a phone or computer that\'s already signed in.</string>
+    <string name="pair_on_phone">On a phone</string>
+    <string name="pair_on_phone_how">Settings, then Add a device</string>
+    <string name="pair_on_web">On the web</string>
+    <string name="pair_on_web_how">%1$s/account, then Pair a device</string>
+    <string name="pair_scan">Or scan the QR code with your phone\'s camera.</string>
+    <string name="dur_min_s">%1$d min %2$d s</string>
+    <string name="dur_s">%1$d s</string>
+    <string name="journey_leave">Leave</string>
+    <string name="going_anyway">Going somewhere anyway?</string>
+    <string name="plan_trip">Plan a trip</string>
+    <string name="feedback_short">Tell us what\'s wrong, or what you\'d like</string>
 </resources>

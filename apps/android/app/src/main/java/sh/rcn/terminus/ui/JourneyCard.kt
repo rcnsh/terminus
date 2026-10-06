@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,6 +36,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -209,60 +211,120 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long) {
     if (bus != null) Tags(answer, journey)
 }
 
-/** Steps: walk, bus, arrive, one under the other, each with its time. */
+/**
+ * Steps: the trip as a line diagram, as on a bus's route map. Each point
+ * has its time on the left and a dot on the line; between them the walk is
+ * dotted and the ride is drawn in the bus's colour; the last point, where
+ * you're going, is ringed in the accent.
+ */
 @Composable
 private fun Steps(answer: NextAnswer, journey: Journey, now: Long) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Text(
-        listOfNotNull(JourneyText.to(answer, journey, clockOf()), journey.arrive?.takeIf { !answer.isClassPlan }?.let { stringResource(R.string.journey_arrive_time, it) }).joinToString(" · "),
-        color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-    )
+    val late = answer.leaveLate
+    Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     LeaveHead(answer, journey, now)
-    JourneyText.by(answer, journey, now)?.let { Text(it, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOfNotNull(JourneyText.by(answer, journey, now), journey.slack).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
+            Text(it, color = if (late) MaterialTheme.colorScheme.error else muted, modifier = Modifier.weight(1f, fill = false))
+        }
+        if (journey.live) Pill(stringResource(R.string.journey_live), goodColor())
+        if (!answer.isClassPlan) answer.card?.crowd?.let { Pill(it, muted) }
+    }
     val bus = journey.bus
-    Column(Modifier.padding(top = 14.dp)) {
-        journey.walk?.let { walk ->
-            // To the stop, or on foot the whole way there.
-            Step(journey.leave ?: stringResource(R.string.journey_now), first = true, last = false, { Text(stringResource(R.string.journey_walk_to, bus?.stop ?: journey.place), style = MaterialTheme.typography.bodyLarge) }, walk)
+    Column(Modifier.padding(top = 18.dp)) {
+        val walk = journey.walk
+        if (walk != null) {
+            LinePoint(journey.leave ?: stringResource(R.string.journey_now), Dot.START, Line.Walk, stringResource(R.string.journey_walk, walk)) {
+                Text(stringResource(R.string.journey_leave), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
         }
-        if (bus != null) Step(
-            bus.board, first = journey.walk == null, last = false,
-            {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BusBadge(bus.svc, bus.color, 14.sp, paid = bus.paid)
-                    Text(stringResource(R.string.journey_from, bus.stop), style = MaterialTheme.typography.bodyLarge)
-                    if (journey.live) LiveTag()
-                }
-            },
+        // On foot the whole way, the walk runs straight from leaving to the place.
+        if (bus != null) LinePoint(
+            bus.board, if (walk == null) Dot.START else Dot.STOP, Line.Ride(Color(bus.color)),
             listOfNotNull(journey.ride?.let { stringResource(R.string.journey_ride, it) }, journey.off?.let { stringResource(R.string.off_at, it) }).joinToString(" · "),
-        )
-        journey.walkEnd?.let { walk ->
-            Step(journey.arriveStop ?: "", first = false, last = false, { Text(stringResource(R.string.journey_walk_to, journey.place), style = MaterialTheme.typography.bodyLarge) }, walk)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(bus.stop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                BusBadge(bus.svc, bus.color, 13.sp, paid = bus.paid)
+                JourneyText.busIn(journey, now)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1) }
+            }
         }
-        Step(journey.arrive ?: "", first = false, last = true, { Text(stringResource(R.string.journey_arrive_place, journey.to), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold) }, journey.slack, late = answer.leaveLate)
+        journey.walkEnd?.let { w ->
+            LinePoint(journey.arriveStop ?: "", Dot.STOP, Line.Walk, stringResource(R.string.journey_walk, w)) {
+                Text(journey.toStop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        LinePoint(journey.arrive ?: "", Dot.END, null, journey.slack, late = late) {
+            Text(if (bus == null || journey.walkEnd != null) journey.place else journey.toStop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
     }
     JourneyText.backup(answer, journey)?.let {
-        HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
-        Text(it, style = MaterialTheme.typography.bodyMedium, color = muted)
+        Text(
+            it,
+            style = MaterialTheme.typography.bodyMedium,
+            color = muted,
+            modifier = Modifier.padding(top = 14.dp).fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 11.dp),
+        )
     }
 }
 
-/** One step: its time, a dot on the rail (filled for the first), what to do and for how long. */
+private enum class Dot { START, STOP, END }
+
+/** The stretch after a point: a walk (dotted) or a ride (the bus's colour). */
+private sealed interface Line {
+    data object Walk : Line
+    data class Ride(val color: Color) : Line
+}
+
+/**
+ * A point on the line: its time, its dot, what's there, and under it how
+ * long the stretch to the next point takes, which the line runs beside.
+ */
 @Composable
-private fun Step(time: String, first: Boolean, last: Boolean, title: @Composable () -> Unit, sub: String?, late: Boolean = false) {
-    val rail = MaterialTheme.colorScheme.outlineVariant
+private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, late: Boolean = false, title: @Composable () -> Unit) {
+    val c = MaterialTheme.colorScheme
     Row(Modifier.height(IntrinsicSize.Min)) {
-        Text(time, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.width(76.dp).padding(top = 2.dp))
-        Column(Modifier.width(14.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-            // The step you're on is filled; those to come are rings.
-            val dot = Modifier.padding(top = 5.dp).size(12.dp)
-            if (first) Box(dot.background(MaterialTheme.colorScheme.primary, CircleShape))
-            else Box(dot.border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape))
-            if (!last) Box(Modifier.width(2.dp).weight(1f).background(rail))
+        Text(time, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.width(72.dp).padding(top = 3.dp))
+        Column(Modifier.width(26.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            val ring = c.onSurface
+            val bg = c.background
+            val accent = c.primary
+            Canvas(Modifier.padding(top = 4.dp).size(20.dp)) {
+                val mid = center
+                when (dot) {
+                    Dot.START -> drawCircle(accent, 7.dp.toPx(), mid)
+                    Dot.STOP -> {
+                        drawCircle(bg, 7.dp.toPx(), mid)
+                        drawCircle(ring, 5.5.dp.toPx(), mid, style = Stroke(3.dp.toPx()))
+                    }
+                    Dot.END -> {
+                        drawCircle(bg, 10.dp.toPx(), mid)
+                        drawCircle(accent, 7.dp.toPx(), mid, style = Stroke(5.5.dp.toPx()))
+                    }
+                }
+            }
+            if (line != null) {
+                val walkInk = c.onSurfaceVariant
+                Canvas(Modifier.weight(1f).fillMaxWidth().padding(vertical = 3.dp)) {
+                    val x = size.width / 2
+                    when (line) {
+                        Line.Walk -> drawLine(walkInk, Offset(x, 0f), Offset(x, size.height), 3.dp.toPx(), StrokeCap.Round, PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 6.dp.toPx())))
+                        is Line.Ride -> drawLine(line.color, Offset(x, 0f), Offset(x, size.height), 7.dp.toPx(), StrokeCap.Round)
+                    }
+                }
+            }
         }
-        Column(Modifier.padding(start = 12.dp, bottom = if (last) 0.dp else 14.dp)) {
+        Column(Modifier.padding(start = 10.dp, top = 1.dp, bottom = if (line == null) 0.dp else 14.dp)) {
             title()
-            sub?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (late) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
+            below?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (late) c.error else c.onSurfaceVariant,
+                    // A ride's stretch is longer: the line is the trip's backbone.
+                    modifier = Modifier.padding(top = if (line is Line.Ride) 14.dp else 6.dp, bottom = if (line is Line.Ride) 14.dp else 0.dp),
+                )
+            }
         }
     }
 }
@@ -274,14 +336,34 @@ private fun clockOf(): (Long) -> String {
     return { clock(ctx, it) }
 }
 
-/** "Leave in 45 s" or "Leave now", red when it's too late to be on time. */
+/**
+ * "Leave in 6 min" as one line at one size, with only the time in the
+ * accent, so it reads first without a giant digit crowding the lines round
+ * it. "Leave now" is all accent; too late to be on time, all red.
+ */
 @Composable
 private fun LeaveHead(answer: NextAnswer, journey: Journey, now: Long) {
+    val text = JourneyText.leaveIn(answer, journey, now)
+    val time = JourneyText.leaveTime(answer, journey, now)
+    val c = MaterialTheme.colorScheme
+    val accent = c.primary
+    val head = buildAnnotatedString {
+        append(text)
+        val at = time?.let { text.indexOf(it) } ?: -1
+        when {
+            answer.leaveLate -> {}
+            at >= 0 -> addStyle(SpanStyle(color = accent), at, at + time!!.length)
+            time == null -> addStyle(SpanStyle(color = accent), 0, text.length)
+        }
+    }
     Text(
-        JourneyText.leaveIn(answer, journey, now),
-        style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold,
-        color = if (answer.leaveLate) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        head,
+        fontSize = 34.sp,
+        lineHeight = 38.sp,
+        fontWeight = FontWeight.ExtraBold,
+        letterSpacing = (-0.5).sp,
+        color = if (answer.leaveLate) c.error else c.onSurface,
+        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
     )
 }
 
@@ -295,17 +377,6 @@ private fun Tags(answer: NextAnswer, journey: Journey) {
         if (!answer.isClassPlan) answer.card?.crowd?.let { Pill(it, muted) }
     }
     JourneyText.backup(answer, journey)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.padding(top = 8.dp)) }
-}
-
-/** "Live", with a green dot. */
-@Composable
-private fun LiveTag() {
-    val good = goodColor()
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(7.dp).background(good, CircleShape))
-        Spacer(Modifier.width(4.dp))
-        Text(stringResource(R.string.journey_live), style = MaterialTheme.typography.labelMedium, color = good)
-    }
 }
 
 /** The badge's text: the service, with a $ after a public bus's number so the fare is never a surprise. */

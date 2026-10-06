@@ -36,6 +36,16 @@ class StringsTest {
         assertEquals(emptyList<String>(), found)
     }
 
+    /** The card colours the time inside "Leave in 6 min" (JourneyText.leaveTime): it must be there to find, in both languages. */
+    @Test fun theLeaveTimeIsInsideTheHeadline() {
+        for (strings in listOf(en, zh)) {
+            fun f(key: String, vararg args: Int) = String.format(java.util.Locale.ROOT, strings.getValue(key), *args.toTypedArray())
+            assertTrue(f("leave_in_min", 6).contains(f("n_min", 6)))
+            assertTrue(f("leave_in_min_s", 1, 5).contains(f("dur_min_s", 1, 5)))
+            assertTrue(f("leave_in_s", 45).contains(f("dur_s", 45)))
+        }
+    }
+
     @Test fun theRideSaysWhereYouAreInChinese() {
         TestStrings.install("values-zh")
         try {

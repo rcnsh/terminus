@@ -358,4 +358,4 @@ class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
 
 private fun JSONObject.number(key: String): Double? = if (!has(key) || isNull(key)) null else optDouble(key)
 
-private fun JSONArray?.stringList(): List<String> = if (this == null) emptyList() else (0 until length()).map { getString(it) }
+internal fun JSONArray?.stringList(): List<String> = if (this == null) emptyList() else (0 until length()).map { getString(it) }
