@@ -56,11 +56,12 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .stop-sign .detail { padding: 12px 14px; }
 .nearby-row { display: flex; align-items: center; gap: 10px; padding: 7px 14px; font-variant-numeric: tabular-nums; }
 .nearby-row + .nearby-row { border-top: 1px solid var(--line); }
-.stop-sign.big .nearby-row { padding-block: 10px; }
-/* A fixed column, so every road starts at the same place. */
-.nearby-row .svc-col { flex: none; display: flex; width: 3.4em; }
-.nearby-row .eta { flex: none; min-width: 3.6em; text-align: right; font-weight: 800; font-size: 0.95rem; white-space: nowrap; }
-.stop-sign.big .nearby-row .eta { font-size: 1.1rem; }
+.stop-sign.nearest .nearby-row { padding-block: 10px; }
+/* Fixed columns either side (in rem, the same on every sign), so every road
+   starts and ends at the same place and a bus is as far along on each. */
+.nearby-row .svc-col { flex: none; display: flex; width: 3.4rem; }
+.nearby-row .eta { flex: none; min-width: 4.6rem; text-align: right; font-weight: 800; font-size: 0.95rem; white-space: nowrap; }
+.stop-sign.nearest .nearby-row .eta { font-size: 1.1rem; }
 /* The road to the stop (the ring at its end), and the bus on it, nearer the sooner it's due. */
 .road { position: relative; flex: 1; height: 18px; min-width: 40px; }
 .road::before { content: ''; position: absolute; left: 0; right: 10px; top: 8px; height: 2px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 10px); }

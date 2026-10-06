@@ -725,7 +725,7 @@ function NearbyCard({ stops }) {
     <div class="widget nearby" aria-live="polite">
       ${shown.map(
         (s, i) => html`
-          <section class=${i === 0 ? 'stop-sign big' : 'stop-sign'} key=${s.stop.code}>
+          <section class=${i === 0 ? 'stop-sign nearest' : 'stop-sign'} key=${s.stop.code}>
             <header class="plate">
               <${Icon} paths=${BUS} class="plate-bus" />
               <button
