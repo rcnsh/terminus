@@ -50,7 +50,12 @@
 .day-route { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
 .day-route::before { content: ''; position: absolute; top: 13px; left: 16.67%; right: 16.67%; height: 4px; border-radius: 2px; background: var(--accent); }
 .day-stop { position: relative; display: grid; justify-items: center; gap: 2px; padding: 6px 4px 8px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; cursor: pointer; min-width: 0; }
-.day-stop:hover { background: var(--surface-2); }
+/* No background, which would cover the line: the stop's dot fills instead,
+   in the accent's soft colour on hover, in the accent when its page is open. */
+.day-stop:hover .day-dot { background: var(--accent-soft); }
+.day-stop:hover strong { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+.day-stop[aria-current] .day-dot { background: var(--accent); }
+.day-stop[aria-current] strong { color: var(--accent); }
 .day-stop .day-dot { width: 18px; height: 18px; margin-bottom: 6px; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--accent); background: var(--surface); }
 .day-stop strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.93rem; }
 .day-stop > span:last-child { font-size: 0.8rem; color: var(--muted); }
@@ -129,7 +134,7 @@ a.settings-row { text-decoration: none; }
   .settings-side { position: sticky; top: 16px; }
   .page-back { display: none; }
   .page-head { margin-left: 0; }
-  .settings-row[aria-current], .set-tile[aria-current], .day-stop[aria-current] { background: var(--accent-soft); }
+  .settings-row[aria-current], .set-tile[aria-current] { background: var(--accent-soft); }
   .set-tile[aria-current], .settings-row.set-account[aria-current] { border-color: var(--accent); }
   .settings-row[aria-current] .chev { color: var(--accent); }
 }
@@ -510,3 +515,11 @@ details.add summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 }
 :root[data-theme="dark"] .ob-track .infield { fill: #1e3a26; }
 :root[data-theme="dark"] .ob-track-text { color: #bbf7d0; }
+
+/* An account with no email: adding one, at the top of Account, where it can't be missed. */
+.add-email { display: grid; gap: 8px; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); }
+.add-email h3 { margin: 0; font-size: 1.1rem; }
+.add-email .hint { margin: 0; line-height: 1.5; }
+.add-email .btn { margin-top: 6px; }
+/* In the list, the line under "No email" says what to do, in the accent. */
+.set-account .row-sum.add { color: var(--accent); font-weight: 600; }
