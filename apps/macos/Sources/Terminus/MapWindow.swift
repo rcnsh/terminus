@@ -634,6 +634,10 @@ private struct CampusMapView: NSViewRepresentable {
             let ring = MLNSymbolStyleLayer(identifier: "bus-on", source: buses)
             ring.iconImageName = NSExpression(forConstantValue: "bus-on")
             ring.iconScale = size
+            // The offset is in the bus's own frame, so the ring turns with
+            // the bus too, or it lands beside it.
+            ring.iconRotation = E(["get", "heading"])
+            ring.iconRotationAlignment = NSExpression(forConstantValue: "map")
             ring.iconOffset = E(["get", "offset"])
             ring.iconAllowsOverlap = NSExpression(forConstantValue: true)
             ring.iconIgnoresPlacement = NSExpression(forConstantValue: true)
