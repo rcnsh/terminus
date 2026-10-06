@@ -365,13 +365,16 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         )
         CircleLayer(id = "me-halo", source = meSource, radius = const(14.dp), color = const(Color(0xFF2B7BF3)), opacity = const(0.18f))
         CircleLayer(id = "me", source = meSource, radius = const(6.5.dp), color = const(Color(0xFF2B7BF3)), strokeColor = const(Color.White), strokeWidth = const(2.5.dp))
-        // The tapped bus, ringed.
+        // The tapped bus, ringed. The offset is in the bus's own frame, so
+        // the ring turns with the bus too, or it lands beside it.
         SymbolLayer(
             id = "bus-on",
             source = busSource,
             filter = feature["id"].asString() eq const(openBus?.id.orEmpty()),
             iconImage = image(ringIcon, size = DpSize(40.dp, 40.dp)),
             iconSize = busSize,
+            iconRotate = feature["heading"].asNumber(),
+            iconRotationAlignment = const(IconRotationAlignment.Map),
             iconOffset = feature["offset"].asDpOffset(),
             iconAllowOverlap = const(true),
             iconIgnorePlacement = const(true),
