@@ -69,6 +69,10 @@
   "alt": "D1 · 7 分钟 · CLB",
   "departsAt": null,
   "arriveAt": "2026-08-27T01:05:18Z",
+  "foot": {
+    "s": 490,
+    "why": "搭 D1 要 16 分钟"
+  },
   "leave": {
     "at": "2026-08-27T01:48:50Z",
     "estimated": false,
@@ -145,6 +149,22 @@
     },
     "notice": null,
     "h12": false,
-    "journey": null
+    "journey": {
+      "leave": "09:48",
+      "walk": "8 分钟",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "CS2030 @ COM1",
+      "toStop": "COM 3",
+      "arrive": "09:57",
+      "walkEnd": null,
+      "arriveStop": "09:57",
+      "slack": "早到 3 分钟",
+      "live": false,
+      "backup": null,
+      "why": "搭 D1 要 16 分钟"
+    }
   }
 }

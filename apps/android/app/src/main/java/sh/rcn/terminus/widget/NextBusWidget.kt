@@ -290,7 +290,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer.card?.journey != null && !isOld(answer, fetchedAt, now0) -> {
-                        // A trip by bus, in the card style chosen in Settings › Appearance.
+                        // A trip by bus or on foot, in the card style chosen in Settings › Appearance.
                         // Old times fall through to the layouts below, which dim them.
                         // A refresh keeps this layout, with "Updating…" on the head
                         // line (compact) or in the footer: switching layouts for a

@@ -69,6 +69,10 @@
   "alt": "A1 · 9 min · CLB",
   "departsAt": null,
   "arriveAt": "2026-08-27T01:15:51Z",
+  "foot": {
+    "s": 951,
+    "why": "A1 would be 19 min"
+  },
   "leave": null,
   "mode": "trip",
   "dest": {
@@ -118,6 +122,22 @@
     "walkTo": null,
     "notice": null,
     "h12": false,
-    "journey": null
+    "journey": {
+      "leave": null,
+      "walk": "16 min",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "Home",
+      "toStop": "PGP",
+      "arrive": "09:15",
+      "walkEnd": null,
+      "arriveStop": "09:15",
+      "slack": null,
+      "live": false,
+      "backup": null,
+      "why": "A1 would be 19 min"
+    }
   }
 }

@@ -69,6 +69,10 @@
   "alt": "A1 · 9 分钟 · CLB",
   "departsAt": null,
   "arriveAt": "2026-08-27T01:15:51Z",
+  "foot": {
+    "s": 951,
+    "why": "搭 A1 要 19 分钟"
+  },
   "leave": null,
   "mode": "trip",
   "dest": {
@@ -118,6 +122,22 @@
     "walkTo": null,
     "notice": null,
     "h12": false,
-    "journey": null
+    "journey": {
+      "leave": null,
+      "walk": "16 分钟",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "家",
+      "toStop": "PGP",
+      "arrive": "09:15",
+      "walkEnd": null,
+      "arriveStop": "09:15",
+      "slack": null,
+      "live": false,
+      "backup": null,
+      "why": "搭 A1 要 19 分钟"
+    }
   }
 }

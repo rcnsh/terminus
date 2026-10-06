@@ -328,8 +328,12 @@ bus with its colour and time, the ride, where you get off and when you get
 there, and a backup bus (the other bus on a trip; for a class, the sooner
 bus to go now on). A class takes the leave-by's bus, any other trip the
 headline bus, from the answer's `bus` and `altBus` legs and the leave-by's
-`walkS` and `rideS`. It's null on foot, on the bus, once there and with no
-time to give; at the stop it has no walk. When where you're going is a walk
+`walkS` and `rideS`. On foot the whole way it's the walk alone, so the
+styles draw a walk the same way: `bus`, `boardAt` and `ride` are null, `walk`
+is the whole walk (from the answer's `foot`, or a class's leave-by to its
+room) and `why` is the bus it beats ("D1 would be 16 min") or "Services
+ended for the night". A kept plan with a bus still shows its bus. It's null
+on the bus, once there and with no time to give; at the stop it has no walk. When where you're going is a walk
 from its stop (a class's room, a room or building searched for by its code,
 a food court), `walkEnd` is that walk and `arrive` is when you reach the place
 itself, with `arriveStop` the bus's arrival at the stop; the detail line's

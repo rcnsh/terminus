@@ -5,8 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 
 /**
- * How the card and the widgets draw a trip by bus (`card.journey`), chosen in
- * Settings › Appearance, for this phone only. Each leads with when to leave:
+ * How the card and the widgets draw a trip by bus or on foot (`card.journey`),
+ * chosen in Settings › Appearance, for this phone only. Each leads with when
+ * to leave:
  *
  * - Route: a line from you to the stop to where you're going, with the times
  *   under each point. The default: the whole trip at a glance.

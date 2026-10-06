@@ -248,6 +248,7 @@ export function buildAnswer(f: FormatInput): Answer {
       arrivals: f.arrivals,
       departsAt: null,
       arriveAt: walk != null ? iso(f.nowMs + walk * 1000) : null,
+      ...(said != null ? { foot: { s: said, why: trivial ? null : m().servicesEnded } } : {}),
     };
   }
 
@@ -289,6 +290,7 @@ export function buildAnswer(f: FormatInput): Answer {
       alt: renderAlt(best),
       departsAt: null,
       arriveAt: iso(f.nowMs + f.walkAllS * 1000),
+      foot: { s: walkThereS ?? f.walkAllS, why: busPhrase },
     };
   }
 

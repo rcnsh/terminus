@@ -5,7 +5,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
 import androidx.glance.GlanceTheme
 import androidx.glance.LocalContext
@@ -29,14 +32,15 @@ import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.Journey
+import sh.rcn.terminus.JourneyBus
 import sh.rcn.terminus.JourneyText
 import sh.rcn.terminus.L
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 
 /**
- * A trip by bus on the widget, in the card style chosen in Settings ›
- * Appearance. A widget can't tick every second, so it leads with "Leave by
+ * A trip by bus, or on foot the whole way, on the widget, in the card style
+ * chosen in Settings › Appearance. A widget can't tick every second, so it leads with "Leave by
  * 4:01 PM", true until then, and turns to "Leave now" when it's redrawn
  * then. [roomy]: room for more than the headline and one line; [large]: the
  * big widget, with room for the backup bus too.
@@ -110,14 +114,20 @@ private fun Route(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
     // On from the stop to a room or building: a fourth point where there's room
     // for it; otherwise the line ends at the place itself, when you get there.
     val four = journey.walkEnd != null && width >= FOUR_MIN
+    val bus = journey.bus
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         val w = if (four) 46.dp else 56.dp
         journey.walk?.let { walk ->
             Point(L.s(R.string.journey_you), journey.leave ?: L.s(R.string.journey_now), true, w)
             Stretch(walk, null, colors.outline, 2.dp)
         }
-        Point(journey.bus.stop, journey.bus.board, false, w)
-        Stretch(journey.ride, journey.bus.svc, fixed(journey.bus.color), 4.dp)
+        // On foot: you, the walk, and the place.
+        if (bus == null) {
+            Point(journey.place, journey.arrive ?: "", false, w)
+            return@Row
+        }
+        Point(bus.stop, bus.board, false, w)
+        Stretch(journey.ride.orEmpty(), bus.svc, fixed(bus.color), 4.dp)
         if (four) {
             Point(journey.toStop, journey.arriveStop ?: "", false, w)
             Stretch(journey.walkEnd!!, null, colors.outline, 2.dp)
@@ -168,20 +178,27 @@ private fun RowScope.Stretch(caption: String, svc: String?, color: androidx.glan
     }
 }
 
-/** Ticket: the bus as a badge in its colour, its time and stop, then when to leave. */
+/** Ticket: the bus as a badge in its colour, its time and stop, then when to leave. On foot, someone walking and the walk. */
 @Composable
 private fun Ticket(answer: NextAnswer, journey: Journey, large: Boolean, roomy: Boolean, note: String?) {
     val colors = GlanceTheme.colors
     if (roomy) Head(answer, journey, note, withArrive = false)
+    val bus = journey.bus
     Row(verticalAlignment = Alignment.CenterVertically, modifier = GlanceModifier.padding(top = if (roomy) 6.dp else 0.dp)) {
         val side = if (large) 52.dp else 44.dp
-        Box(GlanceModifier.size(side).cornerRadius(12.dp).background(fixed(journey.bus.color)), contentAlignment = Alignment.Center) {
-            Text(journey.bus.svc, style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = if (large) 20.sp else 17.sp), maxLines = 1)
+        if (bus != null) {
+            Box(GlanceModifier.size(side).cornerRadius(12.dp).background(fixed(bus.color)), contentAlignment = Alignment.Center) {
+                Text(bus.svc, style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = if (large) 20.sp else 17.sp), maxLines = 1)
+            }
+        } else {
+            Box(GlanceModifier.size(side).cornerRadius(12.dp).background(colors.surfaceVariant), contentAlignment = Alignment.Center) {
+                Image(ImageProvider(R.drawable.ic_walk), contentDescription = null, colorFilter = ColorFilter.tint(colors.onSurface), modifier = GlanceModifier.size(side / 2))
+            }
         }
         Spacer(GlanceModifier.width(12.dp))
         Column {
             Text(
-                listOfNotNull(journey.bus.board, L.s(R.string.journey_from, journey.bus.stop)).joinToString(" "),
+                if (bus != null) listOfNotNull(bus.board, L.s(R.string.journey_from, bus.stop)).joinToString(" ") else L.s(R.string.journey_walk, journey.walk.orEmpty()),
                 style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 20.sp else 17.sp),
                 maxLines = 1,
             )
@@ -210,20 +227,22 @@ private fun Steps(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
         return
     }
     Spacer(GlanceModifier.height(4.dp))
-    journey.walk?.let { StepLine(journey.leave ?: L.s(R.string.journey_now), "${L.s(R.string.journey_walk_to, journey.bus.stop)} · $it", null) }
-    StepLine(journey.bus.board, "${L.s(R.string.journey_from, journey.bus.stop)} · ${L.s(R.string.journey_ride, journey.ride)}", journey)
+    val bus = journey.bus
+    // To the stop, or on foot the whole way there.
+    journey.walk?.let { StepLine(journey.leave ?: L.s(R.string.journey_now), "${L.s(R.string.journey_walk_to, bus?.stop ?: journey.place)} · $it", null) }
+    if (bus != null) StepLine(bus.board, listOfNotNull(L.s(R.string.journey_from, bus.stop), journey.ride?.let { L.s(R.string.journey_ride, it) }).joinToString(" · "), bus)
     // The walk on from the stop shares the arrival's line, so the widget needs no more room.
     if (large) StepLine(journey.arrive ?: "", listOfNotNull(L.s(R.string.journey_arrive_place, journey.to), journey.slack, journey.walkEnd?.let { L.s(R.string.journey_walk_from, it, journey.toStop) }).joinToString(" · "), null, late = answer.leaveLate)
 }
 
 @Composable
-private fun StepLine(time: String, what: String, bus: Journey?, late: Boolean = false) {
+private fun StepLine(time: String, what: String, bus: JourneyBus?, late: Boolean = false) {
     val colors = GlanceTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = GlanceModifier.padding(top = 3.dp)) {
         Text(time, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.width(64.dp))
         bus?.let {
-            Box(GlanceModifier.cornerRadius(5.dp).background(fixed(it.bus.color)).padding(horizontal = 5.dp, vertical = 1.dp)) {
-                Text(it.bus.svc, style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp), maxLines = 1)
+            Box(GlanceModifier.cornerRadius(5.dp).background(fixed(it.color)).padding(horizontal = 5.dp, vertical = 1.dp)) {
+                Text(it.svc, style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp), maxLines = 1)
             }
             Spacer(GlanceModifier.width(6.dp))
         }
@@ -234,15 +253,21 @@ private fun StepLine(time: String, what: String, bus: Journey?, late: Boolean = 
 /**
  * The trip in one line, for a compact widget: "Walk to PGP · D2 4:05 PM", or
  * "D2 4:05 PM · at PGP" there. For a class, when it gets you there instead of
- * the walk: "arrive 4:15 PM · D2 from PGP 4:05 PM".
+ * the walk: "arrive 4:15 PM · D2 from PGP 4:05 PM". On foot, the walk and
+ * the bus it beats: "8 min walk · D1 would be 16 min".
  */
 private fun oneLine(answer: NextAnswer, journey: Journey): String {
-    val bus = "${journey.bus.svc} ${journey.bus.board}"
+    val b = journey.bus
+    val walk = journey.walk?.let { L.s(R.string.journey_walk, it) }
+    if (b == null) {
+        return listOfNotNull(journey.arrive?.takeIf { answer.isClassPlan }?.let { L.s(R.string.arrive_at, it) }, walk, journey.why).joinToString(" · ")
+    }
+    val bus = "${b.svc} ${b.board}"
     return when {
         // Most needed first, as a narrow widget cuts the end: when you get
         // there, where to board, then when the bus leaves.
-        answer.isClassPlan && journey.arrive != null -> "${L.s(R.string.arrive_at, journey.arrive)} · ${journey.bus.svc} ${L.s(R.string.journey_from, journey.bus.stop)} ${journey.bus.board}"
-        journey.walk != null -> "${L.s(R.string.journey_walk_to, journey.bus.stop)} · $bus"
-        else -> "$bus · ${L.s(R.string.journey_at, journey.bus.stop)}"
+        answer.isClassPlan && journey.arrive != null -> "${L.s(R.string.arrive_at, journey.arrive)} · ${b.svc} ${L.s(R.string.journey_from, b.stop)} ${b.board}"
+        journey.walk != null -> "${L.s(R.string.journey_walk_to, b.stop)} · $bus"
+        else -> "$bus · ${L.s(R.string.journey_at, b.stop)}"
     }
 }

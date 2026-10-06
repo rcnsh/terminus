@@ -38,14 +38,18 @@ object JourneyText {
     fun arrive(journey: Journey): String? =
         journey.arrive?.let { listOfNotNull(L.s(R.string.journey_arrive_time, it), journey.slack).joinToString(" · ") }
 
-    /** "Or A1 at 4:05 PM from PGP"; for a class, the sooner bus to go now on. A public bus is "95 ($)": the fare shows here too. */
-    fun backup(answer: NextAnswer, journey: Journey): String? = journey.backup?.let {
+    /**
+     * "Or A1 at 4:05 PM from PGP"; for a class, the sooner bus to go now on. A
+     * public bus is "95 ($)": the fare shows here too. On foot, the bus the
+     * walk beats: "D1 would be 16 min".
+     */
+    fun backup(answer: NextAnswer, journey: Journey): String? = if (journey.bus == null) journey.why else journey.backup?.let {
         L.s(if (answer.isClassPlan) R.string.journey_backup_now else R.string.journey_backup, if (it.paid) "${it.svc} ($)" else it.svc, it.board, it.stop)
     }
 
-    /** "in 4 min" to the bus leaving, or null once it has. */
+    /** "in 4 min" to the bus leaving, or null once it has (or on foot, with no bus). */
     fun busIn(journey: Journey, now: Long): String? {
-        val left = (journey.boardAtMs - now) / 1000
+        val left = ((journey.boardAtMs ?: return null) - now) / 1000
         if (left <= 0) return null
         return if (left >= 120) L.s(R.string.in_min, ((left + 30) / 60).toInt()) else L.s(R.string.in_min_s, (left / 60).toInt(), (left % 60).toInt())
     }
