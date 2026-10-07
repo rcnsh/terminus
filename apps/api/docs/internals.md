@@ -38,7 +38,7 @@ plain 404. `/docs` takes its bar's band from pagesky.ts, at Singapore's
 hour, like the Worker's small pages.
 
 The landing page is sent with the current release's version (from
-`latest.json`, remembered for five minutes) and, for someone with a live
+`latest.json`, read from R2 on every request, so a release shows at once) and, for someone with a live
 session, Account in place of Sign in, both written in by `src/landing.ts`
 so nothing changes once the page is up. It's `private, no-cache`, with a
 weak ETag of its own made from the file's ETag, the version, signed in or
@@ -107,7 +107,7 @@ pnpm run deploy
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; the ETag itself is looked up at most every 5 minutes per data centre, so a new upload is seen within 5 minutes. Fonts and icons never change at their path (new icons get a new folder, like `v4`), so they're kept by path alone, with no look at R2. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
-| `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. Each isolate reads `latest.json` and the appcast from R2 at most every five minutes, as long as they're cached for. |
+| `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. `latest.json` and the appcast are read from R2 on every request, so a release is live the moment it's uploaded. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. The [status page](../../web/public/status) shows it. |

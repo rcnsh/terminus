@@ -50,43 +50,28 @@ const TYPES: Record<string, string> = {
 };
 
 /**
- * latest.json and the appcast change only with a release, and are served
- * with max-age=300 anyway: each isolate reads them from R2 at most once in
- * that time (missing ones too), rather than on every request.
+ * A small release file's text, or null when there is none. Read from R2
+ * every time, not remembered: a release must show on the landing page and
+ * in the download links the moment release.sh uploads it, and one small
+ * read per request costs next to nothing.
  */
-export const RELEASE_MEMO_MS = 300_000;
-type Kept = { at: number; text: string | null };
-let releaseMemos = new WeakMap<R2Bucket, Map<string, Kept>>();
-
-/** A small release file's text, or null when there is none, as of at most RELEASE_MEMO_MS ago. */
-async function releaseText(bucket: R2Bucket, key: string, nowMs: number): Promise<string | null> {
-  let kept = releaseMemos.get(bucket);
-  if (!kept) releaseMemos.set(bucket, (kept = new Map()));
-  const k = kept.get(key);
-  if (k && nowMs - k.at < RELEASE_MEMO_MS && nowMs >= k.at) return k.text;
+async function releaseText(bucket: R2Bucket, key: string): Promise<string | null> {
   const obj = await bucket.get(key);
-  const text = obj ? await obj.text() : null;
-  kept.set(key, { at: nowMs, text });
-  return text;
+  return obj ? obj.text() : null;
 }
 
 /** The current release as latest.json names it, or null before the first. */
-export async function latestRelease(bucket: R2Bucket, nowMs: number): Promise<Latest | null> {
-  const text = await releaseText(bucket, LATEST, nowMs);
+export async function latestRelease(bucket: R2Bucket): Promise<Latest | null> {
+  const text = await releaseText(bucket, LATEST);
   return text === null ? null : (JSON.parse(text) as Latest);
 }
 
-/** For tests: forget what each isolate kept. */
-export function resetReleaseMemos(): void {
-  releaseMemos = new WeakMap();
-}
-
-export async function handleDownload(path: string, env: Env, url: URL, nowMs: number): Promise<Response | null> {
+export async function handleDownload(path: string, env: Env, url: URL): Promise<Response | null> {
   if (!path.startsWith('/download/')) return null;
   if (!env.DOWNLOADS) return json({ error: 'downloads are not configured' }, 503);
 
   if (path === '/download/appcast.xml') {
-    const feed = await releaseText(env.DOWNLOADS, APPCAST, nowMs);
+    const feed = await releaseText(env.DOWNLOADS, APPCAST);
     if (feed === null) return json({ error: 'no release yet' }, 404);
     return new Response(feed, {
       headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=300' },
@@ -96,7 +81,7 @@ export async function handleDownload(path: string, env: Env, url: URL, nowMs: nu
   const release = RELEASE_FILE.exec(path);
   if (release) return serveFile(env.DOWNLOADS, release[1]);
 
-  const latest = await latestRelease(env.DOWNLOADS, nowMs);
+  const latest = await latestRelease(env.DOWNLOADS);
   if (!latest) return json({ error: 'no release yet' }, 404);
 
   if (path === '/download/latest.json') {

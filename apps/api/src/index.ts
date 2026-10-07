@@ -420,7 +420,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         });
       }
     }
-    const dl = await handleDownload(url.pathname, env, url, nowMs);
+    const dl = await handleDownload(url.pathname, env, url);
     if (dl) return dl;
     // A recorded day of buses: operator only, like /admin/stats.
     const timelapse = await handleTimelapse(req, url, env, nowMs);

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 import { makeBucket } from './_stubs.mjs';
 import { makeD1 } from './_d1.mjs';
-import { fillLanding, landingEtag, landingPage, resetLandingMemo } from '../src/landing.ts';
+import { fillLanding, landingEtag, landingPage } from '../src/landing.ts';
 import { ensureUser, openSession, SESSION_COOKIE } from '../src/accounts.ts';
 
 const INDEX = await readFile(new URL('../../web/public/index.html', import.meta.url), 'utf8');
@@ -39,7 +39,6 @@ test('landing: the version and Account are in the page as sent', () => {
 });
 
 test('landing: signed in by a live session only, never the file\'s own 304, private', async () => {
-  resetLandingMemo();
   const db = makeD1();
   const user = await ensureUser(db, 'you@u.nus.edu', NOW);
   const token = await openSession(db, user.id, 'web', null, NOW);
@@ -60,13 +59,11 @@ test('landing: signed in by a live session only, never the file\'s own 304, priv
 });
 
 test('landing: no release yet leaves the version to the page', async () => {
-  resetLandingMemo();
   const res = await landingPage(new Request('https://x.test/'), ASSETS, { DOWNLOADS: downloads(null) }, NOW);
   assert.ok((await res.text()).includes('<span id="version"></span>'));
 });
 
 test('landing: a copy that is still what would be sent gets a 304; a change to anything in it, the page', async () => {
-  resetLandingMemo();
   const db = makeD1();
   const user = await ensureUser(db, 'you@u.nus.edu', NOW);
   const token = await openSession(db, user.id, 'web', null, NOW);
@@ -89,7 +86,6 @@ test('landing: a copy that is still what would be sent gets a 304; a change to a
   assert.equal(out.status, 200);
   assert.ok((await out.text()).includes('id="account-link">Sign in</a>'));
   assert.notEqual(out.headers.get('etag'), etag);
-  resetLandingMemo();
   assert.equal((await get({ cookie, 'if-none-match': etag }, { ...env, DOWNLOADS: downloads({ version: '2.5.0' }) })).status, 200);
   assert.equal((await get({ cookie, 'if-none-match': etag }, { ...env, PUBLIC_ORIGIN: 'https://beta.example.test' })).status, 200);
   const etags = new Set([
@@ -100,4 +96,16 @@ test('landing: a copy that is still what would be sent gets a 304; a change to a
     await landingEtag('"abc"', '2.4.2', true, true),
   ]);
   assert.equal(etags.size, 5);
+});
+
+test('landing: a new release shows on the very next request, with no wait', async () => {
+  let latest = { version: '2.4.2' };
+  const bucket = makeBucket(async (key) => (key === 'latest.json' ? new TextEncoder().encode(JSON.stringify(latest)) : null));
+  const get = () => landingPage(new Request('https://x.test/', { headers: { accept: 'text/html' } }), ASSETS, { DOWNLOADS: bucket }, NOW);
+  const before = await get();
+  assert.ok((await before.text()).includes('>Version 2.4.2.</span>'));
+  latest = { version: '2.4.3' };
+  const after = await get();
+  assert.ok((await after.text()).includes('>Version 2.4.3.</span>'), 'the same isolate, a second later');
+  assert.notEqual(after.headers.get('etag'), before.headers.get('etag'), 'a browser holding the old page gets the new one');
 });
