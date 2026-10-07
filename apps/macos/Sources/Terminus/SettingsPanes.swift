@@ -334,7 +334,7 @@ struct ChoicesSection: View {
 
 /// What terminus is, that it isn't NUS's, where its data comes from, and links.
 struct AboutPane: View {
-    private let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    private let version = Api.version ?? "dev"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

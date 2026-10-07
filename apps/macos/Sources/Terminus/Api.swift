@@ -162,10 +162,15 @@ private enum ISOFormats {
 func campusTime(_ d: Date) -> String {
     let f = DateFormatter()
     f.locale = Lang.locale
-    f.timeZone = TimeZone(identifier: "Asia/Singapore")!
+    f.timeZone = .campus
     f.setLocalizedDateFormatFromTemplate(usesHour12 ? "hmm" : "HHmm")
     // "下午 6:36", with the space the server's Chinese has.
     return f.string(from: d).replacingOccurrences(of: #"([上下]午)(\d)"#, with: "$1 $2", options: .regularExpression)
+}
+
+extension TimeZone {
+    /// Singapore's, where the campus is: times are shown in it whatever zone this Mac is set to.
+    static let campus = TimeZone(identifier: "Asia/Singapore")!
 }
 
 /// The account's 12- or 24-hour choice (its profile's `clock`): "auto"
@@ -466,6 +471,12 @@ struct ApiError: LocalizedError {
     var errorDescription: String? { message }
 }
 
+/// What to show for a failed request: the server's message when it answered,
+/// else `otherwise` (it couldn't be reached, by default).
+func failureMessage(_ error: Error, otherwise: String = L("Couldn't reach terminus. Check your connection and try again.")) -> String {
+    (error as? ApiError)?.message ?? otherwise
+}
+
 /// The API's errors are lowercase phrases for API users ("not a valid NUSMods
 /// share link"); shown here as sentences, as on the web and Android.
 func sentence(_ text: String) -> String {
@@ -502,8 +513,11 @@ struct Api {
 
     let token: String?
 
+    /// This build's version ("2.4.2"); nil run without a bundle (`swift run`, tests).
+    static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+
     /// `x-terminus-client`: platform and version.
-    static let client = "mac/\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")"
+    static let client = "mac/\(version ?? "dev")"
 
     func pair(code: String, name: String) async throws -> String {
         struct R: Decodable { let token: String }
@@ -527,28 +541,19 @@ struct Api {
     }
 
     func next(_ target: Target, lat: Double?, lon: Double?, acc: Double? = nil) async throws -> NextAnswer {
-        var q = coords(lat, lon, acc)
+        var q = Self.coords(lat, lon, acc)
         switch target {
         case .plan: break
         case .place(let key): q.append(URLQueryItem(name: "place", value: key))
         case .code(let code, _): q.append(URLQueryItem(name: "to", value: code))
         }
-        // The card's clock times, in this Mac's 12- or 24-hour style.
-        if usesHour12 { q.append(URLQueryItem(name: "h12", value: "1")) }
-        let data = try await send("GET", "/me/next", query: q)
-        var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
-        answer.raw = data
-        return answer
+        return try await answer("GET", "/me/next", query: q + Self.h12)
     }
 
     /// Something that happened on the trip; answers with the new planned answer.
     func signal(_ action: CardAction) async throws -> NextAnswer {
         let body: [String: Any] = ["kind": action.id, "trip": action.trip]
-        let q = usesHour12 ? [URLQueryItem(name: "h12", value: "1")] : []
-        let data = try await send("POST", "/me/signal", query: q, json: try JSONSerialization.data(withJSONObject: body))
-        var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
-        answer.raw = data
-        return answer
+        return try await answer("POST", "/me/signal", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
     }
 
     /// A suggestion accepted or turned down.
@@ -559,10 +564,7 @@ struct Api {
 
     /// "Is this wrong?": the answer as it came from the server, and a note (required). Needs an account with an email.
     func report(note: String, answer: Data?) async throws {
-        var body: [String: Any] = ["kind": "wrong", "note": note, "platform": "mac"]
-        if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String { body["appVersion"] = v }
-        if let answer, let obj = try? JSONSerialization.jsonObject(with: answer) { body["context"] = obj }
-        _ = try await send("POST", "/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
+        try await feedback(kind: "wrong", note: note, context: answer.flatMap { try? JSONSerialization.jsonObject(with: $0) })
     }
 
     // MARK: setup and devices (phase 7): the account page's routes, from the app
@@ -609,14 +611,12 @@ struct Api {
     /// Today at a glance: each class with its leave-by, and the trips home.
     /// With a location, the next class is planned from there, as the card is.
     func day(lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> DayPlan {
-        var q = coords(lat, lon, acc)
-        if usesHour12 { q.append(URLQueryItem(name: "h12", value: "1")) }
-        return try JSONDecoder().decode(DayPlan.self, from: try await send("GET", "/me/day", query: q))
+        try JSONDecoder().decode(DayPlan.self, from: try await send("GET", "/me/day", query: Self.coords(lat, lon, acc) + Self.h12))
     }
 
     func nearby(lat: Double?, lon: Double?, acc: Double? = nil) async throws -> [NearbyStop] {
         struct R: Decodable { let stops: [NearbyStop] }
-        let r: R = try await request("GET", "/me/nearby", query: coords(lat, lon, acc))
+        let r: R = try await request("GET", "/me/nearby", query: Self.coords(lat, lon, acc))
         return r.stops
     }
 
@@ -650,18 +650,20 @@ struct Api {
         case .place(let key): body["place"] = key
         case .code(let code, let label): body["to"] = code; body["label"] = label
         }
-        let q = usesHour12 ? [URLQueryItem(name: "h12", value: "1")] : []
-        let data = try await send("POST", "/me/once", query: q, json: try JSONSerialization.data(withJSONObject: body))
-        var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
-        answer.raw = data
-        return answer
+        return try await answer("POST", "/me/once", query: Self.h12, json: try JSONSerialization.data(withJSONObject: body))
     }
 
     /// Send feedback: a note about anything, emailed to the operator like "Is this wrong?".
     /// Needs an account with an email.
     func feedback(note: String) async throws {
-        var body: [String: Any] = ["kind": "other", "note": note, "platform": "mac"]
-        if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String { body["appVersion"] = v }
+        try await feedback(kind: "other", note: note)
+    }
+
+    /// A note to /me/feedback with this build's version, and for a report the answer it's about.
+    private func feedback(kind: String, note: String, context: Any? = nil) async throws {
+        var body: [String: Any] = ["kind": kind, "note": note, "platform": "mac"]
+        if let v = Api.version { body["appVersion"] = v }
+        if let context { body["context"] = context }
         _ = try await send("POST", "/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
     }
 
@@ -714,7 +716,16 @@ struct Api {
         return q
     }
 
-    private func coords(_ lat: Double?, _ lon: Double?, _ acc: Double?) -> [URLQueryItem] { Api.coords(lat, lon, acc) }
+    /// The card's clock times in this Mac's 12- or 24-hour style.
+    private static var h12: [URLQueryItem] { usesHour12 ? [URLQueryItem(name: "h12", value: "1")] : [] }
+
+    /// A NextAnswer, keeping the response as it came for "Is this wrong?".
+    private func answer(_ method: String, _ path: String, query: [URLQueryItem], json: Data? = nil) async throws -> NextAnswer {
+        let data = try await send(method, path, query: query, json: json)
+        var answer = try JSONDecoder().decode(NextAnswer.self, from: data)
+        answer.raw = data
+        return answer
+    }
 
     private func request<T: Decodable>(
         _ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: String]? = nil

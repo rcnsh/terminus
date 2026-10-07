@@ -251,8 +251,7 @@ final class AppModel {
         pairError = nil
         Task {
             do {
-                let name = Host.current().localizedName ?? "Mac"
-                let token = try await Api(token: nil).pair(code: code, name: String(name.prefix(40)))
+                let token = try await Api(token: nil).pair(code: code, name: deviceName)
                 guard TokenStore.write(token) else {
                     pairing = false
                     pairError = L("Couldn't save the pairing on this Mac. Check that there's enough disk space, then pair again.")
@@ -262,15 +261,15 @@ final class AppModel {
                 pairing = false
                 if locator.undecided { locator.ask() }
                 kick()
-            } catch let e as ApiError {
-                pairing = false
-                pairError = e.message
             } catch {
                 pairing = false
-                pairError = L("Couldn't reach terminus. Check your connection and try again.")
+                pairError = failureMessage(error)
             }
         }
     }
+
+    /// This Mac's name, as the account's device list shows it.
+    private var deviceName: String { String((Host.current().localizedName ?? "Mac").prefix(40)) }
 
     // MARK: trip signals
 
@@ -285,10 +284,8 @@ final class AppModel {
             do {
                 try await Api(token: token).choice(id: s.id, accept: accept)
                 _ = await refresh()
-            } catch let e as ApiError {
-                error = e.message
             } catch {
-                self.error = L("Couldn't save that")
+                self.error = failureMessage(error, otherwise: L("Couldn't save that"))
             }
         }
     }
@@ -311,7 +308,7 @@ final class AppModel {
         let at = removedAt, date = day?.date
         Task {
             // Refused (or offline): back where it was, with why under it, as on the web.
-            if let message = await sendDay("skipped", item.key, token: token) {
+            if let message = await send(CardAction(id: "skipped", label: "", trip: item.key), token: token, showingError: false) {
                 if removed?.key == item.key { removed = nil; removedTask?.cancel() }
                 // Only into the day it was taken off: past midnight, Today is another list.
                 if day?.date == date, day?.items.contains(where: { $0.key == item.key }) == false { day?.items.insert(item, at: min(at, day?.items.count ?? 0)) }
@@ -330,16 +327,18 @@ final class AppModel {
         guard let item = removed, let token = TokenStore.read() else { return }
         removed = nil
         removedTask?.cancel()
-        Task { await sendDay("reset", item.key, token: token) }
+        Task { await send(CardAction(id: "reset", label: "", trip: item.key), token: token) }
     }
 
-    /// A signal about one of today's entries, then the plan and Today again.
-    /// Nil once it's done, else why it wasn't.
+    /// A signal, then the plan and Today again: "Not going", "Undo" and "Back
+    /// on campus" change Today too, now rather than at the next refresh.
+    /// Nil once it's done, else why it wasn't (also the popover's error,
+    /// unless the caller shows it itself).
     @discardableResult
-    private func sendDay(_ kind: String, _ key: String, token: String) async -> String? {
+    private func send(_ action: CardAction, token: String, showingError: Bool = true) async -> String? {
         do {
             let api = Api(token: token)
-            let a = try await api.signal(CardAction(id: kind, label: "", trip: key))
+            let a = try await api.signal(action)
             answers[.plan] = a
             updated = Date()
             error = nil
@@ -347,12 +346,10 @@ final class AppModel {
             dayFetched = Date()
             day = try? await api.day()
             return nil
-        } catch let e as ApiError {
-            if kind != "skipped" { error = e.message }
-            return e.message
         } catch {
-            if kind != "skipped" { self.error = L("Offline") }
-            return L("Offline")
+            let message = failureMessage(error, otherwise: L("Offline"))
+            if showingError { self.error = message }
+            return message
         }
     }
 
@@ -369,21 +366,7 @@ final class AppModel {
         signalling = true
         Task {
             defer { signalling = false }
-            do {
-                let api = Api(token: token)
-                let a = try await api.signal(action)
-                answers[.plan] = a
-                updated = Date()
-                error = nil
-                LeaveNotifier.shared.update(a)
-                // "Not going", "Undo", "Back on campus" change Today too: now, not at the next refresh.
-                dayFetched = Date()
-                day = try? await api.day()
-            } catch let e as ApiError {
-                error = e.message
-            } catch {
-                self.error = L("Offline")
-            }
+            await send(action, token: token)
         }
     }
 
@@ -399,8 +382,7 @@ final class AppModel {
         Task {
             defer { startingAnon = false }
             do {
-                let name = String((Host.current().localizedName ?? "Mac").prefix(40))
-                let token = try await Api(token: nil).anon(name: name)
+                let token = try await Api(token: nil).anon(name: deviceName)
                 guard TokenStore.write(token) else {
                     signInError = L("Couldn't save the sign-in on this Mac. Check that there's enough disk space, then try again.")
                     return
@@ -410,10 +392,8 @@ final class AppModel {
                 paired = true
                 if locator.undecided { locator.ask() }
                 kick()
-            } catch let e as ApiError {
-                signInError = e.message
             } catch {
-                signInError = L("Couldn't reach terminus. Check your connection and try again.")
+                signInError = failureMessage(error)
             }
         }
     }
@@ -426,10 +406,8 @@ final class AppModel {
                 try await Api(token: token).deleteAccount()
                 TokenStore.write(nil)
                 clearLocal()
-            } catch let e as ApiError {
-                error = e.message
             } catch {
-                self.error = L("Couldn't reach terminus. Check your connection and try again.")
+                self.error = failureMessage(error)
             }
         }
     }
@@ -461,10 +439,8 @@ final class AppModel {
             dayFetched = Date()
             day = try? await Api(token: token).day()
             return nil
-        } catch let e as ApiError {
-            return e.message
         } catch {
-            return L("Couldn't add it. Check your connection.")
+            return failureMessage(error, otherwise: L("Couldn't add it. Check your connection."))
         }
     }
 
@@ -479,20 +455,16 @@ final class AppModel {
         signInTask?.cancel()
         signInTask = Task {
             do {
-                let name = String((Host.current().localizedName ?? "Mac").prefix(40))
                 // Adding an email to this Mac's own account: it's sent, so the server keeps or merges its setup.
                 anonToken = anonymous ? TokenStore.read() : nil
-                let r = try await Api(token: anonToken).signInStart(email: email, name: name)
+                let r = try await Api(token: anonToken).signInStart(email: email, name: deviceName)
                 signingIn = false
                 signInRequest = r
                 signInWaiting = (email, r.match)
                 await pollSignIn(r)
-            } catch let e as ApiError {
-                signingIn = false
-                signInError = e.message
             } catch {
                 signingIn = false
-                signInError = L("Couldn't reach terminus. Check your connection and try again.")
+                signInError = failureMessage(error)
             }
         }
     }
@@ -510,12 +482,9 @@ final class AppModel {
                     signInTask?.cancel()
                     signedIn(p)
                 }
-            } catch let e as ApiError {
-                signingIn = false
-                signInError = e.message
             } catch {
                 signingIn = false
-                signInError = L("Couldn't reach terminus. Check your connection and try again.")
+                signInError = failureMessage(error)
             }
         }
     }
@@ -625,7 +594,7 @@ final class AppModel {
     /// At most once a day: is there a newer release than this one?
     private func checkForUpdate() {
         let d = UserDefaults.standard
-        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        let current = Api.version ?? "0"
         if let v = d.string(forKey: "latestVersion"), isNewer(v, than: current) { update = v }
         guard Date().timeIntervalSince1970 - d.double(forKey: "updateCheckedAt") > 86_400 else { return }
         Task {
@@ -682,10 +651,8 @@ final class AppModel {
                     try? await Task.sleep(for: .seconds(6))
                     if !Task.isCancelled { reportSent = false }
                 }
-            } catch let e as ApiError {
-                reportResult = e.message
             } catch {
-                reportResult = L("Couldn't reach terminus. Try again in a moment.")
+                reportResult = failureMessage(error, otherwise: L("Couldn't reach terminus. Try again in a moment."))
             }
         }
     }
@@ -871,26 +838,30 @@ final class AppModel {
     /// A refresh was asked for while one was running.
     private var rerun = false
 
+    /// Paused while the Mac sleeps, its screens sleep or it's locked; back
+    /// with a refresh and the clock caught up when any of them ends.
     private func observeSleep() {
         let ws = NSWorkspace.shared.notificationCenter
-        ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.paused = true }
-        }
-        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.paused = false; self?.clock = Date(); self?.kick() }
-        }
-        ws.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.paused = true }
-        }
-        ws.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.paused = false; self?.clock = Date(); self?.kick() }
-        }
         let dist = DistributedNotificationCenter.default()
-        dist.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.paused = true }
+        let pauses: [(NotificationCenter, Notification.Name)] = [
+            (ws, NSWorkspace.willSleepNotification),
+            (ws, NSWorkspace.screensDidSleepNotification),
+            (dist, .init("com.apple.screenIsLocked")),
+        ]
+        let resumes: [(NotificationCenter, Notification.Name)] = [
+            (ws, NSWorkspace.didWakeNotification),
+            (ws, NSWorkspace.screensDidWakeNotification),
+            (dist, .init("com.apple.screenIsUnlocked")),
+        ]
+        for (center, name) in pauses {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.paused = true }
+            }
         }
-        dist.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.paused = false; self?.clock = Date(); self?.kick() }
+        for (center, name) in resumes {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.paused = false; self?.clock = Date(); self?.kick() }
+            }
         }
     }
 

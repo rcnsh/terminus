@@ -118,10 +118,16 @@ struct GoLater: View {
     @State private var message: String?
     @State private var sending = false
 
+    /// Campus time, which the picker shows and the trip is planned in.
+    private static var calendar: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .campus
+        return cal
+    }
+
     /// Half an hour from now on campus, on a five-minute mark.
     private static func soon() -> Date {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Asia/Singapore")!
+        let cal = calendar
         let d = Date().addingTimeInterval(30 * 60)
         let c = cal.dateComponents([.hour, .minute], from: d)
         let m = min(((c.hour ?? 0) * 60 + (c.minute ?? 0) + 4) / 5 * 5, 23 * 60 + 55)
@@ -142,13 +148,11 @@ struct GoLater: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     DatePicker(L("Go later today at…"), selection: $at, displayedComponents: .hourAndMinute)
-                        .environment(\.timeZone, TimeZone(identifier: "Asia/Singapore")!)
+                        .environment(\.timeZone, .campus)
                     Spacer()
                     Button(L("Cancel")) { open = false }.controlSize(.small)
                     Button(L("Plan it")) {
-                        var cal = Calendar(identifier: .gregorian)
-                        cal.timeZone = TimeZone(identifier: "Asia/Singapore")!
-                        let c = cal.dateComponents([.hour, .minute], from: at)
+                        let c = Self.calendar.dateComponents([.hour, .minute], from: at)
                         sending = true
                         Task {
                             message = await model.goLater(atMin: (c.hour ?? 0) * 60 + (c.minute ?? 0))
