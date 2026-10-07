@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { checkTurnstile, hashToken, newPairCode, normalizePairCode, verifyTurnstile } from '../src/accounts.ts';
+import { MAIL_TIMEOUT_MS, checkTurnstile, hashToken, newPairCode, normalizePairCode, sendMail, verifyTurnstile } from '../src/accounts.ts';
 import { WALK } from '../src/config.ts';
 import { GRAPH } from '../src/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
@@ -1413,4 +1413,19 @@ test('a last_seen update that fails is logged, and the request still answers', a
     console.error = log;
   }
   assert.ok(errors.some((e) => e.startsWith('last_seen not updated')), errors.join('\n'));
+});
+
+test('an email send that hangs fails after MAIL_TIMEOUT_MS, as a failed send does', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = { EMAIL: { send: () => new Promise(() => {}) } };
+  const sending = sendMail(env, { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' });
+  t.mock.timers.tick(MAIL_TIMEOUT_MS - 1);
+  let settled = false;
+  sending.catch(() => {}).finally(() => (settled = true));
+  await Promise.resolve();
+  assert.equal(settled, false);
+  t.mock.timers.tick(1);
+  await assert.rejects(sending, /timed out/);
+  // A send that answers in time is not held up by the timer.
+  await sendMail({ EMAIL: { send: async () => ({ messageId: 'x' }) } }, { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' });
 });
