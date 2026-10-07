@@ -125,6 +125,16 @@ enum TokenStore {
     }
 }
 
+/// How far out a fix may be, in metres, as Android and the web send it (`acc`):
+/// its accuracy plus how far someone could have walked since it was taken
+/// (1.3 m/s). A ten-minute-old fix is 780 m out, so the server goes by the
+/// timetable rather than plan from where you were. Nil for a fix CoreLocation
+/// marks invalid (a negative accuracy).
+func fixUncertaintyM(accuracy: Double, ageS: Double) -> Double? {
+    guard accuracy >= 0 else { return nil }
+    return accuracy + max(ageS, 0) * 1.3
+}
+
 /// One-shot location fixes. Every failure is nil: without a location the API
 /// follows the timetable, which is a fine answer.
 @MainActor

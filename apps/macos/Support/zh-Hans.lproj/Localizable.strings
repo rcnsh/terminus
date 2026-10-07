@@ -125,7 +125,7 @@
 "Updating times…" = "正在更新时间…";
 "On the %@" = "在 %@ 上";
 "On the other device, open terminus and enter:" = "在另一台设备上打开 terminus，输入：";
-"On your phone: Settings, then Add a device. Or on %@/account: Pair a device. Then enter the 6-character code here." = "在你的手机上：进入“设置”，然后选“添加设备”。或在 %@/account 选择“配对设备”。然后在这里输入 6 位代码。";
+"On your phone: Settings, then Add a device. Or on %@/account: Add a device. Then enter the 6-character code here." = "在你的手机上：进入“设置”，然后选“添加设备”。或在 %@/account 选择“添加设备”。然后在这里输入 6 位代码。";
 "On." = "已开启。";
 "Open Location settings" = "打开定位设置";
 "Open at login" = "登录时打开";
@@ -141,7 +141,6 @@
 "Picked %@. Change it if you use a different stop." = "已选择 %@。如果你用别的车站，可以修改。";
 "QR code for pairing code %@" = "配对代码 %@ 的二维码";
 "Quit" = "退出";
-"Reading your email on your phone? Open the link in it, and when it asks, choose:" = "在手机上看邮件？打开邮件里的链接，看到提示时选择：";
 "Refresh" = "刷新";
 "Refresh now" = "立即刷新";
 "Refreshing" = "正在刷新";
@@ -175,7 +174,6 @@
 "The sign-in was cancelled from the email. If that was you, send a new one." = "登录已在邮件中取消。如果是你取消的，请重新发送。";
 "The trip home" = "回家的行程";
 "This Mac" = "这台 Mac";
-"This Mac will sign in automatically once you do. The code expires after 15 minutes." = "你完成后，这台 Mac 会自动登录。验证码 15 分钟后失效。";
 "This Mac was signed out of your account. Sign in at %@/account and pair it again." = "这台 Mac 已从你的账户退出登录。请在 %@/account 登录并重新配对。";
 "Time to go" = "该出发了";
 "Timetable estimate" = "按时刻表估计";
@@ -191,7 +189,6 @@
 "Use the email you set up terminus with. We'll send you a code to enter here." = "请使用你设置 terminus 时用的邮箱。我们会发送一个验证码，请在此输入。";
 "Walk from home to your stop: %@ min" = "从家步行到车站：%@ 分钟";
 "Walks follow the real paths on campus. Your pace sets how long they take." = "步行按校园里真实的路线计算。你的步速决定要走多久。";
-"We sent a code to %@. Type it here:" = "我们已向 %@ 发送验证码。在这里输入：";
 "What was wrong?" = "哪里不对？";
 "When the bus you'd wait for is often full at that stop and time, aim one bus earlier." = "如果你要等的巴士在那个车站和时间经常满员，就提早一班。";
 "Where do you live?" = "你住在哪里？";
@@ -259,7 +256,6 @@
 "Signed in as %@" = "已登录为 %@";
 "Sign out of this Mac?" = "在这台 Mac 上退出登录？";
 "Sign out" = "退出登录";
-"API keys, signing out everywhere and deleting your account are on the account page." = "API 密钥、在所有设备上退出登录和删除账户都在账户页面上。";
 "In your timetable" = "在你的课表里";
 "1 class had a venue we couldn't place. Pick the nearest stop, or skip it:" = "有 1 节课的地点我们无法确定。选择最近的车站，或跳过：";
 "%@ classes had a venue we couldn't place. Pick the nearest stop, or skip it:" = "有 %@ 节课的地点我们无法确定。选择最近的车站，或跳过：";
@@ -361,3 +357,15 @@
 "Walking directions" = "步行路线";
 "Arriving" = "即将到站";
 "The map needs the built app (./build.sh)." = "地图需要构建好的应用（./build.sh）。";
+"Sent to %@. Not there after a minute? Check your spam folder. The code works for 15 minutes." = "已发送到 %@。一分钟后还没收到？请检查垃圾邮件。验证码 15 分钟内有效。";
+"Reading it on another device?" = "在另一台设备上看邮件？";
+"Open the link in the email, then choose" = "打开邮件里的链接，然后选择";
+"This Mac signs in by itself once you do." = "选好后，这台 Mac 会自动登录。";
+"Use a different email" = "换一个邮箱";
+"API keys, and signing out everywhere" = "API 密钥，以及在所有设备上退出登录";
+"Delete account…" = "删除账户…";
+"Opens the account page, where you confirm it." = "会打开账户页面，在那里确认。";
+"Skip this class" = "这节课不去";
+"Skip every trip left today" = "今天剩下的行程都不去";
+"Is this wrong?" = "这不对？";
+"%@ of %@ characters" = "%@ / %@ 个字符";

@@ -18,7 +18,7 @@ struct AnswerDetail: View {
                 if let w = a.card?.warning { Row(icon: "exclamationmark.triangle.fill", text: w).fontWeight(.semibold).foregroundStyle(Color.warn) }
                 if a.isFree {
                     // Nothing to catch: no bus to mistake for advice.
-                    Row(icon: "calendar", text: a.detail)
+                    NextClass(answer: a)
                     Row(icon: "location", text: L("Buses near you are under Nearby.")).foregroundStyle(.secondary)
                 } else if a.isClassPlan {
                     // Each arrival next to the bus it belongs to.
@@ -29,9 +29,12 @@ struct AnswerDetail: View {
                     if let note = a.card?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(.secondary) }
                     if let e = a.card?.estimate { Row(icon: "info.circle", text: e).foregroundStyle(.secondary) }
                     if let g = a.goNowLine { Row(icon: "bus", text: g).foregroundStyle(.secondary) }
+                } else if a.card?.upcoming != nil {
+                    // After your day, or at home: what's next.
+                    NextClass(answer: a)
                 } else {
-                Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
-                if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
+                    Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
+                    if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
                 }
                 if !a.isClassPlan, !a.isFree, a.timing?.text != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
@@ -42,11 +45,15 @@ struct AnswerDetail: View {
                 // The server's buttons (plans only: Not going, Not on campus today, undo), the first one prominent.
                 if let actions = a.card?.actions?.filter({ !($0.id == "reset" && $0.trip == undoShownFor && undoShownFor != nil) }), !actions.isEmpty {
                     Flow(spacing: 6) {
-                        ForEach(Array(actions.enumerated()), id: \.element) { i, action in
-                            if i == 0 && action.id != "skipped" && action.id != "reset" {
-                                Button(action.label) { onAction(action) }.buttonStyle(.borderedProminent).controlSize(.small)
-                            } else {
-                                Button(action.label) { onAction(action) }.buttonStyle(.bordered).controlSize(.small)
+                        ForEach(Array(Self.grouped(actions).enumerated()), id: \.offset) { i, group in
+                            if group.count > 1 {
+                                SkipMenu(skips: group, onAction: onAction)
+                            } else if let action = group.first {
+                                if i == 0 && action.id != "skipped" && action.id != "reset" {
+                                    Button(action.label) { onAction(action) }.buttonStyle(.borderedProminent).controlSize(.small)
+                                } else {
+                                    Button(action.label) { onAction(action) }.buttonStyle(.bordered).controlSize(.small)
+                                }
                             }
                         }
                     }
@@ -76,6 +83,79 @@ struct AnswerDetail: View {
         // short answer centres in the card instead of leaving a gap under it.
         .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
         .card()
+    }
+
+    /// The card's buttons, one to a group, except "Not going" and "Not on
+    /// campus today": the same no, for this class and for the whole day, so
+    /// with both they share one menu where the first of them was (as on Android).
+    nonisolated static func grouped(_ actions: [CardAction]) -> [[CardAction]] {
+        let isSkip = { (a: CardAction) in a.id == "skipped" || a.id == "away" }
+        let skips = actions.filter(isSkip)
+        guard skips.count > 1 else { return actions.map { [$0] } }
+        var groups: [[CardAction]] = []
+        for a in actions {
+            if !isSkip(a) { groups.append([a]) } else if a == skips[0] { groups.append(skips) }
+        }
+        return groups
+    }
+
+    /// "Not going ▾": each choice says underneath how much it skips.
+    private struct SkipMenu: View {
+        let skips: [CardAction]
+        let onAction: (CardAction) -> Void
+
+        var body: some View {
+            Menu {
+                ForEach(skips, id: \.self) { s in
+                    Button { onAction(s) } label: {
+                        Text(s.label)
+                        Text(s.id == "skipped" ? L("Skip this class") : L("Skip every trip left today"))
+                    }
+                }
+            } label: {
+                Text(skips[0].label)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .fixedSize()
+        }
+    }
+
+    /// The next class on a block of its own (`card.upcoming`): when in the
+    /// accent, what, then where, as the web and Android show it. Why today has
+    /// none on a break goes above it. An older server's one line otherwise.
+    private struct NextClass: View {
+        let answer: NextAnswer
+
+        var body: some View {
+            if let u = answer.card?.upcoming {
+                if let off = u.off { Row(icon: "calendar", text: off) }
+                HStack(alignment: .top, spacing: 10) {
+                    Capsule().fill(Color.brand).frame(width: 3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(u.when).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.brand)
+                        Text(u.title).font(.callout.weight(.semibold))
+                        Label(u.where, systemImage: "mappin.and.ellipse")
+                            .labelStyle(Tight())
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                // The bar as tall as the words, not the card.
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 2)
+                .accessibilityElement(children: .combine)
+            } else {
+                Row(icon: "calendar", text: answer.detail)
+            }
+        }
+
+        /// An icon a few points from its words, the way Row sets them.
+        private struct Tight: LabelStyle {
+            func makeBody(configuration: Configuration) -> some View {
+                HStack(alignment: .firstTextBaseline, spacing: 4) { configuration.icon.font(.system(size: 10)); configuration.title }
+            }
+        }
     }
 
     private struct Row: View {
@@ -136,10 +216,14 @@ struct NearbyList: View {
     }
 }
 
-/// One pill per service: "D2  4m". Wraps onto more lines instead of
-/// squeezing when a stop has many services.
+/// One pill per service: "D2  4m · 14m", the next bus solid and the ones
+/// after it faded, as on the web and Android. A timetable guess has a "~".
+/// Wraps onto more lines instead of squeezing when a stop has many services.
 struct FlowPills: View {
     let rows: [BoardRow]
+    /// At most this many after the next one: a pill, not a timetable.
+    nonisolated static let laterShown = 2
+
     var body: some View {
         Flow(spacing: 6) {
             ForEach(rows, id: \.self) { r in
@@ -151,27 +235,42 @@ struct FlowPills: View {
                         Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(inkOn(r.color ?? ""))
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c))
-                            .accessibilityLabel(r.paid == true ? "\(r.svc), \(L("Public bus, fare applies"))" : r.svc)
                     } else {
                         Text(name).font(.system(size: 11, weight: .bold))
-                            .accessibilityLabel(r.paid == true ? "\(r.svc), \(L("Public bus, fare applies"))" : r.svc)
                     }
-                    Text(eta(r))
+                    let later = Self.later(r)
+                    (Text(Self.eta(etaS: r.etaS, quality: r.quality)).foregroundColor(.secondary)
+                        + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(Color.secondary.opacity(0.55)))
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .foregroundStyle(.secondary)
                         .contentTransition(.numericText())
                 }
                 .fixedSize()
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(.primary.opacity(0.07)))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Self.spoken(r))
             }
         }
     }
 
-    private func eta(_ r: BoardRow) -> String {
-        guard let s = r.etaS else { return r.quality == "ended" ? L("ended") : "–" }
-        return s < 45 ? L("now") : L("%@m", "\((s + 30) / 60)")
+    /// "4m", "~6m" for a timetable guess, "now", or "ended".
+    nonisolated static func eta(etaS: Int?, quality: String) -> String {
+        guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }
+        if s < 45 { return L("now") }
+        let m = L("%@m", "\((s + 30) / 60)")
+        return quality == "scheduled" ? L("~%@", m) : m
+    }
+
+    nonisolated static func later(_ r: BoardRow) -> [String] {
+        (r.later ?? []).filter { $0.etaS != nil }.prefix(laterShown).map { eta(etaS: $0.etaS, quality: $0.quality) }
+    }
+
+    /// "D2, public bus, fare applies: 4m, then 14m".
+    nonisolated static func spoken(_ r: BoardRow) -> String {
+        let who = r.paid == true ? "\(r.svc), \(L("Public bus, fare applies"))" : r.svc
+        let times = [eta(etaS: r.etaS, quality: r.quality)] + later(r)
+        return "\(who): \(times.joined(separator: ", "))"
     }
 }
 
@@ -184,6 +283,8 @@ struct TodayList: View {
     /// or at `removedAt` should that one go too. Its row stays there, so nothing moves.
     var removedAt = 0
     var removedBefore: String? = nil
+    /// An entry the server wouldn't take off, back in its place, and why.
+    var failed: (key: String, message: String)? = nil
     var onRemove: (DayPlan.Item) -> Void = { _ in }
     var onUndo: () -> Void = {}
 
@@ -194,6 +295,13 @@ struct TodayList: View {
             ForEach(Array(day.items.enumerated()), id: \.element.id) { i, item in
                 if i == at, let r = removed { RemovedRow(item: r, onUndo: onUndo) }
                 TodayRow(item: item, onRemove: onRemove)
+                if let f = failed, f.key == item.key {
+                    Label(f.message, systemImage: "exclamationmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.leading, 68)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             if at == day.items.count, let r = removed { RemovedRow(item: r, onUndo: onUndo) }
         }

@@ -325,6 +325,9 @@ final class SetupModel {
         imported = nil
         message = nil
         defer { importing = false }
+        // A setting's save still waiting would land after the import and put
+        // the old timetable back: it goes first.
+        await saveTask?.value
         do {
             let r = ImportResult(try object(await api.importTimetable(share)))
             imported = r
