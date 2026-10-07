@@ -3,11 +3,11 @@
 `pnpm exec cf analytics_engine sql query --file query.sql`, or the GraphQL API.
 
 Dataset: `terminus` (the beta's is `terminus_beta`). Positional schema lives
-in `src/analytics.ts` — it is the query contract, so it is append-only.
+in `src/analytics.ts`. It is the query contract, so it is append-only.
 
 ## Is the direction algorithm right?
 
-The one thing nothing else measures. High-confidence answers that keep pointing
+Nothing else measures this. High-confidence answers that keep pointing
 at the same stop for the same trip are probably fine; a trip whose chosen stop
 flips between a directional pair is the smell.
 
@@ -48,15 +48,15 @@ ORDER BY plate, timestamp
 ```
 
 For a plate seen at stop A then stop B, the travel time A→B is roughly
-`(timestamp_B + eta_B) - (timestamp_A + eta_A)` — each row predicts an absolute
+`(timestamp_B + eta_B) - (timestamp_A + eta_A)`: each row predicts an absolute
 arrival instant, and the difference between two of them is a segment time.
 Bucket by hour of day and you have a table to check the measured ride times
 against. Nothing in the Worker reads it.
 
 ## Crowding
 
-`blob7` is low/medium/high, derived from a real headcount against 88-seat
-buses. At peak the question is not when the bus arrives but whether you get on.
+`blob7` is low/medium/high, derived from a headcount against 88-seat
+buses. At peak, what matters is whether you get on.
 
 ```sql
 SELECT toHour(timestamp) AS hr, blob3 AS svc,
@@ -67,7 +67,7 @@ GROUP BY hr, svc ORDER BY hr
 
 ## Degradation in the wild
 
-How often does the ladder actually degrade?
+How often does the ladder degrade?
 
 ```sql
 SELECT blob5 AS quality, count() AS n

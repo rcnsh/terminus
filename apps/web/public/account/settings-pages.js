@@ -225,7 +225,7 @@ export function Trips() {
 
   return html`
     <div class="trips">
-      <${Group} title=${t('Where you live')} hint=${t('Only your stops are saved, never where you live.')}>
+      <${Group} title=${t('Where you live')} hint=${t('Only your stops are saved.')}>
         <${Field} id="residence" label=${t('Residence')} sub=${picking ? '' : t('Your stops: {0}.', now.map(stopName).join(', '))}>
           <select
             id="residence"

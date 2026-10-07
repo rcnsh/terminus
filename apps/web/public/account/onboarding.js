@@ -129,7 +129,7 @@ function Welcome({ nav }) {
   const shown = clock ?? (browserHour12() ? '12' : '24');
   return html`
     <img class="ob-mark" src="/assets/mark.svg" alt="" />
-    <${Heading} text=${t('Welcome to terminus')} sub=${t('It tells you when to leave for class, not just when the bus comes. Setting up takes about a minute.')} />
+    <${Heading} text=${t('Welcome to terminus')} sub=${t('It tells you when to leave for class, and which bus to catch. Setting up takes about a minute.')} />
     <ul class="ob-list">
       <li>${t('Your timetable, so it knows where you are going')}</li>
       <li>${t('Where your day starts')}</li>
@@ -233,7 +233,7 @@ function Home({ nav }) {
   const tile = (r) => html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`;
   const yours = mode === 'hall' && picked ? picked.stops : stop ? [stop] : [];
   return html`
-    <${Heading} text=${t('Where your day starts')} sub=${t('Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved, never where you live.')} />
+    <${Heading} text=${t('Where your day starts')} sub=${t('Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved.')} />
     <div role="radiogroup" aria-label=${t('Where you live')}>
       ${common.length > 0 &&
       html`<p class="eyebrow ob-label">${t('Most common')}</p>
@@ -305,7 +305,7 @@ function Travel({ nav }) {
   const [pace, setPace] = useState(profile.get().walkPace ?? 'normal');
   const [full, setFull] = useState(profile.get().fullBusMargin !== false);
   return html`
-    <${Heading} text=${t('How you get around')} sub=${t('Walks follow the real paths on campus. Your pace sets how long they take.')} />
+    <${Heading} text=${t('How you get around')} sub=${t('Walks follow the paths on campus. Your pace sets how long they take.')} />
     <${Track} min=${PACES.find((x) => x.value === pace)?.min ?? 5} />
     <p class="hint ob-lap">${t('One lap of a running track is 400 m.')}</p>
     <${PacePicker} value=${pace} onChange=${setPace} />

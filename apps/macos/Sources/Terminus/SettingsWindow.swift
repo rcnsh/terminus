@@ -344,7 +344,7 @@ struct TripsPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            TripsGroup(title: L("Where you live"), hint: L("Only your stops are saved, never where you live.")) { home }
+            TripsGroup(title: L("Where you live"), hint: L("Only your stops are saved.")) { home }
             TripsGroup(title: L("Your day"), hint: L("Outside these hours, you see your next class instead of a bus.")) { day }
             TripsGroup(title: L("Walking"), hint: L("Walks follow the paths on campus.")) { walking }
         }

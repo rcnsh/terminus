@@ -1,6 +1,6 @@
 /**
  * What search engines read about the site: robots.txt and the sitemap. The
- * pages worth finding are the public ones; the account page, the web app,
+ * pages to index are the public ones; the account page, the web app,
  * the dashboard and the pairing page say noindex in their own HTML. The beta
  * is a copy of the real site, so it asks not to be crawled at all (its pages
  * also send x-robots-tag: noindex, markBeta in site.ts). AI agents get
@@ -50,11 +50,11 @@ export function llmsTxt(origin: string): string {
 
 The answers are ready-made text: \`/next\` and \`/trip\` return a \`label\` (such as \`D2 · 4 min\`) and a one-line \`detail\` to show as they are. Every answer has a \`quality\`: \`live\` from NUS's feed, \`scheduled\` (an estimate from the timetable, when the feed is down) and so on. Don't present an estimate as live.
 
-NUS stops come in pairs on opposite sides of the road, a few metres apart (\`KR-MRT\` and \`KR-MRT-OPP\`). The API picks the side from the route, not the distance, and says when to cross the road.
+NUS stops come in pairs on opposite sides of the road, a few metres apart (\`KR-MRT\` and \`KR-MRT-OPP\`). The API picks the side from the route order and says when to cross the road.
 
 ## Using the API
 
-- Answers need an API key. A person signs in at ${origin}/account, creates one under API keys, and gives it to you. There's no way to get one without them. Send it in the \`x-api-key\` header or as a bearer token.
+- Answers need an API key. A person signs in at ${origin}/account, creates one under API keys, and gives it to you. Only they can create one. Send it in the \`x-api-key\` header or as a bearer token.
 - Each key may make 60 requests a minute. Arrivals are cached 15 s per stop and live buses 5 s per service, so asking more often gets the same answer. Please don't poll many stops in bulk: every miss reaches NUS's own feed.
 - Stops are codes such as \`COM3\`, \`UTOWN\` and \`KR-MRT\`; \`/campus\` lists them all, with their names and services. A destination can also be a NUSMods room code such as \`COM1-0212\`.
 

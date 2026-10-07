@@ -22,7 +22,7 @@ catch, and will I make it?** It knows teaching weeks and holidays, picks the sto
 on the right side of the road, and says when walking is faster. On your home
 screen, in your menu bar and on the web.
 
-## Wherever you look
+## On your phone, your Mac and the web
 
 The same answer on your phone, your Mac and the web, in light or dark.
 
@@ -34,7 +34,7 @@ The same answer on your phone, your Mac and the web, in light or dark.
         <img alt="The Android home-screen widget: leave by 6:00 PM for CS2030, with buttons for saved places." src="apps/web/public/assets/shots/widget-light.webp" width="100%">
       </picture>
       <h3>On your home screen</h3>
-      A widget that keeps itself up to date, with your saved places one tap away. Or a live notification, and a heads-up before you need to leave.
+      A widget that keeps itself up to date, with your saved places one tap away, or a live notification, and a heads-up before you need to leave.
     </td>
     <td width="44%" valign="top">
       <picture>
@@ -42,7 +42,7 @@ The same answer on your phone, your Mac and the web, in light or dark.
         <img alt="The Mac menu bar app: leave by 9:41 for CS2030 at 10:00, catch the 9:45 D2 at PGP." src="apps/web/public/assets/shots/mac-light.webp" width="100%">
       </picture>
       <h3>In your menu bar</h3>
-      When to leave, one glance up. The rest, a click away.
+      When to leave, in the menu bar. Click it for the rest.
     </td>
   </tr>
   <tr>
@@ -67,11 +67,11 @@ The same answer on your phone, your Mac and the web, in light or dark.
     </td>
     <td width="33%" valign="top">
       <h3>The right time</h3>
-      The latest bus that still gets you there, walks along real campus paths at your pace, and a bus earlier when yours is usually busy.
+      The latest bus that still gets you there, walks along campus paths at your pace, and a bus earlier when yours is usually busy.
     </td>
     <td width="33%" valign="top">
       <h3>The right stop</h3>
-      The one going your way, even when the stop across the road is closer. Inside your hall, only the stops you can really walk to.
+      The one going your way, even when the stop across the road is closer. Inside your hall, only the stops you can walk to.
     </td>
   </tr>
 </table>
@@ -95,7 +95,7 @@ On Android and the web: every bus route in its colour, on a quiet street map. Ta
 2. **Import** your NUSMods share link and pick your home stop.
 3. **Install** the Mac menu bar app and sign in with the same email: approve it from the link we email you, on any device, by choosing the number the Mac shows. Or pair it with a code from the account page or the Android app's Settings.
 
-That's it. It updates through the day and goes quiet in the evening. The app has three tabs: **Now** (the card and your places), **Map** and **Settings**.
+It updates through the day and goes quiet in the evening. The app has three tabs: **Now** (the card and your places), **Map** and **Settings**.
 
 <details>
 <summary><b>Installing outside the app stores</b></summary>

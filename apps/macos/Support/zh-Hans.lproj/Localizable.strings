@@ -187,11 +187,11 @@
 "Updated" = "已更新";
 "Use the email you set up terminus with. We'll send you a code to enter here." = "请使用你设置 terminus 时用的邮箱。我们会发送一个验证码，请在此输入。";
 "Walk from home to your stop: %@ min" = "从家步行到车站：%@ 分钟";
-"Walks follow the real paths on campus. Your pace sets how long they take." = "步行按校园里真实的路线计算。你的步速决定要走多久。";
+"Walks follow the paths on campus. Your pace sets how long they take." = "步行按校园里的路线计算。你的步速决定要走多久。";
 "What was wrong?" = "哪里不对？";
 "When the bus you'd wait for is often full at that stop and time, aim one bus earlier." = "如果你要等的巴士在那个车站和时间经常满员，就提早一班。";
 "Where do you live?" = "你住在哪里？";
-"Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live." = "早上在哪里搭巴士、晚上回到哪里。只保存车站，绝不保存你住在哪里。";
+"Where you catch the bus in the morning and head back to at night. Only the stops are saved." = "早上在哪里搭巴士、晚上回到哪里。只保存车站。";
 "Works once, for 10 minutes." = "只能用一次，有效 10 分钟。";
 "You're there" = "已到达";
 "You're here" = "就在这里";
@@ -219,7 +219,7 @@
 "6:36 PM" = "下午 6:36";
 "For every time terminus shows, here, on your phone and on the web." = "terminus 显示的所有时间都用这个格式，这里、手机和网页上都是。";
 "Where you live" = "你的住处";
-"Only your stops are saved, never where you live." = "只保存车站，不会保存你住在哪里。";
+"Only your stops are saved." = "只保存车站。";
 "Off campus" = "校外";
 "Most common" = "最常见";
 "Other residences" = "其他宿舍";

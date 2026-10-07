@@ -3,10 +3,9 @@
 A Cloudflare Worker that answers one question about the NUS internal shuttle
 bus: **when is my bus, and should I run.**
 
-It is not a bus tracker. Good NUS bus trackers already exist. The problem is
-that answering a three-second question currently takes six taps — open the app,
-find the stop, pick the correct side of the road, read a table, work out which
-service actually goes where you are going.
+Good NUS bus trackers already exist, but answering a three-second question
+with one takes six taps: open the app, find the stop, pick the correct side of
+the road, read a table, work out which service goes where you are going.
 
 ```
 GET /next  ->  { "label": "D2 · 4 min",
@@ -55,7 +54,7 @@ Copy `.dev.vars.example` to `.dev.vars` and fill in the values. They are not
 included in this repository, and this repository doesn't explain how to obtain
 them. **Never commit them.** `.dev.vars` is gitignored.
 
-Auth is a **public / guest access-token flow** — the same one that lets uNivUS
+Auth is a **public / guest access-token flow**, the same one that lets uNivUS
 show Bus Arrival without signing in. No NUSNET credentials are involved
 anywhere, and nothing here should ever hold a personal NUS session or another
 student's credentials.
@@ -121,7 +120,7 @@ never refused, so a lecture hall can open the map at once.
 Every 429 carries `Retry-After`, and every client waits it out, at most 5
 minutes, sending nothing meanwhile (web `send()` in `account/dom.js`,
 Android `Quiet`, Mac `Quiet`). A refused request still costs a Worker
-request, so a client stuck in a loop must stop asking, not just fail.
+request, so a client stuck in a loop must stop sending requests.
 
 What the bill depends on, and the guards against it:
 
@@ -156,8 +155,8 @@ error is in the Worker's logs as `cron calendar`.
 
 Every request, and the Trip object, reads that copy at most every 10 minutes
 per instance and merges it with the bundled one; the newer wins where they
-differ. A source that drops a year loses nothing, and a broken reply changes
-nothing.
+differ. A year a source drops is kept from the copy before, and a broken reply is
+not merged.
 
 `/health` says which is in use (`calendar.source`: `bundled` or `fetched`)
 and how far it goes. The "calendar runs out soon" email only comes when even
@@ -273,10 +272,10 @@ account into another one.
   its leave-by (`WAIT_EARLY_MS`): not hours before at a stop you live by, and
   not at a stop you're riding past. The headline is then the bus ("D2 at
   9:41"), never "Leave by" or "Leave now".
-- **A missed class is not where you are.** One whose last record is `missed`
+- **The next trip isn't planned from a missed class.** One whose last record is `missed`
   isn't where the next trip is planned from (`DayState.missed`), on the card
   or in Today: without a location, from the class before or from home.
-- **Nothing is asked.** The card has no question in it (the apps can still
+- **The card asks no questions.** It has none in it (the apps can still
   send `boarded`, `missed` and `arrived` signals). Three minutes
   after the departure the phase is taken as `riding` (`TripView.assumed`),
   and the phone's location corrects it: at the boarding stop, or standing
@@ -516,7 +515,7 @@ Settings. It uses the same routes as the account page, with the session cookie.
   its payload encrypted with aes128gcm, using WebCrypto only. Only
   subscriptions on browsers' push services are kept (FCM, Mozilla, Apple,
   Windows): the Worker POSTs to the endpoint, so any other host is refused.
-- **Every day, not just when the app is open.** A Trip object only watches
+- **Every day, whether or not the app is open.** A Trip object only watches
   once a request asks it to. The Android app asks from its background
   refresh, but a Home Screen web app makes no requests unless it's opened. So
   from 06:00 Singapore time the cron (`armTrips` in monitor.ts) asks the Trip
@@ -576,7 +575,7 @@ A tap always wins: detection only changes a trip nobody has answered, or one
 it answered itself, except that it notices the end of a ride someone said they
 were on.
 
-Nothing is asked, so a wrong guess puts itself right: taken to be on the bus
+As the card asks nothing, detection corrects a wrong guess: taken to be on the bus
 (detected, or nobody said) but standing still more than twice the corridor
 off its road is a miss, and the plan moves on to the next way there. Each fix
 also notes the time on the day's record (`followed`, at most once a minute).
@@ -642,9 +641,9 @@ counted on the phone) switch the widget in place: `WidgetModes.kt`.
 **Direction is resolved by route order, not by distance.** This is the most
 important algorithm here. NUS stops come in directional pairs metres apart,
 `X` and `Opp X`. That gap is inside GPS error near dense buildings, so picking
-the nearer stop is wrong roughly half the time — and it is the specific wrong
-answer that makes you miss a bus you can see. Instead
-[`resolve.ts`](../src/resolve.ts) checks whether the destination is genuinely
+the nearer stop is wrong roughly half the time, and it is the wrong answer
+that makes you miss a bus you can see. Instead
+[`resolve.ts`](../src/resolve.ts) checks whether the destination is
 downstream of each candidate in the scraped route sequence, and scores walking
 and riding in the same unit (seconds) so the trade-off is legible. On a loop
 route both sides technically reach the destination; the wrong side loses on hop
@@ -661,14 +660,14 @@ the card, in walking the whole way, and on the Nearby tab.
 
 **Fetch-on-demand with a 15-second edge cache; no poll loop.** Workers has no
 long-lived process and Cron Triggers bottom out at one-minute granularity. The
-cache entry is keyed on the **resolved stop code**, not the request URL —
+cache entry is keyed on the **resolved stop code**, not the request URL:
 `getLastKnownLocation` jitters the coordinates on every call and the tile
 appends a cache-buster, so a URL-keyed cache would never hit. The one
 exception is the timelapse recorder (below): one bounded, switchable poller
 of live bus positions, through the same cache. It is not a pattern for
 anything else (CLAUDE.md, rule 2).
 
-**KV holds small, slow-changing state, never the arrivals.** The guest token
+**KV holds small, slow-changing state; arrivals stay in the edge cache.** The guest token
 and device id, the `config:appVersion` override, the monitor's view of the
 feed and its incidents, measured ride times (`ride:hops`) and a few
 short-lived marks. KV writes are rate-limited and propagation is eventual,
@@ -742,15 +741,15 @@ so the MRT is not here; nor are live public buses on the map, which the
 per-stop feed cannot give without polling every stop. Contains information
 from LTA DataMall accessed via the Singapore Open Data Licence.
 
-**Failure degrades in public.** `quality` walks `live → scheduled → stale →
+**Failures show in `quality`.** `quality` walks `live → scheduled → stale →
 ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-
-old answer honestly labelled beats a spinner, and beats an empty tile that
+old answer labelled as such beats a spinner, and beats an empty tile that
 reads as "no buses". Only a real arrival becomes `stale`; a headway guess
 from an old answer stays `scheduled`. Arrival times count from when they were
 fetched, so a bus that has left since then (by the walk to it) is never
 offered as catchable.
 
-## What the feed actually looks like
+## What the feed looks like
 
 `test/fixtures/` holds real captured responses and `test/fixtures/README.md`
 records what they establish. Three findings changed the code:
@@ -759,7 +758,7 @@ records what they establish. Three findings changed the code:
 `normalize()` returned an empty array on real data until a fixture proved it.
 
 **Crowding is a headcount, not a bucket.** `arrivalTime_capacity` /
-`arrivalTime_ridership` against 88-seat buses, so `88/88` is a genuine "you
+`arrivalTime_ridership` against 88-seat buses, so `88/88` means "you
 are not getting on this one" rather than a vague "high". Some vehicles report
 neither field, and an absent field is not an empty bus.
 
@@ -768,7 +767,7 @@ D1/D2 terminus and returns both `COM3-D2-S` (a run starting there) and
 `COM3-D2-E` (a run ending there); mid-route stops like `UHALL-OPP` and `UHC`
 carry a bare code. This is a second direction problem underneath the
 `X` / `X-OPP` one, and it is the dangerous kind, because both berths belong to
-the same physical stop — choosing the right stop does not save you. Nothing
+the same physical stop, so choosing the right stop does not save you. Nothing
 orders the two: when no bus is waiting to depart, the terminating arrival is
 the sooner of the two, so taking the earliest ETA hands you a bus that ends
 its run as you board. `resolveBerths()` takes `-S` whenever the stop offers
@@ -813,8 +812,8 @@ calling ConnectX directly and moved bus data behind a proxy on its own host:
      -> {code: "00000", data: {TimeStamp, name, shuttles: [...], hints}}
 ```
 
-The guest JWT from step 1 is accepted by the proxy directly -- no seed token,
-no refresh endpoint, no buswidget hop. `data` is the old `ShuttleServiceResult`
+The guest JWT from step 1 is accepted by the proxy directly, with no seed token,
+refresh endpoint or buswidget hop. `data` is the old `ShuttleServiceResult`
 contents, so `normalize()` is unchanged. Like every uNivUS endpoint, failure
 comes back at HTTP 200 with a non-`"00000"` code; `fms.ts` retries once with a
 freshly minted token and otherwise reports the stop unavailable.
@@ -863,7 +862,7 @@ token is a 24-hour RS256 JWT with `domain: PUBLIC` and `iss: HTD`; its `jti` is
 the device id you sent and its `aud` is the issued `userid`. No NUSNET
 credentials are involved at any point.
 
-Three things that will bite you:
+Four things that will bite you:
 
 - **The response has no `expires_in`.** The lifetime is only in the JWT `exp`
   claim, so `auth.ts` decodes the token to find it.
@@ -872,7 +871,6 @@ Three things that will bite you:
 - **A rejection is HTTP 200.** `{"code":"10000","msg":"Invalid API KEY"}` comes
   back with a 200 status line, so anything checking `res.ok` sails straight
   past it.
-
 - **Do not send `X-Forwarded-Proto`.** It makes the NUS load balancer
   intermittently answer 400 "Contradictory scheme headers" (2 of 6 mints in a
   direct A/B, 0 of 6 without).
@@ -884,21 +882,21 @@ only secrets. Everything else in `.dev.vars.example` is a URL or a version.
 
 Every answer writes one decision row, plus one row per timed arrival, to a
 Workers Analytics Engine dataset. Two purposes: checking whether the direction
-algorithm is actually right, which nothing else measures, and inter-stop
+algorithm is right, which nothing else measures, and inter-stop
 travel times from the feed's own predictions (`plate` is the join key), a
 cross-check on the ride times detection measures. Queries and
 the schema contract are in [docs/analytics.md](analytics.md).
 
-Logging is a no-op without the binding and swallows its own errors. An answer
-that failed because logging failed would be an absurd way to miss a bus.
+Logging is a no-op without the binding and swallows its own errors. A logging
+failure never fails an answer.
 
 ## Known weaknesses
 
 - `RIDE.secondsPerHop` is a **guessed constant** and the ranking inherits its
   error. It separates a 2-hop ride from a 14-hop ride, which is the case that
   matters; it does not reliably separate 4 hops from 5. `stop.confidence`
-  reports which situation you are in — below ~0.6, the answer is a coin flip
-  dressed up as a number. Measured ride times replace it per
+  reports which situation you are in: below ~0.6, the answer is little better
+  than a coin flip. Measured ride times replace it per
   service and hour once enough rides have been detected; until then, and for
   services nobody rides with detection on, it is still the guess.
 - `quality: 'scheduled'` has no timetable behind it. It means "inside operating
@@ -906,7 +904,7 @@ that failed because logging failed would be an absurd way to miss a bus.
   of the ladder and it is labelled as such.
 - The `-S` / `-E` rule rests on one captured stop. If any NUS route uses a
   different berth convention, `resolveBerths()` will fall through to the
-  ambiguous branch and cap confidence, which is the safe direction to fail —
+  ambiguous branch and cap confidence, which is the safe direction to fail,
   but it wants a second terminus in the fixtures to confirm.
 - Most stop fixtures come from `bus.hewliyang.com`'s proxy, not the feed
   directly: the rows are passthrough, the envelope is his. One raw ConnectX
@@ -1013,14 +1011,14 @@ A day of every shuttle, for a timelapse video
 ([`src/timelapse.ts`](../src/timelapse.ts),
 [`src/timelapsedo.ts`](../src/timelapsedo.ts)). It is the **only scheduled
 access to the NUS feed** and the one exception to "don't add load on NUS"
-(CLAUDE.md, rule 2). Everything else fetches because someone asked. Its
-bounds are the point:
+(CLAUDE.md, rule 2). Everything else fetches because someone asked. It is
+bounded on every side:
 
 - **Rate.** Each service's live buses (`active-bus`, the map's call; the feed
   has no call for every service at once) once per `TIMELAPSE.pollMs`, 30 s
   by default and never below `MIN_POLL_MS`, 15 s (`pollInterval()` enforces
   it). The services are spread across the interval: with eight running, one
-  every 3.75 s, never a burst. Arrivals are never polled.
+  every 3.75 s rather than all at once. Arrivals are never polled.
 - **Path.** Through `getBuses()` and `trackedPlacement()`, exactly as `/buses`
   asks: the 5 s edge cache, one fetch in flight per service, `failMemoS`
   after a failure and the breaker after a refusal. When the map has just

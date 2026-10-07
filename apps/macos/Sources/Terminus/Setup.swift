@@ -549,7 +549,7 @@ struct HomeStep: View {
     private var residence: Campus.Residence? { setup.campus?.residences.first { $0.stops == setup.homeStops } }
 
     var body: some View {
-        StepTitle(title: L("Where do you live?"), sub: L("Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live."))
+        StepTitle(title: L("Where do you live?"), sub: L("Where you catch the bus in the morning and head back to at night. Only the stops are saved."))
         if let campus = setup.campus {
             Picker(L("Residence"), selection: Binding(
                 get: { offCampus || residence == nil ? "" : residence!.code },
@@ -634,7 +634,7 @@ struct PaceStep: View {
     ]
 
     var body: some View {
-        StepTitle(title: L("How you get around"), sub: L("Walks follow the real paths on campus. Your pace sets how long they take."))
+        StepTitle(title: L("How you get around"), sub: L("Walks follow the paths on campus. Your pace sets how long they take."))
         ForEach(paces, id: \.0) { value, title, hint in
             let on = setup.walkPace == value
             Button { setup.setPace(value) } label: {
