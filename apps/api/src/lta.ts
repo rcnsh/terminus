@@ -27,11 +27,13 @@ export function ltaConfigured(env: Env): boolean {
   return Boolean(env.LTA_ACCOUNT_KEY);
 }
 
-/** DataMall refused us: the key is wrong or revoked (401), or we're over the limit (429). */
+/** DataMall refused us: the key is wrong or revoked (401), we're over the
+ *  limit (429), or it is down (5xx). Any of them trips its breaker, as the
+ *  same answers from NUS trip the shuttle feed's. */
 export class LtaRefused extends Error {
   readonly status: number;
   constructor(status: number) {
-    super(`DataMall refused: HTTP ${status}`);
+    super(status >= 500 ? `DataMall answered HTTP ${status}` : `DataMall refused: HTTP ${status}`);
     this.status = status;
   }
 }
@@ -170,7 +172,7 @@ export async function fetchPublicArrivals(env: Env, graph: Graph, code: string, 
   const res = await timedFetch('DataMall', `${LTA_BASE}v3/BusArrival?BusStopCode=${encodeURIComponent(ltaCode)}`, {
     headers: { AccountKey: env.LTA_ACCOUNT_KEY!, accept: 'application/json' },
   });
-  if (res.status === 401 || res.status === 429) throw new LtaRefused(res.status);
+  if (res.status === 401 || res.status === 429 || res.status >= 500) throw new LtaRefused(res.status);
   if (!res.ok) throw new Error(`DataMall answered HTTP ${res.status}`);
   const body: unknown = await res.json();
   const arrivals = normalizePublic(body, code, graph, nowMs);
@@ -182,8 +184,8 @@ export async function fetchPublicArrivals(env: Env, graph: Graph, code: string, 
 /**
  * One stop's public buses through the edge cache (edgecache.ts): one call
  * per stop per TTL.arrivalsMs, stale served while a fresh one is fetched, a
- * failed stop not asked again for failMemoS. A refused key quiets every
- * stop for breakerS: it won't be right again until someone fixes it.
+ * failed stop not asked again for failMemoS. A refused key, a 429 or a
+ * 5xx quiets every stop for breakerS: no other stop would fare better.
  */
 export async function getPublicArrivals(env: Env, ctx: ExecutionContext, graph: Graph, code: string, ltaCode: string, nowMs: number = Date.now()): Promise<StopArrivals> {
   return cachedFetch<StopArrivals>({
