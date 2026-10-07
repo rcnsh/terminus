@@ -15,6 +15,7 @@ import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.widget.finishAsync
+import sh.rcn.terminus.widget.isOld
 
 /**
  * "Time to leave" for the next class, and then the trip, in one notification.
@@ -147,9 +148,17 @@ object LeaveAlerts {
         // The words follow the trip: the ride or the next way there; before
         // that, when to leave.
         val ride = card?.ride?.takeIf { card.phase == "riding" }
-        val (title, body) = when {
+        val (title, said) = when {
             card?.phase == "riding" || card?.phase == "missed" -> (card.line ?: answer.label) to answer.detail
             else -> (answer.leaveHeadline(now) ?: return) to (answer.catchLine ?: answer.destLabel.orEmpty())
+        }
+        val store = Store(ctx)
+        // Posted from the last answer when a fresh one couldn't be had
+        // (offline): past its staleAt, its times aren't confirmed.
+        val body = if (isOld(answer, now)) {
+            store.lastAnswer()?.second?.let { listOf(L.s(R.string.unconfirmed_checked, fmt(it)), said).filter { s -> s.isNotEmpty() }.joinToString(" · ") } ?: said
+        } else {
+            said
         }
         val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · ")
         val open = PendingIntent.getActivity(
@@ -157,7 +166,6 @@ object LeaveAlerts {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         // Sound for the heads-up, once; quiet for the rest.
-        val store = Store(ctx)
         val moment = if (card?.phase == "riding" || card?.phase == "missed") store.leaveAlertedMoment else "leave:${answer.classAtMs}"
         val alert = moment != store.leaveAlertedMoment
         store.leaveAlertedMoment = moment
