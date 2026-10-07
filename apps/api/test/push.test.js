@@ -258,16 +258,61 @@ test('a semester reminder that reaches nobody is tried again; one whose mark can
   await assert.rejects(remindTerm(env, Date.now()));
   env.KV.put = put;
   assert.equal(fcm.sent.length, before);
-  // Firebase failing: nothing reached, so not marked done.
+  // Firebase failing: nothing reached, so the user is kept to try again.
   const real = globalThis.fetch;
   globalThis.fetch = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
   assert.equal(await remindTerm(env, Date.now()), 0);
   globalThis.fetch = real;
   console.error = quiet;
-  assert.equal(await env.KV.get('term:reminded'), null);
+  assert.equal(JSON.parse(await env.KV.get('term:retry')).users.length, 1);
   assert.equal(await remindTerm(env, Date.now()), 1, 'sent once it works');
+  assert.equal(await env.KV.get('term:retry'), null);
   assert.equal(fcm.sent.length, before + 1);
   assert.equal(await remindTerm(env, Date.now()), 0, 'once a semester');
+});
+
+test('a semester reminder that never gets through holds up no one after it, and stops after a few tries', async () => {
+  const { call, phone, fcm, env, clock } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-broken' } });
+  const db = env.DB._db;
+  const p = { ...JSON.parse(db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
+  // A second user, after the first in id order, whose phone works.
+  const later = 'zzzz-later';
+  db.prepare("INSERT INTO users (id, email, created, last_seen, via) VALUES (?, 'later@u.nus.edu', 0, 0, 'web')").run(later);
+  db.prepare('INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, 0)').run(later, JSON.stringify(p));
+  db.prepare("INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, push_token) VALUES ('later-hash', ?, 'device', 'Later', 0, 0, 'fcm-later')").run(later);
+  clock(Date.parse('2026-08-04T10:30:00+08:00'));
+  // Firebase fails for the first user's token every time, without saying it's gone.
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init) =>
+    String(url).startsWith('https://fcm.googleapis.com/') && String(init?.body).includes('fcm-broken') ? new Response('internal', { status: 500 }) : real(url, init);
+  // KV as Cloudflare runs it: one write a second to a key, so one per run here.
+  const put = env.KV.put.bind(env.KV);
+  let written = new Set();
+  env.KV.put = async (k, ...rest) => {
+    if (written.has(k)) throw new Error('KV PUT failed: 429 Too Many Requests');
+    written.add(k);
+    return put(k, ...rest);
+  };
+  const run = () => ((written = new Set()), remindTerm(env, Date.now(), 1));
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    assert.equal(await run(), 0, 'the first user, not reached');
+    assert.equal(await run(), 1, 'the next batch goes all the same');
+    assert.deepEqual(fcm.sent.map((m) => m.token), ['fcm-later']);
+    let runs = 2;
+    while ((await env.KV.get('term:retry')) !== null && runs < 20) {
+      await run();
+      runs++;
+    }
+    assert.equal(runs, 8, 'tried on eight runs, then left');
+    assert.equal(await run(), 0, 'once a semester');
+  } finally {
+    globalThis.fetch = real;
+    console.error = quiet;
+  }
 });
 
 test('an access token that went stale is replaced, and the push still goes', async () => {
