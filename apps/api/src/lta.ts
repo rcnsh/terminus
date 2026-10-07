@@ -17,7 +17,7 @@
 
 import type { Arrival, Crowd, Env, Graph, StopArrivals } from './types.ts';
 import { MAX_ETA_S, TTL } from './config.ts';
-import { timedFetch } from './http.ts';
+import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch } from './edgecache.ts';
 import { indexGraph } from './resolve.ts';
 
@@ -184,8 +184,9 @@ export async function fetchPublicArrivals(env: Env, graph: Graph, code: string, 
 /**
  * One stop's public buses through the edge cache (edgecache.ts): one call
  * per stop per TTL.arrivalsMs, stale served while a fresh one is fetched, a
- * failed stop not asked again for failMemoS. A refused key, a 429 or a
- * 5xx quiets every stop for breakerS: no other stop would fare better.
+ * failed stop not asked again for failMemoS. A refused key, a 429, a 5xx
+ * or no answer at all (a timeout, a failed connection) quiets every stop
+ * for breakerS: no other stop would fare better.
  */
 export async function getPublicArrivals(env: Env, ctx: ExecutionContext, graph: Graph, code: string, ltaCode: string, nowMs: number = Date.now()): Promise<StopArrivals> {
   return cachedFetch<StopArrivals>({
@@ -198,7 +199,7 @@ export async function getPublicArrivals(env: Env, ctx: ExecutionContext, graph: 
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
-    breaker: { key: `${cacheBase()}/breaker-public`, trips: (err) => err instanceof LtaRefused, maxAgeS: TTL.breakerS },
+    breaker: { key: `${cacheBase()}/breaker-public`, trips: (err) => err instanceof LtaRefused || err instanceof UpstreamUnreachable, maxAgeS: TTL.breakerS },
     inflight,
   });
 }

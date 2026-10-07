@@ -213,3 +213,14 @@ test('getPublicArrivals: DataMall answering 5xx quiets every stop, as a NUS 5xx 
   await assert.rejects(getPublicArrivals(e, ctx, GRAPH_PUBLIC, 'YIH', '16171', FROZEN_NOW + 1_000), /recently failed/);
   assert.equal(down.counts.public, 1, 'the other stop is not asked');
 });
+
+test('getPublicArrivals: DataMall not answering at all quiets every stop, as a NUS timeout does', async () => {
+  const down = makeFetch({ publicFail: true });
+  installGlobals(down, FROZEN_NOW);
+  const e = env();
+  const ctx = makeCtx();
+  await assert.rejects(getPublicArrivals(e, ctx, GRAPH_PUBLIC, 'IT', '16189', FROZEN_NOW), /DataMall unreachable/);
+  await ctx.settle();
+  await assert.rejects(getPublicArrivals(e, ctx, GRAPH_PUBLIC, 'YIH', '16171', FROZEN_NOW + 1_000), /recently failed/);
+  assert.equal(down.counts.public, 1, 'the other stop is not asked');
+});
