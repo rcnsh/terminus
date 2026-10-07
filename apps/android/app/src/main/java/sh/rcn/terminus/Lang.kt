@@ -45,7 +45,7 @@ object Lang {
         return prefs(ctx).getString(KEY, AUTO) ?: AUTO
     }
 
-    /** Sets this phone's language. On 13+ the system recreates the activity; on 12 the caller does. */
+    /** Sets this phone's language. On 13+ the app redraws in it in place (MainActivity); on 12 the caller recreates the activity. */
     fun set(ctx: Context, pref: String) {
         prefs(ctx).edit { putString(KEY, pref) }
         if (Build.VERSION.SDK_INT >= 33) {

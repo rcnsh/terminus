@@ -2,6 +2,7 @@ package sh.rcn.terminus.ui
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,6 +12,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -48,6 +51,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -71,15 +75,39 @@ class MainActivity : ComponentActivity() {
     // Android 12 has no per-app language: the chosen one is applied here (Lang).
     override fun attachBaseContext(base: Context) = super.attachBaseContext(Lang.wrap(base))
 
+    /** The dark mode and language the screen was last drawn in, to tell which one changed. */
+    private var shown: Configuration? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // A recreation (rotation, theme change) must not re-apply the link
+        shown = Configuration(resources.configuration)
+        // A recreation (rotation) must not re-apply the link
         // that opened the app and yank the user back to that view.
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
         sh.rcn.terminus.Push.register(this)
         setContent { TerminusTheme { App(vm, account, map) } }
+    }
+
+    /**
+     * Light or dark, or the language, changed (in Settings or the phone's):
+     * the activity stays and Compose redraws in it, with no blank screen
+     * between. What recreating it did besides is done here.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val before = shown
+        shown = Configuration(newConfig)
+        if (before == null) return
+        val night = Configuration.UI_MODE_NIGHT_MASK
+        // The navigation bar's icons, light or dark, are set once by enableEdgeToEdge.
+        if (before.uiMode and night != newConfig.uiMode and night) enableEdgeToEdge()
+        // The answer and the day are written by the server in the app's language.
+        if (before.locales != newConfig.locales) {
+            vm.load(restart = true)
+            vm.loadDay()
+        }
     }
 
     override fun onResume() {
@@ -150,9 +178,31 @@ class MainActivity : ComponentActivity() {
 private fun TerminusTheme(content: @Composable () -> Unit) {
     // The Surface sets the default text colour to onBackground. Without it,
     // any Text with no explicit colour is black, invisible in dark mode.
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) BrandDark else BrandLight) {
+    MaterialTheme(colorScheme = fading(if (isSystemInDarkTheme()) BrandDark else BrandLight)) {
         Surface(color = MaterialTheme.colorScheme.background, content = content)
     }
+}
+
+/** The colours, fading from light to dark or back rather than swapping in one frame. */
+@Composable
+private fun fading(to: ColorScheme): ColorScheme {
+    @Composable
+    fun Color.fade() = animateColorAsState(this, tween(350), label = "theme").value
+    return to.copy(
+        primary = to.primary.fade(), onPrimary = to.onPrimary.fade(),
+        primaryContainer = to.primaryContainer.fade(), onPrimaryContainer = to.onPrimaryContainer.fade(),
+        secondary = to.secondary.fade(), onSecondary = to.onSecondary.fade(),
+        secondaryContainer = to.secondaryContainer.fade(), onSecondaryContainer = to.onSecondaryContainer.fade(),
+        tertiary = to.tertiary.fade(), onTertiary = to.onTertiary.fade(),
+        error = to.error.fade(), onError = to.onError.fade(),
+        background = to.background.fade(), onBackground = to.onBackground.fade(),
+        surface = to.surface.fade(), onSurface = to.onSurface.fade(),
+        surfaceVariant = to.surfaceVariant.fade(), onSurfaceVariant = to.onSurfaceVariant.fade(),
+        surfaceContainerHighest = to.surfaceContainerHighest.fade(), surfaceContainerHigh = to.surfaceContainerHigh.fade(),
+        surfaceContainer = to.surfaceContainer.fade(), surfaceContainerLow = to.surfaceContainerLow.fade(),
+        outline = to.outline.fade(), outlineVariant = to.outlineVariant.fade(),
+        inverseSurface = to.inverseSurface.fade(), inverseOnSurface = to.inverseOnSurface.fade(), inversePrimary = to.inversePrimary.fade(),
+    )
 }
 
 /** Which screen is up, apart from the tabs. */

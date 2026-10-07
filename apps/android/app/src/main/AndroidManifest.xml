@@ -36,10 +36,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Terminus">
 
+        <!-- A theme or language chosen in Settings redraws the app in place
+             (MainActivity.onConfigurationChanged) rather than starting it
+             again, which blanked the screen for a moment. -->
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:configChanges="uiMode|locale|layoutDirection"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
