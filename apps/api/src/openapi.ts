@@ -787,7 +787,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       kind: { type: 'string', enum: ['class', 'home'] },
                       key: { type: 'string', example: '4:600:UTOWN', description: 'The trip’s key, for POST /me/signal.' },
                       label: { type: 'string' },
-                      title: { type: 'string', example: 'Home, from UTown', description: 'The row’s first line: the class, or "Home, from X" (Chinese "回家，从 X 出发").' },
+                      title: { type: 'string', example: 'Home, from UTown', description: 'The row’s first line: the class, "Home, from X" (Chinese "回家，从 X 出发"), or "Home after your last class" when that class has no place.' },
                       line: {
                         type: ['string', 'null'],
                         example: 'Leave by ~09:38 · D2 from PGP',

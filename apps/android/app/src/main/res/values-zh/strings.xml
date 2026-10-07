@@ -27,7 +27,7 @@
     <string name="map_places_full">收藏已满</string>
     <string name="map_recentre">回到校园</string>
     <string name="map_save_place">加入收藏</string>
-    <string name="map_saved_as">已在收藏中</string>
+    <string name="map_saved_as">已收藏</string>
     <string name="map_services_here">经过这里的线路</string>
     <string name="map_times_need_connection">实时时间需要联网。</string>
     <string name="map_walking_directions">步行路线</string>
@@ -131,7 +131,7 @@
     <string name="friday_short">周五</string>
     <string name="gap_home">空档超过这个时长就回家</string>
     <string name="get_around">你怎么出行</string>
-    <string name="get_around_sub">步行按校园里的路线计算。你的步速决定要走多久。</string>
+    <string name="get_around_sub">步行按校园里的小路计算。你的步速决定要走多久。</string>
     <string name="get_started">开始</string>
     <string name="getting_off_at">在 %1$s 下车</string>
     <string name="go_later">今天晚些时候出发…</string>
@@ -407,7 +407,7 @@
     <string name="about">关于</string>
     <string name="send_feedback">发送反馈</string>
     <string name="about_what">terminus 根据你的 NUSMods 课表，告诉你该搭哪一班 NUS 校园巴士、在哪个车站搭，以及什么时候出发。</string>
-    <string name="about_independent">terminus 是一个独立的学生项目，与 NUS 没有关联。巴士时间来自 NUS 的校园巴士实时时间。步行路线和地图使用 OpenStreetMap 贡献者的数据。</string>
+    <string name="about_independent">terminus 是一个独立的学生项目，与 NUS 没有关联。实时巴士时间来自 NUS。步行路线和地图使用 OpenStreetMap 贡献者的数据。</string>
     <string name="about_aup">使用 terminus 时，请遵守 NUS 的 IT 资源可接受使用政策。</string>
     <string name="about_version">版本 %1$s</string>
     <string name="status">状态</string>
