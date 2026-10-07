@@ -66,21 +66,25 @@ export function d1Unavailable(err: unknown): boolean {
   // in the query itself (a bad binding, too many variables) stay a 500, so
   // a bug doesn't read as "try again in a minute".
   return /\bD1\b|D1_/.test(msg)
-    && !/constraint|no such (?:table|column|function)|syntax error|D1_TYPE_ERROR|D1_COLUMN_NOTFOUND|too many|too ?big|datatype mismatch|out of range/i.test(msg);
+    && !/constraint|no such (?:table|column|function)|syntax error|D1_TYPE_ERROR|D1_COLUMN_NOTFOUND|too many (?:SQL )?variables|too many terms|too ?big|datatype mismatch|out of range/i.test(msg);
 }
 
 /**
- * callerFor, tried once more on an error, since D1 sometimes drops a single
- * query. Null with `down` when it still fails: the caller answers 503 rather
+ * callerFor, tried once more when D1 is unreachable, since it sometimes
+ * drops a single query. Null with `down` when it still fails: the caller answers 503 rather
  * than a bare 500, so the apps know to try again.
  */
 export async function callerOrDown(env: Env, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<{ caller: Caller | null; down: boolean }> {
   try {
     return { caller: await callerFor(env, req, nowMs, ctx), down: false };
-  } catch {
+  } catch (first) {
+    // A fault in the query (a missing column after a deploy that ran ahead
+    // of its migration) won't pass by itself: a 500, not a retry and a 503.
+    if (!d1Unavailable(first)) throw first;
     try {
       return { caller: await callerFor(env, req, nowMs, ctx), down: false };
     } catch (err) {
+      if (!d1Unavailable(err)) throw err;
       console.error('callerFor: D1 failed twice:', err instanceof Error ? err.message : String(err));
       return { caller: null, down: true };
     }
