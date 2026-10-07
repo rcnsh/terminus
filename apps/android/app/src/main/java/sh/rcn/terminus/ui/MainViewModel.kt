@@ -30,6 +30,7 @@ import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.isNewer
 import sh.rcn.terminus.deviceName
+import sh.rcn.terminus.widget.forgetWidgets
 import sh.rcn.terminus.widget.redrawWidgets
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.isOld
@@ -229,7 +230,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         store.clear()
         Refresher.cancel(ctx)
         _state.value = UiState(paired = false)
-        viewModelScope.launch { redrawWidgets(ctx) }
+        viewModelScope.launch { forgetWidgets(ctx) }
     }
 
     /** Local state goes first, so the screen reacts at once even offline. */
@@ -240,7 +241,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         Refresher.cancel(ctx)
         _state.value = UiState(paired = false)
         viewModelScope.launch {
-            redrawWidgets(ctx)
+            forgetWidgets(ctx)
             runCatching { Api(token).logout() }
         }
     }
@@ -540,7 +541,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } else if (e.status == 401) {
                     store.clear()
                     Refresher.cancel(ctx)
-                    redrawWidgets(ctx)
+                    forgetWidgets(ctx)
                     _state.value = UiState(paired = false, pairError = L.s(R.string.signed_out_removed))
                 } else {
                     _state.update { it.copy(loading = false, error = e.message) }

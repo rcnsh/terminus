@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.net.toUri
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
@@ -97,6 +98,11 @@ object WidgetModes {
     val MODE_JSON = stringPreferencesKey("mode-json")
     val MODE_FETCHED = longPreferencesKey("mode-fetched")
     val MODE_ERROR = stringPreferencesKey("mode-error")
+
+    /** Back to the timetable, with nothing kept of the answer shown: for signing out. */
+    fun forget(prefs: MutablePreferences) {
+        for (k in listOf(MODE, MODE_LABEL, MODE_AT, MODE_JSON, MODE_FETCHED, MODE_ERROR)) prefs.remove(k)
+    }
 
     /**
      * The mode to show now: the chosen one, unless it has run out or a trip
