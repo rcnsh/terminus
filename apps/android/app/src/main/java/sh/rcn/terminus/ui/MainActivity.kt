@@ -304,9 +304,11 @@ private fun Tabs(
         // Back from Map or Settings goes to Now, as from any other tab bar.
         BackHandler(enabled = tab != Tab.Now) { onTab(Tab.Now); vm.load(restart = true) }
         // Switching tabs fades through (out, then in with a slight zoom), and
-        // each tab keeps its saved state while it's away: where Now and
-        // Settings were scrolled to, where the map was looking.
+        // Now and Map keep their saved state while they're away: where Now
+        // was scrolled to, where the map was looking. Settings starts again
+        // from its list, not the page it was left on.
         val saved = rememberSaveableStateHolder()
+        LaunchedEffect(tab) { if (tab != Tab.Settings) saved.removeState(Tab.Settings.name) }
         AnimatedContent(targetState = tab, transitionSpec = { fadeThrough() }, label = "tab") { t ->
             saved.SaveableStateProvider(t.name) {
                 when (t) {
