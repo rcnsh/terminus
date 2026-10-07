@@ -170,6 +170,8 @@ export class Trip {
     }
     // Held like a POST, so a /watch or /clear that came in while this woke
     // isn't undone: an earlier wake asked for stays, and a cleared object stays empty.
+    // A storage write that throws in here resets the object, but a failed write
+    // does that anyway (the output gate), and 'waking' makes the rerun wake again.
     await this.state.blockConcurrencyWhile(async () => {
       if (await this.cleared()) return;
       if (woke) {
