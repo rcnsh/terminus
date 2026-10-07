@@ -63,6 +63,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -259,7 +261,9 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                 CircularProgressIndicator(Modifier.size(12.dp).semantics { contentDescription = refreshing }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
             }
-            Text(footer, style = small, color = muted, modifier = Modifier.weight(1f, fill = false))
+            // A failed refresh is said as it happens; "Updated 9:41" alone isn't.
+            val failed = state.error != null
+            Text(footer, style = small, color = muted, modifier = Modifier.weight(1f, fill = false).semantics { if (failed) liveRegion = LiveRegionMode.Polite })
             if (!state.showNearby && state.answer != null) {
                 if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
                 if (state.reportShown) {
@@ -306,7 +310,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         }
         // Only a failure: a report that went shows in the line above.
         state.reportResult?.let {
-            Text(it, style = small, color = MaterialTheme.colorScheme.error)
+            Text(it, style = small, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
 
         Spacer(Modifier.height(24.dp))

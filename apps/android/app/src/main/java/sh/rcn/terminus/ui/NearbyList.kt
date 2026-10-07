@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -33,6 +35,7 @@ import sh.rcn.terminus.BoardRow
 import sh.rcn.terminus.L
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.parseColor
 
 /**
@@ -64,8 +67,14 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
                 for ((j, row) in s.board.withIndex()) {
                     if (j > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     val color = row.color?.let(::parseColor) ?: 0xFF8A939C
+                    // One line to a screen reader: "Bus D2, about 6 minutes, timetable",
+                    // where the screen has the badge, an outlined bus and "~6 min".
+                    val said = listOfNotNull(
+                        stringResource(if (row.paid) R.string.a11y_bus_paid else R.string.a11y_bus, row.svc),
+                        Spoken.eta(row.etaS, row.quality) ?: Spoken.spell(row.eta ?: eta(row.etaS, row.quality)),
+                    ).joinToString(", ")
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = if (big) 10.dp else 7.dp),
+                        Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = said }.padding(horizontal = 14.dp, vertical = if (big) 10.dp else 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {

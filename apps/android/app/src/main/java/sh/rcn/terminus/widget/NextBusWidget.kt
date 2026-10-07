@@ -63,6 +63,7 @@ import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
@@ -534,7 +535,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val first = stops?.firstOrNull() ?: return L.s(R.string.a11y_nearby_none, chosen.error ?: L.s(R.string.a11y_checking))
         val age = chosen.fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
         val due = departures(first, age, 3).replace(" · ", ", ").ifEmpty { L.s(R.string.a11y_no_buses) }
-        return L.s(R.string.a11y_nearby, first.name, due)
+        return L.s(R.string.a11y_nearby, first.name, Spoken.spell(due))
     }
 }
 
@@ -548,43 +549,9 @@ internal fun chipAction(ctx: Context, mode: Mode, appWidgetId: Int): Action =
         )
     }
 
-/** What the widget says, as a sentence for screen readers. */
-fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: String?): String {
-    if (!paired) return L.s(R.string.a11y_not_paired)
-    if (answer == null) return L.s(R.string.a11y_loading, error ?: L.s(R.string.a11y_loading_word))
-    val old = isOld(answer, ServerClock.now())
-    val ride = answer.card?.ride?.takeIf { answer.card.phase == "riding" }
-    if (ride != null) {
-        val now = ServerClock.now()
-        return listOfNotNull(
-            answer.destLabel?.let { L.s(R.string.a11y_on_the_to, ride.svc, it) } ?: L.s(R.string.on_the, ride.svc),
-            L.s(R.string.a11y_off_at, ride.stops.last(), clock(ctx, ride.arriveMs)),
-            ride.nextText(now).replace(" · ", ", "),
-        ).spoken()
-    }
-    if (answer.isClassPlan && !old) {
-        val fmt = { ms: Long -> clock(ctx, ms) }
-        val now = ServerClock.now()
-        return listOfNotNull(
-            answer.destLabel?.let { L.s(R.string.a11y_starts, it, answer.classAtMs?.let(fmt).orEmpty()) },
-            answer.leaveHeadline(now),
-            answer.catchLine?.replace(" · ", ", "),
-            answer.goNowLine?.replace(" · ", ", "),
-        ).spoken()
-    }
-    val parts = listOfNotNull(
-        answer.destLabel?.let { L.s(R.string.a11y_to, it) },
-        if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", L.s(R.string.a11y_leaves)),
-        if (old) L.s(R.string.a11y_old) else answer.detail.replace(" · ", ", "),
-        answer.leaveText(ServerClock.now())?.takeIf { !old }?.replace(" · ", ", "),
-        answer.timingText?.takeIf { !old },
-        error?.takeIf { it != UPDATING },
-    )
-    return parts.spoken()
-}
-
-/** The parts read as sentences, then what a tap does. */
-private fun List<String>.spoken() = joinToString(". ") + "." + L.s(R.string.a11y_open)
+/** What the widget says, as sentences for screen readers ([Spoken.summary]). */
+fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: String?): String =
+    Spoken.summary(paired, answer, error, ServerClock.now()) { clock(ctx, it) }
 
 /** The app's brand colours, so the widget doesn't take the wallpaper's. */
 private val BrandColors = androidx.glance.material3.ColorProviders(light = BrandLight, dark = BrandDark)
