@@ -35,7 +35,7 @@
   .top .nav { position: relative; z-index: 2; }
   .top .nav-links .btn.soft { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
   .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: end; padding-top: 44px; }
-  .sky-chip .beta { margin: 0 0 0 4px; background: var(--accent-soft); color: var(--accent); }
+  .sky-chip .beta { margin: 0 0 0 4px; background: var(--accent-soft); color: var(--k-accent-small); }
   .hero h1 { font-size: clamp(2.8rem, 6.4vw, 4.8rem); line-height: 1.02; letter-spacing: -0.035em; margin-top: 18px; }
   .hero h1 em { font-style: normal; color: var(--accent); }
   .hero .lede { font-size: 1.15rem; color: var(--muted); margin: 18px 0 28px; max-width: 32rem; }
@@ -70,7 +70,7 @@
   .pn-tag .dot { width: 6px; height: 6px; background: currentColor; }
   .pn-body { flex: 1; padding: 0 16px; }
   .pn-road { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12.5px; }
-  .svc { display: inline-grid; place-items: center; padding: 1px 6px; border-radius: 5px; font-weight: 800; font-size: 10.5px; line-height: 1.4; color: #fff; background: var(--svc); }
+  .svc { display: inline-grid; place-items: center; padding: 1px 6px; border-radius: 5px; font-weight: 800; font-size: 10.5px; line-height: 1.4; color: var(--svc-ink, #fff); background: var(--svc); }
   .steps { list-style: none; margin: 14px 0 0; padding: 0; }
   .steps li { display: grid; grid-template-columns: 2.9rem 22px minmax(0, 1fr); column-gap: 10px; min-height: 48px; }
   .steps li.end { min-height: 0; }
@@ -237,10 +237,10 @@
             <div data-horizon data-stop data-bus="#34a853 0.3 live"></div>
           </div>
           <div class="pn-body">
-            <p class="pn-road"><span class="svc" style="--svc:#34a853">R2</span> <span>reaches <b>PGP</b> in 9 min</span></p>
+            <p class="pn-road"><span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span> <span>reaches <b>PGP</b> in 9 min</span></p>
             <ol class="steps">
               <li class="start walk"><span class="time">09:39</span><span class="rail"></span><span class="what"><strong>Leave</strong><small>3 min walk</small></span></li>
-              <li class="ride" style="--svc:#34a853"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853">R2</span></strong><small>10 min ride</small></span></li>
+              <li class="ride" style="--svc:#34a853;--svc-ink:#1c1917"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span></strong><small>10 min ride</small></span></li>
               <li class="end"><span class="time">09:52</span><span class="rail"></span><span class="what"><strong>UTown</strong></span></li>
             </ol>
             <p class="pn-backup">Or go now: D2 at 09:37 from PGP</p>
@@ -286,7 +286,7 @@
         <p class="pn-lead">Leave in <em>6 min</em></p>
         <ol class="steps">
           <li class="start walk"><span class="time">09:39</span><span class="rail"></span><span class="what"><strong>Leave</strong><small>3 min walk</small></span></li>
-          <li class="end"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853">R2</span></strong></span></li>
+          <li class="end"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span></strong></span></li>
         </ol>
       </div>
       <div><h3>Leave at the right time</h3><p>The latest bus that still gets you there, walks along campus paths at your pace, and a bus earlier when yours is usually busy.</p></div>
@@ -338,8 +338,8 @@
       <div class="web" aria-hidden="true">
         <div class="sign">
           <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>UTown</strong><span class="plate-walk">1 min walk</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#2b9ad6">K</span><span class="road"><i class="live" style="--svc:#2b9ad6;--far:0.15"></i></span><span class="eta">1 min</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#f57c1f">R1</span><span class="road"><i class="live" style="--svc:#f57c1f;--far:0.5"></i></span><span class="eta">6 min</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#2b9ad6;--svc-ink:#1c1917">K</span><span class="road"><i class="live" style="--svc:#2b9ad6;--far:0.15"></i></span><span class="eta">1 min</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#f57c1f;--svc-ink:#1c1917">R1</span><span class="road"><i class="live" style="--svc:#f57c1f;--far:0.5"></i></span><span class="eta">6 min</span></div>
           <div class="sign-row"><span class="svc" style="--svc:#d32f2f">A1</span><span class="road"><i style="--svc:#d32f2f;--far:0.75"></i></span><span class="eta">~11 min</span></div>
         </div>
       </div>

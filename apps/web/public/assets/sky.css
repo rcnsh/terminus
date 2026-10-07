@@ -17,7 +17,7 @@
 }
 [data-sky="dawn"] .sky-panel, [data-sky="day"] .sky-panel, [data-sky="golden"] .sky-panel {
   --k-bg: #fafaf9; --k-surface: rgb(255 255 255 / 0.5); --k-surface-2: rgb(255 255 255 / 0.65); --k-ink: #1c1917; --k-muted: #36312d; --k-faint: #3a3633;
-  --k-line: rgb(28 25 23 / 0.16); --k-line-strong: rgb(28 25 23 / 0.3); --k-accent: #9a3412; --k-accent-soft: rgb(154 52 18 / 0.12); --k-scheme: light;
+  --k-line: rgb(28 25 23 / 0.16); --k-line-strong: rgb(28 25 23 / 0.6); --k-accent: #9a3412; --k-accent-soft: rgb(154 52 18 / 0.12); --k-scheme: light;
   --k-good: #14532d; --k-warn: #78350f; --k-bad: #701818; --k-chip: rgb(255 255 255 / 0.65); --k-accent-small: #6c2710;
   --h-win: #dbeafe;
 }
@@ -61,6 +61,8 @@
 }
 /* Small coloured words sit on the sky's chip, darker than a dark sky and
    lighter than a light one, so they read wherever they fall. */
+/* A focus ring in the sky's ink: the accent can be under 3:1 on a day sky. */
+.sky-panel { --focus: var(--k-ink); }
 .sky-panel .sky-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: var(--k-chip); font-size: 0.85rem; font-weight: 600; }
 /* The accent's stronger shade, for words smaller than a headline. */
 .sky-panel .accent-small { color: var(--k-accent-small); }
