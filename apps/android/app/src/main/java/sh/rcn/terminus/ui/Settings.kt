@@ -114,6 +114,7 @@ import sh.rcn.terminus.Lang
 import sh.rcn.terminus.Clock
 import sh.rcn.terminus.L
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
@@ -139,7 +140,7 @@ internal enum class SettingsPage(val title: Int) {
  * Everything the account page has, so the website is optional for daily
  * use: a list of groups, each with a line saying what's set, opening a page
  * that slides in. Back (and the back gesture, which the page follows) returns
- * to the list.
+ * to the list, as does tapping the Settings tab again ([toList]).
  */
 @Composable
 internal fun SettingsScreen(
@@ -147,6 +148,7 @@ internal fun SettingsScreen(
     account: AccountViewModel,
     main: MainViewModel,
     insets: PaddingValues,
+    toList: Flow<Unit>,
     onAddEmail: () -> Unit,
     onSignedOut: () -> Unit,
     onClose: () -> Unit,
@@ -160,6 +162,7 @@ internal fun SettingsScreen(
     var open by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
     // A NUSMods link shared into the app: straight to Timetable, to import it.
     LaunchedEffect(state.sharedLink) { if (state.sharedLink != null) open = SettingsPage.Timetable }
+    LaunchedEffect(Unit) { toList.collect { open = null } }
     // The list and its pages are one transition that a back gesture can
     // seek, as Android's own apps do: the list is drawn under the page from
     // the start, sliding and fading in as the page goes, rather than the
