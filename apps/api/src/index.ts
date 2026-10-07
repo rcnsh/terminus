@@ -41,6 +41,8 @@ import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { allResidences, residenceWalkMin } from './residences.ts';
 import { callerFor } from './access.ts';
+import { fcmEnabled } from './push.ts';
+import { webPushEnabled } from './webpush.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
@@ -339,6 +341,9 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         accounts: accountsConfigured(env),
         email: Boolean(env.EMAIL && env.EMAIL_FROM),
         alerts: Boolean(env.EMAIL && env.EMAIL_FROM && env.ALERT_EMAIL),
+        // Set and usable: a secret that won't parse turns that push off.
+        pushAndroid: fcmEnabled(env),
+        pushWeb: webPushEnabled(env),
       },
       // From the cron probe: whether the NUS feed answered, and since when.
       upstream: u ? { up: u.up, since: new Date(u.since).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale } : null,
