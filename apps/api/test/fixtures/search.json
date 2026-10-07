@@ -1,0 +1,926 @@
+{
+  "about": [
+    "Destination search, as every client ranks it: the web app (apps/web/public/account/search.js, the reference, checked by apps/api/test/search.test.js) and the Android and Mac apps.",
+    "Two sections. \"destinations\": the search on Now and in Settings, over /campus `destinations`, ranked by rank(). \"busesTab\": the Buses tab's search, over an index built from /campus by busesTabIndex(), then ranked by the same rank().",
+    "Results are listed as \"kind:code\" ids, in order: a code alone is not unique (the stop COM3 and the building COM3)."
+  ],
+  "rules": {
+    "query": "Trim leading and trailing whitespace (JavaScript trim(): spaces, tabs, newlines, Unicode spaces), then lower-case it: that is q. An empty q has no results (the Buses tab shows its suggestions instead: see busesTab.rules).",
+    "names": "Each entry's names are its code, its label and each alias, all lower-cased. Aliases are lower case from /campus but are lower-cased anyway.",
+    "normalise": "norm(s): lower-case, then remove every run of whitespace, hyphens (-) and underscores (_). Only the code and the query are normalised, and only for the code checks in scores 0 and 1. When norm(q) is empty (the query was only hyphens or underscores), the code checks are skipped.",
+    "score": [
+      "0 exact: q equals a name, or norm(code) equals norm(q).",
+      "1 starts with: a name starts with q, or norm(code) starts with norm(q).",
+      "2 a word starts with: a name split on runs of whitespace and ( ) · , / & - has a non-empty word starting with q. Underscores, apostrophes and dots do not split.",
+      "3 contains: a name contains q.",
+      "Otherwise no match. The first that holds is the score; labels and aliases are never normalised, so their spaces must match as typed."
+    ],
+    "rooms": "Entries of kind \"room\" are left out unless the trimmed query is at least 2 characters long (UTF-16 code units, before lower-casing).",
+    "order": [
+      "By score, lowest first.",
+      "Then by kind: timetable, place, class, service, stop, landmark, building, room, then any other kind (all other kinds equal, after room).",
+      "Then by label length, shortest first (UTF-16 code units: Kotlin String.length, Swift label.utf16.count, of the label as given).",
+      "Then in the order of the index: the sort is stable."
+    ],
+    "limit": "At most `limit` results (8), after sorting.",
+    "text": "All comparisons are plain string comparisons (no locale collation, no accent folding)."
+  },
+  "destinations": {
+    "limit": 8,
+    "index": [
+      {
+        "code": "COM3",
+        "label": "COM 3",
+        "stopCode": "COM3",
+        "kind": "stop",
+        "aliases": [
+          "soc",
+          "computing"
+        ]
+      },
+      {
+        "code": "CLB",
+        "label": "CLB",
+        "stopCode": "CLB",
+        "kind": "stop",
+        "aliases": [
+          "library",
+          "central library",
+          "clb"
+        ]
+      },
+      {
+        "code": "KR-MRT",
+        "label": "KR MRT",
+        "stopCode": "KR-MRT",
+        "kind": "stop",
+        "aliases": [
+          "mrt",
+          "kent ridge mrt"
+        ]
+      },
+      {
+        "code": "KR-MRT-OPP",
+        "label": "Opp KR MRT",
+        "stopCode": "KR-MRT-OPP",
+        "kind": "stop"
+      },
+      {
+        "code": "UTOWN",
+        "label": "UTown",
+        "stopCode": "UTOWN",
+        "kind": "stop",
+        "aliases": [
+          "utown",
+          "university town"
+        ]
+      },
+      {
+        "code": "UHC",
+        "label": "UHC",
+        "stopCode": "UHC",
+        "kind": "stop",
+        "aliases": [
+          "Health Centre",
+          "clinic"
+        ]
+      },
+      {
+        "code": "AS5",
+        "label": "AS 5",
+        "stopCode": "AS5",
+        "kind": "stop",
+        "aliases": [
+          "fass",
+          "arts"
+        ]
+      },
+      {
+        "code": "LT27",
+        "label": "LT 27",
+        "stopCode": "LT27",
+        "kind": "stop"
+      },
+      {
+        "code": "FINEFOOD",
+        "label": "Fine Food",
+        "stopCode": "UTOWN",
+        "kind": "landmark",
+        "stops": [
+          "UTOWN"
+        ],
+        "detail": "Food court",
+        "walkM": 120,
+        "aliases": [
+          "food court"
+        ]
+      },
+      {
+        "code": "TECHNO",
+        "label": "Techno Edge",
+        "stopCode": "COM3",
+        "kind": "landmark",
+        "stops": [
+          "COM3",
+          "KR-MRT"
+        ],
+        "detail": "Food court",
+        "walkM": 150,
+        "aliases": [
+          "techno"
+        ]
+      },
+      {
+        "code": "COM3",
+        "label": "Computing 3 (COM3)",
+        "stopCode": "COM3",
+        "kind": "building",
+        "walkM": 30,
+        "aliases": [
+          "soc",
+          "computing"
+        ]
+      },
+      {
+        "code": "COM1",
+        "label": "School of Computing (COM1)",
+        "stopCode": "COM3",
+        "kind": "building",
+        "walkM": 224,
+        "aliases": [
+          "soc",
+          "computing"
+        ]
+      },
+      {
+        "code": "AS1",
+        "label": "Faculty of Arts & Social Sciences (AS1)",
+        "stopCode": "CLB",
+        "kind": "building",
+        "walkM": 120,
+        "aliases": [
+          "fass",
+          "arts"
+        ]
+      },
+      {
+        "code": "LT27",
+        "label": "Lecture Theatre 27",
+        "stopCode": "LT27",
+        "kind": "building",
+        "walkM": 40
+      },
+      {
+        "code": "E4A",
+        "label": "Engineering Block E4A",
+        "stopCode": "KR-MRT",
+        "kind": "building",
+        "walkM": 300,
+        "aliases": [
+          "engineering",
+          "cde"
+        ]
+      },
+      {
+        "code": "SDE3",
+        "label": "School of Design and Environment 3 (SDE3)",
+        "stopCode": "CLB",
+        "kind": "building",
+        "walkM": 260,
+        "aliases": [
+          "cde",
+          "sde",
+          "design"
+        ]
+      },
+      {
+        "code": "SH",
+        "label": "Shuttle Depot",
+        "stopCode": "KR-MRT",
+        "kind": "building",
+        "walkM": 90
+      },
+      {
+        "code": "COM1-0203",
+        "label": "Seminar Room 6",
+        "stopCode": "COM3",
+        "kind": "room",
+        "walkM": 210
+      },
+      {
+        "code": "LAW_CR2-1",
+        "label": "CR 2-1",
+        "stopCode": "KR-MRT",
+        "kind": "room",
+        "walkM": 172
+      },
+      {
+        "code": "Ambition_II",
+        "label": "Ambition II",
+        "stopCode": "UTOWN",
+        "kind": "room",
+        "walkM": 40
+      },
+      {
+        "code": "UT-AUD1",
+        "label": "UTown  Auditorium   1",
+        "stopCode": "UTOWN",
+        "kind": "room",
+        "walkM": 60
+      },
+      {
+        "code": "E4A-0405",
+        "label": "Engineering Seminar Room",
+        "stopCode": "KR-MRT",
+        "kind": "room",
+        "walkM": 310
+      },
+      {
+        "code": "HUB",
+        "label": "Bus Hub",
+        "stopCode": "KR-MRT",
+        "kind": "interchange",
+        "aliases": [
+          "Shuttle Hub"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "q": "",
+        "expect": [],
+        "why": "Empty after trimming: nothing."
+      },
+      {
+        "q": "   ",
+        "expect": [],
+        "why": "Only spaces: trimmed to empty, nothing."
+      },
+      {
+        "q": "soc",
+        "expect": [
+          "stop:COM3",
+          "building:COM3",
+          "building:COM1",
+          "building:AS1"
+        ],
+        "why": "An alias, exact (0) on three: the stop first (kind), then the buildings by label length. AS1 last: a word of its label (\"social\") starts with \"soc\" (2)."
+      },
+      {
+        "q": "SOC",
+        "expect": [
+          "stop:COM3",
+          "building:COM3",
+          "building:COM1",
+          "building:AS1"
+        ],
+        "why": "Case never matters."
+      },
+      {
+        "q": "  Lecture   ",
+        "expect": [
+          "building:LT27"
+        ],
+        "why": "Trimmed, then \"lecture\" starts a label (1)."
+      },
+      {
+        "q": "com3",
+        "expect": [
+          "stop:COM3",
+          "building:COM3"
+        ],
+        "why": "Both COM3s exact on their code (0): the stop before the building (kind)."
+      },
+      {
+        "q": "com 3",
+        "expect": [
+          "stop:COM3",
+          "building:COM3"
+        ],
+        "why": "Exact on the stop's label \"com 3\", and on the building's code once both are normalised (\"com3\")."
+      },
+      {
+        "q": "com1 02",
+        "expect": [
+          "room:COM1-0203"
+        ],
+        "why": "Normalised, \"com102\" starts the room's normalised code \"com10203\" (1)."
+      },
+      {
+        "q": "com10203",
+        "expect": [
+          "room:COM1-0203"
+        ],
+        "why": "Normalised code, exact (0)."
+      },
+      {
+        "q": "com1_0203",
+        "expect": [
+          "room:COM1-0203"
+        ],
+        "why": "Underscores are dropped as hyphens and spaces are: exact (0)."
+      },
+      {
+        "q": "COM1-0203",
+        "expect": [
+          "room:COM1-0203"
+        ],
+        "why": "The code as written, exact (0)."
+      },
+      {
+        "q": "c",
+        "expect": [
+          "stop:CLB",
+          "stop:UHC",
+          "stop:COM3",
+          "building:COM3",
+          "building:E4A",
+          "building:COM1",
+          "building:SDE3",
+          "landmark:FINEFOOD"
+        ],
+        "why": "One character: no rooms. Starts with \"c\" (1, CLB by code, UHC by its alias \"clinic\", E4A and SDE3 by \"cde\"), then FINEFOOD by the word \"court\" (2). Eight at most, so the ones that only contain \"c\" (3: TECHNO, AS1, LT27) are cut. CLB and UHC tie on everything and keep the index order."
+      },
+      {
+        "q": "co",
+        "expect": [
+          "stop:COM3",
+          "building:COM3",
+          "building:COM1",
+          "room:COM1-0203",
+          "landmark:FINEFOOD"
+        ],
+        "why": "Two characters: rooms can show."
+      },
+      {
+        "q": "cr 2",
+        "expect": [
+          "room:LAW_CR2-1"
+        ],
+        "why": "Starts the room's label \"cr 2-1\" (1)."
+      },
+      {
+        "q": "law cr",
+        "expect": [
+          "room:LAW_CR2-1"
+        ],
+        "why": "Normalised \"lawcr\" starts the normalised code \"lawcr21\" (1)."
+      },
+      {
+        "q": "ambition_ii",
+        "expect": [
+          "room:Ambition_II"
+        ],
+        "why": "Exact on the code, lower-cased (0)."
+      },
+      {
+        "q": "ambition ii",
+        "expect": [
+          "room:Ambition_II"
+        ],
+        "why": "Exact on the label (0)."
+      },
+      {
+        "q": "auditorium",
+        "expect": [
+          "room:UT-AUD1"
+        ],
+        "why": "A word of the label (2): runs of spaces split words as one space does."
+      },
+      {
+        "q": "utown auditorium",
+        "expect": [],
+        "why": "Labels are not normalised: \"utown  auditorium   1\" has two spaces, so this single-spaced query matches nothing."
+      },
+      {
+        "q": "food",
+        "expect": [
+          "landmark:FINEFOOD"
+        ],
+        "why": "Starts the alias \"food court\" (1). The landmark's detail is never searched."
+      },
+      {
+        "q": "theatre",
+        "expect": [
+          "building:LT27"
+        ],
+        "why": "Starts a word of the label (2)."
+      },
+      {
+        "q": "eatr",
+        "expect": [
+          "building:LT27"
+        ],
+        "why": "Inside the label (3)."
+      },
+      {
+        "q": "cde",
+        "expect": [
+          "building:E4A",
+          "building:SDE3"
+        ],
+        "why": "An alias, exact (0) on both: same kind, so the shorter label first."
+      },
+      {
+        "q": "mrt",
+        "expect": [
+          "stop:KR-MRT",
+          "stop:KR-MRT-OPP"
+        ],
+        "why": "Exact alias (0); then \"mrt\" is a word of \"opp kr mrt\" (2)."
+      },
+      {
+        "q": "kr mrt",
+        "expect": [
+          "stop:KR-MRT",
+          "stop:KR-MRT-OPP"
+        ],
+        "why": "Exact label (0); then \"krmrt\" starts the normalised code \"krmrtopp\" (1)."
+      },
+      {
+        "q": "kr-mrt",
+        "expect": [
+          "stop:KR-MRT",
+          "stop:KR-MRT-OPP"
+        ],
+        "why": "Exact code (0); then starts the code \"kr-mrt-opp\" (1)."
+      },
+      {
+        "q": "fass",
+        "expect": [
+          "stop:AS5",
+          "building:AS1"
+        ],
+        "why": "Exact alias on a stop and a building (0): the stop first."
+      },
+      {
+        "q": "lt27",
+        "expect": [
+          "stop:LT27",
+          "building:LT27"
+        ],
+        "why": "Exact code on a stop and a building (0): the stop first."
+      },
+      {
+        "q": "clinic",
+        "expect": [
+          "stop:UHC"
+        ],
+        "why": "Exact alias (0)."
+      },
+      {
+        "q": "health",
+        "expect": [
+          "stop:UHC"
+        ],
+        "why": "Starts the alias \"Health Centre\", which is compared lower-cased (1)."
+      },
+      {
+        "q": "shuttle hub",
+        "expect": [
+          "interchange:HUB"
+        ],
+        "why": "Exact alias of an unknown kind, compared lower-cased (0)."
+      },
+      {
+        "q": "shuttle",
+        "expect": [
+          "building:SH",
+          "interchange:HUB"
+        ],
+        "why": "Both start with it (1): a known kind (building) before an unknown kind, though its label is longer."
+      },
+      {
+        "q": "hub",
+        "expect": [
+          "interchange:HUB"
+        ],
+        "why": "A word of the unknown kind's label (2)."
+      },
+      {
+        "q": "b",
+        "expect": [
+          "interchange:HUB",
+          "building:E4A",
+          "stop:CLB"
+        ],
+        "why": "Score first, whatever the kind: the unknown kind starts with \"b\" (1), E4A has a word \"block\" (2), CLB contains it (3)."
+      },
+      {
+        "q": "-",
+        "expect": [
+          "stop:KR-MRT",
+          "stop:KR-MRT-OPP"
+        ],
+        "why": "Only a hyphen: nothing to match a code by once normalised, so only the plain rules apply: inside \"kr-mrt\" and \"kr-mrt-opp\" (3). One character, so no rooms."
+      },
+      {
+        "q": "--",
+        "expect": [],
+        "why": "Two characters, so rooms may show, but nothing contains \"--\"."
+      },
+      {
+        "q": "_",
+        "expect": [],
+        "why": "Only an underscore: as \"-\", and nothing contains it."
+      },
+      {
+        "q": "a",
+        "expect": [
+          "stop:AS5",
+          "building:AS1",
+          "building:SDE3",
+          "stop:CLB",
+          "stop:UHC",
+          "building:LT27",
+          "building:E4A"
+        ],
+        "why": "One character: no rooms. Starts (1), then a word starts (2), then contains (3), each by kind then label length."
+      },
+      {
+        "q": "zzz",
+        "expect": [],
+        "why": "No match."
+      }
+    ]
+  },
+  "busesTab": {
+    "rules": [
+      "The index is built from /campus (`stops`, `routes`, `destinations`): every service, then every stop.",
+      "Services: one per key of `routes`, sorted by code in plain string order (code units, not locale). kind \"service\", code and label the service code. (`detail`, shown under it, is \"Loop from <first stop>\" for a loop or \"<first stop> to <last stop>\", with stops by their long names; it is never searched.)",
+      "Stops: one per entry of `stops`, in /campus order. kind \"stop\", code the stop's code, label its longName (its name when there is no longName), aliases its name lower-cased followed by the aliases of the /campus destination of kind \"stop\" with the same code (none when there is no such destination). Aliases of other kinds are not used.",
+      "Then rank(index, query) with the rules above.",
+      "An empty query (after trimming) shows the suggestions: every service, in index order, not limited."
+    ],
+    "limit": 8,
+    "campus": {
+      "stops": [
+        {
+          "code": "KRB",
+          "name": "KR Bus Ter",
+          "longName": "Kent Ridge Bus Terminal"
+        },
+        {
+          "code": "AS5",
+          "name": "AS 5",
+          "longName": "AS 5"
+        },
+        {
+          "code": "CLB",
+          "name": "CLB",
+          "longName": "Central Library"
+        },
+        {
+          "code": "YIH",
+          "name": "YIH",
+          "longName": "Yusof Ishak House"
+        },
+        {
+          "code": "YIH-OPP",
+          "name": "Opp YIH",
+          "longName": "Opp Yusof Ishak House"
+        },
+        {
+          "code": "KR-MRT",
+          "name": "KR MRT",
+          "longName": "Kent Ridge MRT"
+        },
+        {
+          "code": "PGP",
+          "name": "PGP",
+          "longName": "Prince George's Park"
+        },
+        {
+          "code": "UTOWN",
+          "name": "UTown",
+          "longName": "University Town"
+        },
+        {
+          "code": "KV",
+          "name": "Kent Vale"
+        }
+      ],
+      "routes": {
+        "K": {
+          "seq": [
+            "PGP",
+            "KR-MRT",
+            "YIH",
+            "CLB",
+            "KV"
+          ],
+          "loop": false
+        },
+        "D1": {
+          "seq": [
+            "UTOWN",
+            "YIH",
+            "CLB",
+            "AS5"
+          ],
+          "loop": true
+        },
+        "A2": {
+          "seq": [
+            "KRB",
+            "YIH-OPP",
+            "KR-MRT",
+            "PGP"
+          ],
+          "loop": true
+        },
+        "A1": {
+          "seq": [
+            "KRB",
+            "AS5",
+            "PGP",
+            "KR-MRT",
+            "YIH",
+            "CLB"
+          ],
+          "loop": true
+        },
+        "BTC": {
+          "seq": [
+            "KV",
+            "UTOWN"
+          ],
+          "loop": false
+        }
+      },
+      "destinations": [
+        {
+          "code": "CLB",
+          "label": "CLB",
+          "stopCode": "CLB",
+          "kind": "stop",
+          "aliases": [
+            "library",
+            "central library",
+            "clb"
+          ]
+        },
+        {
+          "code": "YIH",
+          "label": "YIH",
+          "stopCode": "YIH",
+          "kind": "stop",
+          "aliases": [
+            "yih"
+          ]
+        },
+        {
+          "code": "KR-MRT",
+          "label": "KR MRT",
+          "stopCode": "KR-MRT",
+          "kind": "stop",
+          "aliases": [
+            "mrt",
+            "kent ridge mrt"
+          ]
+        },
+        {
+          "code": "UTOWN",
+          "label": "UTown",
+          "stopCode": "UTOWN",
+          "kind": "stop",
+          "aliases": [
+            "utown",
+            "university town"
+          ]
+        },
+        {
+          "code": "AS1",
+          "label": "Faculty of Arts & Social Sciences (AS1)",
+          "stopCode": "CLB",
+          "kind": "building",
+          "walkM": 120,
+          "aliases": [
+            "fass",
+            "arts"
+          ]
+        }
+      ]
+    },
+    "index": [
+      "service:A1",
+      "service:A2",
+      "service:BTC",
+      "service:D1",
+      "service:K",
+      "stop:KRB",
+      "stop:AS5",
+      "stop:CLB",
+      "stop:YIH",
+      "stop:YIH-OPP",
+      "stop:KR-MRT",
+      "stop:PGP",
+      "stop:UTOWN",
+      "stop:KV"
+    ],
+    "queries": [
+      {
+        "q": "",
+        "expect": [
+          "service:A1",
+          "service:A2",
+          "service:BTC",
+          "service:D1",
+          "service:K"
+        ],
+        "why": "Empty: the suggestions, every service in code order, not limited."
+      },
+      {
+        "q": "a",
+        "expect": [
+          "service:A1",
+          "service:A2",
+          "stop:AS5",
+          "stop:KV",
+          "stop:CLB",
+          "stop:YIH",
+          "stop:PGP",
+          "stop:YIH-OPP"
+        ],
+        "why": "Services before a stop that matches as well (all 1); then the stops that contain \"a\" (3) by label length, cut at eight (KRB is ninth)."
+      },
+      {
+        "q": "a2",
+        "expect": [
+          "service:A2"
+        ],
+        "why": "Exact on the service (0); no stop has \"a2\"."
+      },
+      {
+        "q": "k",
+        "expect": [
+          "service:K",
+          "stop:KV",
+          "stop:KR-MRT",
+          "stop:KRB",
+          "stop:YIH",
+          "stop:PGP",
+          "stop:YIH-OPP"
+        ],
+        "why": "K exact (0); KV, KR-MRT, KRB start with \"k\" (1, by label length); then the stops that contain it (3), by label length."
+      },
+      {
+        "q": "d",
+        "expect": [
+          "service:D1",
+          "stop:KR-MRT",
+          "stop:KRB"
+        ],
+        "why": "D1 starts with it (1); then the stops whose names contain it (\"kent ridge\", 3), by label length."
+      },
+      {
+        "q": "library",
+        "expect": [
+          "stop:CLB"
+        ],
+        "why": "CLB's /campus alias \"library\", exact (0)."
+      },
+      {
+        "q": "clb",
+        "expect": [
+          "stop:CLB"
+        ],
+        "why": "The code (0)."
+      },
+      {
+        "q": "yih",
+        "expect": [
+          "stop:YIH",
+          "stop:YIH-OPP"
+        ],
+        "why": "The code and the short name (0); then the short name \"opp yih\" has a word \"yih\" (2)."
+      },
+      {
+        "q": "yusof",
+        "expect": [
+          "stop:YIH",
+          "stop:YIH-OPP"
+        ],
+        "why": "Starts the long name (1); then a word of \"Opp Yusof Ishak House\" (2)."
+      },
+      {
+        "q": "opp yih",
+        "expect": [
+          "stop:YIH-OPP"
+        ],
+        "why": "The short name, lower-cased, is an alias: exact (0)."
+      },
+      {
+        "q": "opp",
+        "expect": [
+          "stop:YIH-OPP"
+        ],
+        "why": "Starts the label and the short name (1)."
+      },
+      {
+        "q": "kent",
+        "expect": [
+          "stop:KV",
+          "stop:KR-MRT",
+          "stop:KRB"
+        ],
+        "why": "Starts each label (1), by label length."
+      },
+      {
+        "q": "kent ridge",
+        "expect": [
+          "stop:KR-MRT",
+          "stop:KRB"
+        ],
+        "why": "Starts the label (1), by label length; KV does not match."
+      },
+      {
+        "q": "kr mrt",
+        "expect": [
+          "stop:KR-MRT"
+        ],
+        "why": "The short name as an alias, exact (0)."
+      },
+      {
+        "q": "kr-mrt",
+        "expect": [
+          "stop:KR-MRT"
+        ],
+        "why": "The code (0)."
+      },
+      {
+        "q": "mrt",
+        "expect": [
+          "stop:KR-MRT"
+        ],
+        "why": "The /campus alias \"mrt\" (0)."
+      },
+      {
+        "q": "george",
+        "expect": [
+          "stop:PGP"
+        ],
+        "why": "A word of \"prince george's park\" (2): an apostrophe does not split words."
+      },
+      {
+        "q": "prince",
+        "expect": [
+          "stop:PGP"
+        ],
+        "why": "Starts the label (1)."
+      },
+      {
+        "q": "kv",
+        "expect": [
+          "stop:KV"
+        ],
+        "why": "The code (0). KV has no longName, so its label is its name, \"Kent Vale\"."
+      },
+      {
+        "q": "vale",
+        "expect": [
+          "stop:KV"
+        ],
+        "why": "A word of the label (2)."
+      },
+      {
+        "q": "fass",
+        "expect": [],
+        "why": "Only the aliases of /campus destinations of kind \"stop\" count: AS1's are a building's, and AS5 has none here."
+      },
+      {
+        "q": "btc",
+        "expect": [
+          "service:BTC"
+        ],
+        "why": "The service (0)."
+      },
+      {
+        "q": "b",
+        "expect": [
+          "service:BTC",
+          "stop:KRB",
+          "stop:CLB"
+        ],
+        "why": "BTC starts with it (1); KRB has a word \"bus\" (2); CLB contains it (3)."
+      },
+      {
+        "q": "t",
+        "expect": [
+          "stop:UTOWN",
+          "stop:KRB",
+          "service:BTC",
+          "stop:KV",
+          "stop:KR-MRT",
+          "stop:CLB"
+        ],
+        "why": "Words \"town\" and \"terminal\" (2); then BTC contains it (3) and, as a service, comes before stops that contain it."
+      },
+      {
+        "q": "zzz",
+        "expect": [],
+        "why": "No match."
+      }
+    ]
+  }
+}

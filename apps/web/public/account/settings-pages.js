@@ -12,6 +12,7 @@ import {
   profile,
   ResidenceOptions,
   residenceFor,
+  limit,
   residenceWalkMin,
   residencesByName,
   saveNow,
@@ -616,7 +617,7 @@ function AddClass() {
           e.currentTarget.setCustomValidity('');
           setEnd(e.currentTarget.value);
         }} /></label>
-        <label class="wide">${t('Name')} <input name="label" maxlength="60" required placeholder=${t('e.g. Gym')} value=${label} onInput=${(e) => setLabel(e.currentTarget.value)} /></label>
+        <label class="wide">${t('Name')} <input name="label" maxlength=${limit('label', 60)} required placeholder=${t('e.g. Gym')} value=${label} onInput=${(e) => setLabel(e.currentTarget.value)} /></label>
         <label class="wide">${t('Where')}
           <${SearchBox}
             name="where"

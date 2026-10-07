@@ -3,26 +3,31 @@
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
 import { html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clock, hour12, t } from './dom.js';
+import { api, clock, hour12, serverNow, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle } from './journey.js';
 import { Celestial, Horizon, NightSky } from './sky.js';
 
-/** Past the card's staleAt: its bus has gone, the plan has moved on, or it's 15 minutes old. */
-export const isStale = (a) => Boolean(a?.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
+
+/**
+ * Old: past the card's staleAt (its bus has gone, the plan has moved on, or
+ * it's 15 minutes old), as every client rules. A card with no staleAt
+ * (setup, rest, free) never is; an answer with no card at all always is.
+ */
+export const isStale = (a) => (!a?.card ? true : a.card.staleAt ? serverNow() >= Date.parse(a.card.staleAt) : false);
 
 /** The only part that ticks: "Leave now" once leave.at passes. The words are the server's (card.ts);
  *  at the stop, the bus to wait for ("D2 at 9:41"), as it is. */
-const leaveHead = (a) => (a.card.phase !== 'waiting' && Date.now() >= Date.parse(a.leave.at) ? t('Leave now') : a.card.leaveBy);
+const leaveHead = (a) => (a.card.phase !== 'waiting' && serverNow() >= Date.parse(a.leave.at) ? t('Leave now') : a.card.leaveBy);
 
 /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
 const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
 
 /** The time now, ticking every second; started afresh when `from` changes. */
 function useEverySecond(from) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(serverNow());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1_000);
+    const id = setInterval(() => setNow(serverNow()), 1_000);
     return () => clearInterval(id);
   }, [from]);
   return now;
@@ -39,7 +44,7 @@ function Countdown({ at }) {
   const text =
     left > 60 ? t('Leaves in {0} min {1} s', Math.floor(left / 60), left % 60)
     : left > 0 ? t('Leaves in {0} s', left)
-    : t('Left {0} min ago · updating', Math.floor((-left + 59) / 60));
+    : t('Left {0} min ago', Math.floor((-left + 59) / 60));
   return html`<div class=${left > 0 ? 'countdown' : 'countdown gone'}>${text}</div>`;
 }
 
@@ -97,12 +102,12 @@ function Phase({ a }) {
  * getting off; redrawn every few seconds.
  */
 function Ride({ ride }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(serverNow());
   const board = Date.parse(ride.board);
   const arrive = Date.parse(ride.arrive);
   useEffect(() => {
     if (now >= arrive) return;
-    const timer = setInterval(() => setNow(Date.now()), 5_000);
+    const timer = setInterval(() => setNow(serverNow()), 5_000);
     return () => clearInterval(timer);
   }, [ride.board, ride.arrive]);
   const hops = ride.stops.length - 1;
@@ -270,12 +275,13 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   if (a.card?.kind === 'class' && !old) {
     return html`<div class="widget" aria-live="polite"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${actions}${row}</div>`;
   }
-  const where =
-    a.mode === 'nearby' ? t('Nearby') : a.dest?.why === 'class' ? t('Next class · {0}', a.dest.label) : a.dest?.why === 'gap-home' ? t('Long gap · {0}', a.dest.label) : (a.dest?.label ?? t('Next bus'));
-  // A departure as a clock time, the way the widget shows it, so it can't go stale.
-  const svc = a.label.split(' · ')[0];
+  // The server's heading ("Next class · CS2030", "Heading home"); none without somewhere to go.
+  const heading = a.card?.heading !== undefined ? a.card.heading : a.dest?.why === 'class' ? t('Next class · {0}', a.dest.label) : a.dest?.why === 'gap-home' ? t('Long gap · {0}', a.dest.label) : a.dest?.label;
+  const where = a.mode === 'nearby' ? t('Nearby') : (heading ?? t('Next bus'));
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
-  const big = timed ? `${svc} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label;
+  // A departure as a clock time, the way the widget shows it, so it can't go stale:
+  // the server's title ("A1 · ~09:11"), else worded here for an older server.
+  const big = a.card?.title ?? (timed ? `${a.label.split(' · ')[0]} · ${a.quality === 'scheduled' ? t('~{0}', clock(a.departsAt)) : clock(a.departsAt)}` : a.label);
   // The crowd only when the detail line doesn't already say it ("· crowding: high ·").
   const crowd = a.card?.crowd && !a.detail?.toLowerCase().includes(a.card.crowd.toLowerCase()) ? a.card.crowd : null;
   const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');

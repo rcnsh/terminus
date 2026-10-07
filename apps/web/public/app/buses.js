@@ -11,14 +11,15 @@
 // feed reported, and a line shows no times at stops other than yours.
 
 import { Fill, Icon, MARK, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useStore } from '/assets/ui.js';
-import { clock, inkOn, send, t } from '/account/dom.js';
-import { campus, edit, loadCampus, profile, reloadProfile, toast } from '/account/profile.js';
+import { clock, inkOn, send, serverNow, t } from '/account/dom.js';
+import { campus, edit, limit, loadCampus, profile, reloadProfile, toast } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
+import { busesTabIndex } from '/account/search.js';
 
 /** The page on screen refreshes this often (the API caches arrivals 15 s). */
 const REFRESH_MS = 15_000;
-/** As many stops as the profile keeps pinned. */
-const PIN_MAX = 8;
+/** As many stops as the profile keeps pinned (its `limits`; 8 before it has loaded). */
+const pinMax = () => limit('pinnedStops', 8);
 /** "Runs until" shows for a service ending within this long. */
 const ENDS_SOON_MS = 2 * 3600_000;
 
@@ -28,7 +29,12 @@ const ENDS_SOON_MS = 2 * 3600_000;
 const route = store({ kind: 'home' });
 /** The stop nearest you: { status: 'loading' | 'ready' | 'none', code, distM, fromHome }. */
 const nearest = store({ status: 'loading' });
-/** Each stop's board as last fetched, by code: { stop, board, available, at, error }. */
+/**
+ * Each stop's board as last fetched, by code: { stop, board, available, at,
+ * asOf, error }. `at` is when this browser fetched it (Date.now(), for
+ * fetching again); `asOf` when the server's answer is from (its clock, ms),
+ * older than `at` when it served a board it had kept.
+ */
 const boards = store(new Map());
 /** The stops showing the board across the road, by the page's own stop. */
 const across = store(new Set());
@@ -36,10 +42,10 @@ const across = store(new Set());
 const active = store(0);
 /** A stop to scroll the home to, once it's drawn (a search result that has a page). */
 const wantPage = store(null);
-/** The line on screen: { key, data, at } or { key, error }. */
+/** The line on screen: { key, data, at, asOf } or { key, error }. */
 const line = store(null);
-/** Now, every few seconds, for "Updated 5 s ago". */
-const tick = store(Date.now());
+/** Now on the server's clock (dom.js), every few seconds, for "Updated 5 s ago". */
+const tick = store(serverNow());
 /** Location can be asked for (it isn't blocked), for the nearest stop. */
 const canAsk = store(false);
 
@@ -70,6 +76,9 @@ const oppositeOf = (code) => boards.get().get(code)?.stop?.opposite ?? stopOf(co
 /** The stop whose board a page shows: its own, or the one across the road. */
 const shownCode = (code) => (across.get().has(code) && oppositeOf(code)) || code;
 
+/** When answer `data` is from, on the server's clock: its `asOf`, else now. */
+const asOfMs = (data) => Date.parse(data?.asOf ?? '') || serverNow();
+
 function keep(code, entry) {
   boards.set((m) => new Map(m).set(code, entry));
 }
@@ -81,7 +90,7 @@ async function loadBoard(code) {
   try {
     // stopped=1: the services not running now are listed too, greyed.
     const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub}&stopped=1`);
-    keep(code, { stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null }, board: data.board, available: data.available !== false, at: Date.now() });
+    keep(code, { stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null }, board: data.board, available: data.available !== false, at: Date.now(), asOf: asOfMs(data) });
   } catch (err) {
     if (err.message === 'signed out') return;
     const was = boards.get().get(code);
@@ -104,7 +113,8 @@ async function findNearest({ ask = false } = {}) {
     const data = await getJSON(`/me/nearby${q}`);
     const first = data.stops?.[0];
     if (!first) return nearest.set({ status: 'none' });
-    for (const s of data.stops) keep(s.stop.code, { stop: { ...s.stop, opposite: s.opposite ?? null, oppositeAcross: s.oppositeAcross, oppositeName: s.oppositeName }, board: s.board, available: s.available, at: Date.now() });
+    const asOf = asOfMs(data);
+    for (const s of data.stops) keep(s.stop.code, { stop: { ...s.stop, opposite: s.opposite ?? null, oppositeAcross: s.oppositeAcross, oppositeName: s.oppositeName }, board: s.board, available: s.available, at: Date.now(), asOf });
     nearest.set({ status: 'ready', code: first.stop.code, distM: first.distM, fromHome: !at });
   } catch (err) {
     if (err.message === 'signed out') return;
@@ -117,7 +127,7 @@ async function loadLine(svc, stop) {
   const key = `${svc}/${stop ?? ''}`;
   try {
     const data = await getJSON(`/line?svc=${encodeURIComponent(svc)}${stop ? `&stop=${encodeURIComponent(stop)}` : ''}`);
-    if (lineKey() === key) line.set({ key, data, at: Date.now() });
+    if (lineKey() === key) line.set({ key, data, at: Date.now(), asOf: asOfMs(data) });
   } catch (err) {
     if (err.message === 'signed out' || lineKey() !== key) return;
     const was = line.get()?.key === key ? line.get() : null;
@@ -162,8 +172,8 @@ async function togglePin(code) {
     edit((p) => {
       p.pinnedStops = (p.pinnedStops ?? []).filter((c) => c !== code);
     });
-  } else if (pins().length >= PIN_MAX) {
-    toast(t('You can pin up to {0} stops.', PIN_MAX));
+  } else if (pins().length >= pinMax()) {
+    toast(t('You can pin up to {0} stops.', pinMax()));
   } else {
     edit((p) => {
       p.pinnedStops = [...(p.pinnedStops ?? []), code];
@@ -249,19 +259,34 @@ function Quality({ r }) {
   return null;
 }
 
-/** The big time: "Arriving" under a minute, "7 min", or why there's none. */
+/**
+ * The big time, in the server's words (`eta`: "7 min", "~7 min", "now"),
+ * its numbers large and the rest small; or why there's none. An answer
+ * without `eta` (an older server) is worded here as it was.
+ */
 function Big({ r }) {
   if (r.etaS == null) return html`<span class="bt-big none">${r.quality === 'unknown' ? t('No live times') : t('No time yet')}</span>`;
-  if (r.etaS < 60) return html`<span class="bt-big now">${t('Arriving')}</span>`;
-  return html`<span class="bt-big">${mins(r.etaS)}<small>${t('min')}</small></span>`;
+  if (r.eta == null) {
+    if (r.etaS < 60) return html`<span class="bt-big now">${t('Arriving')}</span>`;
+    return html`<span class="bt-big">${mins(r.etaS)}<small>${t('min')}</small></span>`;
+  }
+  const parts = r.eta.split(/(\d+)/).filter(Boolean);
+  if (!parts.some((x) => /^\d+$/.test(x))) return html`<span class="bt-big now">${r.eta}</span>`;
+  return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
 }
 
-/** "then 12, 20 min": only the later buses the feed gave. */
-const thenText = (r) => (r.later?.length ? t('then {0} min', r.later.map((x) => mins(x.etaS)).join(t(', '))) : '');
+/** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */
+const thenText = (r) => r.laterText ?? (r.later?.length ? t('then {0} min', r.later.map((x) => mins(x.etaS)).join(t(', '))) : '');
 
-/** "to Central Library, Kent Vale": the next stop in bold, then where the route ends. */
-function Towards({ to }) {
-  // The end of its line: nowhere further to say.
+/** "to Central Library, Kent Vale" (the server's `toText`), the next stop in bold. */
+function Towards({ r }) {
+  const to = r.towards;
+  if (r.toText != null) {
+    const at = to?.length ? r.toText.indexOf(to[0]) : -1;
+    if (at < 0) return r.toText;
+    return html`${r.toText.slice(0, at)}<b>${to[0]}</b>${r.toText.slice(at + to[0].length)}`;
+  }
+  // From an older server: worded here. The end of its line: nowhere further to say.
   if (!to?.length) return t('Ends here');
   const text = to.length > 1 ? t('to {0}, {1}', MARK, to[1]) : t('to {0}', MARK);
   return html`<${Fill} text=${text} parts=${[html`<b>${to[0]}</b>`]} />`;
@@ -280,7 +305,7 @@ const WEEKDAYS = () => [t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), 
  * and `resumesAt`: ["Stopped for today", "Back tomorrow at 7:40 am"]. The
  * second is null when the API knows no next start.
  */
-function stoppedWords(stopped, resumesAt, now = Date.now()) {
+function stoppedWords(stopped, resumesAt, now = serverNow()) {
   const first = stopped === 'notYet' ? t('Not running yet') : stopped === 'noService' ? t('No service today') : t('Stopped for today');
   if (!resumesAt) return [first, null];
   const at = Date.parse(resumesAt);
@@ -311,7 +336,7 @@ function Row({ r, stop }) {
   const cls = `bt-row${r.etaS != null && r.etaS < 60 && r.quality === 'live' ? ' soon' : ''}`;
   const body = html`
     <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
-    <span class="bt-dir"><${Towards} to=${r.towards} /></span>
+    <span class="bt-dir"><${Towards} r=${r} /></span>
     <${Big} r=${r} />
     <span class="bt-meta"><${Quality} r=${r} /><${Crowd} crowd=${r.crowd} /></span>
     <span class="bt-then">${thenText(r)}</span>
@@ -320,11 +345,11 @@ function Row({ r, stop }) {
   return html`<button type="button" class=${cls} onClick=${() => go(lineHash(r.svc, stop))}>${body}</button>`;
 }
 
-/** "Updated 5 s ago", from when this browser got it. */
-function Updated({ at }) {
+/** "Updated 5 s ago": from the server's `asOf`, as old as the times are, not when this browser fetched them. */
+function Updated({ asOf }) {
   const now = useStore(tick);
-  if (!at) return null;
-  const s = Math.max(0, Math.round((now - at) / 1000));
+  if (!asOf) return null;
+  const s = Math.max(0, Math.round((now - asOf) / 1000));
   return html`<span class="bt-updated">${s < 5 ? t('Updated just now') : s < 60 ? t('Updated {0} s ago', s) : t('Updated {0} min ago', Math.floor(s / 60))}</span>`;
 }
 
@@ -341,7 +366,7 @@ function Board({ code }) {
       : html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`}
     <div class="bt-foot">
       <div class="bt-ends">${ending.map((r) => html`<div key=${r.svc}><${Chip} svc=${r.svc} color=${r.color} cls="small" /> ${t('Runs until {0}', clock(r.endsAt))}</div>`)}</div>
-      <div class="bt-status">${b.error ? html`<span class="bt-error">${b.error}</span>` : html`<${Updated} at=${b.at} />`}</div>
+      <div class="bt-status">${b.error ? html`<span class="bt-error">${b.error}</span>` : html`<${Updated} asOf=${b.asOf} />`}</div>
     </div>
     ${b.board.some((r) => !r.paid) && html`<p class="bt-hint">${t('Tap a service to see its whole line.')}</p>`}
   `;
@@ -491,33 +516,13 @@ function Peek({ code, onClick }) {
   `;
 }
 
-/** The services, for the search: each with where it runs. */
-function servicesOf(c) {
-  if (!c) return [];
-  return Object.entries(c.routes)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([svc, r]) => {
-      const first = stopName(r.seq[0]);
-      return { kind: 'service', code: svc, label: svc, detail: r.loop ? t('Loop from {0}', first) : t('{0} to {1}', first, stopName(r.seq.at(-1))) };
-    });
-}
-
-/**
- * The stops, for the search: by their long names, found by those, their
- * short names and codes, and the nicknames /campus has for them ("fass").
- */
-function stopsOf(c) {
-  if (!c) return [];
-  const aliases = new Map((c.destinations ?? []).filter((d) => d.kind === 'stop').map((d) => [d.code, d.aliases ?? []]));
-  return c.stops.map((s) => ({ kind: 'stop', code: s.code, stopCode: s.code, label: longName(s), aliases: [s.name.toLowerCase(), ...(aliases.get(s.code) ?? [])] }));
-}
-
 /** Search a stop or a service: a stop opens its board, a service its line. */
 function Find() {
   const c = useStore(campus);
   const box = useRef(null);
-  const services = useMemo(() => servicesOf(c), [c]);
-  const dests = useMemo(() => [...services, ...stopsOf(c)], [c]);
+  // Every service then every stop (search.js), the services also what it offers before anything is typed.
+  const dests = useMemo(() => busesTabIndex(c), [c]);
+  const services = useMemo(() => dests.filter((d) => d.kind === 'service'), [dests]);
   return html`
     <div class="bt-search">
       <${Icon} paths=${SEARCH} class="bt-search-icon" />
@@ -625,7 +630,7 @@ function LinePage({ svc, stop }) {
       ? html`<p class="bt-stopped-note">${stoppedWords(data.stopped, data.resumesAt, now).filter(Boolean).map((w, i) => html`<span key=${i}>${w}</span>`)}</p>`
       : html`<p class="bt-summary">${[data.available ? running : null, ends].filter(Boolean).join(' · ')}</p>`}
     ${!data.available && !stopped && html`<p class="bt-note">${t('Bus positions are unavailable right now.')}</p>`}
-    <div class="bt-line-label"><span class="eyebrow">${t('{0} stops', n)}</span>${mine.error ? html`<span class="bt-error">${mine.error}</span>` : html`<${Updated} at=${mine.at} />`}</div>
+    <div class="bt-line-label"><span class="eyebrow">${t('{0} stops', n)}</span>${mine.error ? html`<span class="bt-error">${mine.error}</span>` : html`<${Updated} asOf=${mine.asOf} />`}</div>
     <ol class="bt-route" style=${svcVars(color)}>
       ${data.stops.map((s, i) => {
         const here = buses.filter((b) => b.at === i);
@@ -680,10 +685,10 @@ export function BusesTab({ visible, here }) {
     if (now.kind === 'stop') showBoard(now.code);
     else if (now.kind === 'line') loadLine(now.svc, now.stop);
     const timer = setInterval(() => document.visibilityState === 'visible' && refresh(), REFRESH_MS);
-    const clockTimer = setInterval(() => tick.set(Date.now()), 5_000);
+    const clockTimer = setInterval(() => tick.set(serverNow()), 5_000);
     const back = () => {
       if (document.visibilityState !== 'visible') return;
-      tick.set(Date.now());
+      tick.set(serverNow());
       refresh();
     };
     document.addEventListener('visibilitychange', back);

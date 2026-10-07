@@ -1,8 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
-// The account page's search ranking; the Android and Mac apps copy its rules.
-import { rank, score } from '../../web/public/account/search.js';
+// The account page's search ranking, the reference; the Android and Mac apps
+// follow its rules, written out in fixtures/search.json with the cases below.
+import { busesTabIndex, rank, results, score } from '../../web/public/account/search.js';
+
+const FIXTURE = JSON.parse(fs.readFileSync(new URL('./fixtures/search.json', import.meta.url), 'utf8'));
+const ids = (list) => list.map((d) => `${d.kind}:${d.code}`);
 
 const D = [
   { code: 'COM3', label: 'COM 3', stopCode: 'COM3', kind: 'stop', aliases: ['soc', 'computing'] },
@@ -48,4 +53,45 @@ test('the Buses tab: stops by their long names, found by those, their short name
   assert.deepEqual(rank(stops, 'library').map((d) => d.code), ['CLB']);
   assert.deepEqual(rank(stops, 'yih').map((d) => d.code), ['YIH', 'YIH-OPP']);
   assert.deepEqual(rank(stops, 'yusof').map((d) => d.code), ['YIH', 'YIH-OPP']);
+});
+
+test('fixtures/search.json: destinations, ranked as the fixture says', () => {
+  const { index, queries, limit } = FIXTURE.destinations;
+  assert.ok(queries.length > 20);
+  for (const { q, expect } of queries) {
+    const got = ids(rank(index, q));
+    assert.ok(got.length <= limit, `"${q}": at most ${limit}`);
+    assert.deepEqual(got, expect, `"${q}"`);
+  }
+});
+
+test('fixtures/search.json: the Buses tab, its index from /campus and its results', () => {
+  const { campus, index, queries, limit } = FIXTURE.busesTab;
+  const built = busesTabIndex(campus);
+  assert.deepEqual(ids(built), index);
+  const services = built.filter((d) => d.kind === 'service');
+  for (const { q, expect } of queries) {
+    const got = ids(results(q, { source: () => built, suggestions: () => services }));
+    if (q.trim()) assert.ok(got.length <= limit, `"${q}": at most ${limit}`);
+    assert.deepEqual(got, expect, `"${q}"`);
+  }
+});
+
+test('the Buses tab index: services name where they run, stops keep their short name as an alias', () => {
+  const built = busesTabIndex(FIXTURE.busesTab.campus);
+  const k = built.find((d) => d.code === 'K');
+  assert.equal(k.detail, "Prince George's Park to Kent Vale");
+  assert.equal(built.find((d) => d.code === 'A1').detail, 'Loop from Kent Ridge Bus Terminal');
+  assert.deepEqual(built.find((d) => d.kind === 'stop' && d.code === 'CLB').aliases, ['clb', 'library', 'central library', 'clb']);
+  assert.deepEqual(busesTabIndex(null), []);
+});
+
+test('the fixture covers what the other apps need to get right', () => {
+  const { index, queries } = FIXTURE.destinations;
+  const kinds = new Set(index.map((d) => d.kind));
+  for (const k of ['stop', 'landmark', 'building', 'room']) assert.ok(kinds.has(k), k);
+  assert.ok([...kinds].some((k) => !['timetable', 'place', 'class', 'service', 'stop', 'landmark', 'building', 'room'].includes(k)), 'an unknown kind');
+  assert.ok(index.some((d) => d.code.includes('_')) && index.some((d) => d.code.includes('-')) && index.some((d) => / {2}/.test(d.label)));
+  // Every query has its reason, so a port that differs can tell which rule.
+  for (const q of [...queries, ...FIXTURE.busesTab.queries]) assert.ok(q.why, `"${q.q}" says why`);
 });

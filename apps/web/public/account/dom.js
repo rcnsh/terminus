@@ -18,6 +18,7 @@ let quietUntil = 0;
 export async function send(path, init) {
   if (Date.now() < quietUntil) throw Object.assign(new Error(t('terminus is busy. Try again in a minute.')), { status: 429 });
   const res = await fetch(path, init);
+  noteServerDate(res);
   if (res.status === 429) {
     const s = Number(res.headers.get('retry-after'));
     quietUntil = Date.now() + Math.min(Number.isFinite(s) && s > 0 ? s : 60, 300) * 1000;
@@ -76,6 +77,49 @@ export const spaced = (s) => s.replace(/([上下]午)(\d)/, '$1 $2');
 
 // Campus time, like the apps: class times from the server are Singapore time.
 export const clock = (iso) => spaced(new Date(iso).toLocaleTimeString(locale() ?? [], { ...clockOpts(), timeZone: 'Asia/Singapore' }));
+
+/*
+ * The device's clock can be wrong by minutes, and every countdown compares
+ * the server's times (leave by, departs, stale at) with it. Each API answer's
+ * Date header says what the server's clock read when it answered, so the
+ * error is that minus this clock at the answer. Date is whole seconds and
+ * is read a moment after it was written, so one answer can only ever say
+ * the error is at most that: the largest of the last few is the best guess,
+ * and an answer the browser kept a few seconds (max-age) can't drag it down.
+ * Under SKEW_MIN_MS it's noise, and ignored.
+ */
+const SKEW_MIN_MS = 3_000;
+const SKEW_SAMPLES = 5;
+let skewSamples = [];
+let skewMs = 0;
+
+/** One answer's reading: the server's `date` header minus `localMs`, or null without one. */
+export function skewSample(date, localMs) {
+  const server = date ? Date.parse(date) : NaN;
+  return Number.isFinite(server) ? server - localMs : null;
+}
+
+/** The clock's error from the latest `samples`: their largest, or 0 under SKEW_MIN_MS. */
+export function skewOf(samples) {
+  if (!samples.length) return 0;
+  const most = Math.max(...samples);
+  return Math.abs(most) < SKEW_MIN_MS ? 0 : most;
+}
+
+/**
+ * Takes response `res` into the clock's error. One the service worker
+ * served from its cache (x-terminus-cached) says nothing about now.
+ */
+export function noteServerDate(res, localMs = Date.now()) {
+  if (!res?.headers || res.headers.get('x-terminus-cached')) return;
+  const s = skewSample(res.headers.get('date'), localMs);
+  if (s === null) return;
+  skewSamples = [...skewSamples, s].slice(-SKEW_SAMPLES);
+  skewMs = skewOf(skewSamples);
+}
+
+/** Now on the server's clock: use it wherever a server time is compared with now. */
+export const serverNow = () => Date.now() + skewMs;
 
 /**
  * Text that reads on a service's colour: white or near-black, whichever
