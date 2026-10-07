@@ -17,20 +17,21 @@ enum Snapshots {
          "departsAt":"\(departs)",
          "timing":{"status":"on-time","text":"Arrive 09:52 · 8 min early","classAt":"\(classAt)","reachAt":"\(reach)"},
          "leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP","board":"\(boards)","arrive":"\(arrives)"},
-         "card":{"kind":"class","crowd":"Crowding: low","leaveBy":"Leave by ~\(t(1080))","catch":"Catch the ~\(t(1380)) D2 at PGP","arrive":"Arrive ~\(t(1980)) · 3 min early","goNow":"Or go now: D2 at \(t(240)) · arrive \(t(840))","estimate":"Estimated from the usual gap between buses. Live times show nearer the time."},
+         "card":{"kind":"class","actions":[{"id":"skipped","label":"Not going","trip":"2:840:UTOWN"},{"id":"away","label":"Not on campus today","trip":"2:840:UTOWN"}],"crowd":"Crowding: low","leaveBy":"Leave by ~\(t(1080))","catch":"Catch the ~\(t(1380)) D2 at PGP","arrive":"Arrive ~\(t(1980)) · 3 min early","goNow":"Or go now: D2 at \(t(240)) · arrive \(t(840))","estimate":"Estimated from the usual gap between buses. Live times show nearer the time."},
          "arrivals":[{"svc":"D2","crowd":"low"}],
          "quality":"live","asOf":"2026-09-29T01:00:00Z","mode":"trip","dest":{"to":"UTOWN","label":"GEA1000 @ UTown","why":"class"},
          "places":[{"key":"mrt","label":"KR MRT"},{"key":"utown","label":"UTown"},{"key":"gym","label":"Gym"}]}
         """
         let answer = try! JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
         let nearbyJSON = """
-        [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"opposite":"PGPR","board":[{"svc":"D2","etaS":240,"quality":"live"},{"svc":"A1","etaS":540,"quality":"live"},{"svc":"K","etaS":20,"quality":"live"},{"svc":"R2","etaS":780,"quality":"live"},{"svc":"BTC1","etaS":1260,"quality":"scheduled"},{"svc":"E","etaS":null,"quality":"ended"}]},
+        [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"quality":"live","color":"#8e44c9","later":[{"etaS":840,"quality":"live"},{"etaS":1500,"quality":"scheduled"}]},{"svc":"A1","etaS":540,"quality":"live","color":"#e5484d","later":[{"etaS":1260,"quality":"live"}]},{"svc":"K","etaS":20,"quality":"live","color":"#2b9ad6"},{"svc":"R2","etaS":780,"quality":"live","color":"#34a853"},{"svc":"BTC1","etaS":1260,"quality":"scheduled","later":[{"etaS":3060,"quality":"scheduled"}]},{"svc":"95","etaS":360,"quality":"live","paid":true},{"svc":"E","etaS":null,"quality":"ended"}]},
          {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"quality":"live"}]}]
         """
         let nearby = try! JSONDecoder().decode([NearbyStop].self, from: Data(nearbyJSON.utf8))
 
         let restJSON = """
         {"label":"Done for today","detail":"Next: CS2030 @ COM1, tomorrow 10:00","alt":null,"stop":{"code":"","name":""},
+         "card":{"kind":"rest","upcoming":{"when":"Tomorrow · Wed","title":"CS2030 at 10:00","where":"At COM1 · get off at COM 3","off":null}},
          "quality":"ended","asOf":"2026-09-29T12:00:00Z","mode":"rest","dest":null,"places":[{"key":"mrt","label":"KR MRT"}]}
         """
         let rest = try! JSONDecoder().decode(NextAnswer.self, from: Data(restJSON.utf8))
@@ -76,6 +77,18 @@ enum Snapshots {
                 m.day = try! JSONDecoder().decode(DayPlan.self, from: Data(dayJSON.utf8))
                 // Just taken off today: the Undo bar.
                 m.removed = try! JSONDecoder().decode(DayPlan.Item.self, from: Data(#"{"kind":"class","key":"c","label":"CS2030 @ COM1","status":"later","startsAt":"2026-10-01T05:00:00Z","removable":true}"#.utf8))
+                return m
+            }()),
+            ("today-refused", {
+                let m = model(nearbyTab: false)
+                let dayJSON = """
+                {"date":"2026-10-01","items":[
+                  {"kind":"class","key":"b","label":"GEA1000 @ UTown","status":"next","fromName":"PGP","startsAt":"\(classAt)","leave":{"at":"\(leaves)","estimated":true,"svc":"D2","stop":"PGP"},"removable":true},
+                  {"kind":"home","key":"h","label":"Home","status":"later","fromName":"UTown","startsAt":"\(iso(12600))","removable":true}
+                ],"note":null}
+                """
+                m.day = try! JSONDecoder().decode(DayPlan.self, from: Data(dayJSON.utf8))
+                m.removeFailed = ("b", "Couldn't reach terminus. Check your connection and try again.")
                 return m
             }()),
         ]

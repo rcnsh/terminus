@@ -71,7 +71,12 @@ struct NextAnswer: Decodable {
         let suggestion: Suggestion?
         /// "NUS's live bus times have been down since 9:14 AM", above the answer.
         let notice: String?
+        /// The next class, on a free day, after your day and at home.
+        let upcoming: Upcoming?
     }
+    /// Worded on the server: "Tomorrow · Fri", "CS2030 at 10:00", "At COM1 · get off at COM 3",
+    /// and why today has none on a break ("Recess week").
+    struct Upcoming: Decodable { let when: String; let title: String; let `where`: String; let off: String? }
 
     enum CodingKeys: String, CodingKey { case label, detail, alt, stop, quality, asOf, mode, dest, places, departsAt, refreshAt, timing, arrivals, arrived, leave, card, walkSpeedMs }
 
@@ -211,6 +216,10 @@ struct BoardRow: Decodable, Hashable {
     var color: String? = nil
     /// A public bus, with a fare (absent for a shuttle).
     var paid: Bool? = nil
+    /// The buses after this one (/me/nearby), soonest first.
+    var later: [Later]? = nil
+
+    struct Later: Decodable, Hashable { let etaS: Int?; let quality: String }
 }
 
 struct NearbyStop: Decodable, Identifiable {
@@ -219,8 +228,6 @@ struct NearbyStop: Decodable, Identifiable {
     let walkS: Int
     let available: Bool
     let board: [BoardRow]
-    /// The stop across the road, when there is one (the nearest stop's is always in the list).
-    var opposite: String? = nil
     var id: String { stop.code }
 }
 
@@ -520,8 +527,8 @@ struct Api {
         try await request("POST", "/auth/app/code", body: ["request": r.request, "poll": r.poll, "code": code])
     }
 
-    func next(_ target: Target, lat: Double?, lon: Double?) async throws -> NextAnswer {
-        var q = coords(lat, lon)
+    func next(_ target: Target, lat: Double?, lon: Double?, acc: Double? = nil) async throws -> NextAnswer {
+        var q = coords(lat, lon, acc)
         switch target {
         case .plan: break
         case .place(let key): q.append(URLQueryItem(name: "place", value: key))
@@ -602,15 +609,15 @@ struct Api {
 
     /// Today at a glance: each class with its leave-by, and the trips home.
     /// With a location, the next class is planned from there, as the card is.
-    func day(lat: Double? = nil, lon: Double? = nil) async throws -> DayPlan {
-        var q = coords(lat, lon)
+    func day(lat: Double? = nil, lon: Double? = nil, acc: Double? = nil) async throws -> DayPlan {
+        var q = coords(lat, lon, acc)
         if usesHour12 { q.append(URLQueryItem(name: "h12", value: "1")) }
         return try JSONDecoder().decode(DayPlan.self, from: try await send("GET", "/me/day", query: q))
     }
 
-    func nearby(lat: Double?, lon: Double?) async throws -> [NearbyStop] {
+    func nearby(lat: Double?, lon: Double?, acc: Double? = nil) async throws -> [NearbyStop] {
         struct R: Decodable { let stops: [NearbyStop] }
-        let r: R = try await request("GET", "/me/nearby", query: coords(lat, lon))
+        let r: R = try await request("GET", "/me/nearby", query: coords(lat, lon, acc))
         return r.stops
     }
 
@@ -697,13 +704,19 @@ struct Api {
         let _: R = try await request("POST", "/auth/logout", body: [:])
     }
 
-    private func coords(_ lat: Double?, _ lon: Double?) -> [URLQueryItem] {
+    /// `acc` is how far out the fix may be (fixUncertaintyM): the server
+    /// treats one further out than 200 m as no location, and follows the timetable.
+    static func coords(_ lat: Double?, _ lon: Double?, _ acc: Double? = nil) -> [URLQueryItem] {
         guard let lat, let lon else { return [] }
         // Four decimals is about 11 m: enough to tell PGP from PGP Foyer, and
         // no more precise than that in URLs that pass through logs.
         let f = { (v: Double) in String(format: "%.4f", locale: Locale(identifier: "en_US_POSIX"), v) }
-        return [URLQueryItem(name: "lat", value: f(lat)), URLQueryItem(name: "lon", value: f(lon))]
+        var q = [URLQueryItem(name: "lat", value: f(lat)), URLQueryItem(name: "lon", value: f(lon))]
+        if let acc { q.append(URLQueryItem(name: "acc", value: String(Int(acc.rounded())))) }
+        return q
     }
+
+    private func coords(_ lat: Double?, _ lon: Double?, _ acc: Double?) -> [URLQueryItem] { Api.coords(lat, lon, acc) }
 
     private func request<T: Decodable>(
         _ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: String]? = nil

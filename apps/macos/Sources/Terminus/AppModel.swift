@@ -76,6 +76,9 @@ final class AppModel {
     var removedAt = 0
     var removedBefore: String?
     private var removedTask: Task<Void, Never>?
+    /// A removal the server refused: the entry is back in its place, the reason under it.
+    var removeFailed: (key: String, message: String)?
+    private var removeFailedTask: Task<Void, Never>?
 
     /// "Notify me when to leave for class" (phase 7), mirrored from LeaveNotifier.
     private(set) var leaveAlerts = LeaveNotifier.shared.enabled
@@ -288,10 +291,12 @@ final class AppModel {
         }
     }
 
-    /// The × on a Today row: taken off today, whatever it is (a timetabled
-    /// class, one you added, the trip home). Gone at once, with Undo.
+    /// The × on a Today row, or "Not going" on the card: taken off today,
+    /// whatever it is (a timetabled class, one you added, the trip home).
+    /// Gone at once, with Undo in its row.
     func removeFromToday(_ item: DayPlan.Item) {
         guard let token = TokenStore.read() else { return }
+        removeFailed = nil
         removedAt = day?.items.firstIndex { $0.key == item.key } ?? 0
         removedBefore = day.flatMap { $0.items.indices.contains(removedAt + 1) ? $0.items[removedAt + 1].key : nil }
         day?.items.removeAll { $0.key == item.key }
@@ -301,7 +306,20 @@ final class AppModel {
             try? await Task.sleep(for: .seconds(6))
             if !Task.isCancelled { removed = nil }
         }
-        Task { await sendDay("skipped", item.key, token: token) }
+        let at = removedAt
+        Task {
+            // Refused (or offline): back where it was, with why under it, as on the web.
+            if let message = await sendDay("skipped", item.key, token: token) {
+                if removed?.key == item.key { removed = nil; removedTask?.cancel() }
+                if day?.items.contains(where: { $0.key == item.key }) == false { day?.items.insert(item, at: min(at, day?.items.count ?? 0)) }
+                removeFailed = (item.key, message)
+                removeFailedTask?.cancel()
+                removeFailedTask = Task {
+                    try? await Task.sleep(for: .seconds(6))
+                    if !Task.isCancelled { removeFailed = nil }
+                }
+            }
+        }
     }
 
     /// Undo on the bar: back on today's list.
@@ -313,7 +331,9 @@ final class AppModel {
     }
 
     /// A signal about one of today's entries, then the plan and Today again.
-    private func sendDay(_ kind: String, _ key: String, token: String) async {
+    /// Nil once it's done, else why it wasn't.
+    @discardableResult
+    private func sendDay(_ kind: String, _ key: String, token: String) async -> String? {
         do {
             let api = Api(token: token)
             let a = try await api.signal(CardAction(id: kind, label: "", trip: key))
@@ -323,14 +343,23 @@ final class AppModel {
             LeaveNotifier.shared.update(a)
             dayFetched = Date()
             day = try? await api.day()
+            return nil
         } catch let e as ApiError {
-            error = e.message
+            if kind != "skipped" { error = e.message }
+            return e.message
         } catch {
-            self.error = L("Offline")
+            if kind != "skipped" { self.error = L("Offline") }
+            return L("Offline")
         }
     }
 
     func signal(_ action: CardAction) {
+        // "Not going" is the × on Today by another name: the same way off the
+        // list, with the same Undo in its row (as on Android).
+        if action.id == "skipped", let item = day?.items.first(where: { $0.key == action.trip && $0.removable == true }) {
+            removeFromToday(item)
+            return
+        }
         guard !signalling, let token = TokenStore.read() else { return }
         signalling = true
         Task {
@@ -604,8 +633,13 @@ final class AppModel {
 
     func askLocation() { locator.ask() }
 
-    /// This Mac's location for setup's "Pick the stop nearest me"; nil if it isn't allowed.
-    func whereAmI() async -> CLLocation? { await locator.current(maxAge: 120) }
+    /// This Mac's location for setup's "Pick the stop nearest me"; nil if it
+    /// isn't allowed, or too rough to pick a stop by (over 200 m, as the server judges).
+    func whereAmI() async -> CLLocation? {
+        guard let fix = await locator.current(maxAge: 120),
+              let acc = fixUncertaintyM(accuracy: fix.horizontalAccuracy, ageS: -fix.timestamp.timeIntervalSinceNow), acc <= 200 else { return nil }
+        return fix
+    }
 
     /// No home and no timetable yet (the server's "Set up" answer), or a new account.
     var wantsSetup: Bool { paired && (needsSetup || plan?.card?.kind == "setup") }
@@ -771,18 +805,21 @@ final class AppModel {
         log.debug("refreshing against \(Api.base, privacy: .public)")
         let api = Api(token: token)
         if !langSynced { Task { await syncLang(api) } }
-        let loc = await locator.current(maxAge: popoverOpen ? 120 : 600)
+        let fix = await locator.current(maxAge: popoverOpen ? 120 : 600)
+        let acc = fix.flatMap { fixUncertaintyM(accuracy: $0.horizontalAccuracy, ageS: -$0.timestamp.timeIntervalSinceNow) }
+        // An invalid fix is no location at all.
+        let loc = acc == nil ? nil : fix
         let lat = loc?.coordinate.latitude, lon = loc?.coordinate.longitude
         loading = true
         defer { loading = false }
         do {
             // What's on screen first; the plan (for the menu bar) after.
             if showNearby {
-                nearby = try await api.nearby(lat: lat, lon: lon)
+                nearby = try await api.nearby(lat: lat, lon: lon, acc: acc)
             } else if target != .plan {
-                answers[target] = try await api.next(target, lat: lat, lon: lon)
+                answers[target] = try await api.next(target, lat: lat, lon: lon, acc: acc)
             }
-            let p = try await api.next(.plan, lat: lat, lon: lon)
+            let p = try await api.next(.plan, lat: lat, lon: lon, acc: acc)
             answers[.plan] = p
             places = p.places ?? []
             // A favourite removed elsewhere leaves no tab to show it under.
@@ -798,7 +835,7 @@ final class AppModel {
             if (popoverOpen && dayAge > 120) || dayAge > 3600 || day?.date != OfflineDay.sgtDate(Date()) {
                 dayFetched = Date()
                 // A failed fetch keeps the plan there was: it's what offline falls back to.
-                if let d = try? await api.day(lat: lat, lon: lon) { day = d }
+                if let d = try? await api.day(lat: lat, lon: lon, acc: acc) { day = d }
             }
             return true
         } catch let e as ApiError where e.status == 401 && TokenStore.read() != token {
