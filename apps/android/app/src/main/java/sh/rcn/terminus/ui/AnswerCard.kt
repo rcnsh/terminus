@@ -32,6 +32,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
@@ -140,7 +146,12 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
     // "Catch the D2 at Museum", and you don't know where Museum is: walking
     // directions there, as the one filled button; the server's go beside it.
     val walkTo = answer.card?.walkTo
-    val actions = answer.card?.actions.orEmpty()
+    val all = answer.card?.actions.orEmpty()
+    // "Not going" and "Not on campus today" are the same no for this class
+    // and for the whole day. With both on the card they share one menu, so
+    // they don't crowd out what the card is for.
+    val skips = all.filter { it.id == "skipped" || it.id == "away" }.takeIf { it.size > 1 }.orEmpty()
+    val actions = all - skips.toSet()
     walkTo?.let { w ->
         val ctx = LocalContext.current
         Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -148,11 +159,14 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
                 onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, w.mapsUri())) } },
                 modifier = Modifier.weight(1f).height(48.dp),
             ) { Text(stringResource(R.string.directions_to, w.name), maxLines = 1) }
-            actions.firstOrNull()?.let { a -> OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.height(48.dp)) { Text(a.label, maxLines = 1) } }
+            if (skips.isNotEmpty()) SkipMenu(skips, onAction, busy, label = null)
+            else actions.firstOrNull()?.let { a -> OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.height(48.dp)) { Text(a.label, maxLines = 1) } }
         }
     }
-    val rest = if (walkTo != null) actions.drop(1) else actions
-    if (rest.isNotEmpty()) {
+    val rest = if (walkTo != null && skips.isEmpty()) actions.drop(1) else actions
+    // Without directions, the menu is a button named for the first choice.
+    val skipButton = walkTo == null && skips.isNotEmpty()
+    if (rest.isNotEmpty() || skipButton) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = if (walkTo != null) 6.dp else 10.dp)) {
             rest.forEachIndexed { i, a ->
                 if (i == 0 && walkTo == null && a.id != "skipped" && a.id != "reset") {
@@ -161,6 +175,7 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
                     OutlinedButton(onClick = { onAction(a) }, enabled = !busy) { Text(a.label) }
                 }
             }
+            if (skipButton) SkipMenu(skips, onAction, busy, label = skips.first().label)
         }
     }
     answer.card?.suggestion?.let { s ->
@@ -171,6 +186,42 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
                     Button(onClick = { onSuggestion(s, true) }, enabled = !busy) { Text(s.accept) }
                     OutlinedButton(onClick = { onSuggestion(s, false) }, enabled = !busy) { Text(s.dismiss) }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The skips behind one button: ⋯ beside directions, or [label] on its own.
+ * Each choice says underneath how much it skips.
+ */
+@Composable
+private fun SkipMenu(skips: List<CardAction>, onAction: (CardAction) -> Unit, busy: Boolean, label: String?) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        if (label == null) {
+            OutlinedButton(onClick = { open = true }, enabled = !busy, modifier = Modifier.size(48.dp), contentPadding = PaddingValues(0.dp)) {
+                Icon(painterResource(R.drawable.ic_more), contentDescription = stringResource(R.string.more_options), modifier = Modifier.size(20.dp))
+            }
+        } else {
+            OutlinedButton(onClick = { open = true }, enabled = !busy) { Text(label) }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            skips.forEach { a ->
+                val hint = when (a.id) {
+                    "skipped" -> stringResource(R.string.skips_class)
+                    "away" -> stringResource(R.string.skips_day)
+                    else -> null
+                }
+                DropdownMenuItem(
+                    text = {
+                        Column(Modifier.padding(vertical = 4.dp)) {
+                            Text(a.label, style = MaterialTheme.typography.bodyLarge)
+                            hint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                    },
+                    onClick = { open = false; onAction(a) },
+                )
             }
         }
     }

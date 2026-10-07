@@ -193,6 +193,7 @@
     <string name="module_at_venue">%1$s at %2$s</string>
     <string name="monday">Monday</string>
     <string name="monday_short">Mon</string>
+    <string name="more_options">More options</string>
     <string name="n_classes">%1$d classes</string>
     <string name="n_devices">%1$d devices</string>
     <string name="n_hours">%1$s hours</string>
@@ -321,6 +322,8 @@
     <string name="signed_out_removed">This phone was signed out of your account. Sign in again with your email.</string>
     <string name="signin_cancelled">The sign-in was cancelled from the email. If that was you, send a new one.</string>
     <string name="skip_setup">Skip setup</string>
+    <string name="skips_class">Skip this class</string>
+    <string name="skips_day">Skip every trip left today</string>
     <string name="something_wrong">Something went wrong</string>
     <string name="starting">Starting…</string>
     <string name="starts">Starts</string>
