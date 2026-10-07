@@ -40,8 +40,10 @@ hour, like the Worker's small pages.
 The landing page is sent with the current release's version (from
 `latest.json`, remembered for five minutes) and, for someone with a live
 session, Account in place of Sign in, both written in by `src/landing.ts`
-so nothing changes once the page is up. It's `private, no-cache` with no
-ETag, so a browser never shows its own older copy. The version carries its
+so nothing changes once the page is up. It's `private, no-cache`, with a
+weak ETag of its own made from the file's ETag, the version, signed in or
+not and the beta (`landingEtag`), so a browser gets a 304 only while its
+copy is what it would be sent, never the file's own 304. The version carries its
 English in `data-t`, which `i18n.js` words in Chinese.
 
 ---
