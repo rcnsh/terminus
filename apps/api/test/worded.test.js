@@ -23,7 +23,7 @@ const zh = (fn) => withLang('zh', fn);
 test('a board row says its time in words, with "~" for a timetable time', () => {
   assert.equal(etaText(240, 'live'), '4 min');
   assert.equal(etaText(360, 'scheduled'), '~6 min');
-  assert.equal(etaText(240, 'stale'), '4 min', 'an old live time is still not a guess');
+  assert.equal(etaText(240, 'stale'), '~4 min', 'an old live time, counted down since, is a guess as on the card');
   assert.equal(etaText(20, 'live'), 'now');
   assert.equal(etaText(20, 'scheduled'), 'now', '"~now" says nothing more than "now"');
   assert.equal(zh(() => etaText(360, 'scheduled')), '约 6 分钟');
@@ -40,6 +40,7 @@ test('"then" names up to three later buses, each timetable one marked', () => {
   ];
   assert.equal(thenText(later), 'then 12, ~20, 25 min');
   assert.equal(zh(() => thenText(later)), '之后 12、约 20、25 分钟');
+  assert.equal(thenText([{ etaS: 720, quality: 'stale' }]), 'then ~12 min', 'an old reading is a guess too');
   // Never "0": a bus under a minute away is still a minute.
   assert.equal(thenText([{ etaS: 10, quality: 'live' }]), 'then 1 min');
 });

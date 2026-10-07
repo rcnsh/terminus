@@ -1636,7 +1636,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             eta: {
               type: ['string', 'null'],
               example: '~6 min',
-              description: '`etaS` in words, in the request’s language: "4 min", "now" under 45 seconds, and a `~` on a `scheduled` time ("~6 min", Chinese "约 6 分钟"). Null when `etaS` is. Show it as it is.',
+              description: '`etaS` in words, in the request’s language: "4 min", "now" under 45 seconds, and a `~` on a `scheduled` or `stale` time ("~6 min", Chinese "约 6 分钟"). Null when `etaS` is. Show it as it is.',
             },
             laterText: {
               type: ['string', 'null'],
