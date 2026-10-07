@@ -995,7 +995,8 @@ struct Api {
         if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")) }
         guard (200..<300).contains(status) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw ApiError(status: status, message: msg.map(sentence) ?? "HTTP \(status)")
+            // No message of its own (a proxy's or Cloudflare's HTML page): plain words, not a status code.
+            throw ApiError(status: status, message: msg.map(sentence) ?? L("Couldn't reach terminus. Try again in a moment."))
         }
         return data
     }
