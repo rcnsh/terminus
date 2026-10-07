@@ -303,13 +303,6 @@ function aliasesFor(code: string): string[] | undefined {
 }
 
 /**
- * One flat list combining the 33 stops and every known NUSMods venue code,
- * each already resolved to a boardable stop. The client just substring-
- * searches `label`/`code` and hands the matched `stopCode` straight to
- * `/trip?to=`; venue resolution (data/venues.json, prefix fallback) happens
- * here once, server-side, the same way it already does for NUSMods import.
- */
-/**
  * What the destination search offers: every stop, every building with a
  * real name, and NUSMods' rooms. Not the import lookup table (venues.json):
  * that also holds the NUS map's internal ids, bare room numbers and codes no

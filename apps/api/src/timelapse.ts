@@ -245,16 +245,17 @@ export interface RecorderStatus {
   state: string;
 }
 
-/**
- * GET /timelapse/days and /timelapse/days/:date, for the operator or a
- * holder of TIMELAPSE_TOKEN only (anything else is a 404, as /admin/stats). A closed day is its file from
- * R2, unchanged from then on, so it's cached for a year; today's is built
- * from what the recorder holds so far, and not cached.
- */
 /** How many days back /timelapse/days looks for a recorder still holding
  *  its day, R2 having refused it. Its retries go on; a week is plenty to notice. */
 const HELD_DAYS = 7;
 
+/**
+ * GET /timelapse/days and /timelapse/days/:date, for the operator or a
+ * holder of TIMELAPSE_TOKEN only (anything else is a 404, as /admin/stats).
+ * A closed day is its file from R2, unchanged from then on, so it's cached
+ * for a year; today's is built from what the recorder holds so far, and not
+ * cached.
+ */
 export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: number): Promise<Response | null> {
   if (!url.pathname.startsWith('/timelapse/')) return null;
   if (!canReadTimelapse(env, req) || req.method !== 'GET') return json({ error: 'not found' }, 404);

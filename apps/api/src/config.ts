@@ -125,7 +125,6 @@ export const MIN_POLL_MS = 15_000;
 /** Hard cap from the API contract. `format.ts` targets much shorter. */
 export const LABEL_MAX = 40;
 
-
 /** SGT is UTC+8, no DST. */
 export function sgt(nowMs: number): { day: number; hour: number; minutes: number } {
   const d = new Date(nowMs + 8 * 3600_000);
@@ -135,7 +134,6 @@ export function sgt(nowMs: number): { day: number; hour: number; minutes: number
     minutes: d.getUTCHours() * 60 + d.getUTCMinutes(),
   };
 }
-
 
 /**
  * live and stale carry real numbers; scheduled and unknown are guesses.
