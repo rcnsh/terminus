@@ -175,6 +175,9 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
     const el = box.current;
     const ground = on && grounds[on];
     ground?.set([...ground.get(), el]);
+    // Measured now, not only when the observer first reports: the hills are
+    // then drawn before the first paint, not a frame after it.
+    setW(Math.round(el.clientWidth));
     const sized = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
     sized.observe(el);
     const shown = moving && new IntersectionObserver(([e]) => setSeen(e.isIntersecting));

@@ -15,10 +15,12 @@
 <link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
 <link rel="preload" href="/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/fonts.css">
 <script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/i18n.js"></script>
+<link rel="preload" href="/assets/sky-phase.js" as="script">
 <link rel="stylesheet" href="/account/account.css">
 <link rel="stylesheet" href="/app/app.css">
 <link rel="stylesheet" href="/assets/tabbar.css">
@@ -38,7 +40,9 @@
 <link rel="modulepreload" href="/account/search.js">
 <link rel="modulepreload" href="/app/offline.js">
 </head>
-<body class="app">
+<body class="app" data-now-sky>
+<!-- The hour's sky on the page before anything is drawn (sky-phase.js). -->
+<script src="/assets/sky-phase.js"></script>
 <header class="wrap nav">
   <a class="brand" href="/app/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
 </header>

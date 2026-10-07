@@ -82,6 +82,10 @@
    page's colour, the rest in the hour's. As app.css draws it on Now. */
 .sky-panel .horizon { display: block; width: 100%; height: 115px; }
 .sky-panel .horizon.low { height: 52px; }
+/* A page's horizon is drawn by a script (sky-page.js); until then its box
+   keeps the room, so nothing below it moves when it appears. */
+.sky-panel [data-horizon]:empty { height: 115px; }
+.sky-panel [data-horizon][data-low]:empty { height: 52px; }
 .sky-panel .horizon svg { display: block; }
 .sky-panel .horizon .far { fill: var(--h-far); }
 .sky-panel .horizon .tree { fill: var(--h-tree); }

@@ -37,7 +37,7 @@ profile.subscribe((p) => p && places.set(p.places.map(({ key, label }) => ({ key
  * The card: an answer (`a`), "Checking…" or another line (`text`), the
  * offline plan (`offline`), or Nearby's stops (`nearby`).
  */
-const card = store({ text: t('Checking…') });
+const card = store({ text: t('Checking…'), loading: true });
 /** "Updated 9:41", or "Updating…" while a card already seen is shown again. */
 const updated = store('');
 /** The banner above the chips when the card isn't live (offline, or no answer), else null. */
@@ -243,7 +243,7 @@ async function drawSeen() {
     card.set({ a: known });
     updated.set(t('Updating…'));
   } else {
-    card.set({ text: t('Checking…') });
+    card.set({ text: t('Checking…'), loading: true });
     updated.set('');
   }
 }
@@ -252,7 +252,7 @@ async function drawSeen() {
 function choose(to) {
   target.set(to);
   if (to.kind === 'nearby') {
-    card.set({ text: t('Checking…') });
+    card.set({ text: t('Checking…'), loading: true });
     updated.set('');
   } else {
     drawSeen();
@@ -781,7 +781,7 @@ function CardArea() {
         ? html`<div class="sky-head nearby-sky"><${Celestial} /></div><${Horizon} /><${NearbyCard} stops=${c.nearby} />`
         : html`<${InSky} sky><${Message} text=${c.text} /><//>`;
   return html`
-    <section class="card app-card">
+    <section class=${c.loading ? 'card app-card loading' : 'card app-card'}>
       ${body}
       <div class="card-foot">
         <div class="updated hint">${when}</div>
@@ -1060,7 +1060,12 @@ async function start() {
   // A tap on a notification with the app already open: show the new card.
   navigator.serviceWorker?.addEventListener('message', (e) => e.data?.kind === 'refresh' && refresh());
   render(html`<${App} />`, document.getElementById('root'));
-  // /me first: it renews the session, so the installed app stays signed in.
+  // The plan from last time at once, if it still holds (a look in the cache),
+  // then the new one asked for alongside /me rather than after it.
+  await drawSeen();
+  const first = refresh();
+  // /me renews the session, so the installed app stays signed in. It keeps
+  // the same token, so the card's requests sent with it are still good.
   // Offline it comes from the cache like everything else, or not at all.
   try {
     me.set((await get('/me')).data);
@@ -1073,9 +1078,7 @@ async function start() {
   setupPush();
   window.addEventListener('hashchange', showTab);
   showTab();
-  // The plan from last time while this one loads, if it still holds.
-  await drawSeen();
-  await refresh();
+  await first;
   const nowShown = () => document.visibilityState === 'visible' && tab.get() === 'now';
   setInterval(() => nowShown() && refresh(), REFRESH_MS);
   document.addEventListener('visibilitychange', () => nowShown() && refresh());
