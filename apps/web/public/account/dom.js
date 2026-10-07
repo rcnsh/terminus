@@ -12,12 +12,34 @@ export const locale = () => globalThis.window?.i18n?.locale;
 let quietUntil = 0;
 
 /**
+ * How long a call may take, unless its caller says otherwise. Wi-Fi that
+ * drops everything (a lecture theatre's, a captive portal before sign-in)
+ * would otherwise leave "Checking…" up for minutes, with the next timed
+ * refresh piling another hung call on top.
+ */
+const SEND_TIMEOUT_MS = 20_000;
+
+/** A signal that aborts after `ms` (AbortSignal.timeout, where the browser has it). */
+export function timeout(ms) {
+  if (AbortSignal.timeout) return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
+/** The error for a call that got no usable answer: nothing back in time, or a page that isn't terminus's. */
+const unreachable = () => new Error(t("Couldn't reach terminus. Check your connection."));
+
+/**
  * fetch(), unless the server asked this page to slow down: then it throws
  * at once, with status 429, until Retry-After (at most 5 minutes) is up.
+ * Gives up after `timeoutMs` (SEND_TIMEOUT_MS), reading the body included.
  */
-export async function send(path, init) {
+export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) {
   if (Date.now() < quietUntil) throw Object.assign(new Error(t('terminus is busy. Try again in a minute.')), { status: 429 });
-  const res = await fetch(path, init);
+  const res = await fetch(path, { signal: timeout(timeoutMs), ...init }).catch((err) => {
+    throw err?.name === 'TimeoutError' || err?.name === 'AbortError' ? unreachable() : err;
+  });
   noteServerDate(res);
   if (res.status === 429) {
     const s = Number(res.headers.get('retry-after'));
@@ -35,8 +57,16 @@ export async function api(path, { method = 'GET', body } = {}) {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     credentials: 'same-origin',
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(sentence(data.error) || `HTTP ${res.status}`), { status: res.status });
+  const text = await res.text().catch(() => null);
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    // Not JSON: a captive portal's sign-in page, or a proxy's error page.
+  }
+  if (!res.ok) throw Object.assign(new Error(sentence(data?.error) || `HTTP ${res.status}`), { status: res.status });
+  // A 200 that isn't the API's answer must not pass for one.
+  if (data === null || typeof data !== 'object') throw unreachable();
   return data;
 }
 
