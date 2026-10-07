@@ -57,10 +57,8 @@ final class SetupModel {
             campus = try await c
             me = await m
             choices = await ch
-        } catch let e as ApiError {
-            message = e.message
         } catch {
-            message = L("Couldn't reach terminus. Check your connection and try again.")
+            message = failureMessage(error)
         }
     }
 
@@ -270,10 +268,8 @@ final class SetupModel {
         do {
             try await api.undoChoice(trip: c.trip, pref: c.pref)
             await loadChoices()
-        } catch let e as ApiError {
-            message = e.message
         } catch {
-            message = L("Couldn't reach terminus. Check your connection and try again.")
+            message = failureMessage(error)
         }
     }
 
@@ -281,10 +277,8 @@ final class SetupModel {
         do {
             try await api.clearHistory()
             await loadChoices()
-        } catch let e as ApiError {
-            message = e.message
         } catch {
-            message = L("Couldn't reach terminus. Check your connection and try again.")
+            message = failureMessage(error)
         }
     }
 
@@ -295,10 +289,8 @@ final class SetupModel {
         do {
             try await api.feedback(note: note.trimmingCharacters(in: .whitespacesAndNewlines))
             return nil
-        } catch let e as ApiError {
-            return e.message
         } catch {
-            return L("Couldn't reach terminus. Try again in a moment.")
+            return failureMessage(error, otherwise: L("Couldn't reach terminus. Try again in a moment."))
         }
     }
 
@@ -336,10 +328,8 @@ final class SetupModel {
             profile = r.profile
             unplaced = r.unplaced
             me = try? await api.me()
-        } catch let e as ApiError {
-            message = e.message
         } catch {
-            message = L("Couldn't reach terminus. Check your connection and try again.")
+            message = failureMessage(error)
         }
     }
 
@@ -357,10 +347,8 @@ final class SetupModel {
     func loadDevices() async {
         do {
             devices = try await api.devices()
-        } catch let e as ApiError {
-            message = e.message
         } catch {
-            message = L("Couldn't reach terminus. Check your connection and try again.")
+            message = failureMessage(error)
         }
     }
 
@@ -370,10 +358,8 @@ final class SetupModel {
         do {
             try await api.removeDevice(d.id)
             devices?.removeAll { $0.id == d.id }
-        } catch let e as ApiError {
-            message = e.message
         } catch {
-            message = L("Couldn't remove it. Try again in a moment.")
+            message = failureMessage(error, otherwise: L("Couldn't remove it. Try again in a moment."))
         }
     }
 
