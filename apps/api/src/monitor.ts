@@ -403,6 +403,15 @@ export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Prom
 }
 
 const REMINDED_KEY = 'term:reminded';
+/** Users whose reminder reached no device, asked again on later runs:
+ *  `{ term, users: [[user id, lang, tries]] }`. Its own key, as KV takes one
+ *  write a second to a key and the mark is written before the sends. */
+const REMIND_RETRY_KEY = 'term:retry';
+/** Runs a failed reminder is tried again (two hours of the cron), so push
+ *  broken for a while still reaches them, and a token that never works stops. */
+const REMIND_TRIES = 8;
+/** A user due a reminder: id, the language chosen in Settings ('' for the device's), tries so far. */
+type Due = [string, string, number];
 /** Not before 10 in the morning, Singapore time. */
 const REMIND_FROM_HOUR = 10;
 
@@ -420,7 +429,8 @@ export function termNotice(term: { acadYear: string; semester: number }, start: 
  * timetable from an earlier semester, to import the new one. Not to anyone
  * who has already imported it, nor to anyone with no timetable at all. Once
  * per semester, in batches like armTrips; the KV mark is "<year> <sem>" when
- * done and "<year> <sem> <last user id>" while under way.
+ * done and "<year> <sem> <last user id>" while under way. Users no device
+ * took are kept under REMIND_RETRY_KEY and tried again on later runs.
  */
 export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {
   if (!env.DB || !pushEnabled(env)) return 0;
@@ -428,19 +438,29 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   if (!soon || new Date(nowMs + 8 * 3_600_000).getUTCHours() < REMIND_FROM_HOUR) return 0;
   const id = `${soon.term.acadYear} ${soon.term.semester}`;
   const mark = (await env.KV.get(REMINDED_KEY)) ?? '';
-  if (mark === id) return 0;
+  let retry: { term: string; users: Due[] } | null = null;
+  try {
+    retry = JSON.parse((await env.KV.get(REMIND_RETRY_KEY)) ?? 'null');
+  } catch {
+    retry = null;
+  }
+  if (retry?.term !== id) retry = null;
+  if (mark === id && !retry) return 0;
   const after = mark.startsWith(`${id} `) ? mark.slice(id.length + 1) : '';
-  const { results } = await env.DB.prepare(
-    'SELECT DISTINCT s.user_id AS user_id, p.json AS json FROM sessions s JOIN profiles p ON p.user_id = s.user_id WHERE s.push_token IS NOT NULL AND s.user_id > ? ORDER BY s.user_id LIMIT ?',
-  )
-    .bind(after, batch)
-    .all<{ user_id: string; json: string }>();
+  const { results } = mark === id
+    ? { results: [] as { user_id: string; json: string }[] }
+    : await env.DB.prepare(
+        'SELECT DISTINCT s.user_id AS user_id, p.json AS json FROM sessions s JOIN profiles p ON p.user_id = s.user_id WHERE s.push_token IS NOT NULL AND s.user_id > ? ORDER BY s.user_id LIMIT ?',
+      )
+        .bind(after, batch)
+        .all<{ user_id: string; json: string }>();
   const both = termNotice(soon.term, soon.start);
   // A language chosen in Settings wins over each device's.
   const en: Notice = { ...both, zhTitle: both.title, zhBody: both.body };
   const zh: Notice = { title: both.zhTitle, body: both.zhBody, zhTitle: both.zhTitle, zhBody: both.zhBody };
+  const notice = (lang: string) => (lang === 'en' ? en : lang === 'zh' ? zh : both);
   let sent = 0;
-  const due: { userId: string; notice: Notice }[] = [];
+  const due: Due[] = [...(retry?.users ?? [])];
   for (const r of results) {
     let p: { trips?: unknown[]; term?: { acadYear: string; semester: number } | null; lang?: string } = {};
     try {
@@ -449,21 +469,29 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
       continue;
     }
     if (!Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) continue;
-    due.push({ userId: r.user_id, notice: p.lang === 'en' ? en : p.lang === 'zh' ? zh : both });
+    due.push([r.user_id, p.lang === 'en' || p.lang === 'zh' ? p.lang : '', 0]);
   }
   // The batch is marked before it's sent, so a mark that can't be saved
-  // sends nothing rather than the same batch every run.
-  const done = results.length < batch;
-  await env.KV.put(REMINDED_KEY, done ? id : `${id} ${results[results.length - 1].user_id}`, { expirationTtl: 30 * 86_400 });
-  for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
-    const n = await Promise.all(due.slice(i, i + ARM_AT_ONCE).map((u) => remindUser(env, u.userId, u.notice, nowMs).catch(() => 0)));
-    sent += n.reduce((x, y) => x + y, 0);
+  // sends nothing rather than the same batch every run. The mark moves on
+  // whatever the sends do, so one user who can't be reached holds up no one.
+  if (mark !== id) {
+    const done = results.length < batch;
+    await env.KV.put(REMINDED_KEY, done ? id : `${id} ${results[results.length - 1].user_id}`, { expirationTtl: 30 * 86_400 });
   }
-  // Not one device reached (push itself broken, say): the batch goes again
-  // next run. Tokens that are gone were cleared, so they aren't asked twice.
-  if (due.length && !sent) {
-    console.error('term reminders not sent', due.length);
-    await (mark ? env.KV.put(REMINDED_KEY, mark, { expirationTtl: 30 * 86_400 }) : env.KV.delete(REMINDED_KEY));
+  const failed: Due[] = [];
+  for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
+    const some = due.slice(i, i + ARM_AT_ONCE);
+    const n = await Promise.all(some.map(([userId, lang]) => remindUser(env, userId, notice(lang), nowMs).catch(() => 0)));
+    some.forEach(([userId, lang, tries], j) => (n[j] ? (sent += n[j]) : failed.push([userId, lang, tries + 1])));
+  }
+  // Users no device took (push itself failing, say) are tried again on the
+  // next runs, up to REMIND_TRIES times, so a token that never works stops.
+  const again = failed.filter(([, , tries]) => tries < REMIND_TRIES).slice(0, ARM_BATCH);
+  if (failed.length) console.error('term reminders not sent', failed.length);
+  if (again.length) {
+    await env.KV.put(REMIND_RETRY_KEY, JSON.stringify({ term: id, users: again }), { expirationTtl: 30 * 86_400 });
+  } else if (retry) {
+    await env.KV.delete(REMIND_RETRY_KEY);
   }
   return sent;
 }
