@@ -55,6 +55,12 @@
     <string name="a11y_show_list">Show as list</string>
     <string name="email_label">Email</string>
     <string name="report_note">Your note</string>
+    <string name="a11y_page">Page %1$d of %2$d</string>
+    <string name="a11y_open_line">See the %1$s line</string>
+    <string name="a11y_open_stop">See this stop\'s buses</string>
+    <string name="a11y_change_stop">Change the stop for %1$s</string>
+    <string name="a11y_expanded">Open</string>
+    <string name="a11y_collapsed">Closed</string>
     <string name="a11y_about">"about "</string>
     <string name="a11y_bus">Bus %1$s</string>
     <string name="a11y_bus_paid">Public bus %1$s, fare applies</string>
