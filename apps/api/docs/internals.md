@@ -1385,7 +1385,8 @@ LTA every 15 minutes, past the cache) and each push user's Trip object
   runs again within seconds, doesn't ask again.
 - **Kill switch.** KV `config:timelapse` set to `off` (or `on`) wins.
   Otherwise the `TIMELAPSE_ENABLED` var applies: `on` for the stable site,
-  `off` for the beta (so the two never poll twice), and off when unset. The
+  `off` for the beta (so the two never poll twice), and off when unset or
+  when KV can't be read (it may hold an `off`). The
   switch is read once a round, so `off` stops it within 30 s, without a
   deploy. On again, the cron restarts it within 15 minutes.
 

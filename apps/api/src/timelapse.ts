@@ -86,10 +86,16 @@ export function nextOpen(ms: number, hours: Hours = TIMELAPSE.hours): number {
  * The kill switch. KV `config:timelapse` ("on" or "off") wins, so the
  * recorder can be stopped at once without a deploy; without it, the
  * TIMELAPSE_ENABLED var. Unset everywhere is off: nothing polls NUS unless
- * someone turned it on.
+ * someone turned it on. KV failing to answer is off too: it may hold an
+ * "off" that the var would otherwise override.
  */
 export async function timelapseEnabled(env: Env): Promise<boolean> {
-  const kv = await env.KV.get('config:timelapse').catch(() => null);
+  let kv: string | null;
+  try {
+    kv = await env.KV.get('config:timelapse');
+  } catch {
+    return false;
+  }
   const v = (kv ?? env.TIMELAPSE_ENABLED ?? '').trim().toLowerCase();
   return v === 'on' || v === 'true' || v === '1';
 }
