@@ -59,6 +59,8 @@ test('the card title is the departure as a clock time, marked when it is an esti
   assert.equal(titleOf(place, true), 'A1 · 9:09 AM');
   assert.equal(titleOf({ ...place, quality: 'scheduled' }, false), 'A1 · ~09:09');
   assert.equal(zh(() => titleOf({ ...place, quality: 'scheduled' }, false)), 'A1 · 约 09:09');
+  // An old reading aged to now is no more exact than a guess.
+  assert.equal(titleOf({ ...place, quality: 'stale' }, false), 'A1 · ~09:09');
   // No time to count down to: the label as it is.
   assert.equal(titleOf(await load('class-walk'), false), 'Walk · 3 min');
   assert.equal(titleOf({ ...place, quality: 'unknown' }, false), place.label);
@@ -174,6 +176,7 @@ test('outside a trip the glance is a clock time, never a minute count that a men
   assert.equal(cardFor(place, true).glance, 'A1 9:09a');
   assert.equal(cardFor({ ...place, quality: 'scheduled' }).glance, 'A1 ~09:09');
   assert.equal(zh(() => cardFor({ ...place, quality: 'scheduled' }).glance), 'A1 约 09:09');
+  assert.equal(cardFor({ ...place, quality: 'stale' }).glance, 'A1 ~09:09');
   // The same as the title, without the separator.
   assert.equal(cardFor(place).glance, cardFor(place).title.replace(' · ', ' '));
   // With no time to give, the label's own words.

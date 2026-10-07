@@ -309,7 +309,7 @@ export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, 
  */
 export function titleOf(a: MeAnswer, h12: boolean): string {
   if (!timedAt(a)) return a.label;
-  return `${a.label.split(' · ')[0]} · ${approx(a.quality === 'scheduled', clockAt(Date.parse(a.departsAt!), h12))}`;
+  return `${a.label.split(' · ')[0]} · ${approx(roughly(a), clockAt(Date.parse(a.departsAt!), h12))}`;
 }
 
 /** The answer has a departure to give as a clock time: not a sort key ('unknown'), and not nothing running. */
@@ -527,7 +527,7 @@ function v1(a: MeAnswer, h12: boolean): V1 {
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const same = timed && l.board && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt!)) < 60_000;
   if (timed && !same) {
-    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(a.quality === 'scheduled', at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
+    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(roughly(a), at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
   }
   card.note = l.note ?? null;
   card.estimate = l.estimated ? m().estimateNote : null;
@@ -552,6 +552,9 @@ const PHASE_TEXT: Record<Phase, (() => string) | null> = {
 
 /** "~9:41" for an estimate, "9:41" otherwise. */
 const approx = (estimated: boolean | undefined, clock: string) => (estimated ? m().approx(clock) : clock);
+
+/** The answer's times are no more exact than a guess: a timetable's, or an old reading aged to now (as etaPhrase says). */
+const roughly = (a: MeAnswer): boolean => a.quality === 'scheduled' || a.quality === 'stale';
 
 /** The time in a message made by `make(time)`, or null when `text` isn't one: "Day starts 09:00" -> "09:00". */
 function slotOf(text: string, make: (t: string) => string): string | null {
@@ -628,7 +631,7 @@ function v2(
   // A clock time, never "4 min": a glance (the Mac's menu bar, a tile) can
   // sit unrefreshed for minutes, and a clock time stays true until the bus
   // leaves. The label as it is when there's no time to give.
-  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(a.quality === 'scheduled', short(a.departsAt!))}` : a.label.replace(' · ', ' ');
+  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}` : a.label.replace(' · ', ' ');
   if (card.kind === 'rest') {
     const from = slotOf(a.label, m().dayStarts);
     glance = from ? m().fromGlance(from) : m().doneToday;
@@ -653,7 +656,7 @@ function v2(
   }
   const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);
   if (phase === 'riding' && onBus) {
-    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${m().offAtTime(offStop(onBus) ?? a.dest?.label ?? m().yourStop, approx(a.quality === 'scheduled', at(onBus.arrive)))}` : ''}`;
+    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${m().offAtTime(offStop(onBus) ?? a.dest?.label ?? m().yourStop, approx(roughly(a), at(onBus.arrive)))}` : ''}`;
     glance = onBus.arrive ? m().offGlance(short(onBus.arrive)) : m().onThe(onBus.svc);
   }
   glance = glance.slice(0, 12);
