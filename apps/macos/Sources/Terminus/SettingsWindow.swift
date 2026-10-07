@@ -181,6 +181,9 @@ struct SettingsPaneView: View {
                 FeedbackPane(setup: setup)
             }
         }
+        // The import's answer replaces the profile, so nothing that edits it
+        // takes a click until it's in (SetupModel.edit refuses them meanwhile).
+        .disabled(setup.importing)
     }
 
     @ViewBuilder private var favourites: some View {
