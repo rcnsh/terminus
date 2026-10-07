@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -58,7 +59,13 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -143,7 +150,7 @@ private fun box(b: DoubleArray) = BoundingBox(west = b[0], south = b[1], east = 
  * live buses), and a sheet for a tapped stop or bus.
  */
 @Composable
-internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String) -> Unit, places: PlacesForMap) {
+internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String) -> Unit, places: PlacesForMap, onShowList: (svc: String?, stop: String?) -> Unit = { _, _ -> }) {
     val ui by map.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val dark = isSystemInDarkTheme()
@@ -165,7 +172,7 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     // Your dot, every 20 s, only with location already allowed.
     LaunchedEffect(Unit) { lifecycle.every(20_000) { map.locate() } }
     BackHandler(enabled = ui.sheet != null) { map.closeSheet() }
-    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places))
+    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList))
 }
 
 /** [block], then again every [ms], while the app is in front. */
@@ -184,6 +191,8 @@ internal class MapActions(
     val closeSheet: () -> Unit,
     val goThere: (code: String, name: String) -> Unit,
     val places: PlacesForMap,
+    /** The Buses tab, on the open stop or the chosen service's line: the map as a list, for a screen reader. */
+    val showList: (svc: String?, stop: String?) -> Unit = { _, _ -> },
 )
 
 /** The map and everything over it, from [ui] alone. */
@@ -469,9 +478,18 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         else state.fitCameraToBounds(box(r.bounds()), fitPadding = padding)
     }
 
+    // The map is drawn, and its stops and buses are only reached by a finger
+    // on them. To a screen reader it says so, and offers the same as a list:
+    // the open stop's board, or the chosen service's line, on the Buses tab.
+    val mapLabel = stringResource(R.string.a11y_map)
+    val listLabel = stringResource(R.string.a11y_show_list)
+    val openStop = (ui.sheet as? MapSheet.Stop)?.code
     MaplibreMap(
         state = state,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().semantics {
+            contentDescription = mapLabel
+            customActions = listOf(CustomAccessibilityAction(listLabel) { actions.showList(selected, openStop); true })
+        },
         cameraConstraints = CameraConstraints(minZoom = 13.0, maxZoom = 19.0, boundingBox = PAN_LIMIT),
         // A TextureView, not a SurfaceView: the map fades with the tab around it.
         uiOptions = MapUiOptions { renderMode = AndroidRenderMode.Texture },
@@ -567,8 +585,12 @@ internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
 
 @Composable
 private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge: String? = null, content: @Composable () -> Unit) {
+    // A pane of its own, named for what's in it, and a screen reader's focus
+    // moved to its title when it opens or shows another stop or bus.
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(title) { runCatching { focus.requestFocus() } }
     Surface(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).semantics { paneTitle = title },
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 8.dp,
@@ -577,7 +599,7 @@ private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(title, style = MaterialTheme.typography.titleLarge)
+                        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
                         // A bus's number plate by its name, like the plate on the bus.
                         badge?.let {
                             Spacer(Modifier.width(8.dp))

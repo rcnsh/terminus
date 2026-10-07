@@ -51,6 +51,8 @@
     <string name="a11y_on_the_to">在 %1$s 上，去 %2$s</string>
     <string name="a11y_starts">%1$s，%2$s 开始</string>
     <string name="a11y_to">去 %1$s</string>
+    <string name="a11y_map">校园地图。要以列表查看车站和巴士，请用“巴士”标签页。</string>
+    <string name="a11y_show_list">以列表显示</string>
     <string name="a11y_about">"约 "</string>
     <string name="a11y_bus">%1$s 巴士</string>
     <string name="a11y_bus_paid">公共巴士 %1$s，需付车费</string>
