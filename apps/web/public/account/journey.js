@@ -127,18 +127,29 @@ function useNow(a, j) {
   return now;
 }
 
+/** Seconds until your bus reaches your stop, or 0 with no time. */
+const dueIn = (j, now) => (j.boardAt ? Math.floor((Date.parse(j.boardAt) - now) / 1000) : 0);
+
 /**
  * Your bus on the horizon's road (sky.js): coming up to your stop's sign,
- * nearer the sooner it's due, with when ("D2 · 8 min"; "~8 min" for a
- * timetable guess). Nothing on foot.
+ * nearer the sooner it's due. Nothing on foot.
  */
 function onTheRoad(j, now) {
   if (!j.bus) return {};
-  const left = j.boardAt ? Math.floor((Date.parse(j.boardAt) - now) / 1000) : 0;
-  const min = t('{0} min', Math.round(left / 60));
-  const when = left <= 0 ? null : left < 60 ? t('Arriving') : j.live ? min : t('~{0}', min);
-  const text = when ? `${named(j.bus)} · ${when}` : named(j.bus);
-  return { stop: j.bus.stop, bus: { color: j.bus.color, live: j.live, far: Math.max(0, left) / 900, text } };
+  return { stop: true, bus: { color: j.bus.color, live: j.live, far: Math.max(0, dueIn(j, now)) / 900 } };
+}
+
+/**
+ * The horizon's road in words, on the ground under it at the page's size:
+ * your bus and when it reaches your stop ("about" for a timetable guess).
+ */
+function RoadLine({ j, now }) {
+  const left = dueIn(j, now);
+  const n = Math.round(left / 60);
+  const stop = j.bus.stop;
+  const text =
+    left <= 0 ? t('from {0}', stop) : left < 60 ? t('arriving at {0}', stop) : j.live ? t('reaches {0} in {1} min', stop, n) : t('reaches {0} in about {1} min', stop, n);
+  return html`<div class="road-line"><${Badge} bus=${j.bus} /><span>${text}</span></div>`;
 }
 
 /**
@@ -155,7 +166,7 @@ export function Journey({ a, style, sky = false, lead = null }) {
   const small = [a.leave?.note, a.card.estimate].filter(Boolean).join(' ');
   const top = (head) =>
     sky
-      ? html`<div class="sky-head"><${Celestial} />${lead}${head}</div><${Horizon} ...${onTheRoad(j, now)} shuttle=${false} />`
+      ? html`<div class="sky-head"><${Celestial} />${lead}${head}</div><${Horizon} ...${onTheRoad(j, now)} shuttle=${false} />${j.bus && html`<${RoadLine} j=${j} now=${now} />`}`
       : html`${lead}${head}`;
   return html`
     <div class=${`journey ${style}`}>

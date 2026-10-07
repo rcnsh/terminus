@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -79,6 +80,7 @@ internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, le
     val top: Top = { head ->
         SkyHead { lead(); head() }
         SkyGround(road)
+        RoadLine(journey, now)
     }
     when (style) {
         CardStyle.TICKET -> Ticket(answer, journey, now, top)
@@ -349,24 +351,50 @@ private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, late:
 /** The top of the card, up in Now's sky with the horizon under it. */
 private typealias Top = @Composable (@Composable ColumnScope.() -> Unit) -> Unit
 
+/** Seconds until your bus reaches your stop, or 0 with no time. */
+private fun dueIn(journey: Journey, now: Long): Int = journey.boardAtMs?.let { ((it - now) / 1000).toInt() } ?: 0
+
 /**
  * Your bus on the horizon's road: coming up to your stop's sign, nearer the
- * sooner it's due, with when ("D2 · 8 min"; "~8 min" for a timetable
- * guess). On foot, an empty road. As the web draws it (journey.js onTheRoad).
+ * sooner it's due. On foot, an empty road. As the web draws it (journey.js
+ * onTheRoad).
  */
-@Composable
 private fun roadFor(journey: Journey, now: Long): Road {
     val bus = journey.bus ?: return Road(shuttle = false)
-    val left = journey.boardAtMs?.let { ((it - now) / 1000).toInt() } ?: 0
-    val min = stringResource(R.string.n_min, (left / 60f).roundToInt())
-    val due = when {
-        left <= 0 -> null
-        left < 60 -> stringResource(R.string.map_arriving)
-        journey.live -> min
-        else -> stringResource(R.string.approx, min)
+    return Road(true, RoadBus(bus.color, dueIn(journey, now).coerceAtLeast(0) / 900f, journey.live), shuttle = false)
+}
+
+/**
+ * The horizon's road in words, on the ground just under it at the page's
+ * size: your bus and when it reaches your stop ("about" for a timetable
+ * guess). Only on Now, where the horizon is. As the web's (journey.js
+ * RoadLine).
+ */
+@Composable
+private fun RoadLine(journey: Journey, now: Long) {
+    if (LocalSky.current == null) return
+    val bus = journey.bus ?: return
+    val left = dueIn(journey, now)
+    val n = (left / 60f).roundToInt()
+    val text = when {
+        left <= 0 -> stringResource(R.string.journey_from, bus.stop)
+        left < 60 -> stringResource(R.string.road_arriving, bus.stop)
+        journey.live -> stringResource(R.string.road_reaches, bus.stop, n)
+        else -> stringResource(R.string.road_reaches_about, bus.stop, n)
     }
-    val name = badgeText(bus.svc, bus.paid)
-    return Road(bus.stop, RoadBus(due?.let { "$name · $it" } ?: name, bus.color, left.coerceAtLeast(0) / 900f, journey.live), shuttle = false)
+    Row(
+        // Up into the strip under the road, which is just the near hill.
+        Modifier.layout { m, c ->
+            val p = m.measure(c)
+            val up = 12.dp.roundToPx()
+            layout(p.width, p.height - up) { p.place(0, -up) }
+        },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BusBadge(bus.svc, bus.color, 14.sp, paid = bus.paid)
+        Text(text)
+    }
 }
 
 /** Clock times in the account's style, for a class's start. */

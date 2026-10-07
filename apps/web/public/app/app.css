@@ -254,13 +254,13 @@ body.sky, body.sky-dusk, body.sky-night {
   --k-bg: #121a33; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
   --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
   --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
-  --h-pill: #fff; --h-pill-ink: #1c1917; --h-win: #fde9c9;
+  --h-win: #fde9c9;
 }
 body.sky-dawn, body.sky-day, body.sky-golden {
   --k-bg: #fafaf9; --k-surface: rgb(255 255 255 / 0.5); --k-surface-2: rgb(255 255 255 / 0.65); --k-ink: #1c1917; --k-muted: #36312d; --k-faint: #3a3633;
   --k-line: rgb(28 25 23 / 0.16); --k-line-strong: rgb(28 25 23 / 0.3); --k-accent: #9a3412; --k-accent-soft: rgb(154 52 18 / 0.12); --k-scheme: light;
   --k-good: #14532d; --k-warn: #78350f; --k-bad: #701818; --k-chip: rgb(255 255 255 / 0.65); --k-accent-small: #6c2710;
-  --h-pill: #1c1917; --h-pill-ink: #fff; --h-win: #dbeafe;
+  --h-win: #dbeafe;
 }
 body.sky-dawn { --s0: #8fc1e8; --s1: #b7d6ee; --s2: #f1d6c2; --s3: #f7c9a4; --h-far: #b3b0c3; --h-tree: #6a7568; --h-city: #cfc8d8; --sun: #fff1d6; }
 body.sky-day { --s0: #5ea8e5; --s1: #8ec4ec; --s2: #c7e2f4; --s3: #e3f0f8; --h-far: #9fbcae; --h-tree: #4f6f58; --h-city: #b7cbd9; }
@@ -271,7 +271,7 @@ body.sky-dusk { --s0: #2c3566; --s1: #4a4275; --s2: #6c4260; --s3: #e08a62; --h-
     --k-bg: #0f0e0d; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
     --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
     --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
-    --h-road: #2c2926; --h-post: #d6d3d1; --h-post-ink: #0f0e0d; --h-pill: #f5f3f0; --h-pill-ink: #0f0e0d; --h-far: #191826; --h-tree: #121110;
+    --h-road: #2c2926; --h-post: #d6d3d1; --h-post-ink: #0f0e0d; --h-far: #191826; --h-tree: #121110;
   }
   :root:not([data-theme="light"]) body.sky-dawn { --s0: #1d3550; --s1: #2a465f; --s2: #5c4d58; --s3: #8a6656; --h-far: #2a3446; --h-tree: #151c24; --h-city: #3d4658; --sun: #f3dcc0; --h-win: #b9c7d6; }
   :root:not([data-theme="light"]) body.sky-day { --s0: #173350; --s1: #1f4262; --s2: #2d5674; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --h-win: #b9c7d6; }
@@ -282,7 +282,7 @@ body.sky-dusk { --s0: #2c3566; --s1: #4a4275; --s2: #6c4260; --s3: #e08a62; --h-
   --k-bg: #0f0e0d; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
   --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
   --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
-  --h-road: #2c2926; --h-post: #d6d3d1; --h-post-ink: #0f0e0d; --h-pill: #f5f3f0; --h-pill-ink: #0f0e0d; --h-far: #191826; --h-tree: #121110;
+  --h-road: #2c2926; --h-post: #d6d3d1; --h-post-ink: #0f0e0d; --h-far: #191826; --h-tree: #121110;
 }
 :root[data-theme="dark"] body.sky-dawn { --s0: #1d3550; --s1: #2a465f; --s2: #5c4d58; --s3: #8a6656; --h-far: #2a3446; --h-tree: #151c24; --h-city: #3d4658; --sun: #f3dcc0; --h-win: #b9c7d6; }
 :root[data-theme="dark"] body.sky-day { --s0: #173350; --s1: #1f4262; --s2: #2d5674; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --h-win: #b9c7d6; }
@@ -360,15 +360,14 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 .horizon .win { fill: var(--h-win); }
 .horizon .tyre { fill: #151311; }
 .horizon .hub { fill: #8a847d; }
-.horizon text { font: 700 7.5px var(--font); text-anchor: middle; }
-/* Your stop's sign, and your bus in its colour on the way to it. */
+/* Your stop's sign (a bus on it), and your bus in its colour on the way to it. */
 .horizon .sign line { stroke: var(--h-post); stroke-width: 1.6; }
 .horizon .sign rect { fill: var(--h-post); }
-.horizon .sign text { fill: var(--h-post-ink); }
+.horizon .sign .mark { fill: var(--h-post-ink); }
 .horizon .coming .body { fill: var(--svc); }
 .horizon .coming .band { fill: #fff; opacity: 0.85; }
 .horizon .coming.guess .body { fill: none; stroke: var(--svc); stroke-width: 1.5; }
 .horizon .coming.guess :is(.band, .win) { display: none; }
-.horizon .label rect { fill: var(--h-pill); }
-.horizon .label text { fill: var(--h-pill-ink); font-size: 8px; }
+/* The road in words, under it on the ground: the scene has none. */
+.road-line { display: flex; align-items: center; gap: 8px; margin-top: -12px; font-size: 1rem; }
 .day-done.open .going { margin-top: 4px; }

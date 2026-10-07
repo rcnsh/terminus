@@ -60,7 +60,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -141,14 +140,13 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
     val shown = sky.end != null
     val light = sky.palette.lightInk
     NightStatusBar(shown && light)
-    val measurer = rememberTextMeasurer()
     CompositionLocalProvider(LocalSky provides sky) { Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(scroll)
             .onGloballyPositioned { sky.contentTop = it.positionInRoot().y }
-            .skyBehind(sky, page, measurer)
+            .skyBehind(sky, page)
             .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())
             .padding(horizontal = 16.dp),
     ) {
