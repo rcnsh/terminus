@@ -16,7 +16,7 @@
  */
 
 import type { Env } from './types.ts';
-import { WEB_PREFIX, parseSubscription, sendWebPush, webPushEnabled } from './webpush.ts';
+import { WEB_PREFIX, type WebSubscription, b64url, parseSubscription, sendWebPush, webPushEnabled } from './webpush.ts';
 
 const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const TOKEN_KV = 'fcm:access';
@@ -52,11 +52,6 @@ function account(env: Env): ServiceAccount | null {
 /** Whether push is set up at all. */
 export const pushEnabled = (env: Env) => account(env) !== null || webPushEnabled(env);
 
-const b64url = (bytes: ArrayBuffer | Uint8Array) =>
-  btoa(String.fromCharCode(...new Uint8Array(bytes)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
 const b64urlText = (s: string) => b64url(new TextEncoder().encode(s));
 
 async function signJwt(a: ServiceAccount, nowS: number): Promise<string> {
@@ -145,11 +140,11 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
     for (const r of results) {
       if (r.push_token.startsWith(WEB_PREFIX)) {
         if (!msg.web) continue;
-        let sub = null;
+        let sub: WebSubscription | null = null;
         try {
           sub = parseSubscription(JSON.parse(r.push_token.slice(WEB_PREFIX.length)));
         } catch {
-          sub = null;
+          // Unreadable: treated as gone, like a subscription that fails its checks.
         }
         // One browser's failure (a key that won't import, a service that hangs) mustn't stop the rest.
         const out = sub

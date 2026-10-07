@@ -10,7 +10,7 @@
  */
 
 import type { Env } from './types.ts';
-import type { Latest } from './downloads.ts';
+import { type Latest, RELEASE_VERSION } from './downloads.ts';
 import { authenticate } from './accounts.ts';
 
 /** latest.json changes only with a release; /download/latest.json is cached as long. */
@@ -18,7 +18,7 @@ const VERSION_MEMO_MS = 300_000;
 let memo: { at: number; version: string | null } | null = null;
 
 /** Only a version as release.sh writes it goes into the page. */
-const VERSION = /^\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?$/;
+const VERSION = new RegExp(`^${RELEASE_VERSION}$`);
 
 /** The current release's version, from latest.json, or null. */
 export async function latestVersion(env: Env, nowMs: number): Promise<string | null> {

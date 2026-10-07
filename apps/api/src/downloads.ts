@@ -37,10 +37,11 @@ export interface Latest {
 
 const LATEST = 'latest.json';
 const APPCAST = 'appcast.xml';
-/** A versioned release file, as /download/releases/<version>/<file>. A
- *  version may carry a pre-release tag: 2.0.0-beta, 2.0.0-beta.2. */
-const VERSION = String.raw`\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?`;
-const RELEASE_FILE = new RegExp(String.raw`^\/download\/(releases\/${VERSION}\/terminus-${VERSION}(?:-armv7|-x86_64)?\.(?:apk|dmg|zip))$`);
+/** A release version as release.sh writes it. It may carry a pre-release
+ *  tag: 2.0.0-beta, 2.0.0-beta.2. */
+export const RELEASE_VERSION = String.raw`\d+\.\d+\.\d+(?:-[a-z]+(?:\.\d+)?)?`;
+/** A versioned release file, as /download/releases/<version>/<file>. */
+const RELEASE_FILE = new RegExp(String.raw`^\/download\/(releases\/${RELEASE_VERSION}\/terminus-${RELEASE_VERSION}(?:-armv7|-x86_64)?\.(?:apk|dmg|zip))$`);
 
 const TYPES: Record<string, string> = {
   apk: 'application/vnd.android.package-archive',

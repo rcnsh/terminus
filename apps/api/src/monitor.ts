@@ -75,15 +75,20 @@ export const FAILS_TO_ALERT = 2;
 /** Warn this long before calendar.json runs out. */
 export const CALENDAR_WARN_DAYS = 45;
 
-export async function readIncidents(env: Env): Promise<Incident[]> {
-  const raw = await env.KV.get(INCIDENTS_KEY).catch(() => null);
-  if (!raw) return [];
+/** A JSON value kept in KV, or null when it's missing, unreadable or not JSON. */
+async function readKvJson(env: Env, key: string): Promise<unknown> {
+  const raw = await env.KV.get(key).catch(() => null);
+  if (!raw) return null;
   try {
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? (list as Incident[]) : [];
+    return JSON.parse(raw);
   } catch {
-    return [];
+    return null;
   }
+}
+
+export async function readIncidents(env: Env): Promise<Incident[]> {
+  const list = await readKvJson(env, INCIDENTS_KEY);
+  return Array.isArray(list) ? (list as Incident[]) : [];
 }
 
 /** Opens an incident when the feed is confirmed down, closes it when it's back. */
@@ -116,13 +121,7 @@ export async function feedDownSince(env: Env, nowMs: number): Promise<number | n
 }
 
 export async function readUpstream(env: Env): Promise<UpstreamState | null> {
-  const raw = await env.KV.get(KEY).catch(() => null);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as UpstreamState;
-  } catch {
-    return null;
-  }
+  return (await readKvJson(env, KEY)) as UpstreamState | null;
 }
 
 /**
@@ -395,13 +394,7 @@ const PUBLIC_KEY = 'monitor:public';
 export const PUBLIC_PROBE: [string, string] = ['CLB', '16181'];
 
 export async function readPublicFeed(env: Env): Promise<PublicFeedState | null> {
-  const raw = await env.KV.get(PUBLIC_KEY).catch(() => null);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as PublicFeedState;
-  } catch {
-    return null;
-  }
+  return (await readKvJson(env, PUBLIC_KEY)) as PublicFeedState | null;
 }
 
 /**

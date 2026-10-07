@@ -14,8 +14,7 @@ import { summarize } from './feedback.ts';
 const DAY = 86_400_000;
 
 export function isOperator(env: Env, req: Request): boolean {
-  const given = req.headers.get('x-health-token');
-  return Boolean(env.HEALTH_TOKEN && given && timingSafeEqual(given, env.HEALTH_TOKEN));
+  return sentToken(req, env.HEALTH_TOKEN);
 }
 
 /**
@@ -25,8 +24,13 @@ export function isOperator(env: Env, req: Request): boolean {
  * never holds the key to the dashboard, its reports and their emails.
  */
 export function canReadTimelapse(env: Env, req: Request): boolean {
+  return isOperator(env, req) || sentToken(req, env.TIMELAPSE_TOKEN);
+}
+
+/** The x-health-token header holds `token`; never true when the token is unset. */
+function sentToken(req: Request, token: string | undefined): boolean {
   const given = req.headers.get('x-health-token');
-  return isOperator(env, req) || Boolean(env.TIMELAPSE_TOKEN && given && timingSafeEqual(given, env.TIMELAPSE_TOKEN));
+  return Boolean(token && given && timingSafeEqual(given, token));
 }
 
 /**
@@ -41,8 +45,8 @@ export function timingSafeEqual(given: string, secret: string): boolean {
 }
 
 type Count = { n: number };
-const count = async (db: D1Database, sql: string, ...args: unknown[]) =>
-  ((await db.prepare(sql).bind(...args).first<Count>())?.n ?? 0) as number;
+const count = async (db: D1Database, sql: string, ...args: unknown[]): Promise<number> =>
+  (await db.prepare(sql).bind(...args).first<Count>())?.n ?? 0;
 
 export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
   const db = env.DB;
