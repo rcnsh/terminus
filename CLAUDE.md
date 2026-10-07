@@ -377,11 +377,17 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
 
 - **Deploying.** `main` is **not** auto-deployed.
   - Deploy from `apps/api` with `pnpm run deploy` (not `pnpm deploy`, which
-    is a pnpm built-in). It runs `cf deploy` and needs `CLOUDFLARE_API_TOKEN`.
-  - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2.
-  - When a migration is involved, apply it **before** deploying:
+    is a pnpm built-in). It applies the stable D1's pending migrations, then
+    runs `cf deploy`, and needs `CLOUDFLARE_API_TOKEN`.
+  - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2; it
+    applies the beta D1's migrations the same way.
+  - By hand, a migration is applied **before** deploying:
     `pnpm exec cf d1 migrations apply <db-id>` (ids are in
-    `cloudflare.config.ts`).
+    `cloudflare.config.ts`; `test/deploy.test.js` checks the scripts match).
+  - Migrations must be additive, since the old Worker runs on the new schema
+    until the deploy lands: no renames, drops or `NOT NULL` without a default.
+    Change a column in steps (expand, backfill, contract; see
+    `docs/internals.md`), and never edit a migration already applied.
   - `wrangler` is only installed in `apps/api`, so run wrangler/R2 commands
     from there.
   - Server-side changes, the website included, are live for everyone once

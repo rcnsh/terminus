@@ -539,11 +539,32 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.
 
-Setup:
+Setup and deploys: `pnpm run deploy` (and `deploy:beta`) applies the
+database's pending migrations, then deploys. The code reads columns from
+recent migrations (`magic_links.code_tries` from 0009, `feedback.reply_to`
+from 0010), so a Worker deployed to a database without them answers 500.
+By hand, the same first step is:
 
 ```bash
 pnpm exec cf d1 migrations apply <database id from cloudflare.config.ts>
 ```
+
+**Migrations must be additive (expand, then contract).** The migration runs
+while the old Worker is still serving, and if the deploy after it fails, the
+old Worker keeps serving on the new schema. So a migration may only add:
+new tables, new indexes, new columns that are nullable or have a `DEFAULT`.
+Renaming or dropping a table or column (0002 renamed one; 0006 rebuilt
+five), or adding `NOT NULL` without a default, breaks the running code. Do those in steps, one deploy each:
+
+1. **Expand.** Add the new column or table; deploy code that writes both the
+   old and the new and reads the new, falling back to the old.
+2. **Backfill** the new from the old, in a later migration or a one-off
+   statement.
+3. **Contract.** Once no deployed code reads the old, a later migration drops
+   it.
+
+The beta takes each step first. Old migration files are never edited:
+D1 records them by name and won't run one again.
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and terminus.rcn.sh onboarded under Email Service >
@@ -606,7 +627,8 @@ Settings. It uses the same routes as the account page, with the session cookie.
   an account with an email, so the operator's inbox only gets reports that
   say something, from someone who can be answered; an anonymous account is
   asked to sign in instead. (`reply_to` on old feedback rows is from when an
-  anonymous account could type an address; nothing writes it now.)
+  anonymous account could type an address; nothing writes it now. The data
+  export and the dashboard still read it, so they rely on migration 0010.)
 - **12- or 24-hour times.** The profile's `clock` (`auto`, `12`, `24`)
   is the account's choice, set in Language and time or in setup. The server
   words every card in it (`hour12()` in next.ts: the profile's choice, else

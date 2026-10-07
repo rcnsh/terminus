@@ -10,8 +10,8 @@
     "test": "node --test test/*.test.js test/worker.smoke.js",
     "typecheck": "tsc --noEmit",
     "dev": "cf dev",
-    "deploy": "cf deploy",
-    "deploy:beta": "cf deploy --mode beta",
+    "deploy": "cf d1 migrations apply 27067356-8691-458f-bc69-fa5ca5bbc374 && cf deploy",
+    "deploy:beta": "cf d1 migrations apply d7f309ef-6e3a-457f-a106-154fa797b933 && cf deploy --mode beta",
     "scrape": "python3 scripts/scrape_stops.py",
     "check": "pnpm test && pnpm typecheck"
   },
