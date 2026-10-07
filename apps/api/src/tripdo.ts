@@ -5,6 +5,9 @@
  * It has one alarm, used for two things:
  *
  * - **End of day:** at the next Singapore midnight everything is deleted.
+ *   An object emptied early (the account was deleted) keeps only a `gone`
+ *   mark until then, and refuses every write: a request already under way
+ *   when the account went can't store the user's trip again.
  * - **Push (phase 3):** when the Worker has sent a card with a
  *   `nextChangeAt`, the object wakes then, works out the card again, and
  *   nudges the user's phones (push.ts) if the phase or the question changed.
@@ -14,7 +17,7 @@
 
 import { loadCalendar } from './calendarsync.ts';
 import type { Env } from './types.ts';
-import { type Boarded, type DayRecord, type TripRecord, sgtDate } from './trip.ts';
+import { type Boarded, type DayRecord, type TripRecord, endOfDayMs, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
 import { nudgeUser, pushDevices } from './push.ts';
@@ -59,6 +62,22 @@ export class Trip {
   private async handle(req: Request): Promise<Response> {
     await loadCalendar(this.env);
     const url = new URL(req.url);
+    if (req.method === 'POST' && url.pathname === '/clear') {
+      // deleteAll takes the alarm with it; the mark and its own alarm go at midnight.
+      await this.storage.deleteAll();
+      const deleteAt = endOfDayMs(Date.now());
+      await this.storage.put('gone', true);
+      await this.storage.put('deleteAt', deleteAt);
+      await this.storage.setAlarm(deleteAt);
+      return Response.json({ ok: true });
+    }
+    // A deleted account's object stores nothing more, and has no day to show.
+    if (await this.storage.get<boolean>('gone')) {
+      if (req.method === 'GET') return Response.json(null);
+      if (url.pathname === '/watch') return Response.json({ ok: true });
+      const { date } = (await req.json().catch(() => ({}))) as { date?: string };
+      return Response.json(today(null, date ?? ''));
+    }
     const day = await this.storedDay();
 
     if (req.method === 'GET' && url.pathname === '/day') {
@@ -113,12 +132,6 @@ export class Trip {
       await this.storage.put('day', next);
       await this.arm(body.deleteAt);
       return Response.json(next);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/clear') {
-      // deleteAll takes the alarm with it.
-      await this.storage.deleteAll();
-      return Response.json({ ok: true });
     }
 
     return new Response('not found', { status: 404 });
