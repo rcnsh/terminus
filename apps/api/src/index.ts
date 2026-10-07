@@ -373,9 +373,11 @@ const ME_DEPS: MeDeps = { graph: GRAPH, publicGraph: GRAPH_PUBLIC, answerFor, co
 const KEYED = ['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs'];
 
 export default {
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     scopeCache(env);
-    ctx.waitUntil(runCron(env, Date.now()));
+    // Awaited, not left to waitUntil: a run that outlives the handler could be
+    // cut off partway, with the trigger's history still saying it succeeded.
+    await runCron(env, Date.now());
   },
 
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
