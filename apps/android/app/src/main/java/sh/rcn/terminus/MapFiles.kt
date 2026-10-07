@@ -12,7 +12,7 @@ import java.net.URL
 /**
  * What the Map tab keeps on the phone so the campus map works offline after
  * the first look: the stops and routes (`/campus`), the map's style in each
- * theme and language used, and the whole campus map file (about 4 MB).
+ * theme and language used, and the whole campus map file (about 3 MB).
  * MapLibre doesn't cache PMTiles it streams, so the file is downloaded once,
  * checked weekly for a newer one, and read from storage
  * (`pmtiles://file://…`); until then the map is plain. Fonts and icons go
@@ -21,18 +21,39 @@ import java.net.URL
 object MapFiles {
     private const val TILES = "campus.pmtiles"
     private const val CHECK_MS = 7 * 24 * 3_600_000L
+    /** `/campus` and the style say `max-age=3600`: a copy that young isn't asked about again. */
+    private const val FRESH_MS = 3_600_000L
 
     private fun dir(ctx: Context) = File(ctx.filesDir, "map").apply { mkdirs() }
 
-    /** `/campus`: from the network, kept; the kept copy without a connection. */
+    private fun fresh(file: File) = file.exists() && System.currentTimeMillis() - file.lastModified() in 0 until FRESH_MS
+
+    /**
+     * `/campus`: the kept copy while it's fresh; then from the network, sent
+     * with the kept copy's ETag so an unchanged one costs no download; the
+     * kept copy without a connection. Opening the Map or Buses tab used to
+     * fetch it whole every time.
+     */
     suspend fun campus(ctx: Context, api: Api): JSONObject? = withContext(Dispatchers.IO) {
         val file = File(dir(ctx), "campus.json")
+        val tagFile = File(dir(ctx), "campus.etag")
+        val kept = runCatching { JSONObject(file.readText()) }.getOrNull()
+        if (kept != null && fresh(file)) return@withContext kept
         try {
-            api.campusJson().also { file.writeText(it.toString()) }
+            val etag = if (kept != null) runCatching { tagFile.readText() }.getOrNull()?.takeIf { it.isNotEmpty() } else null
+            val got = api.campusJson(etag)
+            if (got == null) {
+                file.setLastModified(System.currentTimeMillis())
+                kept
+            } else {
+                file.writeText(got.first.toString())
+                if (got.second != null) tagFile.writeText(got.second!!) else tagFile.delete()
+                got.first
+            }
         } catch (e: Exception) {
             // Signed out or refused: not something a kept copy should hide.
             if (e is ApiError && e.status == 401) throw e
-            runCatching { JSONObject(file.readText()) }.getOrNull()
+            kept
         }
     }
 
@@ -47,8 +68,10 @@ object MapFiles {
         val theme = if (dark) "dark" else "light"
         val lang = if (zh) "zh" else "en"
         val file = File(dir(ctx), "style-$theme-$lang.json")
-        val text = runCatching { get("${BuildConfig.API_BASE}/map/style.json?theme=$theme&lang=$lang").also { file.writeText(it) } }
-            .getOrElse { runCatching { file.readText() }.getOrNull() }
+        val keptText = if (fresh(file)) runCatching { file.readText() }.getOrNull() else null
+        val text = keptText
+            ?: runCatching { get("${BuildConfig.API_BASE}/map/style.json?theme=$theme&lang=$lang").also { file.writeText(it) } }
+                .getOrElse { runCatching { file.readText() }.getOrNull() }
             ?: return@withContext null
         val tiles = File(dir(ctx), TILES)
         if (tiles.exists()) localTiles(text, tiles.absolutePath) else withoutBaseMap(text)
