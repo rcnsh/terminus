@@ -574,3 +574,8 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 /* The road in words, under it on the ground: the scene has none. */
 .road-line { display: flex; align-items: center; gap: 8px; margin-top: -12px; font-size: 1rem; }
 .day-done.open .going { margin-top: 4px; }
+
+/* Less see-through, when the device asks: the glass on the sky solid. */
+@media (prefers-reduced-transparency: reduce) {
+  body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head { --surface: var(--k-bg); --surface-2: var(--k-bg); --k-chip: var(--k-bg); }
+}

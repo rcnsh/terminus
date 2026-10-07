@@ -668,4 +668,5 @@ window.TERMINUS_ZH = {
  "Stops on this map": "地图上的车站",
  "Open a stop…": "打开一个车站…",
  "The Buses tab lists every stop and its buses in words.": "“巴士”标签页以文字列出每个车站和它的巴士。",
+ "Pause the moving buses": "暂停行驶中的巴士",
 };

@@ -9,7 +9,8 @@
 import { html, render, useEffect, useState } from '/assets/ui.js';
 import { t } from '/account/dom.js';
 
-const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Less motion asked for, read when it's needed: it can change during a visit. */
+const still = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** " Version 2.1.0.": the current release, from its manifest. */
 function Version() {
@@ -85,7 +86,7 @@ twoColumns.addEventListener('change', () => {
   const close = () => menu.hidePopover();
   if (typeof menu.showPopover !== 'function') {
     // No popover support: the button goes to the download buttons instead.
-    button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: still() ? 'auto' : 'smooth' }));
   } else {
     menu.addEventListener('beforetoggle', (e) => {
       const open = e.newState === 'open';
@@ -105,7 +106,7 @@ twoColumns.addEventListener('change', () => {
       e.preventDefault();
       close();
       if (!install.open) setInstall(true);
-      install.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+      install.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'center' });
     });
   }
 }

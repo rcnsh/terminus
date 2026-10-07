@@ -118,6 +118,11 @@
 @keyframes horizon-drive-back { from { transform: translateX(var(--to)); } to { transform: translateX(-60px); } }
 .sky-panel .horizon .driving { animation-name: horizon-drive; animation-timing-function: linear; animation-fill-mode: both; }
 .sky-panel .horizon .driving.back { animation-name: horizon-drive-back; }
+.sky-panel .horizon.paused .driving { animation-play-state: paused; }
+/* Pause or play them (sky.js DriveToggle): up in the sky at the right, where the sky's ink reads. */
+.sky-panel [data-horizon] { position: relative; }
+.sky-panel .drive-toggle { position: absolute; right: 12px; top: 0; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
+.sky-panel .drive-toggle svg { width: 14px; height: 14px; fill: currentColor; }
 .sky-panel .horizon .sign line { stroke: var(--h-post); stroke-width: 1.6; }
 .sky-panel .horizon .sign rect { fill: var(--h-post); }
 .sky-panel .horizon .sign .mark { fill: var(--h-post-ink); }
@@ -137,3 +142,8 @@
 .sky-band .band-title p { color: var(--muted); margin-top: 4px; }
 .sky-band .band-title .back { display: inline-block; margin-bottom: 8px; color: var(--ink); text-decoration: none; font-size: 0.9rem; }
 .sky-band .night-sky { --sky-room: 150px; --moon: 30px; --moon-top: 70px; }
+
+/* Less see-through, when the device asks: the glass on the sky solid. */
+@media (prefers-reduced-transparency: reduce) {
+  .sky-panel { --surface: var(--k-bg); --surface-2: var(--k-bg); --k-chip: var(--k-bg); }
+}
