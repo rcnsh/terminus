@@ -44,9 +44,6 @@ export function timingSafeEqual(given: string, secret: string): boolean {
   return diff === 0;
 }
 
-type Count = { n: number };
-const count = async (db: D1Database, sql: string, ...args: unknown[]): Promise<number> =>
-  (await db.prepare(sql).bind(...args).first<Count>())?.n ?? 0;
 
 export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
   const db = env.DB;
@@ -62,67 +59,84 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
   const d1 = nowMs - DAY;
   const d7 = nowMs - 7 * DAY;
   const d30 = nowMs - 30 * DAY;
-  const [users, new7, new30, withTimetable, withHome, active1, active7, web7, keys, keysUsed7, fb7, anonymous, upgraded, upgraded30, installs30, onboarded30] = await Promise.all([
-    count(db, 'SELECT COUNT(*) AS n FROM users'),
-    count(db, 'SELECT COUNT(*) AS n FROM users WHERE created > ?', d7),
-    count(db, 'SELECT COUNT(*) AS n FROM users WHERE created > ?', d30),
-    count(db, "SELECT COUNT(*) AS n FROM profiles WHERE json_array_length(json, '$.trips') > 0"),
-    count(db, "SELECT COUNT(*) AS n FROM profiles WHERE json_array_length(json, '$.home.stops') > 0"),
-    // Active: an account with any session used in the window.
-    count(db, 'SELECT COUNT(DISTINCT user_id) AS n FROM sessions WHERE last_seen > ?', d1),
-    count(db, 'SELECT COUNT(DISTINCT user_id) AS n FROM sessions WHERE last_seen > ?', d7),
-    count(db, "SELECT COUNT(*) AS n FROM sessions WHERE kind = 'web' AND last_seen > ?", d7),
-    count(db, 'SELECT COUNT(*) AS n FROM api_keys'),
-    count(db, 'SELECT COUNT(*) AS n FROM api_keys WHERE last_used > ?', d7),
-    count(db, 'SELECT COUNT(*) AS n FROM feedback WHERE created > ?', d7),
-    // Accounts in the apps: started without an email, and how many added one.
-    count(db, 'SELECT COUNT(*) AS n FROM users WHERE email IS NULL'),
-    count(db, 'SELECT COUNT(*) AS n FROM users WHERE email_added IS NOT NULL'),
-    count(db, 'SELECT COUNT(*) AS n FROM users WHERE email_added > ?', d30),
-    // New installs (an app's first launch makes an account) and how many
-    // finished the in-app setup.
-    count(db, "SELECT COUNT(*) AS n FROM users WHERE via = 'app' AND created > ?", d30),
-    count(
-      db,
-      `SELECT COUNT(*) AS n FROM users u JOIN profiles p ON p.user_id = u.id
-        WHERE u.via = 'app' AND u.created > ? AND EXISTS (SELECT 1 FROM json_each(p.json, '$.seen') WHERE value = 'onboarding')`,
-      d30,
+  // One pass over each table, and every query in one round trip: the counts
+  // read whole tables, so asking each its own question read them many times.
+  // SUM of a comparison counts the rows where it's true (NULL counts none).
+  const [u, p, s, k, f, o, dev, cli, sign, fb] = await db.batch([
+    db
+      .prepare(
+        `SELECT COUNT(*) AS total, SUM(created > ?1) AS new7, SUM(created > ?2) AS new30,
+                SUM(email IS NULL) AS anonymous, SUM(email_added IS NOT NULL) AS upgraded,
+                SUM(email_added > ?2) AS upgraded30, SUM(via = 'app' AND created > ?2) AS installs30
+           FROM users`,
+      )
+      .bind(d7, d30),
+    db.prepare(
+      `SELECT SUM(json_array_length(json, '$.trips') > 0) AS withTimetable,
+              SUM(json_array_length(json, '$.home.stops') > 0) AS withHome
+         FROM profiles`,
     ),
-  ]);
-  const { results: devices } = await db
-    .prepare(
-      `SELECT COALESCE(platform, 'unknown') AS platform, COUNT(*) AS total,
-              SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END) AS active7
-         FROM sessions WHERE kind = 'device' GROUP BY 1 ORDER BY total DESC`,
-    )
-    .bind(d7)
-    .all<{ platform: string; total: number; active7: number }>();
-  const { results: clients } = await db
-    .prepare(
-      // App versions in use: the x-terminus-client header of devices seen this week.
-      `SELECT client, COUNT(*) AS n FROM sessions
-        WHERE kind = 'device' AND client IS NOT NULL AND last_seen > ? GROUP BY 1 ORDER BY n DESC LIMIT 20`,
-    )
-    .bind(d7)
-    .all<{ client: string; n: number }>();
-  const { results: signups } = await db
-    .prepare(
-      // Per Singapore day, the last 30.
-      `SELECT date((created + 8 * 3600000) / 1000, 'unixepoch') AS day, COUNT(*) AS n
-         FROM users WHERE created > ? GROUP BY 1 ORDER BY 1`,
-    )
-    .bind(d30)
-    .all<{ day: string; n: number }>();
-  const { results: feedback } = await db
-    .prepare(
+    // Active: an account with any session used in the window.
+    db
+      .prepare(
+        `SELECT COUNT(DISTINCT CASE WHEN last_seen > ?1 THEN user_id END) AS active1,
+                COUNT(DISTINCT CASE WHEN last_seen > ?2 THEN user_id END) AS active7,
+                SUM(kind = 'web' AND last_seen > ?2) AS web7
+           FROM sessions`,
+      )
+      .bind(d1, d7),
+    db.prepare('SELECT COUNT(*) AS total, SUM(last_used > ?) AS used7 FROM api_keys').bind(d7),
+    db.prepare('SELECT COUNT(*) AS n FROM feedback WHERE created > ?').bind(d7),
+    // New installs (an app's first launch makes an account) that finished the in-app setup.
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM users u JOIN profiles p ON p.user_id = u.id
+          WHERE u.via = 'app' AND u.created > ? AND EXISTS (SELECT 1 FROM json_each(p.json, '$.seen') WHERE value = 'onboarding')`,
+      )
+      .bind(d30),
+    db
+      .prepare(
+        `SELECT COALESCE(platform, 'unknown') AS platform, COUNT(*) AS total,
+                SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END) AS active7
+           FROM sessions WHERE kind = 'device' GROUP BY 1 ORDER BY total DESC`,
+      )
+      .bind(d7),
+    db
+      .prepare(
+        // App versions in use: the x-terminus-client header of devices seen this week.
+        `SELECT client, COUNT(*) AS n FROM sessions
+          WHERE kind = 'device' AND client IS NOT NULL AND last_seen > ? GROUP BY 1 ORDER BY n DESC LIMIT 20`,
+      )
+      .bind(d7),
+    db
+      .prepare(
+        // Per Singapore day, the last 30.
+        `SELECT date((created + 8 * 3600000) / 1000, 'unixepoch') AS day, COUNT(*) AS n
+           FROM users WHERE created > ? GROUP BY 1 ORDER BY 1`,
+      )
+      .bind(d30),
+    db.prepare(
       `SELECT f.id, f.created, f.kind, f.note, f.platform, f.app_version AS appVersion, f.context, f.reply_to AS replyTo, u.email
          FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.created DESC LIMIT 25`,
-    )
-    .all<{ id: string; created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null; email: string | null }>();
+    ),
+  ]);
+  const row = (r: D1Result) => (r.results?.[0] ?? {}) as Record<string, number | null>;
+  const n = (v: number | null | undefined) => v ?? 0;
+  const [users, profiles, sessions, apiKeys] = [row(u), row(p), row(s), row(k)];
+  const devices = dev.results as Array<{ platform: string; total: number; active7: number }>;
+  const clients = cli.results as Array<{ client: string; n: number }>;
+  const signups = sign.results as Array<{ day: string; n: number }>;
+  const feedback = fb.results as Array<{ id: string; created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null; email: string | null }>;
+  const [total, new7, new30, anonymous, upgraded, upgraded30, installs30] = [users.total, users.new7, users.new30, users.anonymous, users.upgraded, users.upgraded30, users.installs30].map(n);
+  const [withTimetable, withHome] = [profiles.withTimetable, profiles.withHome].map(n);
+  const [active1, active7, web7] = [sessions.active1, sessions.active7, sessions.web7].map(n);
+  const [keys, keysUsed7] = [apiKeys.total, apiKeys.used7].map(n);
+  const fb7 = n(row(f).n);
+  const onboarded30 = n(row(o).n);
 
   return {
     ...out,
-    accounts: { total: users, new7d: new7, new30d: new30, withTimetable, withHome, active1d: active1, active7d: active7, webSessions7d: web7, anonymous },
+    accounts: { total, new7d: new7, new30d: new30, withTimetable, withHome, active1d: active1, active7d: active7, webSessions7d: web7, anonymous },
     apps: { installs30d: installs30, onboarded30d: onboarded30, addedEmail: upgraded, addedEmail30d: upgraded30 },
     devices,
     clients,
