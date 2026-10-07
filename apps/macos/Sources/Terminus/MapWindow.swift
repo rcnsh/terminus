@@ -12,7 +12,7 @@ import SwiftUI
 @MainActor @Observable
 final class MapModel {
     enum Sheet: Equatable { case stop(String), bus(String) }
-    enum BusStatus: Equatable { case finding, running(Int), noneRunning, unavailable }
+    enum BusStatus: Equatable { case finding, running(Int), noneRunning, unavailable, offline, stale }
     struct Spot: Equatable { let lat: Double; let lon: Double }
 
     var campus: CampusMap?
@@ -20,6 +20,11 @@ final class MapModel {
     var failed = false
     var selected: String?
     var buses: [LiveBus] = []
+    /// Bumped by every answer from `/buses`, the same or not: each one plans
+    /// the slides again, so a bus that hasn't moved still counts as heard from.
+    var busAnswers = 0
+    /// The feed is down and these are its last places: drawn faded.
+    var busesStale = false
     var busStatus: BusStatus?
     var sheet: Sheet?
     var board: StopBoard?
@@ -54,20 +59,34 @@ final class MapModel {
     func choose(_ svc: String?) {
         selected = svc == selected ? nil : svc
         buses = []
+        busesStale = false
         busStatus = selected == nil ? nil : .finding
         if case .bus = sheet { sheet = nil }
     }
 
-    func refreshBuses() async {
+    /// A failed poll keeps the buses drawn and says so, as the web map does:
+    /// "need a connection" when this Mac is offline (`online`). A signed-out
+    /// Mac (401) says nothing: the popover asks it to sign in again.
+    func refreshBuses(online: Bool) async {
         guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
-        let list = (try? await MapFiles.get("/buses?svc=\(q)", token: TokenStore.read())).flatMap(BusList.parse)
+        let list: BusList?
+        do {
+            list = BusList.parse(try await MapFiles.get("/buses?svc=\(q)", token: TokenStore.read()))
+        } catch let e as ApiError where e.status == 401 {
+            return
+        } catch {
+            if !Task.isCancelled, svc == selected { busStatus = online ? .unavailable : .offline }
+            return
+        }
         guard svc == selected else { return }
         guard let list else {
-            if buses.isEmpty { busStatus = .unavailable }
+            busStatus = .unavailable
             return
         }
         buses = list.buses
-        busStatus = !list.available ? .unavailable : list.buses.isEmpty ? .noneRunning : .running(list.buses.count)
+        busesStale = list.available && list.stale
+        busAnswers += 1
+        busStatus = !list.available ? .unavailable : list.stale ? .stale : list.buses.isEmpty ? .noneRunning : .running(list.buses.count)
         if case .bus(let id) = sheet, !buses.contains(where: { $0.id == id }) { sheet = nil }
     }
 
@@ -119,7 +138,7 @@ struct MapWindow: View {
             } else if let campus = map.campus, let style = map.style {
                 CampusMapView(
                     map: map, campus: campus, style: style, dark: scheme == .dark, still: reduceMotion,
-                    drawn: .init(selected: map.selected, buses: map.buses, sheet: map.sheet, me: map.me, recentre: map.recentre)
+                    drawn: .init(selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet, me: map.me, recentre: map.recentre)
                 )
             } else if map.failed {
                 Text(L("The map needs a connection the first time."))
@@ -181,7 +200,7 @@ struct MapWindow: View {
         .task(id: "\(map.selected ?? "")|\(shown)") {
             guard map.selected != nil else { return }
             while !Task.isCancelled {
-                if visible { await map.refreshBuses() }
+                if visible { await map.refreshBuses(online: app.online) }
                 try? await Task.sleep(for: .seconds(5))
             }
         }
@@ -204,7 +223,7 @@ struct MapWindow: View {
     private var visible: Bool { window.map { $0.occlusionState.contains(.visible) && !$0.isMiniaturized } ?? true }
 }
 
-private extension MapModel.BusStatus {
+extension MapModel.BusStatus {
     func text(_ svc: String) -> String {
         switch self {
         case .finding: L("Finding %@ buses…", svc)
@@ -212,6 +231,8 @@ private extension MapModel.BusStatus {
         case .running(let n): L("%1$@ buses on %2$@", String(n), svc)
         case .noneRunning: L("No %@ buses running right now.", svc)
         case .unavailable: L("Live buses aren’t available right now.")
+        case .offline: L("Live buses need a connection.")
+        case .stale: L("Bus positions may be out of date")
         }
     }
 }
@@ -252,7 +273,7 @@ private struct Pills: View {
 }
 
 /// A line of status over the map, under the pills.
-private struct StatusChip: View {
+struct StatusChip: View {
     let text: String
     var busy = false
 
@@ -431,7 +452,9 @@ private struct StopCard: View {
         .onChange(of: stop.code) { sent = false }
     }
 
+    /// The server's "4 min" ("now", "~6 min"); worded here only for an older server's row.
     private func eta(_ r: BoardRow) -> String {
+        if let e = r.eta { return e }
         let s = r.etaS ?? 0
         if s < 60 { return L("Arriving") }
         let min = L("%@ min", String(s / 60))
@@ -475,6 +498,8 @@ private struct CampusMapView: NSViewRepresentable {
     struct Drawn: Equatable {
         let selected: String?
         let buses: [LiveBus]
+        let answers: Int
+        let stale: Bool
         let sheet: MapModel.Sheet?
         let me: MapModel.Spot?
         let recentre: Int
@@ -526,9 +551,9 @@ private struct CampusMapView: NSViewRepresentable {
 
         private var slides = Slides()
         private var slidesFor: String?
-        private var lastBuses: [LiveBus] = []
+        private var lastAnswer = 0
         private var timer: Timer?
-        private var applied: (selected: String?, dark: Bool, stretch: Bool, bus: String?)?
+        private var applied: (selected: String?, dark: Bool, stretch: Bool, bus: String?, stale: Bool)?
         private var recentred = 0
         private var framedLine: String?
         private var framedMe = false
@@ -670,7 +695,8 @@ private struct CampusMapView: NSViewRepresentable {
             let open = map.openBus
             let stretchData = MapGeoJson.stretch(color: color, path: path, open?.stretch)
             let stretchOn = stretchData != MapGeoJson.empty
-            let now = (selected, dark, stretchOn, open?.id)
+            let stale = map.busesStale
+            let now = (selected, dark, stretchOn, open?.id, stale)
             if applied == nil || applied! != now {
                 applied = now
                 (style.layer(withIdentifier: "route-casing") as? MLNLineStyleLayer)?.lineOpacity = NSExpression(forConstantValue: selected == nil ? 0.9 : 0.3)
@@ -688,16 +714,22 @@ private struct CampusMapView: NSViewRepresentable {
                 (style.layer(withIdentifier: "stop-names") as? MLNSymbolStyleLayer)?.textOpacity = E(["case", onRoute, 1, 0.4])
                 (style.layer(withIdentifier: "bus-on") as? MLNSymbolStyleLayer)?.predicate = NSPredicate(format: "id == %@", open?.id ?? "")
                 style.setImage(Self.busImage(fill: NSColor(hex: color), ring: paper), forName: "bus")
+                // Last-known places while the feed is down: faded, so they don't pass for live.
+                for id in ["buses", "bus-heading", "bus-on"] {
+                    (style.layer(withIdentifier: id) as? MLNSymbolStyleLayer)?.iconOpacity = NSExpression(forConstantValue: stale ? 0.4 : 1)
+                }
             }
             (style.source(withIdentifier: "stretch") as? MLNShapeSource)?.shape = shape(stretchData)
             let meData = map.me.map { MapGeoJson.me(lat: $0.lat, lon: $0.lon) } ?? MapGeoJson.empty
             (style.source(withIdentifier: "me") as? MLNShapeSource)?.shape = shape(meData)
 
             // Buses slide to each new place along their line (see Slides).
-            if slidesFor != selected { slides = Slides(); slidesFor = selected; lastBuses = [] }
-            if map.buses != lastBuses {
-                lastBuses = map.buses
-                slides.update(map.buses, path: path, now: ProcessInfo.processInfo.systemUptime, still: still)
+            // Every answer, even one the same as the last: a bus only jumps
+            // after a while without one (Slides.staleS).
+            if slidesFor != selected { slides = Slides(); slidesFor = selected; lastAnswer = map.busAnswers - 1 }
+            if map.busAnswers != lastAnswer {
+                lastAnswer = map.busAnswers
+                slides.update(map.buses, path: path, now: Slides.clock, still: still)
                 animate()
             }
             drawBuses()
@@ -706,7 +738,7 @@ private struct CampusMapView: NSViewRepresentable {
 
         private func drawBuses() {
             guard let src = view?.style?.source(withIdentifier: "buses") as? MLNShapeSource else { return }
-            let data = MapGeoJson.buses(svc: map.selected ?? "", color: color, slides.at(ProcessInfo.processInfo.systemUptime))
+            let data = MapGeoJson.buses(svc: map.selected ?? "", color: color, slides.at(Slides.clock))
             src.shape = shape(data)
         }
 
@@ -734,7 +766,7 @@ private struct CampusMapView: NSViewRepresentable {
 
         private func frame() {
             drawBuses()
-            if !slides.moving(ProcessInfo.processInfo.systemUptime) {
+            if !slides.moving(Slides.clock) {
                 timer?.invalidate()
                 timer = nil
             }

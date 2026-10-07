@@ -43,12 +43,17 @@ struct Header: View {
                             if old {
                                 StatusLine(color: .gray, text: L("Updating times…"))
                             } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
+                                // Once it's time, the headline says "Leave now" and this line goes, as on the phone and the web.
                                 let left = Int(at.timeIntervalSince(now))
-                                StatusLine(color: a.leaveLate ? .red : .brand, text: left <= 0 ? L("Time to go") : left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)"))
+                                if left > 0 {
+                                    StatusLine(color: a.leaveLate ? .red : .brand, text: left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)"))
+                                }
                             } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
                                 StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
-                            } else {
-                                StatusLine(color: resting ? .brand : dotColor(model.showNearby ? nil : a?.quality), text: resting ? restStatus : a?.isFree == true ? L("Nothing to catch") : a?.arrived == true ? L("You're there") : status(a))
+                            } else if resting {
+                                StatusLine(color: .brand, text: restStatus)
+                            } else if let text = status(a) {
+                                StatusLine(color: dotColor(model.showNearby ? nil : a?.quality), text: text)
                             }
                         }
                     }
@@ -73,17 +78,20 @@ struct Header: View {
         .card()
     }
 
-    /// "D2 · 09:42" when there's a live departure; otherwise the label.
+    /// "D2 · 09:42", "A1 · ~09:11", or the label when there's no time: the
+    /// card's title. An older server's answer, without one, is worded here.
     private func big(_ a: NextAnswer?) -> String {
         guard let a else { return L("Checking…") }
+        if let title = a.card?.title { return title }
         guard a.hasLiveTime, let at = a.departure else { return a.label }
         // A timetable estimate is not a live time: mark it, as the widget does.
         return "\(a.service) · \(a.quality == "scheduled" ? L("~%@", campusTime(at)) : campusTime(at))"
     }
 
+    /// "Leaves in 4 min 12 s", then "Left 1 min ago" until the answer is replaced or goes stale.
     private func countdown(to at: Date, now: Date) -> String {
         let left = Int(at.timeIntervalSince(now))
-        if left <= 0 { return L("Leaving now") }
+        if left <= 0 { return L("Left %@ min ago", "\((-left + 59) / 60)") }
         return left >= 60 ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)") : L("Leaves in %@ s", "\(left)")
     }
 
@@ -92,14 +100,20 @@ struct Header: View {
     /// " · 09:24", when the last refresh came; nothing before one has.
     private var updatedAt: String { model.updated.map { " · \(campusTime($0))" } ?? "" }
 
+    /// The card's heading ("Next class · GEA1000 @ UTown"), led by the phase
+    /// on a trip under way ("On the bus · GEA1000 @ UTown"). Without one (a
+    /// rest or free day, nowhere to go), what this view is.
     private func heading(_ a: NextAnswer?) -> String {
         if model.showNearby { return L("Nearby") }
         guard let a else { return L("Next bus") }
         if a.mode == "rest" { return L("Off hours") }
         if a.isFree { return L("Today") }
         // Under way: the phase leads ("On the bus · CS2030").
-        if let p = a.card?.phaseText, let d = a.dest { return "\(p.components(separatedBy: CharacterSet(charactersIn: ":：")).first ?? p) · \(d.label)" }
+        if let p = a.card?.phaseText, let d = a.dest { return "\(p) · \(d.label)" }
+        if let h = a.card?.heading { return h }
         if a.mode == "nearby" { return L("Nearby") }
+        // A card with no heading has nowhere to go; the rest is for an older server's answer.
+        if a.card != nil { return L("Next bus") }
         guard let d = a.dest else { return L("Next bus") }
         if a.isClassPlan, let c = a.classAt { return "\(d.label) · \(L("starts %@", campusTime(c)))" }
         let why = switch d.why {
@@ -111,18 +125,15 @@ struct Header: View {
         return "\(why) · \(d.label)"
     }
 
-    private func status(_ a: NextAnswer?) -> String {
+    /// The error, or how sure the answer is, worded on the server (`card.quality`:
+    /// "Timetable estimate", none for live times); nil for no line at all.
+    private func status(_ a: NextAnswer?) -> String? {
+        if a?.isFree == true { return L("Nothing to catch") }
+        if a?.arrived == true { return L("You're there") }
         if let e = model.error { return e }
         let when = updatedAt
         if model.showNearby { return L("Updated") + when }
-        switch a?.quality {
-        case "live": return L("Live") + when
-        case "scheduled": return L("Timetable estimate") + when
-        case "stale": return L("Live times are a few minutes old") + when
-        case "ended": return L("Services ended") + when
-        case "unknown": return L("No live data") + when
-        default: return L("Loading")
-        }
+        return a?.card?.quality.map { $0 + when }
     }
 
     private func dotColor(_ q: String?) -> Color {

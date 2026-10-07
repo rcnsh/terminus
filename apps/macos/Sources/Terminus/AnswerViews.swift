@@ -15,6 +15,8 @@ struct AnswerDetail: View {
             if let a = answer {
                 if let n = a.card?.notice { Row(icon: "antenna.radiowaves.left.and.right.slash", text: n).foregroundStyle(Color.warn) }
                 if let w = a.card?.warning { Row(icon: "exclamationmark.triangle.fill", text: w).fontWeight(.semibold).foregroundStyle(Color.warn) }
+                // On the bus: how far along, from the stop you got on at to the one you get off at.
+                if let ride = a.card?.ride { RideLine(ride: ride, color: a.card?.journey?.bus?.color) }
                 if a.isFree {
                     // Nothing to catch: no bus to mistake for advice.
                     NextClass(answer: a)
@@ -31,13 +33,19 @@ struct AnswerDetail: View {
                 } else if a.card?.upcoming != nil {
                     // After your day, or at home: what's next.
                     NextClass(answer: a)
+                } else if let j = a.card?.journey {
+                    // The trip as steps, as the phone and the web show them.
+                    JourneyRows(journey: j)
                 } else {
                     Row(icon: a.mode == "rest" ? "calendar" : "text.alignleft", text: a.detail)
                     if let leave = a.leaveText() { Row(icon: "figure.walk", text: leave).fontWeight(.semibold) }
                 }
-                if !a.isClassPlan, !a.isFree, a.timing?.text != nil || a.crowdText != nil {
+                // On a ride, the detail already says when you get there, with
+                // its "~" on an estimate; the timing pill would say it again.
+                let timing = a.card?.ride == nil ? a.timing?.text : nil
+                if !a.isClassPlan, !a.isFree, timing != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
-                        if let t = a.timing, let text = t.text { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .good) }
+                        if let t = a.timing, let text = timing { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .good) }
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
                 }
@@ -157,6 +165,76 @@ struct AnswerDetail: View {
         }
     }
 
+    /// The journey's title, then a row a step: the walk (and by when), the
+    /// ride, the walk at the end, getting there, and the bus to fall back on.
+    /// Every word is the server's.
+    struct JourneyRows: View {
+        let journey: NextAnswer.Journey
+
+        var body: some View {
+            let j = journey
+            Text(j.title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            if let walk = j.walkText { Row(icon: "figure.walk", text: [walk, j.byText].compactMap { $0 }.joined(separator: " · ")) }
+            if let ride = j.rideText { Row(icon: "bus.fill", text: [j.bus?.svc, ride].compactMap { $0 }.joined(separator: " · ")).fontWeight(.semibold) }
+            if let end = j.walkEndText { Row(icon: "figure.walk", text: end) }
+            if let arrive = j.arriveText { Row(icon: "flag.checkered", text: [arrive, j.arriveWhere].compactMap { $0 }.joined(separator: " · ")) }
+            if let backup = j.backupText { Row(icon: "bus", text: backup).foregroundStyle(.secondary) }
+        }
+    }
+
+    /// The ride as a line of its stops, the passed ones filled, with the bus
+    /// where the clock puts it (stops evenly spaced between the board and
+    /// arrival times, as the phone and the web take them). Boarding stop on
+    /// the left, the one to get off at on the right, the next one under the bus.
+    struct RideLine: View {
+        let ride: NextAnswer.Ride
+        var color: String?
+
+        var body: some View {
+            Ticking(every: 5) { now in
+                let hops = ride.stops.count - 1
+                let done = ride.progress(at: now)
+                let passed = ride.passed(at: now)
+                let tint = color.flatMap(Color.init(hex:)) ?? .brand
+                VStack(alignment: .leading, spacing: 4) {
+                    GeometryReader { g in
+                        let w = g.size.width - 8
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(.primary.opacity(0.12)).frame(height: 3).padding(.horizontal, 4)
+                            Capsule().fill(tint).frame(width: max(0, w * done), height: 3).padding(.leading, 4)
+                            ForEach(0...hops, id: \.self) { i in
+                                Circle()
+                                    .fill(i <= passed ? tint : Color.secondary.opacity(0.35))
+                                    .frame(width: 6, height: 6)
+                                    .offset(x: w * Double(i) / Double(max(1, hops)) + 1)
+                            }
+                            Image(systemName: "bus.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(inkOn(color ?? "#000000"))
+                                .frame(width: 16, height: 16)
+                                .background(Circle().fill(tint))
+                                .offset(x: w * done - 4)
+                        }
+                    }
+                    .frame(height: 16)
+                    HStack(spacing: 6) {
+                        Text(ride.stops[0].name)
+                        Spacer(minLength: 4)
+                        if passed + 1 < hops { Text(ride.stops[passed + 1].name).fontWeight(.semibold) }
+                        Spacer(minLength: 4)
+                        Text(ride.stops[hops].name).fontWeight(.semibold)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(L("Ride progress"))
+                .accessibilityValue(ride.stops.map(\.name).joined(separator: ", "))
+            }
+        }
+    }
+
     private struct Row: View {
         let icon: String
         let text: String
@@ -215,8 +293,9 @@ struct NearbyList: View {
     }
 }
 
-/// One pill per service: "D2  4m · 14m", the next bus solid and the ones
-/// after it faded, as on the web and Android. A timetable guess has a "~".
+/// One pill per service: "D2  4 min · 14 min", the next bus solid and the
+/// ones after it faded, as on the web and Android. The times are the
+/// server's words ("~6 min" for a timetable guess).
 /// Wraps onto more lines instead of squeezing when a stop has many services.
 struct FlowPills: View {
     let rows: [BoardRow]
@@ -238,7 +317,7 @@ struct FlowPills: View {
                         Text(name).font(.system(size: 11, weight: .bold))
                     }
                     let later = Self.later(r)
-                    (Text(Self.eta(etaS: r.etaS, quality: r.quality)).foregroundColor(.secondary)
+                    (Text(Self.eta(r)).foregroundColor(.secondary)
                         + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(Color.secondary.opacity(0.55)))
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .contentTransition(.numericText())
@@ -253,7 +332,10 @@ struct FlowPills: View {
         }
     }
 
-    /// "4m", "~6m" for a timetable guess, "now", or "ended".
+    /// The server's "4 min"; worded here only for an older server's row.
+    nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? eta(etaS: r.etaS, quality: r.quality) }
+
+    /// An older server's row: "4m", "~6m" for a timetable guess, "now", or "ended".
     nonisolated static func eta(etaS: Int?, quality: String) -> String {
         guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }
         if s < 45 { return L("now") }
@@ -262,13 +344,13 @@ struct FlowPills: View {
     }
 
     nonisolated static func later(_ r: BoardRow) -> [String] {
-        (r.later ?? []).filter { $0.etaS != nil }.prefix(laterShown).map { eta(etaS: $0.etaS, quality: $0.quality) }
+        (r.later ?? []).filter { $0.etaS != nil || $0.eta != nil }.prefix(laterShown).map { $0.eta ?? eta(etaS: $0.etaS, quality: $0.quality) }
     }
 
     /// "D2, public bus, fare applies: 4m, then 14m".
     nonisolated static func spoken(_ r: BoardRow) -> String {
         let who = r.paid == true ? "\(r.svc), \(L("Public bus, fare applies"))" : r.svc
-        let times = [eta(etaS: r.etaS, quality: r.quality)] + later(r)
+        let times = [eta(r)] + later(r)
         return "\(who): \(times.joined(separator: ", "))"
     }
 }

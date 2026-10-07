@@ -219,10 +219,13 @@ struct LiveBus: Hashable {
     }
 }
 
-/// One service's buses. `available` false: the feed couldn't be reached, which isn't "no buses".
+/// One service's buses, in the feed's order. `available` false: the feed
+/// couldn't be reached, which isn't "no buses". `stale`: the feed is down and
+/// these are the last places it gave.
 struct BusList {
     let svc: String
     let available: Bool
+    var stale = false
     let buses: [LiveBus]
 
     static func parse(_ data: Data) -> BusList? {
@@ -242,7 +245,7 @@ struct BusList {
                 at: name(b["at"]), slot: (b["slot"] as? Int) ?? 0, stretch: stretch
             )
         }
-        return BusList(svc: svc, available: o["available"] as? Bool ?? false, buses: buses)
+        return BusList(svc: svc, available: o["available"] as? Bool ?? false, stale: o["stale"] as? Bool ?? false, buses: buses)
     }
 }
 
@@ -255,7 +258,7 @@ struct StopBoard {
         guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         let rows: [BoardRow] = (o["board"] as? [[String: Any]] ?? []).compactMap { r in
             guard let svc = r["svc"] as? String, let eta = r["etaS"] as? Int else { return nil }
-            return BoardRow(svc: svc, etaS: eta, quality: r["quality"] as? String ?? "")
+            return BoardRow(svc: svc, etaS: eta, quality: r["quality"] as? String ?? "", eta: (r["eta"] as? String).flatMap { $0.isEmpty ? nil : $0 })
         }
         return StopBoard(available: o["available"] as? Bool ?? false, rows: rows)
     }
@@ -312,7 +315,8 @@ enum MapGeoJson {
 /// it), so it moves from one to the other as it goes. One that can't get there
 /// along the line (behind it, a long way on, no line) jumps, and so does every
 /// bus with `still` (Reduce motion) or after a while without an answer.
-/// Times are seconds on any one clock.
+/// Times are seconds on any one clock that counts sleep (`Slides.clock`).
+/// Buses are drawn in the order of the latest answer, the feed's.
 struct Slides {
     private struct Slide {
         let from: LiveBus?
@@ -324,6 +328,7 @@ struct Slides {
     }
 
     private var slides: [String: Slide] = [:]
+    private var order: [String] = []
     /// When the last answer came, to tell a stale map.
     private var lastUpdate: Double?
     private let duration: (Double) -> Double
@@ -338,6 +343,12 @@ struct Slides {
     /// the next answer (every 5 s).
     static func slideS(_ m: Double) -> Double { min(max(m / 100, 1), 4) }
 
+    /// Seconds on a clock that keeps counting while the Mac sleeps
+    /// (CLOCK_MONOTONIC_RAW, mach_continuous_time), so an answer from before
+    /// a sleep is seen as stale. `systemUptime` and CLOCK_UPTIME_RAW stop
+    /// during sleep; Date() can be set back.
+    static var clock: Double { Double(clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW)) / 1e9 }
+
     /// New places `buses`, with `path` their route's line, at `now`.
     mutating func update(_ buses: [LiveBus], path: RoutePath?, now: Double, still: Bool = false) {
         // No answer for a while (the Mac slept, the window was closed):
@@ -345,7 +356,9 @@ struct Slides {
         let stale = lastUpdate.map { now - $0 > Self.staleS } ?? true
         lastUpdate = now
         var next: [String: Slide] = [:]
+        var order: [String] = []
         for raw in buses {
+            if next[raw.id] == nil { order.append(raw.id) }
             let b = raw.placed()
             let from = slides[b.id].map { at($0, now) }
             if !stale, !still, let from, let path, let d = path.ahead(from: from, to: b) {
@@ -355,10 +368,11 @@ struct Slides {
             }
         }
         slides = next
+        self.order = order
     }
 
     /// Each bus where it's drawn at `now`.
-    func at(_ now: Double) -> [LiveBus] { slides.values.map { at($0, now) } }
+    func at(_ now: Double) -> [LiveBus] { order.compactMap { slides[$0] }.map { at($0, now) } }
 
     /// Whether any bus is still on its way at `now`.
     func moving(_ now: Double) -> Bool { slides.values.contains { $0.from != nil && now - $0.start < $0.s } }

@@ -164,8 +164,8 @@ final class AppModel {
         }
     }
 
-    /// Ticks every 30 s for the menu bar's countdown.
-    var clock = Date()
+    /// Ticks every 30 s for the menu bar's countdown, on the server's clock.
+    var clock = ServerClock.now
     private var clockTask: Task<Void, Never>?
 
     private let locator = Locator()
@@ -190,7 +190,7 @@ final class AppModel {
                 try? await Task.sleep(for: .seconds(30), tolerance: .seconds(5))
                 guard let self, !self.paused else { continue }
                 // Only when the title would change: every assignment redraws the menu bar.
-                let now = Date()
+                let now = ServerClock.now
                 if self.menuTitle(at: now) != self.menuTitle(at: self.clock) || self.isOld(self.plan, at: now) != self.isOld(self.plan, at: self.clock) {
                     self.clock = now
                 }
@@ -208,18 +208,15 @@ final class AppModel {
         return OfflineDay.next(day, now: now)
     }
 
-    /// The menu bar text at `now`: "D2 4m" counted from the departure time,
-    /// or nil for the plain icon once the bus has gone or there's no bus.
+    /// The menu bar text at `now` (on the server's clock): the card's glance,
+    /// worded on the server as the phone's widget shows it, or nil for the
+    /// plain icon. An answer from an older server, without a card, counts
+    /// down from its departure time here.
     func menuTitle(at now: Date) -> String? {
         if let p = offlinePick(at: now) { return OfflineDay.menuTitle(p) }
-        // A trip under way: its phase, as the phone and the widget say it.
-        if let plan, plan.tripUnderWay, let g = plan.card?.glance { return g }
-        guard let plan, plan.quality != "ended", plan.card?.kind != "setup", !plan.isFree else { return nil }
-        // A class: when to leave is what matters from the menu bar.
-        // "~" on an estimate, as the card and the phone say it.
-        if plan.isClassPlan, let at = plan.leaveAt {
-            return now >= at ? L("Leave now") : L("Leave %@", plan.leave?.estimated == true ? L("~%@", campusTime(at)) : campusTime(at))
-        }
+        guard let plan else { return nil }
+        if let card = plan.card { return card.glance.flatMap { $0.isEmpty ? nil : $0 } }
+        guard plan.quality != "ended", !plan.isFree else { return nil }
         guard plan.hasLiveTime, let at = plan.departure else {
             let short = plan.label.replacingOccurrences(of: " · ", with: " ").replacingOccurrences(of: " min", with: "m")
             return short.count > 16 ? String(short.prefix(15)) + "…" : short
@@ -230,17 +227,14 @@ final class AppModel {
         return left < 45 ? "\(plan.service) \(L("now"))" : "\(plan.service) \(plan.quality == "scheduled" ? L("~%@", mins) : mins)"
     }
 
-    /// Same rule as the Android widget: the bus has left, the plan has moved
-    /// on (a class started, the day ended), or the answer is 15 minutes old.
-    /// A rest answer only goes old when the day starts.
+    /// Dimmed once the server's `card.staleAt` has passed (`now` on the
+    /// server's clock), the rule every client follows. A card without one
+    /// never dims (nothing on it goes out of date: setup, rest, free); only
+    /// an answer with no card at all is old from the start.
     func isOld(_ a: NextAnswer?, at now: Date) -> Bool {
-        // The server says when (card.staleAt); the rest is for an answer that predates it.
-        if let at = a?.staleAt { return now >= at }
-        if let at = a?.planChanges, now >= at { return true }
-        if a?.mode == "rest" { return false }
-        if let at = a?.departure, now.timeIntervalSince(at) > 30 { return true }
-        if let updated, now.timeIntervalSince(updated) > 15 * 60 { return true }
-        return false
+        guard let a else { return false }
+        guard let card = a.card else { return true }
+        return card.staleAt.flatMap(parseISODate).map { now >= $0 } ?? false
     }
 
     // MARK: pairing
@@ -340,7 +334,8 @@ final class AppModel {
             let api = Api(token: token)
             let a = try await api.signal(action)
             answers[.plan] = a
-            updated = Date()
+            updated = ServerClock.now
+            planFetched = Date()
             error = nil
             LeaveNotifier.shared.update(a)
             dayFetched = Date()
@@ -433,7 +428,8 @@ final class AppModel {
         do {
             let a = try await Api(token: token).once(target, atMin: atMin)
             answers[.plan] = a
-            updated = Date()
+            updated = ServerClock.now
+            planFetched = Date()
             LeaveNotifier.shared.update(a)
             select(.plan)
             dayFetched = Date()
@@ -577,6 +573,7 @@ final class AppModel {
         anonymous = false
         added = []
         answers = [:]
+        planFetched = nil
         day = nil
         dayFetched = nil
         LeaveNotifier.shared.clearLeave()
@@ -714,7 +711,7 @@ final class AppModel {
 
     // MARK: refresh loop
 
-    /// 30 s while the popover is open, 2 min otherwise, 10 min while
+    /// 30 s while the popover is open, 5 min otherwise, 10 min while
     /// resting; nothing while asleep or locked. Also right after the bus
     /// leaves or the plan changes, and soon after a failure. The API caches
     /// each stop for 15 s, so faster shows nothing new.
@@ -735,8 +732,8 @@ final class AppModel {
         failures = failed ? failures + 1 : 0
         // Wi-Fi is often not up yet right after a wake: retry soon, then back off.
         if failed && failures <= 3 { return [5, 15, 45][failures - 1] }
-        var d: TimeInterval = popoverOpen ? 30 : resting ? 600 : 120
-        let now = Date()
+        var d: TimeInterval = popoverOpen ? 30 : resting ? 600 : 300
+        let now = ServerClock.now
         // nextChange: when the card's phase moves on by itself (the leave-by, a class start).
         for mark in [plan?.departure?.addingTimeInterval(31), plan?.planChanges, plan?.nextChange].compactMap({ $0 }) where mark > now {
             d = min(d, mark.timeIntervalSince(now))
@@ -747,6 +744,21 @@ final class AppModel {
     }
 
     private func kick() { start() }
+
+    /// When the plan was last fetched (this Mac's clock), and how long one
+    /// fetched for the menu bar alone, off its tab, is kept.
+    var planFetched: Date?
+    static let planReuseS: TimeInterval = 300
+
+    /// Off the plan's tab, the plan is wanted only for the menu bar, the
+    /// tabs and the leave reminder: a recent one does, until it's 5 minutes
+    /// old or one of its own times (the bus leaving, refreshAt, the phase
+    /// moving on, staleAt) has passed. `now` is on the server's clock.
+    func planDue(at now: Date, local: Date = Date()) -> Bool {
+        guard let plan, let fetched = planFetched, local.timeIntervalSince(fetched) < Self.planReuseS else { return true }
+        let marks = [plan.departure?.addingTimeInterval(31), plan.planChanges, plan.nextChange, plan.staleAt].compactMap { $0 }
+        return marks.contains { $0 <= now }
+    }
 
     /// Returns false when the fetch failed, so the loop can retry sooner.
     @discardableResult
@@ -786,25 +798,29 @@ final class AppModel {
         defer { loading = false }
         do {
             // What's on screen first; the plan (for the menu bar) after.
+            let onPlan = !showNearby && target == .plan
             if showNearby {
                 nearby = try await api.nearby(lat: lat, lon: lon, acc: acc)
             } else if target != .plan {
                 answers[target] = try await api.next(target, lat: lat, lon: lon, acc: acc)
             }
-            let p = try await api.next(.plan, lat: lat, lon: lon, acc: acc)
-            answers[.plan] = p
-            places = p.places ?? []
-            // A favourite removed elsewhere leaves no tab to show it under.
-            if case .place(let key) = target, !places.contains(where: { $0.key == key }) { target = .plan }
+            if onPlan || planDue(at: ServerClock.now) {
+                let p = try await api.next(.plan, lat: lat, lon: lon, acc: acc)
+                answers[.plan] = p
+                planFetched = Date()
+                places = p.places ?? []
+                // A favourite removed elsewhere leaves no tab to show it under.
+                if case .place(let key) = target, !places.contains(where: { $0.key == key }) { target = .plan }
+                LeaveNotifier.shared.update(p)
+            }
             error = nil
-            updated = Date()
-            clock = Date()
-            LeaveNotifier.shared.update(p)
+            updated = ServerClock.now
+            clock = ServerClock.now
             // Today: while the popover is open, at most every 2 minutes; and,
             // for when the Mac goes offline (OfflineDay), whenever the one kept
             // is another day's or an hour old.
             let dayAge = dayFetched.map { Date().timeIntervalSince($0) } ?? .infinity
-            if (popoverOpen && dayAge > 120) || dayAge > 3600 || day?.date != OfflineDay.sgtDate(Date()) {
+            if (popoverOpen && dayAge > 120) || dayAge > 3600 || day?.date != OfflineDay.sgtDate(ServerClock.now) {
                 dayFetched = Date()
                 // A failed fetch keeps the plan there was: it's what offline falls back to.
                 if let d = try? await api.day(lat: lat, lon: lon, acc: acc) { day = d }
@@ -862,13 +878,14 @@ final class AppModel {
         }
         for (center, name) in resumes {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.paused = false; self?.clock = Date(); self?.kick() }
+                MainActor.assumeIsolated { self?.paused = false; self?.clock = ServerClock.now; self?.kick() }
             }
         }
     }
 
     private let pathMonitor = NWPathMonitor()
-    private var online = true
+    /// Whether this Mac has a network path, for the map's "need a connection".
+    private(set) var online = true
 
     /// Refresh the moment the network comes back, instead of waiting out the
     /// loop with "Offline" on screen.

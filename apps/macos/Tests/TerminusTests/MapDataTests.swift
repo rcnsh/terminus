@@ -231,3 +231,43 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect((plain["layers"] as? [Any])?.count == 1)
     #expect(plain["glyphs"] as? String == "g")
 }
+
+@Test func lastKnownBusesAreMarkedStale() throws {
+    let list = try #require(BusList.parse(Data(#"{"svc": "D2", "available": true, "stale": true, "buses": [{"id": "a", "lat": 1.3, "lon": 103.77}]}"#.utf8)))
+    #expect(list.stale)
+    #expect(list.buses.count == 1)
+    #expect(BusList.parse(Data(#"{"svc": "D2", "available": true, "buses": []}"#.utf8))?.stale == false, "an older server's answer is fresh")
+}
+
+@Test func busesAreDrawnInTheFeedsOrder() {
+    let path = RoutePath([[103.0, 1.0], [103.01, 1.0]])
+    let ids = ["k", "c", "x", "a", "q", "m", "b"]
+    var s = Slides(duration: { _ in 1 })
+    s.update(ids.enumerated().map { bus(path, Double($0.offset) * 100, id: $0.element) }, path: path, now: 0)
+    #expect(s.at(0).map(\.id) == ids)
+    s.update(ids.reversed().map { bus(path, 50, id: $0) }, path: path, now: 5)
+    #expect(s.at(5).map(\.id) == ids.reversed(), "the latest answer's order")
+}
+
+/// The map plans its slides on every answer, the same or not: a bus that
+/// stood still for a while still slides when it moves off.
+@Test func aBusThatStoodStillStillSlides() {
+    let path = RoutePath([[103.0, 1.0], [103.01, 1.0]])
+    var s = Slides(duration: { _ in 1 })
+    for t in stride(from: 0.0, through: 30, by: 5) { s.update([bus(path, 300)], path: path, now: t) }
+    s.update([bus(path, 400)], path: path, now: 35)
+    #expect(s.moving(35.5))
+    #expect(near(s.at(35.5)[0].along, 350, 1e-6))
+}
+
+@Test func theSlidesClockCountsOn() {
+    let a = Slides.clock
+    #expect(a > 0)
+    #expect(Slides.clock >= a)
+}
+
+@Test func aStopsBoardSaysTheServersTimes() throws {
+    let b = try #require(StopBoard.parse(Data(#"{"available": true, "board": [{"svc": "D2", "etaS": 240, "quality": "live", "eta": "4 min"}, {"svc": "A1", "etaS": 300, "quality": "live"}]}"#.utf8)))
+    #expect(b.rows[0].eta == "4 min")
+    #expect(b.rows[1].eta == nil, "an older server's row is worded here")
+}

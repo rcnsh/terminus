@@ -105,7 +105,8 @@ extension EnvironmentValues {
     }
 }
 
-/// Re-renders its content every `every` seconds with the current time.
+/// Re-renders its content every `every` seconds with the current time, on
+/// the server's clock (ServerClock): it's compared with the answer's times.
 struct Ticking<Content: View>: View {
     let every: TimeInterval
     @ViewBuilder let content: (Date) -> Content
@@ -115,7 +116,7 @@ struct Ticking<Content: View>: View {
         if let fixedNow {
             content(fixedNow)
         } else {
-            TimelineView(.periodic(from: .now, by: every)) { ctx in content(ctx.date) }
+            TimelineView(.periodic(from: .now, by: every)) { ctx in content(ServerClock.now(local: ctx.date)) }
         }
     }
 }

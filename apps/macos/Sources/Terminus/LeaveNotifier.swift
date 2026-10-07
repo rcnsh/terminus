@@ -5,9 +5,9 @@ import os
 
 private let log = Logger(subsystem: "sh.rcn.terminus", category: "notify")
 
-/// When to leave for class, as local notifications (phase 7): a heads-up five
-/// minutes before the leave-by, and "Leave now" at it. Worded from the card,
-/// like every other client. Nothing asks what happened afterwards: the trip
+/// When to leave, as local notifications (phase 7): a heads-up at the card's
+/// `remindAt`, and "Leave now" at the leave-by. The server decides which trips
+/// get one (no `remindAt`, no reminder) and words them, like every other client. Nothing asks what happened afterwards: the trip
 /// follows the plan and the phone's location.
 ///
 /// Local notifications don't need APNs or a paid Apple team, so they work for
@@ -22,8 +22,6 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     private static let nowID = "leave-now"
     /// The question older versions posted ("On the 9:41 D2?"), cleared if still showing.
     private static let askID = "ask"
-    /// A heads-up this long before the leave-by.
-    static let headsUp: TimeInterval = 5 * 60
 
     /// Only touched by the running app: without an app bundle (tests,
     /// snapshot renders) asking for it throws.
@@ -69,7 +67,8 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// Brings the scheduled notifications in line with the latest plan.
-    func update(_ plan: NextAnswer?, now: Date = Date()) {
+    /// `now` is on the server's clock, as the plan's times are.
+    func update(_ plan: NextAnswer?, now: Date = ServerClock.now) {
         guard enabled, let plan else { return }
         let card = plan.card
         let phase = card?.phase ?? "idle"
@@ -88,20 +87,19 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
             center.removeDeliveredNotifications(withIdentifiers: [Self.askID])
             return
         }
-        guard plan.isClassPlan, card?.remind != false, let trip, let leaveAt = plan.leaveAt, leaveAt > now else {
+        guard card?.remind != false, let trip, let soonAt = card?.remindAt.flatMap(parseISODate), let leaveAt = plan.leaveAt, leaveAt > now else {
             clearLeave()
             return
         }
         // A different trip (the last one skipped or over): its reminders go.
         if let last = defaults.string(forKey: "soonTrip"), last != trip { clearLeave() }
-        let soonAt = leaveAt.addingTimeInterval(-Self.headsUp)
         // The heads-up goes once per trip: once it has gone, a leave-by that
         // moves later doesn't bring it back.
         let soonDone = defaults.string(forKey: "soonTrip") == trip && defaults.double(forKey: "soonAt") <= now.timeIntervalSince1970
         if !soonDone {
             defaults.set(trip, forKey: "soonTrip")
             defaults.set(max(soonAt, now).timeIntervalSince1970, forKey: "soonAt")
-            schedule(Self.soonID, at: soonAt, now: now, title: card?.leaveBy ?? L("Leave by %@", campusTime(leaveAt)), plan: plan)
+            schedule(Self.soonID, at: soonAt, now: now, title: card?.leaveBy ?? card?.title ?? plan.label, plan: plan)
         }
         schedule(Self.nowID, at: leaveAt, now: now, title: L("Leave now"), plan: plan)
     }
@@ -125,6 +123,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
         content.threadIdentifier = "trip"
         // Already due (a refresh after the moment, or a late wake): now, not never.
+        // Both on the server's clock, so the wait is right on a Mac whose clock is out.
         let wait = at.timeIntervalSince(now)
         let trigger = wait > 1 ? UNTimeIntervalNotificationTrigger(timeInterval: wait, repeats: false) : nil
         center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger)) { err in
@@ -132,9 +131,9 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// "GEA1000 @ UTown · starts 09:00".
+    /// "To GEA1000 @ UTown · starts 10:00", or the card's heading.
     private func where_(_ plan: NextAnswer) -> String {
-        ([plan.dest?.label, plan.classAt.map { L("starts %@", campusTime($0)) }] as [String?]).compactMap { $0 }.joined(separator: " · ")
+        plan.card?.journey?.title ?? plan.card?.heading ?? plan.dest?.label ?? ""
     }
 
     // MARK: UNUserNotificationCenterDelegate
