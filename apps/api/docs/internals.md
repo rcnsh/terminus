@@ -456,10 +456,14 @@ from the class or home before them.
 
 Card v2 adds `phase`, `phaseText`, `glance` (12 characters, for a menu bar
 or a tile), `line` (one line, for a notification), `actions`, `warning` and
-`nextChangeAt` (when the card changes by itself). The glance is never a
-minute count, which a menu bar left unrefreshed would freeze: outside a trip
-it is the headline bus and its clock time ("D2 09:41", "~" for an
-estimate), the label's own words when there's no time.
+`nextChangeAt` (when the card changes by itself). A leave-by counts there
+no sooner than 30 s ahead (`LEAVE_GAP_MS`): a late bus keeps sliding it a
+few seconds past now, and clients refetching at it would poll every few
+seconds; they say "Leave now" themselves once `leave.at` passes. The glance
+is never a minute count, which a menu bar left unrefreshed would freeze:
+outside a trip it is the headline bus and its clock time ("D2 09:41", "~"
+for an estimate or an old reading), the label's own words when there's no
+time.
 
 The card also has its headline and the line above it worded: `title`, the
 departure as a clock time ("D2 · 09:42", "~09:42" for a timetable estimate),
