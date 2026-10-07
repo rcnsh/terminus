@@ -498,10 +498,22 @@ final class AppModel {
 
     /// The choice after adding an email: the account's setup, or this Mac's.
     func keepSetup(mac: Bool) {
-        guard let c = chooseSetup else { return }
+        guard let c = chooseSetup, !signingIn else { return }
         let anon = anonToken
+        signInError = nil
+        signingIn = true
         Task {
-            if let anon { try? await Api(token: c.token).merge(anon: anon, keepDevice: mac) }
+            defer { signingIn = false }
+            if let anon {
+                do {
+                    try await Api(token: c.token).merge(anon: anon, keepDevice: mac)
+                } catch {
+                    // Not merged: the choice stays up, with this Mac's account
+                    // kept, so a second try can still keep its setup.
+                    signInError = failureMessage(error)
+                    return
+                }
+            }
             chooseSetup = nil
             finishSignIn(SignInPoll(status: "approved", token: c.token, email: c.email, outcome: "signed-in"))
         }
