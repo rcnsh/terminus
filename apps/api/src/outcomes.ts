@@ -79,13 +79,9 @@ export async function setPref(db: D1Database, userId: string, key: string, pref:
       db
         .prepare('INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) VALUES (?, ?, ?, ?, ?)')
         .bind(userId, key, choice === 'accept' ? pref : `no-${pref}`, label, nowMs),
-    );
-  }
-  // Accepting "leave earlier" starts the count again, so it isn't suggested twice.
-  if (choice !== 'undo') stmts.push(db.prepare("DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND outcome = ?").bind(userId, key, pref === 'earlier' ? 'missed' : 'skipped'));
-  // The oldest go first past the cap.
-  if (choice !== 'undo') {
-    stmts.push(
+      // Accepting "leave earlier" starts the count again, so it isn't suggested twice.
+      db.prepare('DELETE FROM trip_outcomes WHERE user_id = ? AND trip_key = ? AND outcome = ?').bind(userId, key, pref === 'earlier' ? 'missed' : 'skipped'),
+      // The oldest go first past the cap.
       db
         .prepare('DELETE FROM trip_prefs WHERE user_id = ? AND rowid IN (SELECT rowid FROM trip_prefs WHERE user_id = ? ORDER BY set_at DESC, rowid DESC LIMIT -1 OFFSET ?)')
         .bind(userId, userId, MAX_PREFS),

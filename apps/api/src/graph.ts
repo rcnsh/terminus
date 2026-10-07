@@ -35,11 +35,13 @@ export function mergeOpposites(stops: Stop[], pairs: string[][]): Stop[] {
   return out;
 }
 
+const SCRAPED = graphJson as unknown as Graph;
+
 export const GRAPH = {
-  ...(graphJson as unknown as Graph),
-  stops: mergeOpposites((graphJson as unknown as Graph).stops, oppositesJson.pairs),
+  ...SCRAPED,
+  stops: mergeOpposites(SCRAPED.stops, oppositesJson.pairs),
   serviceHours: mergeServiceHours(
-    (graphJson as unknown as Graph).serviceHours,
+    SCRAPED.serviceHours,
     serviceHoursJson as Record<string, unknown>,
   ),
 } as Graph;

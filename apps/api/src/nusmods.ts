@@ -221,11 +221,12 @@ export async function resolveTrips(
   // A sem-1 link in July means the coming August. If NUSMods has nothing for
   // that year yet, the semester just gone is the next best reading.
   const terms = termsForImport(share.semester, nowMs);
+  const fetchTerm = (t: Term) => Promise.all(modules.map((m) => fetchModule(fetchImpl, apiBase, t.acadYear.replace('/', '-'), m, share.semester)));
   let term = terms[0];
-  let fetched = await Promise.all(modules.map((m) => fetchModule(fetchImpl, apiBase, term.acadYear.replace('/', '-'), m, share.semester)));
+  let fetched = await fetchTerm(term);
   if (terms[1] && fetched.every((f) => f.status === 'missing')) {
     term = terms[1];
-    fetched = await Promise.all(modules.map((m) => fetchModule(fetchImpl, apiBase, term.acadYear.replace('/', '-'), m, share.semester)));
+    fetched = await fetchTerm(term);
   }
 
   const trips: ImportedTrip[] = [];

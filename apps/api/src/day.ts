@@ -140,9 +140,9 @@ export async function dayPlan(
     // agree before the card's plan is saved); for later ones, the class or
     // home before.
     else if ((status === 'next' || status === 'later') && from) {
-      const at = status === 'next' ? here : { lat: null, lon: null };
+      const setOff = status === 'next' ? here : { lat: null, lon: null };
       pending.push(
-        tripAnswer(env, ctx, nowMs, deps, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, at, places, h12, earlier.has(classKey(c)))
+        tripAnswer(env, ctx, nowMs, deps, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, setOff, places, h12, earlier.has(key))
           .then((a) => {
             item.leave = a.leave ?? null;
             item.timing = a.timing ?? null;

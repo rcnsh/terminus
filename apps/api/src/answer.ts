@@ -109,7 +109,10 @@ export async function answerFor(
   const destSides = [input.to, ...(input.toAlso ?? [])]
     .map((c) => (c ? idx.byCode.get(c) : undefined))
     .filter((s): s is Stop => Boolean(s))
-    .flatMap((s) => [s, ...(s.opposite && idx.byCode.get(s.opposite) ? [idx.byCode.get(s.opposite)!] : [])]);
+    .flatMap((s) => {
+      const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+      return twin ? [s, twin] : [s];
+    });
   const atDest = destSides.find((d) =>
     input.lat != null
       ? haversineM(input.lat, input.lon!, d.lat, d.lon) / WALK.speedMs < 45

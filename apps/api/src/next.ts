@@ -9,6 +9,7 @@ import type { MeDeps } from './me.ts';
 import {
   HOME_BY_MIN,
   MAX_VENUE_WALK_S,
+  type Plan,
   type Profile,
   classKey,
   classStartMs,
@@ -63,6 +64,12 @@ interface Dest {
   /** A room or building searched for, reached on foot from its stop `to`. */
   venue?: string | null;
 }
+
+/** The destination as the answer names it. */
+const destOf = (d: Dest): NonNullable<MeAnswer['dest']> => ({ to: d.to, label: d.label, why: d.why });
+
+/** A trip home's key: after the day's last class, or in a long gap. */
+const homeKey = (plan: Pick<Plan, 'why' | 'lastEndMin' | 'from'>) => (plan.why === 'home' ? `home:${plan.lastEndMin}` : `gap-home:${plan.from}`);
 
 export interface Planned {
   answer: MeAnswer;
@@ -160,7 +167,7 @@ export async function tripAnswer(
     return {
       ...base(nowMs, m().addHomeStop, m().addHomeStopHint),
       mode: 'trip',
-      dest: { to: dest.to, label: dest.label, why: dest.why },
+      dest: destOf(dest),
       places,
     };
   }
@@ -196,7 +203,7 @@ export async function tripAnswer(
   // from the stop to the venue, against the start time.
   const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs, h12) : null;
   const endWalk = endWalkS > 0 ? { endWalk: { s: endWalkS, inLeave: input.arriveBy != null } } : {};
-  return { ...answer, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, timing, places, ...endWalk };
+  return { ...answer, mode: 'trip', dest: destOf(dest), timing, places, ...endWalk };
 }
 
 function onCampus(graph: Graph, lat: number, lon: number): boolean {
@@ -268,7 +275,7 @@ function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, plac
     quality: live ? 'live' : 'scheduled',
     arriveAt: b.arrive ?? undefined,
     mode: 'trip',
-    dest: { to: dest.to, label: dest.label, why: dest.why },
+    dest: destOf(dest),
     timing,
     places,
   };
@@ -286,7 +293,7 @@ function thereAnswer(profile: Profile, nowMs: number, dest: Dest, places: PlaceC
   const detail = [when, !early && next ? restDetail(profile, nowMs, h12, skipped) : null]
     .filter(Boolean)
     .join(' · ');
-  return { ...base(nowMs, label, detail || m().youreThere), quality: 'live', arrived: true, leave: null, mode: 'trip', dest: { to: dest.to, label: dest.label, why: dest.why }, places };
+  return { ...base(nowMs, label, detail || m().youreThere), quality: 'live', arrived: true, leave: null, mode: 'trip', dest: destOf(dest), places };
 }
 
 /**
@@ -369,7 +376,7 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   }
 
   let dest: Dest = { to: plan.to, label: plan.label, why: plan.why, from: plan.from, trip: plan.trip, fromVenue: plan.fromVenue };
-  let key = plan.trip ? classKey(plan.trip) : plan.why === 'home' ? `home:${plan.lastEndMin}` : `gap-home:${plan.from}`;
+  let key = plan.trip ? classKey(plan.trip) : homeKey(plan);
 
   if (plan.why === 'home' || plan.why === 'gap-home') {
     // Already in your residence: "Home" is not somewhere to go.
@@ -471,6 +478,6 @@ function reachedOf(url: URL, nowMs: number, profile: Profile, day: DayRecord | n
   if (!atHome(lat, lon, profile.home?.stops ?? [])) return {};
   const plan = planFor(profile, nowMs, dayState(day));
   if (!plan || (plan.why !== 'home' && plan.why !== 'gap-home')) return {};
-  const home = plan.why === 'home' ? `home:${plan.lastEndMin}` : `gap-home:${plan.from}`;
+  const home = homeKey(plan);
   return day?.trips[home] ? {} : { reached: home };
 }

@@ -243,6 +243,15 @@ function stub(env: Env, userId: string): DurableObjectStub | null {
   return env.TRIPS.get(env.TRIPS.idFromName(userId));
 }
 
+/** A change sent to the Trip object (tripdo.ts), as JSON. */
+function post(s: DurableObjectStub, path: string, body: unknown): Promise<Response> {
+  return s.fetch(`https://trip/${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 /** Today's signals, or null when there are none (or no Durable Object binding). */
 export async function loadDay(env: Env, userId: string, nowMs: number): Promise<DayRecord | null> {
   const s = stub(env, userId);
@@ -264,11 +273,7 @@ export async function savePlan(env: Env, userId: string, key: string, plan: Boar
   const s = stub(env, userId);
   if (!s) return;
   try {
-    const res = await s.fetch('https://trip/plan', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ date: sgtDate(nowMs), key, plan, deleteAt: endOfDayMs(nowMs) }),
-    });
+    const res = await post(s, 'plan', { date: sgtDate(nowMs), key, plan, deleteAt: endOfDayMs(nowMs) });
     if (!res.ok) throw new Error(`status ${res.status}`);
   } catch (err) {
     // Only the question at departure depends on it.
@@ -285,11 +290,7 @@ export async function saveSignal(env: Env, userId: string, key: string, rec: Tri
 export async function saveSignals(env: Env, userId: string, items: { key: string; rec: TripRecord | null }[], nowMs: number): Promise<DayRecord | null> {
   const s = stub(env, userId);
   if (!s) return null;
-  const res = await s.fetch('https://trip/signal', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ date: sgtDate(nowMs), items, deleteAt: endOfDayMs(nowMs) }),
-  });
+  const res = await post(s, 'signal', { date: sgtDate(nowMs), items, deleteAt: endOfDayMs(nowMs) });
   if (!res.ok) throw new Error(`trip signal failed: ${res.status}`);
   return (await res.json()) as DayRecord;
 }
@@ -298,11 +299,7 @@ export async function saveSignals(env: Env, userId: string, items: { key: string
 export async function markFollowed(env: Env, userId: string, nowMs: number): Promise<DayRecord | null> {
   const s = stub(env, userId);
   if (!s) return null;
-  const res = await s.fetch('https://trip/followed', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ date: sgtDate(nowMs), at: nowMs, deleteAt: endOfDayMs(nowMs) }),
-  });
+  const res = await post(s, 'followed', { date: sgtDate(nowMs), at: nowMs, deleteAt: endOfDayMs(nowMs) });
   if (!res.ok) throw new Error(`trip followed failed: ${res.status}`);
   return (await res.json()) as DayRecord;
 }
@@ -331,11 +328,7 @@ export async function watchTrip(env: Env, userId: string, atMs: number, nowMs: n
   const s = stub(env, userId);
   if (!s) return;
   try {
-    await s.fetch('https://trip/watch', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ userId, date: sgtDate(nowMs), at: atMs, deleteAt: endOfDayMs(nowMs) }),
-    });
+    await post(s, 'watch', { userId, date: sgtDate(nowMs), at: atMs, deleteAt: endOfDayMs(nowMs) });
   } catch (err) {
     console.error('trip watch failed', err instanceof Error ? err.message : typeof err);
   }

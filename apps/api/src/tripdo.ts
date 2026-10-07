@@ -57,7 +57,7 @@ export class Trip {
   private async handle(req: Request): Promise<Response> {
     await loadCalendar(this.env);
     const url = new URL(req.url);
-    const day = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
+    const day = await this.storedDay();
 
     if (req.method === 'GET' && url.pathname === '/day') {
       const date = url.searchParams.get('date') ?? '';
@@ -144,7 +144,7 @@ export class Trip {
     if (!env || !userId) return;
     // Nobody to tell: stop waking until a request asks again.
     if ((await pushDevices(env, userId)) === 0) return;
-    const stored = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
+    const stored = await this.storedDay();
     const date = sgtDate(nowMs);
     const day = stored && stored.date === date ? stored : null;
     const ctx = { waitUntil: (p: Promise<unknown>) => this.state.waitUntil(p), passThroughOnException() {} } as unknown as ExecutionContext;
@@ -172,9 +172,12 @@ export class Trip {
     }
   }
 
+  private async storedDay(): Promise<DayRecord | null> {
+    return (await this.storage.get<DayRecord>('day')) ?? null;
+  }
+
   private async putPlan(date: string, key: string, plan: Boarded): Promise<DayRecord> {
-    const day = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
-    const next = today(day, date);
+    const next = today(await this.storedDay(), date);
     next.plans = { ...next.plans, [key]: plan };
     await this.storage.put('day', next);
     return next;
