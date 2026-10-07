@@ -111,11 +111,12 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
     const body = NO_BODY.has(res.status) ? null : await res.arrayBuffer();
     return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
   } catch (err) {
-    const name = (err as Error)?.name;
-    if (name === 'TimeoutError') throw new UpstreamUnreachable(`${what} timeout after ${ms}ms`, true);
-    // fetch rejects with a TypeError when the connection itself fails.
-    if (name === 'TypeError') throw new UpstreamUnreachable(`${what} unreachable: ${(err as Error).message}`, false);
-    throw err;
+    if ((err as Error)?.name === 'TimeoutError') throw new UpstreamUnreachable(`${what} timeout after ${ms}ms`, true);
+    // Anything else thrown here is the connection failing, whatever its
+    // class: Node throws a TypeError, workerd a plain Error ('Network
+    // connection lost.', 'internal error; reference = ...'). The signal is
+    // ours alone, so nothing else can abort it.
+    throw new UpstreamUnreachable(`${what} unreachable: ${(err as Error)?.message ?? String(err)}`, false);
   }
 }
 

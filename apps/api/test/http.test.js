@@ -105,10 +105,14 @@ test('timedFetch: a host that stalls mid-body, hangs or cannot be reached fails 
       return true;
     });
 
-    globalThis.fetch = async () => {
-      throw new TypeError('Network connection lost.');
-    };
-    await assert.rejects(timedFetch('feed', 'https://x.test/', {}, 50), (err) => err instanceof UpstreamUnreachable && !err.timedOut && /feed unreachable/.test(err.message));
+    // workerd's own errors for a refused connection and a failed DNS lookup
+    // are plain Errors, not TypeErrors as in Node.
+    for (const make of [() => new Error('Network connection lost.'), () => new Error('internal error; reference = abc'), () => new TypeError('fetch failed')]) {
+      globalThis.fetch = async () => {
+        throw make();
+      };
+      await assert.rejects(timedFetch('feed', 'https://x.test/', {}, 50), (err) => err instanceof UpstreamUnreachable && !err.timedOut && /feed unreachable/.test(err.message));
+    }
 
     // An answer, error statuses included, comes back whole and readable.
     globalThis.fetch = async () => new Response('busy', { status: 503, headers: { 'x-a': '1' } });
