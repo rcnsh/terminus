@@ -75,7 +75,7 @@ render(1024, 500, to: "\(out)/feature-graphic.png") {
 
     let para = NSMutableParagraphStyle()
     para.lineSpacing = 6
-    let line = NSAttributedString(string: "When to leave for class,\nnot just when the bus comes.", attributes: [
+    let line = NSAttributedString(string: "When to leave for class,\nand which bus to catch.", attributes: [
         .font: NSFont.systemFont(ofSize: 38, weight: .medium), .foregroundColor: muted, .paragraphStyle: para,
     ])
     line.draw(in: NSRect(x: 364, y: 500 - 262 - 110, width: 620, height: 110))

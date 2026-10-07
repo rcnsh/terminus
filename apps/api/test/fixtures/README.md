@@ -22,7 +22,7 @@
 **Provenance caveat:** that endpoint is `hewliyang/nus-nextbus-web`'s own
 SvelteKit server route, not the ConnectX FMS directly. The outer envelope
 (`{ etas: { ... }, degraded }`) is his; the row shape inside `timings` is
-passthrough -- `arrivalTime`, `nextArrivalTime`, `arrivalTime_veh_plate`,
+passthrough: `arrivalTime`, `nextArrivalTime`, `arrivalTime_veh_plate`,
 `arrivalTime_capacity`, `busStopCode` are FMS field names.
 
 So: trust the rows, treat the envelope as one of several `normalize()` must
@@ -31,8 +31,8 @@ current bus proxy's reply would be better still.
 
 ## What they establish
 
-- The list key is `timings`, under an `etas` envelope. Not `shuttles`.
-- Crowding is `arrivalTime_capacity` / `arrivalTime_ridership` -- a real
+- The list key is `timings` (not `shuttles`), under an `etas` envelope.
+- Crowding is `arrivalTime_capacity` / `arrivalTime_ridership`, a
   headcount against 88-seat buses, not a `passengers` string. Some vehicles
   report neither.
 - `arrivalTime: "0"` is a real value, distinct from `"-"`.

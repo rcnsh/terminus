@@ -111,7 +111,7 @@
     <string name="delete_account_text">你的课表和设置将被立即删除，应用会重置。由于账户未绑定邮箱，删除后无法恢复。</string>
     <string name="delete_account_title">删除这个账户？</string>
     <string name="detect">自动检测上车</string>
-    <string name="detect_hint">行程中，实时通知会使用你的位置判断你是否已上车、错过巴士或已到达，并在你的所有设备上同步行程。它会在行程中你打开 terminus，或点按其通知或小组件时开始。只保存判断结果，从不保存你的位置。</string>
+    <string name="detect_hint">行程中，实时通知会使用你的位置判断你是否已上车、错过巴士或已到达，并在你的所有设备上同步行程。它会在行程中你打开 terminus，或点按其通知或小组件时开始。不会保存你的位置，只保存判断结果。</string>
     <string name="detect_needs">这需要 terminus 获得精确位置和通知权限。</string>
     <string name="device_removed">设备已移除。请在应用里重新配对。</string>
     <string name="directions_to">到 %1$s 的路线</string>
@@ -131,7 +131,7 @@
     <string name="friday_short">周五</string>
     <string name="gap_home">空档超过这个时长就回家</string>
     <string name="get_around">你怎么出行</string>
-    <string name="get_around_sub">步行按校园里真实的路线计算。你的步速决定要走多久。</string>
+    <string name="get_around_sub">步行按校园里的路线计算。你的步速决定要走多久。</string>
     <string name="get_started">开始</string>
     <string name="getting_off_at">在 %1$s 下车</string>
     <string name="go_later">今天晚些时候出发…</string>
@@ -338,7 +338,7 @@
     <string name="sunday">星期日</string>
     <string name="sunday_short">周日</string>
     <string name="svc_from">在 %2$s 搭 %1$s</string>
-    <string name="tagline">告诉你什么时候出发去上课，而不只是巴士什么时候来。</string>
+    <string name="tagline">告诉你什么时候出发去上课，该搭哪班巴士。</string>
     <string name="taken_off_today">已从今天移除 %1$s</string>
     <string name="tap_to_pair">点按以配对这部手机</string>
     <string name="tap_to_refresh">点按以刷新</string>
@@ -379,7 +379,7 @@
     <string name="welcome_caption">设置大约只要一分钟，不需要邮箱，也不用登录。</string>
     <string name="where">地点</string>
     <string name="where_live">你住在哪里？</string>
-    <string name="where_live_sub">早上在哪里搭巴士、晚上回到哪里。只保存车站，绝不保存你住在哪里。</string>
+    <string name="where_live_sub">早上在哪里搭巴士、晚上回到哪里。只保存车站。</string>
     <string name="which_setup">保留哪个设置？</string>
     <string name="which_setup_text">%1$s 已经有课表和设置，这部手机也有。保留其中一个：</string>
     <string name="works_once">只能用一次，有效 10 分钟。</string>
@@ -389,7 +389,7 @@
     <string name="your_timetable_sub">粘贴你的 NUSMods 分享链接。每节课会对应离教室最近的车站。</string>
     <string name="busy_try_again">terminus 正忙，请一分钟后再试。</string>
     <string name="where_you_live">你的住处</string>
-    <string name="only_stops_saved">只保存车站，不会保存你住在哪里。</string>
+    <string name="only_stops_saved">只保存车站。</string>
     <string name="residence">宿舍</string>
     <string name="off_campus_short">校外</string>
     <string name="your_stop">你的车站</string>
@@ -507,7 +507,7 @@
     <string name="notify_leave_more">之后更新你的乘车情况或下一种到达方式。</string>
     <string name="live_notification_short">下一班巴士和倒计时，直到你到达</string>
     <string name="detect_short">在你的所有设备上同步行程</string>
-    <string name="during_trip_hint">实时通知每 30 秒检查一次新时间，会更耗电。自动检测上车会在行程中使用你的位置，从你打开 terminus，或点按其通知或小组件时开始。只保存判断结果，从不保存你的位置。</string>
+    <string name="during_trip_hint">实时通知每 30 秒检查一次新时间，会更耗电。自动检测上车会在行程中使用你的位置，从你打开 terminus，或点按其通知或小组件时开始。不会保存你的位置，只保存判断结果。</string>
     <string name="heading_your_devices">你的设备</string>
     <string name="this_phone_tag">这部手机</string>
     <string name="auto">自动</string>

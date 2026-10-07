@@ -111,7 +111,7 @@
     <string name="delete_account_text">Your timetable and settings will be deleted immediately and the app will reset. Without an email on the account, they can\'t be recovered.</string>
     <string name="delete_account_title">Delete this account?</string>
     <string name="detect">Notice when I board</string>
-    <string name="detect_hint">During a trip, the live notification uses your location to detect when you board, miss a bus or arrive, and keeps your plan in sync across your devices. It starts when you open terminus, or tap its notification or widget, during a trip. Only the result is stored, never your location.</string>
+    <string name="detect_hint">During a trip, the live notification uses your location to detect when you board, miss a bus or arrive, and keeps your plan in sync across your devices. It starts when you open terminus, or tap its notification or widget, during a trip. Your location isn\'t stored, only the result.</string>
     <string name="detect_needs">terminus needs precise location and notifications for this.</string>
     <string name="device_removed">Device removed. Pair again in the app.</string>
     <string name="directions_to">Directions to %1$s</string>
@@ -131,7 +131,7 @@
     <string name="friday_short">Fri</string>
     <string name="gap_home">Go home in gaps longer than</string>
     <string name="get_around">How you get around</string>
-    <string name="get_around_sub">Walks follow the real paths on campus. Your pace sets how long they take.</string>
+    <string name="get_around_sub">Walks follow the paths on campus. Your pace sets how long they take.</string>
     <string name="get_started">Get started</string>
     <string name="getting_off_at">Getting off at %1$s</string>
     <string name="go_later">Go later today at…</string>
@@ -338,7 +338,7 @@
     <string name="sunday">Sunday</string>
     <string name="sunday_short">Sun</string>
     <string name="svc_from">%1$s from %2$s</string>
-    <string name="tagline">When to leave for class, not just when the bus comes.</string>
+    <string name="tagline">When to leave for class, and which bus to catch.</string>
     <string name="taken_off_today">%1$s removed from today</string>
     <string name="tap_to_pair">Tap to pair this phone</string>
     <string name="tap_to_refresh">Tap to refresh</string>
@@ -379,7 +379,7 @@
     <string name="welcome_caption">About a minute to set up. No email or sign-in needed.</string>
     <string name="where">Where</string>
     <string name="where_live">Where do you live?</string>
-    <string name="where_live_sub">Where you catch the bus in the morning and head back to at night. Only the stops are saved, never where you live.</string>
+    <string name="where_live_sub">Where you catch the bus in the morning and head back to at night. Only the stops are saved.</string>
     <string name="which_setup">Which setup?</string>
     <string name="which_setup_text">%1$s already has a timetable and settings, and so does this phone. Keep one:</string>
     <string name="works_once">Works once, for 10 minutes.</string>
@@ -389,7 +389,7 @@
     <string name="your_timetable_sub">Paste your NUSMods share link. Each class goes to the stop nearest its room.</string>
     <string name="busy_try_again">terminus is busy. Try again in a minute.</string>
     <string name="where_you_live">Where you live</string>
-    <string name="only_stops_saved">Only your stops are saved, never where you live.</string>
+    <string name="only_stops_saved">Only your stops are saved.</string>
     <string name="residence">Residence</string>
     <string name="off_campus_short">Off campus</string>
     <string name="your_stop">Your stop</string>
@@ -507,7 +507,7 @@
     <string name="notify_leave_more">Then updates on your ride or the next way there.</string>
     <string name="live_notification_short">The next bus and a countdown, until you arrive</string>
     <string name="detect_short">Keeps your plan in sync across your devices</string>
-    <string name="during_trip_hint">The live notification checks for new times every 30 seconds, which uses more battery. Noticing when you board uses your location during a trip, from when you open terminus or tap its notification or widget. Only the result is stored, never your location.</string>
+    <string name="during_trip_hint">The live notification checks for new times every 30 seconds, which uses more battery. Noticing when you board uses your location during a trip, from when you open terminus or tap its notification or widget. Your location isn\'t stored, only the result.</string>
     <string name="heading_your_devices">Your devices</string>
     <string name="this_phone_tag">This phone</string>
     <string name="auto">Auto</string>

@@ -26,7 +26,7 @@ affiliated with NUS.
 
 ## The rules that matter most
 
-1. **The server renders the answer; clients don't compute it.** `/me/next`
+1. **The server computes the answer.** `/me/next`
    returns a ready-made card (labels, times, which bus). Clients only count
    down the clock. Never move logic into a client: four clients would then
    drift apart.
@@ -37,10 +37,9 @@ affiliated with NUS.
    LTA DataMall, the public buses' feed (`src/lta.ts`): one call per stop
    per 15 s, through the same cache (`src/edgecache.ts`).
 
-   **One exception, and only one: the timelapse recorder**
+   **One exception: the timelapse recorder**
    (`src/timelapse.ts`, `src/timelapsedo.ts`). It is the only code that
-   reads the NUS feed on a schedule rather than because someone asked.
-   Everything else fetches on demand. It is bounded on every side:
+   reads the NUS feed on a schedule rather than on request. Its limits:
    - **Rate:** each service's live buses once per `TIMELAPSE.pollMs` (30 s),
      spread across that time, never below `MIN_POLL_MS` (15 s, enforced in
      code). Arrivals are never polled.
@@ -53,8 +52,7 @@ affiliated with NUS.
      without a deploy. Otherwise the `TIMELAPSE_ENABLED` var applies: on for
      the stable site, off for the beta, off when unset.
 
-   At most 17,280 requests a day, every one counted on the dashboard. This
-   is not a precedent. Don't add another poller, don't widen this one's
+   At most 17,280 requests a day, every one counted on the dashboard. Don't add another poller, don't widen this one's
    hours or rate, don't point it at arrivals or LTA, and don't reuse its
    alarm for anything else that calls NUS.
 3. **`normalize()` / `normalizeBuses()` in `src/fms.ts` are the only code that
@@ -95,7 +93,7 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - In a Linux cloud container without the Android SDK or Xcode, you can't
   build those apps. Check pure-Kotlin logic another way if you can (for
   example `MapData.kt` with its JUnit test, using a standalone `kotlinc`
-  plus `org.json` and JUnit jars), then let CI build the app. Say plainly
+  plus `org.json` and JUnit jars), then let CI build the app. List
   what you couldn't run.
 
 ### The dev stub
@@ -253,7 +251,7 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
   recommended only when it beats the bus by `WALK.beatsBusByS`.
 - **Quality ladder.** Each answer says how sure it is: `live`, `scheduled` (a
   headway guess inside operating hours, labelled as such), and so on. Never
-  dress up a guess as live.
+  label a guess as live.
 - **Feed etiquette.** The feed answers through a 15 s edge cache per stop.
   On failure it serves a stale answer if one exists (up to `staleMaxS`), and
   a failed stop isn't asked again for `failMemoS`. A version or key
@@ -279,9 +277,9 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
     it's shown **at a stop or between two** (`sectionOf`): within 40 m of a
     stop along its line, at that stop's dot (`at`, `slot` when several are
     there); otherwise halfway between the stop it passed and the next, or
-    spread evenly with several (thirds for two), never back on the same
-    stretch. Between stops it comes with its `stretch`, which a tapped bus
-    highlights, so the midpoint doesn't pass for where it is. A bus over 50 m off its line isn't shown.
+    spread evenly with several (thirds for two). On the same stretch, a
+    bus's spot never moves backwards; it waits where it was. Between stops it comes with its `stretch`, which a tapped bus
+    highlights, so the midpoint isn't read as its position. A bus over 50 m off its line isn't shown.
   - Clients poll every 5 s. A bus at a stop is drawn a few pixels beside
     the dot, on the kerb side (left of its heading), the ones behind it
     further back; a bus that changes place slides there along the line in
@@ -299,10 +297,10 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
   shelter is the same stop with a `publicCode`; a stop of its own keeps
   LTA's five-digit code. A two-way service is two routes, `151/1` and
   `151/2`, shown as `151` (`svcName()`). Ride time comes from metres along
-  the route (`along`), not a count of stops. A public bus is the headline
+  the route (`along`) rather than a count of stops. A public bus is the headline
   only when it beats the free bus by `PUBLIC.fareWorthS`; its leg carries
   `paid: true`, and a timetabled time (LTA's `Monitored: 0`) is
-  `scheduled`, never `live`. Nothing public reaches the map.
+  `scheduled`, never `live`. The map shows no public buses.
 - **Timelapse (`src/timelapse.ts`, `src/timelapsedo.ts`).** Rule 2's one
   exception: a Durable Object per Singapore day records every service's
   buses every 30 s through `getBuses()`, inside 06:30 to 00:30, and writes
@@ -333,8 +331,8 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
 - Place and service names (KR MRT, COM3, D2) stay English in both.
 - One glossary for all of it, at the top of `src/i18n.ts` (class 课, stop
   车站, favourite 收藏, packed 很挤, email address 邮箱, …), with a space
-  between Chinese and Latin letters or digits. Change a word everywhere or
-  nowhere.
+  between Chinese and Latin letters or digits. When you change a word, change it
+  everywhere.
 
 ## Tests
 
@@ -382,8 +380,7 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
 - **Signing keys.** The Android keystore (`~/.gradle/gradle.properties`
   `TERMINUS_*`), the Mac certificate (in the login keychain, from
   `~/.terminus/mac-signing.p12`) and the Sparkle key
-  (`~/.terminus/sparkle-ed25519.key`) live off-repo on the owner's Mac,
-  and nowhere else.
+  (`~/.terminus/sparkle-ed25519.key`) live off-repo, only on the owner's Mac.
 
 ## Code style
 

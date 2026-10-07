@@ -14,7 +14,7 @@ const quality = {
   type: 'string',
   enum: ['live', 'scheduled', 'unknown', 'stale', 'ended'],
   description:
-    'How reliable the answer is, best to worst. `live`: a real ETA for a tracked bus. ' +
+    'How reliable the answer is, best to worst. `live`: an ETA from the feed for a tracked bus. ' +
     '`scheduled`: the feed responded but listed no bus, so the time is an estimate from the usual gap between buses. ' +
     '`unknown`: the feed could not be reached, so no time is given. ' +
     '`stale`: the last cached live answer, returned because the feed is down; `asOf` is when it was originally fetched. ' +
@@ -109,7 +109,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           'when you need to cross the road.',
         '',
         'Every answer has a `quality` field. When the upstream feed is down, the API returns the last cached ' +
-          'answer with its original `asOf` time, or says that live times are unavailable. It does not make up a time.',
+          'answer with its original `asOf` time, or says that live times are unavailable.',
         '',
         'The answers need an API key: sign in at /account, create one under API keys, and send it in the ' +
           '`x-api-key` header (or as a bearer token). A signed-in session or a paired device works too. Each key ' +
@@ -267,7 +267,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Live buses on one service',
           description:
-            'Which stop each bus on a service is at, or which two stops it is between, how full it is and the stop it reaches next. Positions come from the live feed through a 5-second cache per service. The feed gives a new position only every 15 to 20 seconds, too far apart to draw a bus where it really is, so each bus is shown at a stop or between two. Within 40 metres of one of its stops, measured along its route, it is at that stop (`at`), with `lat` and `lon` the stop’s own; a map draws it just beside the stop, and several there side by side by `slot`. Otherwise it is halfway between the stop it passed and its next one, on the route line, or spread evenly between them when there are several (a third and two thirds of the way for two); `stretch` gives that part of the route, so a map can show the bus is somewhere along it. On a road the route uses both ways, its side follows from where it has been: a bus only moves forward along its route, so it keeps its side and its next stop only moves on. A bus away from its route (such as one parked at the depot) is left out. `plate` is the bus’s number plate, as painted on it; `id` stays the same for a bus while it runs, so a map can move it from one place to the next.',
+            'Which stop each bus on a service is at, or which two stops it is between, how full it is and the stop it reaches next. Positions come from the live feed through a 5-second cache per service. The feed gives a new position only every 15 to 20 seconds, too far apart to draw a bus where it is, so each bus is shown at a stop or between two. Within 40 metres of one of its stops, measured along its route, it is at that stop (`at`), with `lat` and `lon` the stop’s own; a map draws it just beside the stop, and several there side by side by `slot`. Otherwise it is halfway between the stop it passed and its next one, on the route line, or spread evenly between them when there are several (a third and two thirds of the way for two); `stretch` gives that part of the route, so a map can show the bus is somewhere along it. On a road the route uses both ways, its side follows from where it has been: a bus only moves forward along its route, so it keeps its side and its next stop only moves on. A bus away from its route (such as one parked at the depot) is left out. `plate` is the bus’s number plate, as painted on it; `id` stays the same for a bus while it runs, so a map can move it from one place to the next.',
           operationId: 'getBuses',
           parameters: [
             { name: 'svc', in: 'query', required: true, description: 'Service code, case-insensitive.', schema: { type: 'string' }, example: 'D2' },
@@ -1405,12 +1405,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               format: 'date-time',
               description: 'When you reach the destination stop, by bus or on foot.',
             },
-            arrived: { type: 'boolean', description: 'Already at the destination (either side of the road). No bus, no countdown.' },
+            arrived: { type: 'boolean', description: 'Already at the destination (either side of the road), so there is no bus or countdown.' },
             leave: {
               type: ['object', 'null'],
               description:
                 'The latest time to set off. On `/me/next` for a class, the latest that still gets you there on time; otherwise, for the bus in `departsAt`. ' +
-                'When you will be late whatever you do, `at` is now. Null or absent when you should simply go now. Once `at` has passed, show "Leave now".',
+                'When you will be late whatever you do, `at` is now. Null or absent when you should go now. Once `at` has passed, show "Leave now".',
               required: ['at', 'estimated', 'svc', 'stop', 'board', 'arrive'],
               properties: {
                 at: { type: 'string', format: 'date-time' },
@@ -1460,7 +1460,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             color: { type: 'string', description: 'The service’s colour as painted on the bus, `#rrggbb`.' },
             stop: { type: 'string', description: 'Where to board, short name.' },
             board: { type: 'string', description: 'When it leaves ("4:05 PM", "~4:05 PM").' },
-            paid: { type: 'boolean', enum: [true], description: 'A public bus, with a fare. Absent for a shuttle. Clients mark it, so a fare is never a surprise.' },
+            paid: { type: 'boolean', enum: [true], description: 'A public bus, with a fare. Absent for a shuttle. Clients mark it, so the user knows there is a fare.' },
           },
         },
         BusLeg: {
