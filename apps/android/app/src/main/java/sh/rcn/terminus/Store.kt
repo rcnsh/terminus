@@ -57,7 +57,9 @@ class Store(context: Context) {
 
     /** The widget's last answer, as the raw JSON plus when it was fetched. */
     fun saveAnswer(json: JSONObject, fetchedAtMs: Long) {
-        prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs) }
+        // A fresh answer from anywhere (the app, the live notification, a
+        // skip) ends a run of failed refreshes, so the back-off starts over.
+        prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).putInt(KEY_REFRESH_FAILS, 0) }
         // The app shortcuts follow the saved places (a no-op when they haven't changed).
         runCatching { Shortcuts.update(app, NextAnswer.parse(json).places) }
     }
