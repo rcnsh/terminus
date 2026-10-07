@@ -1368,6 +1368,24 @@ test('D1 down: the answers and /me say 503 with Retry-After; one dropped query i
       assert.equal(r.headers.get('retry-after'), '30');
       assert.deepEqual(await r.json(), { error: "terminus can't reach your account right now; try again in a minute" });
     }
+
+    // D1's overload message says "too many", yet it is an outage all the same.
+    env.DB.prepare = () => {
+      throw new Error('D1 DB is overloaded. Too many requests queued.');
+    };
+    for (const path of ['/campus', '/me']) assert.equal((await call(env, path, { cookie })).status, 503, path);
+
+    // A fault in the query, as when a deploy runs ahead of its migration,
+    // is a 500 and isn't run twice.
+    let tries = 0;
+    env.DB.prepare = () => {
+      tries++;
+      throw new Error('D1_ERROR: no such column: last_used: SQLITE_ERROR');
+    };
+    const broken = await call(env, '/campus', { cookie });
+    assert.equal(broken.status, 500);
+    assert.equal(broken.headers.get('retry-after'), null);
+    assert.equal(tries, 1);
   } finally {
     env.DB.prepare = prepare;
     console.error = log;
@@ -1436,7 +1454,7 @@ test('a code whose sign-in fails part way can be typed again', async () => {
 });
 
 test('only an unreachable D1 counts as an outage; a fault in the query stays a 500', () => {
-  for (const msg of ['D1_ERROR: Network connection lost.', 'D1 DB is overloaded. Requests queued for too long.', 'D1_ERROR: internal error']) {
+  for (const msg of ['D1_ERROR: Network connection lost.', 'D1 DB is overloaded. Requests queued for too long.', 'D1 DB is overloaded. Too many requests queued.', 'D1_ERROR: internal error']) {
     assert.equal(d1Unavailable(new Error(msg)), true, msg);
   }
   for (const msg of [
