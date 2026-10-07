@@ -107,7 +107,7 @@ pnpm run deploy
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
-| `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
+| `GET /health` | Graph age and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). `?probe=1` tests auth. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
 | `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set, and the timelapse recorder's polls by what they cost NUS). Needs `x-health-token`; anything else gets a 404. |
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
@@ -383,6 +383,26 @@ account into another one.
   priority for due and missed; the app fetches /me/next
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).
+  - A phase counts as pushed once a device got it (or none could be sent
+    to); when every send failed, the next wake tries again. A wake that
+    throws (D1, the feed) is tried again after 30 s, doubling up to 8 min.
+    The wake owed is kept as `waking` until the wake is done, so an alarm
+    the platform runs again still wakes.
+  - The wake's last writes hold the object like a POST: a `/watch` for
+    sooner, or a `/clear`, that came in meanwhile stands.
+  - At the Worker's compatibility date `deleteAll()` leaves the alarm, so
+    `/clear` and midnight delete it first.
+  - Each call to Firebase has a 5 s limit, and each device is sent to on
+    its own, so one that fails or hangs doesn't keep the push from the
+    rest. A token is dropped only when FCM says it's unregistered (404,
+    `UNREGISTERED`) or names it as the bad value; any other 400 is logged
+    with FCM's code and the token kept.
+  - The Worker's calls to the Trip object time out after 3 s
+    (`TRIP_TIMEOUT_MS`): the card is answered without its trip state, as
+    when the object fails.
+  - A push secret that's set but won't parse turns that push off; it's
+    logged once per isolate, and `/health` says which push is usable
+    (`config.pushAndroid`, `config.pushWeb`).
 
 The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 
