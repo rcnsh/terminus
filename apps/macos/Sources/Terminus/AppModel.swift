@@ -736,7 +736,11 @@ final class AppModel {
         loop = Task {
             while !Task.isCancelled {
                 var ok = true
-                if !paused && paired { ok = await refresh() }
+                if !paused && paired {
+                    ok = await refresh()
+                    // The leave reminders say whether their times still stand.
+                    if ok { LeaveNotifier.shared.confirmed(plan) } else { LeaveNotifier.shared.unconfirmed(since: updated) }
+                }
                 try? await Task.sleep(for: .seconds(nextDelay(failed: !ok)))
             }
         }
@@ -889,7 +893,11 @@ final class AppModel {
         ]
         for (center, name) in pauses {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.paused = true }
+                MainActor.assumeIsolated {
+                    self?.paused = true
+                    // Nothing refreshes them until it's back.
+                    LeaveNotifier.shared.unconfirmed(since: self?.updated)
+                }
             }
         }
         for (center, name) in resumes {
