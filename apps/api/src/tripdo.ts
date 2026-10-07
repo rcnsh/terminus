@@ -14,7 +14,7 @@
 
 import { loadCalendar } from './calendarsync.ts';
 import type { Env } from './types.ts';
-import type { Boarded, DayRecord, TripRecord } from './trip.ts';
+import { type Boarded, type DayRecord, type TripRecord, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
 import { nudgeUser, pushDevices } from './push.ts';
@@ -145,7 +145,7 @@ export class Trip {
     // Nobody to tell: stop waking until a request asks again.
     if ((await pushDevices(env, userId)) === 0) return;
     const stored = ((await this.storage.get<DayRecord>('day')) ?? null) as DayRecord | null;
-    const date = new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10);
+    const date = sgtDate(nowMs);
     const day = stored && stored.date === date ? stored : null;
     const ctx = { waitUntil: (p: Promise<unknown>) => this.state.waitUntil(p), passThroughOnException() {} } as unknown as ExecutionContext;
     const card = await tripCardFor(env, ctx, DEPS, userId, day, nowMs, (key, plan) => this.putPlan(date, key, plan).then(() => undefined));

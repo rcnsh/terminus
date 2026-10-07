@@ -17,6 +17,7 @@
 import type { Env, Leave, MeAnswer } from './types.ts';
 import { haversineM } from './geo.ts';
 import { sgt } from './config.ts';
+import { sgtDate } from './calendar.ts';
 import { GRAPH } from './graph.ts';
 import { indexGraph, rideStops } from './resolve.ts';
 import { shortStop } from './format.ts';
@@ -178,10 +179,8 @@ export const ASSUME_MS = 3 * 60_000;
 /** A plate is picked at the tap only from a bus due at the stop within this. */
 export const PLATE_WINDOW_S = 5 * 60;
 
-/** "2026-09-30", the Singapore day a signal belongs to. */
-export function sgtDate(nowMs: number): string {
-  return new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10);
-}
+// The Singapore day a signal belongs to ("2026-09-30"), as calendar.ts has it.
+export { sgtDate };
 
 /** Next Singapore midnight, epoch ms: when the day's signals are deleted. */
 export function endOfDayMs(nowMs: number): number {

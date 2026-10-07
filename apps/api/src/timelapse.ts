@@ -28,6 +28,7 @@ import { canReadTimelapse } from './admin.ts';
 import { json } from './http.ts';
 import { buildCampusMap } from './campus.ts';
 import { GRAPH } from './graph.ts';
+import { sgtDate } from './calendar.ts';
 
 /* ------------------------------------------------------------------ */
 /* When it records                                                     */
@@ -51,8 +52,6 @@ const minutesOf = (hhmm: string) => {
 const DAY_MS = 86_400_000;
 const SGT_MS = 8 * 3_600_000;
 
-/** The Singapore date [ms] falls on, YYYY-MM-DD. */
-export const sgtDate = (ms: number) => new Date(ms + SGT_MS).toISOString().slice(0, 10);
 
 /** Midnight at the start of Singapore date [date], epoch ms. */
 const midnightOf = (date: string) => Date.parse(`${date}T00:00:00Z`) - SGT_MS;
