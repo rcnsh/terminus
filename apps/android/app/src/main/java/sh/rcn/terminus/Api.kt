@@ -879,14 +879,17 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                 conn.requestMethod = method
                 // Fast (widgets, a push, an alarm's broadcast, the live
                 // notification) must finish inside the ~10 s a broadcast or a
-                // push handler gets. The Worker gives each NUS call up to 5 s,
-                // and a cold /me/next mints a guest token first, so the read
-                // waits 8 s: the mint and one slow call. A connection is up in
-                // well under a second, or not at all within 3. The rare worst
+                // push handler gets: 2 s to connect plus 7 s to read stays
+                // under it. The Worker gives each NUS call up to 5 s, and a
+                // cold /me/next mints a guest token first, which usually
+                // fits in 7 s. A connection is up in well under a second, or
+                // not at all within 2. The read timeout counts each wait for
+                // bytes, but the answer is one small JSON body sent at once,
+                // so it is in effect the wait for the reply. The rare worst
                 // case (a re-mint and a retry, ~20 s) is left to the next
                 // refresh rather than overrunning the budget.
-                conn.connectTimeout = if (fast) 3_000 else 8_000
-                conn.readTimeout = if (fast) 8_000 else 10_000
+                conn.connectTimeout = if (fast) 2_000 else 8_000
+                conn.readTimeout = if (fast) 7_000 else 10_000
                 conn.setRequestProperty("accept", "application/json")
                 // So the server can tell apps and versions apart (the User-Agent only says Dalvik).
                 conn.setRequestProperty("x-terminus-client", CLIENT)

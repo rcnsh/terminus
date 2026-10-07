@@ -15,7 +15,6 @@ import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.widget.finishAsync
-import sh.rcn.terminus.widget.isOld
 
 /**
  * "Time to leave" for the next class, and then the trip, in one notification.
@@ -154,8 +153,9 @@ object LeaveAlerts {
         }
         val store = Store(ctx)
         // Posted from the last answer when a fresh one couldn't be had
-        // (offline): past its staleAt, its times aren't confirmed.
-        val body = if (isOld(answer, now)) {
+        // (offline): past its staleAt, its times aren't confirmed. Not
+        // isOld, which also counts a card this version couldn't read.
+        val body = if (card?.staleAtMs?.let { now >= it } == true) {
             store.lastAnswer()?.second?.let { listOf(L.s(R.string.unconfirmed_checked, fmt(it)), said).filter { s -> s.isNotEmpty() }.joinToString(" · ") } ?: said
         } else {
             said
@@ -269,8 +269,9 @@ class LeaveReceiver : BroadcastReceiver() {
         when (intent.action) {
             // A fresh answer re-arms or posts, through Refresher -> LeaveAlerts.arm.
             // Fetched right here: the alarm's idle allowance is seconds long,
-            // and a queued job could run after the heads-up was due.
-            LeaveAlerts.ACTION_CHECK -> finishAsync(Dispatchers.IO) { Refresher.refresh(context, fast = true) }
+            // and a queued job could run after the heads-up was due. Only
+            // /me/next here; the day plan and chosen widgets follow in a job.
+            LeaveAlerts.ACTION_CHECK -> finishAsync(Dispatchers.IO) { Refresher.refresh(context, fast = true, extras = false) }
             LeaveAlerts.ACTION_NOW -> LeaveAlerts.leaveNow(context)
             LeaveAlerts.ACTION_RIDE -> LeaveAlerts.redrawRide(context)
             LeaveAlerts.ACTION_SKIP -> {
