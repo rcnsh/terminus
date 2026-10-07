@@ -107,6 +107,19 @@ test('cron: a KV failure in one step does not stop the others', async () => {
   assert.ok(cleaned, 'housekeeping still ran');
 });
 
+test('cron: a failed step is counted with the errors on the dashboard', async () => {
+  const rows = [];
+  const e = { ...env(), AE: { writeDataPoint: (p) => rows.push(p) } };
+  e.KV.put = async () => { throw new Error('KV write quota'); };
+  const orig = console.error;
+  console.error = () => {};
+  await runCron(e, 1000);
+  console.error = orig;
+  const failed = rows.filter((r) => r.blobs[0] === 'error').map((r) => r.blobs[1]);
+  assert.ok(failed.includes('cron upstream'), failed.join());
+  assert.ok(rows.every((r) => r.indexes[0] === 'error'));
+});
+
 test('calendar: warns once a week inside the last 45 days, not before', async () => {
   const e = env();
   const through = '2027-08-23';
