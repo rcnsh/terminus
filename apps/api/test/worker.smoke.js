@@ -896,16 +896,28 @@ test('downloads serve whatever latest.json points at', async () => {
     async get(k) {
       if (!files.has(k)) return null;
       const v = files.get(k);
-      return { body: v, size: v.length, json: async () => JSON.parse(v) };
+      reads.push(k);
+      return { body: v, size: v.length, json: async () => JSON.parse(v), text: async () => v };
     },
   };
+  const reads = [];
   const env = { ...makeEnv(), DOWNLOADS: bucket };
-  const get = async (p) => (await call(p, { fetchImpl: makeFetch({}), env })).res;
+  // latest.json and the appcast are kept five minutes: a put shows once
+  // that has passed (the clock moves on with each).
+  let at = FROZEN_NOW;
+  const putLater = (k, v) => {
+    put(k, v);
+    at += 300_000;
+  };
+  const get = async (p) => {
+    const cache = installGlobals(makeFetch({}), at);
+    return (await call(p, { env, cache })).res;
+  };
 
   assert.equal((await get('/download/android')).status, 404, 'no release yet');
   put('releases/1.0.0/terminus-1.0.0.apk', 'APK');
   put('releases/1.0.0/terminus-1.0.0-mac.zip', 'ZIP');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.0', released: '2026-09-29',
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.0/terminus-1.0.0-mac.zip', sha256: 'bb', size: 3 },
@@ -922,7 +934,7 @@ test('downloads serve whatever latest.json points at', async () => {
 
   // From 1.3.8 the Mac app is a signed DMG.
   put('releases/1.0.1/terminus-1.0.1.dmg', 'DMG');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.1', released: '2026-10-01',
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
@@ -930,7 +942,7 @@ test('downloads serve whatever latest.json points at', async () => {
   // One APK per CPU type from 2.1: the arm64 one unless the app asks for its own.
   put('releases/1.0.1/terminus-1.0.1.apk', 'ARM64');
   put('releases/1.0.1/terminus-1.0.1-armv7.apk', 'ARMV7');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.1', released: '2026-10-01',
     android: { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
     androidAbis: {
@@ -952,10 +964,17 @@ test('downloads serve whatever latest.json points at', async () => {
 
   // Sparkle: the appcast, and release files by their versioned path.
   assert.equal((await get('/download/appcast.xml')).status, 404, 'no appcast yet');
-  put('appcast.xml', '<rss/>');
+  putLater('appcast.xml', '<rss/>');
   const feed = await get('/download/appcast.xml');
   assert.equal(feed.headers.get('content-type'), 'application/xml; charset=utf-8');
   assert.equal(await feed.text(), '<rss/>');
+  // Read from R2 once in five minutes, not on every request.
+  assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.1');
+  const before = reads.length;
+  assert.equal(await (await get('/download/appcast.xml')).text(), '<rss/>');
+  assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.1');
+  assert.equal((await get('/download/latest.json')).headers.get('cache-control'), 'public, max-age=300');
+  assert.deepEqual(reads.slice(before), [], 'both kept');
   const byPath = await get('/download/releases/1.0.1/terminus-1.0.1.dmg');
   assert.equal(byPath.status, 200);
   assert.equal(byPath.headers.get('content-type'), 'application/x-apple-diskimage');
@@ -978,7 +997,17 @@ test('/status.json: the feed state and outages, public and cached', async () => 
   const now = Date.now();
   await kv.put('monitor:upstream', JSON.stringify({ up: false, since: now - 3_600_000, reason: 'auth rejected: code=10009 secret detail', checkedAt: now - 60_000 }));
   await kv.put('monitor:incidents', JSON.stringify([{ start: now - 3_600_000, end: null, cause: 'version' }]));
-  res = (await call('/status.json', { fetchImpl: makeFetch({}), env })).res;
+  // Each isolate reads the records once a minute, not three KV reads a request.
+  const cache = installGlobals(makeFetch({}), now + 59_000);
+  let reads = 0;
+  const get = kv.get.bind(kv);
+  kv.get = (...a) => (reads++, get(...a));
+  res = (await call('/status.json', { env, cache })).res;
+  assert.equal((await res.json()).feed, 'unknown', 'kept for a minute');
+  assert.equal(reads, 0);
+  Date.now = () => now + 60_000;
+  res = (await call('/status.json', { env, cache })).res;
+  assert.equal(reads, 3);
   assert.equal(res.headers.get('cache-control'), 'public, max-age=60');
   const s = await res.json();
   assert.equal(s.feed, 'down');

@@ -30,7 +30,7 @@ import { phaseAt, sgtMinute } from './pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
-import { readIncidents, readPublicFeed, readUpstream, runCron } from './monitor.ts';
+import { readUpstream, runCron, statusRecords } from './monitor.ts';
 import { ltaConfigured } from './lta.ts';
 import { calendarThrough } from './calendar.ts';
 import { llmsTxt, robotsTxt, SITEMAP } from './seo.ts';
@@ -283,7 +283,7 @@ const CRON_STALE_MS = 40 * 60_000;
  * the cron sees it, and recent outages. Causes are a kind, never NUS's error.
  */
 async function handleStatus(env: Env, nowMs: number): Promise<Response> {
-  const [u, incidents, pub] = await Promise.all([readUpstream(env), readIncidents(env), readPublicFeed(env)]);
+  const { upstream: u, incidents, publicFeed: pub } = await statusRecords(env, nowMs);
   const iso = (ms: number | null) => (ms == null ? null : new Date(ms).toISOString());
   return json(
     {
@@ -305,6 +305,8 @@ async function handleStatus(env: Env, nowMs: number): Promise<Response> {
 async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Promise<Response> {
   const idx = indexGraph(GRAPH);
   const t = sgt(nowMs);
+  // Read fresh, not through /status.json's minute-long memo: the uptime
+  // check and the operator want the record as it is.
   const u = await readUpstream(env);
   const cronStale = u ? nowMs - u.checkedAt > CRON_STALE_MS : null;
   const through = calendarThrough();
@@ -420,7 +422,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         });
       }
     }
-    const dl = await handleDownload(url.pathname, env, url);
+    const dl = await handleDownload(url.pathname, env, url, nowMs);
     if (dl) return dl;
     // A recorded day of buses: operator only, like /admin/stats.
     const timelapse = await handleTimelapse(req, url, env, nowMs);

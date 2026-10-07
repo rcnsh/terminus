@@ -10,30 +10,22 @@
  */
 
 import type { Env } from './types.ts';
-import { type Latest, RELEASE_VERSION } from './downloads.ts';
+import { RELEASE_VERSION, latestRelease, resetReleaseMemos } from './downloads.ts';
 import { authenticate } from './accounts.ts';
-
-/** latest.json changes only with a release; /download/latest.json is cached as long. */
-const VERSION_MEMO_MS = 300_000;
-let memo: { at: number; version: string | null } | null = null;
 
 /** Only a version as release.sh writes it goes into the page. */
 const VERSION = new RegExp(`^${RELEASE_VERSION}$`);
 
-/** The current release's version, from latest.json, or null. */
+/** The current release's version, from latest.json (kept as downloads.ts keeps it), or null. */
 export async function latestVersion(env: Env, nowMs: number): Promise<string | null> {
   if (!env.DOWNLOADS) return null;
-  if (memo && nowMs - memo.at < VERSION_MEMO_MS) return memo.version;
-  let version: string | null = null;
   try {
-    const obj = await env.DOWNLOADS.get('latest.json');
-    const v = obj ? ((await obj.json()) as Partial<Latest>).version : null;
-    version = typeof v === 'string' && VERSION.test(v) ? v : null;
+    const v = (await latestRelease(env.DOWNLOADS, nowMs))?.version;
+    return typeof v === 'string' && VERSION.test(v) ? v : null;
   } catch {
     // No version is the page as written: its script asks for it.
+    return null;
   }
-  memo = { at: nowMs, version };
-  return version;
 }
 
 /**
@@ -72,5 +64,5 @@ export async function landingPage(req: Request, assets: Fetcher, env: Env, nowMs
 
 /** For tests: forget the memoised version. */
 export function resetLandingMemo(): void {
-  memo = null;
+  resetReleaseMemos();
 }
