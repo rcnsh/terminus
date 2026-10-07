@@ -41,6 +41,8 @@ export interface UpstreamState {
   checkedAt: number;
   /** Failed checks in a row. */
   failures?: number;
+  /** Good checks in a row: it takes OKS_TO_RECOVER to come back up. */
+  oks?: number;
   /** An alert that has not been delivered yet; retried every run until it is. */
   pending?: 'down' | 'up' | null;
 }
@@ -73,12 +75,18 @@ export const DEVICE_IDLE_MS = 90 * 86_400_000;
 /** One bad check is often a blip (NUS answers some requests with a 400);
  *  two in a row, 15 minutes apart, is an outage. */
 export const FAILS_TO_ALERT = 2;
+/** And two good ones in a row to be back, so a feed that answers every other
+ *  check stays down rather than emailing "down" and "up" by turns. */
+export const OKS_TO_RECOVER = 2;
+/** How long an operator email may take to send. */
+export const MAIL_TIMEOUT_MS = 15_000;
 /** Warn this long before calendar.json runs out. */
 export const CALENDAR_WARN_DAYS = 45;
 
-/** A JSON value kept in KV, or null when it's missing, unreadable or not JSON. */
-async function readKvJson(env: Env, key: string): Promise<unknown> {
-  const raw = await env.KV.get(key).catch(() => null);
+/** A JSON value kept in KV, or null when it's missing or not JSON. A failed
+ *  read throws: the monitor must not take "KV is down" for "never checked". */
+async function getKvJson(env: Env, key: string): Promise<unknown> {
+  const raw = await env.KV.get(key);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -87,21 +95,35 @@ async function readKvJson(env: Env, key: string): Promise<unknown> {
   }
 }
 
+/** The same for readers that only show it (the status page, the card): null on any failure. */
+const readKvJson = (env: Env, key: string): Promise<unknown> => getKvJson(env, key).catch(() => null);
+
+const asIncidents = (list: unknown): Incident[] => (Array.isArray(list) ? (list as Incident[]) : []);
+
 export async function readIncidents(env: Env): Promise<Incident[]> {
-  const list = await readKvJson(env, INCIDENTS_KEY);
-  return Array.isArray(list) ? (list as Incident[]) : [];
+  return asIncidents(await readKvJson(env, INCIDENTS_KEY));
 }
 
-/** Opens an incident when the feed is confirmed down, closes it when it's back. */
+/**
+ * Brings the incident list in line with the confirmed state: an open
+ * incident while the feed is down, none once it's back. Checked every run
+ * and written only when something changes, so an earlier failed write is
+ * put right on the next run. A failed read throws rather than writing over
+ * the history.
+ */
 async function recordIncident(env: Env, state: UpstreamState, nowMs: number): Promise<void> {
-  const list = await readIncidents(env);
-  if (!state.up) {
-    const cause = /10009/.test(state.reason ?? '') ? 'version' : 'feed';
-    list.unshift({ start: nowMs, end: null, cause });
-  } else if (list[0] && list[0].end === null) {
-    list[0].end = nowMs;
+  const list = asIncidents(await getKvJson(env, INCIDENTS_KEY));
+  const open = list[0] && list[0].end === null ? list[0] : null;
+  if (state.up) {
+    if (!open) return;
+    open.end = Math.max(open.start, Math.min(state.since, nowMs));
   } else {
-    return;
+    // The outage under way is the one that started when it was confirmed.
+    if (open && open.start === state.since) return;
+    // An older one left open (its close was never saved) ended by then.
+    if (open) open.end = Math.max(open.start, state.since);
+    const cause = /10009/.test(state.reason ?? '') ? 'version' : 'feed';
+    list.unshift({ start: state.since, end: null, cause });
   }
   await env.KV.put(INCIDENTS_KEY, JSON.stringify(list.slice(0, INCIDENTS_KEPT)));
 }
@@ -137,6 +159,9 @@ export async function checkUpstream(
   probe: () => Promise<unknown> = () => fetchArrivals(env, PROBE_STOP, nowMs),
   fixVersion: (detail: string | null) => Promise<AutoResult> = (detail) => autoUpdateVersion(env, nowMs, detail, PROBE_STOP),
 ): Promise<{ state: UpstreamState; changed: boolean }> {
+  // Read first, and a failed read stops the check: taken as "never checked",
+  // it would close nothing, or mark the feed up in the middle of an outage.
+  const prev = (await getKvJson(env, KEY)) as UpstreamState | null;
   let ok = true;
   let reason: string | null = null;
   let detail: string | null = null;
@@ -179,14 +204,18 @@ export async function checkUpstream(
     }
   }
 
-  const prev = await readUpstream(env);
   const failures = ok ? 0 : (prev?.failures ?? 0) + 1;
-  const up = ok ? true : failures >= FAILS_TO_ALERT ? false : (prev?.up ?? true);
+  const oks = ok ? (prev?.oks ?? 0) + 1 : 0;
+  const was = prev?.up ?? true;
+  const up = was ? failures < FAILS_TO_ALERT : oks >= OKS_TO_RECOVER;
   const changed = !prev || prev.up !== up;
   let pending = prev?.pending ?? null;
   if (changed && (prev || !up)) pending = up ? 'up' : 'down';
-  const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, detail, auto, checkedAt: nowMs, failures, pending };
+  const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, detail, auto, checkedAt: nowMs, failures, oks, pending };
 
+  // Saved before the email goes, so a KV write that keeps failing can't send
+  // the same email every run; it's sent once the state with it pending is kept.
+  await env.KV.put(KEY, JSON.stringify(state));
   if (pending) {
     try {
       await alert(env, state, pending);
@@ -194,10 +223,12 @@ export async function checkUpstream(
     } catch (e) {
       console.error('alert failed', (e as Error)?.name ?? 'error');
     }
+    // Should this write fail, the email goes once more next run: better than none.
+    if (!state.pending) await env.KV.put(KEY, JSON.stringify(state)).catch((e) => console.error('alert not marked sent', (e as Error)?.name ?? 'error'));
   }
-  await env.KV.put(KEY, JSON.stringify(state));
-  // Only on a change of confirmed state, so a KV write per outage, not per run.
-  if (changed && (prev || !up)) {
+  // Every run, not only on a change, so an incident whose write failed is
+  // opened or closed on the next; it writes only when something changes.
+  if (prev || !up) {
     await recordIncident(env, state, nowMs).catch((e) => console.error('incident not recorded', (e as Error)?.name ?? 'error'));
   }
   return { state, changed };
@@ -226,7 +257,18 @@ export function adviceFor(reason: string | null): string {
  */
 async function mailOperator(env: Env, subject: string, text: string): Promise<boolean> {
   if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return false;
-  await env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
+  const send = env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
+  // Bounded, so a send that hangs can't hold up the rest of the cron. Timed
+  // out, it counts as failed: an alert stays pending and goes again next run.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('email timed out')), MAIL_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([send, late]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
   return true;
 }
 
