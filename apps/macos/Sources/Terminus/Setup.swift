@@ -159,7 +159,9 @@ final class SetupModel {
     /// Changes shown at once, saved a moment later (a run of clicks is one
     /// save, as on the web), put back if the save fails.
     func edit(_ change: (inout [String: Any]) -> Void) {
-        guard let current = profile else { return }
+        // While an import runs, its answer replaces the profile: an edit now
+        // would save the old timetable over it.
+        guard let current = profile, !importing else { return }
         if saveTask == nil { confirmed = current }
         var next = current
         change(&next)
@@ -325,6 +327,9 @@ final class SetupModel {
         imported = nil
         message = nil
         defer { importing = false }
+        // A setting's save still waiting would land after the import and put
+        // the old timetable back: it goes first.
+        await saveTask?.value
         do {
             let r = ImportResult(try object(await api.importTimetable(share)))
             imported = r
@@ -472,13 +477,15 @@ struct SetupView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
+                        // As in Settings: no edits while an import's answer is on its way.
+                        .disabled(setup.importing)
                     }
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
 
             HStack {
-                if step > 0 { Button(L("Back")) { step -= 1 } }
+                if step > 0 { Button(L("Back")) { step -= 1 }.disabled(setup.importing) }
                 Spacer()
                 Button(step + 1 >= steps ? L("Done") : L("Continue")) { step + 1 >= steps ? finish() : (step += 1) }
                     .keyboardShortcut(.defaultAction)

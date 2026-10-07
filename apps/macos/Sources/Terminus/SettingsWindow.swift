@@ -181,6 +181,9 @@ struct SettingsPaneView: View {
                 FeedbackPane(setup: setup)
             }
         }
+        // The import's answer replaces the profile, so nothing that edits it
+        // takes a click until it's in (SetupModel.edit refuses them meanwhile).
+        .disabled(setup.importing)
     }
 
     @ViewBuilder private var favourites: some View {
@@ -233,14 +236,28 @@ struct SettingsPaneView: View {
             .confirmationDialog(L("Sign out of this Mac?"), isPresented: $confirmSignOut) {
                 Button(L("Sign out"), role: .destructive) { app.unpair() }
             }
-            Hint(L("API keys, signing out everywhere and deleting your account are on the account page."))
-            Button(L("Open the account page")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#account")!) }
-                .buttonStyle(.link)
+            Divider().padding(.vertical, 8)
+            // As on Android: the rest of the account is on the web, deleting it too
+            // (where you sign in again to confirm), but each has its own way there.
+            VStack(alignment: .leading, spacing: 2) {
+                Button(L("Open the account page")) { openAccountPage() }
+                    .buttonStyle(.link)
+                Hint(L("API keys, and signing out everywhere"))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Button(L("Delete account…"), role: .destructive) { openAccountPage() }
+                    .buttonStyle(.link)
+                    .foregroundStyle(.red)
+                Hint(L("Opens the account page, where you confirm it."))
+            }
+            .padding(.top, 6)
         }
     }
 
     @State private var confirmDelete = false
     @State private var confirmSignOut = false
+
+    private func openAccountPage() { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#account")!) }
 }
 
 /// Adding a favourite: the same search as the popover's, a pick adds it.

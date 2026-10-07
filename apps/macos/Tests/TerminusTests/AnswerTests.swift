@@ -12,7 +12,7 @@ private func golden(_ name: String) throws -> NextAnswer {
     return try JSONDecoder().decode(NextAnswer.self, from: data)
 }
 
-@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup"])
+@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "class-room", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup"])
 func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect(try golden(name).card != nil)
 }
@@ -125,4 +125,43 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
 @Test func theServersErrorsAreShownAsSentences() {
     #expect(sentence("not a valid NUSMods share link") == "Not a valid NUSMods share link.")
     #expect(sentence("Nothing imported: no stop. Your timetable was not changed.") == "Nothing imported: no stop. Your timetable was not changed.")
+}
+
+/// After your day, on a free day and at home: the next class, worded on the server.
+@Test(arguments: ["free", "rest", "home"])
+func theNextClassComesWithTheCard(name: String) throws {
+    let u = try #require(golden(name).card?.upcoming)
+    #expect(u.title.hasPrefix("CS2030 at "))
+    #expect(u.where.hasPrefix("At "))
+    #expect(!u.when.isEmpty)
+}
+
+@Test func nearbyShowsTheBusesAfterTheNextFaded() throws {
+    struct R: Decodable { let stops: [NearbyStop] }
+    let dir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("../api/test/fixtures/answers").standardized
+    let r = try JSONDecoder().decode(R.self, from: Data(contentsOf: dir.appendingPathComponent("nearby-list.json")))
+    let d2 = try #require(r.stops.first?.board.first { $0.svc == "D2" })
+    #expect(d2.later?.first?.etaS == 840)
+    #expect(FlowPills.later(d2) == ["14m"])
+    #expect(FlowPills.spoken(d2) == "D2: 4m, 14m")
+}
+
+@Test func aTimetableGuessInNearbyIsNeverShownAsLive() {
+    #expect(FlowPills.eta(etaS: 360, quality: "live") == "6m")
+    #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6m")
+    #expect(FlowPills.eta(etaS: 20, quality: "live") == "now")
+    #expect(FlowPills.eta(etaS: nil, quality: "ended") == "ended")
+    let row = BoardRow(svc: "D2", etaS: 240, quality: "live", later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live"), .init(etaS: 2100, quality: "live")])
+    // At most two after the next one.
+    #expect(FlowPills.later(row) == ["~15m", "25m"])
+}
+
+@Test func theTwoWaysOfNotGoingShareOneMenu() {
+    let skip = CardAction(id: "skipped", label: "Not going", trip: "t")
+    let away = CardAction(id: "away", label: "Not on campus today", trip: "t")
+    let undo = CardAction(id: "reset", label: "Undo", trip: "u")
+    #expect(AnswerDetail.grouped([skip, away, undo]) == [[skip, away], [undo]])
+    #expect(AnswerDetail.grouped([skip, undo]) == [[skip], [undo]])
 }
