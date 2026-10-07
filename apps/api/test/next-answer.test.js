@@ -289,3 +289,31 @@ test('riding a public bus reads its arrival from the public graph, by its route'
   await nextArrival({}, {}, deps, { svc: 'D2', stop: 'x', board: null, arrive: null, alightCode: 'COM3' }, nowMs);
   assert.equal(asked[1], GRAPH);
 });
+
+test('riding counts the bus from its own feed: at a shared shelter, not the older one', async () => {
+  const { liveArrival, nextArrival } = await import('../src/next.ts');
+  const nowMs = Date.parse('2026-08-27T02:00:00Z');
+  const pidx = indexGraph(GRAPH_PUBLIC);
+  const alight = [...pidx.routes.get('151/1').pos.keys()][1];
+  // The shuttle half was fetched a minute ago and is stale; LTA 5 s ago. The
+  // stop's own state is the two together: the older time, stale.
+  const shuttle = { fetchedAt: nowMs - 60_000, stale: true, available: true };
+  const pub = { fetchedAt: nowMs - 5_000, stale: false, available: true };
+  const deps = {
+    graph: GRAPH,
+    publicGraph: GRAPH_PUBLIC,
+    answerFor: async () => { throw new Error('not used'); },
+    collectArrivals: async (_env, _ctx, codes) => {
+      const arrivals = [{ svc: '151/1', etaS: 240, crowd: null, plate: 'SBS1A', berth: null }];
+      return new Map(codes.map((code) => [code, { code, arrivals, fetchedAt: shuttle.fetchedAt, stale: true, available: true, feeds: { shuttle, public: pub } }]));
+    },
+  };
+  const b = { svc: '151', route: '151/1', paid: true, stop: 'x', board: null, arrive: null, alightCode: alight, plate: 'SBS1A' };
+  const want = new Date(pub.fetchedAt + 240_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  assert.equal(await liveArrival({}, {}, deps, b, nowMs), want);
+  assert.equal(await nextArrival({}, {}, deps, b, nowMs), want);
+  // The public feed stale itself: no live time.
+  pub.stale = true;
+  assert.equal(await liveArrival({}, {}, deps, b, nowMs), null);
+  assert.equal(await nextArrival({}, {}, deps, b, nowMs), null);
+});
