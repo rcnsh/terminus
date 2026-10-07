@@ -988,7 +988,7 @@ function sampleAnswer(now) {
         arrive: clock(iso(arrive)),
         slack: null,
         live: true,
-        backup: { svc: 'A1', color: '#e53935', stop: 'PGP', board: clock(iso(board + 3 * 60_000)) },
+        backup: { svc: 'A1', color: '#d32f2f', stop: 'PGP', board: clock(iso(board + 3 * 60_000)) },
       },
     },
   };

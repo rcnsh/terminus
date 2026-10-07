@@ -79,14 +79,16 @@ export interface CampusMap {
 /**
  * Each service's colour, as NUS paints it on the buses and stop signs (as
  * students know them; D1 and P chosen to stay distinct). Every client takes
- * these from /campus rather than keeping its own copy.
+ * these from /campus rather than keeping its own copy, and writes on each in
+ * white or near-black, whichever contrasts more: every one reaches 4.5:1
+ * with one of them (campus.test.js).
  */
 export const ROUTE_COLORS: Record<string, string> = {
-  A1: '#e53935', // red
-  A2: '#d9a000', // yellow, deep enough for white text
+  A1: '#d32f2f', // red, deep enough for white text (5:1)
+  A2: '#d9a000', // yellow: too light for white (2.3:1), so it takes dark text
   D1: '#ec4fa0', // pink
   D2: '#8e44c9', // purple
-  K: '#2b9ad6', // light blue, deep enough for white text
+  K: '#2b9ad6', // light blue: dark text, which reads better on it than white
   P: '#8a939c', // grey
   R1: '#f57c1f', // orange
   R2: '#34a853', // green

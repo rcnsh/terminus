@@ -97,7 +97,7 @@ private fun sampleAnswer(): NextAnswer {
         val at = { ms: Long -> clock(ctx, ms) }
         val journey = Journey(
             leave = at(leave), walk = min, bus = JourneyBus("D2", 0xFF8E44C9, "PGP", at(board)), boardAtMs = board, ride = ride, off = null,
-            to = "UTown", toStop = "UTown", arrive = at(arrive), slack = null, live = true, backup = JourneyBus("A1", 0xFFE53935, "PGP", at(board + 3 * 60_000)),
+            to = "UTown", toStop = "UTown", arrive = at(arrive), slack = null, live = true, backup = JourneyBus("A1", 0xFFD32F2F, "PGP", at(board + 3 * 60_000)),
         )
         val card = Card(
             kind = "trip", staleAtMs = null, crowd = null, quality = null, leaveBy = null, leaveVia = null, catch = null, arrive = null,

@@ -301,8 +301,24 @@ test('food courts are in the search, each with both of its stops', () => {
   assert.deepEqual(dest.find((d) => d.code === 'FRONTIER-FOOD').stops, ['S17', 'LT27']);
 });
 
+// Text on a service's colour is white or near-black (#1c1917), whichever
+// reads better (account/dom.js inkOn, and the apps): one of them must reach
+// WCAG's 4.5:1 on every colour.
+test('every service colour has an ink that reads on it', () => {
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * lin(((n >> 16) & 255) / 255) + 0.7152 * lin(((n >> 8) & 255) / 255) + 0.0722 * lin((n & 255) / 255);
+  };
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  for (const [svc, color] of Object.entries(ROUTE_COLORS)) {
+    const best = Math.max(ratio(color, '#ffffff'), ratio(color, '#1c1917'));
+    assert.ok(best >= 4.5, `${svc} ${color}: ${best.toFixed(2)}`);
+  }
+});
+
 test('services wear the colours NUS paints them', () => {
-  assert.equal(ROUTE_COLORS.A1, '#e53935', 'red');
+  assert.equal(ROUTE_COLORS.A1, '#d32f2f', 'red');
   assert.equal(ROUTE_COLORS.A2, '#d9a000', 'yellow');
   assert.equal(ROUTE_COLORS.D2, '#8e44c9', 'purple');
   assert.equal(ROUTE_COLORS.K, '#2b9ad6', 'light blue');

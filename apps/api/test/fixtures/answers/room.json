@@ -162,7 +162,7 @@
       "live": true,
       "backup": {
         "svc": "A1",
-        "color": "#e53935",
+        "color": "#d32f2f",
         "stop": "PGP",
         "board": "09:09"
       },
