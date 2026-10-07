@@ -477,31 +477,11 @@ a.settings-row { text-decoration: none; }
 
 /* Send feedback (settings-pages.js Feedback): one card like a message. The
    From line, the note as the card's own body (no box inside the box), then
-   the counter and Send. "Add an email" turns the From line into a field in
-   place: both sit in one grid cell and cross over, and the line under it
-   opens by animating its row from 0fr to 1fr. */
+   the counter and Send. */
 .compose { padding: 0; overflow: hidden; }
-.compose-from { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 8px 4px 16px; border-bottom: 1px solid var(--line); }
+.compose-from { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 16px; border-bottom: 1px solid var(--line); }
 .compose-key { flex: none; min-width: 2.6rem; color: var(--faint); font-size: 0.9rem; }
 .compose-who { min-width: 0; overflow-wrap: anywhere; }
-.compose-swap { flex: 1; min-width: 0; display: grid; }
-.compose-swap > * { grid-area: 1 / 1; transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.2, 0, 0, 1); }
-.compose-anon { align-self: center; overflow: hidden; color: var(--muted); font-size: 0.9rem; white-space: nowrap; text-overflow: ellipsis; }
-.compose-reply {
-  width: 100%; min-width: 0; padding: 6px 0; border: 0; border-radius: 0; background: none; color: var(--ink); font: inherit;
-  box-shadow: inset 0 -1px 0 var(--line-strong); opacity: 0; transform: translateY(8px); pointer-events: none;
-}
-.compose-reply:focus { outline: none; box-shadow: inset 0 -2px 0 var(--accent); }
-.compose-reply.bad { box-shadow: inset 0 -2px 0 var(--bad); }
-.compose-from.adding .compose-anon { opacity: 0; transform: translateY(-8px); }
-.compose-from.adding .compose-reply { opacity: 1; transform: none; pointer-events: auto; }
-.compose-toggle { flex: none; padding: 8px 6px; color: var(--ink); font-size: 0.9rem; font-weight: 600; }
-.compose-toggle span { display: inline-block; animation: compose-in 0.22s ease; }
-@keyframes compose-in { from { opacity: 0; transform: translateY(4px); } }
-.compose-note { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.26s cubic-bezier(0.2, 0, 0, 1); }
-.compose-note > .hint { overflow: hidden; margin: 0; padding: 0 16px; opacity: 0; transition: opacity 0.2s ease, padding 0.26s cubic-bezier(0.2, 0, 0, 1); }
-.compose-from.adding + .compose-note { grid-template-rows: 1fr; border-bottom: 1px solid var(--line); }
-.compose-from.adding + .compose-note > .hint { padding: 10px 16px; opacity: 1; }
 .compose textarea {
   display: block; width: 100%; min-height: 9.5em; max-height: 16em; padding: 14px 16px; resize: vertical;
   border: 0; border-radius: 0; background: none; color: var(--ink); font: inherit; line-height: 1.5;
@@ -517,10 +497,6 @@ a.settings-row { text-decoration: none; }
 .compose-wrong p { margin: 0; }
 .compose-wrong .row-title, .compose-wrong .hint { display: block; }
 .compose-wrong .hint { margin: 2px 0 0; }
-@media (prefers-reduced-motion: reduce) {
-  .compose-swap > *, .compose-note, .compose-note > .hint { transition: none; }
-  .compose-toggle span { animation: none; }
-}
 
 /* Done for today, or nothing to catch (preview.js DayDone): the label large
    on a panel, a night sky after your day, then your favourites as tiles. */

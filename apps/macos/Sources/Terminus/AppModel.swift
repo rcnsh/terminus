@@ -83,6 +83,10 @@ final class AppModel {
     /// "Notify me when to leave for class" (phase 7), mirrored from LeaveNotifier.
     private(set) var leaveAlerts = LeaveNotifier.shared.enabled
 
+    /// The pane Settings is asked to show, when it opens or now; it clears it
+    /// once shown. A report from an account without an email asks for Account.
+    var settingsPane: SettingsPane?
+
     /// "Is this wrong?": the form is open, what's typed, and how sending went.
     var reporting = false
     var reportNote = ""
@@ -662,10 +666,8 @@ final class AppModel {
 
     func sendReport() {
         let note = reportNote.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard reported != nil || !note.isEmpty else {
-            reportResult = L("Please describe the problem. There's no answer on screen to attach.")
-            return
-        }
+        // The server takes no report without a note; Send is off until there is one.
+        guard !note.isEmpty else { return }
         reportSending = true
         Task {
             defer { reportSending = false }

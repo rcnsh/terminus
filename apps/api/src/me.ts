@@ -816,12 +816,15 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/me/feedback',
     run: async ({ req, env, ctx, nowMs, db, session }) => {
+      // Anonymous accounts are free to make, so reports come only from a known address.
+      const email = session.user.email;
+      if (!email) return json({ error: 'sign in to send feedback' }, 403);
       const parsed = parseFeedback(await readJson(req));
       if (!parsed.ok) return json({ error: parsed.error }, 400);
       const id = await saveFeedback(db, session.user.id, parsed.value, nowMs);
       if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429);
       ctx.waitUntil(
-        mailFeedback(env, id, session.user.email, parsed.value, nowMs).catch((e) =>
+        mailFeedback(env, id, email, parsed.value, nowMs).catch((e) =>
           console.error('feedback email failed', e instanceof Error ? e.name : typeof e),
         ),
       );

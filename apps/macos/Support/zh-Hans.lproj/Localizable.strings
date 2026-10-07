@@ -150,7 +150,6 @@
 "Removing a device signs it out. You'll get an email whenever a device is added or removed." = "移除设备会将其登出。每当添加或移除设备时，你都会收到电子邮件。";
 "Report a wrong answer…" = "报告错误的答案…";
 "Residence" = "宿舍";
-"Please describe the problem. There's no answer on screen to attach." = "请描述问题。屏幕上没有可附上的结果。";
 "Send" = "发送";
 "Sending…" = "正在发送…";
 "Sends the answer above and your note, with your email so you can get a reply." = "会发送上面的答案和你的说明，以及你的邮箱，方便回复你。";
@@ -306,10 +305,6 @@
 "Ideas, problems, anything" = "想法、问题，什么都可以";
 "Thanks. Your feedback was sent." = "谢谢，你的反馈已发送。";
 "From" = "发件人";
-"Anonymous · no reply" = "匿名 · 无法回复";
-"Add an email" = "添加邮箱";
-"Email to reply to" = "用于回复的邮箱";
-"We’ll only use this to reply. It isn’t added to your account." = "这个邮箱只用来回复你，不会添加到你的账户。";
 "Ideas, problems, anything: a place you want to go, something that confused you…" = "想法、问题，什么都可以：想去的地方、让你困惑的地方……";
 "A wrong answer?" = "答案不对？";
 "Choose “Report a wrong answer…” from the menu at the bottom, so we see what you saw." = "请在底部的菜单里选择“报告错误的答案…”，这样我们能看到你看到的内容。";
@@ -369,3 +364,7 @@
 "Skip every trip left today" = "今天剩下的行程都不去";
 "Is this wrong?" = "这不对？";
 "%@ of %@ characters" = "%@ / %@ 个字符";
+"Add an email…" = "添加邮箱…";
+"Add an email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
+"Add an email to send feedback" = "添加邮箱后才能发送反馈";
+"So we can reply to you. Your setup stays as it is." = "这样我们才能回复你。你的设置会保持不变。";

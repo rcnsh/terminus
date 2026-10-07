@@ -2,7 +2,7 @@
 // page ("Your widget right now") and on the web app's Now. Every line comes
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
-import { Rich, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
+import { html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle } from './journey.js';
@@ -305,11 +305,13 @@ const REPORTED_SHOWN_MS = 6_000;
 
 /**
  * "Is this wrong?": sends the answer on screen (`answer`, as it was when the
- * form was opened: the card refreshes meanwhile) with an optional note. Once
- * sent, the link says so in its place for a few seconds, or until the card
- * says something else; give it a new `key` for a new answer.
+ * form was opened: the card refreshes meanwhile) with a note, which it needs.
+ * Once sent, the link says so in its place for a few seconds, or until the
+ * card says something else; give it a new `key` for a new answer. Without an
+ * email the server takes no reports, so the link asks for one instead
+ * (`onAddEmail`, the web app's way there by default).
  */
-export function Report({ answer, anonymous = false }) {
+export function Report({ answer, anonymous = false, onAddEmail = () => location.assign('/account/?add=1&next=/app/') }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
   const [msg, setMsg] = useState('');
@@ -335,15 +337,9 @@ export function Report({ answer, anonymous = false }) {
     const id = setTimeout(() => setDone(null), REPORTED_SHOWN_MS);
     return () => clearTimeout(id);
   }, [done, line]);
-  const hint = anonymous
-    ? t('This sends the answer above and your note. Add an email if you want a reply.')
-    : t('This sends the answer above and your note, with your email address so you can get a reply.');
   const send = async (e) => {
     e.preventDefault();
-    if (!reported && !note.trim()) {
-      setMsg(t('Please describe the problem. The preview has no answer to attach.'));
-      return;
-    }
+    if (!note.trim()) return box.current?.focus();
     setSending(true);
     try {
       await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note: note.trim(), platform: 'web', context: reported ?? undefined } });
@@ -370,8 +366,18 @@ export function Report({ answer, anonymous = false }) {
       }}
     >${t('Is this wrong?')}</button>`}
     ${open &&
+    anonymous &&
+    html`<div class="report">
+      <p class="hint">${t('Add an email to report a wrong answer, so we can reply to you.')}</p>
+      <div class="actions">
+        <button type="button" class="btn small accent" onClick=${onAddEmail}>${t('Add an email')}</button>
+        <button type="button" class="btn small ghost" onClick=${() => setOpen(false)}>${t('Cancel')}</button>
+      </div>
+    </div>`}
+    ${open &&
+    !anonymous &&
     html`<form class="report" onSubmit=${send}>
-      <label for="report-note"><${Rich} text=${t('What was wrong? <span class="hint">(optional)</span>')} /></label>
+      <label for="report-note">${t('What was wrong?')}</label>
       <textarea
         id="report-note"
         rows="3"
@@ -380,10 +386,11 @@ export function Report({ answer, anonymous = false }) {
         value=${note}
         onInput=${(e) => setNote(e.currentTarget.value)}
         ref=${box}
+        required
       ></textarea>
-      <p class="hint">${hint}</p>
+      <p class="hint">${t('This sends the answer above and your note, with your email address so you can get a reply.')}</p>
       <div class="actions">
-        <button type="submit" class="btn small accent" disabled=${sending}>${t('Send')}</button>
+        <button type="submit" class="btn small accent" disabled=${sending || !note.trim()}>${t('Send')}</button>
         <button
           type="button"
           class="btn small ghost"

@@ -106,7 +106,7 @@ pnpm run deploy
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
 | `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store`. Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
-| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`; an account without an email may add a `replyTo` address. |
+| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. It needs a note, and an account with an email: an anonymous one gets 403. |
 
 `/next`, `/trip`, `/arrivals`, `/buses`, `/campus` and `/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`) or a signed-in session. They're
@@ -456,10 +456,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   to leave" is under Notifications. Send feedback posts a note to `/me/feedback`
   as `kind: 'other'`; a wrong answer is better reported from under the card,
   which attaches it. The page is laid out as a message (From, the note, a
-  counter and Send). An account without an email can open the From line
-  into a field for an address to reply to, sent as `replyTo` with that note
-  only: it's stored on the feedback row (`reply_to`) and put in the
-  operator's email marked as not checked, and never added to the account.
+  counter and Send). Feedback and wrong-answer reports both need a note and
+  an account with an email, so the operator's inbox only gets reports that
+  say something, from someone who can be answered; an anonymous account is
+  asked to sign in instead. (`reply_to` on old feedback rows is from when an
+  anonymous account could type an address; nothing writes it now.)
 - **12- or 24-hour times.** The profile's `clock` (`auto`, `12`, `24`)
   is the account's choice, set in Language and time or in setup. The server
   words every card in it (`hour12()` in next.ts: the profile's choice, else

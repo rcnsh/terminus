@@ -169,12 +169,38 @@ struct GoLater: View {
     }
 }
 
-/// "Is this wrong?": a note, sent with the answer on screen.
+/// "Is this wrong?": a note, sent with the answer on screen. The server takes
+/// reports only from an account with an email, so without one it asks for one.
 struct ReportForm: View {
     @Bindable var model: AppModel
     @FocusState private var focused: Bool
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        if model.anonymous { needsEmail } else { form }
+    }
+
+    private var needsEmail: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L("Add an email to report a wrong answer, so we can reply to you."))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small)
+                Button(L("Add an email…")) {
+                    model.cancelReport()
+                    model.settingsPane = .account
+                    openWindow(id: "settings")
+                    NSApp.activate()
+                }
+                .controlSize(.small)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .card(padding: 10)
+    }
+
+    private var form: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L("What was wrong?")).font(.callout.weight(.semibold))
             TextField(L("The D2 never came, the walk is longer…"), text: $model.reportNote, axis: .vertical)
@@ -191,7 +217,7 @@ struct ReportForm: View {
                 Button(L("Send")) { model.sendReport() }
                     .controlSize(.small)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(model.reportSending)
+                    .disabled(model.reportSending || model.reportNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .card(padding: 10)

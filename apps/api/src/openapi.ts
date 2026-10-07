@@ -852,28 +852,28 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Report a wrong answer',
           description:
-            'Sends the answer you were looking at, with an optional note, for checking against what the buses did. Kept with your account (in the export, deleted with it) and emailed to the operator with your address, so they can reply. Up to ten a day.',
+            'Sends the answer you were looking at, with a note saying what was wrong, for checking against what the buses did. Only for an account with an email (signed in), so the operator can reply. Kept with your account (in the export, deleted with it) and emailed to the operator with your address. Up to ten a day.',
           operationId: 'sendFeedback',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
             {
               type: 'object',
-              required: ['platform'],
+              required: ['platform', 'note'],
               properties: {
                 kind: { type: 'string', enum: ['wrong', 'other'], default: 'wrong' },
-                note: { type: 'string', maxLength: 1000, description: "What was wrong. Required for 'other', or for 'wrong' without a context." },
+                note: { type: 'string', minLength: 1, maxLength: 1000, description: 'What was wrong, or what you would like. Required.' },
                 platform: { type: 'string', enum: ['android', 'mac', 'web'] },
                 appVersion: { type: 'string', maxLength: 20 },
                 context: { type: 'object', description: 'The answer as shown (a /me/next response), up to 16 KB.' },
-                replyTo: { type: 'string', format: 'email', description: 'An address to reply to, for an account without an email. Not checked, and not added to the account; only the operator sees it.' },
               },
             },
             { kind: 'wrong', note: 'The D2 never came', platform: 'web', context: { label: 'D2 · 4 min' } },
           ),
           responses: {
             '201': ok({ type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } }),
-            '400': errorResponse('Missing or invalid field (a replyTo that is not an address, too); the message names it.'),
+            '400': errorResponse('Missing or invalid field (an empty note, too); the message names it.'),
             '401': errorResponse('No valid session.'),
+            '403': errorResponse('An anonymous account: sign in with an email first.'),
             '429': errorResponse('Ten reports already today.'),
           },
         },

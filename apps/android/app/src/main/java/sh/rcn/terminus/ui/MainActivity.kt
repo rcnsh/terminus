@@ -397,7 +397,7 @@ private fun Tabs(
                     // Edge to edge, the insets inside its scrolling, so the sky can reach the top.
                     Tab.Now -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
                         // A stop tapped in Nearby: open on the map, with its sheet.
-                        MainScreen(state, vm, insets = inner, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })
+                        MainScreen(state, vm, insets = inner, signedIn = acct.email != null, onAddEmail = onAddEmail, onOpenStop = { code -> map.showStop(code); onTab(Tab.Map) })
                     }
                 }
             }
