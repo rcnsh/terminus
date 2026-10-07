@@ -16,6 +16,7 @@ import {
   createPairCode,
   mailDeviceAdded,
   deleteAccount,
+  forgetSignInCode,
   endAllSessions,
   exportAccount,
   verifyTurnstile,
@@ -432,6 +433,7 @@ export const ME_ROUTES: MeRoute[] = [
       if (session.kind !== 'web' && session.user.email !== null) return json({ error: 'delete the account from the account page' }, 403);
       await deleteAccount(db, session.user);
       await clearTrip(env, session.user.id);
+      if (session.user.email) await forgetSignInCode(env, session.user.email);
       return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
     },
   },

@@ -657,6 +657,15 @@ export async function endAllSessions(db: D1Database, user: User): Promise<number
   return r.meta?.changes ?? 0;
 }
 
+/**
+ * Forgets a sign-in code still waiting in KV for this address: with the
+ * account gone, nothing should be left under its email, even for the
+ * quarter of an hour the code would last.
+ */
+export async function forgetSignInCode(env: Env, email: string): Promise<void> {
+  await env.KV.delete(await signInCodeKey(email)).catch(() => {});
+}
+
 /** Deletes the account and everything hanging off it (the schema cascades). */
 export async function deleteAccount(db: D1Database, user: User): Promise<void> {
   await db.batch([

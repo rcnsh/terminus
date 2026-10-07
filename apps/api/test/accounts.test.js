@@ -561,11 +561,24 @@ test('delete account removes every row for the user', async () => {
   const { token } = await (await call(env, '/pair', { method: 'POST', body: { code } })).json();
   assert.equal((await call(env, '/me', { method: 'DELETE', token })).status, 403, 'a device cannot delete the account');
 
+  // Something in every table that holds the account's data.
+  assert.ok((await call(env, '/me/keys', { method: 'POST', cookie, body: { name: 'My script' } })).ok);
+  assert.ok((await call(env, '/me/feedback', { method: 'POST', cookie, body: { kind: 'other', note: 'hello', platform: 'web' } })).ok);
+  const userId = db._db.prepare('SELECT id FROM users').get().id;
+  db.exec(`INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES ('${userId}', 'home:1080', '2026-10-01', 'arrived', 0)`);
+  db.exec(`INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) VALUES ('${userId}', 'home:1080', 'quiet', 'Home', 0)`);
+  db.exec(`INSERT INTO login_requests (id, email, poll_hash, link_hash, code_hash, match, device_name, platform, status, created, expires)
+    VALUES ('r', '${INVITED}', 'p', 'l', 'c', 7, 'Pixel', 'android', 'pending', 0, ${Date.now() + 60_000})`);
+  // A sign-in code still waiting in KV for the address.
+  const codeKey = `code:${await hashToken(INVITED)}`;
+  await env.KV.put(codeKey, '{}');
+
   const res = await call(env, '/me', { method: 'DELETE', cookie });
   assert.equal(res.status, 200);
-  for (const t of ['users', 'sessions', 'profiles', 'pair_codes', 'magic_links']) {
+  for (const t of ['users', 'sessions', 'profiles', 'pair_codes', 'magic_links', 'api_keys', 'feedback', 'trip_outcomes', 'trip_prefs', 'login_requests']) {
     assert.equal(db._db.prepare(`SELECT count(*) AS n FROM ${t}`).get().n, 0, t);
   }
+  assert.equal(await env.KV.get(codeKey), null, 'the waiting sign-in code');
   assert.equal((await call(env, '/me', { token })).status, 401);
 });
 

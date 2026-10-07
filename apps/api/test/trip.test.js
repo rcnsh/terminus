@@ -633,6 +633,46 @@ test('trip outcomes are in the export and go with the account', async () => {
   assert.equal(env.DB._db.prepare('SELECT COUNT(*) AS n FROM trip_outcomes').get().n, 0);
 });
 
+test("a deleted account's trip state goes at once, and a request still under way can't store it again", async () => {
+  const { env, call, cookie, phone, signal, TRIPS, clock } = await setup();
+  await signal(phone, { kind: 'missed' });
+  const userId = env.DB._db.prepare('SELECT id FROM users').get().id;
+  const inst = TRIPS.instances.get(userId);
+  assert.ok(inst.storage._map.has('day'));
+
+  assert.equal((await call('/me', { method: 'DELETE', cookie })).status, 200);
+  const obj = TRIPS.get(TRIPS.idFromName(userId));
+  const post = (path, body) => obj.fetch(`https://trip/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const date = sgtDate(FROZEN_NOW);
+  const deleteAt = endOfDayMs(FROZEN_NOW);
+  // What a /me/next that read the account just before it went would still send.
+  assert.ok((await post('signal', { date, key: FIRST, rec: { kind: 'skipped', at: FROZEN_NOW }, deleteAt })).ok);
+  assert.ok((await post('plan', { date, key: FIRST, plan: { svc: 'D2', stop: 'PGP', board: null, arrive: null }, deleteAt })).ok);
+  assert.ok((await post('watch', { userId, date, at: FROZEN_NOW + 60_000, deleteAt })).ok);
+  assert.ok((await post('followed', { date, at: FROZEN_NOW, deleteAt })).ok);
+  assert.equal(await (await obj.fetch(`https://trip/day?date=${date}`)).json(), null);
+  assert.deepEqual([...inst.storage._map.keys()].sort(), ['deleteAt', 'gone'], 'only the mark is kept');
+  assert.equal(TRIPS.alarms.get(userId), deleteAt, 'until midnight');
+
+  clock(deleteAt);
+  await TRIPS.fireAlarms();
+  assert.equal(inst.storage._map.size, 0, 'and the mark goes then too');
+});
+
+test("the cron's deletion of an idle anonymous account takes its trip state too", async () => {
+  const { housekeeping } = await import('../src/monitor.ts');
+  const { ACCOUNT_TTL } = await import('../src/accounts.ts');
+  const { env, TRIPS } = await setup();
+  const post = (id, path, body) =>
+    TRIPS.get(TRIPS.idFromName(id)).fetch(`https://trip/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  env.DB._db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('idle', NULL, 0, 0), ('used', NULL, 0, ${FROZEN_NOW})`);
+  for (const id of ['idle', 'used']) await post(id, 'watch', { userId: id, date: sgtDate(FROZEN_NOW), at: FROZEN_NOW + 60_000, deleteAt: endOfDayMs(FROZEN_NOW) });
+  await housekeeping(env.DB, FROZEN_NOW + ACCOUNT_TTL.anonIdleMs - 1000, env);
+  assert.deepEqual(env.DB._db.prepare("SELECT id FROM users WHERE id IN ('idle', 'used')").all().map((r) => r.id), ['used']);
+  assert.equal(TRIPS.instances.get('idle').storage._map.has('userId'), false, 'the idle account’s is emptied');
+  assert.equal(TRIPS.instances.get('used').storage._map.get('userId'), 'used', 'the other is untouched');
+});
+
 /* Phase 8.1: the trip from the phone's location (detect.ts). */
 
 const stopAt = (code) => indexGraph(GRAPH).byCode.get(code);
@@ -1163,6 +1203,9 @@ test('rides from a brand-new account are not counted, nor two on one service in 
   assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW), true);
   assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW + 60_000), false, 'once an hour');
   assert.equal(await mayRecordRide(t.env, db, userId, 'A1', FROZEN_NOW + 60_000), true, 'per service');
+  const marks = [...t.env.KV._map.keys()].filter((k) => k.startsWith('ride:seen:'));
+  assert.equal(marks.length, 2);
+  assert.ok(marks.every((k) => !k.includes(userId) && !/D2|A1/.test(k)), 'the marks name no account and no service');
 });
 
 test('a trip key that is no class of yours and no trip home is refused', async () => {

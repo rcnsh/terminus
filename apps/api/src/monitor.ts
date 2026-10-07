@@ -20,7 +20,7 @@ import { pruneCrowdSeen } from './crowd.ts';
 import { ACCOUNT_TTL } from './accounts.ts';
 import { type Notice, pushEnabled, remindUser } from './push.ts';
 import { m, withLang } from './i18n.ts';
-import { sgtDate, watchTrip } from './trip.ts';
+import { clearTrip, sgtDate, watchTrip } from './trip.ts';
 import { refreshTable } from './ridetimes.ts';
 import { sgt } from './config.ts';
 import { isBeta } from './site.ts';
@@ -253,19 +253,24 @@ async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switche
 
 /**
  * Delete expired sign-in links and requests, pairing codes, web sessions,
- * idle devices, and anonymous accounts nobody has used for 60 days.
+ * idle devices, and anonymous accounts nobody has used for 60 days. With
+ * `env`, each deleted account's trip state goes too, as when an account is
+ * deleted by hand, rather than at midnight.
  */
-export async function housekeeping(db: D1Database, nowMs: number): Promise<void> {
-  await db.batch([
+export async function housekeeping(db: D1Database, nowMs: number, env?: Env): Promise<void> {
+  const [, , idle] = await db.batch([
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
     db.prepare('DELETE FROM login_requests WHERE expires < ?').bind(nowMs),
-    db.prepare('DELETE FROM users WHERE email IS NULL AND last_seen < ?').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
+    db.prepare('DELETE FROM users WHERE email IS NULL AND last_seen < ? RETURNING id').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
     db.prepare('DELETE FROM pair_codes WHERE expires < ?').bind(nowMs),
     db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
     db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
     // Trip outcomes are kept KEEP_DAYS days.
     db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
   ]);
+  if (!env) return;
+  const ids = ((idle?.results ?? []) as Array<{ id: string }>).map((r) => r.id);
+  for (let i = 0; i < ids.length; i += ARM_AT_ONCE) await Promise.all(ids.slice(i, i + ARM_AT_ONCE).map((id) => clearTrip(env, id)));
 }
 
 /**
@@ -447,7 +452,7 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
       await checkCalendar(env, nowMs);
     }
   });
-  if (env.DB) await step('housekeeping', () => housekeeping(env.DB!, nowMs));
+  if (env.DB) await step('housekeeping', () => housekeeping(env.DB!, nowMs, env));
   if (env.DB) await step('crowds', () => pruneCrowdSeen(env.DB!, nowMs));
   await step('trips', () => armTrips(env, nowMs));
   // Starts the day's timelapse recorder in the morning (it runs itself after that).
