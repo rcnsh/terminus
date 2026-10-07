@@ -5,6 +5,7 @@ import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { MAIL_TIMEOUT_MS, checkTurnstile, hashToken, newPairCode, normalizePairCode, sendMail, verifyTurnstile } from '../src/accounts.ts';
+import { d1Unavailable } from '../src/access.ts';
 import { WALK } from '../src/config.ts';
 import { GRAPH } from '../src/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
@@ -1413,6 +1414,22 @@ test('a last_seen update that fails is logged, and the request still answers', a
     console.error = log;
   }
   assert.ok(errors.some((e) => e.startsWith('last_seen not updated')), errors.join('\n'));
+});
+
+test('only an unreachable D1 counts as an outage; a fault in the query stays a 500', () => {
+  for (const msg of ['D1_ERROR: Network connection lost.', 'D1 DB is overloaded. Requests queued for too long.', 'D1_ERROR: internal error']) {
+    assert.equal(d1Unavailable(new Error(msg)), true, msg);
+  }
+  for (const msg of [
+    'D1_TYPE_ERROR: Type \'undefined\' not supported for value \'undefined\'',
+    'D1_ERROR: too many SQL variables: SQLITE_ERROR',
+    'D1_ERROR: string or blob too big: SQLITE_TOOBIG',
+    'D1_ERROR: UNIQUE constraint failed: users.email',
+    'D1_ERROR: no such column: reply_to',
+    'fetch to NUS timed out',
+  ]) {
+    assert.equal(d1Unavailable(new Error(msg)), false, msg);
+  }
 });
 
 test('an email send that hangs fails after MAIL_TIMEOUT_MS, as a failed send does', async (t) => {
