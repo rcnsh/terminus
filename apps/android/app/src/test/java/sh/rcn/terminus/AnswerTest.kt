@@ -139,6 +139,20 @@ class AnswerTest {
         } catch (_: ParseError) {}
     }
 
+    @Test fun aRetryKeepsTheAnswersOwnMoments() {
+        val a = golden("class-bus")
+        val fetched = ms(a.asOf)
+        val card = a.card!!
+        // The soonest of the card's change, its staleAt and the plan's refresh.
+        val first = listOfNotNull(a.refreshAtMs, card.nextChangeAtMs, card.staleAtMs).filter { it > fetched }.min()
+        assertEquals(first, Refresher.pendingAt(a, fetched))
+        // Past the change, staleAt is still waiting for its redraw.
+        card.staleAtMs?.let { stale ->
+            assertTrue(Refresher.pendingAt(a, stale - 1)!! <= stale)
+            assertNull(Refresher.pendingAt(a, listOfNotNull(a.refreshAtMs, card.nextChangeAtMs, stale).max()))
+        }
+    }
+
     @Test fun refreshWaitsForTheNextChangeButNotTooSoon() {
         val a = golden("class-bus")
         val fetched = ms(a.asOf)
