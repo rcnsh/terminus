@@ -585,6 +585,9 @@ internal fun StatusStrip(sky: SkyState?, top: Dp, scroll: ScrollState) {
     )
 }
 
+/** The line a low moon ([SkyBand]) has to itself, just over the hills. */
+private val MOON_LINE = 24.dp
+
 /** How much of the horizon Settings' band shows: the city's top to the near hill. */
 private val LOW = 52.dp
 
@@ -600,9 +603,16 @@ private val BAND_STARS = listOf(
  * then [content] (the title, with the back arrow on a page) in the sky's ink with the moon on the right at
  * night, ending on the low horizon (just the hills, no road). The page's
  * controls stay on the plain page under it. As the web's (.page-band).
+ *
+ * A taller band (the Buses tab's search and stop) puts the moon low on
+ * the right, just over the hills, with the stars beside it, clear of a
+ * button at the top right ([moonLow]), on a line of its own unless the
+ * content's last one has room on the right ([moonLine]). Unpadded, [content] runs edge to
+ * edge and keeps its own margins: a pager in it swipes off the screen's
+ * edges rather than 16 dp in.
  */
 @Composable
-internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
+internal fun SkyBand(phase: Phase, top: Dp, moonLow: Boolean = false, moonLine: Boolean = moonLow, padded: Boolean = true, content: @Composable () -> Unit) {
     val page = MaterialTheme.colorScheme.background
     val p = palette(phase, page.luminance() < 0.5f)
     NightStatusBar(p.lightInk)
@@ -612,8 +622,9 @@ internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
             val end = size.height
             drawRect(skyBrush(p, end))
             // Beside the title, on the right: its row is between the status bar and the hills.
-            val row = top.toPx()..(end - LOW.toPx())
-            val mid = (row.start + row.endInclusive) / 2
+            // Low, the moon and stars take the last few lines over the hills.
+            val row = if (moonLow) (end - LOW.toPx() - 56 * d)..(end - LOW.toPx()) else top.toPx()..(end - LOW.toPx())
+            val mid = if (moonLow) row.endInclusive - 16 * d else (row.start + row.endInclusive) / 2
             val r = 11 * d
             val centre = Offset(size.width - 22 * d - r, mid)
             if (phase == Phase.NIGHT) {
@@ -629,7 +640,10 @@ internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
         },
     ) {
         Spacer(Modifier.height(top))
-        SkyInk(true, p.lightInk) { Box(Modifier.padding(horizontal = 16.dp)) { content() } }
+        SkyInk(true, p.lightInk) { Box(if (padded) Modifier.padding(horizontal = 16.dp) else Modifier) { content() } }
+        // The moon's own line, under the content, so it never sits on a button;
+        // without it ([moonLine] false), the content's last line leaves the right clear for it.
+        if (moonLow && moonLine) Spacer(Modifier.height(MOON_LINE))
         Spacer(Modifier.height(LOW))
     }
 }
