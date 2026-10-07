@@ -6,27 +6,27 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import sh.rcn.terminus.Api
-import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.ApiError
+import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.Campus
 import sh.rcn.terminus.Clock
 import sh.rcn.terminus.Device
 import sh.rcn.terminus.ImportResult
+import sh.rcn.terminus.L
+import sh.rcn.terminus.Lang
 import sh.rcn.terminus.ProfileDoc
+import sh.rcn.terminus.R
 import sh.rcn.terminus.SignInRequest
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.deviceName
-import sh.rcn.terminus.R
-import sh.rcn.terminus.L
-import sh.rcn.terminus.Lang
 
 /** Where an email sign-in is. */
 sealed interface SignIn {
@@ -83,24 +83,35 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         else -> L.s(R.string.cant_reach)
     }
 
+    /**
+     * Runs [block]; a failure is said in the message (the server's words for
+     * a refusal, else that it can't be reached), with [failed] putting back
+     * what was under way (busy, importing).
+     */
+    private fun attempt(failed: (AccountState) -> AccountState = { it }, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { failed(it).copy(message = fail(e)) }
+            }
+        }
+    }
+
     fun clearMessage() = _state.update { it.copy(message = null) }
 
     /** "Get started": an account with no email, made for this phone. */
     fun start(onDone: () -> Unit) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
-        viewModelScope.launch {
-            try {
-                store.token = Api(null).anon(deviceName())
-                store.email = null
-                store.needsSetup = true
-                _state.update { it.copy(busy = false, email = null) }
-                onDone()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(busy = false, message = fail(e)) }
-            }
+        attempt({ it.copy(busy = false) }) {
+            store.token = Api(null).anon(deviceName())
+            store.email = null
+            store.needsSetup = true
+            _state.update { it.copy(busy = false, email = null) }
+            onDone()
         }
     }
 
@@ -180,15 +191,9 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         val link = share.trim()
         if (link.isEmpty() || _state.value.importing) return
         _state.update { it.copy(importing = true, imported = null, message = null) }
-        viewModelScope.launch {
-            try {
-                val r = api().import(link)
-                _state.update { it.copy(importing = false, imported = r, profile = ProfileDoc(r.profile), sharedLink = null, needsReimport = false, term = r.term, unplaced = r.unplaced) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(importing = false, message = fail(e)) }
-            }
+        attempt({ it.copy(importing = false) }) {
+            val r = api().import(link)
+            _state.update { it.copy(importing = false, imported = r, profile = ProfileDoc(r.profile), sharedLink = null, needsReimport = false, term = r.term, unplaced = r.unplaced) }
         }
     }
 
@@ -262,19 +267,13 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         val r = request ?: return
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
-        viewModelScope.launch {
-            try {
-                val p = Api(null).signInCode(r, code)
-                if (p.status == "approved" && p.token != null && p.email != null) {
-                    pollJob?.cancel()
-                    approved(p.token, p.email, p.outcome, onSignedIn)
-                }
-                _state.update { it.copy(busy = false) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(busy = false, message = fail(e)) }
+        attempt({ it.copy(busy = false) }) {
+            val p = Api(null).signInCode(r, code)
+            if (p.status == "approved" && p.token != null && p.email != null) {
+                pollJob?.cancel()
+                approved(p.token, p.email, p.outcome, onSignedIn)
             }
+            _state.update { it.copy(busy = false) }
         }
     }
 
@@ -298,18 +297,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun sendSignIn(email: String, onSignedIn: () -> Unit) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
-        viewModelScope.launch {
-            try {
-                anonToken = store.token
-                val r = api().signInStart(email.trim(), deviceName())
-                request = r
-                _state.update { it.copy(busy = false, signIn = SignIn.Waiting(email.trim(), r.match)) }
-                poll(onSignedIn)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(busy = false, message = fail(e)) }
-            }
+        attempt({ it.copy(busy = false) }) {
+            anonToken = store.token
+            val r = api().signInStart(email.trim(), deviceName())
+            request = r
+            _state.update { it.copy(busy = false, signIn = SignIn.Waiting(email.trim(), r.match)) }
+            poll(onSignedIn)
         }
     }
 
@@ -362,15 +355,9 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         val anon = anonToken
         val email = (state.value.signIn as? SignIn.Choose)?.email ?: return
         _state.update { it.copy(busy = true) }
-        viewModelScope.launch {
-            try {
-                if (anon != null) Api(token).merge(anon, keepPhone)
-                signedIn(token, email, onSignedIn)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(busy = false, message = fail(e)) }
-            }
+        attempt({ it.copy(busy = false) }) {
+            if (anon != null) Api(token).merge(anon, keepPhone)
+            signedIn(token, email, onSignedIn)
         }
     }
 
@@ -418,34 +405,22 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Send feedback; [onSent] clears the box once it's gone. */
     fun sendFeedback(note: String, onSent: () -> Unit) {
-        viewModelScope.launch {
+        attempt({ it.copy(busy = false) }) {
             _state.update { it.copy(busy = true) }
-            try {
-                api().feedback(note.trim(), BuildConfig.VERSION_NAME)
-                _state.update { it.copy(busy = false, message = L.s(R.string.feedback_thanks)) }
-                onSent()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(busy = false, message = fail(e)) }
-            }
+            api().feedback(note.trim(), BuildConfig.VERSION_NAME)
+            _state.update { it.copy(busy = false, message = L.s(R.string.feedback_thanks)) }
+            onSent()
         }
     }
 
     /** Download my data, into the file the person picked. */
     fun exportTo(uri: android.net.Uri) {
-        viewModelScope.launch {
-            try {
-                val json = api().export().toString(2)
-                withContext(Dispatchers.IO) {
-                    getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                }
-                _state.update { it.copy(message = L.s(R.string.export_saved)) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(message = fail(e)) }
+        attempt {
+            val json = api().export().toString(2)
+            withContext(Dispatchers.IO) {
+                getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
             }
+            _state.update { it.copy(message = L.s(R.string.export_saved)) }
         }
     }
 
@@ -460,15 +435,9 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun newPairCode() {
-        viewModelScope.launch {
-            try {
-                val code = api().pairCode()
-                _state.update { it.copy(pairCode = code) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(message = fail(e)) }
-            }
+        attempt {
+            val code = api().pairCode()
+            _state.update { it.copy(pairCode = code) }
         }
     }
 
@@ -478,30 +447,18 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun removeDevice(d: Device, onSelf: () -> Unit) {
-        viewModelScope.launch {
-            try {
-                api().removeDevice(d.id)
-                if (d.current) onSelf() else loadDevices()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(message = fail(e)) }
-            }
+        attempt {
+            api().removeDevice(d.id)
+            if (d.current) onSelf() else loadDevices()
         }
     }
 
     /** For an account with no email: everything goes, then the app starts over. */
     fun deleteAccount(onDone: () -> Unit) {
-        viewModelScope.launch {
-            try {
-                api().deleteAccount()
-                reset()
-                onDone()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(message = fail(e)) }
-            }
+        attempt {
+            api().deleteAccount()
+            reset()
+            onDone()
         }
     }
 
