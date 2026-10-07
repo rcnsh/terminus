@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -53,11 +54,19 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
@@ -111,6 +120,7 @@ import org.maplibre.compose.util.DpPadding
 import org.maplibre.spatialk.geojson.BoundingBox
 import org.maplibre.spatialk.geojson.Position
 import sh.rcn.terminus.CampusMap
+import sh.rcn.terminus.Ink
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.Locator
@@ -118,6 +128,7 @@ import sh.rcn.terminus.MapGeoJson
 import sh.rcn.terminus.MapStop
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Slides
+import sh.rcn.terminus.Spoken
 import kotlin.math.abs
 
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts), with room to spare. */
@@ -139,7 +150,7 @@ private fun box(b: DoubleArray) = BoundingBox(west = b[0], south = b[1], east = 
  * live buses), and a sheet for a tapped stop or bus.
  */
 @Composable
-internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String) -> Unit, places: PlacesForMap) {
+internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String) -> Unit, places: PlacesForMap, onShowList: (svc: String?, stop: String?) -> Unit = { _, _ -> }) {
     val ui by map.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val dark = isSystemInDarkTheme()
@@ -161,7 +172,7 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     // Your dot, every 20 s, only with location already allowed.
     LaunchedEffect(Unit) { lifecycle.every(20_000) { map.locate() } }
     BackHandler(enabled = ui.sheet != null) { map.closeSheet() }
-    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places))
+    MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList))
 }
 
 /** [block], then again every [ms], while the app is in front. */
@@ -180,6 +191,8 @@ internal class MapActions(
     val closeSheet: () -> Unit,
     val goThere: (code: String, name: String) -> Unit,
     val places: PlacesForMap,
+    /** The Buses tab, on the open stop or the chosen service's line: the map as a list, for a screen reader. */
+    val showList: (svc: String?, stop: String?) -> Unit = { _, _ -> },
 )
 
 /** The map and everything over it, from [ui] alone. */
@@ -238,6 +251,11 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val ctx = LocalContext.current
     val ink = if (dark) Color(0xFFF2EFEB) else Color(0xFF1C1917)
     val paper = if (dark) Color(0xFF1A1816) else Color.White
+    // What edges the lines and buses. On the light street map a service's own
+    // colour (A2's yellow, K's blue) is faint against the white roads: edged
+    // in the ink there, so it stands out. In the dark, the paper does that.
+    val edge = if (dark) paper else ink
+    val edgeAlpha = if (dark) 1f else 0.6f
     val routes = remember(campus) { MapGeoJson.routes(campus) }
     val stops = remember(campus) { MapGeoJson.stops(campus) }
 
@@ -267,10 +285,10 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val stretchOn = stretch != MapGeoJson.EMPTY
 
     val heading = painterResource(R.drawable.ic_heading)
-    // The bus: a disc in the service's colour, ringed in the map's. An icon,
+    // The bus: a disc in the service's colour, ringed in the map's edge. An icon,
     // not a circle, so a bus at a stop can sit beside the dot (its offset is
     // per bus, and turns with the road).
-    val busIcon = remember(color, paper) { BusIcon(Color(color), paper) }
+    val busIcon = remember(color, edge) { BusIcon(Color(color), edge) }
     val ringIcon = remember(ink) { RingIcon(ink) }
     val busSize = interpolate(linear(), zoom(), 13 to const(0.64f), 17 to const(1f))
     // Where the buses were last seen, not where they are: faded.
@@ -286,9 +304,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         LineLayer(
             id = "route-casing",
             source = routeSource,
-            color = const(paper),
+            color = const(edge),
             width = interpolate(linear(), zoom(), 13 to const(3.dp), 16 to const(7.dp), 18 to const(11.dp)),
-            opacity = const(if (selected == null) 0.9f else 0.3f),
+            opacity = const((if (selected == null) 0.9f else 0.3f) * edgeAlpha),
             cap = const(LineCap.Round),
             join = const(LineJoin.Round),
         )
@@ -317,7 +335,8 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         LineLayer(
             id = "stretch-casing",
             source = stretchSource,
-            color = const(paper),
+            color = const(edge),
+            opacity = const(edgeAlpha),
             width = interpolate(linear(), zoom(), 13 to const(7.dp), 16 to const(13.dp), 18 to const(18.dp)),
             cap = const(LineCap.Round),
             join = const(LineJoin.Round),
@@ -444,7 +463,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
         if (recentre == 0) return@LaunchedEffect
-        state.animateCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING, animation = CameraAnimation.Ease())
+        // With animations off in the phone's settings, it jumps there.
+        if (ValueAnimator.areAnimatorsEnabled()) state.animateCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING, animation = CameraAnimation.Ease())
+        else state.fitCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING)
     }
     // A pill: its whole line in view, when it's chosen (not again on coming back to the tab).
     var framedLine by rememberSaveable { mutableStateOf<String?>(null) }
@@ -452,12 +473,23 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         if (selected == framedLine) return@LaunchedEffect
         framedLine = selected
         val r = selected?.let { campus.routes[it] } ?: return@LaunchedEffect
-        state.animateCameraToBounds(box(r.bounds()), fitPadding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp), animation = CameraAnimation.Ease())
+        val padding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp)
+        if (ValueAnimator.areAnimatorsEnabled()) state.animateCameraToBounds(box(r.bounds()), fitPadding = padding, animation = CameraAnimation.Ease())
+        else state.fitCameraToBounds(box(r.bounds()), fitPadding = padding)
     }
 
+    // The map is drawn, and its stops and buses are only reached by a finger
+    // on them. To a screen reader it says so, and offers the same as a list:
+    // the open stop's board, or the chosen service's line, on the Buses tab.
+    val mapLabel = stringResource(R.string.a11y_map)
+    val listLabel = stringResource(R.string.a11y_show_list)
+    val openStop = (ui.sheet as? MapSheet.Stop)?.code
     MaplibreMap(
         state = state,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().semantics {
+            contentDescription = mapLabel
+            customActions = listOf(CustomAccessibilityAction(listLabel) { actions.showList(selected, openStop); true })
+        },
         cameraConstraints = CameraConstraints(minZoom = 13.0, maxZoom = 19.0, boundingBox = PAN_LIMIT),
         // A TextureView, not a SurfaceView: the map fades with the tab around it.
         uiOptions = MapUiOptions { renderMode = AndroidRenderMode.Texture },
@@ -494,11 +526,11 @@ private fun Pills(campus: CampusMap, selected: String?, onChoose: (String?) -> U
                 selected = on,
                 onClick = { onChoose(svc) },
                 label = { Text(svc, fontWeight = FontWeight.SemiBold) },
-                leadingIcon = { Box(Modifier.size(10.dp).background(if (on) Color.White else c, CircleShape)) },
+                leadingIcon = { Box(Modifier.size(10.dp).background(if (on) inkOn(c) else c, CircleShape)) },
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     selectedContainerColor = c,
-                    selectedLabelColor = Color.White,
+                    selectedLabelColor = inkOn(c),
                 ),
                 elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
             )
@@ -536,18 +568,16 @@ private fun StatusChip(text: String, busy: Boolean = false) {
     }
 }
 
-/**
- * White or near-black, whichever reads on a service's colour (WCAG
- * contrast): white on the yellow A2 or blue K was under 3.5:1.
- */
-internal fun inkOn(c: Color): Color = if (1.05f / (c.luminance() + 0.05f) >= (c.luminance() + 0.05f) / 0.061f) Color.White else Color(0xFF1C1917)
+/** White or near-black, whichever reads on a service's colour ([Ink]). */
+internal fun inkOn(c: Color): Color = Color(Ink.on(c.toArgb().toLong() and 0xFFFFFFFFL))
 
 /** A service's code on its colour, as on the bus. Also Nearby's, on Now. */
 @Composable
 internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
     val shape = RoundedCornerShape(7.dp)
     val content: @Composable () -> Unit = {
-        Text(svc, color = inkOn(color), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp).widthIn(min = 24.dp))
+        val said = stringResource(R.string.a11y_bus, svc)
+        Text(svc, color = inkOn(color), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.semantics { contentDescription = said }.padding(horizontal = 8.dp, vertical = 3.dp).widthIn(min = 24.dp))
     }
     if (onClick == null) Surface(shape = shape, color = color, content = content)
     else Surface(onClick = onClick, shape = shape, color = color, content = content)
@@ -555,8 +585,12 @@ internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
 
 @Composable
 private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge: String? = null, content: @Composable () -> Unit) {
+    // A pane of its own, named for what's in it, and a screen reader's focus
+    // moved to its title when it opens or shows another stop or bus.
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(title) { runCatching { focus.requestFocus() } }
     Surface(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).semantics { paneTitle = title },
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 8.dp,
@@ -565,7 +599,7 @@ private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(title, style = MaterialTheme.typography.titleLarge)
+                        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
                         // A bus's number plate by its name, like the plate on the bus.
                         badge?.let {
                             Spacer(Modifier.width(8.dp))
@@ -635,6 +669,8 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
                         // The server's words ("4 min", "~6 min", "now"); worked out here for an older server.
                         val s = r.etaS ?: 0
                         val min = stringResource(R.string.map_min, s / 60)
+                        // Said in words: "about 6 minutes, timetable", where the screen has "~6 min".
+                        val said = Spoken.eta(r.etaS, r.quality)
                         Text(
                             r.eta ?: when {
                                 s < 60 -> stringResource(R.string.map_arriving)
@@ -642,6 +678,7 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
                                 else -> min
                             },
                             fontWeight = FontWeight.SemiBold,
+                            modifier = if (said == null) Modifier else Modifier.semantics { contentDescription = said },
                         )
                     }
                 }

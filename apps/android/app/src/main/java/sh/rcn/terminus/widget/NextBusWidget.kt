@@ -63,6 +63,7 @@ import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
@@ -191,7 +192,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     .fillMaxSize()
                     .semantics { contentDescription = spoken }
                     // A compact widget's text runs the full width: keep it clear of the button.
-                    .padding(start = 14.dp, end = if (refreshButton && !large) 36.dp else 14.dp, top = if (large) 12.dp else 8.dp, bottom = if (large) 12.dp else 8.dp)
+                    .padding(start = 14.dp, end = if (refreshButton && !large) 44.dp else 14.dp, top = if (large) 12.dp else 8.dp, bottom = if (large) 12.dp else 8.dp)
                     .clickable(tap),
                 verticalAlignment = if (large) Alignment.Top else Alignment.CenterVertically,
             ) {
@@ -209,7 +210,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         val lines = OfflineDay.lines(offline) { clock(ctx, it) }
                         // A roomy widget's footer already says Offline; a compact one has no footer.
                         Text(if (roomy) lines.head else "${L.s(R.string.offline)} · ${lines.head}", style = muted, maxLines = 1)
-                        Text(lines.big, style = headStyle(colors.onSurface, large), maxLines = 1)
+                        Text(lines.big, style = headStyle(colors.onSurface, large), maxLines = headLines())
                         lines.how?.let { Text(it, style = muted, maxLines = 1) }
                         ButtonRow(ctx, bottom, large)
                         Footer(ctx, fetchedAt, error, roomy)
@@ -239,7 +240,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                                 )
                                 Spacer(GlanceModifier.width(8.dp))
                             }
-                            Text(answer.label, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
+                            Text(answer.label, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = headLines())
                         }
                         Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
                         ButtonRow(ctx, bottom, large)
@@ -254,7 +255,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Text(
                             L.s(R.string.off_at_time, ride.stops.last(), clock(ctx, ride.arriveMs)),
                             style = headStyle(colors.onSurface, large),
-                            maxLines = 1,
+                            maxLines = headLines(),
                         )
                         Text(if (error == UPDATING) L.s(R.string.updating) else ride.nextText(now), style = muted, maxLines = 1)
                         if (roomy) {
@@ -302,7 +303,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                                 },
                                 large,
                             ),
-                            maxLines = 1,
+                            maxLines = headLines(),
                         )
                         val line = when {
                             error == UPDATING -> L.s(R.string.updating)
@@ -335,7 +336,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Text(
                             answer.clockLabel { clock(ctx, it) },
                             style = headStyle(if (old) colors.onSurfaceVariant else colors.onSurface, large),
-                            maxLines = 1,
+                            maxLines = headLines(),
                         )
                         // A compact widget has no footer, so a problem goes on this line.
                         val line = when {
@@ -370,8 +371,9 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     private fun RefreshButton(action: Action) {
         Box(
             modifier = GlanceModifier
-                .size(40.dp)
-                .cornerRadius(20.dp)
+                // 48 dp: a fingertip, though the icon is small.
+                .size(48.dp)
+                .cornerRadius(24.dp)
                 .semantics { contentDescription = L.s(R.string.refresh) }
                 .clickable(action),
             contentAlignment = Alignment.Center,
@@ -437,7 +439,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         modifier = GlanceModifier
                             .background(if (on) colors.primaryContainer else colors.secondaryContainer)
                             .cornerRadius(14.dp)
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            // Tall enough for a fingertip (48 dp with the text).
+                            .padding(horizontal = 14.dp, vertical = 14.dp)
                             .semantics { contentDescription = if (on) L.s(R.string.mode_showing, m.label) else L.s(R.string.mode_show, m.label) }
                             .clickable(chipAction(ctx, m, b.appWidgetId)),
                     ) {
@@ -461,7 +464,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val first = stops?.firstOrNull()
         if (first == null) {
             Text(L.s(R.string.chip_nearby), style = muted, maxLines = 1)
-            Text(if (chosen.error == UPDATING || chosen.json == null) L.s(R.string.checking) else chosen.error ?: L.s(R.string.no_stops_near), style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
+            Text(if (chosen.error == UPDATING || chosen.json == null) L.s(R.string.checking) else chosen.error ?: L.s(R.string.no_stops_near), style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = headLines())
             return
         }
         val walk = if (first.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (first.walkS + 30) / 60)
@@ -471,13 +474,13 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // The other side of the road, a tap away, unless it's one of the stops shown.
         val other = NearbySwap.offer(api.orEmpty(), chosen.swap, now, (listOf(first) + next).map { it.code })
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(L.s(R.string.nearby_line, first.name, walk), style = muted, maxLines = 1, modifier = GlanceModifier.defaultWeight())
+            Text(L.s(R.string.nearby_line, first.name, walk), style = muted, maxLines = headLines(), modifier = GlanceModifier.defaultWeight())
             if (other != null) SwapButton(other, api.first().code)
         }
         Text(
             departures(first, age, 2).ifEmpty { if (first.available) L.s(R.string.no_buses_due) else L.s(R.string.no_live_data) },
             style = headStyle(if (old) colors.onSurfaceVariant else colors.onSurface, large),
-            maxLines = 1,
+            maxLines = headLines(),
         )
         val lines = when {
             chosen.error == UPDATING -> listOf(L.s(R.string.updating))
@@ -494,8 +497,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     private fun SwapButton(other: NearbyStop, nearest: String) {
         Box(
             modifier = GlanceModifier
-                .size(28.dp)
-                .cornerRadius(14.dp)
+                .size(48.dp)
+                .cornerRadius(24.dp)
                 .semantics { contentDescription = L.s(R.string.nearby_swap, other.name) }
                 .clickable(
                     actionRunCallback<SwapAction>(
@@ -534,7 +537,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val first = stops?.firstOrNull() ?: return L.s(R.string.a11y_nearby_none, chosen.error ?: L.s(R.string.a11y_checking))
         val age = chosen.fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
         val due = departures(first, age, 3).replace(" · ", ", ").ifEmpty { L.s(R.string.a11y_no_buses) }
-        return L.s(R.string.a11y_nearby, first.name, due)
+        return L.s(R.string.a11y_nearby, first.name, Spoken.spell(due))
     }
 }
 
@@ -548,43 +551,9 @@ internal fun chipAction(ctx: Context, mode: Mode, appWidgetId: Int): Action =
         )
     }
 
-/** What the widget says, as a sentence for screen readers. */
-fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: String?): String {
-    if (!paired) return L.s(R.string.a11y_not_paired)
-    if (answer == null) return L.s(R.string.a11y_loading, error ?: L.s(R.string.a11y_loading_word))
-    val old = isOld(answer, ServerClock.now())
-    val ride = answer.card?.ride?.takeIf { answer.card.phase == "riding" }
-    if (ride != null) {
-        val now = ServerClock.now()
-        return listOfNotNull(
-            answer.destLabel?.let { L.s(R.string.a11y_on_the_to, ride.svc, it) } ?: L.s(R.string.on_the, ride.svc),
-            L.s(R.string.a11y_off_at, ride.stops.last(), clock(ctx, ride.arriveMs)),
-            ride.nextText(now).replace(" · ", ", "),
-        ).spoken()
-    }
-    if (answer.isClassPlan && !old) {
-        val fmt = { ms: Long -> clock(ctx, ms) }
-        val now = ServerClock.now()
-        return listOfNotNull(
-            answer.destLabel?.let { L.s(R.string.a11y_starts, it, answer.classAtMs?.let(fmt).orEmpty()) },
-            answer.leaveHeadline(now),
-            answer.catchLine?.replace(" · ", ", "),
-            answer.goNowLine?.replace(" · ", ", "),
-        ).spoken()
-    }
-    val parts = listOfNotNull(
-        answer.destLabel?.let { L.s(R.string.a11y_to, it) },
-        if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", L.s(R.string.a11y_leaves)),
-        if (old) L.s(R.string.a11y_old) else answer.detail.replace(" · ", ", "),
-        answer.leaveText(ServerClock.now())?.takeIf { !old }?.replace(" · ", ", "),
-        answer.timingText?.takeIf { !old },
-        error?.takeIf { it != UPDATING },
-    )
-    return parts.spoken()
-}
-
-/** The parts read as sentences, then what a tap does. */
-private fun List<String>.spoken() = joinToString(". ") + "." + L.s(R.string.a11y_open)
+/** What the widget says, as sentences for screen readers ([Spoken.summary]). */
+fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: String?): String =
+    Spoken.summary(paired, answer, error, ServerClock.now()) { clock(ctx, it) }
 
 /** The app's brand colours, so the widget doesn't take the wallpaper's. */
 private val BrandColors = androidx.glance.material3.ColorProviders(light = BrandLight, dark = BrandDark)

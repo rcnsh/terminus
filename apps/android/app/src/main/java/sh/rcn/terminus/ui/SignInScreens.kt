@@ -58,8 +58,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -117,8 +125,9 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
             Spacer(Modifier.height(32.dp))
             Spacer(Modifier.weight(1f))
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp)) }
-                Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                // Said as soon as it shows: it's why nothing happened.
+                message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive }) }
+                Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                     Text(if (busy) stringResource(R.string.starting) else stringResource(R.string.get_started))
                 }
                 Text(
@@ -128,7 +137,7 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
-                OutlinedButton(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                OutlinedButton(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                     Text(stringResource(R.string.have_account))
                 }
                 Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -240,7 +249,7 @@ internal fun SignInScreen(
 private fun Action(text: String, enabled: Boolean, message: String?, onClick: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         InkButton(text, onClick, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled)
-        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 4.dp)) }
+        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 4.dp).semantics { liveRegion = LiveRegionMode.Assertive }) }
     }
 }
 
@@ -260,12 +269,15 @@ private fun EmailStep(adding: Boolean, busy: Boolean, message: String?, onSend: 
                 if (it != email && message != null) onEdit()
                 email = it
             },
+            // A label, so the field keeps its name once something's typed.
+            label = { Text(stringResource(R.string.email_label)) },
             placeholder = { Text(stringResource(R.string.email_example)) },
+            isError = message != null,
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, autoCorrectEnabled = false, imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { if (ok && !busy) onSend(email) }),
-            modifier = Modifier.fillMaxWidth().padding(12.dp).focusRequester(focus),
+            modifier = Modifier.fillMaxWidth().padding(12.dp).focusRequester(focus).semantics { if (message != null) error(message) },
         )
     }
     Action(stringResource(if (busy) R.string.sending else R.string.email_me_code), ok && !busy, message) { onSend(email) }
@@ -382,12 +394,24 @@ private fun Choose(s: SignIn.Choose, busy: Boolean, message: String?, onChoose: 
     }
 }
 
-/** "English · 中文" on the first screen, before there's an account to keep it in. */
+/**
+ * "English · 中文" on the first screen, before there's an account to keep it
+ * in. The one in use is the selected one, in the ink; each name is marked
+ * as its own language, so a screen reader says it in that voice.
+ */
 @Composable
 private fun LanguageSwitch(onLang: (String) -> Unit) {
     val zh = Lang.current(LocalContext.current) == Lang.ZH
-    Row {
-        TextButton(onClick = { onLang(Lang.EN) }, enabled = zh) { Text("English") }
-        TextButton(onClick = { onLang(Lang.ZH) }, enabled = !zh) { Text("中文") }
+    Row(Modifier.selectableGroup()) {
+        for ((lang, name, tag) in listOf(Triple(Lang.EN, "English", "en"), Triple(Lang.ZH, "中文", "zh-Hans"))) {
+            val on = (lang == Lang.ZH) == zh
+            TextButton(
+                onClick = { if (!on) onLang(lang) },
+                colors = ButtonDefaults.textButtonColors(contentColor = if (on) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary),
+                modifier = Modifier.semantics { selected = on },
+            ) {
+                Text(AnnotatedString(name, SpanStyle(localeList = LocaleList(tag))), fontWeight = if (on) FontWeight.SemiBold else null)
+            }
+        }
     }
 }
