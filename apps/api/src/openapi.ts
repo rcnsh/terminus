@@ -103,7 +103,7 @@ const answerExample = {
 export const API_VERSION = '2.4.2';
 
 export function openApiSpec(origin: string): Record<string, unknown> {
-  return {
+  return withAccountsDown({
     openapi: '3.1.0',
     info: {
       title: 'terminus API',
@@ -241,7 +241,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Arrivals at one stop',
           description:
-            'Lists the next arrivals for every service at one stop. There is no destination, so walking time and route direction are not considered. Uses the same 15-second per-stop cache as `/next` and `/trip`. `stop.opposite` is the stop across the road (or one easily mistaken for it), whose board is a second `/arrivals` call away. Each row says where the service goes from here (`towards`), how full its next bus is (`crowd`) and when the service stops running today (`endsAt`).',
+            'Lists the next arrivals for every service at one stop. There is no destination, so walking time and route direction are not considered. Uses the same 15-second per-stop cache as `/next` and `/trip`. `stop.opposite` is the stop across the road (or one easily mistaken for it), whose board is a second `/arrivals` call away. Each row says where the service goes from here (`towards`), how full its next bus is (`crowd`) and when the service stops running today (`endsAt`). `etaS` already counts from the moment of the request, also when the times are cached or stale: do not add it to `asOf`, which says how old the times are.',
           operationId: 'getArrivals',
           parameters: [
             {
@@ -2266,7 +2266,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
       },
     },
-  };
+  });
 }
 
 /** How wide the docs bar's hills are, in pixels: wider than any screen. */
@@ -2355,4 +2355,23 @@ export function docsPage(phase: Phase): string {
   <elements-api apiDescriptionUrl="/openapi.json" router="hash" layout="responsive"></elements-api>
 </body>
 </html>`;
+}
+
+const ACCOUNTS_DOWN_503 = errorResponse('The account database could not be reached just now. Wait for `Retry-After` and try again.');
+
+/**
+ * Lists the accounts-down 503 on every operation that needs a key or a
+ * session (all but those that opt out with `security: []`), so each one
+ * says it can happen rather than only the overview.
+ */
+function withAccountsDown(spec: Record<string, unknown>): Record<string, unknown> {
+  const paths = spec.paths as Record<string, Record<string, { security?: unknown[]; responses?: Record<string, unknown> }>>;
+  for (const ops of Object.values(paths)) {
+    for (const op of Object.values(ops)) {
+      if (!op || typeof op !== 'object' || !op.responses) continue;
+      if (Array.isArray(op.security) && op.security.length === 0) continue;
+      op.responses['503'] ??= ACCOUNTS_DOWN_503;
+    }
+  }
+  return spec;
 }
