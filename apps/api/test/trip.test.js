@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { ASSUME_MS, RIDE_GRACE_MS, endOfDayMs, phaseFor, sgtDate } from '../src/trip.ts';
+import { ASSUME_MS, RIDE_GRACE_MS, endOfDayMs, needsWatch, phaseFor, sgtDate } from '../src/trip.ts';
 import { Trip } from '../src/tripdo.ts';
 import { GRAPH } from '../src/graph.ts';
 import { indexGraph, rideStops, serviceEndsAt } from '../src/resolve.ts';
@@ -1234,4 +1234,16 @@ test('a change to the Trip object that changes nothing writes nothing, and the a
   await update({ watch: { userId: 'u1', at: FROZEN_NOW + 300_000 } });
   assert.deepEqual(writes.map(([op]) => op).sort(), ['put', 'put', 'setAlarm']);
   assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 300_000);
+});
+
+test('needsWatch: any sooner wake is booked, however little sooner; a later or equal one needs nothing', () => {
+  const now = 1_000_000;
+  const day = { date: '2026-10-08', trips: {}, watch: now + 60_000 };
+  assert.equal(needsWatch(day, now + 55_000, now), true, 'five seconds sooner: the leave-by push has only 20 s to spare');
+  assert.equal(needsWatch(day, now + 59_999, now), true);
+  assert.equal(needsWatch(day, now + 60_000, now), false, 'the same wake');
+  assert.equal(needsWatch(day, now + 90_000, now), false, 'later: the object plans afresh when it wakes');
+  assert.equal(needsWatch({ ...day, watch: undefined }, now + 90_000, now), true, 'nothing pending');
+  assert.equal(needsWatch({ ...day, watch: now - 1 }, now + 90_000, now), true, 'the pending wake has passed');
+  assert.equal(needsWatch(null, now + 90_000, now), true);
 });

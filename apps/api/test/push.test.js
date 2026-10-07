@@ -11,7 +11,7 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
 import { armTrips, remindTerm } from '../src/monitor.ts';
-import { endOfDayMs, sgtDate } from '../src/trip.ts';
+import { DUE_MS, endOfDayMs, sgtDate } from '../src/trip.ts';
 import { remindUser } from '../src/push.ts';
 
 const BASE = 'https://bus.example.test';
@@ -296,18 +296,23 @@ function sentToTrips(TRIPS) {
   return sent;
 }
 
-test('refreshing while the leave-by moves by seconds asks the Trip object to watch once, and the push still comes', async () => {
+test('refreshing while the leave-by moves by seconds asks the Trip object to watch only when sooner, and the push is never late', async () => {
   const { call, phone, next, fcm, TRIPS, clock, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   const sent = sentToTrips(TRIPS);
   const marks = new Set();
+  let last;
   for (let i = 0; i < 12; i++) {
-    const a = await next(phone);
-    marks.add(Date.parse(a.leave.at));
+    last = await next(phone);
+    marks.add(Date.parse(last.leave.at));
     clock(Date.now() + 20_000);
   }
   assert.ok(marks.size > 1, 'the leave-by moved between refreshes');
-  assert.equal(sent.filter((u) => u.watch).length, 1, 'one watch, not one per refresh');
+  const watches = sent.filter((u) => u.watch).map((u) => u.watch.at);
+  assert.ok(watches.length >= 1 && watches.length < 12, `a watch only when it brings the wake sooner, not one per refresh (${watches.length})`);
+  for (let i = 1; i < watches.length; i++) assert.ok(watches[i] < watches[i - 1], 'each watch is sooner than the one pending');
+  // The wake booked is no later than the latest card's own "due".
+  assert.ok(Math.min(...watches) <= Date.parse(last.leave.at) - DUE_MS, 'the push is not late');
   await wakeUntil(() => fcm.sent.length > 0);
   assert.equal(fcm.sent[0].data.phase, 'due');
 });

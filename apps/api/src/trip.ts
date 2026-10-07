@@ -160,21 +160,15 @@ export interface DayRecord {
 }
 
 /**
- * A wake this little sooner isn't worth a request: the leave-by moves by
- * seconds with each refresh, and the object wakes no closer together than
- * this anyway (tripdo.ts).
- */
-export const WATCH_SLACK_MS = 30_000;
-
-/**
  * Whether a request should ask the Trip object to wake at `atMs`: when it
- * isn't going to wake at all, or would wake more than WATCH_SLACK_MS later.
- * A later `atMs` needs nothing: the object works out the card afresh when
- * it wakes, and wakes again at that card's own next change.
+ * isn't going to wake at all, or would wake any later than `atMs`. Even a
+ * few seconds count: the leave-by's push has only WALK.boardBufferS to
+ * spare. A later or equal `atMs` needs nothing: the object works out the
+ * card afresh when it wakes, and wakes again at that card's own next change.
  */
 export function needsWatch(day: DayRecord | null, atMs: number, nowMs: number): boolean {
   const w = day?.watch;
-  return w === undefined || w <= nowMs || atMs < w - WATCH_SLACK_MS;
+  return w === undefined || w <= nowMs || atMs < w;
 }
 
 /** Changes to today's record, any of them in one request (see updateTrip). */
