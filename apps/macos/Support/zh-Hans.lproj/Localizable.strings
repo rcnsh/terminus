@@ -369,3 +369,8 @@
 "Leaves in under a minute" = "不到 1 分钟后开";
 "in under a minute" = "不到 1 分钟后";
 "terminus: %@" = "terminus：%@";
+"Find a stop" = "查找车站";
+"Find a %@ bus" = "查找 %@ 巴士";
+"Next stop: %@" = "下一站：%@";
+"Zoom in" = "放大";
+"Zoom out" = "缩小";
