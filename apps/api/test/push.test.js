@@ -315,6 +315,82 @@ test('a semester reminder that never gets through holds up no one after it, and 
   }
 });
 
+test('a retried semester reminder is not sent twice when the retry list cannot be saved', async () => {
+  const { call, phone, fcm, env, clock } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
+  const start = Date.parse('2026-08-04T10:30:00+08:00');
+  clock(start);
+  const quiet = console.error;
+  console.error = () => {};
+  const real = globalThis.fetch;
+  const del = env.KV.delete;
+  try {
+    // Firebase failing: the user goes on the retry list.
+    globalThis.fetch = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
+    assert.equal(await remindTerm(env, Date.now()), 0);
+    globalThis.fetch = real;
+    // The retry reaches them, but the list can't be cleared.
+    env.KV.delete = async () => {
+      throw new Error('KV write failed');
+    };
+    const before = fcm.sent.length;
+    clock(start + 15 * 60_000);
+    assert.equal(await remindTerm(env, Date.now()), 1);
+    clock(start + 30 * 60_000);
+    assert.equal(await remindTerm(env, Date.now()), 0, 'not again');
+    assert.equal(fcm.sent.length, before + 1);
+  } finally {
+    globalThis.fetch = real;
+    env.KV.delete = del;
+    console.error = quiet;
+  }
+});
+
+test('a retried semester reminder reads the profile again: imported since, nothing; a new language, in that one', async () => {
+  const { call, phone, fcm, env, clock } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  const setProfile = (extra) => env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify({ ...p, ...extra }));
+  setProfile({});
+  const start = Date.parse('2026-08-04T10:30:00+08:00');
+  const quiet = console.error;
+  console.error = () => {};
+  const real = globalThis.fetch;
+  const failing = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
+  try {
+    clock(start);
+    globalThis.fetch = failing;
+    assert.equal(await remindTerm(env, Date.now()), 0);
+    globalThis.fetch = real;
+    // They change to Chinese, then the retry goes: in Chinese.
+    setProfile({ lang: 'zh' });
+    const before = fcm.sent.length;
+    clock(start + 15 * 60_000);
+    assert.equal(await remindTerm(env, Date.now()), 1);
+    assert.equal(fcm.sent[before].data.title, fcm.sent[before].data.zhTitle);
+    assert.match(fcm.sent[before].data.title, /学期/);
+
+    // Another semester's reminder fails, then they import the new timetable.
+    await env.KV.delete('term:reminded');
+    setProfile({});
+    clock(start + 30 * 60_000);
+    globalThis.fetch = failing;
+    assert.equal(await remindTerm(env, Date.now()), 0);
+    globalThis.fetch = real;
+    assert.equal(JSON.parse(await env.KV.get('term:retry')).users.length, 1);
+    setProfile({ term: { acadYear: '2026/2027', semester: 1 } });
+    const now = fcm.sent.length;
+    clock(start + 45 * 60_000);
+    assert.equal(await remindTerm(env, Date.now()), 0, 'already imported');
+    assert.equal(fcm.sent.length, now);
+  } finally {
+    globalThis.fetch = real;
+    console.error = quiet;
+  }
+});
+
 test('an access token that went stale is replaced, and the push still goes', async () => {
   const { call, phone, next, fcm, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });

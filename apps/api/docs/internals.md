@@ -693,7 +693,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   that can't be saved sends nothing rather than the batch every run. A user
   no device took (push itself failing, say) goes on `term:retry` and is
   tried again on the next eight runs, while the batches carry on, so one
-  phone that can't be reached holds up no one. A tap opens the timetable settings on the web, and the
+  phone that can't be reached holds up no one. Each run stamps the mark
+  with its time and the list it leaves with the same, so a list that
+  couldn't be saved is set aside rather than sent to again. A retried
+  user's profile is read afresh: imported since, they're skipped; with a
+  new language, they're told in it. A tap opens the timetable settings on the web, and the
   app on Android. The Mac app has no push, so it isn't told.
 
 ### Every trip, detected
