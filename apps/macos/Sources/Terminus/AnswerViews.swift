@@ -105,49 +105,17 @@ struct Pill: View {
 
 struct NearbyList: View {
     let stops: [NearbyStop]?
-    /// The stop across the road shown first: the nearest one by location can be the wrong side.
-    var swap: Binding<(from: String, to: String, at: Date)?> = .constant(nil)
-
-    /// The nearest stop's twin across the road, when the answer has it.
-    private func twin(_ stops: [NearbyStop]) -> NearbyStop? {
-        guard let code = stops.first?.opposite else { return nil }
-        return stops.first { $0.stop.code == code }
-    }
-
-    /// Whether the swap still holds: the same nearest stop, for up to an hour.
-    private func swapped(_ stops: [NearbyStop]) -> Bool {
-        guard let s = swap.wrappedValue, let first = stops.first, let t = twin(stops) else { return false }
-        return Date().timeIntervalSince(s.at) <= 3600 && s.from == first.stop.code && s.to == t.stop.code
-    }
-
-    private func order(_ stops: [NearbyStop]) -> [NearbyStop] {
-        guard swapped(stops), let t = twin(stops), let first = stops.first else { return stops }
-        return [t, first] + stops.dropFirst().filter { $0.stop.code != t.stop.code }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let all = stops {
-                let shown = order(all)
-                ForEach(Array(shown.enumerated()), id: \.element.id) { i, s in
+                ForEach(all) { s in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text(s.stop.name).font(.system(size: 13, weight: .semibold))
                             Spacer()
                             Text(s.walkS < 60 ? L("You're here") : L("%@ min walk", "\((s.walkS + 30) / 60)"))
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
-                            if i == 0, let t = twin(all), let first = all.first {
-                                let on = swapped(all)
-                                let other = on ? first : t
-                                Button {
-                                    swap.wrappedValue = on ? nil : (first.stop.code, t.stop.code, Date())
-                                } label: {
-                                    Image(systemName: "arrow.left.arrow.right").font(.system(size: 11)).foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                                .help(L("Show %@ instead", other.stop.name))
-                                .accessibilityLabel(L("Show %@ instead", other.stop.name))
-                            }
                         }
                         if s.board.isEmpty || !s.available {
                             Text(s.available ? L("Nothing due") : L("No live data")).font(.caption).foregroundStyle(.secondary)

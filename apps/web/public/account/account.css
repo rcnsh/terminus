@@ -510,8 +510,6 @@ a.settings-row { text-decoration: none; }
 .stop-sign.nearest .plate-name { font-size: 1.05rem; }
 .stop-sign .plate-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .stop-sign .plate-walk { flex: none; padding-right: 6px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
-.stop-sign .swap { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
-.stop-sign .swap svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .sign-services { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 14px; }
 .sign-services .svc-tag, .ob-bus .svc-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 2.4em; padding: 2px 7px; border-radius: 6px; background: var(--svc); color: var(--svc-ink, #fff); font-weight: 700; font-size: 0.8rem; }
 
