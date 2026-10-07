@@ -504,6 +504,28 @@ test("a reading keeps each bus's plate, position and metres along its line, as b
   assert.ok(haversineM(tracks.PD111A.lat, tracks.PD111A.lon, busOn('D2', 400).lat, busOn('D2', 400).lng) < 1.6, 'quantised to about a metre');
 });
 
+test('a reading and the times that date it are saved together, or neither is', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  const inst = h.ns.instances.get(DATE);
+  const before = inst.read('meta');
+  const write = inst.write;
+  // Storage fails between the row and the meta that dates it.
+  inst.write = function (k, v) {
+    if (k === 'meta' && Object.keys(v.last).length > 0) throw new Error('storage reset');
+    return write.call(this, k, v);
+  };
+  await h.ns.fireDue(FROZEN_NOW);
+  inst.write = write;
+  assert.equal((await status(h)).samples, 0, 'the row went with it');
+  const meta = inst.read('meta');
+  assert.equal(meta.lastT, before.lastT);
+  assert.deepEqual(meta.last, {});
+  // The next reading counts from the last one actually kept.
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  assert.equal((await status(h)).samples, RUNNING.length - 1);
+});
+
 test('encoding round trip: quantised positions, delta times (even out of order), plates and services', () => {
   const t0 = FROZEN_NOW;
   const plates = ['PA1', 'PB2'];

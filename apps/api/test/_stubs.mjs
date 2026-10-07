@@ -406,6 +406,19 @@ export function makeDurableObjects(Class, env = {}) {
         db?.close();
         db = null;
       },
+      // All or nothing, as the platform's: a savepoint, rolled back on a throw.
+      transactionSync(fn) {
+        sql.exec('SAVEPOINT tx');
+        try {
+          const out = fn();
+          sql.exec('RELEASE tx');
+          return out;
+        } catch (err) {
+          sql.exec('ROLLBACK TO tx');
+          sql.exec('RELEASE tx');
+          throw err;
+        }
+      },
       async getAlarm() {
         return alarms.get(name) ?? null;
       },
