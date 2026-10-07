@@ -8,7 +8,7 @@
 // classes (app.css draws the colours). Android draws the same scene from the
 // same numbers (NightSky.kt).
 import { html, reducedMotion, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '../assets/ui.js';
-import { PHASES, parallax } from './daylight.js';
+import { PHASES, parallax, phaseAt } from './daylight.js';
 
 export { phaseAt } from './daylight.js';
 
@@ -297,13 +297,37 @@ function useSkyEnd(on, name) {
 }
 
 /**
+ * The hour of the sky by the device's clock, ticking each minute whatever
+ * is on screen, so Settings' bands turn with it too (Android's skyPhase()).
+ */
+export function useSkyPhase() {
+  const minute = () => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  };
+  const [m, setM] = useState(minute);
+  useEffect(() => {
+    let t;
+    const next = () => {
+      t = setTimeout(() => {
+        setM(minute());
+        next();
+      }, 60_000 - (Date.now() % 60_000));
+    };
+    next();
+    return () => clearTimeout(t);
+  }, []);
+  return phaseAt(m);
+}
+
+/**
  * Now's sky, for as long as Now's card area is there: the page's
  * background from the top down to the horizon on screen, in the hour's
  * `phase` (app.css, body.sky). It stays put while the card changes, until
  * the next horizon says where it ends. The header and the chips take the
  * sky's colours over it, and so does the browser's own bar while Now is the
  * tab on screen. Settings has the sky only in the band at the top of its
- * pages (body.set-sky, from settings.js).
+ * list and its pages (body.set-sky, from settings.js).
  */
 export function useNowSky(phase) {
   const bar = useRef(null);
@@ -312,7 +336,7 @@ export function useNowSky(phase) {
     const meta = Object.assign(document.createElement('meta'), { name: 'theme-color' });
     bar.current = meta;
     // Map and Settings are drawn over a hidden Now (app.js sets on-map and
-    // on-settings); Settings has the sky only in its pages' band.
+    // on-settings); Settings has the sky only in its band.
     const tab = () => {
       const has = (c) => body.classList.contains(c);
       if (has('on-map') || (has('on-settings') && !has('set-sky'))) return meta.remove();
