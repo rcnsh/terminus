@@ -14,7 +14,7 @@ import {
   clientFrom,
   createAnonymous,
   createPairCode,
-  mailDeviceChange,
+  mailDeviceAdded,
   deleteAccount,
   endAllSessions,
   exportAccount,
@@ -288,7 +288,8 @@ interface MeRoute {
   /**
    * 'web': changes the account itself, from the account page only, never a
    * device (API keys, sign out everywhere). 'email': any session, but the
-   * account needs an email, because each use emails its owner (devices).
+   * account needs an email (devices: one without has only the device asking,
+   * and a pairing code emails its owner when it's used).
    */
   access?: 'web' | 'email';
   run: (c: MeContext) => Promise<Response>;
@@ -596,10 +597,9 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'DELETE',
     path: '/me/devices/',
     access: 'email',
-    run: async ({ env, ctx, nowMs, db, session, rest }) => {
+    run: async ({ db, session, rest }) => {
       const name = await revokeDevice(db, session.user.id, rest);
       if (name === null) return json({ error: 'no such device' }, 404);
-      ctx.waitUntil(mailDeviceChange(env, session.user.email, 'removed', name, nowMs).catch(mailFailed));
       return json({ ok: true });
     },
   },
@@ -1023,10 +1023,6 @@ export async function handleMe(
     const r = await pollAppLogin(db, body.request, body.poll, clientWith(req, body), nowMs);
     if (r.status !== 'approved') return json({ status: r.status });
     if (r.removed) await clearTrip(env, r.removed);
-    // A device added to an account that already had an email: tell its owner.
-    if (r.outcome !== 'created' && r.outcome !== 'added-email') {
-      ctx.waitUntil(mailDeviceChange(env, r.email, 'added', r.device, nowMs).catch(mailFailed));
-    }
     return json({ status: 'approved', token: r.token, email: r.email, outcome: r.outcome });
   }
 
@@ -1090,7 +1086,7 @@ export async function handleMe(
     if (!code) return json({ error: 'enter the 6-character code from the account page' }, 400);
     const paired = await redeemPairCode(db, code, name, nowMs, clientFrom(req));
     if (!paired) return json({ error: 'that code is wrong or has expired' }, 400);
-    ctx.waitUntil(mailDeviceChange(env, paired.email, 'added', name, nowMs).catch(mailFailed));
+    ctx.waitUntil(mailDeviceAdded(env, paired.email, name, nowMs).catch(mailFailed));
     return json({ token: paired.token });
   }
 

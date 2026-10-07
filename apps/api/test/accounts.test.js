@@ -264,7 +264,7 @@ test('pairing: a code from the web session becomes a device token that can be re
   // Codes are single use.
   assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'x' } })).status, 400);
 
-  // The owner hears about every device added.
+  // A device added with a code: the owner hears about it.
   assert.equal(email.sent.at(-1).to, INVITED);
   assert.equal(email.sent.at(-1).subject, 'terminus was added to Pixel');
 
@@ -279,7 +279,7 @@ test('pairing: a code from the web session becomes a device token that can be re
   assert.equal(mine.devices[0].current, true);
   const del = await call(env, `/me/devices/${devices[0].id}`, { method: 'DELETE', cookie });
   assert.equal(del.status, 200);
-  assert.equal(email.sent.at(-1).subject, 'Pixel was removed from terminus');
+  assert.equal(email.sent.at(-1).subject, 'terminus was added to Pixel', 'removing a device sends no email');
   assert.equal((await call(env, '/me', { token })).status, 401, 'a revoked device is signed out');
 });
 

@@ -198,9 +198,11 @@ get one of three ways:
 - **A pairing code** from `/me/pair-code`, made on the account page or in a
   signed-in app, redeemed with `POST /pair`.
 
-Every device added to or removed from an account with an email emails its
-owner. That's what lets a signed-in app add (`/me/pair-code`) and remove
-(`DELETE /me/devices/<id>`) devices. API keys and signing out everywhere
+A device added with a pairing code emails the account's owner: it's the one
+way in that doesn't go through the inbox, and it's what lets a signed-in app
+make codes (`/me/pair-code`). Signing in from the email sends nothing more
+(the owner has just used the inbox), and neither does removing a device
+(`DELETE /me/devices/<id>`), which exposes nothing. API keys and signing out everywhere
 stay on the account page; so does deleting an account, except an anonymous
 one, which has no page and is deleted from its app.
 

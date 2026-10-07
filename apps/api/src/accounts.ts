@@ -577,22 +577,23 @@ export async function revokeDevice(db: D1Database, userId: string, id: string): 
 }
 
 /**
- * "terminus was added to MacBook Air": sent for every device added to or
- * removed from an account with an email. It's what makes managing devices
- * from a phone safe: a lost phone can't add one without the owner hearing.
+ * "terminus was added to MacBook Air": sent when a pairing code adds a
+ * device. It's the one way in that doesn't pass through the inbox, and a
+ * signed-in phone can make a code, so a lost phone can't add one without
+ * the owner hearing. Signing in from the email needs no second email, and
+ * removing a device exposes nothing.
  */
-export async function mailDeviceChange(env: Env, email: string | null, change: 'added' | 'removed', name: string, nowMs: number): Promise<void> {
+export async function mailDeviceAdded(env: Env, email: string | null, name: string, nowMs: number): Promise<void> {
   if (!email || !env.EMAIL || !env.EMAIL_FROM) return;
   const t = m();
   const device = name.trim() || t.aDevice;
   const when = t.singaporeTime(new Date(nowMs + 8 * 3_600_000).toISOString().replace('T', ' ').slice(0, 16));
   const site = siteOrigin(env);
-  const text = change === 'added' ? t.deviceAddedText(device, when, site) : t.deviceRemovedText(device, when, site);
   await env.EMAIL.send({
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: email,
-    subject: change === 'added' ? t.deviceAddedSubject(device) : t.deviceRemovedSubject(device),
-    text,
+    subject: t.deviceAddedSubject(device),
+    text: t.deviceAddedText(device, when, site),
   });
 }
 
