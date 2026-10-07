@@ -624,13 +624,77 @@ test('a suggestion turned down is not offered again, and never during a trip', a
   assert.equal((await next(phone)).card.suggestion, null);
 });
 
+test('how a trip went keeps the day it happened, never the time', async () => {
+  const { env, phone, signal } = await setup();
+  await signal(phone, { kind: 'missed' });
+  const { at, day } = env.DB._db.prepare('SELECT at, day FROM trip_outcomes').get();
+  assert.equal(day, sgtDate(FROZEN_NOW));
+  assert.equal(at, endOfDayMs(FROZEN_NOW) - 86_400_000, 'the start of that day in Singapore');
+  assert.equal(sgtDate(at), day);
+});
+
+test('migration 0012 rounds the trip history already kept to the start of its day', async () => {
+  const { readFileSync } = await import('node:fs');
+  const db = makeD1();
+  db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', NULL, 0, 0)`);
+  // 23:59:59 and 00:00:01 in Singapore, either side of midnight.
+  const late = Date.parse('2026-10-01T15:59:59Z');
+  const early = Date.parse('2026-10-01T16:00:01Z');
+  db.exec(`INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES ('u', 'a', '2026-10-01', 'missed', ${late}), ('u', 'b', '2026-10-02', 'missed', ${early})`);
+  db.exec(readFileSync(new URL('../migrations/0012_trip_outcome_days.sql', import.meta.url), 'utf8'));
+  const rows = db._db.prepare('SELECT trip_key, day, at FROM trip_outcomes ORDER BY trip_key').all();
+  assert.deepEqual(rows.map((r) => [r.trip_key, r.at]), [['a', Date.parse('2026-09-30T16:00:00Z')], ['b', Date.parse('2026-10-01T16:00:00Z')]]);
+  assert.ok(rows.every((r) => sgtDate(r.at) === r.day), 'each still on its own day');
+});
+
 test('trip outcomes are in the export and go with the account', async () => {
   const { env, call, cookie, phone, signal } = await setup();
   await signal(phone, { kind: 'missed' });
   const exported = await (await call('/me/export', { cookie })).json();
   assert.deepEqual(exported.tripOutcomes.map((o) => [o.trip, o.outcome]), [[FIRST, 'missed']]);
+  assert.equal(exported.today.trips[FIRST].kind, 'missed', "today's trip, from the Trip object");
   assert.equal((await call('/me', { method: 'DELETE', cookie })).status, 200);
   assert.equal(env.DB._db.prepare('SELECT COUNT(*) AS n FROM trip_outcomes').get().n, 0);
+});
+
+test("a deleted account's trip state goes at once, and a request still under way can't store it again", async () => {
+  const { env, call, cookie, phone, signal, TRIPS, clock } = await setup();
+  await signal(phone, { kind: 'missed' });
+  const userId = env.DB._db.prepare('SELECT id FROM users').get().id;
+  const inst = TRIPS.instances.get(userId);
+  assert.ok(inst.storage._map.has('day'));
+
+  assert.equal((await call('/me', { method: 'DELETE', cookie })).status, 200);
+  const obj = TRIPS.get(TRIPS.idFromName(userId));
+  const post = (path, body) => obj.fetch(`https://trip/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const date = sgtDate(FROZEN_NOW);
+  const deleteAt = endOfDayMs(FROZEN_NOW);
+  // What a /me/next that read the account just before it went would still send.
+  assert.ok((await post('signal', { date, key: FIRST, rec: { kind: 'skipped', at: FROZEN_NOW }, deleteAt })).ok);
+  assert.ok((await post('plan', { date, key: FIRST, plan: { svc: 'D2', stop: 'PGP', board: null, arrive: null }, deleteAt })).ok);
+  assert.ok((await post('watch', { userId, date, at: FROZEN_NOW + 60_000, deleteAt })).ok);
+  assert.ok((await post('followed', { date, at: FROZEN_NOW, deleteAt })).ok);
+  assert.equal(await (await obj.fetch(`https://trip/day?date=${date}`)).json(), null);
+  assert.deepEqual([...inst.storage._map.keys()].sort(), ['deleteAt', 'gone'], 'only the mark is kept');
+  assert.equal(TRIPS.alarms.get(userId), deleteAt, 'until midnight');
+
+  clock(deleteAt);
+  await TRIPS.fireAlarms();
+  assert.equal(inst.storage._map.size, 0, 'and the mark goes then too');
+});
+
+test("the cron's deletion of an idle anonymous account takes its trip state too", async () => {
+  const { housekeeping } = await import('../src/monitor.ts');
+  const { ACCOUNT_TTL } = await import('../src/accounts.ts');
+  const { env, TRIPS } = await setup();
+  const post = (id, path, body) =>
+    TRIPS.get(TRIPS.idFromName(id)).fetch(`https://trip/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  env.DB._db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('idle', NULL, 0, 0), ('used', NULL, 0, ${FROZEN_NOW})`);
+  for (const id of ['idle', 'used']) await post(id, 'watch', { userId: id, date: sgtDate(FROZEN_NOW), at: FROZEN_NOW + 60_000, deleteAt: endOfDayMs(FROZEN_NOW) });
+  await housekeeping(env.DB, FROZEN_NOW + ACCOUNT_TTL.anonIdleMs - 1000, true, env);
+  assert.deepEqual(env.DB._db.prepare("SELECT id FROM users WHERE id IN ('idle', 'used')").all().map((r) => r.id), ['used']);
+  assert.equal(TRIPS.instances.get('idle').storage._map.has('userId'), false, 'the idle account’s is emptied');
+  assert.equal(TRIPS.instances.get('used').storage._map.get('userId'), 'used', 'the other is untouched');
 });
 
 /* Phase 8.1: the trip from the phone's location (detect.ts). */
@@ -1163,6 +1227,9 @@ test('rides from a brand-new account are not counted, nor two on one service in 
   assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW), true);
   assert.equal(await mayRecordRide(t.env, db, userId, 'D2', FROZEN_NOW + 60_000), false, 'once an hour');
   assert.equal(await mayRecordRide(t.env, db, userId, 'A1', FROZEN_NOW + 60_000), true, 'per service');
+  const marks = [...t.env.KV._map.keys()].filter((k) => k.startsWith('ride:seen:'));
+  assert.equal(marks.length, 2);
+  assert.ok(marks.every((k) => !k.includes(userId) && !/D2|A1/.test(k)), 'the marks name no account and no service');
 });
 
 test('a trip key that is no class of yours and no trip home is refused', async () => {
@@ -1202,5 +1269,8 @@ test('a Trip object that never answers costs the card its trip state, not the ca
   t.mock.timers.tick(TRIP_TIMEOUT_MS);
   assert.equal(await day, null, 'no state, as when the object fails');
   await assert.rejects(save, /timed out/, 'a change says it failed, as it does on an error');
+  // Clearing is tried twice, each try waiting its time.
+  await new Promise((r) => setImmediate(r));
+  t.mock.timers.tick(TRIP_TIMEOUT_MS);
   assert.equal(await clear, undefined, 'clearing goes on without it');
 });

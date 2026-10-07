@@ -46,14 +46,14 @@ const coordParams = [
   {
     name: 'lat',
     in: 'query',
-    description: 'Latitude of the caller. Ignored unless `lon` is also sent.',
+    description: 'Latitude of the caller, rounded to four decimal places (about 11 m) when read, and never stored. Ignored unless `lon` is also sent.',
     schema: { type: 'number', minimum: -90, maximum: 90 },
     example: 1.294962,
   },
   {
     name: 'lon',
     in: 'query',
-    description: 'Longitude of the caller. Ignored unless `lat` is also sent.',
+    description: 'Longitude of the caller, rounded like `lat`. Ignored unless `lat` is also sent.',
     schema: { type: 'number', minimum: -180, maximum: 180 },
     example: 103.784556,
   },
@@ -932,6 +932,31 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: { '200': ok({ type: 'object', description: 'ok, and `choices` as in GET /me/choices.' }), '400': errorResponse('No such suggestion or choice.') },
         },
       },
+      '/me/notice': {
+        get: {
+          tags: ['Account'],
+          summary: 'The new semester’s reminder',
+          description:
+            'The week before a semester starts, the reminder to import its timetable, for an account whose timetable is from an earlier semester; otherwise null. The Android app fetches it when a push says only `kind: term`, so the words do not travel through Firebase. Both languages, unless the account chose one in Settings.',
+          operationId: 'meNotice',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: {
+            '200': ok(
+              {
+                type: 'object',
+                properties: {
+                  notice: {
+                    type: ['object', 'null'],
+                    properties: { title: { type: 'string' }, body: { type: 'string' }, zhTitle: { type: 'string' }, zhBody: { type: 'string' } },
+                  },
+                },
+              },
+              { notice: { title: 'Sem 1 2026/27 starts Mon 10 Aug', body: 'Import your new timetable from NUSMods, so your plans are right from the first day.', zhTitle: '2026/27 第 1 学期将于 8月10日（周一）开始', zhBody: '从 NUSMods 导入新课表，让第一天起的行程安排都准确无误。' } },
+            ),
+            '401': errorResponse('No valid session.'),
+          },
+        },
+      },
       '/me/choices': {
         get: {
           tags: ['Account'],
@@ -966,7 +991,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Report a wrong answer',
           description:
-            'Sends the answer you were looking at, with a note saying what was wrong, for checking against what the buses did. Only for an account with an email (signed in), so the operator can reply. Kept with your account (in the export, deleted with it) and emailed to the operator with your address. Up to ten a day.',
+            'Sends the answer you were looking at, with a note saying what was wrong, for checking against what the buses did. Only for an account with an email (signed in), so the operator can reply. Kept with your account for a year (in the export, deleted with it); the note alone is emailed to the operator, without your address or the answer. Up to ten a day.',
           operationId: 'sendFeedback',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
@@ -1116,7 +1141,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Delete the account',
           description:
-            'Deletes the account and everything kept for it, and signs out every device. From the account page; an account without an email (which has no account page) can delete itself from its app.',
+            'Deletes the account and everything kept for it, today’s trip included, and signs out every device. From the account page; an account without an email (which has no account page) can delete itself from its app.',
           operationId: 'deleteMe',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: {
@@ -1130,7 +1155,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         get: {
           tags: ['Account'],
           summary: 'Download your data',
-          description: 'Everything kept for the account, as a JSON file: the profile, devices, API keys (names only), feedback and trip outcomes.',
+          description: 'Everything kept for the account, as a JSON file: the account and its dates, the profile, devices (with their app, version and push address), API keys (names only), feedback, trip outcomes and choices, sign-in requests still waiting, and today’s trip.',
           operationId: 'meExport',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ type: 'object' }), '401': errorResponse('No valid session.') },

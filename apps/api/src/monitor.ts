@@ -8,6 +8,7 @@
  */
 
 import { KEEP_DAYS } from './outcomes.ts';
+import { FEEDBACK_KEEP_DAYS } from './feedback.ts';
 import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
 import { fetchPublicArrivals, ltaConfigured } from './lta.ts';
@@ -20,7 +21,7 @@ import { pruneCrowdSeen } from './crowd.ts';
 import { ACCOUNT_TTL } from './accounts.ts';
 import { type Notice, pushEnabled, remindUser } from './push.ts';
 import { m, withLang } from './i18n.ts';
-import { sgtDate, watchTrip } from './trip.ts';
+import { clearTrip, sgtDate, watchTrip } from './trip.ts';
 import { refreshTable } from './ridetimes.ts';
 import { sgt } from './config.ts';
 import { isBeta } from './site.ts';
@@ -314,9 +315,11 @@ async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switche
 /**
  * Delete expired sign-in links and requests and pairing codes. With `daily`,
  * also expired web sessions, idle devices, anonymous accounts nobody has
- * used for 60 days, and old trip outcomes.
+ * used for 60 days, and trip history and reports past their time. With
+ * `env`, each deleted account's trip state goes too, as when an account is
+ * deleted by hand, rather than at midnight.
  */
-export async function housekeeping(db: D1Database, nowMs: number, daily = true): Promise<void> {
+export async function housekeeping(db: D1Database, nowMs: number, daily = true, env?: Env): Promise<void> {
   // Small tables of short-lived codes: every run, so they don't pile up.
   const stmts = [
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
@@ -328,14 +331,19 @@ export async function housekeeping(db: D1Database, nowMs: number, daily = true):
   if (daily) {
     stmts.push(
       // The planner prefers the UNIQUE email index, which reads every anonymous account.
-      db.prepare('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < ?').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
+      db.prepare('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < ? RETURNING id').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
       db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
       db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
       // Trip outcomes are kept KEEP_DAYS days.
       db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
+      // Reports are kept FEEDBACK_KEEP_DAYS.
+      db.prepare('DELETE FROM feedback WHERE created < ?').bind(nowMs - FEEDBACK_KEEP_DAYS * 86_400_000),
     );
   }
-  await db.batch(stmts);
+  const out = await db.batch(stmts);
+  if (!daily || !env) return;
+  const ids = ((out[3]?.results ?? []) as Array<{ id: string }>).map((r) => r.id);
+  for (let i = 0; i < ids.length; i += ARM_AT_ONCE) await Promise.all(ids.slice(i, i + ARM_AT_ONCE).map((id) => clearTrip(env, id)));
 }
 
 const SWEPT_KEY = 'housekeeping:day';
@@ -433,8 +441,8 @@ const REMIND_RETRY_KEY = 'term:retry';
 /** Runs a failed reminder is tried again (two hours of the cron), so push
  *  broken for a while still reaches them, and a token that never works stops. */
 const REMIND_TRIES = 8;
-/** A user due a reminder: id, the language chosen in Settings ('' for the device's), tries so far. */
-type Due = [string, string, number];
+/** A user due a reminder: id, the reminder in the language their profile asks for, tries so far. */
+type Due = [string, Notice, number];
 /** Retried users' profiles read at once (D1 binds at most 100 values). */
 const PROFILES_AT_ONCE = 50;
 /** Not before 10 in the morning, Singapore time. */
@@ -447,6 +455,22 @@ export function termNotice(term: { acadYear: string; semester: number }, start: 
   const en = withLang('en', words);
   const zh = withLang('zh', words);
   return { title: en.title, body: en.body, zhTitle: zh.title, zhBody: zh.body };
+}
+
+/**
+ * The reminder a profile is due now, in the words its language setting asks
+ * for (both when it follows the device), or null: no semester starting
+ * within the week, no timetable, or the new one already imported. The cron
+ * pushes it; GET /me/notice gives it to an app that was pushed only its kind.
+ */
+export function termNoticeFor(p: { trips?: unknown; term?: { acadYear: string; semester: number } | null; lang?: unknown } | null, nowMs: number): Notice | null {
+  const soon = semesterSoon(nowMs);
+  if (!soon || !p || !Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) return null;
+  const both = termNotice(soon.term, soon.start);
+  // A language chosen in Settings wins over each device's.
+  if (p.lang === 'en') return { ...both, zhTitle: both.title, zhBody: both.body };
+  if (p.lang === 'zh') return { title: both.zhTitle, body: both.zhBody, zhTitle: both.zhTitle, zhBody: both.zhBody };
+  return both;
 }
 
 /**
@@ -495,22 +519,17 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
     for (const r of got) rows.push({ ...r, tries: triesOf.get(r.user_id) ?? 0 });
   }
   for (const r of results) rows.push({ ...r, tries: 0 });
-  const both = termNotice(soon.term, soon.start);
-  // A language chosen in Settings wins over each device's.
-  const en: Notice = { ...both, zhTitle: both.title, zhBody: both.body };
-  const zh: Notice = { title: both.zhTitle, body: both.zhBody, zhTitle: both.zhTitle, zhBody: both.zhBody };
-  const notice = (lang: string) => (lang === 'en' ? en : lang === 'zh' ? zh : both);
   let sent = 0;
   const due: Due[] = [];
   for (const r of rows) {
-    let p: { trips?: unknown[]; term?: { acadYear: string; semester: number } | null; lang?: string } = {};
+    let p: Parameters<typeof termNoticeFor>[0] = null;
     try {
       p = JSON.parse(r.json);
     } catch {
       continue;
     }
-    if (!Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) continue;
-    due.push([r.user_id, p.lang === 'en' || p.lang === 'zh' ? p.lang : '', r.tries]);
+    const notice = termNoticeFor(p, nowMs);
+    if (notice) due.push([r.user_id, notice, r.tries]);
   }
   // The batch is marked before it's sent, so a mark that can't be saved
   // sends nothing rather than the same batch every run. The mark moves on
@@ -522,12 +541,12 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   const failed: Due[] = [];
   for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
     const some = due.slice(i, i + ARM_AT_ONCE);
-    const n = await Promise.all(some.map(([userId, lang]) => remindUser(env, userId, notice(lang), nowMs).catch(() => ({ sent: 0, failed: 1 }))));
+    const n = await Promise.all(some.map(([userId, notice]) => remindUser(env, userId, notice, nowMs).catch(() => ({ sent: 0, failed: 1 }))));
     // Only a send that failed is worth trying again; a user with no device
     // it could go to (no usable key, every token gone) would fail every time.
-    some.forEach(([userId, lang, tries], j) => {
+    some.forEach(([userId, notice, tries], j) => {
       sent += n[j].sent;
-      if (n[j].sent === 0 && n[j].failed > 0) failed.push([userId, lang, tries + 1]);
+      if (n[j].sent === 0 && n[j].failed > 0) failed.push([userId, notice, tries + 1]);
     });
   }
   // Users no device took (push itself failing, say) are tried again on the
@@ -611,7 +630,7 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
     const daily = await sweepDue(env, nowMs);
     let swept = false;
     await step('housekeeping', async () => {
-      await housekeeping(env.DB!, nowMs, daily);
+      await housekeeping(env.DB!, nowMs, daily, env);
       swept = daily;
     });
     if (daily) {

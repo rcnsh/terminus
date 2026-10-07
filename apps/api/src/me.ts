@@ -16,6 +16,7 @@ import {
   createPairCode,
   mailDeviceAdded,
   deleteAccount,
+  forgetSignInCode,
   endAllSessions,
   exportAccount,
   checkTurnstile,
@@ -57,7 +58,7 @@ import { mayRecordRide, recordRide } from './ridetimes.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
 import { cardFor, nextPhaseAt } from './card.ts';
-import { feedDownSince } from './monitor.ts';
+import { feedDownSince, termNoticeFor } from './monitor.ts';
 import { RIDE, WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
 import { GRAPH_PUBLIC, nearbyTwin, twinOf } from './graph.ts';
@@ -477,14 +478,15 @@ export const ME_ROUTES: MeRoute[] = [
       if (session.kind !== 'web' && session.user.email !== null) return json({ error: 'delete the account from the account page' }, 403);
       await deleteAccount(db, session.user);
       await clearTrip(env, session.user.id);
+      if (session.user.email) await forgetSignInCode(env, session.user.email);
       return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
     },
   },
   {
     method: 'GET',
     path: '/me/export',
-    run: async ({ db, session }) => {
-      return json(await exportAccount(db, session.user), 200, {
+    run: async ({ env, db, session, nowMs }) => {
+      return json(await exportAccount(db, session.user, await loadDay(env, session.user.id, nowMs)), 200, {
         'content-disposition': 'attachment; filename="terminus-export.json"',
       });
     },
@@ -881,6 +883,14 @@ export const ME_ROUTES: MeRoute[] = [
   },
   {
     method: 'GET',
+    path: '/me/notice',
+    // The new semester's reminder, for an app that was pushed only its kind (push.ts).
+    run: async ({ db, session, nowMs }) => {
+      return json({ notice: termNoticeFor((await loadProfileJson(db, session.user.id)) as Parameters<typeof termNoticeFor>[0], nowMs) });
+    },
+  },
+  {
+    method: 'GET',
     path: '/me/choices',
     run: async ({ db, session }) => {
       return json({ choices: await listPrefs(db, session.user.id), history: await historySize(db, session.user.id) });
@@ -907,7 +917,7 @@ export const ME_ROUTES: MeRoute[] = [
       const id = await saveFeedback(db, session.user.id, parsed.value, nowMs);
       if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429);
       ctx.waitUntil(
-        mailFeedback(env, id, email, parsed.value, nowMs).catch((e) =>
+        mailFeedback(env, id, parsed.value, nowMs).catch((e) =>
           console.error('feedback email failed', e instanceof Error ? e.name : typeof e),
         ),
       );

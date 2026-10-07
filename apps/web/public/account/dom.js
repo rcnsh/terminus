@@ -64,6 +64,33 @@ export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) 
   return res;
 }
 
+/** Where the web app keeps the places searched for (app/app.js). */
+export const ADDED_PLACES_KEY = 'added-places';
+
+/**
+ * Signing out, or the account deleted or signed out elsewhere: what this
+ * browser kept of the account goes, so the next person to sign in here
+ * doesn't see it. That's the places searched for, and the push
+ * subscription (the server has already dropped its address). The look
+ * (language, theme, clock) is the browser's and stays.
+ */
+export async function forgetAccountHere() {
+  try {
+    globalThis.localStorage?.removeItem(ADDED_PLACES_KEY);
+  } catch {
+    // Storage blocked: nothing was kept.
+  }
+  // Unsubscribing asks the push service, which can be slow offline: signing
+  // out waits two seconds at most.
+  const unsubscribe = (async () => {
+    const reg = await globalThis.navigator?.serviceWorker?.getRegistration('/app/');
+    await (await reg?.pushManager?.getSubscription())?.unsubscribe();
+  })().catch(() => {
+    // No service worker, or push never set up.
+  });
+  await Promise.race([unsubscribe, new Promise((r) => setTimeout(r, 2000))]);
+}
+
 /**
  * A same-origin JSON call; throws with the server's error message and status.
  * Reads give up after SEND_TIMEOUT_MS, writes after WRITE_TIMEOUT_MS.

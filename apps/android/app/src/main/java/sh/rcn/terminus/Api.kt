@@ -807,6 +807,15 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return parseChoices(request("POST", "/me/choice", body))
     }
 
+    /**
+     * The new semester's reminder, in both languages (unless the account chose
+     * one), or null when there's none: for a push that says only `kind: term`.
+     */
+    suspend fun notice(): Map<String, String>? {
+        val n = request("GET", "/me/notice").optJSONObject("notice") ?: return null
+        return listOf("title", "body", "zhTitle", "zhBody").associateWith { n.optString(it) }
+    }
+
     /** Classes with a bus earlier or no reminders, and how many trips are remembered. */
     suspend fun choices(): Pair<List<TripChoice>, Int> {
         val o = request("GET", "/me/choices")

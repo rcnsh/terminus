@@ -797,6 +797,15 @@ export async function endAllSessions(db: D1Database, user: User): Promise<number
   return r.meta?.changes ?? 0;
 }
 
+/**
+ * Forgets a sign-in code still waiting in KV for this address: with the
+ * account gone, nothing should be left under its email, even for the
+ * quarter of an hour the code would last.
+ */
+export async function forgetSignInCode(env: Env, email: string): Promise<void> {
+  await env.KV.delete(await signInCodeKey(email)).catch(() => {});
+}
+
 /** Deletes the account and everything hanging off it (the schema cascades). */
 export async function deleteAccount(db: D1Database, user: User): Promise<void> {
   await db.batch([
@@ -806,14 +815,39 @@ export async function deleteAccount(db: D1Database, user: User): Promise<void> {
   ]);
 }
 
-/** Everything stored about the user, for a data export. Token hashes are left out. */
-export async function exportAccount(db: D1Database, user: User): Promise<Record<string, unknown>> {
-  const row = await db.prepare('SELECT created FROM users WHERE id = ?').bind(user.id).first<{ created: number }>();
+/** A device's push address as the export shows it: whose service, and the address itself. */
+function pushOf(token: string | null): { service: 'firebase' | 'web'; address: unknown } | null {
+  if (!token) return null;
+  if (!token.startsWith('web:')) return { service: 'firebase', address: token };
+  try {
+    return { service: 'web', address: JSON.parse(token.slice(4)) };
+  } catch {
+    return { service: 'web', address: token.slice(4) };
+  }
+}
+
+const iso = (ms: number | null | undefined) => (ms ? new Date(ms).toISOString() : null);
+
+/**
+ * Everything stored about the user, for a data export: the account, its
+ * devices, keys, reports, trip history and choices, sign-in requests still
+ * waiting, and today's trip (`today`, from the Trip object). Token hashes
+ * are left out.
+ */
+export async function exportAccount(db: D1Database, user: User, today: unknown = null): Promise<Record<string, unknown>> {
+  const row = await db
+    .prepare('SELECT created, last_seen AS lastSeen, via, email_added AS emailAdded, ask_from AS askFrom FROM users WHERE id = ?')
+    .bind(user.id)
+    .first<{ created: number; lastSeen: number; via: string; emailAdded: number | null; askFrom: number | null }>();
   const profile = await loadProfileJson(db, user.id);
   const { results: sessions } = await db
-    .prepare('SELECT kind, name, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created')
+    .prepare('SELECT kind, name, platform, client, push_token AS push, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created')
     .bind(user.id)
-    .all<{ kind: string; name: string | null; created: number; lastSeen: number; expires: number | null }>();
+    .all<{ kind: string; name: string | null; platform: string | null; client: string | null; push: string | null; created: number; lastSeen: number; expires: number | null }>();
+  const { results: requests } = await db
+    .prepare('SELECT device_name AS device, platform, status, created, expires FROM login_requests WHERE email = ? OR anon_user_id = ? ORDER BY created')
+    .bind(user.email, user.id)
+    .all<{ device: string; platform: string | null; status: string; created: number; expires: number }>();
   const { results: apiKeys } = await db
     .prepare('SELECT name, hint, created, last_used AS lastUsed FROM api_keys WHERE user_id = ? ORDER BY created')
     .bind(user.id)
@@ -825,16 +859,25 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
   const trips = await exportOutcomes(db, user.id);
   return {
     email: user.email,
-    created: row ? new Date(row.created).toISOString() : null,
+    created: iso(row?.created),
+    lastSeen: iso(row?.lastSeen),
+    startedIn: row?.via ?? null,
+    emailAdded: iso(row?.emailAdded),
+    askFrom: iso(row?.askFrom),
     profile,
     ...trips,
+    today,
     sessions: sessions.map((r) => ({
       kind: r.kind,
       name: r.name,
+      platform: r.platform,
+      app: r.client,
+      push: pushOf(r.push),
       created: new Date(r.created).toISOString(),
       lastSeen: new Date(r.lastSeen).toISOString(),
-      expires: r.expires ? new Date(r.expires).toISOString() : null,
+      expires: iso(r.expires),
     })),
+    signInRequests: requests.map((r) => ({ device: r.device, platform: r.platform, status: r.status, created: iso(r.created), expires: iso(r.expires) })),
     // Names and dates only: a key itself is never kept.
     apiKeys: apiKeys.map((k) => ({
       name: k.name,

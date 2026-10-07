@@ -322,17 +322,23 @@ export async function markFollowed(env: Env, userId: string, nowMs: number): Pro
 
 /**
  * Empties a user's trip state at once, for an account that's being deleted
- * (it would otherwise go at midnight). A failure is logged, not thrown: the
+ * (it would otherwise go at midnight), and stops anything storing it again
+ * today (tripdo.ts). Tried twice; a failure is then logged, not thrown: the
  * account still goes, and the state still expires with the day.
  */
 export async function clearTrip(env: Env, userId: string): Promise<void> {
   const s = stub(env, userId);
   if (!s) return;
-  try {
-    const res = await ask(s, 'clear', { method: 'POST' });
-    if (!res.ok) throw new Error(`status ${res.status}`);
-  } catch (err) {
-    console.error('trip state not cleared', err instanceof Error ? err.message : typeof err);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await ask(s, 'clear', { method: 'POST' });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return;
+    } catch (err) {
+      if (attempt < 2) continue;
+      console.error('trip state not cleared', err instanceof Error ? err.message : typeof err);
+      return;
+    }
   }
 }
 

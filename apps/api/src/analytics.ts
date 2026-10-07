@@ -24,10 +24,12 @@
  * never reorder, never repurpose, or every query written before the change
  * starts lying.
  *
- *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse'
+ *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse' | 'signal'
  *   blob2   stop        boarding stop code; for 'error', the route (no query),
  *                       or 'cron <step>' for a cron step that failed;
- *                       for 'timelapse', the poll's outcome (see logPoll)
+ *                       for 'timelapse', the poll's outcome (see logPoll);
+ *                       for 'signal', the kind of trip signal (me.ts), a count
+ *                       with no account, stop or location
  *   blob3   svc         service, '' on an ended answer
  *   blob4   dest        destination stop code, '' for a bare /next
  *   blob5   quality     live | scheduled | unknown | stale | ended
@@ -47,7 +49,11 @@
  *   double9  hadCoords       0 | 1
  *   double10 walkAllS        whole-way walk, -1 when unknown
  *
- *   index1  stop code (the sampling key); 'error' and 'timelapse' rows use their kind
+ *   index1  stop code (the sampling key); 'error', 'timelapse' and 'signal' rows use their kind
+ *
+ * No row holds an account, email, IP address or coordinates. An answer row's
+ * stop is the one nearest the caller when a location was sent, and its
+ * destination comes from the timetable: the privacy policy says so.
  * ---------------------------------------------------------------------------
  */
 

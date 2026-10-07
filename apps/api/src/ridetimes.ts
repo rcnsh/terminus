@@ -73,12 +73,14 @@ export const RIDE_MIN_ACCOUNT_AGE_MS = 3 * 86_400_000;
 /**
  * Whether this account's ride on `svc` may be kept: an account a few days
  * old, and one ride per service per hour. The rows hold no user, so the
- * once-an-hour mark is a short-lived KV key instead.
+ * once-an-hour mark is a short-lived KV key instead, named by a hash: the
+ * key itself says nothing of who rode what, and once the account is gone
+ * nothing leads back to it.
  */
 export async function mayRecordRide(env: Env, db: D1Database, userId: string, svc: string, nowMs: number): Promise<boolean> {
   const user = await db.prepare('SELECT created FROM users WHERE id = ?').bind(userId).first<{ created: number }>();
   if (!user || nowMs - user.created < RIDE_MIN_ACCOUNT_AGE_MS) return false;
-  const key = `ride:seen:${userId}:${svc}:${Math.floor(nowMs / 3_600_000)}`;
+  const key = `ride:seen:${await sha256Hex(`${userId}:${svc}:${Math.floor(nowMs / 3_600_000)}`)}`;
   if (await env.KV.get(key).catch(() => null)) return false;
   await env.KV.put(key, '1', { expirationTtl: 3_700 }).catch(() => {});
   return true;
@@ -97,6 +99,11 @@ const medianSql = (by: string) => `
            COUNT(*) OVER (PARTITION BY ${by}) AS n
       FROM ride_times WHERE day >= ?)
   SELECT svc, hour, n, AVG(x) AS med FROM r WHERE i IN ((n + 1) / 2, (n + 2) / 2) GROUP BY ${by}`;
+
+async function sha256Hex(s: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 /** Seconds per stop from the rides kept: each service, and each hour with enough of its own. */
 export async function buildTable(db: D1Database, nowMs: number): Promise<HopTable> {

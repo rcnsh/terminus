@@ -156,7 +156,7 @@
 "Sign out of this Mac" = "在这台 Mac 上退出登录";
 "Skip setup" = "跳过设置";
 "Slow" = "慢";
-"So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored." = "这样路线会从离你最近的车站开始。你的位置只用于该次请求，精确到约 11 米，且从不保存。";
+"So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored." = "这样路线会从离你最近的车站开始。你的位置只用于该次请求，取整到约 11 米，且从不保存。";
 "Start from my nearest stop" = "从离我最近的车站出发";
 "Step %@ of %@" = "第 %1$@ 步，共 %2$@ 步";
 "Stops for %@: %@. terminus won't direct you home when you're already there." = "%@ 的车站：%@。你已经在宿舍时，terminus 不会再引导你回家。";

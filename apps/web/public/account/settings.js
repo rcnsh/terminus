@@ -7,7 +7,7 @@
 // Back and a reload keep it.
 
 import { Icon, html, reducedMotion, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clockOpts, locale, spaced, t } from './dom.js';
+import { api, clockOpts, forgetAccountHere, locale, spaced, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 import { cardStyle, styleName } from './journey.js';
@@ -41,6 +41,7 @@ const TITLES = {
 
 async function signOut() {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  await forgetAccountHere();
   location.reload();
 }
 

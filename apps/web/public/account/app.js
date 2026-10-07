@@ -4,7 +4,7 @@
 // someone is signed in: the sign-in card doesn't wait for them.
 
 import { Fill, MARK, Rich, html, render, store, useEffect, useInterval, useRef, useState, useStore } from '../assets/ui.js';
-import { api, hour12, t } from './dom.js';
+import { api, forgetAccountHere, hour12, t } from './dom.js';
 import { Card, Message, Report } from './preview.js';
 import { Toast, loadCampus, loadProfile, saves, walkSpeed } from './profile.js';
 import { Livery } from './livery.js';
@@ -41,6 +41,7 @@ const set = (patch) => page.set((s) => ({ ...s, ...patch }));
 
 async function signOut() {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  await forgetAccountHere();
   location.reload();
 }
 

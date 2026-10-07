@@ -231,10 +231,21 @@ test('the week before a semester, push users with an older timetable are reminde
   assert.match(sent.data.body, /NUSMods/);
   assert.equal(await remindTerm(env, Date.now()), 0, 'once a semester');
 
+  // An app that fetches the words is pushed only the kind; it asks for them itself.
+  await env.KV.delete('term:reminded');
+  env.DB._db.prepare("UPDATE sessions SET client = 'android/2.5.0' WHERE push_token = 'fcm-phone'").run();
+  const bare = fcm.sent.length;
+  assert.equal(await remindTerm(env, Date.now()), 1);
+  assert.deepEqual(fcm.sent.slice(bare)[0].data, { kind: 'term' }, 'no words through Firebase');
+  const { notice } = await (await call('/me/notice', { token: phone })).json();
+  assert.equal(notice.title, 'Sem 1 2026/27 starts Mon 10 Aug');
+  assert.equal(notice.zhTitle, '2026/27 第 1 学期将于 8月10日（周一）开始');
+
   // Already imported for the new semester, or no timetable: nothing.
   await env.KV.delete('term:reminded');
   setProfile({ term: { acadYear: '2026/2027', semester: 1 } });
   assert.equal(await remindTerm(env, Date.now()), 0, 'already imported');
+  assert.equal((await (await call('/me/notice', { token: phone })).json()).notice, null, 'nothing to fetch either');
   await env.KV.delete('term:reminded');
   setProfile({ trips: [], term: { acadYear: '2025/2026', semester: 2 } });
   assert.equal(await remindTerm(env, Date.now()), 0, 'no timetable to bring up to date');
@@ -408,6 +419,12 @@ test('a retried semester reminder reads the profile again: imported since, nothi
     globalThis.fetch = real;
     console.error = quiet;
   }
+});
+
+test('which apps fetch the reminder words themselves: Android from 2.5.0', async () => {
+  const { fetchesNotice } = await import('../src/push.ts');
+  for (const c of ['android/2.5.0', 'android/2.5.0-beta.1', 'android/2.10.0', 'android/3.0.0']) assert.equal(fetchesNotice(c), true, c);
+  for (const c of ['android/2.4.2', 'android/2.4.10', 'android/1.9.9', 'mac/3.0.0', 'web', null, '']) assert.equal(fetchesNotice(c), false, String(c));
 });
 
 test('an access token that went stale is replaced, and the push still goes', async () => {
@@ -702,18 +719,19 @@ test('a /clear or a sooner /watch while the object wakes is not undone by it', a
   await trip.fetch('https://trip/clear', { method: 'POST' });
   g.open();
   await run;
-  assert.deepEqual([...stored(TRIPS).keys()], [], 'still empty');
-  assert.equal(alarm(), undefined, 'and no alarm left');
+  assert.deepEqual([...stored(TRIPS).keys()].sort(), ['deleteAt', 'gone'], 'nothing but the mark');
+  assert.equal(alarm(), stored(TRIPS).get('deleteAt'), 'and only the mark\'s alarm, at midnight');
 });
 
-test('deleting the account clears its Trip object, alarm and all', async () => {
+test('deleting the account clears its Trip object, its wake alarm too', async () => {
   const { call, cookie, phone, next, TRIPS, alarm } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
   assert.ok(alarm() !== undefined);
   assert.equal((await call('/me', { method: 'DELETE', cookie })).status, 200);
-  assert.deepEqual([...stored(TRIPS).keys()], []);
-  assert.equal(alarm(), undefined, 'the alarm goes too, which deleteAll alone leaves');
+  // Only the mark that keeps it empty today is left, and the alarm that ends it at midnight.
+  assert.deepEqual([...stored(TRIPS).keys()].sort(), ['deleteAt', 'gone']);
+  assert.equal(alarm(), stored(TRIPS).get('deleteAt'), 'no wake left, which deleteAll alone would leave');
 });
 
 test('/health says which push is set up; a key that will not parse is push off, said once', async () => {

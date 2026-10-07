@@ -31,7 +31,9 @@ import sh.rcn.terminus.widget.Refresher
  * redraws the widgets and the trip's notification from it. Everything else
  * (the heads-up alarm, the widget refresh) still works without it. The one
  * other kind, `term`, is the reminder to import a new semester's timetable,
- * worded by the server in both languages.
+ * worded by the server in both languages. Since 2.5.0 the push carries no
+ * words, so none pass through Google: the app fetches them (GET /me/notice).
+ * Older versions are still sent them.
  */
 object Push {
     /** This build has Firebase, and the phone has Play services. */
@@ -124,7 +126,13 @@ class PushService : FirebaseMessagingService() {
     /** The card changed: fetch it, and let the widgets and the trip's notification follow. */
     override fun onMessageReceived(message: RemoteMessage) {
         Store(applicationContext).pushHeardAt = System.currentTimeMillis()
-        if (message.data["kind"] == "term") return TermReminder.post(applicationContext, message.data)
+        if (message.data["kind"] == "term") {
+            val ctx = applicationContext
+            // Words in the push (an older server), or fetched: one request, on this background thread.
+            val words = if (message.data["title"] != null) message.data else runBlocking { TermReminder.fetch(ctx) }
+            if (words != null) TermReminder.post(ctx, words)
+            return
+        }
         if (message.data["kind"] != "card") return
         val ctx = applicationContext
         // A background thread with a few seconds to spare: only the answer
@@ -139,6 +147,13 @@ class PushService : FirebaseMessagingService() {
 object TermReminder {
     private const val CHANNEL = "term"
     private const val NOTIFICATION_ID = 3
+
+    /** The reminder's words from the server, or null (signed out, offline, or no reminder due). */
+    suspend fun fetch(ctx: Context): Map<String, String>? {
+        val token = Store(ctx).token ?: return null
+        // Fast timeouts: this runs inside the few seconds Firebase gives a message.
+        return runCatching { Api(token, fast = true).notice() }.getOrNull()
+    }
 
     fun post(ctx: Context, data: Map<String, String>) {
         if (!LeaveAlerts.canNotify(ctx)) return

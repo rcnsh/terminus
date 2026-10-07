@@ -603,6 +603,19 @@ class PlacesWidget : BaseWidget(large = true)
 
 private val VERSION = longPreferencesKey("version")
 
+/**
+ * Signing out: each widget forgets the place or Nearby list it was showing
+ * (WidgetModes) and the stops it was swapping between (NearbySwap), which
+ * were the old account's, and is drawn again.
+ */
+suspend fun forgetWidgets(ctx: Context) {
+    val mgr = GlanceAppWidgetManager(ctx)
+    for (widget in listOf(NextBusWidget(), PlacesWidget())) {
+        for (id in mgr.getGlanceIds(widget.javaClass)) updateAppWidgetState(ctx, id) { WidgetModes.forget(it) }
+    }
+    redrawWidgets(ctx)
+}
+
 /** Redraws every placed widget of both kinds with the latest cached answer. */
 suspend fun redrawWidgets(ctx: Context) {
     val mgr = GlanceAppWidgetManager(ctx)
