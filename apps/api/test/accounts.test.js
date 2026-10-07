@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
+import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { hashToken, newPairCode, normalizePairCode } from '../src/accounts.ts';
@@ -1057,6 +1057,31 @@ test('a session token that happens to start tk_ is still a session, not a missin
   db._db.prepare('UPDATE sessions SET token_hash = ? WHERE token_hash = ?').run(await hashToken(unlucky), await hashToken(token));
   assert.equal((await call(env, '/arrivals?stop=COM3', { token: unlucky })).status, 200);
   assert.equal((await call(env, '/arrivals?stop=COM3', { token: 'tk_nonsense' })).status, 401);
+});
+
+test('/buses remembers who was let in for a while; /me and the other answers never do', async () => {
+  const { env, db } = setup();
+  delete env[Symbol.for('terminus.testOpen')];
+  const { token } = await (await call(env, '/auth/anon', { method: 'POST', body: { name: 'Pixel' } })).json();
+  const prepare = env.DB.prepare.bind(env.DB);
+  let lookups = 0;
+  env.DB = { ...env.DB, prepare: (sql) => (sql.includes('FROM sessions s JOIN users') && lookups++, prepare(sql)), batch: env.DB.batch.bind(env.DB) };
+  const at = (ms, path) => {
+    installGlobals(makeFetch(), ms);
+    return call(env, path, { token });
+  };
+  assert.equal((await at(FROZEN_NOW, '/buses?svc=D2')).status, 200);
+  assert.equal((await at(FROZEN_NOW + 5_000, '/buses?svc=D2')).status, 200);
+  assert.equal((await at(FROZEN_NOW + 10_000, '/buses?svc=A1')).status, 200);
+  assert.equal(lookups, 1, 'one look-up for three polls');
+  // Signed out: the map may see the buses for the rest of the half-minute, nothing else.
+  db._db.prepare('DELETE FROM sessions').run();
+  assert.equal((await at(FROZEN_NOW + 15_000, '/buses?svc=D2')).status, 200);
+  assert.equal((await at(FROZEN_NOW + 15_000, '/arrivals?stop=COM3')).status, 401);
+  assert.equal((await at(FROZEN_NOW + 15_000, '/me')).status, 401);
+  assert.equal((await at(FROZEN_NOW + 30_000, '/buses?svc=D2')).status, 401, 'then asked again, and refused');
+  // Someone not let in isn't remembered either.
+  assert.equal((await at(FROZEN_NOW + 31_000, '/buses?svc=D2')).status, 401);
 });
 
 test('API keys: a name is required, five at most, and a phone cannot make them', async () => {

@@ -120,7 +120,10 @@ pnpm run deploy
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
-for buses every 5 s. `/health`, `/status.json`, `/admin/stats`,
+for buses every 5 s. For `/buses` only, each isolate remembers who it let
+in for 30 s (`recentCallerFor` in `src/access.ts`), so a poll doesn't
+look the session up in D1 again: a session signed out or a key revoked can
+still see the buses that long, and nothing else. `/health`, `/status.json`, `/admin/stats`,
 `/timelapse/*` and `/download/*` stay limited by IP. `/map/*` is limited by IP only where it
 reads R2 (`RL_MAP`, 300 a minute): a piece already in the edge cache is
 never refused, so a lecture hall can open the map at once.

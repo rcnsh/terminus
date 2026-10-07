@@ -40,7 +40,7 @@ import { landingPage } from './landing.ts';
 import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { residenceList } from './residences.ts';
-import { callerFor } from './access.ts';
+import { callerFor, recentCallerFor } from './access.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
@@ -404,7 +404,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // and the map alone asks every 5 s. A key has its own ceiling wherever
     // it's used from; a request with neither is limited by IP.
     if (keyed) {
-      const caller = await callerFor(env, req, nowMs, ctx);
+      // /buses, which the map asks every 5 s: who it is, remembered a little
+      // while (recentCallerFor says what that costs).
+      const caller = url.pathname === '/buses' ? await recentCallerFor(env, req, nowMs, ctx) : await callerFor(env, req, nowMs, ctx);
       const bucket =
         caller?.kind === 'key' ? { rl: env.RL_PUBLIC, key: `key:${caller.keyId}` }
         : caller?.kind === 'account' ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
