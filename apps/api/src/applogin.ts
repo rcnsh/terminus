@@ -23,7 +23,7 @@
 
 import type { Env } from './types.ts';
 import { mailName } from './site.ts';
-import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, takeMailBudget, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
+import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, takeMailBudget, takeGlobalMail, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
 
 export { hasSetup } from './accounts.ts';
 import { m } from './i18n.ts';
@@ -61,7 +61,7 @@ function randomMatch(): number {
  * was sent an email in the last minute. A blocked address gets a request that
  * looks the same and never completes, so the reply doesn't reveal the blocklist.
  */
-export async function startAppLogin(env: Env, db: D1Database, input: StartInput, origin: string, nowMs: number): Promise<Started | 'cooldown'> {
+export async function startAppLogin(env: Env, db: D1Database, input: StartInput, origin: string, nowMs: number): Promise<Started | 'cooldown' | 'busy'> {
   const { email } = input;
   const inbox = inboxKey(email);
   const coolKey = `mail:${await hashToken(inbox)}`;
@@ -71,7 +71,10 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
     .first();
   if (recent || (await env.KV.get(coolKey).catch(() => null))) return 'cooldown';
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
-  // A blocked address is sent nothing, so it spends nothing.
+  // Everyone's ceiling, after the cooldown so a repeat can't spend it. A
+  // blocked address spends it too, so a busy minute doesn't reveal it.
+  if (!(await takeGlobalMail(env))) return 'busy';
+  // A blocked address is sent nothing, so it spends nothing of its inbox's.
   if (!blocked && !(await takeMailBudget(env, inbox, nowMs))) return 'cooldown';
 
   const id = crypto.randomUUID();
@@ -81,15 +84,22 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
   const code = newPairCode();
   const match = randomMatch();
   const expires = nowMs + LOGIN_TTL.requestMs;
-  await db.batch([
+  // The cooldown checked again in the insert itself: two requests at once
+  // can't both pass the check above and both send an email.
+  const since = nowMs - LOGIN_TTL.cooldownMs;
+  const [, made] = await db.batch([
     db.prepare('DELETE FROM login_requests WHERE expires < ?').bind(nowMs),
     db
       .prepare(
         `INSERT INTO login_requests (id, email, poll_hash, link_hash, code_hash, match, device_name, platform, anon_user_id, status, created, expires)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          WHERE NOT EXISTS (SELECT 1 FROM login_requests WHERE email = ? AND created > ?)
+            AND NOT EXISTS (SELECT 1 FROM magic_links WHERE email = ? AND created > ?)
+         RETURNING id`,
       )
-      .bind(id, email, await hashToken(poll), await hashToken(link), await hashToken(code), match, input.name, input.client.platform, input.anonUserId, blocked ? 'blocked' : 'pending', nowMs, expires),
+      .bind(id, email, await hashToken(poll), await hashToken(link), await hashToken(code), match, input.name, input.client.platform, input.anonUserId, blocked ? 'blocked' : 'pending', nowMs, expires, email, since, email, since),
   ]);
+  if (!made?.results?.length) return 'cooldown';
   if (!blocked) {
     try {
       if (!env.EMAIL || !env.EMAIL_FROM) throw new Error('email sending not configured');

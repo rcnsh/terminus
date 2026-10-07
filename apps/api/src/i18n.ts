@@ -587,6 +587,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'enter a valid email address': '请输入有效的邮箱地址',
   'the human check failed, try again': '人机验证没有通过，请再试一次',
   'sign-in is busy, try again in a minute': '登录繁忙，请一分钟后再试',
+  'pairing is busy, try again in a minute': '配对繁忙，请一分钟后再试',
   'could not send the email, try again later': '邮件发送失败，请稍后再试',
   'enter the 6-character code from the email': '请输入邮件里的 6 位验证码',
   'that code is wrong or has expired': '验证码不对或已失效',

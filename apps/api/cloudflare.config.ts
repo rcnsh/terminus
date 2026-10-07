@@ -26,7 +26,7 @@ function site(mode: string | undefined) {
 			downloads: "terminus-downloads",
 			dataset: "terminus",
 			// Rate limit counters are per namespace; the beta has its own.
-			rl: { auth: "1001", public: "1002", me: "1003", mail: "1004", anon: "1005", map: "1006" },
+			rl: { auth: "1001", public: "1002", me: "1003", mail: "1004", anon: "1005", map: "1006", pair: "1007" },
 			// The timelapse recorder polls NUS (src/timelapse.ts): on here, off on
 			// the beta, so the two sites never poll twice.
 			env: {
@@ -43,7 +43,7 @@ function site(mode: string | undefined) {
 			kv: BETA.kv,
 			downloads: "terminus-beta-downloads",
 			dataset: "terminus_beta",
-			rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005", map: "2006" },
+			rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005", map: "2006", pair: "2007" },
 			env: {
 				PUBLIC_ORIGIN: bindings.text("https://beta.terminus.rcn.sh"),
 				AE_DATASET: bindings.text("terminus_beta"),
@@ -150,6 +150,17 @@ function site(mode: string | undefined) {
 					namespace: s.rl.anon,
 					simple: {
 						limit: 120,
+						period: 60,
+					},
+				}),
+				// Pairing-code lookups, across everyone. A guess is tried against
+				// every live code at once, so a per-IP limit alone falls to an
+				// attacker with many addresses (an IPv6 /48 is 65,536 /64s).
+				// People pair a device rarely; 60 a minute is far above that.
+				RL_PAIR: bindings.rateLimit({
+					namespace: s.rl.pair,
+					simple: {
+						limit: 60,
 						period: 60,
 					},
 				}),

@@ -29,10 +29,14 @@ export function canReadTimelapse(env: Env, req: Request): boolean {
   return isOperator(env, req) || Boolean(env.TIMELAPSE_TOKEN && given && timingSafeEqual(given, env.TIMELAPSE_TOKEN));
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+/**
+ * `given` against the secret, in a time that depends only on the secret's
+ * length: a wrong length is folded into the result rather than returned
+ * early, so timing doesn't say how long the token is.
+ */
+export function timingSafeEqual(given: string, secret: string): boolean {
+  let diff = given.length ^ secret.length;
+  for (let i = 0; i < secret.length; i++) diff |= (given.charCodeAt(i) | 0) ^ secret.charCodeAt(i);
   return diff === 0;
 }
 

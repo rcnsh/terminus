@@ -251,7 +251,11 @@ get one of three ways:
   Works on every client, including the Mac, which can't take universal
   links without a paid Apple team.
 - **A pairing code** from `/me/pair-code`, made on the account page or in a
-  signed-in app, redeemed with `POST /pair`.
+  signed-in app, redeemed with `POST /pair`. A guess is tried against every
+  live code at once, so besides the per-IP limit (`RL_AUTH`, shared by
+  `/pair` and `/pair/check`) there's one ceiling for everyone (`RL_PAIR`,
+  60 a minute): an attacker with an IPv6 range can't spread guesses over
+  thousands of addresses.
 
 A device added with a pairing code emails the account's owner: it's the one
 way in that doesn't go through the inbox, and it's what lets a signed-in app
@@ -432,11 +436,28 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   no email keeps it: it has no other way back in). Device tokens last until
   revoked, or 90 days unused.
 - Sign-in emails: one a minute and ten an hour per inbox, web and app
-  together. The emailed code's wrong guesses are counted on the link's row
-  (`magic_links.code_tries`, migration 0009), five at most.
-- `POST /auth/verify`, `/auth/approve` and `/auth/logout` are refused when
-  `Sec-Fetch-Site` says another site sent them, so no page elsewhere can sign
-  a visitor in to an account it holds a link for, or out of theirs.
+  together, and 30 a minute for everyone (`RL_MAIL`). That ceiling is taken
+  only when an email is about to go (`takeGlobalMail`), after the cooldown,
+  so repeating one address can't use it up and block everyone's sign-in. The
+  cooldown is checked again in the statement that stores the link or the
+  request, so requests arriving together send one email. The emailed code's
+  wrong guesses are counted on the link's row (`magic_links.code_tries`,
+  migration 0009), five at most.
+- `POST /auth/verify`, `/auth/approve`, `/auth/logout`, `/auth/code` and
+  `/auth/anon/web`, and any other change sent with the session cookie and no
+  bearer token, are refused when `Sec-Fetch-Site` says another site sent
+  them. So no page elsewhere can sign a visitor in to an account it holds a
+  link or code for, or out of theirs. Another subdomain of rcn.sh (the beta)
+  counts as the same site, so the Lax cookie goes with its POSTs; this check
+  is what stops those. JSON bodies need exactly `application/json`: a type
+  that only mentions it (`text/plain; x=application/json`) needs no preflight
+  from another page.
+- The link's page names the account by its whole address: a masked one
+  (`f•••@u.nus.edu`) can't be told from a forwarded link to someone else's
+  account at the same domain, which would sign the visitor in to it.
+- Signing out everywhere also deletes the account's pairing codes, unspent
+  sign-in links and app sign-ins not yet collected, so nothing made just
+  before it can still become a new session.
 - The link in the email opens a page with a button, and only the button's
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.

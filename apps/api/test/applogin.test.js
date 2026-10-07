@@ -426,3 +426,25 @@ test('one inbox is sent at most ten sign-in emails an hour', async () => {
   assert.equal(await takeMailBudget(env, 'b@u.nus.edu', hour), true, 'per inbox');
   assert.equal(await takeMailBudget(env, 'a@u.nus.edu', hour + 3_600_000), true, 'the next hour');
 });
+
+test('app sign-in: a repeat in the cooldown does not spend the global email ceiling', async () => {
+  // Otherwise three addresses repeating one email address could use up
+  // everyone's sign-in emails without a single email being sent.
+  const { env } = setup();
+  let spent = 0;
+  env.RL_MAIL = { limit: async () => (spent++, { success: true }) };
+  assert.equal((await call(env, '/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 201);
+  for (let i = 0; i < 3; i++) assert.equal((await call(env, '/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })).status, 429);
+  assert.equal(spent, 1);
+  env.RL_MAIL = { limit: async () => ({ success: false }) };
+  const busy = await call(env, '/auth/app/start', { method: 'POST', body: { email: 'new@u.nus.edu', name: 'x' } });
+  assert.equal(busy.status, 429);
+  assert.match((await busy.json()).error, /busy/);
+});
+
+test('app sign-in: requests for one address all at once send one email', async () => {
+  const { env, email } = setup();
+  const res = await Promise.all(Array.from({ length: 5 }, () => call(env, '/auth/app/start', { method: 'POST', body: { email: ME, name: 'x' } })));
+  assert.equal(res.filter((r) => r.status === 201).length, 1);
+  assert.equal(email.sent.length, 1);
+});

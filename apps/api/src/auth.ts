@@ -265,7 +265,8 @@ export async function proxyEnvelope(env: Env, session: Session): Promise<Record<
 /**
  * NUS said no, at HTTP 200, with a code. `detail` keeps the whole response
  * (up to 2 KB): when a new uNivUS release refuses our version (10009), what
- * the refusal says is the best clue to what changed.
+ * the refusal says is the best clue to what changed. It goes to the logs and
+ * the operator's email, so any credential in it is blanked first.
  */
 export class UpstreamRejected extends Error {
   readonly code: string;
@@ -273,8 +274,20 @@ export class UpstreamRejected extends Error {
   constructor(code: string, message: string, detail = '') {
     super(message);
     this.code = code;
-    this.detail = detail.slice(0, 2000);
+    this.detail = redactDetail(detail).slice(0, 2000);
   }
+}
+
+/**
+ * Blanks what could let someone call the feed as us, should a refusal echo
+ * our request back: the envelope's token, user and device ids, any JWT, and
+ * any field named like a key or password. The rest is kept as the clue.
+ */
+export function redactDetail(detail: string): string {
+  return detail
+    .replace(/("(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
+    .replace(/eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g, '[redacted]')
+    .replace(/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]');
 }
 
 /**
