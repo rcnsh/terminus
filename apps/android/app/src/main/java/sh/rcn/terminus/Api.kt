@@ -644,6 +644,9 @@ internal fun sentence(text: String): String {
 /** The answer arrived but isn't what this version understands. Not a network problem. */
 class ParseError(message: String) : Exception(message)
 
+/** A conditional request's answer: what the app kept is still current. */
+class NotModified : Exception("not modified")
+
 /** `fast` is for the widget: a tap runs inside a broadcast, which can be killed. */
 class Api(private val token: String?, private val fast: Boolean = false, private val hour12: Boolean = false) {
 
@@ -669,8 +672,19 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     /** Stops and residences, for the home and place pickers. */
     suspend fun campus(): Campus = Campus.parse(request("GET", "/campus"))
 
-    /** `/campus` as it came, for the map (MapData), which keeps a copy for offline. */
-    suspend fun campusJson(): JSONObject = request("GET", "/campus")
+    /**
+     * `/campus` as it came, with its ETag, for the map (MapData), which keeps
+     * a copy for offline. Null when [etag] says the kept copy is still current.
+     */
+    suspend fun campusJson(etag: String? = null): Pair<JSONObject, String?>? {
+        var tag: String? = null
+        val json = try {
+            request("GET", "/campus", ifNoneMatch = etag) { tag = it.getHeaderField("etag") }
+        } catch (e: NotModified) {
+            return null
+        }
+        return json to tag
+    }
 
     /** One service's live buses, for the map. */
     suspend fun buses(svc: String): BusList = BusList.parse(request("GET", "/buses?svc=${enc(svc)}"))
@@ -870,7 +884,13 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         request("POST", "/auth/logout", JSONObject())
     }
 
-    private suspend fun request(method: String, path: String, body: JSONObject? = null): JSONObject =
+    private suspend fun request(
+        method: String,
+        path: String,
+        body: JSONObject? = null,
+        ifNoneMatch: String? = null,
+        seen: ((HttpURLConnection) -> Unit)? = null,
+    ): JSONObject =
         withContext(Dispatchers.IO) {
             // Asked to slow down: nothing goes out until Retry-After is up.
             if (System.currentTimeMillis() < Quiet.untilMs) throw ApiError(429, L.s(R.string.busy_try_again))
@@ -885,6 +905,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                 // The server writes answers, cards and errors in the app's language.
                 conn.setRequestProperty("accept-language", L.header())
                 token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
+                ifNoneMatch?.let { conn.setRequestProperty("if-none-match", it) }
                 if (body != null) {
                     conn.doOutput = true
                     conn.setRequestProperty("content-type", "application/json")
@@ -895,6 +916,8 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                 val cached = (conn.getHeaderField("age")?.trim()?.toLongOrNull() ?: 0) > 0 || conn.getHeaderField("cf-cache-status").equals("HIT", ignoreCase = true)
                 ServerClock.observe(conn.getHeaderField("date"), System.currentTimeMillis(), cached)
                 if (status == 429) Quiet.after(conn.getHeaderField("retry-after"))
+                if (status == 304 && ifNoneMatch != null) throw NotModified()
+                seen?.invoke(conn)
                 val stream = if (status in 200..299) conn.inputStream else conn.errorStream
                 val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(text) }.getOrNull()
