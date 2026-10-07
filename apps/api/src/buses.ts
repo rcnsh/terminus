@@ -50,7 +50,7 @@ import { shapeFor } from './campus.ts';
 import type { RouteShape } from './campus.ts';
 import type { RawBus } from './fms.ts';
 import { haversineM } from './geo.ts';
-import type { Crowd, Graph } from './types.ts';
+import type { Crowd, Graph, GraphIndex } from './types.ts';
 
 /** Further than this from its line, a bus is not on its route. */
 const ON_ROUTE_M = 50;
@@ -526,4 +526,67 @@ export async function trackedPlacement(
       .catch(() => {}),
   );
   return body;
+}
+
+/** A stop on a service's line (/line): its name and the other services there. */
+export interface LineStop {
+  code: string;
+  name: string;
+  /** The name in full ("Yusof Ishak House" for YIH), for a list with room for it. */
+  longName: string;
+  services: string[];
+}
+
+/** A service's stops in route order; a loop's first stop isn't listed again at the end. */
+export function lineStops(idx: GraphIndex, svc: string): LineStop[] {
+  const seq = idx.routes.get(svc)?.seq ?? [];
+  return seq.map((code) => ({
+    code,
+    name: idx.byCode.get(code)?.name ?? code,
+    longName: idx.byCode.get(code)?.longName ?? idx.byCode.get(code)?.name ?? code,
+    services: (idx.servingStop.get(code) ?? []).filter((s) => s !== svc),
+  }));
+}
+
+/** A bus on a service's line (/line), by its place in the list of stops. */
+export interface LineBus {
+  id: string;
+  plate: string;
+  crowd: Crowd | null;
+  /** The index of the stop it's at, or null between stops. */
+  at: number | null;
+  /** Between stops `after` and the one after it (the first again, after a loop's last); null at a stop. */
+  after: number | null;
+}
+
+/**
+ * Where a placed bus is in the list of stops `seq`: at a stop, or after the
+ * stop it passed. The stop and stretch come from placeBuses; this only finds
+ * them in the list, so the line agrees with the map. Where a stop is in the
+ * list twice, it's the visit followed by the bus's next stop. Null when the
+ * stop isn't in the list (the route changed since the shapes were made).
+ */
+export function indexOnLine(seq: string[], loop: boolean, bus: Pick<LiveBus, 'at' | 'stretch' | 'nextStop'>): { at: number | null; after: number | null } | null {
+  const after = (i: number): string | null => (i + 1 < seq.length ? seq[i + 1] : loop ? seq[0] : null);
+  const find = (code: string): number | null => {
+    const hits = seq.flatMap((c, i) => (c === code ? [i] : []));
+    return hits.find((i) => bus.nextStop != null && after(i) === bus.nextStop.code) ?? hits[0] ?? null;
+  };
+  if (bus.at) {
+    const i = find(bus.at.code);
+    return i === null ? null : { at: i, after: null };
+  }
+  if (!bus.stretch) return null;
+  const i = find(bus.stretch.last.code);
+  if (i === null) return null;
+  // Past the last stop of a line that doesn't loop, there's nowhere it can be but there.
+  return after(i) === null ? { at: i, after: null } : { at: null, after: i };
+}
+
+/** Placed buses on a service's list of stops, in the order placeBuses gave them. */
+export function busesOnLine(seq: string[], loop: boolean, buses: LiveBus[]): LineBus[] {
+  return buses.flatMap((b) => {
+    const where = indexOnLine(seq, loop, b);
+    return where ? [{ id: b.id, plate: b.plate, crowd: b.crowd, ...where }] : [];
+  });
 }

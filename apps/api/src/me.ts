@@ -48,7 +48,7 @@ import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from '.
 import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
-import { boardAt, indexGraph, rideStops } from './resolve.ts';
+import { boardAt, displayName, indexGraph, rideStops } from './resolve.ts';
 import { CORRIDOR_M, type Fix, atStopOf, departedAt, detect, fixOf, mayDetect, onRoute } from './detect.ts';
 import { mayRecordRide, recordRide } from './ridetimes.ts';
 import { haversineM } from './geo.ts';
@@ -57,8 +57,7 @@ import { cardFor, nextPhaseAt } from './card.ts';
 import { feedDownSince } from './monitor.ts';
 import { RIDE, WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
-import { nearbyTwin } from './graph.ts';
-import { ROUTE_COLORS } from './campus.ts';
+import { GRAPH_PUBLIC, nearbyTwin, twinOf } from './graph.ts';
 import { residenceStops } from './residences.ts';
 import { MAX_KEYS, createKey, listKeys, revokeKey } from './access.ts';
 import { footM, paceSpeed } from './walk.ts';
@@ -226,7 +225,7 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
   const idx = indexGraph(graph);
   // A stop can vanish from a new scrape. Re-validating on read would reject
   // the whole profile, so drop only what no longer resolves.
-  const r = parseProfile(raw, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null);
+  const r = parseProfile(raw, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(graph));
   // The language the account chose wins over the device's, for the rest of this request.
   if (r.ok) {
     useProfileLang(r.profile.lang);
@@ -234,7 +233,14 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
   }
   const p = raw as Profile;
   useProfileLang(LANG_PREFS.includes(p.lang) ? p.lang : 'auto');
-  return salvageProfile(p, (c) => idx.byCode.has(c) || landmark(c) !== null);
+  return salvageProfile(p, (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(graph));
+}
+
+/** A stop a pin may name: one of `graph`'s, or a public bus's stop of its own. */
+function pinnable(graph: Graph): (code: string) => boolean {
+  const idx = indexGraph(graph);
+  const pub = indexGraph(GRAPH_PUBLIC);
+  return (c) => idx.byCode.has(c) || pub.byCode.has(c);
 }
 
 /**
@@ -242,7 +248,7 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
  * scrape): everything that still holds, so the next save doesn't write the
  * user's hours, usual times or one-off trips back as the defaults.
  */
-export function salvageProfile(p: Profile, ok: (code: string) => boolean): Profile {
+export function salvageProfile(p: Profile, ok: (code: string) => boolean, pinnable: (code: string) => boolean = ok): Profile {
   const minute = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60;
   const hours = minute(p.dayStartMin) && minute(p.dayEndMin) && p.dayStartMin < p.dayEndMin;
   const places = (p.places ?? []).filter((x) => ok(x.to));
@@ -266,6 +272,7 @@ export function salvageProfile(p: Profile, ok: (code: string) => boolean): Profi
     term: p.term ?? null,
     lang: LANG_PREFS.includes(p.lang) ? p.lang : 'auto',
     clock: CLOCK_PREFS.includes(p.clock) ? p.clock : 'auto',
+    pinnedStops: (Array.isArray(p.pinnedStops) ? p.pinnedStops : []).filter((c) => typeof c === 'string' && pinnable(c)).slice(0, PROFILE_LIMITS.pinnedStops),
   };
 }
 
@@ -471,7 +478,7 @@ export const ME_ROUTES: MeRoute[] = [
       const body = await readJson(req);
       if (!body) return json({ error: 'send the profile as JSON' }, 400);
       const idx = indexGraph(deps.graph);
-      const r = parseProfile(body, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null);
+      const r = parseProfile(body, (c) => idx.byCode.has(c), (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(deps.graph));
       if (!r.ok) return json({ error: r.error }, 400);
       // One-off trips are done with once their day has passed.
       r.profile.once = r.profile.once.filter((o) => o.date >= sgtDate(nowMs));
@@ -1307,13 +1314,12 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   const stops = picked.map(({ stop, distM, footM: foot }) => {
     const sa = byStop.get(stop.code)!;
     return {
-      stop: { code: stop.code, name: stop.name },
-      opposite: nearbyTwin(stop),
+      stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code) },
+      ...twinOf(stop, idx.byCode),
       distM: Math.round(distM),
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
-      // Each service in its colour, as on the buses and the map.
-      board: boardAt(graph, idx, stop.code, sa, nowMs).map((r) => ({ ...r, color: ROUTE_COLORS[r.svc] ?? null })),
+      board: boardAt(graph, idx, stop.code, sa, nowMs),
     };
   });
   return json({ stops, asOf: new Date(nowMs).toISOString() });

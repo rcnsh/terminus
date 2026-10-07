@@ -18,7 +18,10 @@ import kotlin.math.sqrt
  */
 
 /** A stop on the map, with the services that call there. */
-data class MapStop(val code: String, val name: String, val lat: Double, val lon: Double, val services: List<String>)
+/** [longName]: the full name ("Yusof Ishak House") where [name] is short ("YIH"); null from an older server. */
+data class MapStop(val code: String, val name: String, val lat: Double, val lon: Double, val services: List<String>, val longName: String? = null) {
+    val fullName: String get() = longName ?: name
+}
 
 /** A service: its colour (ARGB) and its path along the roads, as [lon, lat] pairs. */
 data class MapRoute(val svc: String, val color: Long, val line: List<DoubleArray>) {
@@ -131,7 +134,7 @@ data class CampusMap(val stops: List<MapStop>, val routes: Map<String, MapRoute>
             val stops = (0 until s.length()).map { i ->
                 val x = s.getJSONObject(i)
                 if (x.optBoolean("core", true)) core += x.getString("code")
-                MapStop(x.getString("code"), x.optString("name", x.getString("code")), x.getDouble("lat"), x.getDouble("lon"), x.optJSONArray("services").stringList())
+                MapStop(x.getString("code"), x.optString("name", x.getString("code")), x.getDouble("lat"), x.getDouble("lon"), x.optJSONArray("services").stringList(), x.optStringOrNull("longName")?.ifEmpty { null })
             }
             val r = o.getJSONObject("routes")
             val routes = r.keys().asSequence().associateWith { svc ->
@@ -231,10 +234,7 @@ data class StopBoard(val available: Boolean, val rows: List<BoardRow>) {
     companion object {
         fun parse(o: JSONObject): StopBoard {
             val b = o.optJSONArray("board") ?: JSONArray()
-            val rows = (0 until b.length()).map { i ->
-                val r = b.getJSONObject(i)
-                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"))
-            }
+            val rows = (0 until b.length()).map { i -> parseBoardRow(b.getJSONObject(i)) }
             return StopBoard(o.optBoolean("available"), rows.filter { it.etaS != null })
         }
     }

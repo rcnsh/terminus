@@ -3,9 +3,12 @@
     {
       "stop": {
         "code": "PGPR",
-        "name": "PGP Foyer"
+        "name": "PGP Foyer",
+        "longName": "Prince George's Park Foyer"
       },
       "opposite": "PGP",
+      "oppositeAcross": false,
+      "oppositeName": "Prince George's Park",
       "distM": 192,
       "walkS": 235,
       "available": true,
@@ -21,7 +24,13 @@
               "quality": "live"
             }
           ],
-          "color": "#8e44c9"
+          "color": "#8e44c9",
+          "towards": [
+            "TCOMS",
+            "COM 3"
+          ],
+          "crowd": "low",
+          "endsAt": "2026-08-27T15:00:00.000Z"
         },
         {
           "svc": "A2",
@@ -29,7 +38,13 @@
           "quality": "scheduled",
           "ambiguousBerth": false,
           "later": [],
-          "color": "#d9a000"
+          "color": "#d9a000",
+          "towards": [
+            "TCOMS",
+            "Kent Ridge Bus Terminal"
+          ],
+          "crowd": null,
+          "endsAt": "2026-08-27T15:00:00.000Z"
         },
         {
           "svc": "K",
@@ -37,16 +52,22 @@
           "quality": "scheduled",
           "ambiguousBerth": false,
           "later": [],
-          "color": "#2b9ad6"
+          "color": "#2b9ad6",
+          "towards": [],
+          "crowd": null,
+          "endsAt": "2026-08-27T15:04:00.000Z"
         }
       ]
     },
     {
       "stop": {
         "code": "PGP",
-        "name": "PGP"
+        "name": "PGP",
+        "longName": "Prince George's Park"
       },
       "opposite": "PGPR",
+      "oppositeAcross": false,
+      "oppositeName": "Prince George's Park Foyer",
       "distM": 266,
       "walkS": 300,
       "available": true,
@@ -62,7 +83,13 @@
               "quality": "live"
             }
           ],
-          "color": "#8e44c9"
+          "color": "#8e44c9",
+          "towards": [
+            "Kent Ridge MRT",
+            "COM 3"
+          ],
+          "crowd": "low",
+          "endsAt": "2026-08-27T15:00:00.000Z"
         },
         {
           "svc": "R2",
@@ -75,7 +102,13 @@
               "quality": "live"
             }
           ],
-          "color": "#34a853"
+          "color": "#34a853",
+          "towards": [
+            "Opp HSSML",
+            "Kent Vale"
+          ],
+          "crowd": "medium",
+          "endsAt": "2026-08-27T11:30:00.000Z"
         },
         {
           "svc": "A1",
@@ -88,7 +121,13 @@
               "quality": "live"
             }
           ],
-          "color": "#e53935"
+          "color": "#e53935",
+          "towards": [
+            "Kent Ridge MRT",
+            "Kent Ridge Bus Terminal"
+          ],
+          "crowd": "high",
+          "endsAt": "2026-08-27T15:00:00.000Z"
         },
         {
           "svc": "K",
@@ -96,7 +135,13 @@
           "quality": "scheduled",
           "ambiguousBerth": false,
           "later": [],
-          "color": "#2b9ad6"
+          "color": "#2b9ad6",
+          "towards": [
+            "Kent Ridge MRT",
+            "Prince George's Park Foyer"
+          ],
+          "crowd": null,
+          "endsAt": "2026-08-27T15:04:00.000Z"
         },
         {
           "svc": "R1",
@@ -104,7 +149,10 @@
           "quality": "scheduled",
           "ambiguousBerth": false,
           "later": [],
-          "color": "#f57c1f"
+          "color": "#f57c1f",
+          "towards": [],
+          "crowd": null,
+          "endsAt": "2026-08-27T11:30:00.000Z"
         }
       ]
     }

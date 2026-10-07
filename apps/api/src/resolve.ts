@@ -15,6 +15,7 @@ import { termDay } from './calendar.ts';
 import type {
   Arrival,
   Candidate,
+  Crowd,
   FeedState,
   Graph,
   GraphIndex,
@@ -28,6 +29,7 @@ import type {
   StopArrivals,
 } from './types.ts';
 import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK, isMeasured, sgt } from './config.ts';
+import { ROUTE_COLORS } from './campus.ts';
 import { haversineM } from './geo.ts';
 import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
 import { footM, stopFootM } from './walk.ts';
@@ -385,6 +387,37 @@ export interface BoardRow {
   paid?: true;
   /** The buses after that one, soonest first, as far as the feed knows them. */
   later: { etaS: number; quality: Quality }[];
+  /** The service's colour (#rrggbb), as on the buses; null for one NUS hasn't painted. */
+  color: string | null;
+  /** Where it goes from here: the next stop's name, then the stop the route
+   *  ends at. One name when they're the same; none at the end of the line. */
+  towards: string[];
+  /** How full the first bus is, from the feed; null when it doesn't say. */
+  crowd: Crowd | null;
+  /** When the service stops running today (ISO); null when its hours are unknown. */
+  endsAt: string | null;
+}
+
+/** A stop's name as a sign would give it ("Central Library", not "CLB"). */
+export const displayName = (stop: Stop | undefined, code: string): string => stop?.longName ?? stop?.name ?? code;
+
+/**
+ * Where `svc` goes from `stopCode`: [the next stop, the stop the route ends
+ * at], by name. A loop runs on from its last stop to its first, and ends
+ * where it started. At the end of a line there is nowhere on to go: [].
+ * A stop the route calls at twice is taken at its first call.
+ */
+export function towardsFrom(idx: GraphIndex, svc: string, stopCode: string): string[] {
+  const r = idx.routes.get(svc);
+  const at = r?.pos.get(stopCode);
+  if (!r || !at) return [];
+  const nextOf = (i: number): number | null => (i + 1 < r.seq.length ? i + 1 : r.loop ? 0 : null);
+  const n = nextOf(at[0]);
+  if (n === null) return [];
+  const next = r.seq[n];
+  const end = r.loop ? r.seq[0] : r.seq[r.seq.length - 1];
+  const codes = next === end ? [next] : [next, end];
+  return codes.map((c) => displayName(idx.byCode.get(c), c));
 }
 
 /**
@@ -428,7 +461,19 @@ export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: Sto
     // Each later bus keeps its own quality: a timetabled one after a live one stays a guess.
     const later = etas.slice(1).map((a) => ({ etaS: a.etaS as number, quality: aged(a.scheduled ? 'scheduled' : 'live') }));
 
-    out.push({ svc: svcName(svc), etaS, quality, ambiguousBerth, ...(pub ? { paid: true as const } : {}), later });
+    const ends = serviceEndsAt(graph, svc, nowMs);
+    out.push({
+      svc: svcName(svc),
+      etaS,
+      quality,
+      ambiguousBerth,
+      ...(pub ? { paid: true as const } : {}),
+      later,
+      color: ROUTE_COLORS[svcName(svc)] ?? null,
+      towards: towardsFrom(idx, svc, stopCode),
+      crowd: etas[0]?.crowd ?? null,
+      endsAt: ends === null ? null : new Date(ends).toISOString(),
+    });
   }
 
   out.sort(

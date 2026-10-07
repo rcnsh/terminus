@@ -168,7 +168,7 @@ export function buildCampusMap(graph: Graph): CampusMap {
 
   const projected: ProjectedStop[] = stops.map((s) => {
     const { x, y } = project(s);
-    return { code: s.code, name: s.name, longName: s.name, opposite: s.opposite ?? null, x, y, lat: s.lat, lon: s.lon, services: servicesAt.get(s.code) ?? [], core: isCore(s.code) };
+    return { code: s.code, name: s.name, longName: s.longName ?? s.name, opposite: s.opposite ?? null, x, y, lat: s.lat, lon: s.lon, services: servicesAt.get(s.code) ?? [], core: isCore(s.code) };
   });
 
   const routes: Record<string, ProjectedRoute> = {};

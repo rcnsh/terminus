@@ -37,6 +37,12 @@ test('a vanished stop drops only what used it, not the hours or usual times', ()
   assert.equal(p.lang, 'zh');
 });
 
+test('a pinned stop gone from the stops is dropped; the other pins stay, in order', () => {
+  const p = salvageProfile({ pinnedStops: ['UTOWN', 'GONE-STOP', '16009', 'PGP'], dayStartMin: 1300, dayEndMin: 400 }, ok, (c) => ok(c) || c === '16009');
+  assert.deepEqual(p.pinnedStops, ['UTOWN', '16009', 'PGP']);
+  assert.deepEqual(salvageProfile({}, ok).pinnedStops, []);
+});
+
 test('hours that make no sense fall back to the defaults', () => {
   const p = salvageProfile({ dayStartMin: 1300, dayEndMin: 400 }, ok);
   assert.equal(p.dayStartMin, 360);

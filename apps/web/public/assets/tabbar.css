@@ -1,4 +1,4 @@
-/* The web app's bar along the bottom: Now · Map · Settings. */
+/* The web app's bar along the bottom: Now · Buses · Map · Settings. */
 
 :root { --tabbar-h: 60px; }
 body.app { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }

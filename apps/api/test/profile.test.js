@@ -99,6 +99,25 @@ test('parseProfile fills defaults and rejects bad input with a useful message', 
   }
 });
 
+test('pinnedStops: known stops in the user’s order, repeats dropped, at most 8', () => {
+  // A pin may also name a public stop of its own (LTA's code), which isn't a shuttle stop.
+  const pinnable = (c) => isStop(c) || c === '16009';
+  const r = parseProfile({ pinnedStops: ['utown', 'PGP', '16009', 'UTOWN'] }, isStop, isStop, pinnable);
+  assert.ok(r.ok);
+  assert.deepEqual(r.profile.pinnedStops, ['UTOWN', 'PGP', '16009']);
+  assert.deepEqual(parseProfile({}, isStop).profile.pinnedStops, [], 'none until pinned');
+  for (const bad of [['NOPE'], 'PGP', [1], null]) {
+    const b = parseProfile({ pinnedStops: bad }, isStop, isStop, pinnable);
+    assert.equal(b.ok, false, JSON.stringify(bad));
+    assert.equal(b.error, 'pinnedStops must be up to 8 known stop codes');
+  }
+  // Nine pins of which one repeats are eight.
+  const nine = ['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27', '16009', 'PGP', 'COM3', 'UTOWN'];
+  assert.ok(parseProfile({ pinnedStops: nine }, isStop, isStop, pinnable).ok);
+  const tooMany = parseProfile({ pinnedStops: Array.from({ length: 9 }, (_, i) => `S${i}`) }, isStop, isStop, () => true);
+  assert.equal(tooMany.ok, false, 'nine different stops are too many');
+});
+
 test('resting hours: outside 06:00-18:00 by default', () => {
   const p = profile([cls(10, 12, 'COM3')]);
   assert.equal(isResting(p, thu(5, 59)), true);

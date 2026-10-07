@@ -235,7 +235,7 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
     .sort();
   const routed = [
     ...ME_ROUTES.map((r) => `${r.method} ${r.path.endsWith('/') ? r.path + '*' : r.path}`),
-    ...['/next', '/trip', '/arrivals', '/buses', '/campus', '/stops/pairs', '/health', '/status.json', '/admin/stats', '/docs', '/openapi.json', '/timelapse/days', '/timelapse/days/*'].map((p) => `GET ${p}`),
+    ...['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs', '/health', '/status.json', '/admin/stats', '/docs', '/openapi.json', '/timelapse/days', '/timelapse/days/*'].map((p) => `GET ${p}`),
     ...['/auth/config', '/auth/verify', '/auth/approve'].map((p) => `GET ${p}`),
     ...['/auth/login', '/auth/code', '/auth/verify', '/auth/anon', '/auth/anon/web', '/auth/app/start', '/auth/app/poll', '/auth/app/code', '/auth/app/merge', '/auth/approve', '/auth/logout', '/pair', '/pair/check'].map((p) => `POST ${p}`),
     ...['/map/style.json', '/map/campus.pmtiles', '/map/fonts/*/*.pbf', '/map/sprites/v4/*'].map((p) => `GET ${p}`),
@@ -300,6 +300,26 @@ test('/arrivals reports one stop\'s board without needing a destination', async 
   assert.ok(Number.isFinite(d2.etaS));
 });
 
+test('/arrivals names the stop across the road, and each row says where it goes', async () => {
+  const fetchImpl = makeFetch({ byStop: { YIH: [{ name: 'K', arrivalTime: '3', nextArrivalTime: '12', passengers: 'high' }] } });
+  const body = await (await call('/arrivals?stop=YIH', { fetchImpl })).res.json();
+  assert.deepEqual(body.stop, { code: 'YIH', name: 'YIH', longName: 'Yusof Ishak House', opposite: 'YIH-OPP', oppositeAcross: true, oppositeName: 'Opp Yusof Ishak House' });
+  const k = body.board.find((r) => r.svc === 'K');
+  assert.deepEqual(k.towards, ['Central Library', "Prince George's Park Foyer"]);
+  assert.equal(k.color, '#2b9ad6');
+  assert.equal(k.crowd, 'high');
+  assert.ok(k.endsAt === null || Number.isFinite(Date.parse(k.endsAt)));
+  // A stop with no twin says so.
+  const utown = await (await call('/arrivals?stop=UTOWN', { fetchImpl: makeFetch({}) })).res.json();
+  assert.equal(utown.stop.opposite, null);
+  assert.equal(utown.stop.oppositeName, null);
+  // PGP's Foyer is near it, not across the road: named, not "Across the road".
+  const pgp = await (await call('/arrivals?stop=PGP', { fetchImpl: makeFetch({}) })).res.json();
+  assert.equal(pgp.stop.opposite, 'PGPR');
+  assert.equal(pgp.stop.oppositeAcross, false);
+  assert.equal(pgp.stop.oppositeName, "Prince George's Park Foyer");
+});
+
 test('/arrivals on an unknown stop is a 400, not a fabricated empty board', async () => {
   const fetchImpl = makeFetch({});
   const { res } = await call('/arrivals?stop=narnia', { fetchImpl });
@@ -359,6 +379,70 @@ test('/buses: an unknown service is a 400; an unreachable feed is unavailable, n
   const body = await res.json();
   assert.equal(body.available, false);
   assert.deepEqual(body.buses, []);
+});
+
+test('/line: a service’s stops in order, its buses on them, and with a stop that stop’s row; one read of each feed', async () => {
+  const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.D1;
+  // A D1 bus a third of the way along the line between two of its points, heading along it.
+  const i = Math.floor(shape.line.length / 3);
+  const [aLon, aLat] = shape.line[i];
+  const [bLon, bLat] = shape.line[i + 1];
+  const heading = (Math.atan2((bLon - aLon) * Math.cos((aLat * Math.PI) / 180), bLat - aLat) * 180) / Math.PI;
+  const fetchImpl = makeFetch({
+    buses: { D1: [{ vehplate: 'PD418C', lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, speed: 30, direction: (heading + 360) % 360, loadInfo: { crowdLevel: 'low' } }] },
+    byStop: { YIH: [{ name: 'D1', arrivalTime: '6', nextArrivalTime: '18', passengers: 'medium' }] },
+  });
+  const cache = installGlobals(fetchImpl);
+  const { res } = await call('/line?svc=d1&stop=yih', { fetchImpl, cache });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('cache-control'), 'private, max-age=5');
+  const body = await res.json();
+  assert.equal(body.svc, 'D1');
+  assert.equal(body.color, '#ec4fa0');
+  assert.equal(body.available, true);
+  assert.equal(body.stops.length, 13, 'COM3 is listed once though the loop ends there');
+  assert.equal(body.stops[8].code, 'YIH');
+  assert.deepEqual(body.stop.code, 'YIH');
+  assert.equal(body.stop.index, 8);
+  assert.equal(body.stop.row.svc, 'D1');
+  assert.equal(body.stop.row.etaS, 360);
+  assert.deepEqual(body.stop.row.towards, ['Central Library', 'COM 3']);
+  assert.equal(body.stop.row.crowd, 'medium');
+  // The bus where /buses puts it.
+  const [bus] = body.buses;
+  assert.equal(bus.plate, 'PD418C');
+  assert.equal(bus.crowd, 'low');
+  const map = (await (await call('/buses?svc=D1', { fetchImpl, cache })).res.json()).buses[0];
+  assert.equal(bus.id, map.id);
+  if (map.at) assert.equal(body.stops[bus.at].code, map.at.code);
+  else assert.deepEqual([bus.at, body.stops[bus.after].code], [null, map.stretch.last.code]);
+  assert.equal(fetchImpl.counts.shuttle, 2, 'one buses read (cached for /buses after) and one arrivals read');
+
+  // Without a stop: no `stop`, and no arrivals read.
+  const plain = makeFetch({ buses: { D1: [] } });
+  const bare = await (await call('/line?svc=D1', { fetchImpl: plain })).res.json();
+  assert.equal('stop' in bare, false);
+  assert.deepEqual(bare.buses, []);
+  assert.equal(plain.counts.shuttle, 1);
+});
+
+test('/line: an unknown service or a stop it doesn’t call at is a 400, and costs nothing upstream', async () => {
+  const none = makeFetch({});
+  const { res: svc } = await call('/line?svc=Z9', { fetchImpl: none });
+  assert.equal(svc.status, 400);
+  assert.equal((await svc.json()).error, 'unknown service');
+  const { res: stop } = await call('/line?svc=D1&stop=PGP', { fetchImpl: none });
+  assert.equal(stop.status, 400);
+  assert.equal((await stop.json()).error, 'stop not on this service');
+  const { res: zh } = await call('/line?svc=D1&stop=PGP', { fetchImpl: none, headers: { 'accept-language': 'zh-CN' } });
+  assert.equal((await zh.json()).error, '这条路线不经过这个车站');
+  assert.equal(none.counts.shuttle, 0);
+
+  // An unreachable feed: unavailable, no buses, and the row is unknown rather than made up.
+  const down = await (await call('/line?svc=K&stop=YIH', { fetchImpl: makeFetch({ fail: true }) })).res.json();
+  assert.equal(down.available, false);
+  assert.deepEqual(down.buses, []);
+  assert.ok(down.stop.row === null || down.stop.row.etaS === null);
 });
 
 test('walking is offered end to end when it beats the bus', async () => {

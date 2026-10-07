@@ -5,8 +5,10 @@
 
 import { t } from './dom.js';
 
-const KINDS = { timetable: 0, place: 1, class: 2, stop: 3, landmark: 4, building: 5, room: 6 };
-const GROUP = { timetable: t('In your timetable'), place: t('Your favourites'), class: t('Your classes'), stop: t('Stops'), landmark: t('Food & places'), building: t('Buildings'), room: t('Rooms') };
+// A service (in the Buses tab's search) before a stop that matches as well:
+// "a" lists A1 and A2 before AS 5.
+const KINDS = { timetable: 0, place: 1, class: 2, service: 3, stop: 4, landmark: 5, building: 6, room: 7 };
+const GROUP = { timetable: t('In your timetable'), place: t('Your favourites'), class: t('Your classes'), service: t('Services'), stop: t('Stops'), landmark: t('Food & places'), building: t('Buildings'), room: t('Rooms') };
 const MAX = 8;
 
 const norm = (s) => s.toLowerCase().replace(/[\s\-_]+/g, '');
@@ -43,7 +45,7 @@ export const groupOf = (d) => GROUP[d.kind];
 
 /** The line under a result: where it takes you. `stopName(code)` names a stop. */
 export function metaOf(d, stopName, speedMs = 1.3) {
-  if (d.kind === 'timetable') return d.detail;
+  if (d.kind === 'timetable' || d.kind === 'service') return d.detail;
   if (d.kind === 'stop') return t('Bus stop');
   if (d.kind === 'place' || d.kind === 'class') return t('{0} stop', stopName(d.stopCode));
   // Served by more than one stop: the quicker one is used at the time.

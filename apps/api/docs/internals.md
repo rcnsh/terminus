@@ -98,8 +98,9 @@ pnpm run deploy
 | `GET /openapi.json` | The OpenAPI 3.1 description the docs render. Source: [src/openapi.ts](../src/openapi.ts). |
 | `GET /next` | The answer. `?to=` names a stop or venue code; `?lat&lon` alone gives the next buses at your nearest stop. With neither it returns a "Set up" answer rather than inventing a destination. |
 | `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
-| `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache. |
+| `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache, with the stop across the road (`stop.opposite`, as `/me/nearby` gives it). See "Board rows" below. |
 | `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
+| `GET /line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there. One `/buses` read, plus one `/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
 | `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group). Written once per isolate, with an ETag: a client revalidating gets a 304. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
@@ -114,7 +115,7 @@ pnpm run deploy
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
 | `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. It needs a note, and an account with an email: an anonymous one gets 403. |
 
-`/next`, `/trip`, `/arrivals`, `/buses`, `/campus` and `/stops/pairs` need an API key
+`/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and `/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`) or a signed-in session. They're
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
@@ -138,6 +139,25 @@ What the bill depends on, and the guards against it:
 - `limits.cpuMs` (5 s) stops a request that loops from running on.
 - The map's pieces come from the edge cache, so R2 is read once per piece
   per data centre.
+
+### Board rows
+
+`/arrivals`, `/me/nearby` and `/line` (`stop.row`) share one row per service
+(`boardAt` in `src/resolve.ts`): the next bus (`etaS`, `quality`), the ones
+after it the feed knows (`later`), and
+
+- `color`: the service's colour from `ROUTE_COLORS`, null for a public bus;
+- `towards`: where it goes from this stop, by full name (`longName`, such as
+  "Central Library" for CLB): the next stop, then the stop the route ends
+  at. On a loop the stop after the last is the first, and the end is where
+  it started (D1 at BIZ2 is just "COM 3"). One name when the two are the
+  same; none at the end of a line that doesn't loop (K at PGP Foyer);
+- `crowd`: how full the bus in `etaS` is, from the feed, null without one;
+- `endsAt`: when the service stops running today (`serviceEndsAt`), null
+  when its hours are unknown or it isn't running.
+
+Only the feed's own times are given: a later bus the feed doesn't report
+has no row of its own and no guessed time.
 
 ## Personalisation
 
@@ -236,6 +256,10 @@ the Mac.
   (as on `/stops/{code}`) has the next bus in `etaS` and the ones after it
   the feed knows in `later`, each with its own quality; Nearby draws them
   all on the road, the next one solid and the rest faded.
+- The profile's `pinnedStops` are the stops pinned to the Buses tab, in the
+  user's order: up to 8, each a shuttle stop or a public stop of its own
+  (LTA's code), repeats dropped. A pinned stop gone from a new scrape is
+  dropped on read, with the other pins kept.
 - On a day with no classes (or none left), `/me/next` says so (`mode: free`)
   with the next class, and no bus: a bus you have no reason to take reads
   like advice. Departures near you are `/me/nearby`.
@@ -1133,7 +1157,7 @@ src/calendar.ts   NUS teaching weeks and public holidays
 src/calendarsync.ts  The calendar fetched weekly by the cron into KV, between deploys
 src/nusmods.ts    NUSMods share URL -> trips
 src/campus.ts     /campus: stops, route lines and colours, destination search
-src/buses.ts      /buses: live buses placed on their route, next stop
+src/buses.ts      /buses: live buses placed on their route, next stop; /line's stops and buses
 src/timelapse.ts  The timelapse recorder's rules, day file and /timelapse/days
 src/timelapsedo.ts  The recorder's Durable Object: one per Singapore day
 src/map.ts        /map/*: the street map file, its style, fonts and icons

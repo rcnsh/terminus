@@ -91,6 +91,9 @@ export interface Profile {
   lang: LangPref;
   /** 12- or 24-hour times; 'auto' follows each device. */
   clock: ClockPref;
+  /** Stops pinned to the Buses tab, in the user's order: shuttle stops, or
+   *  public stops by LTA's code. */
+  pinnedStops: string[];
 }
 
 export type ClockPref = 'auto' | '12' | '24';
@@ -115,9 +118,10 @@ export const DEFAULT_PROFILE: Profile = {
   term: null,
   lang: 'auto',
   clock: 'auto',
+  pinnedStops: [],
 };
 
-export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24, usual: 30, once: 10 } as const;
+export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24, usual: 30, once: 10, pinnedStops: 8 } as const;
 
 type Result = { ok: true; profile: Profile } | { ok: false; error: string };
 
@@ -129,8 +133,14 @@ const str = (v: unknown, max: number): v is string => typeof v === 'string' && v
 /**
  * Validates a whole profile. Missing fields take their defaults, so a client
  * can send only what it knows about; anything present must be well formed.
+ * `isPinnable` admits the public-only stops too, which a pin may name.
  */
-export function parseProfile(raw: unknown, isStop: (code: string) => boolean, isPlace: (code: string) => boolean = isStop): Result {
+export function parseProfile(
+  raw: unknown,
+  isStop: (code: string) => boolean,
+  isPlace: (code: string) => boolean = isStop,
+  isPinnable: (code: string) => boolean = isStop,
+): Result {
   if (!isObj(raw)) return { ok: false, error: 'profile must be an object' };
   const p: Profile = structuredClone(DEFAULT_PROFILE);
 
@@ -191,6 +201,15 @@ export function parseProfile(raw: unknown, isStop: (code: string) => boolean, is
   if (raw.clock !== undefined) {
     if (typeof raw.clock !== 'string' || !CLOCK_PREFS.includes(raw.clock as ClockPref)) return { ok: false, error: 'clock must be auto, 12 or 24' };
     p.clock = raw.clock as ClockPref;
+  }
+
+  if (raw.pinnedStops !== undefined) {
+    const v = raw.pinnedStops;
+    const codes = Array.isArray(v) && v.every((c) => typeof c === 'string') ? [...new Set((v as string[]).map((c) => c.trim().toUpperCase()))] : null;
+    if (!codes || codes.length > PROFILE_LIMITS.pinnedStops || !codes.every(isPinnable)) {
+      return { ok: false, error: 'pinnedStops must be up to 8 known stop codes' };
+    }
+    p.pinnedStops = codes;
   }
 
   if (raw.homeWalkMin !== undefined) {

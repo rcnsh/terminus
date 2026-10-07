@@ -17,9 +17,9 @@ import { appVersion, authConfigured, getSession } from './auth.ts';
 import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
 import { fmsConfigured, getBuses } from './fms.ts';
 import { shortStop } from './format.ts';
-import { boardAt, indexGraph } from './resolve.ts';
+import { boardAt, displayName, indexGraph, serviceEndsAt } from './resolve.ts';
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
-import { trackedBuses } from './buses.ts';
+import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
 import { adminStats, isOperator } from './admin.ts';
 import { analyticsEnabled, logError } from './analytics.ts';
@@ -41,7 +41,7 @@ import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
 import { handleTimelapse } from './timelapse.ts';
 
-import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
+import { GRAPH, GRAPH_PUBLIC, twinOf } from './graph.ts';
 import { isBeta, markBeta, siteOrigin } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { langOfRequest, m, withLang } from './i18n.ts';
@@ -185,7 +185,9 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   const sa = (await collectArrivals(env, ctx, [code], nowMs, graph)).get(code)!;
   const board = boardAt(graph, idx, code, sa, nowMs);
   return json({
-    stop: { code: stop.code, name: stop.name },
+    // Its twin, for "This side | Across the road" (or the twin's name, when
+    // it's only near rather than across).
+    stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code), ...twinOf(stop, idx.byCode) },
     board,
     asOf: new Date(sa.stale ? sa.fetchedAt : nowMs).toISOString(),
     available: sa.available,
@@ -209,6 +211,41 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
     available: Boolean(live),
     stale: Boolean(live?.stale),
+  }, 200, { 'cache-control': 'private, max-age=5' });
+}
+
+/**
+ * GET /line?svc=<service>[&stop=<code>] -- one service's whole line, for a
+ * service's page: its stops in route order, its buses placed on that list,
+ * and with `stop`, that service's board row there. Costs what /buses does,
+ * plus one /arrivals read with `stop`, both through their caches. No times
+ * are worked out for the other stops: only the feed's own are shown.
+ */
+async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: number): Promise<Response> {
+  const svc = url.searchParams.get('svc')?.trim().toUpperCase() || '';
+  if (!GRAPH.routes?.[svc]) return json({ error: 'unknown service', svc }, 400);
+  const idx = indexGraph(GRAPH);
+  const route = idx.routes.get(svc)!;
+  const code = url.searchParams.get('stop')?.trim().toUpperCase() || '';
+  const index = code ? (route.pos.get(code)?.[0] ?? null) : null;
+  if (code && index === null) return json({ error: 'stop not on this service', svc, stop: code }, 400);
+
+  const [live, sa] = await Promise.all([
+    getBuses(env, ctx, svc, nowMs).catch(() => null),
+    // A rejected fetch is "never reached the feed", as on /arrivals.
+    code ? collectArrivals(env, ctx, [code], nowMs, GRAPH).then((m) => m.get(code)) : Promise.resolve(undefined),
+  ]);
+  const placed = live ? await trackedBuses(GRAPH, svc, live, ctx) : [];
+  const ends = serviceEndsAt(GRAPH, svc, nowMs);
+  return json({
+    svc,
+    color: ROUTE_COLORS[svc] ?? null,
+    endsAt: ends === null ? null : new Date(ends).toISOString(),
+    stops: lineStops(idx, svc),
+    buses: busesOnLine(route.seq, route.loop, placed),
+    ...(code ? { stop: { code, index, row: boardAt(GRAPH, idx, code, sa, nowMs).find((r) => r.svc === svc) ?? null } } : {}),
+    available: Boolean(live),
+    asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
   }, 200, { 'cache-control': 'private, max-age=5' });
 }
 
@@ -315,7 +352,7 @@ async function versionLookup(env: Env, nowMs: number): Promise<Record<string, un
 const ME_DEPS: MeDeps = { graph: GRAPH, publicGraph: GRAPH_PUBLIC, answerFor, collectArrivals };
 
 /** Routes that need an API key or a signed-in account. */
-const KEYED = ['/next', '/trip', '/arrivals', '/buses', '/campus', '/stops/pairs'];
+const KEYED = ['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs'];
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
@@ -416,6 +453,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         return await handleArrivals(url, env, ctx, nowMs);
       case '/buses':
         return await handleBuses(url, env, ctx, nowMs);
+      case '/line':
+        return await handleLine(url, env, ctx, nowMs);
       default:
         // Everything else is the website; the landing page with its version and account link.
         if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) {

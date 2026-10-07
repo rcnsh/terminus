@@ -12,11 +12,12 @@ import { groupOf, metaOf, pickedText, results } from './search.js';
 /**
  * `source()` gives the destinations, `suggestions()` what to offer before
  * anything is typed, `pinned()` what to list first whenever it matches,
- * `stopName(code)` a stop's name. `onPick(d)` gets the result picked;
+ * `stopName(code)` a stop's name, `empty` what to say when nothing matches.
+ * `onPick(d)` gets the result picked;
  * `onText(text)` each change typed (no result picked any more). `ctl`, a
  * ref, gets { clear(), focus(), input }. Other props go to the text box.
  */
-export function SearchBox({ source, suggestions = () => [], pinned, stopName, onPick, onText, onKeyDown, ctl, ...inputProps }) {
+export function SearchBox({ source, suggestions = () => [], pinned, stopName, empty = t('No stop, building or room by that name'), onPick, onText, onKeyDown, ctl, ...inputProps }) {
   const listId = `search-${useId()}`;
   const [text, setText] = useState('');
   const [open, setOpen] = useState(false);
@@ -136,7 +137,7 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, on
         onKeyDown=${keys}
       />
       <ul id=${listId} ref=${list} class=${flip ? 'search-list flip' : 'search-list'} role="listbox" hidden=${!shown}>
-        ${rows.length ? rows : html`<li class="search-empty">${t('No stop, building or room by that name')}</li>`}
+        ${rows.length ? rows : html`<li class="search-empty">${empty}</li>`}
       </ul>
     </div>
   `;
