@@ -511,6 +511,9 @@ final class AppModel {
             if let anon {
                 do {
                     try await Api(token: c.token).merge(anon: anon, keepDevice: mac)
+                } catch let e as ApiError where e.status == 400 {
+                    // This Mac's account is already gone: an earlier try merged
+                    // it and only the reply was lost. Nothing left to keep.
                 } catch {
                     // Not merged: the choice stays up, with this Mac's account
                     // kept, so a second try can still keep its setup.
