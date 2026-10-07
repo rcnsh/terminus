@@ -15,10 +15,10 @@
  * DOWNLOADS bucket. Map data (c) OpenStreetMap contributors, ODbL.
  *
  * Every map open asks for dozens of pieces, the same pieces for everyone,
- * so each piece is kept in the edge cache (edgePart) and R2 is read once
- * per piece per data centre, not once per person. Reads from R2 are
- * limited per IP (RL_MAP); pieces already in the cache are not, so a lecture
- * hall on one Wi-Fi address can all open the map at once.
+ * so each piece is kept in the edge cache (edgePart, edgeFile) and R2 is
+ * read once per piece per data centre, not once per person. Reads from R2
+ * are limited per IP (RL_MAP); pieces already in the cache are not, so a
+ * lecture hall on one Wi-Fi address can all open the map at once.
  */
 
 import { layers, namedFlavor } from '@protomaps/basemaps';
@@ -86,12 +86,12 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
   }
 
   if (!env.DOWNLOADS) return json({ error: 'not found' }, 404);
-  // Asked at most once per request, and only when R2 is about to be read.
+  // Asked at most once per request, and only when R2 is about to be read:
+  // never for what the edge cache already has.
   let allowed: Promise<boolean> | null = null;
   const mayRead = () => (allowed ??= env.RL_MAP ? env.RL_MAP.limit({ key: `map:${clientKey(req)}` }).then((r) => r.success, () => true) : Promise.resolve(true));
-  const part = (key: string, type: string, maxAgeS: number) => edgePart(req, env.DOWNLOADS!, key, type, maxAgeS, mayRead, ctx);
 
-  if (path === `/map/${TILES}`) return part(PREFIX + TILES, 'application/vnd.pmtiles', 86400);
+  if (path === `/map/${TILES}`) return edgePart(req, env.DOWNLOADS, PREFIX + TILES, 'application/vnd.pmtiles', 86400, mayRead, ctx);
 
   // A malformed escape ("%E0") is a bad path: not found, not an error.
   let decoded: string;
@@ -100,14 +100,14 @@ export async function handleMap(req: Request, url: URL, env: Env, ctx?: Executio
   } catch {
     return json({ error: 'not found' }, 404);
   }
+  // Fonts and icons never change at their path (a new set of icons gets a
+  // new folder, as v4 is), so they're kept by path alone.
+  const file = (key: string, type: string) => edgeFile(req, env.DOWNLOADS!, key, type, 30 * 86400, mayRead, ctx);
   const font = FONT.exec(decoded);
-  if (font && glyphRange(font[2])) return part(`${PREFIX}fonts/${font[1]}/${font[2]}.pbf`, 'application/x-protobuf', 30 * 86400);
+  if (font && glyphRange(font[2])) return file(`${PREFIX}fonts/${font[1]}/${font[2]}.pbf`, 'application/x-protobuf');
 
   const sprite = SPRITE.exec(path);
-  if (sprite) {
-    const type = sprite[3] === 'png' ? 'image/png' : 'application/json';
-    return part(`${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`, type, 30 * 86400);
-  }
+  if (sprite) return file(`${PREFIX}sprites/${SPRITES}/${sprite[1]}${sprite[2] ?? ''}.${sprite[3]}`, sprite[3] === 'png' ? 'image/png' : 'application/json');
   return json({ error: 'not found' }, 404);
 }
 
@@ -119,30 +119,56 @@ export function glyphRange(range: string): boolean {
 
 const slowDown = () => json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
 
-/** How long an isolate trusts what it last learnt of a file (its ETag and size). */
+/** How long what was learnt of the map file (its ETag and size) is trusted, in an isolate and at the edge. */
 const HEAD_TTL_MS = 5 * 60_000;
 /** Pieces bigger than this go straight from R2, uncached. The whole map file is about 4 MB. */
 const MAX_CACHED_BYTES = 32 * 1024 * 1024;
-const heads = new Map<string, { etag: string; httpEtag: string; size: number; atMs: number }>();
+type Head = { etag: string; httpEtag: string; size: number; atMs: number };
+const heads = new Map<string, Head>();
 
-/** What this isolate knows of the file, while it still trusts it. */
-const known = (key: string, nowMs: number) => {
-  const head = heads.get(key);
-  return head && nowMs - head.atMs < HEAD_TTL_MS ? head : undefined;
-};
+const headId = (key: string) => new Request(`https://terminus.internal/map/head/${encodeURIComponent(key)}`);
+/** The edge keeps what it learnt longer than it trusts it: an older look is still worth having when R2 may not be read. */
+const HEAD_KEPT_S = 86_400;
 
-async function headOf(bucket: R2Bucket, key: string, nowMs: number) {
-  const fresh = known(key, nowMs);
-  if (fresh) return fresh;
+/**
+ * What is known of the file: this isolate's copy, else the data centre's
+ * (the edge cache, so its isolates share one R2 look per HEAD_TTL_MS), else
+ * R2's. Trusted for HEAD_TTL_MS from when R2 was asked, wherever it was
+ * kept. Past that, when this request may not read R2, the older look
+ * stands: its pieces are still the bytes of the file its ETag names, and
+ * a piece already in the edge cache is never refused.
+ */
+async function headOf(cache: Cache, bucket: R2Bucket, key: string, nowMs: number, mayRead: () => Promise<boolean>, ctx?: ExecutionContext): Promise<Head | null | 'limited'> {
+  const trusted = (h: Head | null | undefined): h is Head => h != null && nowMs - h.atMs < HEAD_TTL_MS && nowMs >= h.atMs;
+  const local = heads.get(key);
+  if (trusted(local)) return local;
+  const shared = (await (await cache.match(headId(key)).catch(() => undefined))?.json().catch(() => null)) as Head | null | undefined;
+  if (trusted(shared)) {
+    heads.set(key, shared);
+    return shared;
+  }
+  if (!(await mayRead())) return local ?? shared ?? 'limited';
   const obj = await bucket.head(key);
   if (!obj) {
-    heads.delete(key);
+    await forgetHead(cache, key);
     return null;
   }
   const head = { etag: obj.etag, httpEtag: obj.httpEtag, size: obj.size, atMs: nowMs };
   heads.set(key, head);
+  const put = cache.put(headId(key), new Response(JSON.stringify(head), { headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${HEAD_KEPT_S}` } })).catch(() => {});
+  if (ctx) ctx.waitUntil(put);
+  else await put;
   return head;
 }
+
+/** Forget what was known of the file: it was replaced or removed. */
+async function forgetHead(cache: Cache, key: string): Promise<void> {
+  heads.delete(key);
+  await cache.delete(headId(key)).catch(() => false);
+}
+
+/** Conditions beyond If-None-Match, which R2 decides. */
+const otherConditions = (req: Request) => ['if-match', 'if-modified-since', 'if-unmodified-since', 'if-range'].some((h) => req.headers.has(h));
 
 /**
  * The byte range a Range header asks for, within a file this size: null for
@@ -170,7 +196,8 @@ export function rangeOf(header: string | null, size: number): { offset: number; 
  * ETag as a condition, so a cached piece is always from the file its key
  * names. A newly uploaded file has a new ETag, so its pieces are new keys,
  * seen within HEAD_TTL_MS. PMTiles readers ask for the same ranges every
- * time, so the pieces are shared by everyone.
+ * time, so the pieces are shared by everyone. A piece from the cache is
+ * streamed as it comes.
  */
 async function edgePart(
   req: Request,
@@ -184,15 +211,14 @@ async function edgePart(
   const cache = typeof caches === 'undefined' ? null : caches.default;
   const fromR2 = async () => ((await mayRead()) ? servePart(req, bucket, key, type, maxAgeS) : slowDown());
   if (!cache) return fromR2();
-  const nowMs = Date.now();
-  if (!known(key, nowMs) && !(await mayRead())) return slowDown();
-  const head = await headOf(bucket, key, nowMs);
+  const head = await headOf(cache, bucket, key, Date.now(), mayRead, ctx);
+  if (head === 'limited') return slowDown();
   if (!head) return json({ error: 'not found' }, 404);
   const headers = partHeaders(type, maxAgeS, head.httpEtag);
   // The client's copy is current: nothing to read.
   if (matchesEtag(req, head.httpEtag)) return new Response(null, { status: 304, headers });
   // Anything conditional beyond that, R2 decides.
-  if (req.headers.has('if-match') || req.headers.has('if-modified-since') || req.headers.has('if-unmodified-since') || req.headers.has('if-range')) return fromR2();
+  if (otherConditions(req)) return fromR2();
 
   const range = rangeOf(req.headers.get('range'), head.size);
   if (range === 'unsatisfiable') return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}` } });
@@ -201,26 +227,79 @@ async function edgePart(
   if (length > MAX_CACHED_BYTES) return fromR2();
 
   const id = new Request(`https://terminus.internal/map/${encodeURIComponent(key)}?etag=${encodeURIComponent(head.etag)}&bytes=${offset}-${length}`);
-  let body: ArrayBuffer | null = null;
+  let body: ReadableStream | ArrayBuffer | null;
   const hit = await cache.match(id).catch(() => undefined);
-  if (hit) body = await hit.arrayBuffer();
+  // Kept under this ETag and range, so exactly `length` bytes.
+  if (hit) body = hit.body;
   else {
     if (!(await mayRead())) return slowDown();
     const obj = await bucket.get(key, { range: { offset, length }, onlyIf: { etagMatches: head.etag } }).catch(() => null);
     // Replaced since we last looked (or gone): forget it and let R2 answer.
     if (!obj || !('body' in obj)) {
-      heads.delete(key);
+      await forgetHead(cache, key);
       return fromR2();
     }
-    body = await obj.arrayBuffer();
-    const put = cache.put(id, new Response(body.slice(0), { headers: { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}` } })).catch(() => {});
+    // Read whole once, for the cache and this answer: a miss is once per
+    // piece per data centre.
+    const bytes = await obj.arrayBuffer();
+    const put = cache.put(id, new Response(bytes.slice(0), { headers: { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}` } })).catch(() => {});
     if (ctx) ctx.waitUntil(put);
     else await put;
+    body = bytes;
   }
-  headers.set('content-length', String(body.byteLength));
+  headers.set('content-length', String(length));
   if (!range) return new Response(body, { headers });
-  headers.set('content-range', `bytes ${offset}-${offset + body.byteLength - 1}/${head.size}`);
+  headers.set('content-range', `bytes ${offset}-${offset + length - 1}/${head.size}`);
   return new Response(body, { status: 206, headers });
+}
+
+/**
+ * A file that never changes at its path (a font range, an icon sheet),
+ * through the edge cache by path alone, with its ETag kept beside it: no
+ * look at R2 for what the cache has. A range, or a condition other than
+ * If-None-Match (MapLibre sends neither for these), R2 answers.
+ */
+async function edgeFile(
+  req: Request,
+  bucket: R2Bucket,
+  key: string,
+  type: string,
+  maxAgeS: number,
+  mayRead: () => Promise<boolean>,
+  ctx?: ExecutionContext,
+): Promise<Response> {
+  const cache = typeof caches === 'undefined' ? null : caches.default;
+  const fromR2 = async () => ((await mayRead()) ? servePart(req, bucket, key, type, maxAgeS) : slowDown());
+  if (!cache || req.headers.has('range') || otherConditions(req)) return fromR2();
+  const id = new Request(`https://terminus.internal/map/file/${encodeURIComponent(key)}`);
+  const hit = await cache.match(id).catch(() => undefined);
+  const etag = hit?.headers.get('etag');
+  const size = hit?.headers.get('content-length');
+  if (hit && etag && size) {
+    const headers = partHeaders(type, maxAgeS, etag);
+    if (matchesEtag(req, etag)) {
+      await hit.body?.cancel();
+      return new Response(null, { status: 304, headers });
+    }
+    headers.set('content-length', size);
+    return new Response(hit.body, { headers });
+  }
+  if (!(await mayRead())) return slowDown();
+  const obj = await bucket.get(key);
+  if (!obj) return json({ error: 'not found' }, 404);
+  const headers = partHeaders(type, maxAgeS, obj.httpEtag);
+  headers.set('content-length', String(obj.size));
+  if (obj.size > MAX_CACHED_BYTES) return matchesEtag(req, obj.httpEtag) ? new Response(null, { status: 304, headers }) : new Response(obj.body, { headers });
+  const bytes = await obj.arrayBuffer();
+  const kept = { 'content-type': type, 'cache-control': `public, max-age=${maxAgeS}`, etag: obj.httpEtag, 'content-length': String(bytes.byteLength) };
+  const put = cache.put(id, new Response(bytes.slice(0), { headers: kept })).catch(() => {});
+  if (ctx) ctx.waitUntil(put);
+  else await put;
+  if (matchesEtag(req, obj.httpEtag)) {
+    headers.delete('content-length');
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(bytes, { headers });
 }
 
 /** If-None-Match names this ETag. Cloudflare weakens an ETag when it compresses the body, so W/ counts too. */

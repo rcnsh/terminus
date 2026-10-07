@@ -1183,6 +1183,72 @@ test('reads from R2 for the map are limited per IP; pieces in the edge cache are
   assert.equal(asked.length, 2);
 });
 
+test('fonts and icons are kept by path: no look at R2 for what the edge has, and a current copy is a 304', async () => {
+  const files = new Map([['map/sprites/v4/light@2x.png', 'PNG-BYTES']]);
+  const bucket = rangedBucket(files);
+  const heads = bucket.head;
+  let headCalls = 0;
+  bucket.head = (k) => (headCalls++, heads(k));
+  const asked = [];
+  const RL_MAP = { limit: async ({ key }) => (asked.push(key), { success: asked.length <= 1 }) };
+  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p, headers = {}) => (await call(p, { env, cache, headers: { 'cf-connecting-ip': '203.0.113.9', ...headers } })).res;
+
+  const first = await get('/map/sprites/v4/light@2x.png');
+  assert.equal(first.status, 200);
+  assert.equal(await first.text(), 'PNG-BYTES');
+  const etag = first.headers.get('etag');
+  assert.ok(etag);
+  assert.equal(first.headers.get('content-length'), '9');
+  assert.equal(first.headers.get('cache-control'), 'public, max-age=2592000');
+  // Days later, past any look at the file, still from the edge: R2 isn't asked, nor the limit.
+  Date.now = () => FROZEN_NOW + 3 * 86_400_000;
+  for (let i = 0; i < 3; i++) {
+    const again = await get('/map/sprites/v4/light@2x.png');
+    assert.equal(again.status, 200);
+    assert.equal(again.headers.get('etag'), etag);
+    assert.equal(again.headers.get('content-length'), '9');
+    assert.equal(again.headers.get('content-type'), 'image/png');
+    assert.equal(await again.text(), 'PNG-BYTES');
+  }
+  const kept = await get('/map/sprites/v4/light@2x.png', { 'if-none-match': `W/${etag}` });
+  assert.equal(kept.status, 304);
+  assert.equal(kept.headers.get('etag'), etag);
+  assert.equal(headCalls, 0, 'never a head()');
+  assert.equal(bucket.gets, 1, 'one read');
+  assert.equal(asked.length, 1, 'limited only where R2 was read');
+  // A file not in the cache, past the limit, waits.
+  assert.equal((await get('/map/sprites/v4/dark.json')).status, 429);
+});
+
+test('a piece of the map in the edge cache is served even once R2 may not be read', async () => {
+  const files = new Map([['map/campus.pmtiles', 'PMTiles-0123456789']]);
+  const bucket = rangedBucket(files);
+  const heads = bucket.head;
+  let headCalls = 0;
+  bucket.head = (k) => (headCalls++, heads(k));
+  let open = true;
+  const RL_MAP = { limit: async () => ({ success: open }) };
+  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
+
+  assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).text(), 'PMTiles');
+  assert.equal(headCalls, 1);
+  open = false;
+  // Past the time the file's ETag is trusted: the limit says no reads, but the piece is in the cache.
+  Date.now = () => FROZEN_NOW + 10 * 60_000;
+  const piece = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
+  assert.equal(piece.status, 206);
+  assert.equal(piece.headers.get('content-range'), 'bytes 0-6/18');
+  assert.equal(piece.headers.get('content-length'), '7');
+  assert.equal(await piece.text(), 'PMTiles');
+  assert.equal(headCalls, 1, 'R2 not asked');
+  // A piece that isn't cached still waits.
+  assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).status, 429);
+});
+
 test('/campus is the same bytes every time, with an ETag a client can revalidate with', async () => {
   const cache = installGlobals(makeFetch({}));
   const first = (await call('/campus', { cache })).res;
