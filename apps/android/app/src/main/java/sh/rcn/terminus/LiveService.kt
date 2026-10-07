@@ -181,12 +181,8 @@ class LiveService : Service() {
          * SCHEDULE_EXACT_ALARM may when its exact alarm fires. Without it the
          * start can be refused; a push at the trip's next phase starts it then.
          */
-        // Exact only when canScheduleExactAlarms() says so; lint can't see the check.
-        @android.annotation.SuppressLint("MissingPermission")
         private fun wakeAt(ctx: Context, at: Long) {
-            val am = ctx.getSystemService(AlarmManager::class.java) ?: return
-            if (am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, startIntent(ctx))
-            else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, startIntent(ctx))
+            ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(at, startIntent(ctx))
         }
 
         private fun startIntent(ctx: Context): PendingIntent =
@@ -256,10 +252,7 @@ class LiveService : Service() {
                     .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(catch, answer.leaveNote, answer.goNowLine).joinToString("\n")))
                     .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "))
                 // A class card can come without a leave time: no countdown then.
-                val leaveAt = answer.leaveAtMs
-                if (leaveAt != null && leaveAt > now) b.setWhen(leaveAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
-                else b.setShowWhen(false)
-                return b.build()
+                return b.countdownTo(answer.leaveAtMs, now).build()
             }
             val title = if (answer.arrived) answer.label else answer.clockLabel(fmt)
             val leave = answer.leaveText(now)
@@ -268,13 +261,7 @@ class LiveService : Service() {
                 .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(leave, answer.detail).joinToString("\n")))
             (answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null)?.let { b.setSubText(it) }
             // The system ticks this down; nothing to redraw between refreshes.
-            val departs = answer.departsAtMs
-            if (departs != null && departs > now && answer.quality != "unknown") {
-                b.setWhen(departs).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
-            } else {
-                b.setShowWhen(false)
-            }
-            return b.build()
+            return b.countdownTo(answer.departsAtMs?.takeIf { answer.quality != "unknown" }, now).build()
         }
     }
 }

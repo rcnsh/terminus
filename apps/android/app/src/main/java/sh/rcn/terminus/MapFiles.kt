@@ -3,6 +3,7 @@ package sh.rcn.terminus
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -28,11 +29,9 @@ object MapFiles {
         val file = File(dir(ctx), "campus.json")
         try {
             api.campusJson().also { file.writeText(it.toString()) }
-        } catch (e: ApiError) {
-            // Signed out or refused: not something a kept copy should hide.
-            if (e.status == 401) throw e
-            runCatching { JSONObject(file.readText()) }.getOrNull()
         } catch (e: Exception) {
+            // Signed out or refused: not something a kept copy should hide.
+            if (e is ApiError && e.status == 401) throw e
             runCatching { JSONObject(file.readText()) }.getOrNull()
         }
     }
@@ -63,7 +62,7 @@ object MapFiles {
         val json = JSONObject(style)
         json.put("sources", JSONObject())
         val layers = json.optJSONArray("layers") ?: return style
-        json.put("layers", org.json.JSONArray((0 until layers.length()).map { layers.getJSONObject(it) }.filter { it.optString("type") == "background" }))
+        json.put("layers", JSONArray((0 until layers.length()).map { layers.getJSONObject(it) }.filter { it.optString("type") == "background" }))
         return json.toString()
     }
 

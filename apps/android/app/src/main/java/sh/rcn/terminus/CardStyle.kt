@@ -29,7 +29,7 @@ object CardStyle {
 
     private const val KEY = "card_style"
 
-    private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
+    private fun prefs(ctx: Context) = terminusPrefs(ctx)
 
     // Read in a composable, so the card redraws when Settings changes it.
     private val chosen = mutableStateOf<String?>(null)

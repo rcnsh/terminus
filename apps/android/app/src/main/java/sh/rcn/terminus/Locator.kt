@@ -22,6 +22,9 @@ object Locator {
     /** How far a fix drifts per second of age: a walking pace. */
     private const val DRIFT_M_PER_S = 1.3
 
+    /** The providers to ask, best first. */
+    private val PROVIDERS = listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+
     /**
      * How far out a fix may be, in metres: its accuracy, plus how far you
      * could have walked since it was taken. Sent to the API as `acc`, which
@@ -49,7 +52,7 @@ object Locator {
             val now = System.currentTimeMillis()
             // The one that could be least wrong now: a fresh network fix over
             // a precise GPS fix from before the walk here.
-            listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+            PROVIDERS
                 .filter { lm.allProviders.contains(it) }
                 .mapNotNull { lm.getLastKnownLocation(it) }
                 .filter { now - it.time < maxAgeMs }
@@ -63,7 +66,7 @@ object Locator {
     suspend fun current(ctx: Context): Location? {
         if (!hasForeground(ctx)) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
-        val provider = listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+        val provider = PROVIDERS
             .firstOrNull { lm.allProviders.contains(it) && lm.isProviderEnabled(it) } ?: return lastKnown(ctx)
         val fresh = withTimeoutOrNull(6_000) {
             suspendCancellableCoroutine { cont ->
