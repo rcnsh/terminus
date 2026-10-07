@@ -264,7 +264,10 @@ class LiveService : Service() {
             val ride = card?.ride
             if (card != null && card.phase == "riding" && ride != null) {
                 b.setSubText(answer.destLabel)
-                return RideStyle.apply(ctx, b, card, ride, now).build()
+                RideStyle.apply(ctx, b, card, ride, now)
+                // The stops are the clock's estimate either way; unconfirmed, it says so.
+                if (unconfirmed != null) b.setContentText(listOf(unconfirmed, ride.nextText(now)).joinToString(" · "))
+                return b.build()
             }
 
             // Collapsed, one line each: the bus, then when to leave. Where to
