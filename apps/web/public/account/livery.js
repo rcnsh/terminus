@@ -6,8 +6,9 @@ import { html } from '../assets/ui.js';
 /**
  * The services' colours, for the livery: before sign-in there's no /campus to
  * ask, so they're here, mirroring the API's ROUTE_COLORS (src/campus.ts).
+ * The landing page's driving shuttles wear them too (sky-page.js).
  */
-const LIVERY = [
+export const LIVERY = [
   ['A1', '#e53935'], ['A2', '#d9a000'], ['D1', '#ec4fa0'], ['D2', '#8e44c9'],
   ['K', '#2b9ad6'], ['R1', '#f57c1f'], ['R2', '#34a853'], ['P', '#8a939c'],
 ];
