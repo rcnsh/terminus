@@ -1,7 +1,6 @@
 package sh.rcn.terminus.ui
 
 import android.app.Activity
-import androidx.compose.ui.text.rememberTextMeasurer
 import android.provider.Settings
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -54,13 +53,8 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import kotlin.math.PI
 import kotlin.math.cos
@@ -109,14 +103,18 @@ internal fun parallax(s: Float): Parallax {
 }
 
 /**
- * Your bus on the horizon's road: when it's due ("D2 · 8 min"), its colour,
- * how far off it is (0 at the stop, 1 a quarter of an hour away), and
- * whether that's live. A timetable guess is drawn as an outline.
+ * Your bus on the horizon's road: its colour, how far off it is (0 at the
+ * stop, 1 a quarter of an hour away), and whether that's live. A timetable
+ * guess is drawn as an outline.
  */
-internal data class RoadBus(val text: String, val color: Long, val far: Float, val live: Boolean)
+internal data class RoadBus(val color: Long, val far: Float, val live: Boolean)
 
-/** What's on the horizon's road: your stop's sign and your bus, or a shuttle going by. */
-internal data class Road(val stop: String? = null, val bus: RoadBus? = null, val shuttle: Boolean = true)
+/**
+ * What's on the horizon's road: your stop's sign and your bus, or a shuttle
+ * going by. It's a picture with no words: drawn this small, they were too
+ * hard to read, so the card says them under it ([RoadLine]).
+ */
+internal data class Road(val stop: Boolean = false, val bus: RoadBus? = null, val shuttle: Boolean = true)
 
 /** Now's sky: where it ends, its hour, the page's theme, and what's on the road. */
 @Stable
@@ -174,8 +172,6 @@ internal class Palette(
     val road: Color,
     val post: Color,
     val postInk: Color,
-    val pill: Color,
-    val pillInk: Color,
     val window: Color,
 )
 
@@ -186,11 +182,8 @@ internal fun palette(phase: Phase, dark: Boolean): Palette {
     val post = c(if (dark) 0xFFD6D3D1 else 0xFF1C1917)
     val postInk = c(if (dark) 0xFF0F0E0D else 0xFFFAFAF9)
     val lit = c(0xFFFDE9C9)
-    // Dark words on a light sky get a dark label; light words a light one.
     fun make(sky: List<Long>, far: Long, tree: Long, city: Long, light: Boolean, sun: Long? = null, window: Color) = Palette(
         sky.map(::c), c(far), c(tree), c(city), light, sun?.let(::c), road, post, postInk,
-        pill = if (dark) c(0xFFF5F3F0) else if (light) Color.White else c(0xFF1C1917),
-        pillInk = if (dark) c(0xFF0F0E0D) else if (light) c(0xFF1C1917) else Color.White,
         window = window,
     )
     val day = c(if (dark) 0xFFB9C7D6 else 0xFFDBEAFE)
@@ -225,14 +218,14 @@ private const val ROAD_SCALE = 1.25f
 internal val HORIZON = 115.dp
 
 /** The sky behind Now's content, down to the horizon, once something on it has said where that is. */
-internal fun Modifier.skyBehind(sky: SkyState, page: Color, measurer: TextMeasurer): Modifier = drawBehind {
+internal fun Modifier.skyBehind(sky: SkyState, page: Color): Modifier = drawBehind {
     val end = sky.end ?: return@drawBehind
     val p = sky.palette
     drawRect(
         Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end),
         size = Size(size.width, end),
     )
-    horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, measurer, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE)
+    horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE)
 }
 
 /**
@@ -305,7 +298,7 @@ private fun dip(lo: Float, hi: Float): Float {
  * Drawn [scale] times its numbers; [far] is in pixels. [withSun]: false for
  * just the hills (the band at the top of Settings' pages).
  */
-private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase, road: Road, measurer: TextMeasurer, far: Float, scale: Float = 1f, withSun: Boolean = true) {
+private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase, road: Road, far: Float, scale: Float = 1f, withSun: Boolean = true) {
     val d = 1.dp.toPx() * scale
     val lights = phase == Phase.DUSK || phase == Phase.NIGHT
     val w = size.width / d
@@ -333,12 +326,9 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
     val lit = MOON
     val dim = MOON.copy(alpha = 0.6f)
     fun across(f: Float) = (w * f).roundToInt().toFloat()
-    // Your stop's sign left of the flag, whatever its name's length; the
-    // flag right of anything on the road; the city clear of the flag and
-    // of the screen's edge.
-    val name = road.stop?.let { measurer.measure(it, TextStyle(color = p.postInk, fontSize = 7.5.sp * scale, fontWeight = FontWeight.Bold)) }
-    val plate = name?.let { it.size.width / d + 10 } ?: 0f
-    val sx = if (name != null) minOf(across(0.7f), across(0.74f) - plate / 2) else 0f
+    // Your stop's sign left of the flag; the flag right of anything on the
+    // road; the city clear of the flag and of the screen's edge.
+    val sx = if (road.stop) minOf(across(0.7f), across(0.74f) - 7) else 0f
     val flag = across(0.76f)
     // The far layer sinks behind the near hill as Now scrolls ([far]), kept to the strip.
     clipRect(top = top, bottom = top + 92 * d) { translate(top = far) {
@@ -403,14 +393,16 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
             drawCircle(Color(0xFF8A847D), 0.8f * d, at(x + wx, 69f))
         }
     }
-    if (name != null) {
+    if (road.stop) {
+        // The sign: a bus on it, as on a real one.
         drawLine(p.post, at(sx, 70f), at(sx, 44f), 1.6f * d)
-        box(sx - plate / 2, 35f, plate, 11f, p.post, 2.5f)
-        drawText(name, topLeft = Offset(sx * d - name.size.width / 2f, top + 40.5f * d - name.size.height / 2f))
+        box(sx - 6.5f, 33f, 13f, 13f, p.post, 2.5f)
+        box(sx - 3.5f, 35.5f, 7f, 7.5f, p.postInk, 1.5f)
+        box(sx - 2.5f, 36.5f, 5f, 3f, p.post, 0.5f)
     }
     val bus = road.bus
-    if (bus != null && name != null) {
-        // Your bus pulls up just short of the sign; its label keeps clear of the sign.
+    if (bus != null && road.stop) {
+        // Your bus pulls up just short of the sign.
         val colour = Color(bus.color)
         val x = (sx - 44 - bus.far.coerceIn(0f, 1f) * (sx - 56)).roundToInt().toFloat()
         if (bus.live) {
@@ -422,11 +414,6 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
             drawRoundRect(colour, at(x + 0.75f, 57.75f), Size(36.5f * d, 10.5f * d), CornerRadius(3 * d), style = Stroke(1.5f * d))
         }
         tyres(x)
-        val label = measurer.measure(bus.text, TextStyle(color = p.pillInk, fontSize = 8.sp * scale, fontWeight = FontWeight.Bold))
-        val lw = label.size.width / d + 14
-        val lx = maxOf(4f, minOf(x + 19 - lw / 2, sx - plate / 2 - 4 - lw))
-        box(lx, 42f, lw, 12f, p.pill, 6f)
-        drawText(label, topLeft = Offset((lx + lw / 2) * d - label.size.width / 2f, top + 48f * d - label.size.height / 2f))
     } else if (road.shuttle) {
         // A shuttle going by, heading right, its headlights on after dark: A1's red along the bottom.
         val x = across(0.58f) - 19f
@@ -585,7 +572,6 @@ private val BAND_STARS = listOf(
 internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
     val page = MaterialTheme.colorScheme.background
     val p = palette(phase, page.luminance() < 0.5f)
-    val measurer = rememberTextMeasurer()
     NightStatusBar(p.lightInk)
     Column(
         Modifier.fillMaxWidth().drawBehind {
@@ -605,7 +591,7 @@ internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
             val strip = end - 58 * d
             clipRect(top = end - LOW.toPx(), bottom = end) {
                 // Just the hills: the sun stays for Now's horizon.
-                horizon(strip, page, p, phase, Road(shuttle = false), measurer, 0f, withSun = false)
+                horizon(strip, page, p, phase, Road(shuttle = false), 0f, withSun = false)
             }
         },
     ) {

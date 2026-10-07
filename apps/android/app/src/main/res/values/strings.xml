@@ -452,6 +452,9 @@
     <string name="journey_walk_to">Walk to %1$s</string>
     <string name="journey_walk">%1$s walk</string>
     <string name="journey_from">from %1$s</string>
+    <string name="road_arriving">arriving at %1$s</string>
+    <string name="road_reaches">reaches %1$s in %2$d min</string>
+    <string name="road_reaches_about">reaches %1$s in about %2$d min</string>
     <string name="journey_ride">%1$s ride</string>
     <string name="journey_arrive_place">Arrive at %1$s</string>
     <string name="journey_arrive_time">Arrive %1$s</string>

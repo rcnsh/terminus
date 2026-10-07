@@ -60,8 +60,6 @@ const ridge = (w, y) => {
   for (let x = 4; x < w + 4; x += 4) d += `L${x} ${y(x).toFixed(1)}`;
   return `${d}L${w} 92Z`;
 };
-/** About how wide `s` is at `size` px in bold: Chinese characters are about square. */
-const textW = (s, size) => [...s].reduce((n, c) => n + (/[⺀-鿿＀-￯]/.test(c) ? size * 1.05 : size * 0.6), 0);
 
 /** The flag's five stars, in a ring around its middle (px). */
 const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5), -0.85 * Math.cos((i * 2 * Math.PI) / 5)]);
@@ -81,8 +79,10 @@ const ROAD_SCALE = 1.25;
  * flag by the road, and Marina Bay Sands far off in the city. The near hill
  * is the page's own colour, so the sky meets the ground instead of fading.
  * On the road, either your stop's sign (`stop`) with your bus (`bus`:
- * `svc`, `color`, `text`, `far` from 0 at the stop to 1 a quarter of an
- * hour away, and `live`) coming up to it, or a shuttle going by (`shuttle`).
+ * `color`, `far` from 0 at the stop to 1 a quarter of an hour away, and
+ * `live`) coming up to it, or a shuttle going by (`shuttle`). It's a
+ * picture with no words: drawn this small, they were too hard to read, so
+ * the card says them under it (journey.js RoadLine).
  * A timetable guess is an outline, never a filled bus, so it doesn't pass
  * for live. The sun is only ever low behind the hills: rising at dawn, low in
  * the golden hour, setting at dusk (app.css shows the hour's). `on`: 'now',
@@ -91,7 +91,7 @@ const ROAD_SCALE = 1.25;
  * its own size (the band at the top of Settings' pages); otherwise it's
  * drawn ROAD_SCALE times bigger.
  */
-export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now', low = false }) {
+export function Horizon({ stop = false, bus = null, shuttle = true, on = 'now', low = false }) {
   const box = useRef(null);
   const [w, setW] = useState(0);
   useLayoutEffect(() => {
@@ -111,18 +111,15 @@ export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now', l
   // How wide the strip is in its own numbers: the page's width, scaled down.
   const vw = Math.round(w / k);
   const at = (f) => Math.round(vw * f);
-  // Your stop's sign left of the flag, whatever its name's length; the flag
-  // right of anything on the road; the city clear of the flag and the edge.
-  const plate = stop ? Math.round(textW(stop, 7.5) + 10) : 0;
-  const sx = stop ? Math.min(at(0.7), at(0.74) - plate / 2) : 0;
+  // Your stop's sign left of the flag; the flag right of anything on the
+  // road; the city clear of the flag and the edge.
+  const sx = stop ? Math.min(at(0.7), at(0.74) - 7) : 0;
   const [b1, b2, flag] = [at(0.18), at(0.62), at(0.76)];
   const mbs = dip(Math.max(at(0.8) - 40, flag + 30), Math.min(at(0.8) + 40, vw - 29));
   const city = farY(mbs) + 3;
   const pole = nearY(flag);
-  // The bus pulls up just short of the sign; its label keeps clear of the sign.
+  // The bus pulls up just short of the sign.
   const bx = bus ? Math.round(sx - 44 - Math.min(1, Math.max(0, bus.far)) * (sx - 56)) : 0;
-  const lw = bus ? Math.round(textW(bus.text, 8) + 14) : 0;
-  const lx = bus ? Math.max(4, Math.min(bx + 19 - lw / 2, sx - plate / 2 - 4 - lw)) : 0;
   const passing = at(0.58) - 19;
   return html`
     <div class=${low ? 'horizon low' : 'horizon'} ref=${box} aria-hidden="true">
@@ -167,8 +164,9 @@ export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now', l
         stop &&
         html`<g class="sign">
           <line x1=${sx} y1="70" x2=${sx} y2="44" />
-          <rect x=${sx - plate / 2} y="35" width=${plate} height="11" rx="2.5" />
-          <text x=${sx} y="43.2">${stop}</text>
+          <rect x=${sx - 6.5} y="33" width="13" height="13" rx="2.5" />
+          <rect class="mark" x=${sx - 3.5} y="35.5" width="7" height="7.5" rx="1.5" />
+          <rect x=${sx - 2.5} y="36.5" width="5" height="3" rx="0.5" />
         </g>`}
         ${!low &&
         bus &&
@@ -178,10 +176,6 @@ export function Horizon({ stop = null, bus = null, shuttle = true, on = 'now', l
             ${[3, 10, 17, 24].map((x) => html`<rect class="win" x=${x} y="2.5" width="5" height="4" rx="1" />`)}
             <rect class="win" x="32" y="2.5" width="4" height="6" rx="1" />
             ${[8, 30].map((x) => html`<circle class="tyre" cx=${x} cy="12" r="2.2" /><circle class="hub" cx=${x} cy="12" r="0.8" />`)}
-          </g>
-          <g class="label">
-            <rect x=${lx} y="42" width=${lw} height="12" rx="6" />
-            <text x=${lx + lw / 2} y="50.6">${bus.text}</text>
           </g>`}
         ${!low &&
         !bus &&

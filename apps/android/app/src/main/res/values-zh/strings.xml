@@ -452,6 +452,9 @@
     <string name="journey_walk_to">步行到 %1$s</string>
     <string name="journey_walk">步行 %1$s</string>
     <string name="journey_from">在 %1$s 上车</string>
+    <string name="road_arriving">即将到达 %1$s</string>
+    <string name="road_reaches">%2$d 分钟后到达 %1$s</string>
+    <string name="road_reaches_about">约 %2$d 分钟后到达 %1$s</string>
     <string name="journey_ride">乘车 %1$s</string>
     <string name="journey_arrive_place">到达 %1$s</string>
     <string name="journey_arrive_time">%1$s 到达</string>
