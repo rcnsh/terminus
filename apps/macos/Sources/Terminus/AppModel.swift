@@ -1,6 +1,7 @@
 import AppKit
 import CoreLocation
 import Foundation
+import IOKit
 import Network
 import Observation
 import os
@@ -262,8 +263,27 @@ final class AppModel {
         }
     }
 
-    /// This Mac's name, as the account's device list shows it.
-    private var deviceName: String { String((Host.current().localizedName ?? "Mac").prefix(40)) }
+    /// This Mac as the account's device list shows it: its model, never the
+    /// name it was given ("Alex's MacBook Pro"), which would say who owns it.
+    private var deviceName: String { macModelName(productName: Self.productName(), hwModel: Self.hwModel()) }
+
+    /// "MacBook Pro (16-inch, M5 Pro)", from the device tree (Apple silicon only).
+    private static func productName() -> String? {
+        let entry = IORegistryEntryFromPath(kIOMainPortDefault, "IODeviceTree:/product")
+        guard entry != 0 else { return nil }
+        defer { IOObjectRelease(entry) }
+        guard let data = IORegistryEntryCreateCFProperty(entry, "product-name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Data else { return nil }
+        return String(decoding: data, as: UTF8.self).trimmingCharacters(in: CharacterSet(charactersIn: "\0").union(.whitespaces))
+    }
+
+    /// "MacBookPro16,1" on an Intel Mac.
+    private static func hwModel() -> String? {
+        var size = 0
+        guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else { return nil }
+        var buf = [CChar](repeating: 0, count: size)
+        guard sysctlbyname("hw.model", &buf, &size, nil, 0) == 0 else { return nil }
+        return String(cString: buf)
+    }
 
     // MARK: trip signals
 
@@ -900,4 +920,18 @@ final class AppModel {
         }
         pathMonitor.start(queue: .global(qos: .utility))
     }
+}
+
+/**
+ * The device name an anonymous Mac reports: the model, as the device list
+ * shows it, and never the computer's own name. The device tree's product
+ * name when there is one; else the family from hw.model ("MacBookAir7,2"
+ * is a MacBook Air); else "Mac". At most 40 characters, as the server keeps.
+ */
+func macModelName(productName: String?, hwModel: String?) -> String {
+    if let p = productName?.trimmingCharacters(in: .whitespaces), !p.isEmpty { return String(p.prefix(40)) }
+    let families: [(String, String)] = [("MacBookPro", "MacBook Pro"), ("MacBookAir", "MacBook Air"), ("MacBook", "MacBook"), ("Macmini", "Mac mini"), ("MacPro", "Mac Pro"), ("iMacPro", "iMac Pro"), ("iMac", "iMac")]
+    let model = hwModel ?? ""
+    // iMacPro before iMac: the longest prefix wins.
+    return families.sorted { $0.0.count > $1.0.count }.first { model.hasPrefix($0.0) }?.1 ?? "Mac"
 }

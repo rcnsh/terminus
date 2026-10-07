@@ -443,7 +443,8 @@ private struct StopCard: View {
                     .tint(.brand)
                 }
                 Button(L("Walking directions")) {
-                    let url = "https://www.google.com/maps/dir/?api=1&destination=\(stop.lat),\(stop.lon)&travelmode=walking"
+                    // Apple Maps, the Mac's own, as the web app does on Apple devices.
+                    let url = "https://maps.apple.com/?daddr=\(stop.lat),\(stop.lon)&dirflg=w"
                     if let u = URL(string: url) { NSWorkspace.shared.open(u) }
                 }
             }
