@@ -42,7 +42,7 @@ test('alerts once when the feed goes down, once when it recovers', async () => {
   await checkUpstream(e, 4500, ok);
   assert.equal(e.EMAIL.sent.length, 2);
   assert.match(e.EMAIL.sent[1].subject, /recovered/);
-  assert.equal((await readUpstream(e)).since, 4500, 'since = when it was confirmed back');
+  assert.equal((await readUpstream(e)).since, 4000, 'since = the first of the good checks that confirmed it');
 });
 
 test('confirmed outages are kept for the status page, with a cause and no error text', async () => {
@@ -57,7 +57,7 @@ test('confirmed outages are kept for the status page, with a cause and no error 
   await checkUpstream(e, 4000, ok);
   await checkUpstream(e, 4500, ok);
   await checkUpstream(e, 4700, ok);
-  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 4500, cause: 'feed' }]);
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 4000, cause: 'feed' }], 'it ended at the first good check');
 
   const refused = fail('auth rejected: code=10009 msg=We have a new release of uNivUS');
   const noFix = async () => ({ status: 'failed', note: 'nothing found' });
@@ -113,7 +113,7 @@ test('a KV read that fails changes nothing: no state, no email, no incident', as
   // And once it's back, the incident closes.
   await checkUpstream(e, 7000, ok);
   await checkUpstream(e, 8000, ok);
-  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 8000, cause: 'feed' }]);
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 7000, cause: 'feed' }]);
 });
 
 test('an incident whose close was not saved is closed on the next run', async () => {
@@ -128,10 +128,10 @@ test('an incident whose close was not saved is closed on the next run', async ()
   undo();
   assert.equal((await readIncidents(e))[0].end, null, 'still open');
   await checkUpstream(e, 6000, ok);
-  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 5000, cause: 'feed' }], 'closed when it came back');
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 4000, cause: 'feed' }], 'closed when it came back');
   await checkUpstream(e, 7000, fail('network'));
   await checkUpstream(e, 8000, fail('network'));
-  assert.deepEqual((await readIncidents(e)).map((i) => [i.start, i.end]), [[8000, null], [3000, 5000]]);
+  assert.deepEqual((await readIncidents(e)).map((i) => [i.start, i.end]), [[8000, null], [3000, 4000]]);
 });
 
 test('an incident whose opening was not saved is opened on the next run, once', async () => {
