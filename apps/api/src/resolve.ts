@@ -552,6 +552,23 @@ export function towardsFrom(idx: GraphIndex, svc: string, stopCode: string): str
 }
 
 /**
+ * How far past its time a bus on a board is taken as gone. The feed's times
+ * are whole minutes, so one listed as arriving may still be at the stop a
+ * little after; past this, it has left.
+ */
+export const BOARD_GONE_S = 60;
+
+/**
+ * When the boards made from these stops' arrivals are from: the oldest
+ * fetch among the feeds that answered (a cached or stale answer's original
+ * time), else now. Clients say "Updated N ago" from it.
+ */
+export function boardAsOf(sas: (StopArrivals | undefined)[], nowMs: number): number {
+  const times = sas.filter((sa): sa is StopArrivals => sa !== undefined && sa.available !== false).map((sa) => sa.fetchedAt);
+  return times.length ? Math.min(nowMs, ...times) : nowMs;
+}
+
+/**
  * What is coming at a single stop, for every service that stops there --
  * the map's tap-a-stop popover. Deliberately destination-less: no walk time,
  * no hops, no "can I reach it" cutoff, because the visitor is already
@@ -581,9 +598,14 @@ export function boardAt(
     const available = feed !== undefined && feed.available !== false;
     const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === svc);
     const { usable, ambiguousBerth } = resolveBerths(forSvc);
+    // The feed's times count from its fetch, and a cached or stale answer is
+    // that much older: counted from now, as scoreOptions does, and a bus
+    // whose time is well past is gone, not "now".
+    const ageS = feed && available ? Math.max(0, (nowMs - feed.fetchedAt) / 1000) : 0;
     const etas = usable
-      .filter((a) => a.etaS != null)
-      .sort((a, b) => (a.etaS as number) - (b.etaS as number));
+      .filter((a) => a.etaS != null && (a.etaS as number) - ageS >= -BOARD_GONE_S)
+      .map((a) => ({ ...a, etaS: Math.max(0, Math.round((a.etaS as number) - ageS)) }))
+      .sort((a, b) => a.etaS - b.etaS);
 
     let quality: Quality;
     let etaS: number | null = null;
@@ -624,7 +646,7 @@ export function boardAt(
     // Each later bus keeps its own quality: a timetabled one after a live one stays a guess.
     const later = etas.slice(1).map((a) => {
       const q = aged(a.scheduled ? 'scheduled' : 'live');
-      return { etaS: a.etaS as number, quality: q, eta: etaText(a.etaS as number, q) };
+      return { etaS: a.etaS, quality: q, eta: etaText(a.etaS, q) };
     });
     const towards = towardsFrom(idx, svc, stopCode);
 

@@ -752,7 +752,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     },
                   },
                 },
-                asOf: { type: 'string', format: 'date-time' },
+                asOf: { type: 'string', format: 'date-time', description: 'When the oldest times on these boards were fetched (a cached or `stale` answer’s original fetch time), so "updated N ago" is true.' },
               },
             }),
             '400': errorResponse('No coordinates and no home set.'),
@@ -1632,7 +1632,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later', 'color', 'towards', 'crowd', 'endsAt', 'running', 'eta', 'laterText', 'toText'],
           properties: {
             svc: { type: 'string' },
-            etaS: { type: ['integer', 'null'] },
+            etaS: { type: ['integer', 'null'], description: 'Seconds from the request until the bus arrives, counted from now even when the feed’s answer is older (a bus whose time passed over a minute ago is left out).' },
             eta: {
               type: ['string', 'null'],
               example: '~6 min',
@@ -1691,7 +1691,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               },
             },
             board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
-            asOf: { type: 'string', format: 'date-time' },
+            asOf: { type: 'string', format: 'date-time', description: 'When the times on the board were fetched: a cached or `stale` answer’s original fetch time, so "updated N ago" is true.' },
             available: { type: 'boolean', description: 'False when the upstream feed could not be reached.' },
           },
         },
