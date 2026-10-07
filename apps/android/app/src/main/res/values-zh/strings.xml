@@ -52,7 +52,6 @@
     <string name="a11y_starts">%1$s，%2$s 开始</string>
     <string name="a11y_to">去 %1$s</string>
     <string name="account_page">账户页面</string>
-    <string name="account_page_hint">API 密钥、在所有设备上退出登录和删除账户都在账户页面。</string>
     <string name="add">添加</string>
     <string name="add_by_hand">手动添加课或其他安排</string>
     <string name="add_device">添加设备</string>
@@ -161,12 +160,10 @@
     <string name="is_this_wrong">这不对？</string>
     <string name="language">语言</string>
     <string name="time_format">时间格式</string>
-    <string name="time_format_hint">terminus 显示的所有时间都用这个格式，这里、Mac 和网页上都是。</string>
     <string name="show_times_as">时间显示为</string>
     <string name="clock_12">12 小时制</string>
     <string name="clock_12_eg">下午 6:36</string>
     <string name="clock_24">24 小时制</string>
-    <string name="with_example">%1$s（%2$s）</string>
     <string name="language_hint">也用于你的 Mac、网页和电子邮件。地点和巴士名称保持英文，与站牌一致。</string>
     <string name="all_off">全部关闭</string>
     <string name="devices_need_email">添加邮箱后可在其他设备上使用</string>
@@ -183,7 +180,6 @@
     <string name="leaves_in_s">%1$d 秒后开</string>
     <string name="left_ago">%1$d 分钟前已开走 · 正在更新</string>
     <string name="live_notification">行程中的实时通知</string>
-    <string name="live_notification_hint">每次行程中，从该出发时直到到达，会在通知和小组件中显示下一班巴士和倒计时。它每 30 秒检查一次新时间，会更耗电。</string>
     <string name="loading">正在加载…</string>
     <string name="location">定位</string>
     <string name="location_ask">允许使用位置，路线就会从离你最近的车站开始。否则，terminus 会假设你在上一节课的地点或在家。</string>
@@ -225,7 +221,6 @@
     <string name="notifications_off">terminus 的通知已关闭。</string>
     <string name="notifications_text">在你需要出发去上课前 5 分钟提醒你，不用一直查看。</string>
     <string name="notify_leave">上课前提醒我出发</string>
-    <string name="notify_leave_hint">在需要出发前 5 分钟提醒你，之后更新你的乘车情况或下一种到达方式。</string>
     <string name="now">现在</string>
     <string name="number_to_choose">要选择的数字：%1$s</string>
     <string name="nusmods_hint">在 NUSMods 中：打开 Timetable，然后 Share/Sync。点按“分享”并选择 terminus，或复制链接粘贴到这里。</string>
@@ -318,7 +313,6 @@
     <string name="sign_in">登录</string>
     <string name="sign_in_why">使用你注册时的邮箱。我们会发一个验证码给你，在这里输入。</string>
     <string name="sign_out">退出登录</string>
-    <string name="sign_out_phone">在这部手机上退出登录</string>
     <string name="sign_out_text">应用和小组件将不再显示你的课表。你的账户和设置会保留，可用 %1$s 重新登录。</string>
     <string name="sign_out_title">在这部手机上退出登录？</string>
     <string name="signed_in_as">已登录：%1$s</string>
@@ -344,7 +338,6 @@
     <string name="theme_dark">深色</string>
     <string name="theme_hint">仅限这部手机。</string>
     <string name="theme_light">浅色</string>
-    <string name="this_phone">（这部手机）</string>
     <string name="thursday">星期四</string>
     <string name="thursday_short">周四</string>
     <string name="time_am">上午 %1$s</string>
@@ -491,4 +484,23 @@
     <string name="going_anyway">还是要去别的地方？</string>
     <string name="plan_trip">规划行程</string>
     <string name="feedback_short">告诉我们哪里有问题，或你想要什么</string>
+    <!-- Settings' pages as one family (SettingsParts.kt) -->
+    <string name="heading_from_nusmods">来自 NUSMods</string>
+    <string name="heading_your_favourites">你的收藏</string>
+    <string name="heading_before_class">上课前</string>
+    <string name="heading_during_trip">行程中</string>
+    <string name="notify_leave_short">在需要出发前 5 分钟提醒你</string>
+    <string name="notify_leave_more">之后更新你的乘车情况或下一种到达方式。</string>
+    <string name="live_notification_short">下一班巴士和倒计时，直到你到达</string>
+    <string name="detect_short">在你的所有设备上同步行程</string>
+    <string name="during_trip_hint">实时通知每 30 秒检查一次新时间，会更耗电。自动检测上车会在行程中使用你的位置，从你打开 terminus，或点按其通知或小组件时开始。只保存判断结果，从不保存你的位置。</string>
+    <string name="heading_your_devices">你的设备</string>
+    <string name="this_phone_tag">这部手机</string>
+    <string name="auto">自动</string>
+    <string name="time_format_hint_auto">terminus 显示的所有时间都用这个格式，这里、Mac 和网页上都是。“自动”跟随这部手机。</string>
+    <string name="heading_signed_in">已登录</string>
+    <string name="heading_your_data">你的数据</string>
+    <string name="account_page_sub">API 密钥，以及在所有设备上退出登录</string>
+    <string name="heading_more">更多</string>
+    <string name="get_apps">下载应用</string>
 </resources>

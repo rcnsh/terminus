@@ -527,28 +527,35 @@ const CLOSE = '<path d="M6 6l12 12M18 6 6 18"/>';
 /** "Notify me when to leave", in Settings under Notifications, where this browser can do it. */
 function Notify() {
   const s = useStore(push);
-  const busy = useRef(false);
+  const [busy, setBusy] = useState(false);
+  // A group of one row, as the rest of Settings' pages (settings-pages.js Group): blocked, the row says so without a switch.
   return html`
-    <section class="card notify">
-      <div>
-        <strong>${t('Notify me when to leave')}</strong>
-        <p class="hint">${s.text}</p>
-      </div>
-      ${s.button &&
-      html`<button
-        type="button"
-        class=${`btn small ${s.on ? 'ghost' : 'accent'}`}
-        onClick=${async (e) => {
-          if (busy.current) return;
-          busy.current = true;
-          e.currentTarget.disabled = true;
-          const btn = e.currentTarget;
-          await togglePush();
-          busy.current = false;
-          btn.disabled = false;
-        }}
-      >${s.on ? t('Turn off') : t('Turn on')}</button>`}
-    </section>
+    <div class="trips">
+      <section class="trips-group">
+        <h3 class="eyebrow">${t('Before class')}</h3>
+        <div class="card settings-list">
+          <div class="field">
+            <label for="notify-on">${t('Notify me when to leave')}<span class="field-sub">${s.text}</span></label>
+            ${s.button &&
+            html`<div class="field-control">
+              <input
+                id="notify-on"
+                class="switch"
+                type="checkbox"
+                role="switch"
+                checked=${s.on}
+                disabled=${busy}
+                onChange=${async () => {
+                  setBusy(true);
+                  await togglePush();
+                  setBusy(false);
+                }}
+              />
+            </div>`}
+          </div>
+        </div>
+      </section>
+    </div>
   `;
 }
 
