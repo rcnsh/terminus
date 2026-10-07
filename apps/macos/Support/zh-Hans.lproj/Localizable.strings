@@ -95,13 +95,11 @@
 "Move terminus to Applications first, then turn this on" = "请先把 terminus 移到“应用程序”，再开启这个选项";
 "NUSMods has no classes this semester for %@." = "NUSMods 上 %@ 本学期没有课。";
 "Nearby" = "附近";
-"New to terminus? Get the Android app, or set up at %@/account, then sign in here." = "第一次用 terminus？下载 Android 应用，或在 %@/account 设置，然后在这里登录。";
 "Next" = "下一个";
 "Next bus" = "下一班巴士";
 "Next class" = "下一节课";
 "No buses until your day starts" = "你的一天开始前不显示巴士";
 "No live data" = "没有实时数据";
-"No stop found for %@. Add those by hand on the account page." = "找不到 %@ 的车站。请在账户页面手动添加。";
 "None yet" = "暂无";
 "Normal" = "正常";
 "Not going" = "不去了";
@@ -121,7 +119,6 @@
 "Settings…" = "设置…";
 "Theme" = "主题";
 "Timetable" = "课表";
-"To go somewhere every week, add it to your timetable on the account page or in the phone app." = "每周都去的地方，可以在账户页面或手机应用里加到课表中。";
 "Updating times…" = "正在更新时间…";
 "On the %@" = "在 %@ 上";
 "On the other device, open terminus and enter:" = "在另一台设备上打开 terminus，输入：";
@@ -195,7 +192,6 @@
 "Works once, for 10 minutes." = "只能用一次，有效 10 分钟。";
 "You're there" = "已到达";
 "You're here" = "就在这里";
-"Your email, API keys, signing out everywhere and deleting your account are on the account page." = "邮箱、API 密钥、在所有设备上退出登录和删除账户都在账户页面上。";
 "Your timetable" = "你的课表";
 "Your trips" = "你的行程";
 "arrive %@" = "%@ 到达";

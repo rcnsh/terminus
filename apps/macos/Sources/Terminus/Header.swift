@@ -3,6 +3,7 @@ import SwiftUI
 /// The hero: where you're going, the answer, and whether it's live.
 struct Header: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let a = model.showNearby ? model.plan : model.shown
@@ -71,8 +72,6 @@ struct Header: View {
         }
         .card()
     }
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// "D2 · 09:42" when there's a live departure; otherwise the label.
     private func big(_ a: NextAnswer?) -> String {

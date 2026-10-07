@@ -57,6 +57,8 @@ struct SettingsWindow: View {
     @State private var setup: SetupModel
     @State private var pane: SettingsPane?
     @State private var visited: [SettingsPane] = []
+    /// Set while the back arrow changes the pane, so that isn't recorded as a visit.
+    @State private var going = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(app: AppModel, setup: SetupModel = SetupModel(), pane: SettingsPane = .trips) {
@@ -113,9 +115,6 @@ struct SettingsWindow: View {
         }
     }
 
-    /// Set while the back arrow changes the pane, so that isn't recorded as a visit.
-    @State private var going = false
-
     private func back() {
         guard let last = visited.popLast() else { return }
         going = true
@@ -129,6 +128,8 @@ struct SettingsPaneView: View {
     @Bindable var app: AppModel
     let setup: SetupModel
     @AppStorage(Appearance.key) private var theme = "auto"
+    @State private var confirmDelete = false
+    @State private var confirmSignOut = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -258,9 +259,6 @@ struct SettingsPaneView: View {
             .padding(.top, 6)
         }
     }
-
-    @State private var confirmDelete = false
-    @State private var confirmSignOut = false
 
     private func openAccountPage() { NSWorkspace.shared.open(URL(string: "\(Api.site)/account/#account")!) }
 }
