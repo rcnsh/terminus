@@ -276,8 +276,6 @@ final class AppModel {
 
     var signalling = false
 
-    /// A card button: "On the D2", "Missed it", "Not going". Recorded for every
-    /// device; the answer that comes back replaces the planned one.
     /// "Leave earlier" or "No thanks" on a suggestion; the card comes back without it.
     func choose(_ s: Suggestion, accept: Bool) {
         guard !signalling, let token = TokenStore.read() else { return }
@@ -358,6 +356,8 @@ final class AppModel {
         }
     }
 
+    /// A card button: "On the D2", "Missed it", "Not going". Recorded for every
+    /// device; the answer that comes back replaces the planned one.
     func signal(_ action: CardAction) {
         // "Not going" is the × on Today by another name: the same way off the
         // list, with the same Undo in its row (as on Android).
@@ -720,12 +720,6 @@ final class AppModel {
         Task { destinations = (try? await Api(token: TokenStore.read()).destinations()) ?? [] }
     }
 
-    // MARK: refresh loop
-
-    /// 30 s while the popover is open, 2 min otherwise, 10 min while
-    /// resting; nothing while asleep or locked. Also right after the bus
-    /// leaves or the plan changes, and soon after a failure. The API caches
-    /// each stop for 15 s, so faster shows nothing new.
     // MARK: language (phase 10)
 
     /// The account's language once per launch: one chosen on another device
@@ -751,6 +745,12 @@ final class AppModel {
         }
     }
 
+    // MARK: refresh loop
+
+    /// 30 s while the popover is open, 2 min otherwise, 10 min while
+    /// resting; nothing while asleep or locked. Also right after the bus
+    /// leaves or the plan changes, and soon after a failure. The API caches
+    /// each stop for 15 s, so faster shows nothing new.
     private func start() {
         loop?.cancel()
         loop = Task {

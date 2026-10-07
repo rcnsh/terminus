@@ -1,5 +1,4 @@
 import SwiftUI
-import os
 
 /// The hero: where you're going, the answer, and whether it's live.
 struct Header: View {

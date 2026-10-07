@@ -391,12 +391,12 @@ final class SetupModel {
         }
     }
 
-    /// While the code is showing, checks every few seconds for a device
-    /// that wasn't there before, and goes back to the list once one is.
-    /// Cancelled with the card (Done, or the window closing).
     /// The device just paired, while its tick shows.
     var added: String?
 
+    /// While the code is showing, checks every few seconds for a device
+    /// that wasn't there before, and goes back to the list once one is.
+    /// Cancelled with the card (Done, or the window closing).
     func waitForNewDevice() async {
         let known = Set((devices ?? []).map(\.id))
         let code = pairCode

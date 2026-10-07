@@ -1,5 +1,4 @@
 import SwiftUI
-import os
 
 // MARK: - Pairing
 
@@ -128,30 +127,30 @@ struct Pair: View {
     }
 
     private var pairCard: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel(text: L("Pair this Mac"))
-                Text(L("On your phone: Settings, then Add a device. Or on %@/account: Add a device. Then enter the 6-character code here.", Api.siteHost))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                CodeField(code: $code, label: L("Pairing code"), onEdit: { model.pairError = nil }) { model.pair($0) }
-                    .padding(.vertical, 4)
-                Button {
-                    model.pair(code)
-                } label: {
-                    Text(model.pairing ? L("Pairing…") : L("Pair")).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(code.count != CodeField.length || model.pairing)
-                if let e = model.pairError {
-                    Text(e).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
-                }
-                Button(L("Sign in with email instead")) { useCode = false }
-                    .buttonStyle(.link)
-                    .font(.callout)
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: L("Pair this Mac"))
+            Text(L("On your phone: Settings, then Add a device. Or on %@/account: Add a device. Then enter the 6-character code here.", Api.siteHost))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            CodeField(code: $code, label: L("Pairing code"), onEdit: { model.pairError = nil }) { model.pair($0) }
+                .padding(.vertical, 4)
+            Button {
+                model.pair(code)
+            } label: {
+                Text(model.pairing ? L("Pairing…") : L("Pair")).frame(maxWidth: .infinity)
             }
-            .card()
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(code.count != CodeField.length || model.pairing)
+            if let e = model.pairError {
+                Text(e).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            }
+            Button(L("Sign in with email instead")) { useCode = false }
+                .buttonStyle(.link)
+                .font(.callout)
+        }
+        .card()
     }
 }
 

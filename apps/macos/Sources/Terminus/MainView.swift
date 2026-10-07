@@ -1,5 +1,4 @@
 import SwiftUI
-import os
 import AppKit
 
 // MARK: - Main

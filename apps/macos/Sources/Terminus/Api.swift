@@ -188,7 +188,6 @@ var usesHour12: Bool {
     }
 }
 
-/// "1.0.10" is newer than "1.0.9".
 /// "1.0.10" > "1.0.9", and a release is newer than its own pre-release:
 /// "2.0.0" > "2.0.0-beta.2" > "2.0.0-beta" > "1.3.10".
 func isNewer(_ latest: String, than current: String) -> Bool {

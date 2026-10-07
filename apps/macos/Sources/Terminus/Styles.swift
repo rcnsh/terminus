@@ -1,9 +1,6 @@
 import SwiftUI
-import os
 import AppKit
 
-/// The site's accent (#c2410c light, #fb923c dark), so the menu bar app
-/// looks like the same product as the web and the widget.
 extension Color {
     /// "#rrggbb", as the API sends a service's colour; nil for anything else.
     init?(hex: String) {
@@ -11,6 +8,8 @@ extension Color {
         self.init(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255, blue: Double(v & 0xFF) / 255)
     }
 
+    /// The site's accent (#c2410c light, #fb923c dark), so the menu bar app
+    /// looks like the same product as the web and the widget.
     static let brand = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
             ? NSColor(red: 0xFB / 255, green: 0x92 / 255, blue: 0x3C / 255, alpha: 1)
