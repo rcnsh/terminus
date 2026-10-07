@@ -390,6 +390,7 @@
     <string name="your_timetable">Your timetable</string>
     <string name="your_timetable_sub">Paste your NUSMods share link. Each class goes to the stop nearest its room.</string>
     <string name="busy_try_again">terminus is busy. Try again in a minute.</string>
+    <string name="server_not_answering">terminus isn\'t answering right now. Try again soon.</string>
     <string name="where_you_live">Where you live</string>
     <string name="only_stops_saved">Only your stops are saved.</string>
     <string name="residence">Residence</string>
