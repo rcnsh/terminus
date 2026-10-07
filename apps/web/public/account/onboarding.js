@@ -24,7 +24,8 @@ export function Onboarding({ onDone }) {
   const { n, dir, out } = step;
 
   const finish = async () => {
-    await saveNow((x) => (x.seen = [...new Set([...(x.seen ?? []), 'onboarding'])])).catch(() => {});
+    // Not saved, setup comes back next time: say so, but let them in now.
+    await saveNow((x) => (x.seen = [...new Set([...(x.seen ?? []), 'onboarding'])])).catch((err) => toast(t('Not saved. {0}', err.message)));
     setLeaving(true);
     setTimeout(
       () => {

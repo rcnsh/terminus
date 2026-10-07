@@ -325,11 +325,12 @@ function Choices() {
   const load = () =>
     api('/me/choices')
       .then(setR)
-      .catch(() => {});
+      .catch(() => setR((was) => was ?? { failed: true }));
   useEffect(() => {
     load();
   }, [version]);
   if (!r) return null;
+  if (r.failed) return html`<p class="hint group-hint" role="status">${t("Couldn't load your classes and trip history. Check your connection.")}</p>`;
   const name = (c) => c.label ?? t('A class no longer in your timetable');
   return html`
     ${r.choices.length > 0 &&
@@ -883,7 +884,7 @@ export function Language() {
             onChange=${async (v) => {
               // This browser and the account, so emails and the other devices follow.
               window.i18n?.noteAccount(v);
-              await saveNow((x) => (x.lang = v)).catch(() => {});
+              await saveNow((x) => (x.lang = v)).catch((err) => toast(t('Not saved. {0}', err.message)));
               window.i18n?.setLang(v);
             }}
           />
@@ -1065,7 +1066,7 @@ function Keys() {
   const load = () =>
     api('/me/keys')
       .then((r) => setKeys(r.keys))
-      .catch(() => {});
+      .catch(() => setMsg(t("Couldn't load your API keys. Check your connection.")));
   useEffect(() => {
     load();
   }, []);
