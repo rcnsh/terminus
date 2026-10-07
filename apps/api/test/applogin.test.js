@@ -243,7 +243,7 @@ test('signing in to an existing account from a fresh install drops the empty ano
   assert.equal(r.outcome, 'signed-in');
   assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
   assert.equal(await hasTrip(env, id), false);
-  assert.equal(email.sent.at(-1).subject, 'terminus was added to Pixel 8');
+  assert.doesNotMatch(email.sent.at(-1).subject, /was added to/, 'approved from the inbox: no second email');
   assert.deepEqual((await (await call(env, '/me/profile', { token: r.token })).json()).home, HOME.home);
 });
 

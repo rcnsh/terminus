@@ -593,7 +593,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Pair a device',
           description:
             'Exchanges the 6-character code shown on the account page for a device token. Send the token as ' +
-            '`Authorization: Bearer <token>` on `/me` routes. It lasts until it is revoked on the account page. Codes work once, for 10 minutes.',
+            '`Authorization: Bearer <token>` on `/me` routes. It lasts until it is revoked on the account page. Codes work once, for 10 minutes. The account’s owner is emailed to say a device was added.',
           operationId: 'pair',
           requestBody: jsonBody(
             { type: 'object', required: ['code'], properties: { code: { type: 'string' }, name: { type: 'string', maxLength: 40, description: 'Shown in the device list.' } } },
@@ -1081,7 +1081,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         delete: {
           tags: ['Account'],
           summary: 'Remove a device',
-          description: 'Signs the device out, and emails the account’s owner to say so. Needs an account with an email.',
+          description: 'Signs the device out. Needs an account with an email.',
           operationId: 'removeDevice',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: [{ name: 'id', in: 'path', required: true, description: 'The `id` from `GET /me/devices`.', schema: { type: 'string' } }],

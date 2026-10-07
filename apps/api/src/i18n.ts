@@ -282,9 +282,7 @@ const en = {
   aDevice: 'a device',
   singaporeTime: ((when: string) => `${when} Singapore time`) as Fn<[string]>,
   deviceAddedSubject: ((device: string) => `terminus was added to ${device}`) as Fn<[string]>,
-  deviceRemovedSubject: ((device: string) => `${device} was removed from terminus`) as Fn<[string]>,
   deviceAddedText: ((device: string, when: string, site: string) => `terminus was added to ${device} on your account, ${when}.\n\nIf that wasn't you, remove it on the account page (${site}/account) or from any of your devices, and sign out everywhere.`) as Fn<[string, string, string]>,
-  deviceRemovedText: ((device: string, when: string, site: string) => `${device} was removed from your terminus account, ${when}. It is signed out.\n\nIf that wasn't you, sign in at ${site}/account and sign out everywhere.`) as Fn<[string, string, string]>,
 
   // Pages the Worker serves itself (me.ts)
   pageLinkExpired: 'Link expired',
@@ -514,9 +512,7 @@ const zh: Msgs = {
   aDevice: '一台设备',
   singaporeTime: (when) => `新加坡时间 ${when}`,
   deviceAddedSubject: (device) => `terminus 已添加到 ${device}`,
-  deviceRemovedSubject: (device) => `${device} 已从 terminus 移除`,
   deviceAddedText: (device, when, site) => `你的账户在 ${when} 把 terminus 添加到了 ${device}。\n\n如果不是你，请在账户页面（${site}/account）或你的任一设备上移除它，并在所有设备上退出登录。`,
-  deviceRemovedText: (device, when, site) => `${device} 已在 ${when} 从你的 terminus 账户移除，并已退出登录。\n\n如果不是你，请在 ${site}/account 登录，并在所有设备上退出登录。`,
 
   pageLinkExpired: '链接已失效',
   linkExpiredHtml: '<h1>这个链接已失效</h1><p class="hint">登录链接只能用一次，有效 15 分钟。</p><a class="btn accent" href="/account">获取新链接</a>',
