@@ -29,7 +29,7 @@ import { trackedPlacement } from './buses.ts';
 import { inService } from './resolve.ts';
 import { logPoll } from './analytics.ts';
 import { loadCalendar } from './calendarsync.ts';
-import { buildDayFile, dayKey, encodeBus, gzip, lineKeys, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
+import { buildDayFile, dayKey, encodeBus, gzip, HELD_DAYS, lineKeys, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
 import type { DayFile, RecorderStatus, Row } from './timelapse.ts';
 
 type State = 'polling' | 'resting' | 'off' | 'done';
@@ -75,6 +75,7 @@ export const backoffOf = (failing: number): number => 2 ** Math.min(Math.max(0, 
 
 /** After the day failed to reach R2, try again this much later. */
 const RETRY_MS = 10 * 60_000;
+const DAY_MS = 86_400_000;
 
 export class TimelapseRecorder {
   private readonly state: DurableObjectState;
@@ -155,8 +156,9 @@ export class TimelapseRecorder {
       meta.round = null;
       this.write('meta', meta);
       await this.storage.setAlarm(now);
-    } else if (meta.state === 'polling' && (await this.storage.getAlarm()) === null) {
-      // Never stranded: a polling day always has its next alarm.
+    } else if ((await this.storage.getAlarm()) === null) {
+      // Never stranded: a day always has its next alarm, whatever its
+      // state (a past day whose writes to R2 ran out of retries closes now).
       await this.storage.setAlarm(now);
     }
     return Response.json({ state: meta.state });
@@ -341,19 +343,28 @@ export class TimelapseRecorder {
     return buildDayFile({ date: meta.date, t0: meta.t0, pollMs: meta.pollMs, plates: meta.plates, rows, map: this.read<DayFile>('map') ?? mapSnapshot() });
   }
 
-  /** The window has closed: the day to R2, then nothing left here. */
+  /**
+   * The window has closed: the day to R2, then nothing left here. Anything
+   * failing on the way keeps the day and tries again RETRY_MS later, for
+   * HELD_DAYS after the close (as long as /timelapse/days lists it); past
+   * that the day is given up and the storage deleted, so it can't stay for
+   * ever.
+   */
   private async close(meta: Meta): Promise<void> {
-    if (this.count() > 0) {
-      try {
+    try {
+      const samples = this.count();
+      if (samples > 0) {
         if (!this.env.DOWNLOADS) throw new Error('no DOWNLOADS bucket');
         const body = await gzip(JSON.stringify(this.dayFile(meta)));
-        await this.env.DOWNLOADS.put(dayKey(meta.date), body, { httpMetadata: { contentType: 'application/gzip' }, customMetadata: { samples: String(this.count()) } });
-      } catch (err) {
-        // Kept, and tried again: losing a day to one failed write would be a waste.
-        console.error('timelapse', meta.date, err instanceof Error ? err.message : String(err));
-        return this.storage.setAlarm(Date.now() + RETRY_MS);
+        await this.env.DOWNLOADS.put(dayKey(meta.date), body, { httpMetadata: { contentType: 'application/gzip' }, customMetadata: { samples: String(samples) } });
       }
+      await this.storage.deleteAll();
+    } catch (err) {
+      console.error('timelapse', meta.date, err instanceof Error ? err.message : String(err));
+      const now = Date.now();
+      if (now < windowOf(meta.date).close + HELD_DAYS * DAY_MS) return this.storage.setAlarm(now + RETRY_MS);
+      console.error('timelapse', meta.date, 'given up: not written to R2');
+      await this.storage.deleteAll();
     }
-    await this.storage.deleteAll();
   }
 }

@@ -664,6 +664,64 @@ test('asking about a day nobody recorded leaves no storage behind', async () => 
   assert.deepEqual(tables, [], 'no tables created');
 });
 
+test('a close that fails anywhere keeps the day and tries again, for a week; then the storage goes', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  const inst = h.ns.instances.get(DATE);
+  const { close } = windowOf(DATE);
+  // Storage itself fails at the close, outside the write to R2.
+  const count = inst.count;
+  inst.count = () => {
+    throw new Error('storage unavailable');
+  };
+  h.ns.alarms.set(DATE, close);
+  Date.now = () => close;
+  await h.ns.fireDue(close);
+  assert.equal(h.ns.alarms.get(DATE), close + 10 * 60_000, 'tried again ten minutes later');
+  inst.count = count;
+  await runUntil(h, close + 10 * 60_000);
+  assert.ok(h.bucket._written.has(`timelapse/${DATE}.json.gz`), 'written once storage is back');
+  assert.equal(h.ns.alarms.has(DATE), false);
+
+  // R2 refusing for over a week: given up, and nothing left behind.
+  const g = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(g);
+  await runUntil(g, FROZEN_NOW + 30_000 - 1);
+  g.bucket.put = async () => {
+    throw new Error('R2 down');
+  };
+  g.ns.alarms.set(DATE, close);
+  await runUntil(g, close + 6 * 86_400_000);
+  assert.equal((await status(g)).samples, RUNNING.length, 'still held after six days');
+  await runUntil(g, close + 8 * 86_400_000);
+  assert.equal(g.ns.alarms.has(DATE), false);
+  assert.deepEqual(await status(g), { date: null, samples: 0, state: 'idle' }, 'storage deleted');
+});
+
+test('a past day whose alarm is gone is woken by the next morning\'s cron and written', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  // The platform's retries ran out: the day is held with no alarm at all.
+  h.ns.alarms.delete(DATE);
+  const morning = sgt('2026-08-29', '06:30');
+  Date.now = () => morning;
+  // Switched off by then: the cleanup happens anyway, and asks NUS nothing.
+  await h.env.KV.put('config:timelapse', 'off');
+  const asked = h.busCalls().length;
+  await ensureRecorder(h.env, morning);
+  assert.equal(h.ns.alarms.get(DATE), morning);
+  await h.ns.fireDue(morning);
+  assert.ok(h.bucket._written.has(`timelapse/${DATE}.json.gz`));
+  assert.equal(h.ns.alarms.has(DATE), false);
+  assert.equal(h.busCalls().length, asked);
+  // Later runs that day don't ask the past week's recorders again.
+  const before = h.ns.instances.size;
+  await ensureRecorder(h.env, morning + 15 * 60_000);
+  assert.equal(h.ns.instances.size, before);
+});
+
 /* ------------------------------------------------------------------ */
 /* The routes                                                          */
 /* ------------------------------------------------------------------ */

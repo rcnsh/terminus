@@ -1437,9 +1437,16 @@ than draw them on the wrong line.
 
 **At the close** the object writes the day to R2 (the site's downloads
 bucket) as `timelapse/YYYY-MM-DD.json.gz` (`DayFile`), deletes everything,
-its alarm included, and costs nothing from then on. If the write fails it
-keeps the day and tries again 10 minutes later; meanwhile `/timelapse/days`
-still lists it (the recorders of the past week are asked too). `/download/*`
+its alarm included, and costs nothing from then on. If anything on the
+way fails (R2, or the object's own storage) it keeps the day and tries
+again 10 minutes later, for a week after the close; meanwhile
+`/timelapse/days` still lists it (the recorders of the past week are asked
+too). Past the week the day is given up and the storage deleted. Once a
+day, at the cron's first run after the window opens, the past week's
+recorders are asked to start: one holding a day whose alarm is gone (the
+platform's retries of a throwing alarm ran out) is woken to close it, and
+one holding nothing does nothing. Asking about a day nobody recorded
+creates no storage. `/download/*`
 serves only release files, so the days are reachable only through
 `/timelapse/days`, with the operator token or `TIMELAPSE_TOKEN`. The second
 opens these routes and nothing else, so the machine that renders the videos
