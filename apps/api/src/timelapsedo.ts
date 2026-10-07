@@ -95,7 +95,15 @@ export class TimelapseRecorder {
     return sql;
   }
 
+  /** Whether there are tables at all: a read mustn't create them, or asking
+   *  about a day nobody recorded (/timelapse/days asks about a week of them)
+   *  would leave storage behind that nothing ever deletes. */
+  private hasTables(): boolean {
+    return this.storage.sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").toArray().length > 0;
+  }
+
   private read<T>(k: string): T | null {
+    if (!this.hasTables()) return null;
     const row = this.schema().exec<{ v: string }>('SELECT v FROM meta WHERE k = ?', k).toArray()[0];
     return row ? (JSON.parse(row.v) as T) : null;
   }
@@ -105,6 +113,7 @@ export class TimelapseRecorder {
   }
 
   private count(): number {
+    if (!this.hasTables()) return 0;
     return this.schema().exec<{ n: number }>('SELECT COUNT(*) AS n FROM samples').one().n;
   }
 

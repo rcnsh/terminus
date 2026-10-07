@@ -535,6 +535,17 @@ test('at the close the day goes to R2 and the recorder is emptied', async () => 
   assert.deepEqual([...h.ns.alarms.keys()], ['2026-08-28']);
 });
 
+test('asking about a day nobody recorded leaves no storage behind', async () => {
+  const h = harness();
+  const date = '2026-08-20';
+  assert.deepEqual(await status(h, date), { date: null, samples: 0, state: 'idle' });
+  assert.equal((await h.ns.get(date).fetch(`https://timelapse.internal/day?date=${date}`)).status, 404);
+  // A past day's start, too: closed, so nothing to begin.
+  assert.equal((await (await start(h, date)).json()).state, 'closed');
+  const tables = h.ns.instances.get(date).storage.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table'").toArray();
+  assert.deepEqual(tables, [], 'no tables created');
+});
+
 /* ------------------------------------------------------------------ */
 /* The routes                                                          */
 /* ------------------------------------------------------------------ */
