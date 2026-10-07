@@ -204,6 +204,11 @@ class AnswerTest {
         assertEquals("Leave in 1 min 5 s", JourneyText.leaveIn(a, j, at - 65_000))
         assertEquals("Leave in 45 s", JourneyText.leaveIn(a, j, at - 45_000))
         assertEquals("Leave now", JourneyText.leaveIn(a, j, at))
+        // The time inside each, which the card colours; none once it's "Leave now".
+        assertEquals("5 min", JourneyText.leaveTime(a, j, at - 5 * 60_000 + 10_000))
+        assertEquals("1 min 5 s", JourneyText.leaveTime(a, j, at - 65_000))
+        assertEquals("45 s", JourneyText.leaveTime(a, j, at - 45_000))
+        assertNull(JourneyText.leaveTime(a, j, at))
         assertEquals("by 09:03", JourneyText.by(a, j, at - 45_000))
         assertNull(JourneyText.by(a, j, at))
         assertEquals("Or D2 at 09:14 from PGP", JourneyText.backup(a, j))
