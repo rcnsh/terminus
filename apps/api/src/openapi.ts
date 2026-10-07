@@ -383,7 +383,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     viewBox: '0 0 1000 871',
                     stops: [{ code: 'AS5', name: 'AS 5', longName: 'AS 5', opposite: null, x: 177.7, y: 657.9, lat: 1.293619, lon: 103.771475, services: ['A1', 'D1', 'R1'], core: true }],
                     routes: {
-                      A1: { seq: ['KRB', 'LT13', 'AS5', 'BIZ2', 'TCOMS-OPP', 'PGP', 'KR-MRT'], loop: true, color: '#e53935', line: [[103.77438, 1.29464], [103.77421, 1.29475]], shaped: true },
+                      A1: { seq: ['KRB', 'LT13', 'AS5', 'BIZ2', 'TCOMS-OPP', 'PGP', 'KR-MRT'], loop: true, color: '#d32f2f', line: [[103.77438, 1.29464], [103.77421, 1.29475]], shaped: true },
                     },
                     destinations: [
                       { code: 'AS5', label: 'AS 5', stopCode: 'AS5', kind: 'stop' },

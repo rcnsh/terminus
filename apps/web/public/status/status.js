@@ -13,7 +13,7 @@ const dateTime = (iso) => new Date(iso).toLocaleString(LOCALE, { ...TZ, day: 'nu
 const time = (iso) => new Date(iso).toLocaleTimeString(LOCALE, { ...TZ, hour: 'numeric', minute: '2-digit' });
 
 /** The shuttle on the road: A1's red. */
-const RED = '#e53935';
+const RED = '#d32f2f';
 /** The server keeps this many outages (monitor.ts INCIDENTS_KEPT). */
 const KEPT = 20;
 const MONTH_MS = 30 * 86_400_000;

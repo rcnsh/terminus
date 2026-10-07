@@ -9,7 +9,7 @@ import { html } from '../assets/ui.js';
  * The landing page's driving shuttles wear them too (sky-page.js).
  */
 export const LIVERY = [
-  ['A1', '#e53935'], ['A2', '#d9a000'], ['D1', '#ec4fa0'], ['D2', '#8e44c9'],
+  ['A1', '#d32f2f'], ['A2', '#d9a000'], ['D1', '#ec4fa0'], ['D2', '#8e44c9'],
   ['K', '#2b9ad6'], ['R1', '#f57c1f'], ['R2', '#34a853'], ['P', '#8a939c'],
 ];
 

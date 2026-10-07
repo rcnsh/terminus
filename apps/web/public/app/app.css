@@ -529,7 +529,7 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 .horizon .beam { opacity: 0.12; }
 .horizon .dim { opacity: 0.6; }
 .horizon .bus { fill: #24211e; }
-.horizon .stripe { fill: #e53935; }
+.horizon .stripe { fill: #d32f2f; }
 .horizon .win { fill: var(--h-win); }
 .horizon .tyre { fill: #151311; }
 .horizon .hub { fill: #8a847d; }

@@ -103,7 +103,7 @@
 .sky-panel .horizon .beam { opacity: 0.12; }
 .sky-panel .horizon .dim { opacity: 0.6; }
 .sky-panel .horizon .bus { fill: #24211e; }
-.sky-panel .horizon .stripe { fill: #e53935; }
+.sky-panel .horizon .stripe { fill: #d32f2f; }
 .sky-panel .horizon .win { fill: var(--h-win); }
 .sky-panel .horizon .tyre { fill: #151311; }
 .sky-panel .horizon .hub { fill: #8a847d; }
