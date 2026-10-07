@@ -118,7 +118,8 @@ export const PUBLIC = {
  */
 export const TIMELAPSE = {
   /** Each service is asked once per this, the services spread across it.
-   *  Never below MIN_POLL_MS, whatever this says (pollInterval()). */
+   *  Never below MIN_POLL_MS, whatever this says, and longer when there are
+   *  too many services for maxPollsPerDay (pollInterval()). */
   pollMs: 30_000,
   /** The Singapore-time window it records in. It may cross midnight: the
    *  day is the date the window opened, until it closes the next morning. */
@@ -128,6 +129,9 @@ export const TIMELAPSE = {
    *  idleSleepMs (before the first bus, or a gap in service). */
   idleRounds: 6,
   idleSleepMs: 15 * 60_000,
+  /** The most polls in a day, whatever stops.json lists: with more services
+   *  than eight, pollInterval() lengthens the interval to keep under it. */
+  maxPollsPerDay: 17_280,
 } as const;
 
 /** The floor under TIMELAPSE.pollMs, enforced in code. */

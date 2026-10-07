@@ -8,7 +8,8 @@
  *
  * - one Durable Object per Singapore day (timelapsedo.ts), driven by its own
  *   alarm, asks for each service's buses once per TIMELAPSE.pollMs (never
- *   below MIN_POLL_MS), the services spread across that time, never in a
+ *   below MIN_POLL_MS, and never more than TIMELAPSE.maxPollsPerDay polls a
+ *   day: pollInterval()), the services spread across that time, never in a
  *   burst;
  * - only inside TIMELAPSE.hours, and only for services inside their own
  *   operating hours;
@@ -34,11 +35,6 @@ import { sgtDate, sgtMidnight as midnightOf } from './calendar.ts';
 /* When it records                                                     */
 /* ------------------------------------------------------------------ */
 
-/** The poll interval actually used: [ms], but never below MIN_POLL_MS. */
-export function pollInterval(ms: number = TIMELAPSE.pollMs): number {
-  return Number.isFinite(ms) ? Math.max(MIN_POLL_MS, ms) : TIMELAPSE.pollMs;
-}
-
 export interface Hours {
   start: string;
   end: string;
@@ -50,6 +46,27 @@ const minutesOf = (hhmm: string) => {
 };
 
 const DAY_MS = 86_400_000;
+
+/** How long a recording window lasts, ms: 18 hours at 06:30 to 00:30. */
+export function windowLength(hours: Hours = TIMELAPSE.hours): number {
+  const start = minutesOf(hours.start);
+  const end = minutesOf(hours.end);
+  return ((end <= start ? 1440 : 0) + end - start) * 60_000;
+}
+
+/**
+ * The poll interval actually used: [ms], but never below MIN_POLL_MS, and
+ * long enough that [services] services can't be polled more than
+ * TIMELAPSE.maxPollsPerDay times in a window. No service is asked twice
+ * within it, so each is asked at most ceil(window / interval) times a day.
+ * The weekly scrape can add a route to stops.json without anyone looking:
+ * the day then polls each service a little less often, never NUS more.
+ */
+export function pollInterval(ms: number = TIMELAPSE.pollMs, services: number = Object.keys(GRAPH.routes ?? {}).length): number {
+  const asked = Number.isFinite(ms) ? Math.max(MIN_POLL_MS, ms) : TIMELAPSE.pollMs;
+  const perService = Math.max(1, Math.floor(TIMELAPSE.maxPollsPerDay / Math.max(1, services)));
+  return Math.max(asked, Math.ceil(windowLength() / perService));
+}
 
 /** When day [date]'s window opens and closes, epoch ms. One that crosses
  *  midnight (06:30 to 00:30) closes the next morning. */

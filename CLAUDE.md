@@ -61,8 +61,9 @@ affiliated with NUS.
    - **Back-off:** after a round in which no service answered, the next
      waits 2, 4, then 8 times as long.
 
-   At most 17,280 polls a day, and every request counted on the dashboard
-   (a retry inside a poll too). Don't add another poller, don't widen this one's
+   At most 17,280 polls a day (`TIMELAPSE.maxPollsPerDay`, enforced in
+   code: more routes in `stops.json` lengthen the interval), and every
+   request counted on the dashboard (a retry inside a poll too). Don't add another poller, don't widen this one's
    hours or rate, don't point it at arrivals or LTA, and don't reuse its
    alarm for anything else that calls NUS.
 

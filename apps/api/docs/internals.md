@@ -1393,7 +1393,11 @@ LTA every 15 minutes, past the cache) and each push user's Trip object
   deploy. On again, the cron restarts it within 15 minutes.
 
 At the defaults that is at most 17,280 polls a day (8 services × 2 a
-minute × 18 hours). The services' real hours make it about 13,300 on a
+minute × 18 hours), and the code holds it there: `pollInterval()`
+lengthens the interval when `stops.json` has more routes (the weekly
+scrape commits it unattended), so that services × ceil(window ÷
+interval) stays within `TIMELAPSE.maxPollsPerDay`. A day already running
+takes the longer interval from its next round after such a deploy. The services' real hours make it about 13,300 on a
 weekday, 9,000 on a Saturday and 6,700 on a Sunday or holiday. Each poll
 is one `active-bus` call, plus at most one retry on a rejection that a
 token might fix, with a token minted at most once a minute. The map alone, with one
