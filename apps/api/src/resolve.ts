@@ -88,7 +88,14 @@ export function legRideS(leg: Leg): number {
   return (leg.rideS ?? leg.hops * RIDE.secondsPerHop) + (leg.crossS ?? 0);
 }
 
-export function reach(idx: GraphIndex, svc: string, from: string, to: string): { hops: number } | null {
+/**
+ * `through` when the ride goes on past the loop's terminal: the run ends
+ * there (the feed lists a shuttle's under an -E berth, and a public loop
+ * ends at its interchange), so it's the next run on from there, not the
+ * same bus. A shuttle loop starts at its terminal; a public one's
+ * interchange can be off campus, between its last campus stop and its first.
+ */
+export function reach(idx: GraphIndex, svc: string, from: string, to: string): { hops: number; through?: true } | null {
   if (from === to) return { hops: 0 };
   const r = idx.routes.get(svc);
   if (!r) return null;
@@ -96,15 +103,40 @@ export function reach(idx: GraphIndex, svc: string, from: string, to: string): {
   const toAt = r.pos.get(to);
   if (!fromAt || !toAt) return null;
 
+  const origin = idx.graph.public?.[svc]?.origin;
+  const endsAtFirst = origin === undefined || origin === r.seq[0];
   let best = Infinity;
+  let through = false;
   const n = r.seq.length;
   for (const i of fromAt) {
     for (const j of toAt) {
-      if (j > i) best = Math.min(best, j - i);
-      else if (r.loop) best = Math.min(best, j - i + n);
+      const hops = j > i ? j - i : r.loop ? j - i + n : Infinity;
+      if (hops < best) {
+        best = hops;
+        // Wrapping round to the terminal itself is getting off there; to any stop after it, riding on.
+        through = j < i && (j > 0 || !endsAtFirst);
+      }
     }
   }
-  return best === Infinity ? null : { hops: best };
+  if (best === Infinity) return null;
+  return through ? { hops: best, through: true } : { hops: best };
+}
+
+/**
+ * Seconds riding `svc` along `stops`: `perHop` a stop, but no faster than
+ * RIDE.longHopMs over a long one. Route P's stops are kilometres apart
+ * (Kent Vale to the Bukit Timah campus), where a count of stops says
+ * minutes for a ride of a quarter of an hour.
+ */
+export function shuttleRideS(idx: GraphIndex, stops: string[], perHop: number): number {
+  let s = 0;
+  for (let k = 1; k < stops.length; k++) {
+    const a = idx.byCode.get(stops[k - 1]);
+    const b = idx.byCode.get(stops[k]);
+    const m = a && b ? haversineM(a.lat, a.lon, b.lat, b.lon) : 0;
+    s += Math.max(perHop, m / RIDE.longHopMs);
+  }
+  return Math.round(s);
 }
 
 /**
@@ -143,38 +175,6 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
   const idx = indexGraph(graph);
   const { to } = input;
 
-  let base: Array<{ stop: Stop; distM: number; footM: number }>;
-  const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode, homeWalk(input)) : null;
-  if (home) {
-    base = home;
-  } else if (input.lat != null && input.lon != null) {
-    // Range is the straight line; the walk itself follows the paths.
-    const all = graph.stops
-      .map((stop) => ({ stop, distM: haversineM(input.lat!, input.lon!, stop.lat, stop.lon) }))
-      .sort((a, b) => a.distM - b.distM)
-      .map((c) => ({ ...c, footM: footM(input.lat!, input.lon!, c.stop) }));
-    const inRange = all.filter((c) => c.distM <= WALK.maxRadiusM);
-    // The nearest few shuttle stops, as ever, and the nearest stop only
-    // public buses call at as one more: turning public buses on adds
-    // options and never crowds a shuttle stop out of the answer.
-    const near = inRange.filter((c) => !c.stop.public).slice(0, WALK.maxCandidates);
-    const publicOnly = inRange.find((c) => c.stop.public);
-    if (publicOnly) near.push(publicOnly);
-    // A user's usual stops (near home) join the set when in range, so a dense
-    // cluster of closer stops cannot push out the one they actually use.
-    for (const code of input.preferStops ?? []) {
-      const c = all.find((x) => x.stop.code === code);
-      if (c && c.distM <= WALK.maxRadiusM && !near.includes(c)) near.push(c);
-    }
-    // Never answer "no stop nearby" -- degrade to the nearest one, however far.
-    base = near.length ? near : all.slice(0, 1);
-  } else {
-    const stop = input.originCode ? idx.byCode.get(input.originCode) : undefined;
-    if (!stop) return [];
-    // Starting from home: the walk to the stop decides which bus is catchable.
-    base = [{ stop, distM: 0, footM: 0 }];
-  }
-
   // Either side of the road will do: arriving at "Opp UHC" gets you to UHC.
   // Without this, a route that only serves the far side never counts, and
   // the answer takes a longer bus to the exact stop. Getting off on the far
@@ -190,6 +190,55 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
       })
     : [];
   const targetCodes = new Set(targets.map((t) => t.code));
+  // A stop worth a fetch: some bus from it goes there (any stop, with no destination).
+  const reaches = (stop: Stop) =>
+    !to || (!targetCodes.has(stop.code) && (idx.servingStop.get(stop.code) ?? []).some((svc) => targets.some((t) => reach(idx, svc, stop.code, t.code))));
+
+  let base: Array<{ stop: Stop; distM: number; footM: number }>;
+  const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode, homeWalk(input)) : null;
+  if (home) {
+    base = home;
+  } else if (input.lat != null && input.lon != null) {
+    // Range is the straight line; the walk itself follows the paths.
+    const all = graph.stops
+      .map((stop) => ({ stop, distM: haversineM(input.lat!, input.lon!, stop.lat, stop.lon) }))
+      .sort((a, b) => a.distM - b.distM)
+      .map((c) => ({ ...c, footM: footM(input.lat!, input.lon!, c.stop) }));
+    const inRange = all.filter((c) => c.distM <= WALK.maxRadiusM);
+    // The nearest few shuttle stops that go there, and the nearest stop only
+    // public buses call at as one more: turning public buses on adds
+    // options and never crowds a shuttle stop out of the answer. A closer
+    // stop no bus to the destination calls at would only take a fetch and
+    // push out one that does.
+    const shuttle = inRange.filter((c) => !c.stop.public);
+    const near = shuttle.filter((c) => reaches(c.stop)).slice(0, WALK.maxCandidates);
+    const publicOnly = inRange.find((c) => c.stop.public && reaches(c.stop));
+    if (publicOnly) near.push(publicOnly);
+    // A user's usual stops (near home) join the set when in range, so a dense
+    // cluster of closer stops cannot push out the one they actually use.
+    for (const code of input.preferStops ?? []) {
+      const c = all.find((x) => x.stop.code === code);
+      if (c && c.distM <= WALK.maxRadiusM && !near.includes(c)) near.push(c);
+    }
+    // Never answer "no stop nearby" -- degrade to the nearest one, however far.
+    base = near.length ? near : shuttle.length ? shuttle.slice(0, 1) : all.slice(0, 1);
+  } else {
+    const stop = input.originCode ? idx.byCode.get(input.originCode) : undefined;
+    if (!stop) return [];
+    // Starting from home: the walk to the stop decides which bus is catchable.
+    base = [{ stop, distM: 0, footM: 0 }];
+    // The far side of the road, a crossing further: the bus you want may
+    // only call there, and nothing says which side you'll come out on.
+    const twin = stop.opposite ? idx.byCode.get(stop.opposite) : undefined;
+    if (twin) base.push({ stop: twin, distM: haversineM(stop.lat, stop.lon, twin.lat, twin.lon), footM: stopFootM(stop, twin) });
+    // From home, every home stop: the walk from home (originWalkS) is to each.
+    if (input.preferStops?.includes(stop.code)) {
+      for (const code of input.preferStops) {
+        const s = idx.byCode.get(code);
+        if (s && !base.some((b) => b.stop.code === code)) base.push({ stop: s, distM: 0, footM: 0 });
+      }
+    }
+  }
 
   const out: Candidate[] = base.map(({ stop, distM, footM: foot }) => {
     const legs = [];
@@ -208,19 +257,23 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
       // A public bus rides by the metres along its route (public.ts): its
       // campus stops can be a long way round the island apart.
       const pub = isPublic(graph, svc);
-      const cost = (b: { hops: number; crossS: number; rideS?: number }) => (b.rideS ?? b.hops * perHop) + b.crossS;
+      const cost = (b: { hops: number; crossS: number; rideS?: number }) => (b.rideS ?? b.hops * RIDE.secondsPerHop) + b.crossS;
       for (const t of targets) {
         const r = reach(idx, svc, stop.code, t.code);
         if (!r) continue;
         const m = pub ? rideMetres(idx, svc, stop.code, t.code) : null;
-        const rideS = m !== null ? publicRideS(m) : perHop !== RIDE.secondsPerHop ? Math.round(r.hops * perHop) : undefined;
-        const cand = { hops: r.hops, crossS: t.crossS, code: t.code, ...(rideS !== undefined ? { rideS } : {}) };
+        const stops = m === null ? rideStops(idx, svc, stop.code, t.code) : null;
+        let rideS = m !== null ? publicRideS(m) : stops ? shuttleRideS(idx, stops, perHop) : r.hops * perHop;
+        // Past the terminal it's the next run: about a headway's wait there.
+        if (r.through) rideS += headwayFor(graph, svc);
+        const cand = { hops: r.hops, crossS: t.crossS, code: t.code, ...(rideS !== r.hops * RIDE.secondsPerHop ? { rideS } : {}) };
         if (!best || cost(cand) < cost(best)) best = cand;
       }
       if (best) legs.push({ svc, hops: best.hops, ...(best.rideS !== undefined ? { rideS: best.rideS } : {}), ...(best.crossS ? { crossS: best.crossS, off: idx.byCode.get(best.code)! } : {}), to: idx.byCode.get(best.code)! });
     }
-    // Starting from home or a room without coordinates: that walk comes first.
-    const walkS = input.lat != null ? Math.round(foot / speed) : (input.originWalkS ?? 0);
+    // Starting from home or a room without coordinates: that walk comes
+    // first, and a crossing to the far side's stop after it.
+    const walkS = input.lat != null ? Math.round(foot / speed) : (input.originWalkS ?? 0) + Math.round(foot / speed);
     return { stop, distM, walkS, legs };
   });
 
@@ -562,7 +615,8 @@ export function boardAt(
 
 /**
  * Convert candidates plus live arrivals into ranked options, all in seconds
- * from now. Options whose service has ended are dropped entirely.
+ * from now. Options whose service has ended are dropped entirely, and so is
+ * a guessed bus after the service stops for the day.
  */
 export function scoreOptions(
   graph: Graph,
@@ -572,6 +626,10 @@ export function scoreOptions(
   /** The walk on from where an option gets you off to the place itself: a
    *  food court's stops are different walks from it, so it counts in the ranking. */
   endWalk: (o: ScoredOption) => number = () => 0,
+  /** `openBy`: a service not running yet that starts before this (epoch ms)
+   *  is kept, its first bus guessed from its start. For a class: at 06:30 the
+   *  08:00 class's bus is the D2 that starts at 07:15, not "Services ended". */
+  opts: { openBy?: number } = {},
 ): ScoredOption[] {
   const out: ScoredOption[] = [];
 
@@ -607,6 +665,12 @@ export function scoreOptions(
       let boardS: number;
       let quality: ScoredOption['quality'];
       let arrival = null;
+      // Waiting for the service to start, which you can do wherever you are.
+      let opensInS = 0;
+      // When the service stops today, for the guesses below: a bus guessed
+      // after it is no bus. Null when its hours are unknown or it isn't running.
+      const endsAt = serviceEndsAt(graph, leg.svc, nowMs);
+      const pastEnd = (s: number) => endsAt !== null && fetchedAt + s * 1000 > endsAt;
 
       // The first bus you can physically reach, not the first bus listed.
       const catchable = etas.find((a) => (a.etaS as number) >= earliest);
@@ -622,27 +686,40 @@ export function scoreOptions(
         const headway = headwayFor(graph, leg.svc);
         boardS = (etas[etas.length - 1].etaS as number) + headway;
         if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
+        if (pastEnd(boardS)) continue; // that was the last bus
         quality = 'scheduled';
       } else if (!inService(graph, leg.svc, nowMs)) {
         // The published hours are ours, not the feed's, so this holds even
         // when we have no data at all.
-        continue; // ended
-      } else if (!available) {
-        // Keep the option -- the graph still says this service goes where you
-        // are going -- but boardS here is only an ordering key. The formatter
-        // must never print a time for an 'unknown' option.
-        boardS = earliest + headwayFor(graph, leg.svc) / 2;
-        quality = 'unknown';
-      } else {
-        // The feed answered and had nothing: a headway is the honest guess.
-        boardS = earliest + headwayFor(graph, leg.svc) / 2;
+        const opens = opts.openBy !== undefined ? serviceResumesAt(graph, leg.svc, nowMs) : null;
+        if (opens === null || opens > opts.openBy!) continue; // ended, or not started in time
+        // It starts before you need it: a bus somewhere in the headway after
+        // it does, or after you reach the stop, whichever is later.
+        const startS = (opens - fetchedAt) / 1000;
+        opensInS = Math.max(0, startS - earliest);
+        boardS = Math.max(earliest, startS) + headwayFor(graph, leg.svc) / 2;
         quality = 'scheduled';
+      } else {
+        // You'd reach the stop after the last bus.
+        if (pastEnd(earliest)) continue;
+        // The feed answered and had nothing: a headway is the honest guess,
+        // no later than the last bus. Unreached: keep the option -- the
+        // graph still says this service goes where you are going -- but
+        // boardS here is only an ordering key. The formatter must never
+        // print a time for an 'unknown' option.
+        boardS = earliest + headwayFor(graph, leg.svc) / 2;
+        if (pastEnd(boardS)) boardS = (endsAt! - fetchedAt) / 1000;
+        quality = available ? 'scheduled' : 'unknown';
       }
 
       // Only a real arrival goes stale; a headway guess stays a guess, never
       // ranked or worded as measured.
       if (feed?.stale && quality === 'live') quality = 'stale';
 
+      // From now: the times above count from the fetch, and a cached or
+      // stale answer is that much older. Comparing them with a walk that
+      // starts now, or with another stop's fresher times, needs one clock.
+      const fromNow = Math.round(boardS - ageS);
       const rideS = legRideS(leg);
       out.push({
         stop: c.stop,
@@ -650,12 +727,14 @@ export function scoreOptions(
         distM: c.distM,
         walkS: c.walkS,
         hops: leg.hops,
-        boardS: Math.round(boardS),
+        boardS: fromNow,
         rideS,
-        totalS: Math.round(boardS) + rideS,
+        totalS: fromNow + rideS,
         quality,
         arrival,
         fetchedAt,
+        fromMs: nowMs,
+        ...(opensInS > 0 ? { opensInS: Math.round(opensInS) } : {}),
         ambiguousBerth,
         ...(leg.off ? { off: leg.off } : {}),
         ...(leg.to ? { to: leg.to } : {}),
@@ -678,23 +757,27 @@ export function scoreOptions(
   // A live public bus outranks a free bus that only has a headway guess by
   // tier, but the fare still has to be worth it: unless it beats the best
   // free option's time by what the fare is worth, the free bus is the answer.
+  // A free bus with no times at all has nothing to beat it with: its time is
+  // only a sort key, and an estimate never goes over a measurement.
   if (out[0]?.paid) {
     const free = out.findIndex((o) => !o.paid);
-    if (free > 0 && costS(out[free]) <= costS(out[0])) out.unshift(...out.splice(free, 1));
+    if (free > 0 && out[free].quality !== 'unknown' && costS(out[free]) <= costS(out[0])) out.unshift(...out.splice(free, 1));
   }
   return out;
 }
 
 /**
  * The second option. Must differ in its first leg -- two variants of the same
- * service off the same stop is not a choice, it is noise.
+ * service off the same stop is not a choice, it is noise. The same service
+ * from another stop is a choice only when it gets you there about as soon:
+ * across the road it's usually the same bus the wrong way round the loop.
  */
 export function pickAlt(options: ScoredOption[]): ScoredOption | null {
   const best = options[0];
   if (!best) return null;
   return (
     options.find((o) => o.svc !== best.svc) ??
-    options.find((o) => o.stop.code !== best.stop.code) ??
+    options.find((o) => o.stop.code !== best.stop.code && o.totalS - best.totalS <= WALK.mentionWithinS) ??
     null
   );
 }
@@ -738,27 +821,67 @@ export function nearestStop(graph: Graph, lat: number | null, lon: number | null
   return best;
 }
 
-/** Seconds to walk the whole way, for the "service ended" answer. */
+/**
+ * Seconds on foot to the destination's stop `destCode` (input.to without
+ * one), for the walk-or-bus comparison and the "service ended" answer.
+ */
 export function walkAllTheWayS(
   graph: Graph,
   input: ResolveInput,
   fallbackFrom: Stop | null,
+  destCode: string | null = input.to,
 ): number | null {
   const idx = indexGraph(graph);
-  const dest = input.to ? idx.byCode.get(input.to) : null;
+  const dest = destCode ? idx.byCode.get(destCode) : null;
   if (!dest) return null;
   const speed = input.walkSpeedMs ?? WALK.speedMs;
   if (input.lat != null && input.lon != null) {
+    const { lat, lon } = input;
     // In a residence, walk out by its own stops: the straight line can cross
     // a hill the path goes round.
-    const home = residenceStops(input.lat, input.lon, idx.byCode, homeWalk(input));
+    const home = residenceStops(lat, lon, idx.byCode, homeWalk(input));
     if (home) {
       const via = Math.min(...home.map((h) => (h.stop.code === dest.code ? h.footM : h.footM + stopFootM(h.stop, dest))));
-      return Math.round(Math.max(via, footM(input.lat, input.lon, dest)) / speed);
+      return Math.round(Math.max(via, footM(lat, lon, dest)) / speed);
     }
-    return Math.round(footM(input.lat, input.lon, dest) / speed);
+    // Elsewhere, out by the stops near you and on along the paths between
+    // stops (walks.json). The straight line with its detour is for a walk to
+    // a stop nearby; across campus it can be half the real walk, or double it.
+    const near = graph.stops
+      .map((stop) => ({ stop, d: haversineM(lat, lon, stop.lat, stop.lon) }))
+      .filter((c) => c.d <= WALK.maxRadiusM)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, WALK.maxCandidates);
+    const via = near.map((c) => footM(lat, lon, c.stop) + (c.stop.code === dest.code ? 0 : stopFootM(c.stop, dest)));
+    const direct = haversineM(lat, lon, dest.lat, dest.lon) <= WALK.maxRadiusM || !via.length ? [footM(lat, lon, dest)] : [];
+    return Math.round(Math.min(...via, ...direct) / speed);
   }
   if (!fallbackFrom) return null;
   // From the origin stop, the walk to it (from home) comes first, same as for the bus.
   return Math.round(stopFootM(fallbackFrom, dest) / speed) + (input.originWalkS ?? 0);
+}
+
+/**
+ * The walk the whole way: `s` on foot to a stop of the destination and
+ * `endS` on from it to the place itself (a room, a food court), by
+ * whichever of its stops makes the walk shortest. Straight to the room
+ * when it's near enough to walk to directly (`endS` 0): a room 120 m away
+ * can be 400 m from the stop it's listed under, on the other side.
+ */
+export function wholeWalk(graph: Graph, input: ResolveInput, fallbackFrom: Stop | null): { s: number; endS: number } | null {
+  if (!input.to) return null;
+  const endOf = (code: string) => input.endWalkByStopS?.[code] ?? input.endWalkS ?? 0;
+  let best: { s: number; endS: number } | null = null;
+  for (const code of [input.to, ...(input.toAlso ?? [])]) {
+    const s = walkAllTheWayS(graph, input, fallbackFrom, code);
+    if (s !== null && (!best || s + endOf(code) < best.s + best.endS)) best = { s, endS: endOf(code) };
+  }
+  const { lat, lon, destAt } = input;
+  if (lat != null && lon != null && destAt && haversineM(lat, lon, destAt.lat, destAt.lon) <= WALK.maxRadiusM) {
+    // With the paths' detour of the room's own stop, the nearest one known.
+    const room = { code: input.to, lat: destAt.lat, lon: destAt.lon } as Stop;
+    const s = Math.round(footM(lat, lon, room) / (input.walkSpeedMs ?? WALK.speedMs));
+    if (!best || s < best.s + best.endS) best = { s, endS: 0 };
+  }
+  return best;
 }

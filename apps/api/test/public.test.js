@@ -10,13 +10,13 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { GRAPH, GRAPH_PUBLIC } from '../src/graph.ts';
 import { isPublic, publicCodeOf, rideMetres, shuttleCalls, svcName } from '../src/public.ts';
-import { boardAt, candidateStops, feedFor, inService, indexGraph, scoreOptions } from '../src/resolve.ts';
+import { boardAt, candidateStops, feedFor, inService, indexGraph, legRideS, reach, scoreOptions } from '../src/resolve.ts';
 import { collectArrivals, mergeFeeds } from '../src/answer.ts';
 import { planOfLeave } from '../src/plan.ts';
 import { leaveOf } from '../src/trip.ts';
 import { onRoute } from '../src/detect.ts';
 import { leaveBy } from '../src/leave.ts';
-import { PUBLIC, WALK } from '../src/config.ts';
+import { DEFAULT_HEADWAY_S, PUBLIC, RIDE, WALK } from '../src/config.ts';
 
 const idx = indexGraph(GRAPH_PUBLIC);
 const stop = (code) => idx.byCode.get(code);
@@ -70,49 +70,63 @@ test('ride time on a public bus is the metres along its route, the long way roun
   assert.equal(rideMetres(idx, '95', 'CLB', 'CLB'), 0);
 });
 
-// Standing at the Central Library, going to Kent Ridge MRT: A1 and 95 both go.
+// Standing at the Central Library, going to Kent Ridge MRT: A1 and 95 both go,
+// each on past its terminal (Kent Ridge Bus Terminal, Kent Ridge Ter).
 const AT_CLB = { lat: 1.296544, lon: 103.772569, to: 'KR-MRT', originCode: null };
+// Standing at IT, going to Kent Ridge MRT: A2 and 95 both go, straight there.
+const AT_IT = { lat: 1.297204, lon: 103.772688, to: 'KR-MRT', originCode: null };
 
 test('candidates at a shared shelter carry the public leg with its ride time from metres', () => {
-  const cands = candidateStops(GRAPH_PUBLIC, AT_CLB);
-  const clb = cands.find((c) => c.stop.code === 'CLB');
-  const leg = clb.legs.find((l) => l.svc === '95');
-  assert.ok(leg, '95 goes from CLB to KR MRT');
+  const cands = candidateStops(GRAPH_PUBLIC, AT_IT);
+  const it = cands.find((c) => c.stop.code === 'IT');
+  const leg = it.legs.find((l) => l.svc === '95');
+  assert.ok(leg, '95 goes from IT to KR MRT');
   // It gets off across the road (Opp KR MRT), the sooner side on the loop; the ride is the metres to there.
   assert.equal(leg.to.code, 'KR-MRT-OPP');
   assert.ok(leg.crossS > 0);
-  const expect = Math.round(rideMetres(idx, '95', 'CLB', 'KR-MRT-OPP') / PUBLIC.speedMs);
+  const expect = Math.round(rideMetres(idx, '95', 'IT', 'KR-MRT-OPP') / PUBLIC.speedMs);
   assert.equal(leg.rideS, expect);
-  // Not a count of stops: the loop goes out to Holland Village and back between.
-  assert.ok(leg.rideS > 400 && leg.rideS < 800, `${leg.rideS} s`);
   // The shuttle legs are as they were: a count of stops, no rideS of their own.
-  const a1 = clb.legs.find((l) => l.svc === 'A1');
-  assert.ok(a1 && a1.rideS === undefined);
+  const a2 = it.legs.find((l) => l.svc === 'A2');
+  assert.ok(a2 && a2.rideS === undefined);
   // The plain graph has no 95 anywhere.
-  assert.ok(!candidateStops(GRAPH, AT_CLB).some((c) => c.legs.some((l) => l.svc === '95')));
+  assert.ok(!candidateStops(GRAPH, AT_IT).some((c) => c.legs.some((l) => l.svc === '95')));
+});
+
+test('a ride on past a loop\'s terminal waits there for the next run, a headway', () => {
+  const clb = candidateStops(GRAPH_PUBLIC, AT_CLB).find((c) => c.stop.code === 'CLB');
+  // The 95 ends its loop at Kent Ridge Ter, between CLB and Kent Ridge MRT.
+  const bus95 = clb.legs.find((l) => l.svc === '95');
+  assert.equal(bus95.rideS, Math.round(rideMetres(idx, '95', 'CLB', 'KR-MRT-OPP') / PUBLIC.speedMs) + GRAPH_PUBLIC.headwayS['95']);
+  // The A1 ends its at Kent Ridge Bus Terminal, the stop after CLB.
+  const a1 = clb.legs.find((l) => l.svc === 'A1');
+  assert.equal(a1.rideS, a1.hops * RIDE.secondsPerHop + DEFAULT_HEADWAY_S);
+  // The 96's interchange (Clementi) isn't a campus stop: riding round from Raffles Hall goes through it.
+  assert.ok(reach(idx, '96', 'RAFFLES', 'IT').through, '96 round through Clementi');
+  assert.ok(!reach(idx, '96', 'IT', 'RAFFLES').through, 'IT to Raffles Hall: the same run');
 });
 
 const arrivals = (code, rows, extra = {}) => ({ code, arrivals: rows, fetchedAt: FROZEN_NOW, stale: false, available: true, ...extra });
 
 test('a public bus is the headline only when it clearly beats the free bus; otherwise the alternative', () => {
-  const cands = candidateStops(GRAPH_PUBLIC, AT_CLB).filter((c) => c.stop.code === 'CLB');
-  const a1 = cands[0].legs.find((l) => l.svc === 'A1');
+  const cands = candidateStops(GRAPH_PUBLIC, AT_IT).filter((c) => c.stop.code === 'IT');
+  const a2 = cands[0].legs.find((l) => l.svc === 'A2');
   const bus95 = cands[0].legs.find((l) => l.svc === '95');
-  const a1Ride = a1.hops * 95;
-  // The 95 arrives now and rides faster, but saves less than a fare is worth: A1 stays the answer.
-  const close = new Map([['CLB', arrivals('CLB', [
-    { svc: 'A1', etaS: 60 + bus95.rideS - a1Ride + PUBLIC.fareWorthS - 30, crowd: null, plate: 'PA1', berth: null },
-    { svc: '95', etaS: 60, crowd: 'low', plate: null, berth: null },
+  const a2Ride = legRideS(a2);
+  // The 95 comes in 5 min and rides faster, but saves less than a fare is worth: A2 stays the answer.
+  const close = new Map([['IT', arrivals('IT', [
+    { svc: 'A2', etaS: 300 + legRideS(bus95) - a2Ride + PUBLIC.fareWorthS - 30, crowd: null, plate: 'PA2', berth: null },
+    { svc: '95', etaS: 300, crowd: 'low', plate: null, berth: null },
   ])]]);
   let opts = scoreOptions(GRAPH_PUBLIC, cands, close, FROZEN_NOW);
-  assert.equal(opts[0].svc, 'A1');
+  assert.equal(opts[0].svc, 'A2');
   assert.equal(opts[1].svc, '95');
   assert.equal(opts[1].paid, true);
   assert.equal(opts[0].paid, undefined);
-  // The A1 is a little later still: now the 95 saves more than the fare is worth and wins.
-  const clear = new Map([['CLB', arrivals('CLB', [
-    { svc: 'A1', etaS: 60 + bus95.rideS - a1Ride + PUBLIC.fareWorthS + 30, crowd: null, plate: 'PA1', berth: null },
-    { svc: '95', etaS: 60, crowd: 'low', plate: null, berth: null },
+  // The A2 is a little later still: now the 95 saves more than the fare is worth and wins.
+  const clear = new Map([['IT', arrivals('IT', [
+    { svc: 'A2', etaS: 300 + legRideS(bus95) - a2Ride + PUBLIC.fareWorthS + 30, crowd: null, plate: 'PA2', berth: null },
+    { svc: '95', etaS: 300, crowd: 'low', plate: null, berth: null },
   ])]]);
   opts = scoreOptions(GRAPH_PUBLIC, cands, clear, FROZEN_NOW);
   assert.equal(opts[0].svc, '95');
@@ -201,8 +215,8 @@ const BASE = 'https://bus.example.test';
 
 test('/next?public=1 names the public bus, says it is one, and marks its leg paid; without it nothing changes', async () => {
   const fetch = makeFetch({
-    byStop: { CLB: [{ name: 'A1', arrivalTime: '9', nextArrivalTime: '19' }] },
-    publicStops: { 16181: [{ ServiceNo: '95', buses: [{ etaS: 90, dest: '16009', load: 'SDA' }] }] },
+    byStop: { IT: [{ name: 'A2', arrivalTime: '9', nextArrivalTime: '19' }] },
+    publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 90, dest: '16009', load: 'SDA' }] }] },
   });
   installGlobals(fetch, FROZEN_NOW);
   const env = key();
@@ -212,19 +226,19 @@ test('/next?public=1 names the public bus, says it is one, and marks its leg pai
     await ctx.settle();
     return res.json();
   };
-  const pub = await ask(`/next?lat=${AT_CLB.lat}&lon=${AT_CLB.lon}&to=KR-MRT&public=1`);
+  const pub = await ask(`/next?lat=${AT_IT.lat}&lon=${AT_IT.lon}&to=KR-MRT&public=1`);
   assert.match(pub.label, /^95 · /);
   assert.match(pub.detail, /public bus/);
   assert.match(pub.detail, /crowding: medium/);
   assert.equal(pub.bus.svc, '95');
   assert.equal(pub.bus.paid, true);
-  assert.equal(pub.altBus.svc, 'A1');
+  assert.equal(pub.altBus.svc, 'A2');
   assert.equal(pub.altBus.paid, undefined);
   assert.equal(pub.leave?.svc ?? '95', '95');
   // The raw arrivals are named as the buses are, not by route key.
   assert.ok(pub.arrivals.every((a) => !a.svc.includes('/')));
-  const plain = await ask(`/next?lat=${AT_CLB.lat}&lon=${AT_CLB.lon}&to=KR-MRT`);
-  assert.match(plain.label, /^A1 · /);
+  const plain = await ask(`/next?lat=${AT_IT.lat}&lon=${AT_IT.lon}&to=KR-MRT`);
+  assert.match(plain.label, /^A2 · /);
   assert.ok(!plain.detail.includes('public bus'));
   assert.equal(plain.bus.paid, undefined);
 });
@@ -257,8 +271,8 @@ test('/arrivals lists public buses at a public stop, and at a shared shelter onl
 
 test('an account with publicBuses on gets public buses on /me/next and /me/nearby; the default does not', async () => {
   const fetch = makeFetch({
-    byStop: { CLB: [{ name: 'A1', arrivalTime: '9', nextArrivalTime: '19' }], LT13: [], IT: [] },
-    publicStops: { 16181: [{ ServiceNo: '95', buses: [{ etaS: 90, dest: '16009' }] }], 16189: [{ ServiceNo: '151', buses: [{ etaS: 200, dest: '64009' }] }] },
+    byStop: { IT: [{ name: 'A2', arrivalTime: '9', nextArrivalTime: '19' }], CLB: [], 'YIH-OPP': [] },
+    publicStops: { 16189: [{ ServiceNo: '95', buses: [{ etaS: 90, dest: '16009' }] }, { ServiceNo: '151', buses: [{ etaS: 200, dest: '64009' }] }] },
   });
   installGlobals(fetch, FROZEN_NOW);
   const env = { ...key(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test' };
@@ -277,47 +291,47 @@ test('an account with publicBuses on gets public buses on /me/next and /me/nearb
 
   assert.equal((await put({ home: { stops: ['PGP'] }, places, publicBuses: 'yes' })).status, 400);
   assert.equal((await put({ home: { stops: ['PGP'] }, places })).status, 200);
-  const off = await get(`/me/next?place=mrt&lat=${AT_CLB.lat}&lon=${AT_CLB.lon}`);
-  assert.match(off.label, /^A1 · /);
+  const off = await get(`/me/next?place=mrt&lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
+  assert.match(off.label, /^A2 · /);
   assert.equal((await get('/me/profile')).publicBuses, false);
 
   assert.equal((await put({ home: { stops: ['PGP'] }, places, publicBuses: true })).status, 200);
   assert.equal((await get('/me/profile')).publicBuses, true);
-  const on = await get(`/me/next?place=mrt&lat=${AT_CLB.lat}&lon=${AT_CLB.lon}`);
+  const on = await get(`/me/next?place=mrt&lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
   assert.match(on.label, /^95 · /);
   assert.equal(on.bus.paid, true);
   assert.equal(on.card.journey.bus.svc, '95');
   assert.equal(on.card.journey.bus.paid, true);
-  assert.equal(on.card.journey.backup.svc, 'A1');
+  assert.equal(on.card.journey.backup.svc, 'A2');
   assert.equal(on.card.journey.backup.paid, undefined);
   // The card's words name it with its fare too, for the clients that show only them (the Mac, notifications).
   assert.equal(on.leave.paid, true);
   assert.match(on.card.leaveVia, /\b95 \(\$\) at /);
-  const nearby = await get(`/me/nearby?lat=${AT_CLB.lat}&lon=${AT_CLB.lon}`);
-  const clb = nearby.stops.find((s) => s.stop.code === 'CLB');
-  const row = clb.board.find((r) => r.svc === '95');
+  const nearby = await get(`/me/nearby?lat=${AT_IT.lat}&lon=${AT_IT.lon}`);
+  const it = nearby.stops.find((s) => s.stop.code === 'IT');
+  const row = it.board.find((r) => r.svc === '95');
   assert.deepEqual([row.etaS, row.paid, row.color], [90, true, null]);
   // Within walking range, up to the usual number of stops, so no extra load on either feed.
   assert.ok(nearby.stops.length <= WALK.maxCandidates + 1);
 });
 
 test('a live public bus does not outrank a free bus with only a headway guess unless the fare is worth it', () => {
-  const cands = candidateStops(GRAPH_PUBLIC, AT_CLB).filter((c) => c.stop.code === 'CLB');
-  // The shuttle feed answered with nothing for A1 (a headway guess); the 95 is live, 3 min away.
-  const byStop = new Map([['CLB', arrivals('CLB', [{ svc: '95', etaS: 180, crowd: null, plate: null, berth: null }])]]);
+  const cands = candidateStops(GRAPH_PUBLIC, AT_IT).filter((c) => c.stop.code === 'IT');
+  // The shuttle feed answered with nothing for A2 (a headway guess); the 95 is live, 3 min away.
+  const byStop = new Map([['IT', arrivals('IT', [{ svc: '95', etaS: 180, crowd: null, plate: null, berth: null }])]]);
   const opts = scoreOptions(GRAPH_PUBLIC, cands, byStop, FROZEN_NOW);
-  const a1 = opts.find((o) => o.svc === 'A1');
+  const a2 = opts.find((o) => o.svc === 'A2');
   const bus95 = opts.find((o) => o.svc === '95');
-  assert.equal(a1.quality, 'scheduled');
+  assert.equal(a2.quality, 'scheduled');
   assert.equal(bus95.quality, 'live');
-  // Here the guess for A1 is quicker than the 95 plus its fare: A1 stays first despite its tier.
-  const costA1 = a1.totalS;
+  // Here the guess for A2 is quicker than the 95 plus its fare: A2 stays first despite its tier.
+  const costA2 = a2.totalS;
   const cost95 = bus95.totalS + PUBLIC.fareWorthS;
-  assert.equal(opts[0].svc, costA1 <= cost95 ? 'A1' : '95');
+  assert.equal(opts[0].svc, costA2 <= cost95 ? 'A2' : '95');
   // A 95 pulling in now, saving well over the fare's worth: it wins.
-  const soon = new Map([['CLB', arrivals('CLB', [{ svc: '95', etaS: 30, crowd: null, plate: null, berth: null }])]]);
+  const soon = new Map([['IT', arrivals('IT', [{ svc: '95', etaS: 30, crowd: null, plate: null, berth: null }])]]);
   const o2 = scoreOptions(GRAPH_PUBLIC, cands, soon, FROZEN_NOW);
-  assert.equal(o2[0].svc, o2.find((o) => o.svc === '95').totalS + PUBLIC.fareWorthS < costA1 ? '95' : 'A1');
+  assert.equal(o2[0].svc, o2.find((o) => o.svc === '95').totalS + PUBLIC.fareWorthS < costA2 ? '95' : 'A2');
 });
 
 test('turning public buses on never crowds a shuttle stop out of the candidates', () => {

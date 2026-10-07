@@ -86,9 +86,9 @@
     "stop": "PGP",
     "stopCode": "PGP",
     "walkS": 300,
-    "rideS": 855,
+    "rideS": 1575,
     "board": "2026-08-27T01:09:00Z",
-    "arrive": "2026-08-27T01:23:15Z",
+    "arrive": "2026-08-27T01:35:15Z",
     "estimated": false,
     "toStop": "AS 5",
     "endWalkS": 162

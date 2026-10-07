@@ -50,7 +50,7 @@ test('often packed: leave-by aims one bus earlier and says why; off, it only war
   const option = {
     stop: { code: 'COM3', name: 'COM 3', lat: 0, lon: 0 }, svc: 'D2', distM: 130, walkS: 100, hops: 4,
     boardS: 300, rideS: 4 * RIDE.secondsPerHop, totalS: 300 + 4 * RIDE.secondsPerHop, quality: 'live',
-    arrival: null, fetchedAt: THU, ambiguousBerth: false,
+    arrival: null, fetchedAt: THU, fromMs: THU, ambiguousBerth: false,
   };
   const base = {
     options: [option], candidates: [], graph: { stops: [], routes: {}, headwayS: { D2: 600 } },

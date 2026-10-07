@@ -53,8 +53,8 @@ test('on foot to a class, the journey is the walk alone: when to leave, how long
   assert.equal(j.boardAt, null);
   assert.equal(j.ride, null);
   // The leave-by and its arrival at the room, as the class card says them.
-  assert.equal(j.leave, '09:48');
-  assert.equal(j.walk, '8 min');
+  assert.equal(j.leave, '09:53');
+  assert.equal(j.walk, '3 min');
   assert.equal(j.arrive, '09:57');
   assert.equal(j.slack, '3 min early');
   assert.equal(j.to, 'CS2030 @ COM1');
@@ -68,10 +68,10 @@ test('on foot with no class, the journey leaves now and arrives after the whole 
   const j = cardFor(answer).journey;
   assert.equal(j.bus, null);
   assert.equal(j.leave, null);
-  assert.equal(j.walk, '16 min');
+  assert.equal(j.walk, '15 min');
   assert.equal(j.arrive, '09:15');
   assert.equal(j.slack, null);
-  assert.equal(j.why, 'A1 would be 19 min');
+  assert.equal(j.why, 'A1 would be 31 min');
   // 12-hour, as the account asks.
   assert.match(cardFor(answer, true).journey.arrive, /^9:15\sAM$/);
 });
@@ -113,6 +113,10 @@ test('a trip kept as a plan keeps its journey on every device', async () => {
   // Another device reads the plan the first one kept (next.ts), not its own leave-by.
   const kept = cardFor({ ...answer, leave: leaveOf(planOfLeave(answer.leave, false, 'UTOWN')) }).journey;
   assert.deepEqual(kept, fresh);
+  // Shown in place of the answer's own (next.ts), its times are an earlier reading: not live.
+  const place = await load('place');
+  assert.equal(cardFor(place).journey.live, true);
+  assert.equal(cardFor({ ...place, leave: { ...leaveOf(planOfLeave(place.leave, false, 'KR-MRT')), stale: true } }).journey.live, false);
 });
 
 test('a plan kept before it carried walk and ride times still has a journey', async () => {

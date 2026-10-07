@@ -23,6 +23,7 @@ const best = (extra = {}) => ({
   quality: 'live',
   arrival: null,
   fetchedAt: NOW,
+  fromMs: NOW,
   ambiguousBerth: false,
   ...extra,
 });

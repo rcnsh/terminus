@@ -94,10 +94,25 @@ function semEndMs(s: { semester: number; start: string }): number {
   return sgtMidnight(s.start) + semWeeks(s.semester) * 7 * DAY_MS;
 }
 
-/** The last day the calendar data can answer for, as YYYY-MM-DD. */
+/** Semester 1 starts on the same Monday each year, give or take: 52 weeks after the last. */
+const YEAR_MS = 52 * 7 * DAY_MS;
+
+/**
+ * The last day the calendar data can answer for, as YYYY-MM-DD: a few weeks
+ * past the last semester's end, but never into the week the next academic
+ * year's first semester would start when the data doesn't have it. Special
+ * Term II ends a week before semester 1 begins, so the grace alone would
+ * call its first teaching weeks vacation and hide every class.
+ */
 export function calendarThrough(data: CalendarData = DATA): string {
   const last = Math.max(...data.semesters.map(semEndMs));
-  return sgtDate(last + COVERAGE_GRACE_DAYS * DAY_MS);
+  let through = last + COVERAGE_GRACE_DAYS * DAY_MS;
+  const sem1 = data.semesters.filter((s) => s.semester === 1).map((s) => sgtMidnight(s.start));
+  if (sem1.length) {
+    const next = Math.max(...sem1) + YEAR_MS;
+    if (next > last) through = Math.min(through, next - DAY_MS);
+  }
+  return sgtDate(through);
 }
 
 export function termDay(nowMs: number, data: CalendarData = DATA): TermDay {
@@ -146,9 +161,9 @@ export function importedClassRuns(
 ): boolean {
   const d = termDay(nowMs, data);
   if (d.holiday) return false;
-  if (d.kind === 'unknown') return true;
 
-  // A date-range lesson runs on its own dates, whatever the teaching week.
+  // A date-range lesson runs on its own dates, whatever the teaching week,
+  // and whether or not the calendar still covers them.
   if (weeks && !Array.isArray(weeks)) {
     const day = sgtMidnight(sgtDate(nowMs));
     const start = sgtMidnight(weeks.start);
@@ -157,6 +172,10 @@ export function importedClassRuns(
     if (weeks.weeks) return weeks.weeks.includes(n);
     return (n - 1) % (weeks.weekInterval ?? 1) === 0;
   }
+
+  // Past the end of the data: every week (fail open), but not for a
+  // semester the data says has finished.
+  if (d.kind === 'unknown') return !(term && termEnded(term, nowMs, data));
 
   if (d.kind !== 'instructional' || d.week === null) return false;
   if (term && (d.acadYear !== term.acadYear || d.semester !== term.semester)) return false;
@@ -177,11 +196,14 @@ export function termsForImport(semester: number, nowMs: number, data: CalendarDa
   const live = same.filter((s) => semEndMs(s) >= sgtMidnight(sgtDate(nowMs)));
   const ended = same.filter((s) => !live.includes(s)).reverse();
   const out = [...live.slice(0, 1), ...ended.slice(0, 1)].map((s) => ({ acadYear: s.acadYear, semester: s.semester }));
-  if (out.length) return out;
-  // Not in the data at all: the academic year that starts in August.
+  // Not in the data: the academic year that starts in August.
   const d = new Date(nowMs + SGT_MS);
   const y = d.getUTCMonth() + 1 >= 8 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
-  return [{ acadYear: `${y}/${y + 1}`, semester }];
+  const guess = { acadYear: `${y}/${y + 1}`, semester };
+  // Only an ended one in the data, from a year before this one: the data
+  // hasn't caught up with the new year yet, so the new year comes first.
+  if (!live.length && (!out.length || out[0].acadYear < guess.acadYear)) return [guess, ...out];
+  return out;
 }
 
 /**

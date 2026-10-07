@@ -64,6 +64,9 @@ test('from its leave-by the plan is frozen, whatever the answer says', () => {
 test("without a location, the phone's plan is shown, not the device's own", () => {
   const stored = bus(30, { located: true });
   assert.deepEqual(choose({ stored, made: bus(25, { svc: 'R2' }), located: false }), { bus: stored, save: false });
+  // That same bus in this answer, its time moved on since: this answer's times, the plan unchanged.
+  const same = bus(32);
+  assert.deepEqual(choose({ stored, made: same, located: false }), { bus: same, save: false });
   // A plan made without a location is replaced by one with.
   assert.deepEqual(choose({ stored: bus(30), made: bus(25, { svc: 'R2' }) }), { bus: bus(25, { svc: 'R2' }), save: true });
 });

@@ -119,8 +119,30 @@ test('import picks the coming semester: a sem-1 link in July means August', () =
 test('past the end of the calendar data, imported classes run every week (fail open)', () => {
   const far = at('2031-03-03'); // a Monday
   assert.equal(termDay(far).kind, 'unknown');
-  assert.equal(importedClassRuns([3], SEM1, far), true);
+  assert.equal(importedClassRuns([3], { acadYear: '2030/2031', semester: 2 }, far), true, 'a term the data has never heard of');
+  assert.equal(importedClassRuns([3], null, far), true, 'no term recorded');
   assert.ok(calendarThrough() > '2027-01-01');
+});
+
+test('past the end of the calendar data, a semester the data says has finished stays finished', () => {
+  // The bundled calendar is good to late August 2027; a Monday after that.
+  const after = at('2027-08-30');
+  assert.equal(termDay(after, CAL).kind, 'unknown');
+  assert.equal(importedClassRuns([3], { acadYear: '2026/2027', semester: 2 }, after, CAL), false, 'Sem 2 2026/27 ended in May');
+  // A date-range lesson runs on its own dates, covered by the calendar or not.
+  const range = { start: '2027-06-21', end: '2027-07-26' };
+  assert.equal(importedClassRuns(range, null, after, CAL), false, 'after its last date');
+  assert.equal(importedClassRuns({ start: '2027-08-30', end: '2027-09-27' }, null, after, CAL), true, 'on its first date');
+});
+
+test('a calendar without the next academic year stops before its first semester would start', () => {
+  // Through Special Term II 2026/27 (ends 2 August 2027), but not semester 1 2027/28.
+  const data = { semesters: [...CAL.semesters, { acadYear: '2026/2027', semester: 3, start: '2027-05-10' }, { acadYear: '2026/2027', semester: 4, start: '2027-06-21' }], holidays: [] };
+  assert.equal(calendarThrough(data), '2027-08-08', 'not three weeks of grace into the new year');
+  assert.equal(termDay(at('2027-08-04'), data).kind, 'vacation');
+  assert.equal(termDay(at('2027-08-09'), data).kind, 'unknown', 'week 1 of the new year: classes run, not hidden as vacation');
+  // A sem-1 link then is for the new year, with the old one to fall back on.
+  assert.deepEqual(termsForImport(1, at('2027-08-12'), data), [{ acadYear: '2027/2028', semester: 1 }, SEM1]);
 });
 
 test('the real calendar covers the next 60 days', () => {

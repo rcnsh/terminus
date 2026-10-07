@@ -410,8 +410,10 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   const { bus, save } = choosePlan({ stored, made, located, classAtMs: dest.trip ? classStartMs(dest.trip, nowMs) : null, nowMs });
   // Every device says that bus: the card, the notifications and Today, and
   // it's the one detection watches. A miss (said, or seen) is the exception:
-  // then the answer is the next way there.
-  const answer: MeAnswer = bus && bus !== made && rec?.kind !== 'missed' ? { ...fresh, leave: leaveOf(bus) } : fresh;
+  // then the answer is the next way there. The plan's times are from an
+  // earlier answer: never shown as live.
+  const kept = bus && bus !== made && rec?.kind !== 'missed';
+  const answer: MeAnswer = kept ? { ...fresh, leave: { ...leaveOf(bus), stale: true } } : fresh;
 
   const home = dest.why === 'home' || dest.why === 'gap-home';
   const out = withPhase(home ? { ...answer, warning: lastBusWarning(deps.graph, answer, nowMs) } : answer, key);
