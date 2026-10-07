@@ -85,6 +85,7 @@ class TerminusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         L.init(this)
+        ServerClock.init(this)
         Push.init(this)
     }
 }

@@ -51,7 +51,8 @@ object RideStyle {
 /**
  * A countdown to [at] in the notification's header, which the system ticks
  * by itself; no time at all when there's nothing ahead to count down to.
+ * [at] and [now] are on the server's clock; the header counts on the phone's.
  */
 internal fun Notification.Builder.countdownTo(at: Long?, now: Long): Notification.Builder =
-    if (at != null && at > now) setWhen(at).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
+    if (at != null && at > now) setWhen(ServerClock.toDevice(at)).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
     else setShowWhen(false)

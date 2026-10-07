@@ -99,7 +99,7 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
                 } else {
                     account.edit {
                         it.setHomeStops(r.stops)
-                        it.homeWalkMin = maxOf(1, Math.round(r.walkM / 1.3 / 60).toInt())
+                        it.homeWalkMin = r.minutes
                     }
                 }
             },
@@ -128,7 +128,7 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
             Stepper(
                 stringResource(R.string.n_min, profile.homeWalkMin),
                 L.s(R.string.walk_one_less), L.s(R.string.walk_one_more),
-                profile.homeWalkMin > 0, profile.homeWalkMin < 30,
+                profile.homeWalkMin > profile.limits.homeWalkMin.first, profile.homeWalkMin < profile.limits.homeWalkMin.last,
                 { account.edit { it.homeWalkMin = it.homeWalkMin - 1 } },
                 { account.edit { it.homeWalkMin = it.homeWalkMin + 1 } },
             )

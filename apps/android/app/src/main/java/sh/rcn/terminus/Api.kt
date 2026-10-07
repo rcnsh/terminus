@@ -84,9 +84,13 @@ data class NextAnswer(
         return card?.leaveVia?.let { "$head · $it" } ?: head
     }
 
-    /** "D2 · 09:42" when there's a departure time; otherwise the label as sent.
-     *  A timetable estimate gets a "~": it is not a live time. */
+    /** The headline, as the server words it (card.title): "D2 · 09:42", "A1 · ~09:11", or the label. */
+    val title: String get() = card?.title ?: label
+
+    /** [title], or for an older server without it, "D2 · 09:42" from the label and departure time;
+     *  a timetable estimate gets a "~": it is not a live time. */
     fun clockLabel(format: (Long) -> String): String {
+        card?.title?.let { return it }
         val at = departsAtMs ?: return label
         if (quality == "unknown" || quality == "ended") return label
         return "${label.substringBefore(" · ")} · ${if (quality == "scheduled") L.s(R.string.approx, format(at)) else format(at)}"
@@ -104,17 +108,17 @@ data class NextAnswer(
             val places = o.optJSONArray("places") ?: JSONArray()
             return NextAnswer(
                 label = o.getString("label"),
-                detail = o.optString("detail"),
+                detail = o.optStringOrNull("detail").orEmpty(),
                 alt = o.optStringOrNull("alt"),
-                stopName = o.optJSONObject("stop")?.optString("name").orEmpty(),
+                stopName = o.optJSONObject("stop")?.optStringOrNull("name").orEmpty(),
                 quality = o.optString("quality", "unknown"),
-                asOf = o.optString("asOf"),
+                asOf = o.optStringOrNull("asOf").orEmpty(),
                 mode = o.optString("mode", "trip"),
                 destLabel = dest?.optStringOrNull("label"),
                 why = dest?.optStringOrNull("why"),
-                places = (0 until places.length()).map {
-                    val p = places.getJSONObject(it)
-                    Place(p.getString("key"), p.getString("label"))
+                places = (0 until places.length()).mapNotNull {
+                    val p = places.optJSONObject(it) ?: return@mapNotNull null
+                    Place(p.optStringOrNull("key") ?: return@mapNotNull null, p.optStringOrNull("label") ?: return@mapNotNull null)
                 },
                 departsAtMs = o.optStringOrNull("departsAt")?.let(::parseInstant),
                 refreshAtMs = o.optStringOrNull("refreshAt")?.let(::parseInstant),
@@ -125,7 +129,7 @@ data class NextAnswer(
                 classAtMs = o.optJSONObject("timing")?.optStringOrNull("classAt")?.let(::parseInstant),
                 timingStatus = o.optJSONObject("timing")?.optStringOrNull("status"),
                 timingText = o.optJSONObject("timing")?.optStringOrNull("text"),
-                card = o.optJSONObject("card")?.let(Card::parse),
+                card = o.optJSONObject("card")?.let { lenient { Card.parse(it) } },
                 walkSpeedMs = o.optDouble("walkSpeedMs").takeIf { it.isFinite() && it > 0 },
             )
         }
@@ -176,6 +180,12 @@ data class Card(
     val journey: Journey? = null,
     /** Done for today, no classes, home: the next class, for its own card. */
     val upcoming: Upcoming? = null,
+    /** The headline: "R2 · 09:06", "A1 · ~09:11", "On the R2"; the label when there's no time. */
+    val title: String? = null,
+    /** Above the headline: "Next class · GEA1000 @ UTown", "Heading home"; null with no destination. */
+    val heading: String? = null,
+    /** When to send the leave reminder, epoch ms; null: no reminder for this trip. */
+    val remindAtMs: Long? = null,
 ) {
     companion object {
         fun parse(o: JSONObject) = Card(
@@ -197,32 +207,32 @@ data class Card(
             glance = o.optStringOrNull("glance"),
             line = o.optStringOrNull("line"),
             actions = o.optJSONArray("actions")?.let { a ->
-                (0 until a.length()).map { a.getJSONObject(it).let { x -> CardAction(x.getString("id"), x.getString("label"), x.getString("trip")) } }
+                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { lenient { CardAction.parse(it) } } }
             }.orEmpty(),
             warning = o.optStringOrNull("warning"),
             notice = o.optStringOrNull("notice"),
             nextChangeAtMs = o.optStringOrNull("nextChangeAt")?.let(::parseInstant),
             remind = o.optBoolean("remind", true),
-            suggestion = o.optJSONObject("suggestion")?.let { s ->
-                Suggestion(s.getString("id"), s.getString("text"), s.getString("accept"), s.getString("dismiss"))
-            },
-            ride = o.optJSONObject("ride")?.let { r ->
-                val stops = r.optJSONArray("stops") ?: return@let null
-                val board = r.optStringOrNull("board")?.let(::parseInstant) ?: return@let null
-                val arrive = r.optStringOrNull("arrive")?.let(::parseInstant) ?: return@let null
-                Ride(r.getString("svc"), (0 until stops.length()).map { stops.getJSONObject(it).getString("name") }, board, arrive)
-                    .takeIf { it.stops.size >= 2 && arrive > board }
-            },
-            walkTo = o.optJSONObject("walkTo")?.let { w -> WalkTo(w.getString("name"), w.getDouble("lat"), w.getDouble("lon")) },
-            journey = o.optJSONObject("journey")?.let(Journey::parse),
-            upcoming = o.optJSONObject("upcoming")?.let { u ->
-                Upcoming(u.optString("when"), u.optString("title"), u.optString("where"), u.optStringOrNull("off"))
-            },
+            suggestion = o.optJSONObject("suggestion")?.let { lenient { Suggestion.parse(it) } },
+            ride = o.optJSONObject("ride")?.let { lenient { Ride.parse(it) } },
+            walkTo = o.optJSONObject("walkTo")?.let { lenient { WalkTo.parse(it) } },
+            journey = o.optJSONObject("journey")?.let { lenient { Journey.parse(it) } },
+            upcoming = o.optJSONObject("upcoming")?.let { lenient { Upcoming.parse(it) } },
+            title = o.optStringOrNull("title"),
+            heading = o.optStringOrNull("heading"),
+            remindAtMs = o.optStringOrNull("remindAt")?.let(::parseInstant),
         )
-
-        private fun parseActions(a: JSONArray?): List<CardAction> =
-            a?.let { (0 until it.length()).map { i -> it.getJSONObject(i).let { x -> CardAction(x.getString("id"), x.getString("label"), x.getString("trip")) } } }.orEmpty()
     }
+}
+
+/**
+ * One part of the card, read on its own: a malformed one (a field missing or
+ * the wrong type) is left out, and the rest of the answer still shows.
+ */
+private inline fun <T> lenient(parse: () -> T?): T? = try {
+    parse()
+} catch (_: org.json.JSONException) {
+    null
 }
 
 /**
@@ -230,7 +240,16 @@ data class Card(
  * alone: when ("Tomorrow · Tue"), what ("CS2030 at 10:00"), where ("At COM1
  * · get off at COM 3"), and why today has none when it's a break.
  */
-data class Upcoming(val whenText: String, val title: String, val where: String, val off: String?)
+data class Upcoming(val whenText: String, val title: String, val where: String, val off: String?) {
+    companion object {
+        fun parse(o: JSONObject): Upcoming? = Upcoming(
+            o.optStringOrNull("when").orEmpty(),
+            o.optStringOrNull("title") ?: return null,
+            o.optStringOrNull("where").orEmpty(),
+            o.optStringOrNull("off"),
+        )
+    }
+}
 
 /**
  * The ride, from boarding to getting off. Where the bus is comes from the
@@ -249,6 +268,18 @@ data class Ride(val svc: String, val stops: List<String>, val boardMs: Long, val
 
     /** Stops left before getting off, the next one included. */
     fun stopsLeft(now: Long): Int = (stops.size - 1 - passed(now)).coerceAtLeast(0)
+
+    companion object {
+        /** Null without its times, or with fewer than two stops: there's no bar to draw. */
+        fun parse(o: JSONObject): Ride? {
+            val svc = o.optStringOrNull("svc") ?: return null
+            val stops = o.optJSONArray("stops") ?: return null
+            val names = (0 until stops.length()).map { stops.optJSONObject(it)?.optStringOrNull("name") ?: return null }
+            val board = o.optStringOrNull("board")?.let(::parseInstant) ?: return null
+            val arrive = o.optStringOrNull("arrive")?.let(::parseInstant) ?: return null
+            return Ride(svc, names, board, arrive).takeIf { names.size >= 2 && arrive > board }
+        }
+    }
 
     /** "Next: Opp NUSS · 3 stops to go", the same in the notification and the widget. */
     fun nextText(now: Long): String {
@@ -296,13 +327,17 @@ data class Journey(
     val backup: JourneyBus?,
     /** On foot: why not a bus ("D1 would be 16 min"). */
     val why: String? = null,
+    /** The server's words for the card, each null from an older server (JourneyText words them then). */
+    val text: JourneyWords = JourneyWords(),
 ) {
     /** Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown". */
-    val place: String get() = to.substringBefore(" @ ")
+    val place: String get() = text.place ?: to.substringBefore(" @ ")
 
     companion object {
         fun parse(o: JSONObject): Journey? {
             val bus = o.optJSONObject("bus")?.let(JourneyBus::parse)
+            // A bus that can't be read isn't a walk: no journey rather than the wrong one.
+            if (bus == null && !o.isNull("bus")) return null
             val board = o.optStringOrNull("boardAt")?.let(::parseInstant)
             // A bus needs its time to count down to; on foot there's neither.
             if (bus != null && board == null) return null
@@ -314,8 +349,8 @@ data class Journey(
                 boardAtMs = board?.takeIf { bus != null },
                 ride = o.optStringOrNull("ride")?.takeIf { bus != null },
                 off = o.optStringOrNull("off"),
-                to = o.optString("to"),
-                toStop = o.optString("toStop"),
+                to = o.optStringOrNull("to").orEmpty(),
+                toStop = o.optStringOrNull("toStop").orEmpty(),
                 arrive = o.optStringOrNull("arrive"),
                 walkEnd = o.optStringOrNull("walkEnd"),
                 arriveStop = o.optStringOrNull("arriveStop") ?: o.optStringOrNull("arrive"),
@@ -323,10 +358,41 @@ data class Journey(
                 live = o.optBoolean("live", false),
                 backup = o.optJSONObject("backup")?.let(JourneyBus::parse),
                 why = o.optStringOrNull("why"),
+                text = JourneyWords(
+                    title = o.optStringOrNull("title"),
+                    place = o.optStringOrNull("place"),
+                    by = o.optStringOrNull("byText"),
+                    walk = o.optStringOrNull("walkText"),
+                    ride = o.optStringOrNull("rideText"),
+                    walkEnd = o.optStringOrNull("walkEndText"),
+                    arrive = o.optStringOrNull("arriveText"),
+                    arriveWhere = o.optStringOrNull("arriveWhere"),
+                    backup = o.optStringOrNull("backupText"),
+                    summary = o.optStringOrNull("summary"),
+                ),
             )
         }
     }
 }
+
+/**
+ * `card.journey`'s words: "To GEA1000 @ UTown · starts 10:00", "by ~09:36",
+ * "5 min walk", "10 min ride · off at Opp NUSS", "Arrive ~09:51 · 9 min
+ * early", "at UTown", "Or go now: R2 at 09:06 from PGP", and [summary], the
+ * trip in one line for a widget.
+ */
+data class JourneyWords(
+    val title: String? = null,
+    val place: String? = null,
+    val by: String? = null,
+    val walk: String? = null,
+    val ride: String? = null,
+    val walkEnd: String? = null,
+    val arrive: String? = null,
+    val arriveWhere: String? = null,
+    val backup: String? = null,
+    val summary: String? = null,
+)
 
 /** A bus in the journey: its service, colour (as painted on the bus, ARGB), stop and time. */
 /** `paid`: a public bus, with a fare, unlike the free shuttle. */
@@ -334,13 +400,21 @@ data class JourneyBus(val svc: String, val color: Long, val stop: String, val bo
     companion object {
         fun parse(o: JSONObject): JourneyBus? {
             val svc = o.optStringOrNull("svc") ?: return null
-            return JourneyBus(svc, parseColor(o.optStringOrNull("color")), o.optString("stop"), o.optString("board"), o.optBoolean("paid", false))
+            return JourneyBus(svc, parseColor(o.optStringOrNull("color")), o.optStringOrNull("stop").orEmpty(), o.optStringOrNull("board").orEmpty(), o.optBoolean("paid", false))
         }
     }
 }
 
 /** A stop to walk to, and where it is. */
 data class WalkTo(val name: String, val lat: Double, val lon: Double) {
+    companion object {
+        fun parse(o: JSONObject): WalkTo? {
+            val lat = o.optDouble("lat").takeIf { it.isFinite() } ?: return null
+            val lon = o.optDouble("lon").takeIf { it.isFinite() } ?: return null
+            return WalkTo(o.optStringOrNull("name") ?: return null, lat, lon)
+        }
+    }
+
     /** Walking directions there in the phone's maps app (Google Maps opens it; a browser otherwise). */
     fun mapsUri(): android.net.Uri =
         "https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=walking".toUri()
@@ -348,13 +422,30 @@ data class WalkTo(val name: String, val lat: Double, val lon: Double) {
 
 
 /** Something terminus learned and offers to change; `id` goes back to /me/choice. */
-data class Suggestion(val id: String, val text: String, val accept: String, val dismiss: String)
+data class Suggestion(val id: String, val text: String, val accept: String, val dismiss: String) {
+    companion object {
+        fun parse(o: JSONObject): Suggestion? = Suggestion(
+            o.optStringOrNull("id") ?: return null,
+            o.optStringOrNull("text") ?: return null,
+            o.optStringOrNull("accept") ?: return null,
+            o.optStringOrNull("dismiss") ?: return null,
+        )
+    }
+}
 
 /** A class you chose to leave a bus earlier for (`earlier`) or get no reminders for (`quiet`). */
 data class TripChoice(val trip: String, val pref: String, val label: String?)
 
 /** A button on the card: `id` is the signal to send, `trip` which trip it's about. */
-data class CardAction(val id: String, val label: String, val trip: String)
+data class CardAction(val id: String, val label: String, val trip: String) {
+    companion object {
+        fun parse(o: JSONObject): CardAction? = CardAction(
+            o.optStringOrNull("id") ?: return null,
+            o.optStringOrNull("label") ?: return null,
+            o.optStringOrNull("trip") ?: return null,
+        )
+    }
+}
 
 /** `/me/day`: today's timeline. */
 data class DayItem(
@@ -378,6 +469,10 @@ data class DayItem(
     val onBus: OnBus? = null,
     /** Can be taken off today (swiped away): anything not done yet. */
     val removable: Boolean = false,
+    /** The server's line under it: "Leave by ~09:36 · R2 from PGP", "Not going"; null when done or from an older server. */
+    val line: String? = null,
+    /** The server's name for it: the class, or "Home, from UTown"; null from an older server. */
+    val title: String? = null,
 )
 
 data class OnBus(val svc: String, val off: String?, val arriveMs: Long?)
@@ -410,6 +505,8 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
                         timingStatus = timing?.optStringOrNull("status"),
                         onBus = bus?.let { OnBus(it.optString("svc"), it.optStringOrNull("off"), it.optStringOrNull("arrive")?.let(::parseInstant)) },
                         removable = x.optBoolean("removable", false),
+                        line = x.optStringOrNull("line"),
+                        title = x.optStringOrNull("title"),
                     )
                 },
                 note = o.optStringOrNull("note"),
@@ -446,16 +543,22 @@ data class BoardRow(
     val stopped: String? = null,
     /** When it next starts; null when none was found. */
     val resumesAtMs: Long? = null,
+    /** The server's words: "4 min", "now", "~6 min"; null without a time, or from an older server. */
+    val eta: String? = null,
+    /** "then 12, ~20, 25 min"; null with no later buses, or from an older server. */
+    val laterText: String? = null,
+    /** "to Central Library, Kent Vale", "Ends here"; null from an older server. */
+    val toText: String? = null,
 )
 
-/** A bus after the next one, with its own quality: a timetabled one stays a guess. */
-data class LaterBus(val etaS: Int, val quality: String)
+/** A bus after the next one, with its own quality: a timetabled one stays a guess. [eta] is the server's "12 min". */
+data class LaterBus(val etaS: Int, val quality: String, val eta: String? = null)
 
 private fun parseLater(r: JSONObject): List<LaterBus> {
     val a = r.optJSONArray("later") ?: return emptyList()
     return (0 until a.length()).mapNotNull { k ->
         val b = a.optJSONObject(k) ?: return@mapNotNull null
-        if (b.isNull("etaS")) null else LaterBus(b.getInt("etaS"), b.optString("quality"))
+        if (b.isNull("etaS")) null else LaterBus(b.optInt("etaS"), b.optString("quality"), b.optStringOrNull("eta"))
     }
 }
 
@@ -474,6 +577,9 @@ fun parseBoardRow(r: JSONObject): BoardRow = BoardRow(
     stopped = r.optStringOrNull("stopped")?.takeIf { it in STOPPED },
     resumesAtMs = r.optStringOrNull("resumesAt")?.let(::parseInstant),
     endsHere = r.optJSONArray("towards")?.let { a -> (0 until a.length()).none { a.optString(it).isNotBlank() } } ?: false,
+    eta = r.optStringOrNull("eta")?.ifEmpty { null },
+    laterText = r.optStringOrNull("laterText")?.ifEmpty { null },
+    toText = r.optStringOrNull("toText")?.ifEmpty { null },
 )
 
 private val CROWDS = setOf("low", "medium", "high")
@@ -512,36 +618,9 @@ data class Destination(
     val detail: String? = null,
 )
 
-/**
- * The destination search, same rules as the account page: exact, then starts
- * with, then a word starts with, then contains; stops before buildings before
- * rooms, and rooms only once two characters say which.
- */
-fun rankDestinations(all: List<Destination>, query: String, max: Int = 8): List<Destination> {
-    val q = query.trim().lowercase()
-    if (q.isEmpty()) return emptyList()
-    val norm = { s: String -> s.lowercase().replace(Regex("[\\s\\-_]+"), "") }
-    val nq = norm(q)
-    val kinds = listOf("stop", "landmark", "building", "room")
-    fun score(d: Destination): Int {
-        val names = listOf(d.code.lowercase(), d.label.lowercase()) + d.aliases
-        return when {
-            names.any { it == q } || norm(d.code) == nq -> 0
-            names.any { it.startsWith(q) } || norm(d.code).startsWith(nq) -> 1
-            names.any { n -> n.split(Regex("[\\s()·,/&-]+")).any { it.isNotEmpty() && it.startsWith(q) } } -> 2
-            names.any { it.contains(q) } -> 3
-            else -> -1
-        }
-    }
-    return all.asSequence()
-        .filter { it.kind != "room" || q.length >= 2 }
-        .map { it to score(it) }
-        .filter { it.second >= 0 }
-        .sortedWith(compareBy({ it.second }, { kinds.indexOf(it.first.kind) }, { it.first.label.length }))
-        .take(max)
-        .map { it.first }
-        .toList()
-}
+/** The destination search, by the rules every client shares ([SearchRank], search.json). */
+fun rankDestinations(all: List<Destination>, query: String, max: Int = SearchRank.MAX): List<Destination> =
+    SearchRank.rank(all, query, max) { SearchRank.Key(it.kind, it.code, it.label, it.aliases) }
 
 /** What the user asked for: the planned trip, a saved place, or any stop/venue. */
 sealed interface Target {
@@ -599,8 +678,13 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     /** What's coming at one stop, for the map's stop sheet. */
     suspend fun arrivals(stop: String): StopBoard = StopBoard.parse(request("GET", "/arrivals?stop=${enc(stop)}"))
 
-    /** The same board whole, for the Buses tab: every row, the stop's name and its twin. */
-    suspend fun board(stop: String): Board = Board.parse(request("GET", "/arrivals?stop=${enc(stop)}&stopped=1"))
+    /**
+     * The same board whole, for the Buses tab: every row, the stop's name and
+     * its twin, and the services not running now (`stopped=1`), greyed. With
+     * [public], the public buses there too (the profile's `publicBuses`).
+     */
+    suspend fun board(stop: String, public: Boolean = false): Board =
+        Board.parse(request("GET", "/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else ""))
 
     /** One service's whole line; with [stop], that stop's board row for it too. */
     suspend fun line(svc: String, stop: String? = null): Line =
@@ -807,6 +891,9 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                     conn.outputStream.use { it.write(body.toString().toByteArray()) }
                 }
                 val status = conn.responseCode
+                // How far the phone's clock is out, from a reply fresh from the server.
+                val cached = (conn.getHeaderField("age")?.trim()?.toLongOrNull() ?: 0) > 0 || conn.getHeaderField("cf-cache-status").equals("HIT", ignoreCase = true)
+                ServerClock.observe(conn.getHeaderField("date"), System.currentTimeMillis(), cached)
                 if (status == 429) Quiet.after(conn.getHeaderField("retry-after"))
                 val stream = if (status in 200..299) conn.inputStream else conn.errorStream
                 val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -865,7 +952,10 @@ data class Device(val id: String, val name: String, val platform: String?, val c
 data class Stop(val code: String, val name: String, val lat: Double, val lon: Double, val services: List<String> = emptyList())
 
 /** `common`: where most students live (PGP, UTown Residence), shown first in the pickers. */
-data class Residence(val code: String, val name: String, val stops: List<String>, val walkM: Int, val common: Boolean = false)
+data class Residence(val code: String, val name: String, val stops: List<String>, val walkM: Int, val common: Boolean = false, val walkMin: Int? = null) {
+    /** Minutes on foot to its stop, as the server works them out; at a steady 1.3 m/s from an older server. */
+    val minutes: Int get() = walkMin ?: maxOf(1, Math.round(walkM / 1.3 / 60).toInt())
+}
 
 /** `colors`: each service's colour as NUS paints it, from /campus's routes. */
 data class Campus(val stops: List<Stop>, val residences: List<Residence>, val destinations: List<Destination>, val colors: Map<String, Long> = emptyMap()) {
@@ -886,7 +976,7 @@ data class Campus(val stops: List<Stop>, val residences: List<Residence>, val de
                 residences = (0 until r.length()).map {
                     val x = r.getJSONObject(it)
                     val st = x.getJSONArray("stops")
-                    Residence(x.getString("code"), x.getString("name"), (0 until st.length()).map { i -> st.getString(i) }, x.optInt("walkM"), x.optBoolean("common"))
+                    Residence(x.getString("code"), x.getString("name"), (0 until st.length()).map { i -> st.getString(i) }, x.optInt("walkM"), x.optBoolean("common"), x.optInt("walkMin", 0).takeIf { it >= 1 })
                 }.sortedWith(compareByDescending<Residence> { it.common }.thenBy { it.name }),
                 destinations = (0 until d.length()).map { parseDestination(d.getJSONObject(it)) },
                 colors = routes?.keys()?.asSequence()?.associateWith { parseColor(routes.getJSONObject(it).optString("color")) }.orEmpty(),

@@ -220,8 +220,6 @@ private fun ColumnScope.HomeStep(profile: ProfileDoc, state: AccountState, accou
     }
 }
 
-/** The walk from a residence to its stop, at an easy pace. */
-private fun Residence.walkMin() = maxOf(1, Math.round(walkM / 1.3 / 60).toInt())
 
 /** The residence menu's groups: where most students live, then the rest (residences come common first). */
 @Composable
@@ -263,12 +261,12 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
             offCampus = false
             account.edit {
                 it.setHomeStops(r.stops)
-                it.homeWalkMin = r.walkMin()
+                it.homeWalkMin = r.minutes
             }
         }, mod) {
             Text(r.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                listOfNotNull(r.stops.firstOrNull()?.let(campus::stopName), stringResource(R.string.min_walk, r.walkMin())).joinToString(" · "),
+                listOfNotNull(r.stops.firstOrNull()?.let(campus::stopName), stringResource(R.string.min_walk, r.minutes)).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -316,9 +314,9 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
         }
         Row(Modifier.fillMaxWidth().padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.home_walk), modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin - 1 } }, enabled = profile.homeWalkMin > 0, modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_less) }) { Text("−") }
+            OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin - 1 } }, enabled = profile.homeWalkMin > profile.limits.homeWalkMin.first, modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_less) }) { Text("−") }
             Text(stringResource(R.string.n_min, profile.homeWalkMin), modifier = Modifier.padding(horizontal = 12.dp))
-            OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin + 1 } }, enabled = profile.homeWalkMin < 30, modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_more) }) { Text("+") }
+            OutlinedButton(onClick = { account.edit { it.homeWalkMin = profile.homeWalkMin + 1 } }, enabled = profile.homeWalkMin < profile.limits.homeWalkMin.last, modifier = Modifier.semantics { contentDescription = L.s(R.string.walk_one_more) }) { Text("+") }
         }
         Hint(stringResource(R.string.home_walk_hint), Modifier.padding(top = 4.dp))
     }

@@ -55,6 +55,7 @@ import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyText
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.widget.clock
 
 /**
@@ -69,9 +70,9 @@ import sh.rcn.terminus.widget.clock
 @Composable
 internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, lead: @Composable ColumnScope.() -> Unit = {}) {
     // Every second near the end, so "Leave in 45 s" is never a stale 45.
-    val now by produceState(System.currentTimeMillis(), answer.leaveAtMs, journey.boardAtMs) {
+    val now by produceState(ServerClock.now(), answer.leaveAtMs, journey.boardAtMs) {
         while (true) {
-            value = System.currentTimeMillis()
+            value = ServerClock.now()
             val soonest = listOfNotNull(answer.leaveAtMs, journey.boardAtMs).filter { it > value }.minOrNull()
             delay(if (soonest != null && soonest - value < 150_000) 1_000 else 15_000)
         }
@@ -196,11 +197,11 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
                         JourneyText.busIn(journey, now)?.let { Text(" $it", style = MaterialTheme.typography.titleSmall, color = muted, modifier = Modifier.padding(bottom = 2.dp)) }
                     }
                     Text(
-                        listOfNotNull(stringResource(R.string.journey_from, bus.stop), journey.walk?.let { stringResource(R.string.journey_walk, it) }).joinToString(" · "),
+                        listOfNotNull(stringResource(R.string.journey_from, bus.stop), JourneyText.walk(journey)).joinToString(" · "),
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 } else {
-                    Text(stringResource(R.string.journey_walk, journey.walk.orEmpty()), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(JourneyText.walk(journey).orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     // Why not the bus, which the others say under the trip.
                     Text(journey.why ?: stringResource(R.string.journey_walk_to, journey.place), style = MaterialTheme.typography.bodyLarge)
                 }
@@ -219,7 +220,7 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(stringResource(R.string.journey_arrive_time, arrive), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     // Late is said in red, as on the line and in the steps.
-                    Text(journey.slack ?: journey.walkEnd?.let { stringResource(R.string.journey_walk_from, it, journey.toStop) } ?: stringResource(R.string.journey_at, journey.toStop), style = MaterialTheme.typography.bodySmall, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
+                    Text(JourneyText.arriveWhere(journey), style = MaterialTheme.typography.bodySmall, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
                 }
             }
         }
@@ -253,14 +254,14 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     Column(Modifier.padding(top = 18.dp)) {
         val walk = journey.walk
         if (walk != null) {
-            LinePoint(journey.leave ?: stringResource(R.string.journey_now), Dot.START, Line.Walk, stringResource(R.string.journey_walk, walk)) {
+            LinePoint(journey.leave ?: stringResource(R.string.journey_now), Dot.START, Line.Walk, JourneyText.walk(journey).orEmpty()) {
                 Text(stringResource(R.string.journey_leave), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
         }
         // On foot the whole way, the walk runs straight from leaving to the place.
         if (bus != null) LinePoint(
             bus.board, if (walk == null) Dot.START else Dot.STOP, Line.Ride(Color(bus.color)),
-            listOfNotNull(journey.ride?.let { stringResource(R.string.journey_ride, it) }, journey.off?.let { stringResource(R.string.off_at, it) }).joinToString(" · "),
+            JourneyText.ride(journey).orEmpty(),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(bus.stop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -269,7 +270,7 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
             }
         }
         journey.walkEnd?.let { w ->
-            LinePoint(journey.arriveStop ?: "", Dot.STOP, Line.Walk, stringResource(R.string.journey_walk, w)) {
+            LinePoint(journey.arriveStop ?: "", Dot.STOP, Line.Walk, journey.text.walkEnd ?: stringResource(R.string.journey_walk, w)) {
                 Text(journey.toStop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
         }

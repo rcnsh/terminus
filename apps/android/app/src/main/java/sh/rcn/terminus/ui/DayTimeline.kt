@@ -159,16 +159,18 @@ private fun DayRow(item: DayItem, fmt: (Long) -> String) {
             modifier = Modifier.widthIn(min = 72.dp).padding(end = 8.dp),
         )
         Column(Modifier.weight(1f)) {
-            val title = if (item.kind == "home") stringResource(R.string.home_from, item.fromName ?: stringResource(R.string.your_last_class)) else item.label
+            // The server's words (`title`, `line`); worked out here only for an older server.
+            val title = item.title ?: if (item.kind == "home") stringResource(R.string.home_from, item.fromName ?: stringResource(R.string.your_last_class)) else item.label
             Text(
                 title,
                 fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (past) muted else MaterialTheme.colorScheme.onSurface,
                 textDecoration = if (item.status == "skipped") TextDecoration.LineThrough else null,
             )
-            val sub = when (item.status) {
-                "skipped" -> stringResource(R.string.not_going_today)
-                "done" -> null
+            val sub = when {
+                item.status == "done" -> null
+                item.line != null -> item.line
+                item.status == "skipped" -> stringResource(R.string.not_going_today)
                 else -> item.onBus?.let { b ->
                     listOfNotNull(L.s(R.string.on_the, b.svc), b.off?.let { L.s(R.string.off_at, it) }, b.arriveMs?.let { L.s(R.string.arrive_at, fmt(it)) }).joinToString(" · ")
                 } ?: item.leaveAtMs?.let { at ->

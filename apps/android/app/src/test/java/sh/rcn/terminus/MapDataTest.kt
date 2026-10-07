@@ -137,6 +137,24 @@ class MapDataTest {
         assertNull(path.aheadBy(between, atStop.copy(along = 5_000.0)))
     }
 
+    @Test fun theSameAnswerOverAndOverKeepsTheMapFresh() {
+        // A bus waiting at a stop for 30 s: the same answer every 5 s. Then it
+        // moves, and slides there rather than jumping as if the map were stale.
+        val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.01, 1.0)))
+        fun at(m: Double) = path.pointAt(m).let { (lat, lon) -> LiveBus("b1", lat, lon, 90.0, true, null, null, along = m) }
+        val s = Slides { 1_000 }
+        for (t in 0L..30_000L step 5_000L) s.update(listOf(at(100.0)), path, t)
+        s.update(listOf(at(200.0)), path, 35_000)
+        assertTrue(s.moving(35_500))
+        assertEquals(150.0, s.at(35_500)[0].along!!, 1e-6)
+    }
+
+    @Test fun lastSeenBusesSaySo() {
+        assertTrue(BusList.parse(JSONObject("""{"svc": "D2", "available": true, "stale": true, "buses": []}""")).stale)
+        assertFalse(BusList.parse(JSONObject("""{"svc": "D2", "available": true, "stale": false, "buses": []}""")).stale)
+        assertFalse("an older API", BusList.parse(JSONObject("""{"svc": "D2", "available": true, "buses": []}""")).stale)
+    }
+
     @Test fun aLongerSlideTakesLonger() {
         assertEquals(1_000L, Slides.slideMs(30.0))
         assertEquals(2_100L, Slides.slideMs(210.0))

@@ -96,11 +96,13 @@ import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Pins
 import sh.rcn.terminus.Stopped
 import sh.rcn.terminus.R
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.parseColor
 import sh.rcn.terminus.searchBuses
+import sh.rcn.terminus.busesTabIndex
 
 /** How often the page in view is refreshed: the API's own cache, so sooner shows nothing new. */
 private const val REFRESH_MS = 15_000L
@@ -120,8 +122,13 @@ internal fun BusesScreen(
     pins: List<String>,
     onPin: (String) -> Unit,
     onShowOnMap: (String) -> Unit,
+    publicBuses: Boolean = false,
+    pinLimit: Int = sh.rcn.terminus.Limits.DEFAULT.pinnedStops,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    // Before the boards below ask, so the first ones have them too.
+    vm.publicBuses = publicBuses
+    vm.pinLimit = pinLimit
     LaunchedEffect(Unit) { vm.loadCampus() }
     val top = state.stack.lastOrNull()
     BackHandler(enabled = top != null) { vm.back() }
@@ -152,10 +159,10 @@ private fun Refreshing(vararg keys: Any?, refresh: suspend () -> Unit) {
 /** The clock, a tick a second, for "Updated 5 s ago". */
 @Composable
 private fun ticking(): Long {
-    val now by produceState(System.currentTimeMillis()) {
+    val now by produceState(ServerClock.now()) {
         while (true) {
             delay(1_000)
-            value = System.currentTimeMillis()
+            value = ServerClock.now()
         }
     }
     return now
@@ -237,7 +244,8 @@ private fun SearchBox(query: String, onQuery: (String) -> Unit, modifier: Modifi
 @Composable
 private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Unit) {
     val campus = state.campus
-    val hits = remember(campus, query) { campus?.let { searchBuses(query, it.stops, it.services) }.orEmpty() }
+    val index = remember(campus) { campus?.let(::busesTabIndex).orEmpty() }
+    val hits = remember(index, query) { searchBuses(query, index) }
     val colors = campus?.routes?.mapValues { it.value.color }.orEmpty()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
         if (hits.isEmpty() && campus != null) {
@@ -378,7 +386,7 @@ private fun StopPage(
         val ctx = LocalContext.current
         IconButton(
             onClick = {
-                if (!starOn && pins.size >= Pins.MAX) android.widget.Toast.makeText(ctx, L.s(R.string.buses_pins_full, Pins.MAX), android.widget.Toast.LENGTH_SHORT).show()
+                if (!starOn && pins.size >= vm.pinLimit) android.widget.Toast.makeText(ctx, L.s(R.string.buses_pins_full, vm.pinLimit), android.widget.Toast.LENGTH_SHORT).show()
                 else onPin(shownCode)
             },
             modifier = Modifier.padding(start = 8.dp).size(44.dp).background(c.secondaryContainer, CircleShape),
@@ -496,12 +504,14 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
     ) {
         SvcChip(row.svc, color, paid = row.paid)
         Column(Modifier.weight(1f)) {
-            if (row.towards.isNotEmpty()) Text(towards(row.towards), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // Where it goes, as the server words it ("to Central Library, Kent Vale", "Ends here").
+            if (row.toText != null) Text(towards(row.toText, row.towards.firstOrNull(), row.towards.isEmpty()), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            else if (row.towards.isNotEmpty()) Text(towards(row.towards), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
             // The end of its line: said, so no direction doesn't read as missing.
             else if (row.endsHere) Text(stringResource(R.string.buses_ends_here), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             @OptIn(ExperimentalLayoutApi::class)
             FlowRow(
-                Modifier.padding(top = if (row.towards.isEmpty() && !row.endsHere) 2.dp else 6.dp),
+                Modifier.padding(top = if (row.toText == null && row.towards.isEmpty() && !row.endsHere) 2.dp else 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,
@@ -511,7 +521,7 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
             }
         }
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(min = 72.dp)) {
-            BigTime(row.etaS, row.quality, arriving)
+            BigTime(row.etaS, row.quality, arriving, row.eta)
             thenText(row)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.End, modifier = Modifier.padding(top = 4.dp)) }
         }
     }
@@ -536,7 +546,7 @@ private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick
         Box(Modifier.alpha(0.35f)) { SvcChip(row.svc, color, paid = row.paid) }
         Column(Modifier.weight(1f)) {
             if (row.towards.isNotEmpty()) {
-                Text(stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.buses_towards_sep))), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(row.toText ?: stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.buses_towards_sep))), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(why, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
             back?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
@@ -544,7 +554,15 @@ private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick
     }
 }
 
-/** "to **Central Library**, Kent Vale": where it goes next in bold, then where it ends. */
+/** The server's "to Central Library, Kent Vale" with the next stop ([next]) in bold; all of it bold at the end of the line. */
+private fun towards(text: String, next: String?, endsHere: Boolean): AnnotatedString = buildAnnotatedString {
+    append(text)
+    val at = next?.let { text.indexOf(it) } ?: -1
+    if (endsHere) addStyle(SpanStyle(fontWeight = FontWeight.Bold), 0, text.length)
+    else if (at >= 0) addStyle(SpanStyle(fontWeight = FontWeight.Bold), at, at + next!!.length)
+}
+
+/** "to **Central Library**, Kent Vale", worked out here for an older server without `toText`. */
 @Composable
 private fun towards(names: List<String>): AnnotatedString {
     val joined = names.joinToString(stringResource(R.string.buses_towards_sep))
@@ -610,12 +628,31 @@ private fun crowdWord(crowd: String?): String? = when (crowd) {
     else -> null
 }
 
-/** "4 min" with the number large, or "Arriving"; nothing without a time (the tag says why). */
+/**
+ * "4 min" with the number large, or "Arriving"; nothing without a time (the
+ * tag says why). The words are the server's ([eta]: "4 min", "~6 min", "约 6
+ * 分钟", "now"), with its number drawn large; worked out here for an older server.
+ */
 @Composable
-private fun BigTime(etaS: Int?, quality: String, arriving: Boolean) {
+private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String? = null) {
     val c = MaterialTheme.colorScheme
+    val number = eta?.let { Regex("\\d+").find(it) }
     when {
         etaS == null -> Text("–", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = c.outline)
+        eta != null -> Text(
+            buildAnnotatedString {
+                if (number == null) {
+                    withStyle(SpanStyle(fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)) { append(eta) }
+                } else {
+                    withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(eta.substring(0, number.range.first)) }
+                    withStyle(SpanStyle(fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)) { append(number.value) }
+                    withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(eta.substring(number.range.last + 1)) }
+                }
+            },
+            color = if (arriving) c.primary else if (quality == "live") c.onSurface else c.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.semantics { contentDescription = eta },
+        )
         arriving -> Text(stringResource(R.string.map_arriving), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = c.primary)
         else -> {
             val unit = stringResource(R.string.buses_min)
@@ -633,8 +670,9 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean) {
     }
 }
 
-/** "then 12, 20 min", only from the later buses the API gave. */
+/** "then 12, ~20, 25 min", as the server words it; worked out here, from the later buses it gave, for an older server. */
 private fun thenText(row: BoardRow): String? {
+    row.laterText?.let { return it }
     val later = BusTimes.later(row)
     if (later.isEmpty()) return null
     val list = later.joinToString(", ")
@@ -871,7 +909,7 @@ private fun Plate(text: String) {
 @Composable
 private fun HereTime(row: BoardRow) {
     Column(horizontalAlignment = Alignment.End) {
-        BigTime(row.etaS, row.quality, row.etaS != null && row.etaS < BusTimes.ARRIVING_S)
+        BigTime(row.etaS, row.quality, row.etaS != null && row.etaS < BusTimes.ARRIVING_S, row.eta)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             QualityTag(row)
         }

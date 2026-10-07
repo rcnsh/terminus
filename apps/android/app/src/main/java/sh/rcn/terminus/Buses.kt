@@ -217,12 +217,9 @@ data class Stopped(val why: String, val back: Back?) {
 
 /** The account's pinned stops, as the profile keeps them. */
 object Pins {
-    /** PROFILE_LIMITS on the server. */
-    const val MAX = 8
-
-    /** Pinned: unpinned. Otherwise pinned at the end, unless there are [MAX] already. */
-    fun toggle(pins: List<String>, code: String): List<String> =
-        if (code in pins) pins - code else if (pins.size >= MAX) pins else pins + code
+    /** Pinned: unpinned. Otherwise pinned at the end, unless there are [max] already (the profile's limit). */
+    fun toggle(pins: List<String>, code: String, max: Int = Limits.DEFAULT.pinnedStops): List<String> =
+        if (code in pins) pins - code else if (pins.size >= max) pins else pins + code
 
     /**
      * The pages to swipe between: the nearest stop first (null until it's
@@ -234,35 +231,38 @@ object Pins {
 
 /** A search result: a stop opens its board, a service its line. */
 sealed interface BusHit {
-    data class Service(val svc: String) : BusHit
-    data class Stop(val code: String, val name: String, val services: List<String>) : BusHit
+    val key: SearchRank.Key
+
+    data class Service(val svc: String) : BusHit {
+        override val key get() = SearchRank.Key("service", svc, svc)
+    }
+
+    /** [name] is the full name; [aliases] its short name, lower case, and the nicknames /campus has for it ("library"). */
+    data class Stop(val code: String, val name: String, val services: List<String>, val aliases: List<String> = emptyList()) : BusHit {
+        override val key get() = SearchRank.Key("stop", code, name, aliases)
+    }
 }
 
 /**
- * The tab's search, by the destination search's rules: exact, then starts
- * with, then a word starts with, then contains. A service matches by its
- * name (D1); a stop by its code, short name or full name.
+ * What the tab's search looks through, as the web builds it (busesTabIndex):
+ * every service by its code, in code order, then every stop by its full
+ * name, in /campus order, also found by its short name and its nicknames
+ * ([stopAliases], from /campus's destinations of kind "stop").
  */
-fun searchBuses(query: String, stops: List<MapStop>, services: List<String>, max: Int = 12): List<BusHit> {
-    val q = query.trim().lowercase()
-    if (q.isEmpty()) return emptyList()
-    fun score(text: String): Int? {
-        val t = text.lowercase()
-        return when {
-            t == q -> 0
-            t.startsWith(q) -> 1
-            t.split(' ', '-', '/', '(').any { it.startsWith(q) } -> 2
-            q.length >= 2 && t.contains(q) -> 3
-            else -> null
-        }
-    }
-    // A service by its name only from its start: "1" isn't A1, D1 and K1.
-    val svc = services.mapNotNull { s -> score(s)?.takeIf { it <= 1 }?.let { Triple(it, 0, s) to BusHit.Service(s) } }
-    val stop = stops.mapNotNull { s ->
-        listOfNotNull(score(s.name), score(s.code), s.longName?.let(::score)).minOrNull()?.let { Triple(it, 1, s.fullName) to BusHit.Stop(s.code, s.fullName, s.services) }
-    }
-    // As good a match either way, the service first: its name is the whole of what was typed.
-    return (svc + stop).sortedWith(compareBy({ it.first.first }, { it.first.second }, { it.first.third })).map { it.second }.take(max)
+fun busesTabIndex(stops: List<MapStop>, services: List<String>, stopAliases: Map<String, List<String>>): List<BusHit> =
+    services.sorted().map { BusHit.Service(it) } +
+        stops.map { s -> BusHit.Stop(s.code, s.fullName, s.services, listOf(s.name.lowercase()) + stopAliases[s.code].orEmpty()) }
+
+/** The tab's index from the map's /campus. */
+fun busesTabIndex(campus: CampusMap): List<BusHit> = busesTabIndex(campus.stops, campus.serviceCodes, campus.stopAliases)
+
+/**
+ * The tab's search, by the destination search's rules ([SearchRank]). With
+ * nothing typed, the suggestions: every service, in order, not limited.
+ */
+fun searchBuses(query: String, index: List<BusHit>, max: Int = SearchRank.MAX): List<BusHit> {
+    if (query.trim { it.isWhitespace() || it == '\uFEFF' }.isEmpty()) return index.filterIsInstance<BusHit.Service>()
+    return SearchRank.rank(index, query, max) { it.key }
 }
 
 private fun JSONArray?.strings(): List<String> =

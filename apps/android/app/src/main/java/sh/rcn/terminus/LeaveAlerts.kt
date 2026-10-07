@@ -19,8 +19,8 @@ import sh.rcn.terminus.widget.finishAsync
 /**
  * "Time to leave" for the next class, and then the trip, in one notification.
  *
- * Every planned answer carries a leave-by time. A few minutes before the
- * heads-up is due, an exact alarm fetches a fresh answer (live times by
+ * The server says when the heads-up goes (`card.remindAt`), and for which
+ * trips: none when it's null. A couple of minutes before, an exact alarm fetches a fresh answer (live times by
  * then, not the headway guess from hours ago) and that answer decides: post
  * now, or check again later. A second alarm at the leave time turns the
  * notification into "Leave now", unless it was dismissed.
@@ -37,9 +37,7 @@ import sh.rcn.terminus.widget.finishAsync
 object LeaveAlerts {
     private const val CHANNEL = "leave"
     const val NOTIFICATION_ID = 1
-    /** Heads-up this long before the leave time. */
-    const val LEAD_MS = 5 * 60_000L
-    /** Fetch fresh times this long before the heads-up is due. */
+    /** Fetch fresh times this long before the heads-up is due: the reminder itself is the server's `remindAt`. */
     private const val CHECK_AHEAD_MS = 2 * 60_000L
 
     const val ACTION_CHECK = "sh.rcn.terminus.LEAVE_CHECK"
@@ -66,41 +64,44 @@ object LeaveAlerts {
     fun exactAlarmSettings(ctx: Context): Intent =
         Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.fromParts("package", ctx.packageName, null))
 
-    /** Called with every planned answer, from the app and from the background refresh. */
-    fun arm(ctx: Context, answer: NextAnswer, now: Long = System.currentTimeMillis()) {
+    /** Called with every planned answer, from the app and from the background refresh. [now] is on the server's clock. */
+    fun arm(ctx: Context, answer: NextAnswer, now: Long = ServerClock.now()) {
         val store = Store(ctx)
         val leaveAt = answer.leaveAtMs
         val classAt = answer.classAtMs
         val card = answer.card
+        val remindAt = card?.remindAtMs
+        // Which trip the heads-up was for: a class by its start, which stays put
+        // while its leave time moves with the buses.
+        val trip = classAt ?: remindAt
         // "On it", "Missed it" or "Not going" was just answered for the trip on
         // screen: its notification follows, even though the plan (and its
         // leave time) has moved on.
-        val following = store.leaveNotifiedFor != 0L && store.leaveNotifiedFor == classAt && showing(ctx)
-        if (card?.remind == false || (answer.why == "class" && card?.phase == "arrived")) {
-            // Reminders off for this class, or you're there: nothing more to say.
+        val following = trip != null && store.leaveNotifiedFor != 0L && store.leaveNotifiedFor == trip && showing(ctx)
+        if (card?.remind == false || card?.phase == "arrived") {
+            // Reminders off for this trip, or you're there: nothing more to say.
             if (following || card.remind == false) cancel(ctx)
             return
         }
-        if (!store.leaveAlerts || !canNotify(ctx) || answer.why != "class" || classAt == null || now >= classAt || (leaveAt == null && !following)) {
+        if (!store.leaveAlerts || !canNotify(ctx) || trip == null || (classAt != null && now >= classAt) || (remindAt == null && !following)) {
             cancelAlarm(ctx, ACTION_CHECK)
             return
         }
-        // One heads-up per class. A new plan (the next class) has a new classAt.
+        // One heads-up per trip. A new plan (the next class) has a new classAt.
         // After it, the same notification follows the trip, but only while it's showing.
-        if (store.leaveNotifiedFor == classAt) {
+        if (store.leaveNotifiedFor == trip) {
             if (showing(ctx)) post(ctx, answer, now)
             followUp(ctx, answer, now)
             return
         }
-        if (leaveAt == null) return
-        val notifyAt = leaveAt - LEAD_MS
-        if (notifyAt <= now + CHECK_AHEAD_MS) {
+        if (remindAt == null) return
+        if (remindAt <= now + CHECK_AHEAD_MS) {
             post(ctx, answer, now)
-            store.leaveNotifiedFor = classAt
+            store.leaveNotifiedFor = trip
             cancelAlarm(ctx, ACTION_CHECK)
-            if (leaveAt > now) setAlarm(ctx, ACTION_NOW, leaveAt)
+            if (leaveAt != null && leaveAt > now) setAlarm(ctx, ACTION_NOW, leaveAt)
         } else {
-            setAlarm(ctx, ACTION_CHECK, notifyAt - CHECK_AHEAD_MS)
+            setAlarm(ctx, ACTION_CHECK, remindAt - CHECK_AHEAD_MS)
         }
     }
 
@@ -116,7 +117,7 @@ object LeaveAlerts {
     fun leaveNow(ctx: Context) {
         if (!showing(ctx)) return
         val answer = Store(ctx).lastAnswer()?.first ?: return
-        post(ctx, answer, System.currentTimeMillis())
+        post(ctx, answer, ServerClock.now())
     }
 
     private fun showing(ctx: Context): Boolean =
@@ -129,7 +130,7 @@ object LeaveAlerts {
      */
     private fun followUp(ctx: Context, answer: NextAnswer, now: Long) {
         val next = answer.card?.nextChangeAtMs
-        val until = answer.classAtMs ?: return
+        val until = answer.classAtMs ?: Long.MAX_VALUE
         if (Push.active(ctx) || next == null || next <= now || next >= until) cancelAlarm(ctx, ACTION_CHECK)
         else setAlarm(ctx, ACTION_CHECK, next + 2_000)
     }
@@ -224,11 +225,12 @@ object LeaveAlerts {
     fun redrawRide(ctx: Context) {
         if (!showing(ctx)) return
         val answer = Store(ctx).lastAnswer()?.first ?: return
-        if (answer.card?.phase == "riding") post(ctx, answer, System.currentTimeMillis())
+        if (answer.card?.phase == "riding") post(ctx, answer, ServerClock.now())
     }
 
-    private fun setAlarm(ctx: Context, action: String, at: Long) {
-        ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(at, alarmIntent(ctx, action))
+    /** [serverAt] is on the server's clock; alarms go by the phone's. */
+    private fun setAlarm(ctx: Context, action: String, serverAt: Long) {
+        ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(ServerClock.toDevice(serverAt), alarmIntent(ctx, action))
     }
 
     private fun cancelAlarm(ctx: Context, action: String) {

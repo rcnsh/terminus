@@ -33,6 +33,8 @@ import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.Push
 import sh.rcn.terminus.R
 import sh.rcn.terminus.RideStyle
+import sh.rcn.terminus.ServerClock
+import sh.rcn.terminus.setWhileIdle
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
@@ -41,10 +43,11 @@ import java.util.concurrent.TimeUnit
 /**
  * Keeping the widget true without a process running:
  *
- * - a network refresh at the moments the answer changes: 30 s after the bus
- *   leaves (so the next one appears), when the plan moves on (`refreshAt`),
- *   and when the answer reaches MAX_AGE_MS. An idle-safe alarm, not a delayed
- *   job: Doze defers jobs for hours, and a departed bus must not sit bright.
+ * - a network refresh at the moments the server says the answer changes:
+ *   when the card changes (`card.nextChangeAt`: the bus leaves, "Leave now"),
+ *   when it goes stale (`card.staleAt`), and when the plan moves on
+ *   (`refreshAt`). An idle-safe alarm, not a delayed job: Doze defers jobs
+ *   for hours, and a departed bus must not sit bright.
  * - a 30-minute periodic job as the floor, in case an alarm is missed.
  * - after a reboot or app update, and on a time or timezone change.
  *
@@ -54,8 +57,12 @@ import java.util.concurrent.TimeUnit
 object Refresher {
     private const val WORK = "terminus-refresh"
     private const val NOW = "terminus-refresh-now"
-    /** Never refresh more often than this from the schedule, whatever the answer says. */
-    private const val MIN_GAP_MS = 60_000L
+    /** Never refresh sooner than this after the last, at a moment the server gave. */
+    private const val MIN_GAP_MS = 15_000L
+    /** Nor sooner than this at a moment worked out here (a ride's next stop). */
+    private const val MIN_LOCAL_GAP_MS = 60_000L
+    /** With no moment from the server at all (an answer kept from an older version). */
+    private const val FALLBACK_MS = 15 * 60_000L
     /** The day plan kept for offline is fetched again after this long. */
     private const val DAY_MAX_AGE_MS = 60 * 60_000L
 
@@ -126,8 +133,8 @@ object Refresher {
      */
     fun armOfflineRedraw(ctx: Context, store: Store) {
         if (widgetCount(ctx) == 0) return
-        val at = OfflineDay.nextChangeAt(store.lastDay()?.first, System.currentTimeMillis()) ?: return
-        ctx.getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at + 1_000, redrawIntent(ctx))
+        val at = OfflineDay.nextChangeAt(store.lastDay()?.first, ServerClock.now()) ?: return
+        ctx.getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ServerClock.toDevice(at) + 1_000, redrawIntent(ctx))
     }
 
     private fun redrawIntent(ctx: Context): PendingIntent =
@@ -141,35 +148,38 @@ object Refresher {
     fun active(ctx: Context): Boolean = widgetCount(ctx) > 0 || Store(ctx).let { (it.leaveAlerts || it.liveUpdates) && it.paired }
 
     /**
-     * When this answer next needs a network refresh. With no widget, only
-     * when the plan changes: the leave check fetches its own fresh times.
+     * When this answer next needs a network refresh, on the server's clock
+     * ([now] too; [fetchedAt] is when it came, on the same clock). With no
+     * widget, only when the plan changes: the leave check fetches its own
+     * fresh times.
      */
     fun nextRefreshAt(answer: NextAnswer, fetchedAt: Long, now: Long, widget: Boolean = true): Long {
-        val marks = buildList {
+        val card = answer.card
+        // The server's moments, at most every 15 s: "Leave now" mustn't wait a minute.
+        val server = buildList {
             answer.refreshAtMs?.let(::add)
-            // A rest answer holds until the day starts; it does not age.
-            if (widget && answer.mode != "rest") {
-                answer.departsAtMs?.let { add(it + DEPARTED_GRACE_MS + 1_000) }
+            if (widget) {
+                card?.nextChangeAtMs?.let(::add)
+                card?.staleAtMs?.let(::add)
                 // "Leave by" turns into "Leave now" at the leave time.
-                answer.leaveAtMs?.let { if (it > now) add(it) }
-                // On the bus: at each stop, so the progress bar and the arrival move on.
-                answer.card?.ride?.takeIf { answer.card.phase == "riding" }?.let { r -> RideStyle.nextRedrawAt(r, now)?.let(::add) }
-                add(fetchedAt + MAX_AGE_MS)
+                if (answer.mode != "rest") answer.leaveAtMs?.let(::add)
             }
-        }
-        return (marks.minOrNull() ?: (fetchedAt + MAX_AGE_MS)).coerceAtLeast(now + MIN_GAP_MS)
+        }.filter { it > now }.minOrNull()?.coerceAtLeast(now + MIN_GAP_MS)
+        // On the bus: at each stop, so the progress bar and the arrival move on.
+        val local = card?.ride?.takeIf { widget && card.phase == "riding" }?.let { r -> RideStyle.nextRedrawAt(r, now) }?.coerceAtLeast(now + MIN_LOCAL_GAP_MS)
+        return listOfNotNull(server, local).minOrNull() ?: (fetchedAt + FALLBACK_MS).coerceAtLeast(now + MIN_LOCAL_GAP_MS)
     }
 
-    /** Arm the next refresh, and the leave alert. Only while something needs them. */
+    /** Arm the next refresh, and the leave alert. Only while something needs them. [fetchedAt] is on the phone's clock. */
     fun scheduleNext(ctx: Context, answer: NextAnswer, fetchedAt: Long) {
         LeaveAlerts.arm(ctx, answer)
         if (!active(ctx)) return
-        val at = nextRefreshAt(answer, fetchedAt, System.currentTimeMillis(), widget = widgetCount(ctx) > 0)
+        val at = nextRefreshAt(answer, ServerClock.fromDevice(fetchedAt), ServerClock.now(), widget = widgetCount(ctx) > 0)
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
-        // Honoured in Doze (at most every ~9 min there) and needs no exact-alarm
-        // permission. The system may run it a few minutes late; the widget
-        // shows a clock time, which stays true until then.
-        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, alarmIntent(ctx))
+        // Honoured in Doze (at most every ~9 min there). Without "Alarms &
+        // reminders" allowed it's inexact, and the system may run it a few
+        // minutes late; the widget shows a clock time, which stays true until then.
+        am.setWhileIdle(ServerClock.toDevice(at), alarmIntent(ctx))
     }
 
     /** A refresh as soon as possible, with network. */

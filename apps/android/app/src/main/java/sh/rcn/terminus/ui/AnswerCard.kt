@@ -61,6 +61,9 @@ import sh.rcn.terminus.Ride
 import sh.rcn.terminus.Suggestion
 import sh.rcn.terminus.Upcoming
 import sh.rcn.terminus.widget.clock
+import sh.rcn.terminus.ServerClock
+import sh.rcn.terminus.widget.isOld
+import androidx.compose.ui.res.stringResource
 
 @Composable
 internal fun AnswerCard(
@@ -98,19 +101,24 @@ internal fun AnswerCard(
             answer.card?.ride?.let { RideProgress(it) }
             answer.card?.warning?.let { ToneText(it, MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.SemiBold) }
         }
+        // Past the card's staleAt: its times may be gone, so they're dimmed
+        // and "Updating times…" stands in until the refresh lands, as on the
+        // web and the Mac. The styled cards fall through to the plain one.
+        val old = stale(answer)
         // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
-        answer.card?.journey?.takeIf { !answer.arrived }?.let { journey ->
+        answer.card?.journey?.takeIf { !answer.arrived && !old }?.let { journey ->
             JourneyCard(answer, journey, CardStyle.pref(LocalContext.current), lead)
             Actions(answer, onAction, busy, onSuggestion)
             return@Column
         }
-        if (answer.isClassPlan) {
+        if (answer.isClassPlan && !old) {
             SkyHead { lead(); ClassPlan(answer) }
             SkyGround()
             Actions(answer, onAction, busy, onSuggestion)
             return@Column
         }
-        val heading = when {
+        // The server's ("Going to KR MRT", "Long gap · Home"); worked out here only for an older server.
+        val heading = answer.card?.heading ?: when {
             answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
             answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())
             else -> answer.destLabel
@@ -119,13 +127,23 @@ internal fun AnswerCard(
             lead()
             heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             val ctx = LocalContext.current
-            Text(answer.clockLabel { clock(ctx, it) }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Countdown(answer)
-            Text(answer.detail)
-            LeaveLine(answer)
+            val muted = MaterialTheme.colorScheme.onSurfaceVariant
+            Text(
+                answer.clockLabel { clock(ctx, it) },
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (old) muted else MaterialTheme.colorScheme.onSurface,
+            )
+            if (old) {
+                Text(stringResource(R.string.updating_times), color = muted)
+            } else {
+                Countdown(answer)
+                Text(answer.detail)
+                LeaveLine(answer)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-                answer.timingText?.let { Pill(it, timingColor(answer.timingStatus)) }
-                answer.crowdText?.let { Pill(it, MaterialTheme.colorScheme.onSurfaceVariant) }
+                answer.timingText?.takeIf { !old }?.let { Pill(it, timingColor(answer.timingStatus)) }
+                answer.crowdText?.let { Pill(it, muted) }
             }
             // The alternative is already at the end of `detail`.
             answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -133,6 +151,20 @@ internal fun AnswerCard(
         SkyGround()
         Actions(answer, onAction, busy, onSuggestion)
     }
+}
+
+/** Whether [answer] is past its staleAt ([isOld]), checked again when that comes. */
+@Composable
+private fun stale(answer: NextAnswer): Boolean {
+    val old by produceState(isOld(answer, ServerClock.now()), answer) {
+        while (!value) {
+            val at = answer.card?.staleAtMs ?: break
+            // At most a minute at a time, in case the clock's correction moves.
+            delay((at - ServerClock.now()).coerceIn(50, 60_000))
+            value = isOld(answer, ServerClock.now())
+        }
+    }
+    return old
 }
 
 /**
@@ -240,9 +272,9 @@ internal fun ClassPlan(answer: NextAnswer) {
     val at = answer.leaveAtMs ?: return
     val fmt = { ms: Long -> clock(ctx, ms) }
     // Minute resolution is enough for "in 24 min"; seconds near the end.
-    val now by produceState(System.currentTimeMillis(), at) {
+    val now by produceState(ServerClock.now(), at) {
         while (true) {
-            value = System.currentTimeMillis()
+            value = ServerClock.now()
             delay(if (at - value < 120_000) 1_000 else 15_000)
         }
     }
@@ -391,10 +423,10 @@ internal fun goodColor() = LocalSkyTones.current?.good ?: if (MaterialTheme.colo
 internal fun LeaveLine(answer: NextAnswer) {
     val at = answer.leaveAtMs ?: return
     val ctx = LocalContext.current
-    val now by produceState(System.currentTimeMillis(), at) {
+    val now by produceState(ServerClock.now(), at) {
         while (value < at) {
             delay((at - value).coerceIn(1_000, 30_000))
-            value = System.currentTimeMillis()
+            value = ServerClock.now()
         }
     }
     answer.leaveText(now)?.let {
@@ -406,9 +438,9 @@ internal fun LeaveLine(answer: NextAnswer) {
 @Composable
 internal fun Countdown(answer: NextAnswer) {
     val at = answer.departsAtMs ?: return
-    val now by produceState(System.currentTimeMillis(), at) {
+    val now by produceState(ServerClock.now(), at) {
         while (true) {
-            value = System.currentTimeMillis()
+            value = ServerClock.now()
             delay(1_000)
         }
     }
@@ -458,10 +490,10 @@ internal fun Pill(text: String, color: Color) {
 /** On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3 stops to go". */
 @Composable
 private fun RideProgress(ride: Ride) {
-    val now by produceState(System.currentTimeMillis(), ride) {
+    val now by produceState(ServerClock.now(), ride) {
         while (value < ride.arriveMs) {
             delay(5_000)
-            value = System.currentTimeMillis()
+            value = ServerClock.now()
         }
     }
     LinearProgressIndicator(

@@ -384,7 +384,7 @@ private fun Tabs(
                             },
                             places = PlacesForMap(
                                 savedAs = { code -> acct.profile?.places?.firstOrNull { it.to == code }?.label },
-                                full = { (acct.profile?.places?.size ?: 0) >= MAX_PLACES },
+                                full = { acct.profile.let { p -> (p?.places?.size ?: 0) >= (p?.limits ?: sh.rcn.terminus.Limits.DEFAULT).places } },
                                 save = { code, name -> account.edit { it.addPlace(name, code) } },
                             ),
                         )
@@ -396,7 +396,9 @@ private fun Tabs(
                             buses,
                             insets = inner,
                             pins = acct.profile?.pinnedStops.orEmpty(),
-                            onPin = { code -> account.edit { it.pinnedStops = sh.rcn.terminus.Pins.toggle(it.pinnedStops, code) } },
+                            publicBuses = acct.profile?.publicBuses == true,
+                            pinLimit = (acct.profile?.limits ?: sh.rcn.terminus.Limits.DEFAULT).pinnedStops,
+                            onPin = { code -> account.edit { it.pinnedStops = sh.rcn.terminus.Pins.toggle(it.pinnedStops, code, it.limits.pinnedStops) } },
                             onShowOnMap = { svc ->
                                 map.show(svc)
                                 onTab(Tab.Map)
@@ -451,7 +453,6 @@ private fun fadeThrough(): ContentTransform =
         .togetherWith(fadeOut(tween(90, easing = FastOutLinearInEasing)))
 
 /** The account's limit on saved places (PROFILE_LIMITS.places in the API). */
-private const val MAX_PLACES = 12
 
 /** Android 12 has no per-app language: the activity starts again in the chosen one (Lang.wrap). */
 private fun recreateOn12(ctx: Context) {

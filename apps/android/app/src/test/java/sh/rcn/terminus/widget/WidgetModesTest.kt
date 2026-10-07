@@ -52,7 +52,7 @@ class WidgetModesTest {
         "label":"D2 · 9:41","detail":"","quality":"live","asOf":"${java.time.Instant.ofEpochMilli(now)}",
         "arrivals":[],"stop":{"code":"PGP","name":"PGP","confidence":1},"places":[],
         "leave":{"at":"${java.time.Instant.ofEpochMilli(leaveAt)}","svc":"D2","stop":"PGP"},
-        "card":{"kind":"trip","phase":"$phase","actions":[]}
+        "card":{"kind":"trip","phase":"$phase","actions":[],"remindAt":"${java.time.Instant.ofEpochMilli(leaveAt - 5 * 60_000)}"}
     }"""
 
     @Test fun theNewestAddedPlaceKeepsTheLastButton() {

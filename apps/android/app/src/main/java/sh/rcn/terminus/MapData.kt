@@ -106,7 +106,17 @@ class RoutePath(private val line: List<DoubleArray>) {
     }
 }
 
-data class CampusMap(val stops: List<MapStop>, val routes: Map<String, MapRoute>) {
+/**
+ * [serviceCodes]: every service in /campus's routes, drawn or not, in code
+ * order. [stopAliases]: each stop's nicknames, from /campus's destinations of
+ * kind "stop", for the Buses tab's search.
+ */
+data class CampusMap(
+    val stops: List<MapStop>,
+    val routes: Map<String, MapRoute>,
+    val serviceCodes: List<String> = routes.keys.sorted(),
+    val stopAliases: Map<String, List<String>> = emptyMap(),
+) {
     /** The services in pill order: A1, A2, D1, … */
     val services: List<String> get() = routes.keys.sorted()
 
@@ -142,7 +152,18 @@ data class CampusMap(val stops: List<MapStop>, val routes: Map<String, MapRoute>
                 val line = x.optJSONArray("line") ?: JSONArray()
                 MapRoute(svc, parseColor(x.optString("color")), (0 until line.length()).map { i -> line.getJSONArray(i).let { p -> doubleArrayOf(p.getDouble(0), p.getDouble(1)) } })
             }.filterValues { it.line.size >= 2 }
-            return CampusMap(stops, routes) to core
+            return CampusMap(stops, routes, serviceCodes(r), stopAliases(o.optJSONArray("destinations"))) to core
+        }
+
+        /** Every service in /campus's `routes`, in plain code order. */
+        fun serviceCodes(routes: JSONObject): List<String> = routes.keys().asSequence().toList().sorted()
+
+        /** Each stop's nicknames, from /campus's `destinations` of kind "stop". */
+        fun stopAliases(destinations: JSONArray?): Map<String, List<String>> {
+            if (destinations == null) return emptyMap()
+            return (0 until destinations.length()).mapNotNull { destinations.optJSONObject(it) }
+                .filter { it.optString("kind") == "stop" }
+                .associate { d -> d.optString("code") to d.optJSONArray("aliases").stringList() }
         }
     }
 }
@@ -194,8 +215,12 @@ data class LiveBus(
 /** A stretch of a route line, [from] and [to] metres along it, starting at the stop named [last]. */
 data class Stretch(val from: Double, val to: Double, val last: String)
 
-/** One service's buses. [available] false: the feed couldn't be reached, which isn't "no buses". */
-data class BusList(val svc: String, val available: Boolean, val buses: List<LiveBus>) {
+/**
+ * One service's buses. [available] false: the feed couldn't be reached, which
+ * isn't "no buses". [stale]: the feed is down and these are where the buses
+ * were last seen, so they may have moved on.
+ */
+data class BusList(val svc: String, val available: Boolean, val buses: List<LiveBus>, val stale: Boolean = false) {
     companion object {
         fun parse(o: JSONObject): BusList {
             val a = o.optJSONArray("buses") ?: JSONArray()
@@ -224,6 +249,7 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                         },
                     )
                 },
+                stale = o.optBoolean("stale", false),
             )
         }
     }
@@ -292,7 +318,10 @@ object MapGeoJson {
  * it), so it moves from one to the other as it goes. One that can't get there
  * along the line (behind it, a long way on, no line) jumps, and so does every
  * bus with [still] (animations off) or after a while without an answer.
- * Times are any one clock.
+ * Times are any one clock that keeps counting while the phone sleeps
+ * (elapsedRealtime, not uptimeMillis), so a map left asleep reads as stale.
+ * Call [update] with every answer, the same list or not: that's what tells
+ * a quiet map from a stale one.
  */
 class Slides(private val msFor: (Double) -> Long = { slideMs(it) }) {
     private class Slide(val from: LiveBus?, val to: LiveBus, val start: Long, val path: RoutePath?, val d: Double, val ms: Long = 0)
