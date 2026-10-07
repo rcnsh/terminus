@@ -14,7 +14,7 @@ import { FROZEN_NOW, installGlobals, makeAnalytics, makeBucket, makeDurableObjec
 import worker from '../src/index.ts';
 import { TimelapseRecorder } from '../src/timelapsedo.ts';
 import { MIN_POLL_MS, TIMELAPSE } from '../src/config.ts';
-import { buildDayFile, encodeBus, ensureRecorder, inWindow, mapSnapshot, nextOpen, pollInterval, serviceDate, timelapseEnabled, windowOf } from '../src/timelapse.ts';
+import { buildDayFile, encodeBus, ensureRecorder, inWindow, mapSnapshot, nextOpen, pollInterval, serviceDate, timelapseEnabled, windowLength, windowOf } from '../src/timelapse.ts';
 import { getBuses } from '../src/fms.ts';
 import { pointAlong } from '../src/buses.ts';
 import { shapeFor } from '../src/campus.ts';
@@ -70,13 +70,65 @@ const gunzip = async (body) => new Response(new Blob([body]).stream().pipeThroug
 
 test('the poll interval never goes below its floor', () => {
   assert.equal(MIN_POLL_MS, 15_000);
-  assert.equal(pollInterval(), 30_000, 'the default');
-  assert.equal(pollInterval(30_000), 30_000);
-  assert.equal(pollInterval(15_000), 15_000);
-  assert.equal(pollInterval(5_000), 15_000, 'a lower setting is raised to the floor');
-  assert.equal(pollInterval(0), 15_000);
-  assert.equal(pollInterval(-1), 15_000);
-  assert.equal(pollInterval(Number.NaN), 30_000, 'nonsense is the default, not zero');
+  assert.equal(pollInterval(30_000, 8), 30_000, 'the default, with eight routes');
+  // Two services: the day's ceiling is far off, so only the floor applies.
+  assert.equal(pollInterval(30_000, 2), 30_000);
+  assert.equal(pollInterval(15_000, 2), 15_000);
+  assert.equal(pollInterval(5_000, 2), 15_000, 'a lower setting is raised to the floor');
+  assert.equal(pollInterval(0, 2), 15_000);
+  assert.equal(pollInterval(-1, 2), 15_000);
+  assert.equal(pollInterval(Number.NaN, 2), 30_000, 'nonsense is the default, not zero');
+});
+
+/** The most a day can poll: each service at most once per interval, inside the window. */
+const mostPolls = (services, intervalMs) => services * Math.ceil(windowLength() / intervalMs);
+
+test('a day never polls more than its ceiling, with the real routes or more of them', () => {
+  assert.equal(TIMELAPSE.maxPollsPerDay, 17_280);
+  assert.equal(windowLength(), 18 * 3_600_000);
+  // stops.json as it is (eight routes, every 30 s: exactly the ceiling).
+  const routes = Object.keys(GRAPH.routes).length;
+  assert.ok(pollInterval() >= TIMELAPSE.pollMs);
+  assert.ok(mostPolls(routes, pollInterval()) <= TIMELAPSE.maxPollsPerDay, `${routes} routes`);
+  assert.equal(mostPolls(8, pollInterval(30_000, 8)), 17_280);
+  // The weekly scrape adds routes: each is polled less often, the day no more.
+  assert.equal(pollInterval(30_000, 12), 45_000);
+  for (let n = 1; n <= 200; n++) {
+    const ms = pollInterval(TIMELAPSE.pollMs, n);
+    assert.ok(ms >= MIN_POLL_MS && ms >= TIMELAPSE.pollMs, `${n} services: ${ms} ms`);
+    assert.ok(mostPolls(n, ms) <= TIMELAPSE.maxPollsPerDay, `${n} services: ${mostPolls(n, ms)} polls`);
+    // A lower setting can't get round it either.
+    assert.ok(mostPolls(n, pollInterval(MIN_POLL_MS, n)) <= TIMELAPSE.maxPollsPerDay);
+  }
+});
+
+test('with routes added mid-day, the recorder slows down to stay under the ceiling', async () => {
+  const extra = ['X1', 'X2', 'X3', 'X4'];
+  for (const svc of extra) GRAPH.routes[svc] = GRAPH.routes.D2;
+  try {
+    const services = Object.keys(GRAPH.routes).length;
+    const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+    await start(h);
+    // As if the day began on the deploy before, with eight routes and 30 s.
+    const inst = h.ns.instances.get(DATE);
+    inst.write('meta', { ...inst.read('meta'), pollMs: 30_000 });
+    const hour = 3_600_000;
+    await runUntil(h, FROZEN_NOW + hour - 1);
+    const pollMs = inst.read('meta').pollMs;
+    assert.equal(pollMs, pollInterval(TIMELAPSE.pollMs, services));
+    assert.ok(pollMs > 30_000);
+    const bySvc = {};
+    for (const r of h.busCalls()) (bySvc[r.body.route_code] ??= []).push(r.at);
+    assert.ok(bySvc.X1, 'the new routes are polled');
+    for (const [svc, ts] of Object.entries(bySvc)) {
+      assert.ok(ts.length <= Math.ceil(hour / pollMs), `${svc}: ${ts.length} polls in an hour`);
+      for (let j = 1; j < ts.length; j++) assert.ok(ts[j] - ts[j - 1] >= pollMs, `${svc} asked again after ${ts[j] - ts[j - 1]} ms`);
+    }
+    // At this rate a whole window stays under the ceiling.
+    assert.ok(mostPolls(services, pollMs) <= TIMELAPSE.maxPollsPerDay);
+  } finally {
+    for (const svc of extra) delete GRAPH.routes[svc];
+  }
 });
 
 test('the window is 06:30 to 00:30 Singapore time, across midnight, and the day is the date it opened', () => {

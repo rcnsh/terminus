@@ -179,6 +179,9 @@ export class TimelapseRecorder {
         this.write('meta', meta);
         return this.storage.setAlarm(close);
       }
+      // A deploy since the day began may have added routes: the interval
+      // they need to stay under the day's ceiling, from this round on.
+      meta.pollMs = Math.max(meta.pollMs, pollInterval());
       // Only the services running now; none running is a round with no bus.
       round = { list: Object.keys(GRAPH.routes ?? {}).filter((svc) => inService(GRAPH, svc, now)).sort(), start: now, i: 0, buses: 0, answered: 0 };
       meta.state = 'polling';
