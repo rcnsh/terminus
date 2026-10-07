@@ -110,6 +110,31 @@ export interface Journey {
   backup: JourneyBus | null;
   /** On foot: why not a bus ("D1 would be 16 min"). Null with a bus. */
   why: string | null;
+
+  /* The lines the card styles put together, worded here so every client says the same. */
+  /** "To GEA1000 @ UTown · starts 10:00": the class's start only for a class. */
+  title: string;
+  /** Where you're going, short enough for the end of a line: "GEA1000", not "GEA1000 @ UTown". */
+  place: string;
+  /** "by ~09:36", under the leave countdown. Null when it's now, and at the stop. */
+  byText: string | null;
+  /** "3 min walk", the walk to the stop (or the whole walk on foot). Null when `walk` is. */
+  walkText: string | null;
+  /** "8 min ride · off at Opp NUSS". Null on foot. */
+  rideText: string | null;
+  /** "2 min walk", from `toStop` on to the place. Null when `walkEnd` is. */
+  walkEndText: string | null;
+  /** "Arrive ~09:51 · 9 min early" (the slack for a class only). Null when `arrive` is. */
+  arriveText: string | null;
+  /** Under the arrival: "2 min walk from UTown", or "at UTown". */
+  arriveWhere: string;
+  /** The other way: "Or go now: R2 at 09:06 from PGP" for a class, "Or A1 at
+   *  09:09 from PGP" for a trip; on foot, why not a bus. Null with neither. */
+  backupText: string | null;
+  /** The trip in one line, most needed first, for a compact widget:
+   *  "arrive ~09:51 · R2 ~09:42 at PGP" for a class, "Walk to PGP · D2 09:04",
+   *  "D2 09:04 at PGP", or on foot "8 min walk · D1 would be 16 min". */
+  summary: string;
 }
 
 /**
@@ -130,6 +155,16 @@ export interface Upcoming {
 
 export interface Card {
   kind: CardKind;
+  /** The headline: "D2 · 09:42" (with "~" for a timetable time) when there's
+   *  a bus to count down to, otherwise `label` as it is. */
+  title: string;
+  /** The small line above the card: "Next class · CS2030", "Long gap · Home",
+   *  "Heading home", "Going to KR MRT". Null with nowhere to go. */
+  heading: string | null;
+  /** When to post the leave reminder: `leave.at` less DUE_MS (five minutes),
+   *  ISO. Null when there's none to post: reminders off for the trip, not a
+   *  class, no leave-by, the trip under way, or the class started. */
+  remindAt: string | null;
   /** Dim the answer from this instant: the bus has gone, the plan has moved
    *  on, or it is 15 minutes old. Null: never on its own (setup). */
   staleAt: string | null;
@@ -239,7 +274,7 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
 }
 
 type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
-type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey' | 'upcoming'>;
+type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey' | 'upcoming' | 'title' | 'heading' | 'remindAt'>;
 
 /**
  * `feedDownSince`: when the monitor confirmed NUS's feed down, or null while
@@ -254,7 +289,55 @@ export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, 
   // Only on an answer that wanted a live time and has none: the feed may be
   // back before the monitor's next check, and a day with no bus needs none.
   const notice = feedDownSince !== null && QUALITY[a.quality] ? m().feedDown(clockAt(feedDownSince, h12)) : null;
-  return { ...card, ...v2(a, card, h12, trip, nowMs), notice, h12, journey: journeyOf(a, card, h12, trip.phase, nowMs), upcoming: a.upcoming ?? null };
+  return {
+    ...card,
+    ...v2(a, card, h12, trip, nowMs),
+    notice,
+    h12,
+    journey: journeyOf(a, card, h12, trip.phase, nowMs),
+    upcoming: a.upcoming ?? null,
+    title: titleOf(a, h12),
+    heading: headingOf(a),
+    remindAt: remindAtOf(a, card.kind, trip, nowMs),
+  };
+}
+
+/**
+ * The headline: a departure as a clock time ("D2 · 09:42"), which stays true
+ * until the bus leaves where "4 min" is wrong a minute later. With no time to
+ * give (on foot, nothing running, no live data), the label as it is.
+ */
+export function titleOf(a: MeAnswer, h12: boolean): string {
+  if (!timedAt(a)) return a.label;
+  return `${a.label.split(' · ')[0]} · ${approx(a.quality === 'scheduled', clockAt(Date.parse(a.departsAt!), h12))}`;
+}
+
+/** The answer has a departure to give as a clock time: not a sort key ('unknown'), and not nothing running. */
+const timedAt = (a: MeAnswer): boolean => Boolean(a.departsAt) && a.quality !== 'unknown' && a.quality !== 'ended';
+
+/** The small line above the card (see Card.heading). */
+export function headingOf(a: MeAnswer): string | null {
+  const d = a.dest;
+  if (!d) return null;
+  if (d.why === 'class') return m().headClass(d.label);
+  if (d.why === 'gap-home') return m().headGap(d.label);
+  if (d.why === 'home') return m().headHome;
+  return m().headPlace(d.label);
+}
+
+/**
+ * When the leave reminder goes (see Card.remindAt): the same five minutes
+ * the trip turns `due` (DUE_MS), so the reminder and the card agree. Only for
+ * a class, as the apps have always done: a favourite you tap is already on
+ * your mind.
+ */
+export function remindAtOf(a: MeAnswer, kind: CardKind, trip: TripView, nowMs = Date.parse(a.asOf)): string | null {
+  const l = a.leave ?? null;
+  if (!l || trip.remind === false || a.dest?.why !== 'class' || kind === 'arrived') return null;
+  // Under way (left, at the stop, on the bus, missed it) or there: the reminder is over.
+  if (trip.phase !== 'idle' && trip.phase !== 'due') return null;
+  if (a.timing && Date.parse(a.timing.classAt) <= nowMs) return null;
+  return iso(Date.parse(l.at) - DUE_MS);
 }
 
 /** The journey (see Journey): null on the bus, once there, and with no time to give. */
@@ -283,7 +366,7 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase, now
         }
       : null;
   // On foot the whole way, unless a kept plan still has a bus to catch.
-  if (!planned && a.foot) return footJourney(a, a.dest, a.foot, card, h12, nowMs);
+  if (!planned && a.foot) return footJourney(a, a.dest, a.foot, card, h12, phase, nowMs);
   const leg = planned ?? (card.kind === 'class' ? null : (a.bus ?? null));
   if (!leg?.board) return null;
   const at = (iso: string, estimated: boolean) => approx(estimated, clockAt(Date.parse(iso), h12));
@@ -300,7 +383,7 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase, now
   const thereMs = stopMs != null ? stopMs + endS * 1000 : null;
   const walkEnd = endS >= 45 ? mins(endS) : null;
   const arrive = thereMs != null ? approx(leg.estimated, clockAt(thereMs, h12)) : null;
-  return {
+  return worded(a, card, h12, phase, {
     leave: l && Date.parse(l.at) > nowMs ? at(l.at, l.estimated) : null,
     // At the stop, or close enough that the walk is nothing.
     walk: phase === 'waiting' || leg.walkS < 45 ? null : mins(leg.walkS),
@@ -319,7 +402,55 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase, now
     live: a.quality === 'live' && !leg.estimated && !(leg === planned && l?.stale),
     backup: other ? busOf(other) : null,
     why: null,
+  });
+}
+
+/** The journey's own facts, before they're worded. */
+type Steps = Omit<Journey, 'title' | 'place' | 'byText' | 'walkText' | 'rideText' | 'walkEndText' | 'arriveText' | 'arriveWhere' | 'backupText' | 'summary'>;
+
+/** The service in running text: "95 ($)" for a public bus, so the fare shows where no badge does. */
+const busName = (b: JourneyBus) => named({ svc: b.svc, paid: b.paid });
+
+/**
+ * The lines the card styles put round the journey (see Journey), from its
+ * own facts: the web's three styles, the app's card and the widgets all
+ * said these for themselves before, each a little differently.
+ */
+function worded(a: MeAnswer, card: V1, h12: boolean, phase: Phase, j: Steps): Journey {
+  const isClass = card.kind === 'class';
+  const starts = isClass && a.timing ? m().startsShort(clockAt(Date.parse(a.timing.classAt), h12)) : null;
+  const arriveText = j.arrive ? [m().arriveCap(j.arrive), j.slack].filter(Boolean).join(' · ') : null;
+  const backupText = !j.bus
+    ? j.why
+    : j.backup
+      ? (isClass ? m().orGoNowFrom : m().orBusFrom)(busName(j.backup), j.backup.board, j.backup.stop)
+      : null;
+  return {
+    ...j,
+    title: [m().journeyTo(j.to), starts].filter(Boolean).join(' · '),
+    place: j.to.split(' @ ')[0],
+    byText: phase !== 'waiting' && j.leave ? m().byTime(j.leave) : null,
+    walkText: j.walk ? m().walkToStop(j.walk) : null,
+    rideText: j.ride ? [m().rideFor(j.ride), j.off ? m().offAt(j.off) : null].filter(Boolean).join(' · ') : null,
+    walkEndText: j.walkEnd ? m().walkToStop(j.walkEnd) : null,
+    arriveText,
+    arriveWhere: j.walkEnd ? m().walkFrom(j.walkEnd, j.toStop) : m().atStop(j.toStop),
+    backupText,
+    summary: summaryOf(j, isClass),
   };
+}
+
+/**
+ * The trip in one line, most needed first, as a narrow widget cuts the end:
+ * for a class, when you get there and then the bus; otherwise the walk to the
+ * stop and the bus, or just the bus when you're at the stop.
+ */
+function summaryOf(j: Steps, isClass: boolean): string {
+  const b = j.bus;
+  if (!b) return [isClass && j.arrive ? m().arriveAt(j.arrive) : null, j.walk ? m().walkToStop(j.walk) : null, j.why].filter(Boolean).join(' · ');
+  if (isClass && j.arrive) return `${m().arriveAt(j.arrive)} · ${m().svcAtStop(busName(b), b.board, b.stop)}`;
+  if (j.walk) return `${m().walkToPlace(b.stop)} · ${m().busTime(busName(b), b.board)}`;
+  return m().svcAtStop(busName(b), b.board, b.stop);
 }
 
 /**
@@ -327,13 +458,13 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase, now
  * leave-by and gets to the room as the leave-by says; anything else is now,
  * for the walk the answer says.
  */
-function footJourney(a: MeAnswer, dest: Dest, foot: NonNullable<MeAnswer['foot']>, card: V1, h12: boolean, nowMs: number): Journey {
+function footJourney(a: MeAnswer, dest: Dest, foot: NonNullable<MeAnswer['foot']>, card: V1, h12: boolean, phase: Phase, nowMs: number): Journey {
   const l = a.leave ?? null;
   const fromMs = l ? Date.parse(l.at) : nowMs;
   const thereMs = l?.arrive ? Date.parse(l.arrive) : nowMs + foot.s * 1000;
   const classAt = a.timing ? Date.parse(a.timing.classAt) : null;
   const arrive = clockAt(thereMs, h12);
-  return {
+  return worded(a, card, h12, phase, {
     leave: fromMs > nowMs ? clockAt(fromMs, h12) : null,
     walk: mins((thereMs - fromMs) / 1000),
     bus: null,
@@ -349,7 +480,7 @@ function footJourney(a: MeAnswer, dest: Dest, foot: NonNullable<MeAnswer['foot']
     live: false,
     backup: null,
     why: foot.why,
-  };
+  });
 }
 
 function v1(a: MeAnswer, h12: boolean): V1 {
@@ -471,7 +602,8 @@ function walkToOf(a: MeAnswer, kind: CardKind, phase: Phase): Card['walkTo'] {
 /** "9:38" or "9:38p": clocks short enough for a glance. */
 function shortClock(ms: number, h12: boolean): string {
   const c = clockAt(ms, h12);
-  return h12 ? c.replace(/ ([AaPp])[Mm]$/, (_m, x: string) => x.toLowerCase()) : c;
+  // clockAt puts a no-break space before AM/PM, so a line never ends between them.
+  return h12 ? c.replace(/[ \u00a0]([AaPp])[Mm]$/, (_m, x: string) => x.toLowerCase()) : c;
 }
 
 function v2(
@@ -493,7 +625,10 @@ function v2(
 
   // One line and a glance per phase; outside a trip, the answer's own words.
   let line = a.detail ? `${a.label} · ${a.detail.split(' · ')[0]}` : a.label;
-  let glance = a.label.replace(' · ', ' ');
+  // A clock time, never "4 min": a glance (the Mac's menu bar, a tile) can
+  // sit unrefreshed for minutes, and a clock time stays true until the bus
+  // leaves. The label as it is when there's no time to give.
+  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(a.quality === 'scheduled', short(a.departsAt!))}` : a.label.replace(' · ', ' ');
   if (card.kind === 'rest') {
     const from = slotOf(a.label, m().dayStarts);
     glance = from ? m().fromGlance(from) : m().doneToday;

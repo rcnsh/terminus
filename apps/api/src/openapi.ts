@@ -261,8 +261,22 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   example: {
                     stop: { code: 'YIH', name: 'YIH', longName: 'Yusof Ishak House', opposite: 'YIH-OPP', oppositeAcross: true, oppositeName: 'Opp Yusof Ishak House' },
                     board: [
-                      { svc: 'K', etaS: 180, quality: 'live', ambiguousBerth: false, later: [{ etaS: 900, quality: 'live' }], color: '#2b9ad6', towards: ['Central Library', 'Prince George’s Park Foyer'], crowd: 'low', endsAt: '2026-09-28T15:04:00.000Z', running: true },
-                      { svc: 'D1', etaS: 420, quality: 'live', ambiguousBerth: false, later: [], color: '#ec4fa0', towards: ['Central Library', 'COM 3'], crowd: 'high', endsAt: '2026-09-28T15:00:00.000Z', running: true },
+                      {
+                        svc: 'K',
+                        etaS: 180,
+                        quality: 'live',
+                        ambiguousBerth: false,
+                        later: [{ etaS: 900, quality: 'live', eta: '15 min' }, { etaS: 1500, quality: 'scheduled', eta: '~25 min' }],
+                        color: '#2b9ad6',
+                        towards: ['Central Library', 'Prince George’s Park Foyer'],
+                        crowd: 'low',
+                        endsAt: '2026-09-28T15:04:00.000Z',
+                        running: true,
+                        eta: '3 min',
+                        laterText: 'then 15, ~25 min',
+                        toText: 'to Central Library, Prince George’s Park Foyer',
+                      },
+                      { svc: 'D1', etaS: 420, quality: 'live', ambiguousBerth: false, later: [], color: '#ec4fa0', towards: ['Central Library', 'COM 3'], crowd: 'high', endsAt: '2026-09-28T15:00:00.000Z', running: true, eta: '7 min', laterText: null, toText: 'to Central Library, COM 3' },
                     ],
                     asOf: '2026-09-28T01:14:02.000Z',
                     available: true,
@@ -691,9 +705,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '- before your first class: that class, from home\n' +
             '- between classes: the next one, unless the gap is longer than `gapHours`, in which case home until an hour before it\n' +
             '- after your last class: home\n' +
-            '- no classes today: `mode: nearby`, the next buses at the nearest stop\n' +
+            '- no classes today, or none left to plan: `mode: free`, nothing to catch (departures near you are on `/me/nearby`)\n' +
             '- outside your day hours (default 06:00-18:00, stretched for early or late classes): `mode: rest`, no bus\n\n' +
-            'The response also carries your favourites (`places`), so a widget can show them as buttons.',
+            'The response also carries your favourites (`places`), so a widget can show them as buttons. ' +
+            '`card` has every line worded for display (the headline `title`, the `heading` above it, the trip as steps in `journey`), and `remindAt`, when to post the leave reminder: show the strings as they are, and count down only to the times given.',
           operationId: 'meNext',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: [
@@ -756,7 +771,48 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           operationId: 'meDay',
           security: [{ bearer: [] }, { cookie: [] }],
           parameters: [...coordParams],
-          responses: { '200': ok({ type: 'object', properties: { date: { type: 'string' }, dayStart: { type: 'string' }, dayEnd: { type: 'string' }, items: { type: 'array', items: { type: 'object' } }, note: { type: ['string', 'null'] } } }) },
+          responses: {
+            '200': ok({
+              type: 'object',
+              properties: {
+                date: { type: 'string' },
+                dayStart: { type: 'string' },
+                dayEnd: { type: 'string' },
+                items: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    required: ['kind', 'key', 'label', 'title', 'line', 'status', 'from', 'fromName', 'to', 'toName', 'startsAt', 'endsAt', 'removable'],
+                    properties: {
+                      kind: { type: 'string', enum: ['class', 'home'] },
+                      key: { type: 'string', example: '4:600:UTOWN', description: 'The trip’s key, for POST /me/signal.' },
+                      label: { type: 'string' },
+                      title: { type: 'string', example: 'Home, from UTown', description: 'The row’s first line: the class, or "Home, from X" (Chinese "回家，从 X 出发").' },
+                      line: {
+                        type: ['string', 'null'],
+                        example: 'Leave by ~09:38 · D2 from PGP',
+                        description:
+                          'The row’s second line: the leave-by and how ("Leave by ~09:38 · D2 from PGP", "Leave by 13:39 · walk", with "~5 min late" when it will be), the bus you are on ("On the D2 · off at UTown · arrive 09:52"), or "Not going". Null once done, and with nothing to say yet. Show it as it is.',
+                      },
+                      status: { type: 'string', enum: ['done', 'now', 'next', 'later', 'skipped'] },
+                      from: { type: ['string', 'null'] },
+                      fromName: { type: ['string', 'null'] },
+                      to: { type: 'string' },
+                      toName: { type: 'string' },
+                      startsAt: { type: 'string', format: 'date-time' },
+                      endsAt: { type: ['string', 'null'], format: 'date-time' },
+                      venue: { type: 'string' },
+                      leave: { type: ['object', 'null'], description: 'As `leave` on GET /me/next.' },
+                      onBus: { type: ['object', 'null'], properties: { svc: { type: 'string' }, off: { type: ['string', 'null'] }, arrive: { type: ['string', 'null'], format: 'date-time' } } },
+                      timing: { type: ['object', 'null'], description: 'As `timing` on GET /me/next.' },
+                      removable: { type: 'boolean' },
+                    },
+                  },
+                },
+                note: { type: ['string', 'null'] },
+              },
+            }),
+          },
         },
       },
       '/me/signal': {
@@ -1475,6 +1531,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 off: { type: 'string', description: 'Where to get off, when the bus only stops across the road from the destination (e.g. `Opp NUSS` for AS 5). `arrive` includes the walk back across. Absent otherwise.' },
                 stopCode: { type: 'string', description: 'Stop code of `stop`. Absent when walking.' },
                 offCode: { type: 'string', description: 'Stop code of `off`. Absent without a crossing.' },
+                toStop: { type: 'string', example: 'UTown', description: 'Where you get off, short name: the destination stop this bus calls at (for a place with several stops, the one it calls at), or `off`. Absent when walking.' },
                 paid: { type: 'boolean', enum: [true], description: 'The bus is a public one, with a fare. Absent for a shuttle.' },
                 route: { type: 'string', description: 'For a public two-way service, its route in the graph (`151/1`), which `svc` (`151`) cannot name. Absent otherwise.' },
                 estimated: { type: 'boolean', description: 'Based on the usual gap between buses, or on a timetable, rather than a live time. Show it with a `~`.' },
@@ -1554,17 +1611,36 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
         BoardRow: {
           type: 'object',
-          required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later', 'color', 'towards', 'crowd', 'endsAt', 'running'],
+          required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later', 'color', 'towards', 'crowd', 'endsAt', 'running', 'eta', 'laterText', 'toText'],
           properties: {
             svc: { type: 'string' },
             etaS: { type: ['integer', 'null'] },
+            eta: {
+              type: ['string', 'null'],
+              example: '~6 min',
+              description: '`etaS` in words, in the request’s language: "4 min", "now" under 45 seconds, and a `~` on a `scheduled` time ("~6 min", Chinese "约 6 分钟"). Null when `etaS` is. Show it as it is.',
+            },
+            laterText: {
+              type: ['string', 'null'],
+              example: 'then 12, ~20 min',
+              description: 'The next few buses after this one, up to three, in whole minutes, each `scheduled` one marked `~`: "then 12, ~20 min" (Chinese "之后 12、约 20 分钟"). Null when `later` is empty.',
+            },
+            toText: {
+              type: 'string',
+              example: 'to Central Library, Prince George’s Park Foyer',
+              description: '`towards` in words: "to A, B" (Chinese "经 A，开往 B"), "to A" with one name (Chinese "开往 A"), or "Ends here" (Chinese "本站为终点站") at the end of the line. A client that sets the next stop in bold finds it as `towards[0]`.',
+            },
             quality: { $ref: '#/components/schemas/Quality' },
             ambiguousBerth: { type: 'boolean', description: 'True when the direction of this service at this stop could not be confirmed.' },
             paid: { type: 'boolean', enum: [true], description: 'A public bus, with a fare. Absent for a shuttle.' },
             later: {
               type: 'array',
               description: 'The buses after the one in `etaS`, soonest first, as far as the feed knows them (usually one more for a shuttle, up to two for a public bus). Each has its own quality: a timetabled one is `scheduled`.',
-              items: { type: 'object', required: ['etaS', 'quality'], properties: { etaS: { type: 'integer' }, quality: { $ref: '#/components/schemas/Quality' } } },
+              items: {
+                type: 'object',
+                required: ['etaS', 'quality', 'eta'],
+                properties: { etaS: { type: 'integer' }, quality: { $ref: '#/components/schemas/Quality' }, eta: { type: 'string', example: '~15 min', description: '`etaS` in words, as the row’s `eta`.' } },
+              },
             },
             color: { type: ['string', 'null'], description: 'The colour of the service, as on the buses (#rrggbb). Null for a public bus.' },
             towards: {
@@ -1799,7 +1875,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   code: { type: 'string' },
                   name: { type: 'string' },
                   stops: { type: 'array', items: { type: 'string' } },
-                  walkM: { type: 'integer' },
+                  walkM: { type: 'integer', description: 'Metres on foot from the residence to its nearest stop (the first in `stops`).' },
+                  walkMin: { type: 'integer', minimum: 1, example: 3, description: 'That walk in whole minutes at the normal pace (1.3 m/s), never under 1: what a picker shows beside the residence.' },
                   common: { type: 'boolean', description: 'Where most students live (PGP, UTown Residence). Pickers show these in their own group at the top.' },
                 },
               },
@@ -1927,6 +2004,23 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               },
             },
             share: { type: ['string', 'null'], description: 'The NUSMods share link last imported.' },
+            limits: {
+              type: 'object',
+              readOnly: true,
+              description: 'Sent with the profile (GET and PUT /me/profile, the import, the merge): the limits the server enforces, so an app’s fields and pickers stop where it does. Ignored when sent back.',
+              required: ['pinnedStops', 'label', 'places', 'placeLabel', 'homeStops', 'homeWalkMin', 'trips', 'usual', 'once'],
+              properties: {
+                pinnedStops: { type: 'integer', example: 8, description: 'Most stops in `pinnedStops`.' },
+                label: { type: 'integer', example: 60, description: 'Longest name of a class or a one-off trip, in characters.' },
+                places: { type: 'integer', example: 12, description: 'Most favourites.' },
+                placeLabel: { type: 'integer', example: 24, description: 'Longest name of a favourite, in characters.' },
+                homeStops: { type: 'integer', example: 3, description: 'Most home stops.' },
+                homeWalkMin: { type: 'object', properties: { min: { type: 'integer', example: 0 }, max: { type: 'integer', example: 30 } }, description: 'The range of `homeWalkMin`, inclusive.' },
+                trips: { type: 'integer', example: 100, description: 'Most classes in `trips`, and in `manual`.' },
+                usual: { type: 'integer', example: 30, description: 'Most usual times.' },
+                once: { type: 'integer', example: 10, description: 'Most one-off trips.' },
+              },
+            },
           },
         },
         MeAnswer: {
@@ -1938,8 +2032,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               properties: {
                 mode: {
                   type: 'string',
-                  enum: ['trip', 'nearby', 'rest'],
-                  description: '`rest` outside your day hours: no bus, and `detail` names your next class. Show a rest state, not a bus.',
+                  enum: ['trip', 'nearby', 'rest', 'free'],
+                  description:
+                    '`rest` outside your day hours: no bus, and `detail` names your next class. Show a rest state, not a bus. ' +
+                    '`free` on a day with no classes, or none left to plan (and for a new account with no timetable yet): nothing to catch, so no bus in the headline; `card.upcoming` has the next class.',
+                },
+                warning: {
+                  type: ['string', 'null'],
+                  example: 'Last D2 from UTown in 18 min',
+                  description: 'On the way home near the end of service: the last bus is soon. Absent or null otherwise. Also in `card.warning`.',
                 },
                 card: {
                   type: 'object',
@@ -1947,6 +2048,84 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     'The answer worded for display, the same on every app: headline parts, the phase of the trip, `actions` (buttons), `warning`, and `notice`, ' +
                     'a line to show above the answer while NUS’s live bus times are down ("NUS’s live bus times have been down since 9:14 AM"), or null. Show its strings as they are.',
                   properties: {
+                    kind: {
+                      type: 'string',
+                      enum: ['class', 'trip', 'nearby', 'rest', 'arrived', 'setup', 'free'],
+                      description: 'What the card is: a class with a leave-by, any other trip, what is near you, resting outside your day, there already, nothing to start from (`setup`), or a day with nothing to catch (`free`).',
+                    },
+                    title: {
+                      type: 'string',
+                      example: 'D2 · 09:42',
+                      description: 'The headline. With a bus to count down to, its service and departure as a clock time ("D2 · 09:42", "~09:42" for a timetable estimate, Chinese "约 09:42"), which stays true until the bus leaves; otherwise `label` as it is ("Walk · 8 min", "No classes today").',
+                    },
+                    heading: {
+                      type: ['string', 'null'],
+                      example: 'Next class · CS2030 @ COM1',
+                      description: 'The small line above the card, from `dest.why`: "Next class · X", "Long gap · Home", "Heading home" or "Going to X" (Chinese "下一节课 · X", "空档较长 · 回家", "回家", "去 X"). Null with no destination (`nearby`, `rest`, `free`).',
+                    },
+                    remindAt: {
+                      type: ['string', 'null'],
+                      format: 'date-time',
+                      example: '2026-08-27T01:31:40Z',
+                      description:
+                        'When to post the leave reminder: `leave.at` less five minutes (when the trip turns `due`). Null when there is none to post: reminders off for the trip (`remind` false), not a class, no leave-by, the trip under way or over (any phase but `idle` and `due`), or the class has started. ' +
+                        'Schedule it on the device; at `leave.at` the reminder becomes "Leave now".',
+                    },
+                    staleAt: { type: ['string', 'null'], format: 'date-time', description: 'Dim the answer from this instant: the bus has gone, the plan has moved on, or it is 15 minutes old. Null: never on its own.' },
+                    crowd: { type: ['string', 'null'], example: 'Crowding: medium', description: 'How full the headline bus is, in words.' },
+                    quality: { type: ['string', 'null'], example: 'Timetable estimate', description: 'What is less than live about the times: "Timetable estimate", "Live times are a few minutes old", "No live data". Null when they are live.' },
+                    leaveBy: { type: ['string', 'null'], example: 'Leave by ~09:36', description: 'The leave-by. Say "Leave now" once `leave.at` passes, except at the stop (phase `waiting`), where it is the bus to wait for ("D2 at 09:41"), shown as it is.' },
+                    leaveVia: { type: ['string', 'null'], example: 'catch the 09:38 D2 at PGP', description: 'After the leave-by on trips that are not classes. A public bus is "95 ($)".' },
+                    catch: { type: ['string', 'null'], example: 'Catch the ~09:42 R2 at PGP', description: 'Class only: the bus to catch, or "Walk there".' },
+                    arrive: { type: ['string', 'null'], example: 'Arrive ~09:51 · 9 min early', description: 'Class only: when you get there and how early or late.' },
+                    catchLine: { type: ['string', 'null'], description: 'Class only: `catch` and `arrive` on one line, for a widget or notification.' },
+                    late: { type: 'boolean', description: 'Class only: the arrival misses the start.' },
+                    goNow: { type: ['string', 'null'], example: 'Or go now: R2 at 09:06 · arrive 09:15', description: 'Class only: the headline bus, when it is not the one to wait for.' },
+                    note: { type: ['string', 'null'], description: 'Class only: why the leave-by is earlier than it could be.' },
+                    estimate: { type: ['string', 'null'], description: 'Class only: said under a leave-by that rests on the usual gap between buses.' },
+                    phase: { type: 'string', enum: ['idle', 'due', 'heading', 'waiting', 'riding', 'missed', 'arrived'], description: 'Where the trip is. `idle` with no trip in progress.' },
+                    phaseText: { type: ['string', 'null'], example: 'On your way', description: 'A few words on the phase, above the answer. Null when idle or there.' },
+                    glance: {
+                      type: 'string',
+                      maxLength: 12,
+                      example: 'D2 09:41',
+                      description: 'For a watch face, the menu bar or a tile. Never a minute count, which would freeze while nothing refreshes: outside a trip, the headline bus and its clock time ("D2 09:41", "D2 ~9:41a" 12-hour); in a trip, its phase ("Leave 9:36a", "Off 09:51"); otherwise a word or two ("Set up", "No classes").',
+                    },
+                    line: { type: 'string', example: 'Leave by ~09:36 · R2 from PGP', description: 'One line, for a collapsed notification or a compact widget.' },
+                    actions: {
+                      type: 'array',
+                      description: 'Buttons to show, in order. Send `id` and `trip` to POST /me/signal.',
+                      items: {
+                        type: 'object',
+                        required: ['id', 'label', 'trip'],
+                        properties: { id: { type: 'string', enum: ['boarded', 'missed', 'skipped', 'arrived', 'reset', 'away', 'back'] }, label: { type: 'string', example: 'Not going' }, trip: { type: 'string', example: '4:600:UTOWN' } },
+                      },
+                    },
+                    warning: { type: ['string', 'null'], example: 'Last D2 from UTown in 18 min' },
+                    nextChangeAt: { type: ['string', 'null'], format: 'date-time', description: 'When this card is next expected to change by itself (the next phase, or going stale): fetch again then.' },
+                    remind: { type: 'boolean', description: 'False when the user turned reminders off for this trip. See `remindAt`.' },
+                    suggestion: {
+                      type: ['object', 'null'],
+                      description: 'Something terminus has learned and offers to change, with its two buttons: send `id` and the choice to POST /me/choice. Never during a trip.',
+                      properties: { id: { type: 'string', example: 'earlier:4:600:UTOWN' }, text: { type: 'string' }, accept: { type: 'string', example: 'Leave earlier' }, dismiss: { type: 'string', example: 'No thanks' } },
+                    },
+                    ride: {
+                      type: ['object', 'null'],
+                      description: 'On the bus: the stops from boarding to getting off, and the board and arrival times, for a progress bar. Null otherwise.',
+                      required: ['svc', 'stops', 'board', 'arrive'],
+                      properties: {
+                        svc: { type: 'string', example: 'R2' },
+                        stops: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } } },
+                        board: { type: 'string', format: 'date-time' },
+                        arrive: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                    detected: { type: 'boolean', description: 'The phase was worked out from the phone’s location, not tapped ("Looks like you’re on the bus").' },
+                    walkTo: {
+                      type: ['object', 'null'],
+                      description: 'Where to walk to now, for a maps app: the stop to catch the bus at, or the destination’s stop on foot. Null on the bus, at the stop, once there, and with nothing to catch.',
+                      properties: { name: { type: 'string' }, lat: { type: 'number' }, lon: { type: 'number' } },
+                    },
                     notice: { type: ['string', 'null'] },
                     h12: { type: 'boolean', description: 'The card’s times are 12-hour. Write any time you show yourself the same way.' },
                     journey: {
@@ -1955,7 +2134,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         'The trip as steps, for apps that draw it (a line from you to the destination, a ticket, a list of steps): walk to the stop, take the bus, get there, and walk on when the destination is a room or building away from the stop. ' +
                         'On foot the whole way it is the walk alone: `bus`, `boardAt` and `ride` are null, `walk` is the whole walk and `why` says why not a bus. ' +
                         'Null on the bus, once there, and with no time to give. Count down to `leave.at` and `boardAt` yourself; show the strings as they are.',
-                      required: ['leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'walkEnd', 'arriveStop', 'slack', 'live', 'backup', 'why'],
+                      required: [
+                        'leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'walkEnd', 'arriveStop', 'slack', 'live', 'backup', 'why',
+                        'title', 'place', 'byText', 'walkText', 'rideText', 'walkEndText', 'arriveText', 'arriveWhere', 'backupText', 'summary',
+                      ],
                       properties: {
                         leave: { type: ['string', 'null'], description: 'When to set off ("4:01 PM", "~4:01 PM"). Null when it is now.' },
                         walk: { type: ['string', 'null'], description: 'The walk to the stop ("3 min"). Null at the stop. On foot, the whole walk there.' },
@@ -1978,6 +2160,24 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                           description: 'Another bus: the next one for a trip, or for a class the sooner bus to go now on.',
                         },
                         why: { type: ['string', 'null'], description: 'On foot: why not a bus ("D1 would be 16 min"). Null with a bus.' },
+                        title: { type: 'string', example: 'To GEA1000 @ UTown · starts 10:00', description: 'Where to, with a class’s start ("To X · starts 10:00"; Chinese "去 X · 10:00 开始", "回家" for home).' },
+                        place: { type: 'string', example: 'GEA1000', description: 'Where you are going, short enough for the end of a line: `to` without its " @ " part.' },
+                        byText: { type: ['string', 'null'], example: 'by ~09:36', description: 'Under the leave countdown, until it is time to go. Null when `leave` is, and at the stop.' },
+                        walkText: { type: ['string', 'null'], example: '5 min walk', description: '`walk` as a step: the walk to the stop, or the whole walk on foot. Null when `walk` is.' },
+                        rideText: { type: ['string', 'null'], example: '10 min ride · off at Opp NUSS', description: '`ride` as a step, with where to get off when that is across the road. Null on foot.' },
+                        walkEndText: { type: ['string', 'null'], example: '2 min walk', description: '`walkEnd` as a step, from `toStop` to the place. Null when `walkEnd` is.' },
+                        arriveText: { type: ['string', 'null'], example: 'Arrive ~09:51 · 9 min early', description: 'When you get there, with a class’s slack. Null when `arrive` is.' },
+                        arriveWhere: { type: 'string', example: '2 min walk from UTown', description: 'Under the arrival: the walk on from `toStop`, or "at UTown".' },
+                        backupText: {
+                          type: ['string', 'null'],
+                          example: 'Or go now: R2 at 09:06 from PGP',
+                          description: 'The other way: for a class the sooner bus to go now on ("Or go now: R2 at 09:06 from PGP"), for a trip the other bus ("Or A1 at 09:09 from PGP"), on foot `why`. A public bus is "95 ($)". Null with none.',
+                        },
+                        summary: {
+                          type: 'string',
+                          example: 'arrive ~09:51 · R2 ~09:42 at PGP',
+                          description: 'The trip on one line, most needed first, for a compact widget: a class’s arrival then its bus ("arrive ~09:51 · R2 ~09:42 at PGP"), the walk to the stop then the bus ("Walk to PGP · A1 09:09"), the bus at the stop ("A1 09:09 at PGP"), or on foot the walk and why ("8 min walk · D1 would be 16 min").',
+                        },
                       },
                     },
                     upcoming: {

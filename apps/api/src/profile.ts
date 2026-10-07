@@ -121,7 +121,38 @@ export const DEFAULT_PROFILE: Profile = {
   pinnedStops: [],
 };
 
-export const PROFILE_LIMITS = { trips: 100, places: 12, homeStops: 3, label: 60, placeLabel: 24, usual: 30, once: 10, pinnedStops: 8 } as const;
+export const PROFILE_LIMITS = {
+  trips: 100,
+  places: 12,
+  homeStops: 3,
+  label: 60,
+  placeLabel: 24,
+  usual: 30,
+  once: 10,
+  pinnedStops: 8,
+  /** Minutes from home to the home stop, inclusive. */
+  homeWalkMin: { min: 0, max: 30 },
+} as const;
+
+/**
+ * The limits as the profile endpoints send them (`limits`), so the apps'
+ * pickers and fields stop at the same place the server does, instead of
+ * each keeping its own copy of these numbers.
+ */
+export function profileLimits() {
+  const l = PROFILE_LIMITS;
+  return {
+    pinnedStops: l.pinnedStops,
+    label: l.label,
+    places: l.places,
+    placeLabel: l.placeLabel,
+    homeStops: l.homeStops,
+    homeWalkMin: { min: l.homeWalkMin.min, max: l.homeWalkMin.max },
+    trips: l.trips,
+    usual: l.usual,
+    once: l.once,
+  };
+}
 
 type Result = { ok: true; profile: Profile } | { ok: false; error: string };
 
@@ -213,7 +244,7 @@ export function parseProfile(
   }
 
   if (raw.homeWalkMin !== undefined) {
-    if (!isInt(raw.homeWalkMin, 0, 30)) return { ok: false, error: 'homeWalkMin must be 0 to 30 minutes' };
+    if (!isInt(raw.homeWalkMin, PROFILE_LIMITS.homeWalkMin.min, PROFILE_LIMITS.homeWalkMin.max)) return { ok: false, error: 'homeWalkMin must be 0 to 30 minutes' };
     p.homeWalkMin = raw.homeWalkMin;
   }
 

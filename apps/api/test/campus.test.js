@@ -170,7 +170,7 @@ test('boardAt: the buses after the next one come in later, soonest first, each k
   };
   const bySvc = new Map(boardAt(GRAPH, idx, 'COM3', sa, nowMs).map((r) => [r.svc, r]));
   assert.equal(bySvc.get('D2').etaS, 240);
-  assert.deepEqual(bySvc.get('D2').later, [{ etaS: 900, quality: 'scheduled' }]);
+  assert.deepEqual(bySvc.get('D2').later, [{ etaS: 900, quality: 'scheduled', eta: '~15 min' }]);
   assert.deepEqual(bySvc.get('D1').later, []);
 });
 
@@ -280,6 +280,8 @@ test('boardAt with stopped: services outside their hours come last, greyed, unle
   assert.deepEqual(r1, {
     svc: 'R1', etaS: null, quality: 'ended', ambiguousBerth: false, later: [], color: '#f57c1f',
     towards: r1.towards, crowd: null, endsAt: null, running: false, stopped: 'ended', resumesAt: '2026-10-07T23:40:00.000Z',
+    // Not running: no time to give, but still where it goes.
+    eta: null, laterText: null, toText: r1.toText,
   });
   // The feed still reporting an R1 at PGP: the feed wins, and it is a running row.
   const late = { ...sa, arrivals: [...sa.arrivals, { svc: 'R1', etaS: 300, crowd: null, plate: 'PR1', berth: null }] };

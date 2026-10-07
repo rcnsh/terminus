@@ -129,7 +129,7 @@
     "estimate": null,
     "phase": "idle",
     "phaseText": null,
-    "glance": "R2 6 分钟",
+    "glance": "R2 09:06",
     "line": "R2 · 6 分钟 · PGP",
     "actions": [],
     "warning": null,
@@ -166,8 +166,21 @@
         "stop": "PGP",
         "board": "09:09"
       },
-      "why": null
+      "why": null,
+      "title": "去 LT3",
+      "place": "LT3",
+      "byText": null,
+      "walkText": "步行 5 分钟",
+      "rideText": "乘车 6 分钟",
+      "walkEndText": "步行 1 分钟",
+      "arriveText": "09:13 到达",
+      "arriveWhere": "从 IT 步行 1 分钟",
+      "backupText": "或在 PGP 搭 09:09 的 A1",
+      "summary": "步行到 PGP · 09:06 的 R2"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "R2 · 09:06",
+    "heading": "去 LT3",
+    "remindAt": null
   }
 }

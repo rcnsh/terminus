@@ -101,7 +101,7 @@ pnpm run deploy
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache, with the stop across the road (`stop.opposite`, as `/me/nearby` gives it). See "Board rows" below. |
 | `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
 | `GET /line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/buses` read, plus one `/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
-| `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group). Written once per isolate, with an ETag: a client revalidating gets a 304. |
+| `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group), each with its walk to its nearest stop in metres (`walkM`) and in whole minutes at the normal pace (`walkMin`, never under 1). Written once per isolate, with an ETag: a client revalidating gets a 304. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
@@ -176,6 +176,18 @@ and `resumesAt` at the top (null while it runs).
 
 Only the feed's own times are given: a later bus the feed doesn't report
 has no row of its own and no guessed time.
+
+Each row also comes worded, in the request's language, so the Buses tab,
+Nearby and the map say the same thing (they used to word these
+themselves, and drifted):
+
+- `eta`: `etaS` in words with `mins()` ("4 min", "now"), a `scheduled` time
+  marked "~6 min" ("约 6 分钟"); null when `etaS` is. Each `later` entry has
+  its own `eta` the same way;
+- `laterText`: up to three later buses in whole minutes, each `scheduled` one
+  marked, "then 12, ~20 min" ("之后 12、约 20 分钟"); null with none;
+- `toText`: `towards` as "to A, B" ("经 A，开往 B"), "to A" ("开往 A"), or
+  "Ends here" ("本站为终点站").
 
 ## Personalisation
 
@@ -287,6 +299,13 @@ the Mac.
   user's order: up to 8, each a shuttle stop or a public stop of its own
   (LTA's code), repeats dropped. A pinned stop gone from a new scrape is
   dropped on read, with the other pins kept.
+- The profile comes with `limits` wherever it's sent (GET and PUT
+  `/me/profile`, the import, the merge): the most pinned stops (8), places
+  (12) and home stops (3), the longest class and favourite names (60, 24),
+  the home walk's range (0 to 30 minutes) and the list sizes, all from
+  `PROFILE_LIMITS`, the numbers `parseProfile` enforces. The apps size their
+  fields and pickers from it instead of keeping copies; sent back with the
+  profile, it's ignored.
 - On a day with no classes (or none left), `/me/next` says so (`mode: free`)
   with the next class, and no bus: a bus you have no reason to take reads
   like advice. Departures near you are `/me/nearby`.
@@ -383,7 +402,11 @@ campus and said so with confidence.
 
 `GET /me/day` is today's timeline, worked out with the same planner. A
 class you're on the bus to carries `onBus` (the bus, where to get off, the
-arrival) instead of a leave-by that has passed. Apps send it the same
+arrival) instead of a leave-by that has passed. Each row comes worded:
+`title` (the class, or "Home, from UTown") and `line`, its second line
+("Leave by ~09:38 · D2 from PGP", with "~5 min late" when it will be; "On
+the D2 · off at UTown · arrive 09:52"; "Not going"), null once it's done or
+with nothing to say yet (`dayLine` in `src/day.ts`). Apps send it the same
 `lat`/`lon` as `/me/next`, and the next class is planned from there, so Today
 and the card agree even on the first load, when both are asked at once and
 the card's plan isn't saved yet. (Without it, Today planned from the home
@@ -393,7 +416,21 @@ from the class or home before them.
 
 Card v2 adds `phase`, `phaseText`, `glance` (12 characters, for a menu bar
 or a tile), `line` (one line, for a notification), `actions`, `warning` and
-`nextChangeAt` (when the card changes by itself). While riding, `ride` lists
+`nextChangeAt` (when the card changes by itself). The glance is never a
+minute count, which a menu bar left unrefreshed would freeze: outside a trip
+it is the headline bus and its clock time ("D2 09:41", "~" for an
+estimate), the label's own words when there's no time.
+
+The card also has its headline and the line above it worded: `title`, the
+departure as a clock time ("D2 · 09:42", "~09:42" for a timetable estimate),
+which stays true until the bus leaves, or the label when there's no time
+(`titleOf`); `heading`, from `dest.why` ("Next class · X", "Long gap ·
+Home", "Heading home", "Going to X"), null with no destination; and
+`remindAt`, when the apps post the leave reminder: `leave.at` less `DUE_MS`
+(five minutes, when the trip turns `due`), only for a class with reminders
+on, before the trip is under way and before the class starts, else null
+(`remindAtOf`). The apps used to hard-code the five minutes and the
+class-only rule. While riding, `ride` lists
 the stops from boarding to getting off, with the board and arrival times (the
 arrival live when the bus's plate is known), for a progress bar. v1
 fields are unchanged. `notice` is a line above the answer while the monitor
@@ -426,6 +463,18 @@ way to the place ("Walk · 8 min"). The answer's own times (`arriveAt`, a
 leg's `arrive`) stay at the stop. A class's leave-by already aims at the
 room (`leave.arrive` is there): the answer's `endWalk` (kept off the
 response) says which, so the walk is never added twice. Apps count down to `leave.at` and `journey.boardAt` themselves.
+
+The journey's lines come worded too (`worded` in `src/card.ts`), so the three
+web styles, the app's card and the widgets say the same: `title` ("To
+GEA1000 @ UTown · starts 10:00"), `place` ("GEA1000"), `byText` ("by
+~09:36", null at the stop), `walkText` ("5 min walk"), `rideText` ("10 min
+ride · off at Opp NUSS"), `walkEndText` ("2 min walk"), `arriveText`
+("Arrive ~09:51 · 9 min early"), `arriveWhere` ("2 min walk from UTown" or
+"at UTown"), `backupText` ("Or go now: R2 at 09:06 from PGP" for a class,
+"Or A1 at 09:09 from PGP" for a trip, `why` on foot) and `summary`, one line
+for a compact widget, most needed first ("arrive ~09:51 · R2 ~09:42 at
+PGP", "Walk to PGP · A1 09:09", "A1 09:09 at PGP", "8 min walk · D1 would
+be 16 min"). Only the countdowns ("Leave in 4 min") are the apps' own.
 
 `upcoming` is the next class on its own card, under Done for today, a day
 with no classes, and You're home: when ("Tomorrow · Tue"), what ("CS2030

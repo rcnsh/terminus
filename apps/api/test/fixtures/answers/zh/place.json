@@ -138,7 +138,7 @@
     "estimate": null,
     "phase": "idle",
     "phaseText": null,
-    "glance": "A1 9 分钟",
+    "glance": "A1 09:09",
     "line": "A1 · 9 分钟 · PGP",
     "actions": [],
     "warning": null,
@@ -179,8 +179,21 @@
         "stop": "PGP",
         "board": "09:14"
       },
-      "why": null
+      "why": null,
+      "title": "去 KR MRT",
+      "place": "KR MRT",
+      "byText": "09:03 前出发",
+      "walkText": "步行 5 分钟",
+      "rideText": "乘车 2 分钟",
+      "walkEndText": null,
+      "arriveText": "09:10 到达",
+      "arriveWhere": "在 KR MRT",
+      "backupText": "或在 PGP 搭 09:14 的 D2",
+      "summary": "步行到 PGP · 09:09 的 A1"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "A1 · 09:09",
+    "heading": "去 KR MRT",
+    "remindAt": null
   }
 }

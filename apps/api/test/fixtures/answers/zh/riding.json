@@ -1,0 +1,106 @@
+{
+  "label": "在 R2 上",
+  "detail": "在 UTown 下车 · 约 09:51 到达 · 早到 9 分钟",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "scheduled",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [],
+  "arriveAt": "2026-08-27T01:51:30Z",
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "GEA1000 @ UTown",
+    "why": "class"
+  },
+  "timing": {
+    "status": "on-time",
+    "text": "09:51 到达 · 早到 9 分钟",
+    "classAt": "2026-08-27T02:00:00Z",
+    "reachAt": "2026-08-27T01:51:30Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T02:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:15:00Z",
+    "crowd": null,
+    "quality": "按时刻表估计",
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "riding",
+    "phaseText": "在车上",
+    "glance": "09:51 下车",
+    "line": "在 R2 上 · 09:51 在 UTown 下车",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:15:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": {
+      "svc": "R2",
+      "stops": [
+        {
+          "code": "PGP",
+          "name": "PGP"
+        },
+        {
+          "code": "HSSML-OPP",
+          "name": "Opp HSSML"
+        },
+        {
+          "code": "NUSS-OPP",
+          "name": "Opp NUSS"
+        },
+        {
+          "code": "LT13-OPP",
+          "name": "Ventus"
+        },
+        {
+          "code": "IT",
+          "name": "IT"
+        },
+        {
+          "code": "YIH-OPP",
+          "name": "Opp YIH"
+        },
+        {
+          "code": "UTOWN",
+          "name": "UTown"
+        }
+      ],
+      "board": "2026-08-27T01:42:00Z",
+      "arrive": "2026-08-27T01:51:30Z"
+    },
+    "detected": false,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": null,
+    "upcoming": null,
+    "title": "在 R2 上",
+    "heading": "下一节课 · GEA1000 @ UTown",
+    "remindAt": null
+  }
+}

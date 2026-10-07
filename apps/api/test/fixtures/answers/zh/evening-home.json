@@ -137,8 +137,21 @@
       "slack": null,
       "live": false,
       "backup": null,
-      "why": "搭 A1 要 31 分钟"
+      "why": "搭 A1 要 31 分钟",
+      "title": "回家",
+      "place": "家",
+      "byText": null,
+      "walkText": "步行 15 分钟",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "09:15 到达",
+      "arriveWhere": "在 PGP",
+      "backupText": "搭 A1 要 31 分钟",
+      "summary": "步行 15 分钟 · 搭 A1 要 31 分钟"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "步行 · 15 分钟",
+    "heading": "回家",
+    "remindAt": null
   }
 }

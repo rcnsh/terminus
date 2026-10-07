@@ -186,8 +186,21 @@
       "slack": "约迟到 25 分钟",
       "live": true,
       "backup": null,
-      "why": null
+      "why": null,
+      "title": "去 GEA1000 @ UTown · 08:50 开始",
+      "place": "GEA1000",
+      "byText": null,
+      "walkText": "步行 5 分钟",
+      "rideText": "乘车 10 分钟",
+      "walkEndText": null,
+      "arriveText": "09:15 到达 · 约迟到 25 分钟",
+      "arriveWhere": "在 UTown",
+      "backupText": null,
+      "summary": "09:15 到达 · 在 PGP 搭 09:06 的 R2"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "R2 · 09:06",
+    "heading": "下一节课 · GEA1000 @ UTown",
+    "remindAt": null
   }
 }

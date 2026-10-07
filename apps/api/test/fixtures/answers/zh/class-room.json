@@ -198,8 +198,21 @@
         "stop": "PGP",
         "board": "09:06"
       },
-      "why": null
+      "why": null,
+      "title": "去 GEA1000 @ UTown · 10:00 开始",
+      "place": "GEA1000",
+      "byText": "约 09:36 前出发",
+      "walkText": "步行 5 分钟",
+      "rideText": "乘车 10 分钟",
+      "walkEndText": "步行 2 分钟",
+      "arriveText": "约 09:53 到达 · 早到 7 分钟",
+      "arriveWhere": "从 UTown 步行 2 分钟",
+      "backupText": "或现在走：在 PGP 搭 09:06 的 R2",
+      "summary": "约 09:53 到达 · 在 PGP 搭 约 09:42 的 R2"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "R2 · 09:06",
+    "heading": "下一节课 · GEA1000 @ UTown",
+    "remindAt": "2026-08-27T01:31:40Z"
   }
 }

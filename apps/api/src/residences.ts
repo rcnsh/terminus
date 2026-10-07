@@ -11,6 +11,7 @@ import residencesJson from '../data/residences.json' with { type: 'json' };
 import { haversineM } from './geo.ts';
 import { footM, stopFootM } from './walk.ts';
 import type { Stop } from './types.ts';
+import { WALK } from './config.ts';
 
 export interface Residence {
   name: string;
@@ -26,6 +27,14 @@ const RESIDENCES = (residencesJson as unknown as { residences: Record<string, Re
 
 /** Indoors a phone's fix can be this far off. */
 export const GPS_MARGIN_M = 30;
+
+/**
+ * A residence's walk to its nearest stop, in whole minutes at a normal pace,
+ * never under one: what "Where do you live?" shows beside it.
+ */
+export function residenceWalkMin(walkM: number): number {
+  return Math.max(1, Math.round(walkM / WALK.speedMs / 60));
+}
 
 export function allResidences(): Array<[string, Residence]> {
   return Object.entries(RESIDENCES);

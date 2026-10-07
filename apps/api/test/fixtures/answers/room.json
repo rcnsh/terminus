@@ -129,7 +129,7 @@
     "estimate": null,
     "phase": "idle",
     "phaseText": null,
-    "glance": "R2 6 min",
+    "glance": "R2 09:06",
     "line": "R2 · 6 min · PGP",
     "actions": [],
     "warning": null,
@@ -166,8 +166,21 @@
         "stop": "PGP",
         "board": "09:09"
       },
-      "why": null
+      "why": null,
+      "title": "To LT3",
+      "place": "LT3",
+      "byText": null,
+      "walkText": "5 min walk",
+      "rideText": "6 min ride",
+      "walkEndText": "1 min walk",
+      "arriveText": "Arrive 09:13",
+      "arriveWhere": "1 min walk from IT",
+      "backupText": "Or A1 at 09:09 from PGP",
+      "summary": "Walk to PGP · R2 09:06"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "R2 · 09:06",
+    "heading": "Going to LT3",
+    "remindAt": null
   }
 }

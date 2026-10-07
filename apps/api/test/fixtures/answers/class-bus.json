@@ -196,8 +196,21 @@
         "stop": "PGP",
         "board": "09:06"
       },
-      "why": null
+      "why": null,
+      "title": "To GEA1000 @ UTown · starts 10:00",
+      "place": "GEA1000",
+      "byText": "by ~09:36",
+      "walkText": "5 min walk",
+      "rideText": "10 min ride",
+      "walkEndText": null,
+      "arriveText": "Arrive ~09:51 · 9 min early",
+      "arriveWhere": "at UTown",
+      "backupText": "Or go now: R2 at 09:06 from PGP",
+      "summary": "arrive ~09:51 · R2 ~09:42 at PGP"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "R2 · 09:06",
+    "heading": "Next class · GEA1000 @ UTown",
+    "remindAt": "2026-08-27T01:31:40Z"
   }
 }

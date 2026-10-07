@@ -186,8 +186,21 @@
       "slack": "~25 min late",
       "live": true,
       "backup": null,
-      "why": null
+      "why": null,
+      "title": "To GEA1000 @ UTown · starts 08:50",
+      "place": "GEA1000",
+      "byText": null,
+      "walkText": "5 min walk",
+      "rideText": "10 min ride",
+      "walkEndText": null,
+      "arriveText": "Arrive 09:15 · ~25 min late",
+      "arriveWhere": "at UTown",
+      "backupText": null,
+      "summary": "arrive 09:15 · R2 09:06 at PGP"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "R2 · 09:06",
+    "heading": "Next class · GEA1000 @ UTown",
+    "remindAt": null
   }
 }

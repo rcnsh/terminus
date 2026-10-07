@@ -138,7 +138,7 @@
     "estimate": null,
     "phase": "idle",
     "phaseText": null,
-    "glance": "A1 9 min",
+    "glance": "A1 09:09",
     "line": "A1 · 9 min · PGP",
     "actions": [],
     "warning": null,
@@ -179,8 +179,21 @@
         "stop": "PGP",
         "board": "09:14"
       },
-      "why": null
+      "why": null,
+      "title": "To KR MRT",
+      "place": "KR MRT",
+      "byText": "by 09:03",
+      "walkText": "5 min walk",
+      "rideText": "2 min ride",
+      "walkEndText": null,
+      "arriveText": "Arrive 09:10",
+      "arriveWhere": "at KR MRT",
+      "backupText": "Or D2 at 09:14 from PGP",
+      "summary": "Walk to PGP · A1 09:09"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "A1 · 09:09",
+    "heading": "Going to KR MRT",
+    "remindAt": null
   }
 }
