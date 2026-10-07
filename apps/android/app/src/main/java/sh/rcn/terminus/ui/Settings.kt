@@ -20,6 +20,26 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.rememberTransition
@@ -595,25 +615,187 @@ private fun AboutPage() {
     }
 }
 
-/** A note to the operator about anything; a wrong answer is better sent from under the card. */
+/** The longest note the server takes; the counter turns amber from [FEEDBACK_NEAR]. */
+private const val FEEDBACK_MAX = 1000
+private const val FEEDBACK_NEAR = 900
+
+/** How the From row opens into an address and closes again: quick, with Material's easing. */
+private fun <T> feedbackMotion(delay: Int = 0) = tween<T>(250, delayMillis = delay, easing = FastOutSlowInEasing)
+
+/**
+ * A note to the operator about anything, laid out as a message: who it's
+ * from, the note, then a counter and Send. With no email on the account, an
+ * address to reply to can be typed in place; it goes with this note only and
+ * isn't added to the account. A wrong answer is better sent from under the
+ * card, so the card below says so.
+ */
 @Composable
 private fun FeedbackPage(state: AccountState, account: AccountViewModel) {
     var note by rememberSaveable { mutableStateOf("") }
-    Column {
-        Group(stringResource(R.string.feedback_label), stringResource(if (state.email == null) R.string.feedback_no_email else R.string.feedback_with_email)) {
-            OutlinedTextField(
-                value = note,
-                onValueChange = { note = it.take(1000) },
-                placeholder = { Text(stringResource(R.string.feedback_placeholder)) },
-                minLines = 5,
-                modifier = Modifier.fillMaxWidth().padding(12.dp).semantics { contentDescription = L.s(R.string.feedback_label) },
+    var replying by rememberSaveable { mutableStateOf(false) }
+    var replyTo by rememberSaveable { mutableStateOf("") }
+    // Focus goes to the address when it's opened by a tap, not when the page comes back after a rotation.
+    var opened by remember { mutableStateOf(false) }
+    val noteFocus = remember { FocusRequester() }
+    val c = MaterialTheme.colorScheme
+    // An address is sent only when the field is open and filled; one that doesn't look like one holds Send back.
+    val reply = replyTo.trim().takeIf { state.email == null && replying && it.isNotEmpty() }
+    val replyOk = reply == null || looksLikeEmail(reply)
+    val count by animateColorAsState(if (note.length >= FEEDBACK_NEAR) c.tertiary else c.onSurfaceVariant, label = "count")
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Group(null) {
+            FeedbackFrom(
+                email = state.email,
+                replying = replying,
+                replyTo = replyTo,
+                focusOnOpen = opened,
+                onReplying = { open ->
+                    replying = open
+                    opened = open
+                    if (!open) replyTo = ""
+                },
+                onReplyTo = { replyTo = it },
+                onNext = { noteFocus.requestFocus() },
             )
+            AnimatedVisibility(
+                visible = state.email == null && replying,
+                enter = expandVertically(feedbackMotion()) + fadeIn(feedbackMotion()),
+                exit = shrinkVertically(feedbackMotion()) + fadeOut(feedbackMotion()),
+            ) {
+                Hint(stringResource(R.string.feedback_reply_to_hint), Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp))
+            }
+            RowDivider()
+            // The note is the card's body: no box of its own, and it scrolls inside past ten lines.
+            TextField(
+                value = note,
+                onValueChange = { note = it.take(FEEDBACK_MAX) },
+                placeholder = { Text(stringResource(R.string.feedback_placeholder)) },
+                minLines = 6,
+                maxLines = 10,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                ),
+                modifier = Modifier.fillMaxWidth().focusRequester(noteFocus).semantics { contentDescription = L.s(R.string.feedback_label) },
+            )
+            RowDivider()
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${note.length} / $FEEDBACK_MAX", style = MaterialTheme.typography.labelMedium, color = count, modifier = Modifier.weight(1f))
+                InkButton(
+                    stringResource(R.string.send),
+                    { account.sendFeedback(note, reply) { note = "" } },
+                    enabled = note.isNotBlank() && replyOk && !state.busy,
+                )
+            }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
-            InkButton(stringResource(R.string.send), { account.sendFeedback(note) { note = "" } }, enabled = note.isNotBlank() && !state.busy)
+        Group(null) {
+            Row(Modifier.padding(16.dp)) {
+                Icon(painterResource(R.drawable.ic_chat), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+                Column(Modifier.padding(start = 12.dp)) {
+                    Text(stringResource(R.string.feedback_wrong_title), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Hint(stringResource(R.string.feedback_wrong_hint), Modifier.padding(top = 2.dp))
+                }
+            }
         }
-        Hint(stringResource(R.string.feedback_wrong_answer), Modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp))
     }
+}
+
+/**
+ * Who the note is from: the account's email, or "Anonymous · no reply" with
+ * Add an email, which turns the row in place into a field for an address
+ * (and the button into Cancel).
+ */
+@Composable
+private fun FeedbackFrom(
+    email: String?,
+    replying: Boolean,
+    replyTo: String,
+    focusOnOpen: Boolean,
+    onReplying: (Boolean) -> Unit,
+    onReplyTo: (String) -> Unit,
+    onNext: () -> Unit,
+) {
+    val c = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(start = 16.dp, end = if (email == null) 4.dp else 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.feedback_from), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+        Spacer(Modifier.width(12.dp))
+        if (email != null) {
+            Text(email, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            return@Row
+        }
+        AnimatedContent(
+            targetState = replying,
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.CenterStart,
+            transitionSpec = {
+                // The new line rises in as the old one lifts away; the row's height follows.
+                val dir = if (targetState) 1 else -1
+                (fadeIn(feedbackMotion(delay = 60)) + slideInVertically(feedbackMotion()) { dir * it / 2 }) togetherWith
+                    (fadeOut(feedbackMotion()) + slideOutVertically(feedbackMotion()) { -dir * it / 2 }) using
+                    SizeTransform(clip = false) { _, _ -> feedbackMotion() }
+            },
+            label = "from",
+        ) { open ->
+            if (open) {
+                ReplyToField(replyTo, onReplyTo, focusOnOpen, onNext)
+            } else {
+                Text(stringResource(R.string.feedback_anonymous), style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        AnimatedContent(
+            targetState = replying,
+            transitionSpec = { fadeIn(feedbackMotion()) togetherWith fadeOut(feedbackMotion()) using SizeTransform(clip = false) { _, _ -> feedbackMotion() } },
+            contentAlignment = Alignment.CenterEnd,
+            label = "fromButton",
+        ) { open ->
+            TextButton(
+                onClick = { onReplying(!open) },
+                colors = if (open) ButtonDefaults.textButtonColors(contentColor = c.onSurfaceVariant) else ButtonDefaults.textButtonColors(),
+            ) {
+                Text(stringResource(if (open) R.string.cancel else R.string.feedback_add_email))
+            }
+        }
+    }
+}
+
+/** An address to reply to, in the From row: no box, the hint as its placeholder, red once it plainly isn't an address. */
+@Composable
+private fun ReplyToField(value: String, onChange: (String) -> Unit, focusOnOpen: Boolean, onNext: () -> Unit) {
+    val c = MaterialTheme.colorScheme
+    val focus = remember { FocusRequester() }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (focusOnOpen) focus.requestFocus() }
+    // Not while the first letters go in: only once there's an @, or the field's been left.
+    val wrong = value.isNotBlank() && !looksLikeEmail(value) && ('@' in value || !focused)
+    val description = stringResource(R.string.feedback_reply_to)
+    BasicTextField(
+        value = value,
+        onValueChange = { onChange(it.take(254)) },
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = if (wrong) c.error else c.onSurface),
+        cursorBrush = SolidColor(c.onSurface),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, autoCorrectEnabled = false, imeAction = ImeAction.Next),
+        keyboardActions = KeyboardActions(onNext = { onNext() }),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 14.dp)
+            .focusRequester(focus)
+            .onFocusChanged { focused = it.isFocused }
+            .semantics { contentDescription = description },
+        decorationBox = { inner ->
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) Text(description, style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant)
+                inner()
+            }
+        },
+    )
 }
 
 /**

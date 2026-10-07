@@ -699,9 +699,15 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         request("POST", "/me/feedback", body)
     }
 
-    /** Send feedback: a note about anything, emailed to the operator like "Is this wrong?". */
-    suspend fun feedback(note: String, appVersion: String) {
-        request("POST", "/me/feedback", JSONObject().put("kind", "other").put("note", note).put("platform", "android").put("appVersion", appVersion))
+    /**
+     * Send feedback: a note about anything, emailed to the operator like "Is
+     * this wrong?". [replyTo] is an address to answer, for an account without
+     * one; it isn't added to the account.
+     */
+    suspend fun feedback(note: String, appVersion: String, replyTo: String? = null) {
+        val body = JSONObject().put("kind", "other").put("note", note).put("platform", "android").put("appVersion", appVersion)
+        replyTo?.let { body.put("replyTo", it) }
+        request("POST", "/me/feedback", body)
     }
 
     /** Download my data: everything the account holds, as the account page gives it. */

@@ -1175,17 +1175,39 @@ export function About() {
   `;
 }
 
-/** A note to the operator about anything; a wrong answer is better sent from under the card, with the answer. */
+/** Longest note the API takes; the counter turns amber from `NOTE_WARN`. */
+const NOTE_MAX = 1000;
+const NOTE_WARN = 900;
+/** Loose on purpose: the server has the real check, this only keeps Send off for a half-typed address. */
+const looksLikeEmail = (s) => /^[^\s@,<>]+@[^\s@]+\.[a-z]{2,}$/i.test(s.trim());
+
+/**
+ * A note to the operator about anything, laid out like a message: who it's
+ * from, the note, then a counter and Send. An account without an email can
+ * open a field in the From line for an address to reply to; it goes with
+ * the note only and isn't added to the account. A wrong answer is better
+ * sent from under the card, with the answer.
+ */
 export function Feedback({ me }) {
   const [note, setNote] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [replyTo, setReplyTo] = useState('');
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
+  const replyRef = useRef(null);
+  // Focus the address once its field has slid in; not on first render.
+  useEffect(() => {
+    if (adding) replyRef.current?.focus({ preventScroll: true });
+  }, [adding]);
+  const reply = adding ? replyTo.trim() : '';
+  const badReply = reply !== '' && !looksLikeEmail(reply);
   const send = async (e) => {
     e.preventDefault();
     if (!note.trim()) return setMsg(t('Write something first.'));
+    if (badReply) return replyRef.current?.focus();
     setSending(true);
     try {
-      await api('/me/feedback', { method: 'POST', body: { kind: 'other', note: note.trim(), platform: 'web' } });
+      await api('/me/feedback', { method: 'POST', body: { kind: 'other', note: note.trim(), platform: 'web', ...(reply && { replyTo: reply }) } });
       setNote('');
       setMsg(t('Thanks. Your feedback was sent.'));
     } catch (err) {
@@ -1194,30 +1216,66 @@ export function Feedback({ me }) {
       setSending(false);
     }
   };
+  const toggle = () => {
+    if (adding) setReplyTo('');
+    setAdding(!adding);
+  };
   return html`
-    <form class="trips feedback" onSubmit=${send}>
-      <${Group}
-        title=${t('Ideas, problems, anything')}
-        id="feedback-label"
-        hint=${me.anonymous ? t('This sends your note. Add an email if you want a reply.') : t('This sends your note, with your email address so you can get a reply.')}
-      >
-        <div class="field">
-          <textarea
-            id="feedback-note"
-            rows="5"
-            maxlength="1000"
-            aria-labelledby="feedback-label"
-            placeholder=${t('A place you want to go, something that confused you…')}
-            value=${note}
-            onInput=${(e) => setNote(e.currentTarget.value)}
-          ></textarea>
+    <form class="feedback" onSubmit=${send}>
+      <div class="card compose">
+        <div class=${`compose-from${adding ? ' adding' : ''}`}>
+          <span class="compose-key">${t('From')}</span>
+          ${me.email
+            ? html`<span class="compose-who">${me.email}</span>`
+            : html`
+                <span class="compose-swap">
+                  <span class="compose-anon" aria-hidden=${adding}>${t('Anonymous · no reply')}</span>
+                  <input
+                    ref=${replyRef}
+                    class=${`compose-reply${badReply ? ' bad' : ''}`}
+                    type="email"
+                    autocomplete="email"
+                    inputmode="email"
+                    maxlength="254"
+                    placeholder=${t('Email to reply to')}
+                    aria-label=${t('Email to reply to')}
+                    aria-invalid=${badReply}
+                    disabled=${!adding}
+                    value=${replyTo}
+                    onInput=${(e) => setReplyTo(e.currentTarget.value)}
+                  />
+                </span>
+                <button type="button" class="link-btn compose-toggle" aria-expanded=${adding} onClick=${toggle}>
+                  <span key=${adding ? 'cancel' : 'add'}>${adding ? t('Cancel') : t('Add an email')}</span>
+                </button>
+              `}
         </div>
-      <//>
-      <div class="send-row">
-        ${msg && html`<p class="hint" role="status">${msg}</p>`}
-        <button type="submit" class="btn small" disabled=${sending || !note.trim()}>${t('Send')}</button>
+        ${!me.email && html`
+          <div class="compose-note" aria-hidden=${!adding}>
+            <p class="hint">${t('We’ll only use this to reply. It isn’t added to your account.')}</p>
+          </div>
+        `}
+        <textarea
+          id="feedback-note"
+          rows="6"
+          maxlength=${NOTE_MAX}
+          aria-label=${t('Ideas, problems, anything')}
+          placeholder=${t('Ideas, problems, anything: a place you want to go, something that confused you…')}
+          value=${note}
+          onInput=${(e) => setNote(e.currentTarget.value)}
+        ></textarea>
+        <div class="compose-foot">
+          <span class=${`compose-count${note.length >= NOTE_WARN ? ' near' : ''}`} aria-live=${note.length >= NOTE_WARN ? 'polite' : 'off'}>
+            ${`${note.length} / ${NOTE_MAX}`}
+          </span>
+          <button type="submit" class="btn small" disabled=${sending || !note.trim() || badReply}>${t('Send')}</button>
+        </div>
       </div>
-      <p class="hint group-hint">${t('Was an answer wrong? Press “Is this wrong?” under it instead, so we see what you saw.')}</p>
+      ${msg && html`<p class="hint compose-msg" role="status">${msg}</p>`}
+      <div class="card compose-wrong">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z" /><path d="M12 8.5v3M12 13.6v.1" /></svg>
+        <p><span class="row-title">${t('A wrong answer?')}</span><span class="hint">${t('Press “Is this wrong?” under it, so we see what you saw.')}</span></p>
+      </div>
     </form>
   `;
 }

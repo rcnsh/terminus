@@ -975,6 +975,22 @@ test('feedback: a wrong answer is kept with the account, emailed with the addres
   assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback').get().n, 0);
 });
 
+test('feedback: an account without an email can leave an address to reply to, without adding it', async () => {
+  const { env, email, db } = setup();
+  env.ALERT_EMAIL = 'ops@example.test';
+  const { token } = await (await call(env, '/auth/anon', { method: 'POST', body: {} })).json();
+  const post = (body) => call(env, '/me/feedback', { method: 'POST', token, body: { kind: 'other', note: 'Add Kent Vale', platform: 'android', ...body } });
+  assert.equal((await post({ replyTo: 'not an address' })).status, 400);
+  assert.equal((await post({ replyTo: 'x,blocked@example.com' })).status, 400, 'plain addresses only');
+  assert.equal((await post({ replyTo: ' Me@Example.com ' })).status, 201);
+  assert.match(email.sent.at(-1).text, /anonymous account \(reply to me@example\.com, not checked\)/);
+  assert.equal(db._db.prepare('SELECT reply_to FROM feedback').get().reply_to, 'me@example.com');
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM users WHERE email IS NOT NULL').get().n, 0, 'the account still has no email');
+  assert.equal((await post({ replyTo: '' })).status, 201, 'an empty field is no address');
+  assert.equal(db._db.prepare('SELECT count(*) AS n FROM feedback WHERE reply_to IS NULL').get().n, 1);
+  assert.deepEqual((await (await call(env, '/me/export', { token })).json()).feedback.map((f) => f.replyTo), ['me@example.com', null]);
+});
+
 test('feedback: validated, and capped at ten a day per account', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);

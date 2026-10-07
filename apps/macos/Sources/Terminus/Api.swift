@@ -652,8 +652,10 @@ struct Api {
     }
 
     /// Send feedback: a note about anything, emailed to the operator like "Is this wrong?".
-    func feedback(note: String) async throws {
+    /// `replyTo` is where to answer an account with no email; it isn't added to the account.
+    func feedback(note: String, replyTo: String? = nil) async throws {
         var body: [String: Any] = ["kind": "other", "note": note, "platform": "mac"]
+        if let replyTo { body["replyTo"] = replyTo }
         if let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String { body["appVersion"] = v }
         _ = try await send("POST", "/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
     }

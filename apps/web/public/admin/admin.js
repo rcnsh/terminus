@@ -203,7 +203,7 @@ function Dashboard({ s, note }) {
           ? fb.latest.map(
               (f) => html`
                 <li>
-                  <div class="meta">${`${when(f.created)} · ${f.email ?? 'no email'} · ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}`}</div>
+                  <div class="meta">${`${when(f.created)} · ${f.email ?? (f.replyTo ? `reply to ${f.replyTo} (not checked)` : 'no email')} · ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}`}</div>
                   <div class="note">${f.note || '(no note)'}</div>
                   <div class="meta">${`Answer: ${f.answer}`}</div>
                   ${f.context && html`<details><summary>The answer they saw</summary><pre>${JSON.stringify(f.context, null, 2)}</pre></details>`}
