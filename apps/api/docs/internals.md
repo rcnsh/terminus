@@ -132,10 +132,15 @@ request, so a client stuck in a loop must stop sending requests.
 
 What the bill depends on, and the guards against it:
 
-- Worker requests are what grows with use. Static files under `/assets/`
-  and `/vendor/` skip the Worker (`runWorkerFirst` in
-  `cloudflare.config.ts`; their headers are in `apps/web/public/_headers`,
-  checked against `withSecurityHeaders` by a test), so they're free.
+- Worker requests are what grows with use. Static files skip the Worker:
+  everything under `/assets/` and `/vendor/`, and every script and style
+  sheet (`*.js`, `*.css`), the favicons and the manifest anywhere else
+  (`runWorkerFirst` in `cloudflare.config.ts`). Their headers are in
+  `apps/web/public/_headers`, checked against `withSecurityHeaders` by a
+  test, which also checks that no page or route of the Worker matches.
+  So a page costs one Worker request, not one per module. `/vendor/`
+  folders carry their version and are kept by browsers for a year
+  (`immutable`); the fonts for a week; everything else is revalidated.
 - `limits.cpuMs` (5 s) stops a request that loops from running on.
 - The map's pieces come from the edge cache, so R2 is read once per piece
   per data centre.
