@@ -77,15 +77,19 @@ private struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        let title = model.menuTitle(at: model.clock)
+        // Resting, the moon, with the server's glance ("From 9:00") when it sends one.
+        let icon = model.resting ? "moon.zzz.fill" : "bus.fill"
         Group {
-            if model.resting {
-                Image(systemName: "moon.zzz.fill")
-            } else if let title = model.menuTitle(at: model.clock) {
-                Label(title, systemImage: "bus.fill").labelStyle(.titleAndIcon)
+            if let title {
+                Label(title, systemImage: icon).labelStyle(.titleAndIcon)
             } else {
-                Image(systemName: "bus.fill")
+                Image(systemName: icon)
             }
         }
+        // The name first, then the glance with its "~" said as a word.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title.map { L("terminus: %@", spokenTimes($0)) } ?? "terminus")
         // TERMINUS_OPEN=setup, devices or (debug) popover opens that window at launch, for
         // testing when the menu bar item is hidden behind the notch.
         .task {

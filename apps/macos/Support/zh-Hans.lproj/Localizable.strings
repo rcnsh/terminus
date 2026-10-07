@@ -7,7 +7,6 @@
 "%@ min walk" = "步行 %@ 分钟";
 "%@ stop" = "%@ 站";
 "%@ removed from today" = "已从今天移除 %@";
-"%@m" = "%@ 分";
 ", %@ min walk" = "，步行 %@ 分钟";
 "1 class imported." = "已导入 1 节课。";
 "400 m in about 4 min. A brisk pace." = "400 米约 4 分钟。步伐轻快。";
@@ -363,3 +362,10 @@
 "Add an email to report a wrong answer, so we can reply to you." = "添加邮箱后才能报告错误的答案，方便我们回复你。";
 "Add an email to send feedback" = "添加邮箱后才能发送反馈";
 "So we can reply to you. Your setup stays as it is." = "这样我们才能回复你。你的设置会保持不变。";
+
+/* Accessibility: spoken to VoiceOver */
+"about" = "约";
+"Leaves in %@ min" = "%@ 分钟后开";
+"Leaves in under a minute" = "不到 1 分钟后开";
+"in under a minute" = "不到 1 分钟后";
+"terminus: %@" = "terminus：%@";

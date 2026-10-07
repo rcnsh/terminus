@@ -148,13 +148,15 @@ func theNextClassComesWithTheCard(name: String) throws {
 }
 
 @Test func aTimetableGuessInNearbyIsNeverShownAsLive() {
-    #expect(FlowPills.eta(etaS: 360, quality: "live") == "6m")
-    #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6m")
+    #expect(FlowPills.eta(etaS: 360, quality: "live") == "6 min")
+    #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6 min")
     #expect(FlowPills.eta(etaS: 20, quality: "live") == "now")
     #expect(FlowPills.eta(etaS: nil, quality: "ended") == "ended")
     let row = BoardRow(svc: "D2", etaS: 240, quality: "live", later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live"), .init(etaS: 2100, quality: "live")])
     // At most two after the next one.
-    #expect(FlowPills.later(row) == ["~15m", "25m"])
+    #expect(FlowPills.later(row) == ["~15 min", "25 min"])
+    // Spoken, the "~" is a word: VoiceOver doesn't read it.
+    #expect(FlowPills.spoken(row) == "D2: 4 min, about 15 min, 25 min")
 }
 
 @Test func theTwoWaysOfNotGoingShareOneMenu() {
