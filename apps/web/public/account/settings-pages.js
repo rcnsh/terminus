@@ -2,7 +2,7 @@
 // out and moves between them). Each saves as it changes, through the shared
 // profile (profile.js).
 
-import { Rich, html, refocusAfterRemove, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
+import { Rich, html, noteRow, refocusAfterRemove, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, clockOpts, locale, spaced, t } from './dom.js';
 import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
@@ -788,10 +788,11 @@ export function Devices({ me }) {
                 class="remove"
                 aria-label=${t('Remove {0}', d.name ?? t('Device'))}
                 onClick=${async (e) => {
-                  const button = e.currentTarget;
+                  // Noted before the wait: by the time the list is back, the row has gone.
+                  const refocus = noteRow(e.currentTarget);
                   await api(`/me/devices/${d.id}`, { method: 'DELETE' });
                   await load();
-                  refocusAfterRemove(button, document.querySelector('.add-device'));
+                  refocus(() => document.querySelector('.add-device'));
                 }}
               >${t('Remove')}</button>
             </li>`,
@@ -1098,12 +1099,13 @@ function Keys() {
                 class="remove"
                 aria-label=${t('Revoke {0}', k.name)}
                 onClick=${async (e) => {
-                  const button = e.currentTarget;
+                  // Noted before the wait: by the time the list is back, the row has gone.
+                  const refocus = noteRow(e.currentTarget);
                   if (!confirm(t('Revoke "{0}"? Anything using it stops working straight away.', k.name))) return;
                   await api(`/me/keys/${k.id}`, { method: 'DELETE' });
                   setMade(null);
                   await load();
-                  refocusAfterRemove(button, document.querySelector('.keys-name'));
+                  refocus(() => document.querySelector('.keys-name'));
                 }}
               >${t('Revoke')}</button>
             </li>`,

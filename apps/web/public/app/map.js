@@ -74,7 +74,7 @@ function openSheet(what) {
   if (!what && was) {
     const back = opener;
     opener = null;
-    focusSoon(() => (back?.isConnected ? back : (document.querySelector('.map-stops') ?? map?.getCanvas())));
+    focusSoon(() => (back?.isConnected ? back : (document.getElementById('map-stops') ?? map?.getCanvas())));
   }
 }
 
@@ -706,29 +706,42 @@ function Pills() {
 }
 
 /**
- * The map's stops as a list, for a keyboard or a screen reader: picking one
- * opens its sheet, as tapping it on the map does. Seen only while it has the
- * focus; the Buses tab has every stop and bus in words too.
+ * The map's stops as a list, for a keyboard or a screen reader: a stop picked
+ * and then Open (or Enter) opens its sheet, as tapping it on the map does.
+ * Not on picking alone: on Windows and Linux the arrow keys pick as they
+ * move through the list. Seen only while it has the focus; the Buses tab has
+ * every stop and bus in words too.
  */
 function StopList() {
   const campus = useStore(campusData);
+  const [code, setCode] = useState('');
   const stops = useMemo(() => [...(campus?.stops ?? [])].sort((a, b) => a.name.localeCompare(b.name)), [campus]);
   if (!campus) return null;
+  const open = () => code && showStop(code);
   return html`
-    <label class="sr-only" for="map-stops">${t('Stops on this map')}</label>
-    <select
-      id="map-stops"
+    <form
       class="map-stops"
-      value=""
-      onChange=${(e) => {
-        const code = e.currentTarget.value;
-        e.currentTarget.value = '';
-        if (code) showStop(code);
+      onSubmit=${(e) => {
+        e.preventDefault();
+        open();
       }}
     >
-      <option value="">${t('Open a stop…')}</option>
-      ${stops.map((x) => html`<option value=${x.code} key=${x.code}>${x.name}</option>`)}
-    </select>
+      <label class="sr-only" for="map-stops">${t('Stops on this map')}</label>
+      <select
+        id="map-stops"
+        value=${code}
+        onChange=${(e) => setCode(e.currentTarget.value)}
+        onKeyDown=${(e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          open();
+        }}
+      >
+        <option value="">${t('Open a stop…')}</option>
+        ${stops.map((x) => html`<option value=${x.code} key=${x.code}>${x.name}</option>`)}
+      </select>
+      <button type="submit" class="btn">${t('Open')}</button>
+    </form>
     <p class="sr-only">${t('The Buses tab lists every stop and its buses in words.')}</p>
   `;
 }

@@ -212,10 +212,22 @@ function onHash() {
   if (JSON.stringify(next) === JSON.stringify(route.get())) return;
   route.set(next);
   window.scrollTo(0, 0);
-  // What was focused (a row, Back) has gone with the page: its heading takes it.
-  if (location.hash.startsWith('#buses') && document.activeElement !== document.body) focusSoon(() => document.querySelector('#tab-buses .bt-head'));
+  // What was focused (a row, Back) has gone with the page: its heading takes
+  // it. On the home, the heading of the page it's back on (Home puts the
+  // pager there before this runs), without scrolling the pager to it.
+  if (location.hash.startsWith('#buses') && document.activeElement !== document.body) focusSoon(() => headOnScreen(next), { preventScroll: true });
   if (next.kind === 'stop') showBoard(next.code);
   else if (next.kind === 'line') loadLine(next.svc, next.stop);
+}
+
+/** The heading of what the tab shows: the home's page on screen, else the stop's or line's. */
+function headOnScreen(r) {
+  if (r.kind === 'home') {
+    const pages = document.querySelectorAll('#tab-buses .bt-pages > .bt-page');
+    const page = pages[Math.min(active.get(), pages.length - 1)];
+    if (page) return page.querySelector('.bt-head');
+  }
+  return document.querySelector('#tab-buses .bt-head');
 }
 
 /** A stop picked: its page on the home if it has one, else its own. */

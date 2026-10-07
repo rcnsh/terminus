@@ -50,11 +50,18 @@ function Countdown({ at }) {
 
 /**
  * Says `text` on the page's status line (ui.js announce) whenever it
- * changes: the card's parts tick and redraw, but only this is heard.
+ * changes: the card's parts tick and redraw, but only this is heard. Not
+ * while it's out of sight: on a tab that's hidden (the app keeps them drawn)
+ * or in a browser tab in the background.
  */
 export function Say({ text }) {
-  useEffect(() => announce(text), [text]);
-  return null;
+  const mark = useRef(null);
+  useEffect(() => {
+    if (document.hidden || mark.current?.parentElement?.closest('[hidden]')) return;
+    announce(text);
+  }, [text]);
+  // Takes no room: only there to say where on the page it is.
+  return html`<span hidden ref=${mark}></span>`;
 }
 
 /**

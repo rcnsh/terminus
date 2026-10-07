@@ -149,27 +149,39 @@ export function announce(text, { again = false } = {}) {
  * lost to the top of the page.
  */
 export function refocusAfterRemove(button, fallback) {
+  noteRow(button)(fallback);
+}
+
+/**
+ * refocusAfterRemove for a Remove that waits on the server first: notes where
+ * the row is now, while it's still on the page, and returns the function to
+ * call once the list has been loaded again (with its `fallback`).
+ */
+export function noteRow(button) {
   const row = button.closest('li, details');
   const list = row?.parentElement;
   const rows = () => (list?.isConnected ? [...list.children].filter((c) => c.matches('li, details')) : []);
   const at = rows().indexOf(row);
-  focusSoon(() => {
-    // Not yet redrawn: the row is still there.
-    if (row?.isConnected) return null;
-    const left = rows();
-    const next = left[Math.min(at, left.length - 1)];
-    return next?.querySelector('summary, button, a, select, input') ?? fallback;
-  });
+  return (fallback) =>
+    focusSoon(() => {
+      // Not yet redrawn: the row is still there.
+      if (row?.isConnected) return null;
+      const left = rows();
+      const next = left[Math.min(at, left.length - 1)];
+      return next?.querySelector('summary, button, a, select, input') ?? (typeof fallback === 'function' ? fallback() : fallback);
+    });
 }
 
 /**
  * Focuses `el` once it's on the page, after the redraw under way: `el` is a
  * function returning the element, asked again until it is there (or 10 tries).
+ * `preventScroll`: leave every scroller where it is (a pager the redraw has
+ * just put back on its page would otherwise jump to the focused one).
  */
-export function focusSoon(el, tries = 10) {
+export function focusSoon(el, { preventScroll = false } = {}, tries = 10) {
   requestAnimationFrame(() => {
     const node = typeof el === 'function' ? el() : el;
-    if (node?.isConnected && node.getClientRects().length) node.focus({ preventScroll: false });
-    else if (tries > 1) focusSoon(el, tries - 1);
+    if (node?.isConnected && node.getClientRects().length) node.focus({ preventScroll });
+    else if (tries > 1) focusSoon(el, { preventScroll }, tries - 1);
   });
 }
