@@ -14,7 +14,7 @@
 import { Icon, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { api, clock, hour12, inkOn, send, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, isStale, signal } from '/account/preview.js';
-import { Celestial, Horizon, phaseAt, useNowSky } from '/account/sky.js';
+import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
@@ -772,8 +772,7 @@ function CardArea() {
   const bar = useStore(undo);
   // Undo once: in the removed entry's row while it's there, not on the card as well.
   const a = c.a?.card && bar?.undo ? { ...c.a, card: { ...c.a.card, actions: c.a.card.actions.filter((x) => !(x.id === 'reset' && x.trip === bar.it.key)) } } : c.a;
-  const clockNow = new Date();
-  useNowSky(phaseAt(clockNow.getHours() * 60 + clockNow.getMinutes()));
+  useNowSky(useSkyPhase());
   const body = a
     ? html`<${Card} a=${a} sky onAnswer=${answered} onChoice=${refresh} onPlace=${(key) => choose({ kind: 'place', key })} />`
     : c.offline
