@@ -176,7 +176,8 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
 type Outcome = 'sent' | 'failed' | 'gone' | 'skip';
 
 async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: number): Promise<Outcome> {
-  if (!msg.web) return 'skip';
+  // Without a usable VAPID key no browser can be sent to: nobody reached, not a failure to retry.
+  if (!msg.web || !webPushEnabled(env)) return 'skip';
   let sub: WebSubscription | null = null;
   try {
     sub = parseSubscription(JSON.parse(pushToken.slice(WEB_PREFIX.length)));

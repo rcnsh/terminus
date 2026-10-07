@@ -149,3 +149,13 @@ test('a bad subscription is refused, and without a VAPID key web push says it is
   assert.equal((await call('/me/push/key', { cookie })).status, 503);
   assert.equal((await call('/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } })).status, 503);
 });
+
+test('a kept subscription is skipped, not failed, once the VAPID key is gone', async () => {
+  const { env, call, cookie, pushes, userId, pushToken } = await setup();
+  await call('/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } });
+  delete env.VAPID_PRIVATE_KEY;
+  // Nobody could be reached, which isn't a failure to try again at every wake; the subscription stays.
+  assert.deepEqual(await nudgeUser(env, userId, { phase: 'due', urgent: true }, Date.now()), { sent: 0, failed: 0 });
+  assert.equal(pushes.length, 0);
+  assert.match(await pushToken(), /^web:/);
+});
