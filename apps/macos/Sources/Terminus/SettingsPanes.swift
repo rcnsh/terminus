@@ -108,7 +108,7 @@ struct TimetablePane: View {
                     HStack {
                         Button(setup.importing ? L("Importing…") : L("Import")) { Task { await setup.importTimetable(link) } }
                             .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || setup.importing)
-                        Hint(L("In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester."))
+                        Hint(L("In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here. Re-import each semester."))
                     }
                     if let r = setup.imported {
                         Text(r.summary)
@@ -179,7 +179,7 @@ struct TimetablePane: View {
     /// " · wk 1–6" for a class that runs only some weeks.
     private func weeksText(_ weeks: [Int]?) -> String {
         guard let w = weeks, w.count < 13, let a = w.first, let b = w.last else { return "" }
-        return " · " + L("wk %@–%@", "\(a)", "\(b)")
+        return " · " + L("weeks %@–%@", "\(a)", "\(b)")
     }
 }
 

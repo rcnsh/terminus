@@ -840,7 +840,7 @@ final class AppModel {
             return false
         } catch is DecodingError {
             // Not the network: the API sent something this version can't read.
-            error = update != nil ? L("Update terminus to continue") : L("Unexpected response from terminus")
+            error = update != nil ? L("Update terminus to continue") : L("terminus sent something this version can't read.")
             return false
         } catch {
             // kick() restarts the loop and cancels a refresh in flight; that

@@ -335,23 +335,25 @@ struct FlowPills: View {
     /// The server's "4 min"; worded here only for an older server's row.
     nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? eta(etaS: r.etaS, quality: r.quality) }
 
-    /// An older server's row: "4m", "~6m" for a timetable guess, "now", or "ended".
-    nonisolated static func eta(etaS: Int?, quality: String) -> String {
+    /// An older server's row: "4m", "~6m" for a timetable guess, "now", or
+    /// "ended". Spoken, "4 min": VoiceOver reads "4m" as metres.
+    nonisolated static func eta(etaS: Int?, quality: String, spoken: Bool = false) -> String {
         guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }
         if s < 45 { return L("now") }
-        let m = L("%@m", "\((s + 30) / 60)")
+        let n = "\((s + 30) / 60)"
+        let m = spoken ? L("%@ min", n) : L("%@m", n)
         return quality == "scheduled" ? L("~%@", m) : m
     }
 
-    nonisolated static func later(_ r: BoardRow) -> [String] {
-        (r.later ?? []).filter { $0.etaS != nil || $0.eta != nil }.prefix(laterShown).map { $0.eta ?? eta(etaS: $0.etaS, quality: $0.quality) }
+    nonisolated static func later(_ r: BoardRow, spoken: Bool = false) -> [String] {
+        (r.later ?? []).filter { $0.etaS != nil || $0.eta != nil }.prefix(laterShown).map { $0.eta ?? eta(etaS: $0.etaS, quality: $0.quality, spoken: spoken) }
     }
 
-    /// "D2, public bus, fare applies: 4m, then 14m".
+    /// "D2, public bus, fare applies: 4 min, 14 min", with Chinese punctuation in Chinese.
     nonisolated static func spoken(_ r: BoardRow) -> String {
-        let who = r.paid == true ? "\(r.svc), \(L("Public bus, fare applies"))" : r.svc
-        let times = [eta(r)] + later(r)
-        return "\(who): \(times.joined(separator: ", "))"
+        let who = r.paid == true ? r.svc + L(", ") + L("Public bus, fare applies") : r.svc
+        let times = [r.eta ?? eta(etaS: r.etaS, quality: r.quality, spoken: true)] + later(r, spoken: true)
+        return L("%@: %@", who, times.joined(separator: L(", ")))
     }
 }
 
