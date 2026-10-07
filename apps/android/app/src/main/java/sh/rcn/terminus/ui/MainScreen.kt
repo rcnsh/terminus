@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -283,8 +286,10 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                                 opened = true
                                 vm.clearReportResult()
                             }
-                            // A taller target than the words, for a thumb.
-                            .padding(vertical = 10.dp),
+                            // A target 48 dp tall, though the words are small, for a thumb.
+                            .heightIn(min = 48.dp)
+                            .wrapContentHeight()
+                            .padding(horizontal = 4.dp),
                     )
                     if (opened && !signedIn) {
                         // The server takes reports only from an account with an email.
@@ -467,7 +472,8 @@ private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onR
             Icon(
                 painterResource(R.drawable.ic_close),
                 contentDescription = remove,
-                modifier = Modifier.size(18.dp).clickable(onClickLabel = remove, role = Role.Button, onClick = onRemove),
+                // A bigger target than the 18 dp X, as tall as the chip.
+                modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClickLabel = remove, role = Role.Button, onClick = onRemove).padding(7.dp),
             )
         },
         modifier = Modifier
