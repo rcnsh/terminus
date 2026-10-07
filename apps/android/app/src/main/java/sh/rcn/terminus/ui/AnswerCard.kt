@@ -1,60 +1,66 @@
 package sh.rcn.terminus.ui
 
-import sh.rcn.terminus.Suggestion
+import android.content.Intent
 import androidx.compose.foundation.background
-import sh.rcn.terminus.Upcoming
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import sh.rcn.terminus.CardAction
 import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Ride
+import sh.rcn.terminus.Suggestion
+import sh.rcn.terminus.Upcoming
 import sh.rcn.terminus.widget.clock
-import androidx.compose.ui.res.stringResource
 
 @Composable
 internal fun AnswerCard(
@@ -152,7 +158,7 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
         val ctx = LocalContext.current
         Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, w.mapsUri())) } },
+                onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, w.mapsUri())) } },
                 modifier = Modifier.weight(1f).height(48.dp),
             ) { Text(stringResource(R.string.directions_to, w.name), maxLines = 1) }
             if (skips.isNotEmpty()) SkipMenu(skips, onAction, busy, label = null)
@@ -175,7 +181,7 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
         }
     }
     answer.card?.suggestion?.let { s ->
-        androidx.compose.material3.OutlinedCard(Modifier.padding(top = 14.dp)) {
+        OutlinedCard(Modifier.padding(top = 14.dp)) {
             Column(Modifier.padding(12.dp)) {
                 Text(s.text, style = MaterialTheme.typography.bodyMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
@@ -425,7 +431,7 @@ internal fun timingColor(status: String?) = when (status) {
 
 /** Words in a colour of their own (a notice, a warning); in the sky, on its chip, so they read over any hour's colours. */
 @Composable
-private fun ToneText(text: String, color: Color, style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.LocalTextStyle.current, fontWeight: FontWeight? = null) {
+private fun ToneText(text: String, color: Color, style: TextStyle = LocalTextStyle.current, fontWeight: FontWeight? = null) {
     val chip = LocalSkyTones.current?.chip
     Text(
         text,
@@ -437,28 +443,28 @@ private fun ToneText(text: String, color: Color, style: androidx.compose.ui.text
 }
 
 @Composable
-internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) {
+internal fun Pill(text: String, color: Color) {
     Text(
         text,
         style = MaterialTheme.typography.labelMedium,
         color = color,
         modifier = Modifier
             // In the sky, on its chip, so the colour reads over any hour's (SkyTones).
-            .background(LocalSkyTones.current?.chip ?: color.copy(alpha = 0.12f), androidx.compose.foundation.shape.RoundedCornerShape(50))
+            .background(LocalSkyTones.current?.chip ?: color.copy(alpha = 0.12f), RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }
 
 /** On the bus: a bar from boarding to getting off, and "Next: Opp NUSS · 3 stops to go". */
 @Composable
-private fun RideProgress(ride: sh.rcn.terminus.Ride) {
+private fun RideProgress(ride: Ride) {
     val now by produceState(System.currentTimeMillis(), ride) {
         while (value < ride.arriveMs) {
             delay(5_000)
             value = System.currentTimeMillis()
         }
     }
-    androidx.compose.material3.LinearProgressIndicator(
+    LinearProgressIndicator(
         progress = { ride.progress(now) },
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
     )

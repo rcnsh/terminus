@@ -53,6 +53,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -90,17 +91,17 @@ import org.maplibre.compose.expressions.value.LineCap
 import org.maplibre.compose.expressions.value.LineJoin
 import org.maplibre.compose.expressions.value.SymbolAnchor
 import org.maplibre.compose.interaction.ClickResult
-import org.maplibre.compose.layers.FeaturesClickHandler
 import org.maplibre.compose.interaction.MapInteractions
 import org.maplibre.compose.layers.CircleLayer
+import org.maplibre.compose.layers.FeaturesClickHandler
 import org.maplibre.compose.layers.LineLayer
 import org.maplibre.compose.layers.SymbolLayer
 import org.maplibre.compose.map.AndroidRenderMode
 import org.maplibre.compose.map.CameraConstraints
 import org.maplibre.compose.map.MapUiOptions
 import org.maplibre.compose.map.MaplibreMap
-import org.maplibre.compose.map.renderMode
 import org.maplibre.compose.map.rememberMapState
+import org.maplibre.compose.map.renderMode
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.overlay.include
 import org.maplibre.compose.sources.GeoJsonData
@@ -110,20 +111,27 @@ import org.maplibre.compose.util.DpPadding
 import org.maplibre.spatialk.geojson.BoundingBox
 import org.maplibre.spatialk.geojson.Position
 import sh.rcn.terminus.CampusMap
-import sh.rcn.terminus.Slides
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LiveBus
+import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapGeoJson
 import sh.rcn.terminus.MapStop
 import sh.rcn.terminus.R
-import androidx.compose.ui.graphics.luminance
+import sh.rcn.terminus.Slides
+import kotlin.math.abs
 
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts), with room to spare. */
 private val PAN_LIMIT = BoundingBox(west = 103.735, south = 1.26, east = 103.85, north = 1.352)
 /** Further than this from campus (in degrees, about 3 km), the map opens on campus, not on you. */
 private const val NEAR_CAMPUS_DEG = 0.027
 
+/** Room round the campus's core when the map frames it: the pills are along the top. */
+private val CORE_PADDING = DpPadding(left = 24.dp, top = 96.dp, right = 24.dp, bottom = 24.dp)
+
 private fun Long.color() = Color(this.toInt())
+
+/** West, south, east, north (MapData's bounds) as a box for the camera. */
+private fun box(b: DoubleArray) = BoundingBox(west = b[0], south = b[1], east = b[2], north = b[3])
 
 /**
  * The Map tab: the campus's streets, every service's line in its colour,
@@ -142,35 +150,26 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     // Live buses every 5 s while a pill is on and the app is in front (the API caches 5 s).
     LaunchedEffect(ui.selected) {
         if (ui.selected == null) return@LaunchedEffect
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) {
-                map.refreshBuses()
-                delay(5_000)
-            }
-        }
+        lifecycle.every(5_000) { map.refreshBuses() }
     }
     val openStop = (ui.sheet as? MapSheet.Stop)?.code
     // The open stop's arrivals every 15 s (cached 15 s).
     LaunchedEffect(openStop) {
         if (openStop == null) return@LaunchedEffect
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) {
-                map.refreshBoard()
-                delay(15_000)
-            }
-        }
+        lifecycle.every(15_000) { map.refreshBoard() }
     }
     // Your dot, every 20 s, only with location already allowed.
-    LaunchedEffect(Unit) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) {
-                map.locate()
-                delay(20_000)
-            }
-        }
-    }
+    LaunchedEffect(Unit) { lifecycle.every(20_000) { map.locate() } }
     BackHandler(enabled = ui.sheet != null) { map.closeSheet() }
     MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places))
+}
+
+/** [block], then again every [ms], while the app is in front. */
+private suspend fun Lifecycle.every(ms: Long, block: suspend () -> Unit) = repeatOnLifecycle(Lifecycle.State.RESUMED) {
+    while (true) {
+        block()
+        delay(ms)
+    }
 }
 
 /** What the map's taps do. */
@@ -418,11 +417,10 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         framed = true
         // Opened on a stop from Nearby: that's the first view (below).
         if (ui.focus != null) return@LaunchedEffect
-        val core = campus.coreBounds(ui.core)
-        state.fitCameraToBounds(BoundingBox(west = core[0], south = core[1], east = core[2], north = core[3]), fitPadding = DpPadding(left = 24.dp, top = 96.dp, right = 24.dp, bottom = 24.dp))
-        val at = sh.rcn.terminus.Locator.lastKnown(ctx) ?: return@LaunchedEffect
+        state.fitCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING)
+        val at = Locator.lastKnown(ctx) ?: return@LaunchedEffect
         val near = campus.stops.minByOrNull { (it.lat - at.latitude) * (it.lat - at.latitude) + (it.lon - at.longitude) * (it.lon - at.longitude) } ?: return@LaunchedEffect
-        if (kotlin.math.abs(near.lat - at.latitude) < NEAR_CAMPUS_DEG && kotlin.math.abs(near.lon - at.longitude) < NEAR_CAMPUS_DEG) {
+        if (abs(near.lat - at.latitude) < NEAR_CAMPUS_DEG && abs(near.lon - at.longitude) < NEAR_CAMPUS_DEG) {
             state.setCameraPosition(CameraPosition(target = Position(longitude = near.lon, latitude = near.lat), zoom = 17.0))
         }
     }
@@ -436,8 +434,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
         if (recentre == 0) return@LaunchedEffect
-        val core = campus.coreBounds(ui.core)
-        state.animateCameraToBounds(BoundingBox(west = core[0], south = core[1], east = core[2], north = core[3]), fitPadding = DpPadding(left = 24.dp, top = 96.dp, right = 24.dp, bottom = 24.dp), animation = CameraAnimation.Ease())
+        state.animateCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING, animation = CameraAnimation.Ease())
     }
     // A pill: its whole line in view, when it's chosen (not again on coming back to the tab).
     var framedLine by rememberSaveable { mutableStateOf<String?>(null) }
@@ -445,8 +442,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         if (selected == framedLine) return@LaunchedEffect
         framedLine = selected
         val r = selected?.let { campus.routes[it] } ?: return@LaunchedEffect
-        val b = r.bounds()
-        state.animateCameraToBounds(BoundingBox(west = b[0], south = b[1], east = b[2], north = b[3]), fitPadding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp), animation = CameraAnimation.Ease())
+        state.animateCameraToBounds(box(r.bounds()), fitPadding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp), animation = CameraAnimation.Ease())
     }
 
     MaplibreMap(

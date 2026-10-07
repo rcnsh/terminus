@@ -3,7 +3,6 @@ package sh.rcn.terminus.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -118,16 +117,7 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
                 if (Locator.hasForeground(ctx)) {
                     TextButton(onClick = {
                         locating = L.s(R.string.finding_stop)
-                        scope.launch {
-                            val loc = Locator.lastKnown(ctx, maxAgeMs = 120_000) ?: Locator.current(ctx)
-                            val near = loc?.let { l -> nearestStop(campus.stops, l.latitude, l.longitude) }
-                            if (near == null) {
-                                locating = L.s(R.string.no_location)
-                            } else {
-                                account.edit { it.setHomeStops(listOf(near.code) + stops.filter { s -> s != near.code }) }
-                                locating = L.s(R.string.picked_stop, near.name)
-                            }
-                        }
+                        scope.launch { locating = pickNearestHome(ctx, campus, stops, account) }
                     }) { Text(stringResource(R.string.pick_nearest)) }
                 }
                 locating?.let { Hint(it, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) }

@@ -1,25 +1,13 @@
 package sh.rcn.terminus.ui
 
 import android.content.Intent
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.unit.Dp
-import androidx.compose.foundation.layout.PaddingValues
 import android.graphics.Bitmap
-import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.rememberTransition
@@ -33,22 +21,25 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -56,12 +47,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,18 +66,28 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.set
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,32 +95,25 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.Campus
 import sh.rcn.terminus.CardStyle
+import sh.rcn.terminus.Clock
 import sh.rcn.terminus.Destination
-import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Device
+import sh.rcn.terminus.L
+import sh.rcn.terminus.Lang
+import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.ProfileDoc
+import sh.rcn.terminus.R
 import sh.rcn.terminus.Theme
 import sh.rcn.terminus.Trip
 import sh.rcn.terminus.WEEKDAYS
 import sh.rcn.terminus.dayShort
-import sh.rcn.terminus.hhmm
-import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
-import androidx.compose.ui.res.stringResource
-import sh.rcn.terminus.R
-import sh.rcn.terminus.Lang
-import sh.rcn.terminus.Clock
-import sh.rcn.terminus.L
 import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.Role
 
 /** Settings' pages, in the order the list shows them. */
 internal enum class SettingsPage(val title: Int) {
@@ -235,13 +230,7 @@ internal fun SettingsScreen(
                 ) {
                     // The title in a slim band of the list's sky; the page itself plain.
                     SkyBand(skyPhase(), if (state.message != null) 0.dp else top) {
-                        TabHeader {
-                            // The arrow sits in the margin, so the title lines up with the list's.
-                            IconButton(onClick = { open = null }, modifier = Modifier.offset(x = (-12).dp)) {
-                                Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
-                            }
-                            Text(stringResource(page.title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.offset(x = (-12).dp))
-                        }
+                        BackHeader(stringResource(page.title)) { open = null }
                     }
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                         SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
@@ -295,20 +284,27 @@ private fun AccountTile(state: AccountState, ui: UiState, onOpen: (SettingsPage)
         Row(verticalAlignment = Alignment.CenterVertically) {
             val email = state.email
             if (email != null) {
-                Box(Modifier.size(44.dp).background(c.primary, CircleShape), contentAlignment = Alignment.Center) {
-                    Text(email.take(1).uppercase(), color = c.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                }
+                Initial(email, 44.dp, 18.sp)
             } else {
                 BrandMark(Modifier.size(44.dp))
             }
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(email ?: stringResource(R.string.not_signed_in), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                summary(SettingsPage.Devices, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips)?.let {
+                summary(SettingsPage.Devices, state, ui)?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = muted)
         }
+    }
+}
+
+/** The email's first letter on a disc in the accent, for the account. */
+@Composable
+private fun Initial(email: String, size: Dp, fontSize: TextUnit) {
+    val c = MaterialTheme.colorScheme
+    Box(Modifier.size(size).background(c.primary, CircleShape), contentAlignment = Alignment.Center) {
+        Text(email.take(1).uppercase(), color = c.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = fontSize)
     }
 }
 
@@ -325,7 +321,7 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
     ) {
         Label(stringResource(R.string.heading_your_day), Modifier.padding(horizontal = 14.dp).semantics { heading() })
         val h12 = hour12(LocalContext.current)
-        val time = { m: Int -> if (h12) hhmm12(m) else hhmm(m) }
+        val time = { m: Int -> minuteClock(m, h12) }
         val home = profile?.homeStops?.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
         val classes = profile?.let { it.trips.size + it.manual.size }
         DayRoute(
@@ -333,7 +329,7 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
                 DayStop(stringResource(R.string.home_stop), home ?: stringResource(R.string.choose_your_stop), home == null && profile != null, SettingsPage.Trips),
                 DayStop(
                     stringResource(R.string.timetable),
-                    if (classes == 0 && !state.needsReimport) stringResource(R.string.import_from_nusmods) else summary(SettingsPage.Timetable, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips).orEmpty(),
+                    if (classes == 0 && !state.needsReimport) stringResource(R.string.import_from_nusmods) else summary(SettingsPage.Timetable, state, ui).orEmpty(),
                     classes == 0 || state.needsReimport,
                     SettingsPage.Timetable,
                 ),
@@ -363,7 +359,7 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
             val said = when (page) {
                 SettingsPage.Feedback -> stringResource(R.string.feedback_short)
                 SettingsPage.Language, SettingsPage.Appearance -> displaySummary(page, state)
-                else -> summary(page, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips)
+                else -> summary(page, state, ui)
             }
             val off = page == SettingsPage.Notifications && !ui.leaveAlerts && !ui.liveUpdates && !ui.detectTrips
             said?.let {
@@ -429,34 +425,39 @@ private fun DayRoute(stops: List<DayStop>, onOpen: (SettingsPage) -> Unit) {
 
 /** What's set on a page, in a line: the same words the list had. */
 @Composable
-private fun summary(page: SettingsPage, state: AccountState, leaveAlerts: Boolean, liveUpdates: Boolean, detectTrips: Boolean): String? {
+private fun summary(page: SettingsPage, state: AccountState, ui: UiState): String? {
     val profile = state.profile
     return when (page) {
         SettingsPage.Trips -> profile?.let {
             val home = it.homeStops.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
             listOf(home ?: stringResource(R.string.no_home_stop), stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))).joinToString(" · ")
         }
-        SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let {
-            when (val n = it.trips.size + it.manual.size) {
-                0 -> stringResource(R.string.no_classes_yet)
-                1 -> stringResource(R.string.one_class)
-                else -> stringResource(R.string.n_classes, n)
-            }
-        }
+        SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let { classCount(it.trips.size + it.manual.size) }
         SettingsPage.Favourites -> profile?.let { p -> p.places.joinToString(", ") { it.label }.ifEmpty { stringResource(R.string.none_yet) } }
         SettingsPage.Notifications -> listOfNotNull(
-            if (leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
-            if (liveUpdates) stringResource(R.string.short_live) else null,
-            if (detectTrips) stringResource(R.string.short_detect) else null,
+            if (ui.leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
+            if (ui.liveUpdates) stringResource(R.string.short_live) else null,
+            if (ui.detectTrips) stringResource(R.string.short_detect) else null,
         ).joinToString(", ").ifEmpty { stringResource(R.string.all_off) }
         SettingsPage.Devices -> when {
             state.email == null -> stringResource(R.string.devices_need_email)
-            else -> state.devices?.let { if (it.size == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, it.size) }
+            else -> state.devices?.let { deviceCount(it.size) }
         }
         SettingsPage.Account -> state.email ?: stringResource(R.string.not_signed_in)
         else -> null
     }
 }
+
+/** "No classes yet", "1 class", "12 classes". */
+@Composable
+private fun classCount(n: Int): String = when (n) {
+    0 -> stringResource(R.string.no_classes_yet)
+    1 -> stringResource(R.string.one_class)
+    else -> stringResource(R.string.n_classes, n)
+}
+
+@Composable
+private fun deviceCount(n: Int): String = if (n == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, n)
 
 /** Language and time, and Appearance: what each is set to. */
 @Composable
@@ -560,7 +561,6 @@ private fun SettingsPageContent(
 @Composable
 private fun AboutPage() {
     val ctx = LocalContext.current
-    val open = { url: String -> ctx.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
     val host = BuildConfig.SITE.removePrefix("https://").removePrefix("http://")
     // Each link's name, where it goes, and that place as shown under the name.
     val links = listOf(
@@ -587,7 +587,7 @@ private fun AboutPage() {
     Group(stringResource(R.string.heading_more), stringResource(R.string.about_aup)) {
         links.forEachIndexed { i, (title, url, where) ->
             if (i > 0) RowDivider()
-            LinkRow(stringResource(title), { open(url) }, sub = where, away = true)
+            LinkRow(stringResource(title), { ctx.openWeb(url) }, sub = where, away = true)
         }
     }
 }
@@ -678,7 +678,7 @@ private fun NotificationSettings(main: MainViewModel) {
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { exact = LeaveAlerts.canBeExact(ctx) }
     }
-    val openSettings = { ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))) }
+    val openSettings = { ctx.openAppSettings() }
     Group(stringResource(R.string.heading_before_class), stringResource(R.string.notify_leave_more)) {
         NotifyToggle(
             stringResource(R.string.notify_leave),
@@ -762,12 +762,10 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
     } else {
         Group(stringResource(R.string.heading_signed_in)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(40.dp).background(c.primary, CircleShape), contentAlignment = Alignment.Center) {
-                    Text(email.take(1).uppercase(), color = c.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                }
+                Initial(email, 40.dp, 17.sp)
                 Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                     Text(email, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    state.devices?.let { Hint(if (it.size == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, it.size)) }
+                    state.devices?.let { Hint(deviceCount(it.size)) }
                 }
                 OutlinedButton(onClick = { confirm = "signout" }) { Text(stringResource(R.string.sign_out)) }
             }
@@ -777,7 +775,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
         LinkRow(stringResource(R.string.download_data), { export.launch("terminus-export.json") })
         if (email != null) {
             RowDivider()
-            LinkRow(stringResource(R.string.account_page), { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }, sub = stringResource(R.string.account_page_sub), away = true)
+            LinkRow(stringResource(R.string.account_page), { ctx.openWeb("${BuildConfig.SITE}/account") }, sub = stringResource(R.string.account_page_sub), away = true)
         }
     }
     // An account with an email is deleted from the account page, signed in on the web (the server insists).
@@ -785,7 +783,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
         if (email == null) {
             LinkRow(stringResource(R.string.delete_account), { confirm = "delete" }, color = c.error)
         } else {
-            LinkRow(stringResource(R.string.delete_account), { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }, away = true, color = c.error)
+            LinkRow(stringResource(R.string.delete_account), { ctx.openWeb("${BuildConfig.SITE}/account") }, away = true, color = c.error)
         }
     }
     when (confirm) {
@@ -917,7 +915,7 @@ private fun qrBitmap(text: String, size: Int): Bitmap {
 private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
     val ctx = LocalContext.current
     val h12 = hour12(ctx)
-    val time = { m: Int -> if (h12) hhmm12(m) else hhmm(m) }
+    val time = { m: Int -> minuteClock(m, h12) }
     val destinations = campus?.destinations.orEmpty()
     // Monday first, as the week reads; the index is the class's place in its own list.
     val order = WEEKDAYS.map { it.first }
@@ -925,12 +923,7 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
     var open by rememberSaveable { mutableStateOf(false) }
     val all = (profile.trips.mapIndexed { i, t -> Triple(true, i, t) } + profile.manual.mapIndexed { i, t -> Triple(false, i, t) })
         .sortedWith(compareBy({ order.indexOf(it.third.day) }, { it.third.arriveByMin }))
-    val count = when (all.size) {
-        0 -> stringResource(R.string.no_classes_yet)
-        1 -> stringResource(R.string.one_class)
-        else -> stringResource(R.string.n_classes, all.size)
-    }
-    Group(count) {
+    Group(classCount(all.size)) {
         for ((imported, i, t) in all) {
             // Tapped, a class opens to change its stop, as on the web.
             val key = "${if (imported) "t" else "m"}$i"

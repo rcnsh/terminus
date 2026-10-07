@@ -1,22 +1,14 @@
 package sh.rcn.terminus.ui
 
 import android.app.Activity
-import android.provider.Settings
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.background
-import androidx.compose.foundation.ScrollState
 import android.content.Context
 import android.content.ContextWrapper
+import android.provider.Settings
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
@@ -29,34 +21,43 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathOperation
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -218,14 +219,14 @@ private const val ROAD_SCALE = 1.25f
 /** The strip at the foot of the sky where the horizon is drawn: its 92 dp, [ROAD_SCALE] times. */
 internal val HORIZON = 115.dp
 
+/** The hour's sky from the top down to [end] px, where it meets the horizon. */
+private fun skyBrush(p: Palette, end: Float) = Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end)
+
 /** The sky behind Now's content, down to the horizon, once something on it has said where that is. */
 internal fun Modifier.skyBehind(sky: SkyState, page: Color): Modifier = drawBehind {
     val end = sky.end ?: return@drawBehind
     val p = sky.palette
-    drawRect(
-        Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end),
-        size = Size(size.width, end),
-    )
+    drawRect(skyBrush(p, end), size = Size(size.width, end))
     horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE)
 }
 
@@ -472,8 +473,8 @@ private operator fun FloatArray.component4() = this[3]
 
 /** A crescent moon centred at [c], of radius [r]: a disc with a slightly smaller one taken out up and to the right. */
 internal fun DrawScope.crescent(c: Offset, r: Float, alpha: Float = 1f) {
-    val moon = Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, r)) }
-    val bite = Path().apply { addOval(androidx.compose.ui.geometry.Rect(c + Offset(r * 0.46f, -r * 0.3f), r * 0.9f)) }
+    val moon = Path().apply { addOval(Rect(c, r)) }
+    val bite = Path().apply { addOval(Rect(c + Offset(r * 0.46f, -r * 0.3f), r * 0.9f)) }
     drawPath(Path.combine(PathOperation.Difference, moon, bite), MOON, alpha = alpha)
 }
 
@@ -609,7 +610,7 @@ internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
         Modifier.fillMaxWidth().drawBehind {
             val d = 1.dp.toPx()
             val end = size.height
-            drawRect(Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end))
+            drawRect(skyBrush(p, end))
             // Beside the title, on the right: its row is between the status bar and the hills.
             val row = top.toPx()..(end - LOW.toPx())
             val mid = (row.start + row.endInclusive) / 2
