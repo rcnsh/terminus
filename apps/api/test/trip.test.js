@@ -652,6 +652,7 @@ test('trip outcomes are in the export and go with the account', async () => {
   await signal(phone, { kind: 'missed' });
   const exported = await (await call('/me/export', { cookie })).json();
   assert.deepEqual(exported.tripOutcomes.map((o) => [o.trip, o.outcome]), [[FIRST, 'missed']]);
+  assert.equal(exported.today.trips[FIRST].kind, 'missed', "today's trip, from the Trip object");
   assert.equal((await call('/me', { method: 'DELETE', cookie })).status, 200);
   assert.equal(env.DB._db.prepare('SELECT COUNT(*) AS n FROM trip_outcomes').get().n, 0);
 });

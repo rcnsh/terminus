@@ -440,8 +440,8 @@ export const ME_ROUTES: MeRoute[] = [
   {
     method: 'GET',
     path: '/me/export',
-    run: async ({ db, session }) => {
-      return json(await exportAccount(db, session.user), 200, {
+    run: async ({ env, db, session, nowMs }) => {
+      return json(await exportAccount(db, session.user, await loadDay(env, session.user.id, nowMs)), 200, {
         'content-disposition': 'attachment; filename="terminus-export.json"',
       });
     },

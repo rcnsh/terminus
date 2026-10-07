@@ -593,6 +593,24 @@ test('export returns the profile and sessions, never token hashes', async () => 
   assert.equal(body.profile.gapHours, 3);
   assert.equal(body.sessions.length, 1);
   assert.doesNotMatch(JSON.stringify(body), /[0-9a-f]{64}/);
+  for (const k of ['created', 'lastSeen', 'startedIn', 'emailAdded', 'askFrom', 'today', 'signInRequests']) assert.ok(k in body, k);
+});
+
+test('export: each device with its app, version and push address, as the policy lists them', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  await call(env, '/pair', { method: 'POST', body: { code, name: 'Pixel 8' } });
+  db.exec(`UPDATE sessions SET platform = 'android', client = 'android/2.4.2', push_token = 'fcm-token' WHERE kind = 'device'`);
+  const body = await (await call(env, '/me/export', { cookie })).json();
+  const phone = body.sessions.find((s) => s.kind === 'device');
+  assert.deepEqual({ name: phone.name, platform: phone.platform, app: phone.app, push: phone.push }, {
+    name: 'Pixel 8',
+    platform: 'android',
+    app: 'android/2.4.2',
+    push: { service: 'firebase', address: 'fcm-token' },
+  });
+  assert.equal(body.sessions.find((s) => s.kind === 'web').push, null);
 });
 
 test('sign out everywhere ends every session', async () => {
