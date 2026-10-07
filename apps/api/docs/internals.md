@@ -936,7 +936,7 @@ down reads as "no data" for the shuttles and not as "no bus", while the 95
 stays live, and the other way round. DataMall is called like NUS is: one
 call per stop per 15 s through the edge cache (`edgecache.ts`, which both
 feeds now use), a failed stop not asked again for `failMemoS`, a refused
-key (401) tripping a breaker for `breakerS`. The cron probes it once a run
+key (401), a 429 or a 5xx tripping a breaker for `breakerS`. The cron probes it once a run
 for `/status.json` (`publicFeed`) and `/health`; it raises no alerts, since
 the shuttle is the product and this is extra. LTA has no live train feed,
 so the MRT is not here; nor are live public buses on the map, which the
