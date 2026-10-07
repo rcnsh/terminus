@@ -239,6 +239,11 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val ctx = LocalContext.current
     val ink = if (dark) Color(0xFFF2EFEB) else Color(0xFF1C1917)
     val paper = if (dark) Color(0xFF1A1816) else Color.White
+    // What edges the lines and buses. On the light street map a service's own
+    // colour (A2's yellow, K's blue) is faint against the white roads: edged
+    // in the ink there, so it stands out. In the dark, the paper does that.
+    val edge = if (dark) paper else ink
+    val edgeAlpha = if (dark) 1f else 0.6f
     val routes = remember(campus) { MapGeoJson.routes(campus) }
     val stops = remember(campus) { MapGeoJson.stops(campus) }
 
@@ -268,10 +273,10 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val stretchOn = stretch != MapGeoJson.EMPTY
 
     val heading = painterResource(R.drawable.ic_heading)
-    // The bus: a disc in the service's colour, ringed in the map's. An icon,
+    // The bus: a disc in the service's colour, ringed in the map's edge. An icon,
     // not a circle, so a bus at a stop can sit beside the dot (its offset is
     // per bus, and turns with the road).
-    val busIcon = remember(color, paper) { BusIcon(Color(color), paper) }
+    val busIcon = remember(color, edge) { BusIcon(Color(color), edge) }
     val ringIcon = remember(ink) { RingIcon(ink) }
     val busSize = interpolate(linear(), zoom(), 13 to const(0.64f), 17 to const(1f))
     // Where the buses were last seen, not where they are: faded.
@@ -287,9 +292,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         LineLayer(
             id = "route-casing",
             source = routeSource,
-            color = const(paper),
+            color = const(edge),
             width = interpolate(linear(), zoom(), 13 to const(3.dp), 16 to const(7.dp), 18 to const(11.dp)),
-            opacity = const(if (selected == null) 0.9f else 0.3f),
+            opacity = const((if (selected == null) 0.9f else 0.3f) * edgeAlpha),
             cap = const(LineCap.Round),
             join = const(LineJoin.Round),
         )
@@ -318,7 +323,8 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         LineLayer(
             id = "stretch-casing",
             source = stretchSource,
-            color = const(paper),
+            color = const(edge),
+            opacity = const(edgeAlpha),
             width = interpolate(linear(), zoom(), 13 to const(7.dp), 16 to const(13.dp), 18 to const(18.dp)),
             cap = const(LineCap.Round),
             join = const(LineJoin.Round),
@@ -445,7 +451,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // Back to campus, from the button.
     LaunchedEffect(recentre) {
         if (recentre == 0) return@LaunchedEffect
-        state.animateCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING, animation = CameraAnimation.Ease())
+        // With animations off in the phone's settings, it jumps there.
+        if (ValueAnimator.areAnimatorsEnabled()) state.animateCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING, animation = CameraAnimation.Ease())
+        else state.fitCameraToBounds(box(campus.coreBounds(ui.core)), fitPadding = CORE_PADDING)
     }
     // A pill: its whole line in view, when it's chosen (not again on coming back to the tab).
     var framedLine by rememberSaveable { mutableStateOf<String?>(null) }
@@ -453,7 +461,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         if (selected == framedLine) return@LaunchedEffect
         framedLine = selected
         val r = selected?.let { campus.routes[it] } ?: return@LaunchedEffect
-        state.animateCameraToBounds(box(r.bounds()), fitPadding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp), animation = CameraAnimation.Ease())
+        val padding = DpPadding(left = 40.dp, top = 110.dp, right = 40.dp, bottom = 40.dp)
+        if (ValueAnimator.areAnimatorsEnabled()) state.animateCameraToBounds(box(r.bounds()), fitPadding = padding, animation = CameraAnimation.Ease())
+        else state.fitCameraToBounds(box(r.bounds()), fitPadding = padding)
     }
 
     MaplibreMap(
