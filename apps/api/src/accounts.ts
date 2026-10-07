@@ -320,7 +320,7 @@ export function addEmailTo(db: D1Database, anonId: string, email: string, nowMs:
 export function profileFor(db: D1Database, userId: string, profile: unknown, nowMs: number, live: Live): D1PreparedStatement {
   return whileLive(
     db,
-    'INSERT INTO profiles (user_id, json, updated) SELECT ?, ?, ? WHERE {live} ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = excluded.updated',
+    'INSERT INTO profiles (user_id, json, updated) SELECT ?, ?, ? WHERE {live} ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = MAX(excluded.updated, profiles.updated + 1)',
     [userId, JSON.stringify(profile), nowMs],
     live,
   );
@@ -709,13 +709,42 @@ export async function loadProfileJson(db: D1Database, userId: string): Promise<u
   return row ? JSON.parse(row.json) : null;
 }
 
-export async function saveProfileJson(db: D1Database, userId: string, profile: unknown, nowMs: number): Promise<void> {
-  await db
+/** The saved profile and its version: `updated`, which a conditional write compares. */
+export async function loadProfileRow(db: D1Database, userId: string): Promise<{ json: unknown; updated: number } | null> {
+  const row = await db.prepare('SELECT json, updated FROM profiles WHERE user_id = ?').bind(userId).first<{ json: string; updated: number }>();
+  return row ? { json: JSON.parse(row.json), updated: row.updated } : null;
+}
+
+/** Saves the profile whatever was there; returns its new version. Every
+ *  write's version is later than the one it replaces, even within a
+ *  millisecond, so a conditional write can't mistake one for another. */
+export async function saveProfileJson(db: D1Database, userId: string, profile: unknown, nowMs: number): Promise<number> {
+  const row = await db
     .prepare(
-      'INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = excluded.updated',
+      'INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = MAX(excluded.updated, profiles.updated + 1) RETURNING updated',
     )
     .bind(userId, JSON.stringify(profile), nowMs)
-    .run();
+    .first<{ updated: number }>();
+  return row?.updated ?? nowMs;
+}
+
+/**
+ * Saves the profile only if it is still at version `from` (null: none saved
+ * yet). Returns the new version, or null when another write got there first.
+ */
+export async function saveProfileIf(db: D1Database, userId: string, profile: unknown, nowMs: number, from: number | null): Promise<number | null> {
+  const json = JSON.stringify(profile);
+  const row =
+    from === null
+      ? await db
+          .prepare('INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING RETURNING updated')
+          .bind(userId, json, nowMs)
+          .first<{ updated: number }>()
+      : await db
+          .prepare('UPDATE profiles SET json = ?, updated = ? WHERE user_id = ? AND updated = ? RETURNING updated')
+          .bind(json, Math.max(nowMs, from + 1), userId, from)
+          .first<{ updated: number }>();
+  return row?.updated ?? null;
 }
 
 /* ------------------------------------------------------------------ */

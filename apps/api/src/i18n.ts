@@ -686,6 +686,7 @@ export const ERRORS_ZH: Record<string, string> = {
   "no timelapse for that day": "那天没有延时回放",
   "timelapse storage is not configured": "延时回放存储未配置",
   "walkPace must be slow, normal or fast": "walkPace 必须是 slow、normal 或 fast",
+  'your settings were changed on another device; try again': '你的设置刚在另一台设备上改过，请再试一次',
 };
 
 /** An error message in the current language. Unknown ones stay English. */

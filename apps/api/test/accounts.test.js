@@ -23,8 +23,9 @@ function setup() {
   return { db, email, env };
 }
 
-async function call(env, path, { method = 'GET', body, token, form, cookie, key, accept } = {}) {
+async function call(env, path, { method = 'GET', body, token, form, cookie, key, accept, ifMatch } = {}) {
   const headers = {};
+  if (ifMatch) headers['if-match'] = ifMatch;
   if (key) headers['x-api-key'] = key;
   if (accept) headers.accept = accept;
   let payload;
@@ -1272,4 +1273,68 @@ test('the test D1 counts the rows a RETURNING statement changed, as D1 does', as
   assert.equal(del.meta.changes, 2);
   const read = await db.prepare('SELECT * FROM blocklist').run();
   assert.equal(read.meta.changes, 0);
+});
+
+test('profile: a save sent with If-Match is refused when another device saved first; one without is not', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const fresh = await call(env, '/me/profile', { cookie });
+  assert.equal(fresh.headers.get('etag'), '"0"', 'never saved');
+  const first = await call(env, '/me/profile', { method: 'PUT', cookie, ifMatch: '"0"', body: { home: { stops: ['PGP'] } } });
+  assert.equal(first.status, 200);
+  const v1 = first.headers.get('etag');
+  assert.match(v1, /^"[1-9]\d*"$/);
+  assert.equal((await call(env, '/me/profile', { cookie })).headers.get('etag'), v1);
+
+  // Another device saves; a save from the old version is refused, compressed ETag or not.
+  const other = await call(env, '/me/profile', { method: 'PUT', cookie, ifMatch: `W/${v1}`, body: { home: { stops: ['UTOWN'] } } });
+  assert.equal(other.status, 200);
+  assert.notEqual(other.headers.get('etag'), v1, 'a new version, even within the same millisecond');
+  const stale = await call(env, '/me/profile', { method: 'PUT', cookie, ifMatch: v1, body: { home: { stops: ['KR-MRT'] } } });
+  assert.equal(stale.status, 412);
+  assert.equal((await stale.json()).error, 'your settings were changed on another device; try again');
+  assert.deepEqual((await (await call(env, '/me/profile', { cookie })).json()).home.stops, ['UTOWN']);
+  assert.equal((await call(env, '/me/profile', { method: 'PUT', cookie, ifMatch: '"0"', body: {} })).status, 412, 'one is saved already');
+
+  // Without If-Match (the apps installed today), the last save wins as before.
+  assert.equal((await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['KR-MRT'] } } })).status, 200);
+  assert.deepEqual((await (await call(env, '/me/profile', { cookie })).json()).home.stops, ['KR-MRT']);
+});
+
+test('a one-off trip added while another device saves is not lost, nor is the other save', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const tomorrow = new Date(Date.now() + 8 * 3_600_000 + 86_400_000).toISOString().slice(0, 10);
+  const add = (to, atMin) => call(env, '/me/once', { method: 'POST', cookie, body: { to, atMin, date: tomorrow } });
+  assert.equal((await add('COM3', 600)).status, 200);
+  // Just after this request reads the profile, another device adds a trip.
+  const prepare = db.prepare;
+  let armed = true;
+  db.prepare = (sql) => {
+    const st = prepare(sql);
+    if (!sql.startsWith('SELECT json')) return st;
+    return {
+      ...st,
+      bind: (...p) => {
+        const b = st.bind(...p);
+        return {
+          ...b,
+          async first(col) {
+            const row = await b.first(col);
+            if (armed) {
+              armed = false;
+              db._db
+                .prepare("UPDATE profiles SET json = json_insert(json, '$.once[#]', json(?)), updated = updated + 1")
+                .run(JSON.stringify({ date: tomorrow, arriveByMin: 1000, to: 'KR-MRT', label: 'KR MRT' }));
+            }
+            return row;
+          },
+        };
+      },
+    };
+  };
+  assert.equal((await add('UTOWN', 900)).status, 200);
+  db.prepare = prepare;
+  const saved = (await (await call(env, '/me/profile', { cookie })).json()).once.map((o) => o.to).sort();
+  assert.deepEqual(saved, ['COM3', 'KR-MRT', 'UTOWN']);
 });
