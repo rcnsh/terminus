@@ -27,6 +27,10 @@ const REFRESH_MS = 30_000;
 const DAY_MS = 120_000;
 /** Sooner than that at the card's own marks (nextChangeAt, refreshAt), but never sooner than this from now. */
 const MARK_MIN_MS = 5_000;
+/** Nor sooner than this after the last refresh a mark brought: a leave-by
+ *  that keeps sliding (a late bus) would otherwise ask every 5 s. The Mac
+ *  app and the server's own trip engine wait 30 s too. */
+const MARK_GAP_MS = 30_000;
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 // iPadOS says it's a Mac; one with a touch screen is an iPad.
@@ -162,13 +166,20 @@ const nowShown = () => document.visibilityState === 'visible' && tab.get() === '
  * one: the server had it in hand, and waiting on it would ask every 5 s.
  */
 let markTimer = null;
+/** When a mark last brought a refresh (Date.now()). */
+let markAt = -Infinity;
 function atMarks(a) {
   clearTimeout(markTimer);
   const asOf = Date.parse(a?.asOf ?? '');
   const marks = [a?.card?.nextChangeAt, a?.refreshAt].map((x) => Date.parse(x ?? '')).filter((m) => Number.isFinite(m) && !(m <= asOf));
   if (!marks.length) return;
-  const wait = Math.max(MARK_MIN_MS, Math.min(...marks) - serverNow());
-  if (wait < REFRESH_MS) markTimer = setTimeout(() => nowShown() && refresh({ timed: true }), wait);
+  const wait = Math.max(MARK_MIN_MS, markAt + MARK_GAP_MS - Date.now(), Math.min(...marks) - serverNow());
+  if (wait >= REFRESH_MS) return;
+  markTimer = setTimeout(() => {
+    if (!nowShown()) return;
+    markAt = Date.now();
+    refresh({ timed: true });
+  }, wait);
 }
 
 /** A query string: the 12-hour style, and the other params given. */
@@ -211,8 +222,21 @@ let generation = 0;
 let lastPlan = null;
 let planAt = 0;
 
+/** Refreshes on their way: a timed one waits for them rather than piling another on a slow connection. */
+let pending = 0;
+
 /** The card and Today. [timed]: by the clock, not something the user did, so Today is asked for at most every DAY_MS. */
 async function refresh({ timed = false } = {}) {
+  if (timed && pending) return;
+  pending++;
+  try {
+    return await refreshNow(timed);
+  } finally {
+    pending--;
+  }
+}
+
+async function refreshNow(timed) {
   const mine = ++generation;
   // This refresh's answer sets the next mark.
   clearTimeout(markTimer);
