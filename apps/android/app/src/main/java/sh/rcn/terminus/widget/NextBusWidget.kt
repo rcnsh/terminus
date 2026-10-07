@@ -2,6 +2,8 @@ package sh.rcn.terminus.widget
 
 import sh.rcn.terminus.ServerClock
 import android.content.Context
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -608,9 +610,20 @@ suspend fun redrawWidgets(ctx: Context) {
 class RefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         // Show that the tap landed before the network answers.
-        Store(context).lastError = UPDATING
+        val store = Store(context)
+        store.lastError = UPDATING
         redrawWidgets(context)
-        Refresher.refresh(context, fast = true)
+        try {
+            Refresher.refresh(context, fast = true)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Stopped before an answer: "Updating…" mustn't stay, nor keep
+            // the widget from its offline day plan.
+            withContext(NonCancellable) {
+                if (store.lastError == UPDATING) store.lastError = null
+                redrawWidgets(context)
+            }
+            throw e
+        }
     }
 }
 
