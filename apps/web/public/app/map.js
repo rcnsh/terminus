@@ -109,6 +109,12 @@ const styleUrl = () => `/map/style.json?theme=${dark() ? 'dark' : 'light'}&lang=
 /** The page's ink and paper, for what's drawn over the street map. */
 const pageInk = () => (dark() ? '#f2efeb' : '#1c1917');
 const pagePaper = () => (dark() ? '#1a1816' : '#ffffff');
+/**
+ * The edge round a route line and a bus: on the light street map a dark
+ * one, so a pale line (A2's yellow, K's blue) still stands out from the
+ * streets at 3:1; on the dark map the page's own colour does that.
+ */
+const edgeOf = () => (dark() ? pagePaper() : '#57534e');
 const colorOf = (svc) => campusData.get()?.routes[svc]?.color ?? '#8a939c';
 const svcVars = (svc) => `--svc:${colorOf(svc)};--svc-ink:${inkOn(colorOf(svc))}`;
 
@@ -274,7 +280,7 @@ function addLayers() {
   map.addSource('stretch', { type: 'geojson', data: empty });
 
   const width = ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 4, 18, 7];
-  map.addLayer({ id: 'route-casing', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': paper, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 7, 18, 11], 'line-opacity': 0.9 } });
+  map.addLayer({ id: 'route-casing', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': edgeOf(), 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 7, 18, 11], 'line-opacity': 0.9 } });
   map.addLayer({ id: 'routes', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': width } });
   // The chosen service, drawn again on top of the others.
   map.addLayer({ id: 'route-on', type: 'line', source: 'routes', filter: ['==', ['get', 'svc'], ''], layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 6, 18, 9] } });
@@ -348,12 +354,13 @@ const busSize = (zoom) => Math.max(0.64, Math.min(1, 0.64 + ((zoom - 13) * 0.36)
 function paintBus() {
   const paper = pagePaper();
   const color = colorOf(selected.get());
-  // At 2 pixels a point: 11 across the disc, with a 2.5 ring.
+  // At 2 pixels a point: 11 across the disc, with a 2.5 ring, and on the
+  // light map a thin dark edge round that, so the white ring shows on pale streets.
   const size = 60;
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const g = c.getContext('2d');
-  for (const [r, fill] of [[27, paper], [22, color]]) {
+  for (const [r, fill] of [...(dark() ? [] : [[29.5, edgeOf()]]), [27, paper], [22, color]]) {
     g.fillStyle = fill;
     g.beginPath();
     g.arc(size / 2, size / 2, r, 0, Math.PI * 2);
