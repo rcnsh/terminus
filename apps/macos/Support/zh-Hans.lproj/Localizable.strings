@@ -378,3 +378,8 @@
 "Next stop: %@. %@ stops to go, getting off at %@." = "下一站：%1$@。还有 %2$@ 站，在 %3$@ 下车。";
 "Over" = "已结束";
 "Skipped" = "已跳过";
+"No matches" = "没有结果";
+"1 result" = "1 个结果";
+"%@ results" = "%@ 个结果";
+"Tab %@ of %@" = "第 %1$@ 个，共 %2$@ 个";
+"Destinations" = "目的地";
