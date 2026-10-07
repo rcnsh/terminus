@@ -4,7 +4,7 @@
 // showing timetable estimates, as the apps draw a guess.
 
 import { html, render, useEffect, useState } from '/assets/ui.js';
-import { t } from '/account/dom.js';
+import { t, timeout } from '/account/dom.js';
 import { drawHorizon } from '/assets/sky-page.js';
 
 const TZ = { timeZone: 'Asia/Singapore' };
@@ -112,7 +112,8 @@ function Status() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/status.json', { cache: 'no-store' });
+        // Given up on after a while, so a hung call says it failed rather than loading for ever.
+        const res = await fetch('/status.json', { cache: 'no-store', signal: timeout(15_000) });
         if (!res.ok) throw new Error(String(res.status));
         setS(await res.json());
         setFailed(false);
