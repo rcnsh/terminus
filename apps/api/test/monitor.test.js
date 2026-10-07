@@ -162,6 +162,51 @@ test('housekeeping removes expired links, codes, sessions and idle devices only'
   assert.deepEqual(left('sessions', 'token_hash'), ['d-used', 'w-new']);
 });
 
+test('cron: the large tables are swept once a Singapore day, the short-lived codes every run', async () => {
+  const e = env();
+  const db = makeD1();
+  const swept = [];
+  const batch = db.batch.bind(db);
+  db.batch = async (s) => { swept.push(s.length); return batch(s); };
+  const orig = console.error;
+  console.error = () => {};
+  const day = Date.UTC(2026, 9, 7, 2); // 10:00 in Singapore
+  await runCron({ ...e, DB: db }, day);
+  await runCron({ ...e, DB: db }, day + 15 * 60_000);
+  await runCron({ ...e, DB: db }, day + 86_400_000);
+  console.error = orig;
+  assert.deepEqual(swept.filter((n) => n >= 3), [7, 3, 7]);
+});
+
+test('cron: a failed daily sweep is tried again on the next run', async () => {
+  const e = env();
+  const db = makeD1();
+  const sizes = [];
+  const batch = db.batch.bind(db);
+  let fail = true;
+  db.batch = async (s) => {
+    sizes.push(s.length);
+    if (fail && s.length === 7) { fail = false; throw new Error('D1 busy'); }
+    return batch(s);
+  };
+  const orig = console.error;
+  console.error = () => {};
+  const day = Date.UTC(2026, 9, 7, 2);
+  await runCron({ ...e, DB: db }, day);
+  await runCron({ ...e, DB: db }, day + 15 * 60_000);
+  await runCron({ ...e, DB: db }, day + 30 * 60_000);
+  console.error = orig;
+  assert.deepEqual(sizes.filter((n) => n >= 3), [7, 7, 3]);
+});
+
+test('the hot and housekeeping lookups use an index, not a table scan', () => {
+  const db = makeD1();
+  const plan = (sql) => db._db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all().map((r) => r.detail).join('; ');
+  assert.match(plan("SELECT svc, stop, slot, n, packed FROM crowd_stats WHERE daytype = 'term' AND n >= 3 AND stop IN ('COM3', 'UTOWN')"), /USING INDEX crowd_stats_lookup/);
+  assert.match(plan("UPDATE sessions SET push_token = NULL WHERE push_token = 'x'"), /USING INDEX sessions_push/);
+  assert.match(plan('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < 5'), /USING INDEX users_anon_idle/);
+});
+
 test('a refused version: the alert gives the one-line KV fix and NUS\'s whole response', async () => {
   const e = env();
   const body = '{"code":"10009","msg":"We have a new release of uNivUS","data":{"store":"https://example.test/new"}}';

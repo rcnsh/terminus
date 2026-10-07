@@ -252,20 +252,37 @@ async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switche
 }
 
 /**
- * Delete expired sign-in links and requests, pairing codes, web sessions,
- * idle devices, and anonymous accounts nobody has used for 60 days.
+ * Delete expired sign-in links and requests and pairing codes. With `daily`,
+ * also expired web sessions, idle devices, anonymous accounts nobody has
+ * used for 60 days, and old trip outcomes.
  */
-export async function housekeeping(db: D1Database, nowMs: number): Promise<void> {
-  await db.batch([
+export async function housekeeping(db: D1Database, nowMs: number, daily = true): Promise<void> {
+  // Small tables of short-lived codes: every run, so they don't pile up.
+  const stmts = [
     db.prepare('DELETE FROM magic_links WHERE expires < ?').bind(nowMs),
     db.prepare('DELETE FROM login_requests WHERE expires < ?').bind(nowMs),
-    db.prepare('DELETE FROM users WHERE email IS NULL AND last_seen < ?').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
     db.prepare('DELETE FROM pair_codes WHERE expires < ?').bind(nowMs),
-    db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
-    db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
-    // Trip outcomes are kept KEEP_DAYS days.
-    db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
-  ]);
+  ];
+  // These read every row of large tables, and their limits are counted in
+  // days, so once a day is enough. Sign-in already refuses an expired session.
+  if (daily) {
+    stmts.push(
+      // The planner prefers the UNIQUE email index, which reads every anonymous account.
+      db.prepare('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < ?').bind(nowMs - ACCOUNT_TTL.anonIdleMs),
+      db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
+      db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
+      // Trip outcomes are kept KEEP_DAYS days.
+      db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
+    );
+  }
+  await db.batch(stmts);
+}
+
+const SWEPT_KEY = 'housekeeping:day';
+
+/** Whether today's (Singapore) daily cleanup is still to do. A KV failure says yes: a second sweep is harmless. */
+async function sweepDue(env: Env, nowMs: number): Promise<boolean> {
+  return (await env.KV.get(SWEPT_KEY).catch(() => null)) !== sgtDate(nowMs);
 }
 
 /**
@@ -447,8 +464,20 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
       await checkCalendar(env, nowMs);
     }
   });
-  if (env.DB) await step('housekeeping', () => housekeeping(env.DB!, nowMs));
-  if (env.DB) await step('crowds', () => pruneCrowdSeen(env.DB!, nowMs));
+  if (env.DB) {
+    const daily = await sweepDue(env, nowMs);
+    let swept = false;
+    await step('housekeeping', async () => {
+      await housekeeping(env.DB!, nowMs, daily);
+      swept = daily;
+    });
+    if (daily) {
+      // Sightings are kept in whole days, so one prune a day is enough.
+      await step('crowds', () => pruneCrowdSeen(env.DB!, nowMs));
+      // Only once the sweep worked: a failed one is tried again next run.
+      if (swept) await step('swept', () => env.KV.put(SWEPT_KEY, sgtDate(nowMs), { expirationTtl: 2 * 86_400 }));
+    }
+  }
   await step('trips', () => armTrips(env, nowMs));
   // Starts the day's timelapse recorder in the morning (it runs itself after that).
   await step('timelapse', () => ensureRecorder(env, nowMs));
