@@ -227,15 +227,8 @@ object LeaveAlerts {
         if (answer.card?.phase == "riding") post(ctx, answer, System.currentTimeMillis())
     }
 
-    // Exact only when canScheduleExactAlarms() says so; lint can't see the check.
-    @android.annotation.SuppressLint("MissingPermission")
     private fun setAlarm(ctx: Context, action: String, at: Long) {
-        val am = ctx.getSystemService(AlarmManager::class.java) ?: return
-        val pi = alarmIntent(ctx, action)
-        // Without "Alarms & reminders" allowed, an inexact alarm, which Doze
-        // may run a few minutes late.
-        if (am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-        else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(at, alarmIntent(ctx, action))
     }
 
     private fun cancelAlarm(ctx: Context, action: String) {
@@ -248,6 +241,17 @@ object LeaveAlerts {
             Intent(ctx, LeaveReceiver::class.java).setAction(action),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+}
+
+/**
+ * An alarm at [at] that runs in Doze too: exact when "Alarms & reminders" is
+ * allowed, otherwise inexact, which Doze may run a few minutes late.
+ */
+// Exact only when canScheduleExactAlarms() says so; lint can't see the check.
+@android.annotation.SuppressLint("MissingPermission")
+internal fun AlarmManager.setWhileIdle(at: Long, pi: PendingIntent) {
+    if (canScheduleExactAlarms()) setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+    else setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
 }
 
 class LeaveReceiver : BroadcastReceiver() {

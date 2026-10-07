@@ -1,5 +1,7 @@
 package sh.rcn.terminus
 
+import androidx.annotation.StringRes
+
 /**
  * The few words the card styles put round the server's journey (Journey),
  * shared by the app's card and the widgets. Only the countdown is worked out
@@ -13,14 +15,8 @@ object JourneyText {
      */
     fun leaveIn(answer: NextAnswer, journey: Journey, now: Long): String {
         if (answer.card?.phase == "waiting") return answer.leaveHeadline(now) ?: L.s(R.string.leave_now)
-        val at = answer.leaveAtMs
-        if (at == null || journey.leave == null || now >= at) return L.s(R.string.leave_now)
-        val left = (at - now) / 1000
-        return when {
-            left >= 120 -> L.s(R.string.leave_in_min, ((left + 30) / 60).toInt())
-            left >= 60 -> L.s(R.string.leave_in_min_s, (left / 60).toInt(), (left % 60).toInt())
-            else -> L.s(R.string.leave_in_s, left.coerceAtLeast(1).toInt())
-        }
+        val left = secondsToLeave(answer, journey, now) ?: return L.s(R.string.leave_now)
+        return countdown(left, R.string.leave_in_min, R.string.leave_in_min_s, R.string.leave_in_s)
     }
 
     /**
@@ -28,15 +24,23 @@ object JourneyText {
      * of "6 分钟后出发"), for the card to colour; null when there's none ("Leave now").
      */
     fun leaveTime(answer: NextAnswer, journey: Journey, now: Long): String? {
+        val left = secondsToLeave(answer, journey, now) ?: return null
+        return countdown(left, R.string.n_min, R.string.dur_min_s, R.string.dur_s)
+    }
+
+    /** Whole seconds until it's time to leave; null at the stop, with no leave time, or once it's passed. */
+    private fun secondsToLeave(answer: NextAnswer, journey: Journey, now: Long): Long? {
         if (answer.card?.phase == "waiting") return null
         val at = answer.leaveAtMs
         if (at == null || journey.leave == null || now >= at) return null
-        val left = (at - now) / 1000
-        return when {
-            left >= 120 -> L.s(R.string.n_min, ((left + 30) / 60).toInt())
-            left >= 60 -> L.s(R.string.dur_min_s, (left / 60).toInt(), (left % 60).toInt())
-            else -> L.s(R.string.dur_s, left.coerceAtLeast(1).toInt())
-        }
+        return (at - now) / 1000
+    }
+
+    /** [left] seconds in [min] ("4 min", rounded) from two minutes, else [minS] ("1 min 5 s"), else [s]. */
+    private fun countdown(left: Long, @StringRes min: Int, @StringRes minS: Int, @StringRes s: Int): String = when {
+        left >= 120 -> L.s(min, ((left + 30) / 60).toInt())
+        left >= 60 -> L.s(minS, (left / 60).toInt(), (left % 60).toInt())
+        else -> L.s(s, left.coerceAtLeast(1).toInt())
     }
 
     /** "To GEA1000 @ UTown · starts 10:00", the class's start being what the arrival and slack are about. */

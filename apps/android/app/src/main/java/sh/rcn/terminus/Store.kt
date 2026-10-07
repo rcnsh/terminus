@@ -1,6 +1,7 @@
 package sh.rcn.terminus
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -13,12 +14,19 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
+ * The app's own settings and state on this phone: Store's, and Lang's,
+ * Theme's and CardStyle's keys beside them, which a sign-out keeps
+ * ([Store.clear]).
+ */
+internal fun terminusPrefs(ctx: Context): SharedPreferences = ctx.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
+
+/**
  * The device token, encrypted with a key that never leaves the Android
  * Keystore, plus the last answer the widget shows.
  */
 class Store(context: Context) {
     private val app = context.applicationContext
-    private val prefs = context.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
+    private val prefs = terminusPrefs(context)
 
     /**
      * Decrypted once per process: the widget reads `paired` on every draw, and

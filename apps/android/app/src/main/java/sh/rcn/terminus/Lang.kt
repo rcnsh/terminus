@@ -30,7 +30,7 @@ object Lang {
     /** The account's lang last applied here, so a choice made on another device is applied once, not over this phone's. */
     private const val KEY_APPLIED = "lang_applied"
 
-    private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
+    private fun prefs(ctx: Context) = terminusPrefs(ctx)
 
     /** What this phone was set to: auto, en or zh. */
     fun pref(ctx: Context): String {

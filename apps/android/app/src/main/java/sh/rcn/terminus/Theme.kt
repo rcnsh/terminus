@@ -18,7 +18,7 @@ object Theme {
 
     private const val KEY = "theme"
 
-    private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences("terminus", Context.MODE_PRIVATE)
+    private fun prefs(ctx: Context) = terminusPrefs(ctx)
 
     /** What this phone was set to: auto, light or dark. */
     fun pref(ctx: Context): String = prefs(ctx).getString(KEY, AUTO) ?: AUTO

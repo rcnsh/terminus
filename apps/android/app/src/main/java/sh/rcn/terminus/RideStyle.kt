@@ -27,8 +27,7 @@ object RideStyle {
 
     fun apply(ctx: Context, b: Notification.Builder, card: Card, ride: Ride, now: Long): Notification.Builder {
         b.setContentTitle(card.line ?: L.s(R.string.on_the, ride.svc)).setContentText(ride.nextText(now))
-        if (ride.arriveMs > now) b.setWhen(ride.arriveMs).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
-        else b.setShowWhen(false)
+        b.countdownTo(ride.arriveMs, now)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) b.setStyle(progress(ctx, ride, now))
         return b
     }
@@ -48,3 +47,11 @@ object RideStyle {
             .setProgress((ride.progress(now) * hops * unit).toInt())
     }
 }
+
+/**
+ * A countdown to [at] in the notification's header, which the system ticks
+ * by itself; no time at all when there's nothing ahead to count down to.
+ */
+internal fun Notification.Builder.countdownTo(at: Long?, now: Long): Notification.Builder =
+    if (at != null && at > now) setWhen(at).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
+    else setShowWhen(false)
