@@ -956,7 +956,7 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
         }
         if (open) {
             RowDivider()
-            AddClass(destinations, account) { open = false }
+            AddClass(destinations, account, profile.limits.label) { open = false }
         }
     }
     // A favourite at its usual time each week: removable here with the classes.
@@ -980,7 +980,7 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
 
 /** A class or commitment by hand: its day, times, name and where, under the classes. */
 @Composable
-private fun AddClass(destinations: List<Destination>, account: AccountViewModel, onDone: () -> Unit) {
+private fun AddClass(destinations: List<Destination>, account: AccountViewModel, maxLabel: Int, onDone: () -> Unit) {
     var day by rememberSaveable { mutableIntStateOf(1) }
     var start by rememberSaveable { mutableStateOf<Int?>(null) }
     var end by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -992,7 +992,7 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
             TimeButton(stringResource(R.string.starts), start, { start = it }, Modifier.weight(1f))
             TimeButton(stringResource(R.string.ends), end, { end = it }, Modifier.weight(1f))
         }
-        OutlinedTextField(label, { if (it.length <= 60) label = it }, label = { Text(stringResource(R.string.name_eg_gym)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(label, { if (it.length <= maxLabel) label = it }, label = { Text(stringResource(R.string.name_eg_gym)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
         WherePicker(stringResource(R.string.where), destinations, where) { where = it }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onDone) { Text(stringResource(R.string.cancel)) }
@@ -1033,7 +1033,7 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
             }
             RowDivider()
         }
-        if (profile.places.size < 12) {
+        if (profile.places.size < profile.limits.places) {
             // The stops your classes go to come first, each saying which classes use it.
             val favourite = profile.places.map { it.to }.toSet()
             val timetable = (profile.trips + profile.manual).groupBy { it.to }

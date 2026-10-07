@@ -78,6 +78,7 @@ import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.R
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
@@ -116,15 +117,22 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
     }
     val openSettings = { ctx.openAppSettings() }
 
-    // Keep the answer fresh while the app is on screen; the API's own cache
-    // is 15 s, so polling faster than that would show nothing new.
+    // Keep the answer fresh while the app is on screen: every 30 s, or
+    // sooner at the moment the server says the card changes (nextPollAt).
+    // The answer lands after the fetch starts, so the wait is worked out
+    // again every few seconds rather than once.
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             // Location may have been allowed in system settings meanwhile.
             hasLocation = Locator.hasForeground(ctx)
             while (true) {
                 vm.load()
-                delay(30_000)
+                val polled = ServerClock.now()
+                while (true) {
+                    val wait = nextPollAt(vm.state.value.answer, polled) - ServerClock.now()
+                    if (wait <= 0) break
+                    delay(wait.coerceAtMost(POLL_MIN_MS))
+                }
             }
         }
     }
@@ -223,7 +231,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
             } else {
                 // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
                 val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
-                OfflinePlanOr(offline, state.answer, state.fetchedAt, state.day) {
+                OfflinePlanOr(offline, state.answer, state.day) {
                     AnswerCard(state.answer, state.loading, vm::signal, state.signalling, vm::choose, onPlace = { vm.select(Target.SavedPlace(it)) })
                 }
             }

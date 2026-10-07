@@ -11,6 +11,7 @@
     <string name="map_bus_title">%1$s bus</string>
     <string name="map_buses">%1$d buses on %2$s</string>
     <string name="map_buses_unavailable">Live buses aren’t available right now.</string>
+    <string name="map_buses_stale">Bus positions may be out of date</string>
     <string name="map_download_failed">The street map hasn\'t downloaded yet. Routes and stops are still available.</string>
     <string name="map_downloading">Downloading the street map (about 4 MB)…</string>
     <string name="map_finding_buses">Finding %1$s buses…</string>
@@ -183,7 +184,7 @@
     <string name="leave_now">Leave now</string>
     <string name="leaves_in_min_s">Leaves in %1$d min %2$d s</string>
     <string name="leaves_in_s">Leaves in %1$d s</string>
-    <string name="left_ago">Left %1$d min ago · updating</string>
+    <string name="left_ago">Left %1$d min ago</string>
     <string name="live_notification">Live notification during trips</string>
     <string name="loading">Loading…</string>
     <string name="location">Location</string>
@@ -369,6 +370,7 @@
     <string name="update_to_continue">Update terminus to continue</string>
     <string name="updated_at">Updated %1$s</string>
     <string name="updating">Updating…</string>
+    <string name="updating_times">Updating times…</string>
     <string name="used_when">used %1$s</string>
     <string name="every_week">Every week</string>
     <string name="walk">walk</string>

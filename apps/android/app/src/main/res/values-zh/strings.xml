@@ -11,6 +11,7 @@
     <string name="map_bus_title">%1$s 巴士</string>
     <string name="map_buses">%2$s 有 %1$d 辆巴士</string>
     <string name="map_buses_unavailable">暂时看不到实时巴士。</string>
+    <string name="map_buses_stale">车辆位置可能不是最新的</string>
     <string name="map_download_failed">街道地图尚未下载。路线和车站仍可使用。</string>
     <string name="map_downloading">正在下载街道地图（约 4 MB）…</string>
     <string name="map_finding_buses">正在查找 %1$s 巴士…</string>
@@ -183,7 +184,7 @@
     <string name="leave_now">现在出发</string>
     <string name="leaves_in_min_s">%1$d 分 %2$d 秒后开</string>
     <string name="leaves_in_s">%1$d 秒后开</string>
-    <string name="left_ago">%1$d 分钟前已开走 · 正在更新</string>
+    <string name="left_ago">%1$d 分钟前已开走</string>
     <string name="live_notification">行程中的实时通知</string>
     <string name="loading">正在加载…</string>
     <string name="location">定位</string>
@@ -369,6 +370,7 @@
     <string name="update_to_continue">请更新 terminus 以继续使用</string>
     <string name="updated_at">%1$s 更新</string>
     <string name="updating">正在更新…</string>
+    <string name="updating_times">正在更新时间…</string>
     <string name="used_when">%1$s使用过</string>
     <string name="every_week">每周</string>
     <string name="walk">步行</string>

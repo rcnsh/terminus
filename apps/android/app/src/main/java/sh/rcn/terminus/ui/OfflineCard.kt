@@ -20,6 +20,7 @@ import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.R
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.widget.clock
 import sh.rcn.terminus.widget.isOld
 
@@ -29,15 +30,15 @@ import sh.rcn.terminus.widget.isOld
  * [content], the usual card.
  */
 @Composable
-internal fun OfflinePlanOr(offline: Boolean, answer: NextAnswer?, fetchedAt: Long?, day: DayPlan?, content: @Composable () -> Unit) {
+internal fun OfflinePlanOr(offline: Boolean, answer: NextAnswer?, day: DayPlan?, content: @Composable () -> Unit) {
     // Ticks, so "Leave by" turns into "Leave now" without a refresh to prompt it.
-    val now by produceState(System.currentTimeMillis(), offline, day) {
+    val now by produceState(ServerClock.now(), offline, day) {
         while (true) {
-            value = System.currentTimeMillis()
+            value = ServerClock.now()
             delay(15_000)
         }
     }
-    val pick = if (offline && (answer == null || isOld(answer, fetchedAt, now))) OfflineDay.next(day, now) else null
+    val pick = if (offline && (answer == null || isOld(answer, now))) OfflineDay.next(day, now) else null
     if (pick == null) {
         content()
         return

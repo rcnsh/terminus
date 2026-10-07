@@ -4,12 +4,48 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
+ * The profile's limits, as the server sends them with it (`limits`, its
+ * PROFILE_LIMITS): pinned stops, a class's name, favourites, a favourite's
+ * name, and the walk to the home stop in minutes. The server ignores them
+ * when they're sent back.
+ */
+data class Limits(
+    val pinnedStops: Int = 8,
+    val label: Int = 60,
+    val places: Int = 12,
+    val placeLabel: Int = 24,
+    val homeWalkMin: IntRange = 0..30,
+) {
+    companion object {
+        val DEFAULT = Limits()
+
+        fun parse(o: JSONObject?): Limits {
+            if (o == null) return DEFAULT
+            fun n(key: String, fallback: Int) = o.optInt(key, fallback).takeIf { it > 0 } ?: fallback
+            val walk = o.optJSONObject("homeWalkMin")
+            val min = walk?.optInt("min", DEFAULT.homeWalkMin.first) ?: DEFAULT.homeWalkMin.first
+            val max = walk?.optInt("max", DEFAULT.homeWalkMin.last) ?: DEFAULT.homeWalkMin.last
+            return Limits(
+                pinnedStops = n("pinnedStops", DEFAULT.pinnedStops),
+                label = n("label", DEFAULT.label),
+                places = n("places", DEFAULT.places),
+                placeLabel = n("placeLabel", DEFAULT.placeLabel),
+                homeWalkMin = if (max >= min) min..max else DEFAULT.homeWalkMin,
+            )
+        }
+    }
+}
+
+/**
  * The profile as the server keeps it (apps/api/src/profile.ts), edited in
  * place and sent back whole with PUT /me/profile. Kept as JSON so fields this
  * version doesn't know about survive a save.
  */
 class ProfileDoc(val json: JSONObject) {
     fun copy() = ProfileDoc(JSONObject(json.toString()))
+
+    /** What the server allows (its `limits`); today's values from an older server. */
+    val limits: Limits get() = Limits.parse(json.optJSONObject("limits"))
 
     val homeStops: List<String>
         get() = json.optJSONObject("home")?.optJSONArray("stops")?.strings().orEmpty()
@@ -22,7 +58,7 @@ class ProfileDoc(val json: JSONObject) {
     /** The stops pinned on the Buses tab, in their order. */
     var pinnedStops: List<String>
         get() = json.optJSONArray("pinnedStops")?.strings().orEmpty()
-        set(v) { json.put("pinnedStops", JSONArray(v.distinct().take(Pins.MAX))) }
+        set(v) { json.put("pinnedStops", JSONArray(v.distinct().take(limits.pinnedStops))) }
 
     /** The account's language (phase 10): auto, en or zh. */
     var lang: String
@@ -36,7 +72,7 @@ class ProfileDoc(val json: JSONObject) {
 
     var homeWalkMin: Int
         get() = json.optInt("homeWalkMin", 5)
-        set(v) { json.put("homeWalkMin", v.coerceIn(0, 30)) }
+        set(v) { json.put("homeWalkMin", v.coerceIn(limits.homeWalkMin)) }
 
     var walkPace: String
         get() = json.optString("walkPace", "normal")
@@ -101,7 +137,7 @@ class ProfileDoc(val json: JSONObject) {
 
     fun addPlace(label: String, to: String) {
         val list = json.optJSONArray("places") ?: JSONArray()
-        list.put(JSONObject().put("key", placeKey(label, places.map { it.key })).put("label", label.trim().take(24)).put("to", to))
+        list.put(JSONObject().put("key", placeKey(label, places.map { it.key })).put("label", label.trim().take(limits.placeLabel)).put("to", to))
         json.put("places", list)
     }
 

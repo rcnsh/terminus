@@ -1,5 +1,6 @@
 package sh.rcn.terminus.widget
 
+import sh.rcn.terminus.ServerClock
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -57,7 +58,7 @@ internal fun WidgetJourney(answer: NextAnswer, journey: Journey, style: String, 
 private val white = ColorProvider(Color.White, Color.White)
 private fun fixed(argb: Long) = ColorProvider(Color(argb), Color(argb))
 
-private fun headline(answer: NextAnswer): String = answer.leaveHeadline(System.currentTimeMillis()) ?: L.s(R.string.leave_now)
+private fun headline(answer: NextAnswer): String = answer.leaveHeadline(ServerClock.now()) ?: L.s(R.string.leave_now)
 
 @Composable
 private fun Headline(answer: NextAnswer, large: Boolean) {
@@ -257,6 +258,8 @@ private fun StepLine(time: String, what: String, bus: JourneyBus?, late: Boolean
  * the bus it beats: "8 min walk · D1 would be 16 min".
  */
 private fun oneLine(answer: NextAnswer, journey: Journey): String {
+    // The server's one line for this ("arrive ~09:51 · R2 ~09:42 at PGP"); worked out here for an older server.
+    journey.text.summary?.let { return it }
     val b = journey.bus
     val walk = journey.walk?.let { L.s(R.string.journey_walk, it) }
     if (b == null) {

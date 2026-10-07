@@ -178,19 +178,19 @@ class BusesTest {
     @Test fun theSearchFindsServicesAndStops() {
         val stops = listOf(
             MapStop("COM3", "COM 3", 0.0, 0.0, listOf("D1", "D2")),
-            MapStop("KR-MRT", "Kent Ridge MRT", 0.0, 0.0, listOf("A1", "D2")),
+            MapStop("KR-MRT", "KR MRT", 0.0, 0.0, listOf("A1", "D2"), longName = "Kent Ridge MRT"),
             MapStop("KV", "Kent Vale", 0.0, 0.0, listOf("K")),
-            MapStop("YIH", "Yusof Ishak House", 0.0, 0.0, listOf("A1", "D1", "K")),
+            MapStop("YIH", "YIH", 0.0, 0.0, listOf("A1", "D1", "K"), longName = "Yusof Ishak House"),
         )
-        val services = listOf("A1", "A2", "D1", "D2", "K")
-        fun names(q: String) = searchBuses(q, stops, services).map { if (it is BusHit.Service) it.svc else (it as BusHit.Stop).code }
-        assertEquals("the service first, then stops starting with it", listOf("K", "KR-MRT", "KV"), names("k"))
+        val index = busesTabIndex(stops, listOf("K", "D2", "A1", "D1", "A2"), mapOf("KR-MRT" to listOf("mrt")))
+        fun names(q: String) = searchBuses(q, index).map { if (it is BusHit.Service) it.svc else (it as BusHit.Stop).code }
+        assertEquals("the service first, then stops starting with it", listOf("K", "KV", "KR-MRT", "YIH"), names("k"))
         assertEquals(listOf("D1"), names("d1"))
-        assertEquals(listOf("D1", "D2"), names("d"))
+        assertEquals(listOf("D1", "D2", "KR-MRT"), names("d"))
         assertEquals(listOf("YIH"), names("ishak"))
         assertEquals(listOf("YIH"), names("yih"))
-        assertEquals("a number alone isn't every service with it", emptyList<String>(), names("1"))
-        assertEquals(emptyList<String>(), names("  "))
+        assertEquals("a nickname", listOf("KR-MRT"), names("mrt"))
+        assertEquals("nothing typed: every service", listOf("A1", "A2", "D1", "D2", "K"), names("  "))
     }
 
     @Test fun theFullNameIsShownWhereTheServerGivesOne() {
@@ -202,7 +202,7 @@ class BusesTest {
         assertEquals("the widget keeps the short name", "YIH", near.name)
         assertEquals("Yusof Ishak House", Board.of(near, null).name)
         val stops = listOf(MapStop("CLB", "CLB", 0.0, 0.0, listOf("A1"), longName = "Central Library"))
-        val hit = searchBuses("library", stops, emptyList()).single() as BusHit.Stop
+        val hit = searchBuses("library", busesTabIndex(stops, emptyList(), emptyMap())).single() as BusHit.Stop
         assertEquals("Central Library", hit.name)
     }
 

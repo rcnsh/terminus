@@ -115,12 +115,13 @@ class LiveService : Service() {
             if (!sendFix(store)) Refresher.refresh(this)
             val answer = store.lastAnswer()?.first
             if (answer == null || answer.mode == "rest" || answer.card?.phase !in TRIP_PHASES) {
-                // Between trips: come back when the next one is due, or the plan changes.
-                val now = System.currentTimeMillis()
-                listOfNotNull(answer?.leaveAtMs?.minus(LeaveAlerts.LEAD_MS), answer?.refreshAtMs)
+                // Between trips: come back when the next one is due, the card changes (a
+                // trip that isn't a class has no remindAt), or the plan changes.
+                val now = ServerClock.now()
+                listOfNotNull(answer?.card?.remindAtMs, answer?.card?.nextChangeAtMs, answer?.refreshAtMs)
                     .filter { it > now }
                     .minOrNull()
-                    ?.let { wakeAt(this, it) }
+                    ?.let { wakeAt(this, ServerClock.toDevice(it)) }
                 break
             }
             nm?.notify(NOTIFICATION_ID, build(this, answer, watching = watch != null))
@@ -199,7 +200,7 @@ class LiveService : Service() {
                     setShowBadge(false)
                 },
             )
-            val now = System.currentTimeMillis()
+            val now = ServerClock.now()
             val open = PendingIntent.getActivity(
                 ctx, 0, MainActivity.intentFor(ctx),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

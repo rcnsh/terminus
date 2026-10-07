@@ -23,6 +23,7 @@ import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.Place
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.ParseError
@@ -31,6 +32,7 @@ import sh.rcn.terminus.isNewer
 import sh.rcn.terminus.deviceName
 import sh.rcn.terminus.widget.redrawWidgets
 import sh.rcn.terminus.widget.Refresher
+import sh.rcn.terminus.widget.isOld
 import sh.rcn.terminus.R
 import sh.rcn.terminus.L
 
@@ -106,9 +108,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun seen(): Pair<NextAnswer, Long>? {
         if (!store.paired) return null
         val (a, at) = store.lastAnswer() ?: return null
-        // Without a card's staleAt, 15 minutes: the server's own limit for an answer.
-        val until = a.card?.staleAtMs ?: (at + 15 * 60_000)
-        return if (until > System.currentTimeMillis()) a to at else null
+        return if (!isOld(a, ServerClock.now())) a to at else null
     }
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
@@ -567,6 +567,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 /** Installed by the Play Store, rather than the APK from the website. */
 internal fun installedFromPlay(ctx: android.content.Context): Boolean =
     runCatching { ctx.packageManager.getInstallSourceInfo(ctx.packageName).installingPackageName == "com.android.vending" }.getOrDefault(false)
+
+/** The answer on Now is fetched again this often while it's on screen: the API caches 15 s, so sooner shows nothing new. */
+internal const val POLL_MS = 30_000L
+/** Nor sooner than this after the last fetch, whatever the answer says. */
+internal const val POLL_MIN_MS = 5_000L
+
+/**
+ * When to fetch [answer] again, fetched at [polledAt] (both on the server's
+ * clock): at the moment the server says it changes by itself (the card's
+ * `nextChangeAt`, the plan's `refreshAt`) when that's sooner than the usual
+ * [POLL_MS], but never within [POLL_MIN_MS]. A moment already past when it
+ * was fetched isn't one to wait for.
+ */
+internal fun nextPollAt(answer: NextAnswer?, polledAt: Long): Long {
+    val mark = listOfNotNull(answer?.card?.nextChangeAtMs, answer?.refreshAtMs).filter { it > polledAt }.minOrNull()
+    val at = mark?.coerceAtLeast(polledAt + POLL_MIN_MS) ?: Long.MAX_VALUE
+    return minOf(at, polledAt + POLL_MS)
+}
 
 /** Today is fetched again with the answer once it's this old. */
 private const val DAY_MAX_AGE_MS = 120_000L

@@ -203,6 +203,8 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
             Column(Modifier.statusBarsPadding().padding(top = 8.dp)) {
                 Pills(campus, ui.selected, actions.choose)
                 ui.busStatus?.let { BusStatusLine(it, ui.selected.orEmpty()) }
+                // The feed is down: these are where the buses were last seen.
+                if (ui.busesStale) StatusChip(stringResource(R.string.map_buses_stale))
                 when {
                     ui.downloading -> StatusChip(stringResource(R.string.map_downloading), busy = true)
                     ui.downloadFailed -> StatusChip(stringResource(R.string.map_download_failed))
@@ -242,13 +244,16 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // Buses slide to each new place along their line (see Slides): a plain
     // holder, not state, redrawn by the frame clock while one moves. With
     // animations off in the phone's settings, they jump.
+    // Every answer is planned again, the same list or not, so a bus that
+    // hasn't moved for a while still slides when it does. The clock keeps
+    // counting while the phone sleeps, so a map left that long is seen as stale.
     val slides = remember(ui.selected) { Slides() }
-    var now by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val path = ui.selected?.let { campus.routes[it]?.path }
-    LaunchedEffect(ui.buses, slides) {
-        slides.update(ui.buses, path, SystemClock.uptimeMillis(), still = !ValueAnimator.areAnimatorsEnabled())
+    LaunchedEffect(ui.busAnswers, ui.buses, slides) {
+        slides.update(ui.buses, path, SystemClock.elapsedRealtime(), still = !ValueAnimator.areAnimatorsEnabled())
         do {
-            withFrameMillis { now = SystemClock.uptimeMillis() }
+            withFrameMillis { now = SystemClock.elapsedRealtime() }
         } while (slides.moving(now))
     }
     val drawn = slides.at(now)
@@ -268,6 +273,8 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val busIcon = remember(color, paper) { BusIcon(Color(color), paper) }
     val ringIcon = remember(ink) { RingIcon(ink) }
     val busSize = interpolate(linear(), zoom(), 13 to const(0.64f), 17 to const(1f))
+    // Where the buses were last seen, not where they are: faded.
+    val busOpacity = const(if (ui.busesStale) 0.4f else 1f)
     val selected = ui.selected
     val state = rememberMapState(baseStyle = BaseStyle.Json(style)) {
         val routeSource = rememberGeoJsonSource(GeoJsonData.JsonString(routes))
@@ -369,6 +376,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         SymbolLayer(
             id = "bus-on",
             source = busSource,
+            iconOpacity = busOpacity,
             filter = feature["id"].asString() eq const(openBus?.id.orEmpty()),
             iconImage = image(ringIcon, size = DpSize(40.dp, 40.dp)),
             iconSize = busSize,
@@ -381,6 +389,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         SymbolLayer(
             id = "buses",
             source = busSource,
+            iconOpacity = busOpacity,
             iconImage = image(busIcon, size = DpSize(27.dp, 27.dp)),
             iconSize = busSize,
             iconRotate = feature["heading"].asNumber(),
@@ -398,6 +407,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         SymbolLayer(
             id = "bus-heading",
             source = busSource,
+            iconOpacity = busOpacity,
             iconImage = image(heading, size = DpSize(12.dp, 12.dp)),
             iconSize = busSize,
             iconOffset = feature["offset"].asDpOffset(),
@@ -622,10 +632,11 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         SvcTag(r.svc, campus.routes[r.svc]?.color?.color() ?: Color.Gray)
                         Spacer(Modifier.weight(1f))
+                        // The server's words ("4 min", "~6 min", "now"); worked out here for an older server.
                         val s = r.etaS ?: 0
                         val min = stringResource(R.string.map_min, s / 60)
                         Text(
-                            when {
+                            r.eta ?: when {
                                 s < 60 -> stringResource(R.string.map_arriving)
                                 r.quality == "scheduled" -> stringResource(R.string.map_about, min)
                                 else -> min

@@ -105,8 +105,9 @@ object WidgetModes {
     fun effective(chosen: Mode, chosenAt: Long?, plan: NextAnswer?, rowShown: Boolean, now: Long): Mode {
         if (chosen == Mode.Timetable || !rowShown || chosenAt == null) return Mode.Timetable
         if (now - chosenAt > KEEP_MS) return Mode.Timetable
-        val dueAt = plan?.leaveAtMs?.minus(LeaveAlerts.LEAD_MS)
-        if (dueAt != null && dueAt in (chosenAt + 1)..now && plan.card?.phase in LiveService.TRIP_PHASES) return Mode.Timetable
+        // When the trip turned due: the server's reminder time, else its leave time.
+        val dueAt = plan?.card?.remindAtMs ?: plan?.leaveAtMs
+        if (dueAt != null && dueAt in (chosenAt + 1)..now && plan?.card?.phase in LiveService.TRIP_PHASES) return Mode.Timetable
         return chosen
     }
 

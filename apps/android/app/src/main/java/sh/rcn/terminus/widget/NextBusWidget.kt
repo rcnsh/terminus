@@ -1,5 +1,6 @@
 package sh.rcn.terminus.widget
 
+import sh.rcn.terminus.ServerClock
 import android.content.Context
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
@@ -153,8 +154,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val error = if (onTimetable) planError else chosen.error
         // Offline (the last refresh failed) with the plan gone stale, or none
         // kept: the next thing on the day plan kept for it.
-        val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, fetchedAt, now0))) {
-            OfflineDay.next(store.lastDay()?.first, now0)
+        val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, ServerClock.now()))) {
+            OfflineDay.next(store.lastDay()?.first, ServerClock.now())
         } else {
             null
         }
@@ -176,7 +177,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val spoken = when {
             mode == Mode.Nearby -> nearbySpoken(chosen)
             offline != null -> OfflineDay.lines(offline) { clock(ctx, it) }.let { listOfNotNull(L.s(R.string.offline), it.head, it.big, it.how).joinToString(". ") }
-            else -> spokenSummary(ctx, paired, answer, fetchedAt, error)
+            else -> spokenSummary(ctx, paired, answer, error)
         }
         Box(
             modifier = GlanceModifier
@@ -248,7 +249,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         // On the bus (phase 6): where you get off and when, the
                         // next stop, and how far along the ride the bus is.
                         val ride = answer.card.ride
-                        val now = System.currentTimeMillis()
+                        val now = ServerClock.now()
                         Text(listOfNotNull(answer.phaseText, answer.destLabel).joinToString(" · "), style = muted, maxLines = 1)
                         Text(
                             L.s(R.string.off_at_time, ride.stops.last(), clock(ctx, ride.arriveMs)),
@@ -269,7 +270,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         ButtonRow(ctx, bottom, large)
                         Footer(ctx, fetchedAt, error, roomy)
                     }
-                    answer.card?.journey != null && !isOld(answer, fetchedAt, now0) -> {
+                    answer.card?.journey != null && !isOld(answer, ServerClock.now()) -> {
                         // A trip by bus or on foot, in the card style chosen in Settings › Appearance.
                         // Old times fall through to the layouts below, which dim them.
                         // A refresh keeps this layout, with "Updating…" on the head
@@ -283,12 +284,12 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     answer.isClassPlan -> {
                         // A class: when to leave leads, the next bus is the fallback.
                         // After a missed bus the same, headed by what was missed.
-                        val now = System.currentTimeMillis()
-                        val old = isOld(answer, fetchedAt, now)
+                        val now = ServerClock.now()
+                        val old = isOld(answer, now)
                         val fmt = { ms: Long -> clock(ctx, ms) }
-                        val missed = answer.card?.takeIf { it.phase == "missed" }?.line?.substringBefore(" · ")
+                        // The trip's phase as the server words it ("On your way", "Missed it. Here's the next way there."), whole.
                         Text(
-                            listOfNotNull(missed ?: answer.phaseText?.let(::phaseHead), answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "),
+                            listOfNotNull(answer.phaseText, answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "),
                             style = muted, maxLines = 1,
                         )
                         Text(
@@ -322,16 +323,15 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     }
                     else -> {
                         val heading = listOfNotNull(
-                            answer.phaseText?.let(::phaseHead),
-                            answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null,
-                            if (answer.why == "gap-home") L.s(R.string.long_gap_short) else null,
+                            answer.phaseText,
+                            answer.card?.heading ?: localHeading(answer),
                         ).joinToString(" · ")
                         if (heading.isNotEmpty()) Text(heading, style = muted, maxLines = 1)
                         // A clock time stays true until the bus leaves; "4 min"
                         // is wrong a minute later. Once the bus has gone, or the
                         // data is old, dim it and ask for a tap rather than lie.
-                        val now = System.currentTimeMillis()
-                        val old = isOld(answer, fetchedAt, now)
+                        val now = ServerClock.now()
+                        val old = isOld(answer, now)
                         Text(
                             answer.clockLabel { clock(ctx, it) },
                             style = headStyle(if (old) colors.onSurfaceVariant else colors.onSurface, large),
@@ -517,11 +517,14 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         /** Nearby's countdowns are guesses past this. */
         private const val NEARBY_OLD_S = 180L
 
-        /** "D2 3 min · A1 7 min", counted down by `ageS`. */
+        /** The server's own words for a time are kept while they're this fresh; then the widget counts down itself. */
+        private const val SERVER_ETA_S = 30L
+
+        /** "D2 3 min · A1 7 min": the server's words while fresh, then counted down by `ageS`. */
         fun departures(s: NearbyStop, ageS: Long, n: Int, skip: Int = 0): String =
             s.board.filter { it.etaS != null }.drop(skip).take(n).joinToString(" · ") { r ->
                 val left = (r.etaS!! - ageS).toInt()
-                "${r.svc} ${eta(left.coerceAtLeast(0), r.quality)}"
+                "${r.svc} ${r.eta?.takeIf { ageS < SERVER_ETA_S } ?: eta(left.coerceAtLeast(0), r.quality)}"
             }
     }
 
@@ -546,13 +549,13 @@ internal fun chipAction(ctx: Context, mode: Mode, appWidgetId: Int): Action =
     }
 
 /** What the widget says, as a sentence for screen readers. */
-fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt: Long?, error: String?): String {
+fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: String?): String {
     if (!paired) return L.s(R.string.a11y_not_paired)
     if (answer == null) return L.s(R.string.a11y_loading, error ?: L.s(R.string.a11y_loading_word))
-    val old = isOld(answer, fetchedAt, System.currentTimeMillis())
+    val old = isOld(answer, ServerClock.now())
     val ride = answer.card?.ride?.takeIf { answer.card.phase == "riding" }
     if (ride != null) {
-        val now = System.currentTimeMillis()
+        val now = ServerClock.now()
         return listOfNotNull(
             answer.destLabel?.let { L.s(R.string.a11y_on_the_to, ride.svc, it) } ?: L.s(R.string.on_the, ride.svc),
             L.s(R.string.a11y_off_at, ride.stops.last(), clock(ctx, ride.arriveMs)),
@@ -561,7 +564,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
     }
     if (answer.isClassPlan && !old) {
         val fmt = { ms: Long -> clock(ctx, ms) }
-        val now = System.currentTimeMillis()
+        val now = ServerClock.now()
         return listOfNotNull(
             answer.destLabel?.let { L.s(R.string.a11y_starts, it, answer.classAtMs?.let(fmt).orEmpty()) },
             answer.leaveHeadline(now),
@@ -573,7 +576,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
         answer.destLabel?.let { L.s(R.string.a11y_to, it) },
         if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", L.s(R.string.a11y_leaves)),
         if (old) L.s(R.string.a11y_old) else answer.detail.replace(" · ", ", "),
-        answer.leaveText(System.currentTimeMillis())?.takeIf { !old }?.replace(" · ", ", "),
+        answer.leaveText(ServerClock.now())?.takeIf { !old }?.replace(" · ", ", "),
         answer.timingText?.takeIf { !old },
         error?.takeIf { it != UPDATING },
     )
@@ -614,8 +617,11 @@ class RefreshAction : ActionCallback {
 /** Stored as the error while an update is under way; shown as R.string.updating. */
 const val UPDATING = "Updating…"
 
-/** "Missed it: here is the next way there" -> "Missed it": the phase's head, either colon. */
-internal fun phaseHead(text: String) = text.substringBefore(':').substringBefore('：')
+/** The line above the headline from an older server, without `card.heading`: where to, and a long gap. */
+private fun localHeading(answer: NextAnswer): String? = listOfNotNull(
+    answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null,
+    if (answer.why == "gap-home") L.s(R.string.long_gap_short) else null,
+).joinToString(" · ").ifEmpty { null }
 
 open class BusWidgetReceiver(widget: GlanceAppWidget) : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = widget

@@ -42,6 +42,10 @@ data class MapUi(
     /** The service whose pill is on. */
     val selected: String? = null,
     val buses: List<LiveBus> = emptyList(),
+    /** The buses are where they were last seen, the feed being down: shown dimmed, and said so. */
+    val busesStale: Boolean = false,
+    /** Counts every answer from /buses, the same list or not, so the slides are planned again each time. */
+    val busAnswers: Int = 0,
     val busStatus: BusStatus? = null,
     val sheet: MapSheet? = null,
     /** A stop opened from elsewhere (Nearby on Now), for the map to move to once. */
@@ -122,7 +126,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     fun choose(svc: String?) {
         val next = if (svc == _state.value.selected) null else svc
-        _state.update { it.copy(selected = next, buses = emptyList(), busStatus = if (next == null) null else BusStatus.Finding, sheet = (it.sheet as? MapSheet.Stop)) }
+        _state.update { it.copy(selected = next, buses = emptyList(), busesStale = false, busStatus = if (next == null) null else BusStatus.Finding, sheet = (it.sheet as? MapSheet.Stop)) }
     }
 
     suspend fun refreshBuses() {
@@ -138,7 +142,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { s ->
                 // A bus whose card is open and has gone: close the card.
                 val sheet = s.sheet.let { sh -> if (sh is MapSheet.Bus && list.buses.none { it.id == sh.id }) null else sh }
-                s.copy(buses = list.buses, busStatus = status, sheet = sheet)
+                s.copy(buses = list.buses, busesStale = list.stale && list.buses.isNotEmpty(), busAnswers = s.busAnswers + 1, busStatus = status, sheet = sheet)
             }
         } catch (e: CancellationException) {
             throw e

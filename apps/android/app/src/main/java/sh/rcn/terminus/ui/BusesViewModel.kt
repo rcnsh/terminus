@@ -66,6 +66,19 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun api() = Api(store.token)
 
+    /**
+     * The profile's "public buses": boards then have them too, as the web's
+     * do. A change asks again at the next refresh rather than waiting out the gap.
+     */
+    /** How many stops the profile may pin (its `limits`). */
+    var pinLimit = sh.rcn.terminus.Limits.DEFAULT.pinnedStops
+
+    var publicBuses = false
+        set(v) {
+            if (field != v) asked.clear()
+            field = v
+        }
+
     private fun fresh(key: String): Boolean = System.currentTimeMillis() - (asked[key] ?: 0) < MIN_GAP_MS
 
     private fun mark(key: String) { asked[key] = System.currentTimeMillis() }
@@ -113,7 +126,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         if (!force && fresh(code)) return
         mark(code)
         try {
-            val board = api().board(code)
+            val board = api().board(code, publicBuses)
             _state.update { it.copy(boards = it.boards + (code to board.copy(code = board.code.ifEmpty { code })), failed = it.failed - code) }
         } catch (e: CancellationException) {
             throw e

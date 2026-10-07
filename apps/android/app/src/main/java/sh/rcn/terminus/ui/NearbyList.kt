@@ -73,7 +73,7 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
                         Box(Modifier.width(if (row.paid) 52.dp else 34.dp)) { BusBadge(row.svc, color, if (big) 13.sp else 12.sp, paid = row.paid) }
                         Road(row, Color(color), Modifier.weight(1f).height(18.dp))
                         Text(
-                            eta(row.etaS, row.quality),
+                            row.eta ?: eta(row.etaS, row.quality),
                             fontSize = if (big) 18.sp else 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             textAlign = TextAlign.End,
@@ -124,8 +124,11 @@ private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
     }
 }
 
+/** A row's time worded here, for an older server that doesn't send `eta`. */
+/** The local wording, for an older server and the widget's own countdown: a timetable guess keeps its "~", as the server's `eta` does. */
 internal fun eta(s: Int?, quality: String) = when {
     s == null -> if (quality == "ended") L.s(R.string.eta_ended) else "–"
     s < 45 -> L.s(R.string.now)
+    quality == "scheduled" -> L.s(R.string.approx, L.s(R.string.n_min, (s + 30) / 60))
     else -> L.s(R.string.n_min, (s + 30) / 60)
 }

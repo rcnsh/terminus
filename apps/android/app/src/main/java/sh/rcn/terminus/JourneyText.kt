@@ -4,8 +4,10 @@ import androidx.annotation.StringRes
 
 /**
  * The few words the card styles put round the server's journey (Journey),
- * shared by the app's card and the widgets. Only the countdown is worked out
- * here, because it ticks.
+ * shared by the app's card and the widgets. The server words them
+ * (`journey.title`, `byText`, `arriveText`, `backupText`, ...); only the
+ * countdown is worked out here, because it ticks, and the rest only for an
+ * older server that doesn't send them.
  */
 object JourneyText {
     /**
@@ -44,18 +46,19 @@ object JourneyText {
     }
 
     /** "To GEA1000 @ UTown · starts 10:00", the class's start being what the arrival and slack are about. */
-    fun to(answer: NextAnswer, journey: Journey, clock: (Long) -> String): String =
+    fun to(answer: NextAnswer, journey: Journey, clock: (Long) -> String): String = journey.text.title ?:
         listOfNotNull(L.s(R.string.journey_to, journey.to), answer.classAtMs?.takeIf { answer.isClassPlan }?.let { L.s(R.string.starts_at, clock(it)) }).joinToString(" · ")
 
     /** "by 4:01 PM" under the countdown, until it's time to go. */
     fun by(answer: NextAnswer, journey: Journey, now: Long): String? {
         if (answer.card?.phase == "waiting") return null
         val at = answer.leaveAtMs ?: return null
-        return journey.leave?.takeIf { now < at }?.let { L.s(R.string.leave_by_short, it) }
+        if (now >= at) return null
+        return journey.text.by ?: journey.leave?.let { L.s(R.string.leave_by_short, it) }
     }
 
     /** "Arrive 4:08 PM", with a class's "9 min early". */
-    fun arrive(journey: Journey): String? =
+    fun arrive(journey: Journey): String? = journey.text.arrive ?:
         journey.arrive?.let { listOfNotNull(L.s(R.string.journey_arrive_time, it), journey.slack).joinToString(" · ") }
 
     /**
@@ -63,9 +66,19 @@ object JourneyText {
      * public bus is "95 ($)": the fare shows here too. On foot, the bus the
      * walk beats: "D1 would be 16 min".
      */
-    fun backup(answer: NextAnswer, journey: Journey): String? = if (journey.bus == null) journey.why else journey.backup?.let {
+    fun backup(answer: NextAnswer, journey: Journey): String? = journey.text.backup ?: if (journey.bus == null) journey.why else journey.backup?.let {
         L.s(if (answer.isClassPlan) R.string.journey_backup_now else R.string.journey_backup, if (it.paid) "${it.svc} ($)" else it.svc, it.board, it.stop)
     }
+
+    /** "5 min walk", as the server words it. */
+    fun walk(journey: Journey): String? = journey.text.walk ?: journey.walk?.let { L.s(R.string.journey_walk, it) }
+
+    /** "10 min ride · off at Opp NUSS". */
+    fun ride(journey: Journey): String? = journey.text.ride ?: listOfNotNull(journey.ride?.let { L.s(R.string.journey_ride, it) }, journey.off?.let { L.s(R.string.off_at, it) }).joinToString(" · ").ifEmpty { null }
+
+    /** Under the arrival time: "9 min early", else "2 min walk from UTown" or "at UTown". */
+    fun arriveWhere(journey: Journey): String = journey.slack ?: journey.text.arriveWhere
+        ?: journey.walkEnd?.let { L.s(R.string.journey_walk_from, it, journey.toStop) } ?: L.s(R.string.journey_at, journey.toStop)
 
     /** "in 4 min" to the bus leaving, or null once it has (or on foot, with no bus). */
     fun busIn(journey: Journey, now: Long): String? {
