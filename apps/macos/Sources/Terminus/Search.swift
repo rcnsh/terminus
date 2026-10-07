@@ -5,6 +5,8 @@ struct Search: View {
     @Binding var query: String
     /// The result Return goes to, moved with the arrow keys.
     @State private var highlighted = 0
+    /// The number of results VoiceOver last heard, while something is typed.
+    @State private var countSaid: Int?
 
     private var q: String { query.trimmingCharacters(in: .whitespaces) }
     private var matches: [Destination] { q.isEmpty ? [] : rankDestinations(model.destinations, q) }
@@ -74,9 +76,18 @@ struct Search: View {
                 .transition(.opacity)
             }
         }
-        // How many came up, said as the list changes under the typing.
-        .onChange(of: q.isEmpty ? nil : matches.count) { _, n in
-            guard let n, !model.destinations.isEmpty else { return }
+        // How many came up, said once typing settles (half a second after the
+        // last key), and only when it's a different count from the last said.
+        .task(id: "\(model.destinations.count)|\(q)") {
+            guard !q.isEmpty else {
+                countSaid = nil
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled, !model.destinations.isEmpty else { return }
+            let n = matches.count
+            guard n != countSaid else { return }
+            countSaid = n
             announce(n == 0 ? L("No matches") : n == 1 ? L("1 result") : L("%@ results", "\(n)"))
         }
     }

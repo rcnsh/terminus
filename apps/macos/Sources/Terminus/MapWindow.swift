@@ -164,7 +164,12 @@ struct MapWindow: View {
             if let campus = map.campus {
                 VStack(alignment: .leading, spacing: 8) {
                     Pills(campus: campus, selected: map.selected) { map.choose($0) }
-                    if let status = map.busStatus { StatusChip(text: status.text(map.selected ?? "")).announced(status.text(map.selected ?? "")) }
+                    if let status = map.busStatus {
+                        // Said for a new service, or when its buses go to or from none;
+                        // not at every bus that joins or leaves.
+                        StatusChip(text: status.text(map.selected ?? ""))
+                            .announced(status.text(map.selected ?? ""), when: [map.selected ?? "", status.heard])
+                    }
                     if map.downloading {
                         StatusChip(text: L("Downloading the street map (about 4 MB)…"), busy: true)
                     } else if map.downloadFailed {
@@ -230,6 +235,13 @@ struct MapWindow: View {
 }
 
 extension MapModel.BusStatus {
+    /// What VoiceOver hears again when it changes: any number of buses
+    /// running is the same, so a count going up or down is not said.
+    var heard: String {
+        if case .running = self { return "running" }
+        return "\(self)"
+    }
+
     func text(_ svc: String) -> String {
         switch self {
         case .finding: L("Finding %@ buses…", svc)
