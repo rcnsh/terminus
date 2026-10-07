@@ -40,7 +40,7 @@ import { landingPage } from './landing.ts';
 import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { allResidences, residenceWalkMin } from './residences.ts';
-import { callerFor } from './access.ts';
+import { ACCOUNTS_DOWN, callerOrDown, d1Unavailable } from './access.ts';
 import { fcmEnabled } from './push.ts';
 import { webPushEnabled } from './webpush.ts';
 import { handleTimelapse } from './timelapse.ts';
@@ -413,7 +413,11 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // and the map alone asks every 5 s. A key has its own ceiling wherever
     // it's used from; a request with neither is limited by IP.
     if (keyed) {
-      const caller = await callerFor(env, req, nowMs, ctx);
+      const { caller, down } = await callerOrDown(env, req, nowMs, ctx);
+      if (down) {
+        logError(env, url.pathname);
+        return json({ error: ACCOUNTS_DOWN }, 503, { 'retry-after': '30' });
+      }
       const bucket =
         caller?.kind === 'key' ? { rl: env.RL_PUBLIC, key: `key:${caller.keyId}` }
         : caller?.kind === 'account' ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
@@ -490,6 +494,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // dashboard. The path only: the query can hold coordinates.
     console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
     logError(env, url.pathname);
+    // D1 down for a moment (on /me/*, say) is worth trying again; the apps
+    // read a 503 that way, and a 500 as a fault.
+    if (d1Unavailable(err)) return json({ error: ACCOUNTS_DOWN }, 503, { 'retry-after': '30' });
     return json({ error: 'internal' }, 500);
   }
 }

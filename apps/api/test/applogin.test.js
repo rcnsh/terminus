@@ -497,7 +497,7 @@ test('a web sign-in or pairing that fails part way can be tried again with the s
     beforeNextBatch(db, () => {
       throw new Error('D1 hiccup');
     });
-    assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t } })).status, 500);
+    assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t } })).status, 503);
     const ok = await call(env, '/auth/verify', { method: 'POST', form: { t } });
     assert.match(ok.headers.get('set-cookie') ?? '', /__Host-tm_s=[^;]+;/);
     const cookie = ok.headers.get('set-cookie').split(';')[0];
@@ -506,7 +506,7 @@ test('a web sign-in or pairing that fails part way can be tried again with the s
     beforeNextBatch(db, () => {
       throw new Error('D1 hiccup');
     });
-    assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'Mac' } })).status, 500);
+    assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'Mac' } })).status, 503);
     const paired = await call(env, '/pair', { method: 'POST', body: { code, name: 'Mac' } });
     assert.equal(paired.status, 200);
     assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'Mac' } })).status, 400, 'still only once');

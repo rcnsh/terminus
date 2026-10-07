@@ -687,6 +687,7 @@ export const ERRORS_ZH: Record<string, string> = {
   "timelapse storage is not configured": "延时回放存储未配置",
   "walkPace must be slow, normal or fast": "walkPace 必须是 slow、normal 或 fast",
   'your settings were changed on another device; try again': '你的设置刚在另一台设备上改过，请再试一次',
+  "terminus can't reach your account right now; try again in a minute": 'terminus 现在无法读取你的账户，请一分钟后再试',
 };
 
 /** An error message in the current language. Unknown ones stay English. */
