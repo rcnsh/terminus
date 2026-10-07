@@ -83,6 +83,19 @@ test('Turnstile: enforced once a secret is set', async () => {
   assert.ok(verify.every((u) => u.includes('challenges.cloudflare.com')));
 });
 
+test('Turnstile not answering: sign-in says try again later (503), not that the check failed', async () => {
+  const { env, email } = setup();
+  globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
+  const e = { ...env, TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  for (const path of ['/auth/login', '/auth/anon/web']) {
+    const res = await call(e, path, { method: 'POST', body: { email: INVITED, turnstile: 'good' } });
+    assert.equal(res.status, 503, path);
+    assert.equal(res.headers.get('retry-after'), '60');
+    assert.match((await res.json()).error, /not answering/);
+  }
+  assert.equal(email.sent.length, 0);
+});
+
 test('opening the link does not spend it; the POST does, once', async () => {
   const { env, email } = setup();
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });

@@ -527,8 +527,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           requestBody: jsonBody({ type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } }, { email: 'you@u.nus.edu' }),
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, message: { type: 'string' } } }),
-            '400': errorResponse('Not an email address.'),
+            '400': errorResponse('Not an email address, or the human check failed.'),
             '429': errorResponse('Too many attempts from this IP, or too many sign-in emails for everyone this minute.'),
+            '503': errorResponse('The human check (Turnstile) is not answering. Try again after `Retry-After` seconds.'),
           },
         },
       },
@@ -563,6 +564,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '201': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
             '400': errorResponse('The human check failed.'),
             '429': errorResponse('Too many new accounts, from this IP or overall.'),
+            '503': errorResponse('The human check (Turnstile) is not answering. Try again after `Retry-After` seconds.'),
           },
         },
       },

@@ -645,6 +645,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'too many attempts, try again in a minute': '尝试次数太多，请一分钟后再试',
   'enter a valid email address': '请输入有效的邮箱地址',
   'the human check failed, try again': '人机验证没有通过，请再试一次',
+  'the human check is not answering, try again in a minute': '人机验证暂时没有响应，请一分钟后再试',
   'sign-in is busy, try again in a minute': '登录繁忙，请一分钟后再试',
   'pairing is busy, try again in a minute': '配对繁忙，请一分钟后再试',
   'could not send the email, try again later': '邮件发送失败，请稍后再试',
