@@ -291,12 +291,7 @@ private struct FavouriteSearch: View {
                         query = ""
                         note = setup.addPlace(d).map { L("Already a favourite: %@", $0) }
                     } label: {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(d.label)
-                            if d.label != d.code { Text(d.code).font(.caption).foregroundStyle(.secondary) }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+                        DestinationLabel(destination: d)
                     }
                     .buttonStyle(.plain)
                     .padding(.vertical, 3)
@@ -335,12 +330,8 @@ struct TripsPane: View {
     @State private var offCampus = false
     @State private var locating: String?
 
-    private var residence: Campus.Residence? { setup.campus?.residences.first { $0.stops == setup.homeStops } }
-    private let paces = [
-        ("slow", L("Slow"), L("400 m in about 6 min. A relaxed pace, or if you often carry a bag.")),
-        ("normal", L("Normal"), L("400 m in about 5 min. An average pace.")),
-        ("fast", L("Fast"), L("400 m in about 4 min. A brisk pace.")),
-    ]
+    private var residence: Campus.Residence? { setup.residence }
+    private let paces = WalkPace.all
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -374,8 +365,7 @@ struct TripsPane: View {
                 LabeledContent(L("Your stop")) {
                     Picker(L("Your stop"), selection: Binding(
                         get: { setup.homeStops.first ?? "" },
-                        // "Choose a stop" clears the first one rather than saving a blank stop.
-                        set: { code in setup.setHomeStops((code.isEmpty ? [] : [code]) + setup.homeStops.dropFirst().filter { $0 != code }) }
+                        set: { setup.setFirstHomeStop($0) }
                     )) {
                         Text(L("Choose a stop")).tag("")
                         ForEach(campus.stops, id: \.code) { Text($0.name).tag($0.code) }
@@ -386,14 +376,7 @@ struct TripsPane: View {
                 HStack {
                     Button(L("Pick the stop nearest me")) {
                         locating = L("Finding the nearest stop…")
-                        Task {
-                            if let loc = await app.whereAmI(), let near = campus.nearest(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) {
-                                setup.setHomeStops([near.code] + setup.homeStops.filter { $0 != near.code })
-                                locating = L("Picked %@. Change it if you use a different stop.", near.name)
-                            } else {
-                                locating = L("Couldn't get this Mac's location. Pick your stop instead.")
-                            }
-                        }
+                        Task { locating = await setup.pickNearestStop(app: app, campus: campus) }
                     }
                     .buttonStyle(.link)
                     if let locating { Hint(locating) }

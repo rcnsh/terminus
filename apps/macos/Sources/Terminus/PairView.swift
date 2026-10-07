@@ -9,7 +9,7 @@ struct Pair: View {
     @State private var useCode = false
     @State private var emailCode = ""
 
-    private var emailOK: Bool { email.trimmingCharacters(in: .whitespaces).range(of: #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#, options: .regularExpression) != nil }
+    private var emailOK: Bool { looksLikeEmail(email) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -152,6 +152,11 @@ struct Pair: View {
         }
         .card()
     }
+}
+
+/// Something@somewhere.tld, spaces around it aside: enough to offer to send a code.
+func looksLikeEmail(_ s: String) -> Bool {
+    s.trimmingCharacters(in: .whitespaces).range(of: #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#, options: .regularExpression) != nil
 }
 
 // MARK: - Code boxes
