@@ -1263,3 +1263,13 @@ test('a page that isn\'t there is the not-found page for a browser, still a 404'
   assert.equal(script.status, 404);
   assert.equal(await script.text(), 'not found');
 });
+
+test('the test D1 counts the rows a RETURNING statement changed, as D1 does', async () => {
+  const db = makeD1();
+  db.exec("INSERT INTO blocklist VALUES ('a@example.com', 0), ('b@example.com', 0)");
+  const del = await db.prepare('DELETE FROM blocklist RETURNING email').run();
+  assert.equal(del.results.length, 2);
+  assert.equal(del.meta.changes, 2);
+  const read = await db.prepare('SELECT * FROM blocklist').run();
+  assert.equal(read.meta.changes, 0);
+});
