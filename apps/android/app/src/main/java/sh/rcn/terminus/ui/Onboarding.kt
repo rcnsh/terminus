@@ -57,7 +57,13 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -110,7 +116,7 @@ internal fun OnboardingScreen(state: AccountState, account: AccountViewModel, ma
         val profile = state.profile
         if (profile == null) {
             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                if (state.message == null) CircularProgressIndicator() else Text(state.message, color = MaterialTheme.colorScheme.error)
+                if (state.message == null) CircularProgressIndicator() else Text(state.message, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
             }
             if (state.message != null) Button(onClick = account::refresh) { Text(stringResource(R.string.try_again)) }
             return@Column
@@ -178,7 +184,7 @@ private fun StepLine(step: Int, modifier: Modifier = Modifier) {
 private fun ColumnScope.StepPage(message: String?, buttons: @Composable () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 12.dp)) {
         content()
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp)) }
+        message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive }) }
         Spacer(Modifier.height(20.dp))
     }
     buttons()
@@ -200,9 +206,12 @@ private fun StepButtons(next: () -> Unit, back: (() -> Unit)?, nextLabel: String
     }
 }
 
+/** A step's title, a heading; a screen reader's focus moves to it when the step changes. */
 @Composable
 private fun Title(text: String, sub: String) {
-    Text(text, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(text) { runCatching { focus.requestFocus() } }
+    Text(text, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
     Spacer(Modifier.height(6.dp))
     Text(sub, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(18.dp))

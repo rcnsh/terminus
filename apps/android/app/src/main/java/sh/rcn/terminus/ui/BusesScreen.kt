@@ -67,6 +67,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -224,7 +225,8 @@ private fun SearchBox(query: String, onQuery: (String) -> Unit, modifier: Modifi
     TextField(
         value = query,
         onValueChange = onQuery,
-        placeholder = { Text(stringResource(R.string.buses_search)) },
+        // A label, not only a placeholder: it keeps the field's name once something's typed.
+        label = { Text(stringResource(R.string.buses_search)) },
         leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null, modifier = Modifier.size(20.dp)) },
         trailingIcon = if (query.isEmpty()) null else {
             { IconButton(onClick = { onQuery(""); focus.clearFocus() }) { Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close)) } }
@@ -378,7 +380,7 @@ private fun StopPage(
                 board?.name ?: stopName(state, shownCode),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 2.dp).semantics { heading() },
             )
             Text(shownCode, style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant, letterSpacing = 0.8.sp)
         }

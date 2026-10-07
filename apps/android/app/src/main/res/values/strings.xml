@@ -53,6 +53,8 @@
     <string name="a11y_to">To %1$s</string>
     <string name="a11y_map">Campus map. For stops and buses as a list, use the Buses tab.</string>
     <string name="a11y_show_list">Show as list</string>
+    <string name="email_label">Email</string>
+    <string name="report_note">Your note</string>
     <string name="a11y_about">"about "</string>
     <string name="a11y_bus">Bus %1$s</string>
     <string name="a11y_bus_paid">Public bus %1$s, fare applies</string>
