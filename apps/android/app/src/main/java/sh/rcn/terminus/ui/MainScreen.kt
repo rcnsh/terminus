@@ -88,17 +88,17 @@ private fun minuteOfDay(): Int = java.time.LocalTime.now().let { it.hour * 60 + 
 
 /**
  * The hour of the sky over Now, and over Settings' list: by the phone's
- * clock, ticking each minute, and night after your day (Next resting).
+ * clock, ticking each minute, whatever the chip shows.
  */
 @Composable
-internal fun skyPhase(state: UiState): Phase {
+internal fun skyPhase(): Phase {
     val minute by produceState(minuteOfDay()) {
         while (true) {
             delay(60_000 - System.currentTimeMillis() % 60_000)
             value = minuteOfDay()
         }
     }
-    return if (!state.showNearby && state.answer?.mode == "rest") Phase.NIGHT else phaseAt(minute)
+    return phaseAt(minute)
 }
 
 @Composable
@@ -130,12 +130,12 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         }
     }
 
-    // Now's sky, by the hour (always night after your day): whatever's shown
+    // Now's sky, by the hour: whatever's shown
     // under the chips says where it ends, and the header, chips and status
     // bar take its ink over it. One sky for the tab, so it stays as the
     // chips switch.
     val scroll = rememberScrollState()
-    val sky = rememberSky(scroll, skyPhase(state))
+    val sky = rememberSky(scroll, skyPhase())
     val page = MaterialTheme.colorScheme.background
     val shown = sky.end != null
     val light = sky.palette.lightInk

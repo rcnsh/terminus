@@ -177,7 +177,6 @@ internal fun SettingsScreen(
     LaunchedEffect(state.email) { if (state.email != null) account.loadDevices() }
     LaunchedEffect(Unit) { account.loadChoices() }
     LaunchedEffect(Unit) { account.loadCampus() }
-    val ui by main.state.collectAsStateWithLifecycle()
 
     var open by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
     // A NUSMods link shared into the app: straight to Timetable, to import it.
@@ -256,7 +255,7 @@ internal fun SettingsScreen(
                     }.background(MaterialTheme.colorScheme.background).padding(bottom = bottom),
                 ) {
                     // The title in a slim band of the list's sky; the page itself plain.
-                    SkyBand(skyPhase(ui), if (state.message != null) 0.dp else top) {
+                    SkyBand(skyPhase(), if (state.message != null) 0.dp else top) {
                         TabHeader {
                             // The arrow sits in the margin, so the title lines up with the list's.
                             IconButton(onClick = { open = null }, modifier = Modifier.offset(x = (-12).dp)) {

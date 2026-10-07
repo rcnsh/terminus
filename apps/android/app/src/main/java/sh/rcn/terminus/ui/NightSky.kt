@@ -65,7 +65,7 @@ import kotlin.math.sin
 /*
  * Now's sky: behind the top of Now, from the status bar down to a horizon
  * of the campus's hills, in the hour's colours (dawn, day, the golden hour,
- * dusk, night; always night after your day). There's one sky for the whole
+ * dusk, night), by the clock. There's one sky for the whole
  * tab, so it stays as the chips switch: whatever Now shows has its top in a
  * [SkyHead] and ends on a [SkyGround], which says where the sky ends and
  * what's on the road. Now draws the sky and puts what's over it (the

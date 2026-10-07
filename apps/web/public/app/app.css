@@ -264,7 +264,7 @@ body.app .toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 1
 
 /* Now's sky (sky.js): from the top of the page down to the horizon at the
    end of the card's top, in the hour's colours: dawn, day, the golden hour,
-   dusk and night (always night after your day). The header, the chips and
+   dusk and night, by the clock. The header, the chips and
    the card's top take the sky's ink: dark on a light sky, light on a dark
    one, and always light on a dark phone, whose skies are deep and muted so
    they never glare. The horizon's near hill is the page's own colour. */

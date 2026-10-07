@@ -261,7 +261,7 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
         SignInScreen(
             acct,
             adding = state.paired,
-            phase = skyPhase(state),
+            phase = skyPhase(),
             onSend = { account.sendSignIn(it, signedIn) },
             onCode = { account.enterCode(it, signedIn) },
             onChoose = { keepPhone -> account.choose(keepPhone, signedIn) },
