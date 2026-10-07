@@ -2,10 +2,10 @@
 // page ("Your widget right now") and on the web app's Now. Every line comes
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
-import { html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
+import { announce, focusSoon, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, serverNow, t } from './dom.js';
 import { lists } from './profile.js';
-import { Journey, cardStyle } from './journey.js';
+import { Journey, cardStyle, spokenJourney } from './journey.js';
 import { Celestial, Horizon, NightSky } from './sky.js';
 
 
@@ -48,6 +48,49 @@ function Countdown({ at }) {
   return html`<div class=${left > 0 ? 'countdown' : 'countdown gone'}>${text}</div>`;
 }
 
+/**
+ * Says `text` on the page's status line (ui.js announce) whenever it
+ * changes: the card's parts tick and redraw, but only this is heard. Not
+ * while it's out of sight: on a tab that's hidden (the app keeps them drawn)
+ * or in a browser tab in the background.
+ */
+export function Say({ text }) {
+  const mark = useRef(null);
+  useEffect(() => {
+    if (document.hidden || mark.current?.parentElement?.closest('[hidden]')) return;
+    announce(text);
+  }, [text]);
+  // Takes no room: only there to say where on the page it is.
+  return html`<span hidden ref=${mark}></span>`;
+}
+
+/**
+ * The card in a line, for a screen reader: what it's for and its headline,
+ * minute by minute at most (journey.js spokenJourney for a trip). Null for
+ * an old card, which is about to be replaced.
+ */
+function spoken(a, now) {
+  const c = a.card;
+  if (a.mode === 'rest' || a.mode === 'free' || a.arrived) return [a.label, c?.upcoming ? `${c.upcoming.when} ${c.upcoming.title}` : a.detail].filter(Boolean).join('. ');
+  if (isStale(a)) return null;
+  if (c?.journey) return spokenJourney(a, now);
+  if (c?.kind === 'class') {
+    const head = c.phase !== 'waiting' && now >= Date.parse(a.leave.at) ? t('Leave now') : c.leaveBy;
+    return [`${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}`, head, c.catch, c.late ? c.arrive : null].filter(Boolean).join('. ');
+  }
+  return [a.card?.title ?? a.label, a.detail].filter(Boolean).join('. ');
+}
+
+/** Says card `a` when what it means changes, checking each few seconds for "Leave now". */
+function SayCard({ a }) {
+  const [now, setNow] = useState(serverNow());
+  useEffect(() => {
+    const id = setInterval(() => setNow(serverNow()), 5_000);
+    return () => clearInterval(id);
+  }, []);
+  return html`<${Say} text=${spoken(a, now)} />`;
+}
+
 /** Sends a card's button (Not going, Undo, …) and returns the answer that comes back. */
 export const signal = (body) => api(`/me/signal${hour12() ? '?h12=1' : ''}`, { method: 'POST', body });
 
@@ -60,7 +103,7 @@ function LeaveBy({ a, late }) {
   // At the stop the headline is the bus and its time: nothing to count down to.
   const left = a.card.phase === 'waiting' ? 0 : Math.floor((Date.parse(a.leave.at) - now) / 1000);
   return html`
-    <div class=${`big${late}`}>${leaveHead(a)}</div>
+    <h2 class=${`big${late}`}>${leaveHead(a)}</h2>
     ${left > 0 && html`<div class="countdown">${left >= 120 ? t('in {0} min', Math.round(left / 60)) : t('in {0} min {1} s', Math.floor(left / 60), left % 60)}</div>`}
   `;
 }
@@ -214,10 +257,10 @@ function DayDone({ a, night, sky, onPlace, children }) {
   // The line under the label: why today's empty on a break, or what's next when there's no card for it.
   const sub = u ? u.off : a.detail || null;
   return html`
-    <div class=${sky ? 'widget day-done open' : 'widget day-done'} aria-live="polite">
+    <div class=${sky ? 'widget day-done open' : 'widget day-done'}>
       <div class=${sky ? 'done-panel sky-head' : night ? 'done-panel night' : 'done-panel'}>
         ${sky ? html`<${Celestial} />` : night && html`<${NightSky} />`}
-        <div class="done-label">${a.label}</div>
+        <h2 class="done-label">${a.label}</h2>
         ${sub && html`<div class="done-detail">${sub}</div>`}
         ${sky && u && html`<${UpcomingCard} u=${u} />`}
       </div>
@@ -259,7 +302,7 @@ const Chips = ({ a }) => html`
 export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky = false }) {
   const style = useStore(cardStyle);
   const actions = html`<${Actions} a=${a} onAnswer=${onAnswer} onChoice=${onChoice} />`;
-  const row = chips && html`<${Chips} a=${a} />`;
+  const row = html`${chips && html`<${Chips} a=${a} />`}<${SayCard} a=${a} />`;
   // After your day, or no classes today: said plainly, with no bus to mistake
   // for advice. "Undo" when the class just taken off was the day's last, and
   // "Back on campus".
@@ -270,10 +313,10 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   // A trip by bus or on foot, in the style chosen in Settings › Appearance. Old
   // times fall through to the cards below, which say they're updating.
   if (a.card?.journey && !old && !a.arrived) {
-    return html`<div class="widget" aria-live="polite"><${Journey} a=${a} style=${style} sky=${sky} lead=${html`<${Phase} a=${a} />`} />${actions}${row}</div>`;
+    return html`<div class="widget"><${Journey} a=${a} style=${style} sky=${sky} lead=${html`<${Phase} a=${a} />`} />${actions}${row}</div>`;
   }
   if (a.card?.kind === 'class' && !old) {
-    return html`<div class="widget" aria-live="polite"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${actions}${row}</div>`;
+    return html`<div class="widget"><${InSky} sky=${sky}><${Phase} a=${a} /><${ClassPlan} a=${a} /><//>${actions}${row}</div>`;
   }
   // The server's heading ("Next class · CS2030", "Heading home"); none without somewhere to go.
   const heading = a.card?.heading !== undefined ? a.card.heading : a.dest?.why === 'class' ? t('Next class · {0}', a.dest.label) : a.dest?.why === 'gap-home' ? t('Long gap · {0}', a.dest.label) : a.dest?.label;
@@ -286,11 +329,11 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   const crowd = a.card?.crowd && !a.detail?.toLowerCase().includes(a.card.crowd.toLowerCase()) ? a.card.crowd : null;
   const notes = [a.card?.quality, crowd].filter(Boolean).join(' · ');
   return html`
-    <div class=${old ? 'widget old' : 'widget'} aria-live="polite">
+    <div class=${old ? 'widget old' : 'widget'}>
       <${InSky} sky=${sky}>
         <${Phase} a=${a} />
         <div class="where">${where}</div>
-        <div class="big">${big}</div>
+        <h2 class="big">${big}</h2>
         ${timed && !old && html`<${Countdown} at=${a.departsAt} />`}
         <div class="detail">${old ? t('Updating times…') : a.detail}</div>
         ${a.leave && a.card && !old && html`<div class="leave">${leaveText(a)}</div>`}
@@ -302,9 +345,9 @@ export function Card({ a, onAnswer, onChoice, onPlace = null, chips = false, sky
   `;
 }
 
-/** A card with just a line in it: "Checking…", or why there's no answer. */
-export const Message = ({ text, children, cls = 'widget' }) => html`
-  <div class=${cls} aria-live="polite"><div class="detail">${text}</div>${children}</div>
+/** A card with just a line in it: "Checking…", or why there's no answer; said unless `quiet`. */
+export const Message = ({ text, children, cls = 'widget', quiet = false }) => html`
+  <div class=${cls}><div class="detail">${text}</div>${children}${!quiet && html`<${Say} text=${text} />`}</div>
 `;
 
 /** How long "✓ Reported, thanks" stays before "Is this wrong?" comes back. */
@@ -327,9 +370,20 @@ export function Report({ answer, anonymous = false, onAddEmail = () => location.
   // The card's line when the report went ("Leave by ~09:36 · R2 from PGP"); null when not just sent.
   const [done, setDone] = useState(null);
   const box = useRef(null);
+  const opener = useRef(null);
+  const tick = useRef(null);
+  // Where focus goes when what had it goes: the box when the form opens, the
+  // tick once it's sent, the link back after Cancel or once the tick goes.
+  const refocus = useRef(null);
   useEffect(() => {
     if (open) box.current?.focus();
   }, [open]);
+  useEffect(() => {
+    const to = refocus.current;
+    if (!to) return;
+    refocus.current = null;
+    focusSoon(() => (to === 'tick' ? tick.current : opener.current));
+  });
   const line = answer?.card?.line ?? '';
   // The line now, for when the send returns: the card may have refreshed meanwhile.
   const lineNow = useRef(line);
@@ -338,10 +392,14 @@ export function Report({ answer, anonymous = false, onAddEmail = () => location.
   useEffect(() => {
     if (done === null) return;
     if (line !== done) {
+      if (document.activeElement === tick.current) refocus.current = 'link';
       setDone(null);
       return;
     }
-    const id = setTimeout(() => setDone(null), REPORTED_SHOWN_MS);
+    const id = setTimeout(() => {
+      if (document.activeElement === tick.current) refocus.current = 'link';
+      setDone(null);
+    }, REPORTED_SHOWN_MS);
     return () => clearTimeout(id);
   }, [done, line]);
   const send = async (e) => {
@@ -353,6 +411,7 @@ export function Report({ answer, anonymous = false, onAddEmail = () => location.
       setOpen(false);
       setNote('');
       setDone(lineNow.current);
+      refocus.current = 'tick';
     } catch (err) {
       setMsg(err.message);
     } finally {
@@ -360,12 +419,13 @@ export function Report({ answer, anonymous = false, onAddEmail = () => location.
     }
   };
   return html`
-    ${done !== null && html`<span class="report-done">✓ ${t('Reported, thanks')}</span>`}
+    ${done !== null && html`<span class="report-done" tabindex="-1" ref=${tick}>✓ ${t('Reported, thanks')}</span>`}
     ${!open &&
     done === null &&
     html`<button
       type="button"
       class="link-btn report-open"
+      ref=${opener}
       onClick=${() => {
         setReported(answer);
         setMsg('');
@@ -378,7 +438,14 @@ export function Report({ answer, anonymous = false, onAddEmail = () => location.
       <p class="hint">${t('Add an email to report a wrong answer, so we can reply to you.')}</p>
       <div class="actions">
         <button type="button" class="btn small accent" onClick=${onAddEmail}>${t('Add an email')}</button>
-        <button type="button" class="btn small ghost" onClick=${() => setOpen(false)}>${t('Cancel')}</button>
+        <button
+          type="button"
+          class="btn small ghost"
+          onClick=${() => {
+            refocus.current = 'link';
+            setOpen(false);
+          }}
+        >${t('Cancel')}</button>
       </div>
     </div>`}
     ${open &&
@@ -402,6 +469,7 @@ export function Report({ answer, anonymous = false, onAddEmail = () => location.
           type="button"
           class="btn small ghost"
           onClick=${() => {
+            refocus.current = 'link';
             setOpen(false);
             setNote('');
           }}

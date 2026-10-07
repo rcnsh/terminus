@@ -25,8 +25,8 @@ struct AnswerDetail: View {
                     // Each arrival next to the bus it belongs to.
                     // The bus to catch (it names the stop), then when it gets you there.
                     // One colour for "go" (the countdown in the header); red only when it's late.
-                    if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.red : Color.primary) }
-                    if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(a.leaveLate ? Color.red : Color.secondary) }
+                    if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.bad : Color.primary) }
+                    if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(a.leaveLate ? Color.bad : Color.secondary) }
                     if let note = a.card?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(.secondary) }
                     if let e = a.card?.estimate { Row(icon: "info.circle", text: e).foregroundStyle(.secondary) }
                     if let g = a.goNowLine { Row(icon: "bus", text: g).foregroundStyle(.secondary) }
@@ -45,7 +45,7 @@ struct AnswerDetail: View {
                 let timing = a.card?.ride == nil ? a.timing?.text : nil
                 if !a.isClassPlan, !a.isFree, timing != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
-                        if let t = a.timing, let text = timing { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .good) }
+                        if let t = a.timing, let text = timing { Pill(text: text, color: t.status == "late" ? .bad : t.status == "tight" ? .warn : .good) }
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
                 }
@@ -209,7 +209,7 @@ struct AnswerDetail: View {
                                     .offset(x: w * Double(i) / Double(max(1, hops)) + 1)
                             }
                             Image(systemName: "bus.fill")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(inkOn(color ?? "#000000"))
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(tint))
@@ -230,8 +230,18 @@ struct AnswerDetail: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L("Ride progress"))
-                .accessibilityValue(ride.stops.map(\.name).joined(separator: ", "))
+                .accessibilityValue(Self.spoken(ride.stops.map(\.name), passed: passed))
             }
+        }
+
+        /// "Next stop: COM 3. 2 more stops, getting off at UTown.": where the
+        /// bus is and how far is left, not every stop's name.
+        nonisolated static func spoken(_ stops: [String], passed: Int) -> String {
+            let last = stops.count - 1
+            guard last > 0 else { return stops.first ?? "" }
+            let next = min(passed + 1, last)
+            let left = last - min(passed, last - 1)
+            return left <= 1 ? L("Next stop: %@, where you get off.", stops[last]) : L("Next stop: %@. %@ stops to go, getting off at %@.", stops[next], "\(left)", stops[last])
         }
     }
 
@@ -240,9 +250,12 @@ struct AnswerDetail: View {
         let text: String
         var body: some View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14)
+                // The words say it all; the icon is only for the eye.
+                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14).accessibilityHidden(true)
                 Text(text).font(.callout).fixedSize(horizontal: false, vertical: true)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spokenTimes(text))
         }
     }
 }
@@ -269,7 +282,7 @@ struct NearbyList: View {
                 ForEach(all) { s in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text(s.stop.name).font(.system(size: 13, weight: .semibold))
+                            Text(s.stop.name).font(.system(size: 13, weight: .semibold)).accessibilityAddTraits(.isHeader)
                             Spacer()
                             Text(s.walkS < 60 ? L("You're here") : L("%@ min walk", "\((s.walkS + 30) / 60)"))
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -299,6 +312,7 @@ struct NearbyList: View {
 /// Wraps onto more lines instead of squeezing when a stop has many services.
 struct FlowPills: View {
     let rows: [BoardRow]
+    @Environment(\.colorSchemeContrast) private var contrast
     /// At most this many after the next one: a pill, not a timetable.
     nonisolated static let laterShown = 2
 
@@ -318,7 +332,7 @@ struct FlowPills: View {
                     }
                     let later = Self.later(r)
                     (Text(Self.eta(r)).foregroundColor(.secondary)
-                        + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(Color.secondary.opacity(0.55)))
+                        + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(Color.secondary.opacity(contrast == .increased ? 0.85 : 0.55)))
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .contentTransition(.numericText())
                 }
@@ -335,25 +349,24 @@ struct FlowPills: View {
     /// The server's "4 min"; worded here only for an older server's row.
     nonisolated static func eta(_ r: BoardRow) -> String { r.eta ?? eta(etaS: r.etaS, quality: r.quality) }
 
-    /// An older server's row: "4m", "~6m" for a timetable guess, "now", or
-    /// "ended". Spoken, "4 min": VoiceOver reads "4m" as metres.
-    nonisolated static func eta(etaS: Int?, quality: String, spoken: Bool = false) -> String {
+    /// An older server's row: "4 min", "~6 min" for a timetable guess, "now",
+    /// or "ended", as the server words it ("4m" would be read as metres).
+    nonisolated static func eta(etaS: Int?, quality: String) -> String {
         guard let s = etaS else { return quality == "ended" ? L("ended") : "–" }
         if s < 45 { return L("now") }
-        let n = "\((s + 30) / 60)"
-        let m = spoken ? L("%@ min", n) : L("%@m", n)
+        let m = L("%@ min", "\((s + 30) / 60)")
         return quality == "scheduled" ? L("~%@", m) : m
     }
 
-    nonisolated static func later(_ r: BoardRow, spoken: Bool = false) -> [String] {
-        (r.later ?? []).filter { $0.etaS != nil || $0.eta != nil }.prefix(laterShown).map { $0.eta ?? eta(etaS: $0.etaS, quality: $0.quality, spoken: spoken) }
+    nonisolated static func later(_ r: BoardRow) -> [String] {
+        (r.later ?? []).filter { $0.etaS != nil || $0.eta != nil }.prefix(laterShown).map { $0.eta ?? eta(etaS: $0.etaS, quality: $0.quality) }
     }
 
-    /// "D2, public bus, fare applies: 4 min, 14 min", with Chinese punctuation in Chinese.
+    /// "D2, public bus, fare applies: 4 min, about 14 min", with Chinese punctuation in Chinese.
     nonisolated static func spoken(_ r: BoardRow) -> String {
         let who = r.paid == true ? r.svc + L(", ") + L("Public bus, fare applies") : r.svc
-        let times = [r.eta ?? eta(etaS: r.etaS, quality: r.quality, spoken: true)] + later(r, spoken: true)
-        return L("%@: %@", who, times.joined(separator: L(", ")))
+        let times = [eta(r)] + later(r)
+        return spokenTimes(L("%@: %@", who, times.joined(separator: L(", "))))
     }
 }
 
@@ -381,9 +394,10 @@ struct TodayList: View {
                 if let f = failed, f.key == item.key {
                     Label(f.message, systemImage: "exclamationmark.circle")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.bad)
                         .padding(.leading, 68)
                         .fixedSize(horizontal: false, vertical: true)
+                        .announced(f.message)
                 }
             }
             if at == day.items.count, let r = removed { RemovedRow(item: r, onUndo: onUndo) }
@@ -412,9 +426,21 @@ private struct RemovedRow: View {
 
 /// One of today's entries; anything still to come has an × on hover to take it off today.
 private struct TodayRow: View {
+    /// Its status in words: what the dimming, the strike and the bold say.
+    private var status: String {
+        switch item.status {
+        case "done": L("Over")
+        case "skipped": L("Skipped")
+        case "next", "now": L("Next")
+        default: ""
+        }
+    }
+
     let item: DayPlan.Item
     let onRemove: (DayPlan.Item) -> Void
     @State private var hovering = false
+    @FocusState private var removeFocused: Bool
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         let past = item.status == "done" || item.status == "skipped"
@@ -428,19 +454,24 @@ private struct TodayRow: View {
             }
             Spacer(minLength: 0)
             if item.removable == true {
+                // Shown on hover, and when the keyboard reaches it. VoiceOver
+                // has the row's action instead, so it isn't offered twice.
                 Button { onRemove(item) } label: { Image(systemName: "xmark").font(.caption.weight(.semibold)) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .opacity(hovering ? 1 : 0)
+                    .focused($removeFocused)
+                    .opacity(hovering || removeFocused ? 1 : 0)
                     .help(L("Remove from today"))
-                    .accessibilityLabel(L("Remove %@ from today", item.title))
+                    .accessibilityHidden(true)
             }
         }
-        .opacity(past ? 0.5 : 1)
+        .opacity(past ? (contrast == .increased ? 0.7 : 0.5) : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         // One element per row; the hover-only × is its "Remove from today" action.
         .accessibilityElement(children: .combine)
+        // Dimmed or struck through on screen: said in words.
+        .accessibilityValue(status)
         .accessibilityActions {
             if item.removable == true { Button(L("Remove from today")) { onRemove(item) } }
         }

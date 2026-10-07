@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -66,7 +68,9 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -97,6 +101,7 @@ import sh.rcn.terminus.Pins
 import sh.rcn.terminus.Stopped
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
+import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
@@ -223,7 +228,8 @@ private fun SearchBox(query: String, onQuery: (String) -> Unit, modifier: Modifi
     TextField(
         value = query,
         onValueChange = onQuery,
-        placeholder = { Text(stringResource(R.string.buses_search)) },
+        // A label, not only a placeholder: it keeps the field's name once something's typed.
+        label = { Text(stringResource(R.string.buses_search)) },
         leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null, modifier = Modifier.size(20.dp)) },
         trailingIcon = if (query.isEmpty()) null else {
             { IconButton(onClick = { onQuery(""); focus.clearFocus() }) { Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close)) } }
@@ -377,7 +383,7 @@ private fun StopPage(
                 board?.name ?: stopName(state, shownCode),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 2.dp).semantics { heading() },
             )
             Text(shownCode, style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant, letterSpacing = 0.8.sp)
         }
@@ -421,7 +427,8 @@ private fun StopPage(
 @Composable
 private fun Dots(count: Int, current: Int, nearestFirst: Boolean) {
     val c = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+    val said = stringResource(R.string.a11y_page, current + 1, count)
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp).clearAndSetSemantics { contentDescription = said }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         for (i in 0 until count) {
             if (i == 0 && nearestFirst) {
                 Icon(painterResource(R.drawable.ic_near), contentDescription = null, tint = if (current == 0) c.onSurface else c.outline, modifier = Modifier.padding(horizontal = 3.dp).size(10.dp))
@@ -439,13 +446,13 @@ private fun Dots(count: Int, current: Int, nearestFirst: Boolean) {
 @Composable
 private fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     val c = MaterialTheme.colorScheme
-    Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(14.dp)).background(c.secondaryContainer).padding(4.dp)) {
+    Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(14.dp)).background(c.secondaryContainer).padding(4.dp).selectableGroup()) {
         for ((i, text) in options.withIndex()) {
             val on = i == selected
             Box(
                 Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp))
                     .background(if (on) c.surface else Color.Transparent)
-                    .clickable(role = Role.Tab) { onSelect(i) }
+                    .selectable(selected = on, role = Role.Tab) { onSelect(i) }
                     .padding(vertical = 9.dp, horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -498,7 +505,7 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
     Row(
         Modifier.fillMaxWidth()
             .background(if (arriving) c.primaryContainer else Color.Transparent)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc), onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -538,7 +545,7 @@ private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick
     val (why, back) = stopped.lines(remember { hour12(ctx) })
     Row(
         Modifier.fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc), onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -651,7 +658,8 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
             },
             color = if (arriving) c.primary else if (quality == "live") c.onSurface else c.onSurfaceVariant,
             maxLines = 1,
-            modifier = Modifier.semantics { contentDescription = eta },
+            // "about 6 minutes", not "tilde 6 min": the tag beside it says live or timetable.
+            modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: eta },
         )
         arriving -> Text(stringResource(R.string.map_arriving), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = c.primary)
         else -> {
@@ -664,7 +672,7 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
                 // A timetabled time isn't drawn as boldly as a bus seen.
                 color = if (quality == "live") c.onSurface else c.onSurfaceVariant,
                 maxLines = 1,
-                modifier = Modifier.semantics { contentDescription = L.s(R.string.n_min, BusTimes.minutes(etaS)) },
+                modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: L.s(R.string.n_min, BusTimes.minutes(etaS)) },
             )
         }
     }
@@ -739,11 +747,12 @@ private fun SwipeFor(name: String, onClick: () -> Unit) {
 /** A service as it's painted on the bus, larger, for the board's rows and the line's heading. */
 @Composable
 private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolean = false) {
+    val said = stringResource(if (paid) R.string.a11y_bus_paid else R.string.a11y_bus, svc)
     Box(
-        Modifier.widthIn(min = if (big) 64.dp else 46.dp).height(if (big) 44.dp else 32.dp).background(Color(color), RoundedCornerShape(if (big) 12.dp else 9.dp)).padding(horizontal = 8.dp),
+        Modifier.semantics(mergeDescendants = true) { contentDescription = said }.widthIn(min = if (big) 64.dp else 46.dp).heightIn(min = if (big) 44.dp else 32.dp).background(Color(color), RoundedCornerShape(if (big) 12.dp else 9.dp)).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(badgeText(svc, paid), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else 15.sp, maxLines = 1)
+        Text(badgeText(svc, paid), color = inkOn(Color(color)), fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else 15.sp, maxLines = 1)
     }
 }
 
@@ -844,7 +853,7 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (here) c.primaryContainer else Color.Transparent)
                         .then(if (here) Modifier.onGloballyPositioned { onHere(it.positionInParent().y.toInt()) } else Modifier)
-                        .clickable(role = Role.Button) { onStop(item.stop.code) },
+                        .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { onStop(item.stop.code) },
                 ) {
                     Rail(color, first, last, bus = item.buses.isNotEmpty(), here = here)
                     Column(Modifier.weight(1f).padding(vertical = 10.dp).padding(end = 10.dp)) {
@@ -936,7 +945,7 @@ private fun Rail(color: Color, first: Boolean, last: Boolean, bus: Boolean, here
         }
         if (bus) {
             Box(Modifier.size(28.dp).background(color, RoundedCornerShape(8.dp)).border(2.dp, paper, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = inkOn(color), modifier = Modifier.size(16.dp))
             }
         }
     }

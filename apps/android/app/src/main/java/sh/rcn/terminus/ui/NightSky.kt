@@ -458,7 +458,7 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
             val beam = listOf(at(x + 38, 66f), at(x + 60, 63f), at(x + 60, 70f))
             drawPath(Path().apply { moveTo(beam[0].x, beam[0].y); beam.drop(1).forEach { lineTo(it.x, it.y) }; close() }, MOON.copy(alpha = 0.12f))
         }
-        bus(x, Color(0xFF24211E), Color(0xFFE53935), dim = 3)
+        bus(x, Color(0xFF24211E), Color(0xFFD32F2F), dim = 3)
     }
 }
 

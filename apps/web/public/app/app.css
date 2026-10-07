@@ -41,6 +41,10 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
   cursor: pointer;
 }
 .app-chips button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+@media (forced-colors: active) {
+  .app-chips button[aria-pressed="true"], .app-chips .chip-added:has(> button[aria-pressed="true"]) .chip-x { forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText; }
+  .map-pills .dot, .road-bus, .bt-bus { forced-color-adjust: none; }
+}
 /* The search button at the end of the chips, and the search it opens. */
 .app-chips .chip-search { display: grid; place-items: center; padding: 7px 10px; color: var(--muted); }
 .app-chips .chip-search[aria-expanded="true"] { color: var(--ink); border-color: var(--ink); }
@@ -102,8 +106,10 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .road-bus { position: absolute; top: 3px; left: calc((100% - 38px) * (1 - var(--far))); width: 18px; height: 12px; box-sizing: border-box; border-radius: 4px; border: 2px solid var(--svc); }
 .road-bus.live { background: var(--svc); }
 /* The buses after the next one: there, but not the one to catch. */
-.road-bus.later { opacity: 0.35; }
+.road-bus.later { opacity: 0.6; }
 
+/* Its status line stays on the page; empty, it takes no room in Now's column. */
+.banner-slot:empty { position: absolute; }
 .offline {
   padding: 10px 14px;
   border-radius: var(--radius);
@@ -150,7 +156,7 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 body.on-buses > .nav { display: none; }
 .buses-tab { max-width: 560px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: 32px; }
 .bt-search { position: relative; }
-.bt-search input { height: 46px; padding-left: 42px; border-radius: 14px; border-color: transparent; background: var(--surface-2); }
+.bt-search input { height: 46px; padding-left: 42px; border-radius: 14px; border-color: var(--line-strong); background: var(--surface-2); }
 .bt-search input:focus-visible { outline-offset: 0; }
 .bt-search-icon { position: absolute; z-index: 1; left: 14px; top: 13px; width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
 
@@ -166,8 +172,8 @@ body.on-buses > .nav { display: none; }
 .bt-kicker .link-btn { padding: 0; font-size: inherit; font-weight: 600; }
 .bt-kicker-icon { width: 13px; height: 13px; fill: var(--accent); }
 .bt-kicker-icon.star { fill: var(--warn); }
-.bt-title h1 { margin-top: 6px; font: 700 2.2rem/1.05 var(--display); letter-spacing: -0.025em; overflow-wrap: anywhere; }
-.bt-code { margin-top: 6px; font: 600 0.7rem/1 var(--display); letter-spacing: 0.08em; color: var(--faint); }
+.bt-title h2 { margin-top: 6px; font: 700 2.2rem/1.05 var(--display); letter-spacing: -0.025em; overflow-wrap: anywhere; }
+.bt-code { margin-top: 6px; font: 600 0.7rem/1 var(--display); letter-spacing: 0.08em; color: var(--muted); }
 .bt-star { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--muted); cursor: pointer; }
 .bt-star svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
 .bt-star.on { color: var(--warn); }
@@ -175,7 +181,7 @@ body.on-buses > .nav { display: none; }
 
 .bt-dots { display: flex; align-items: center; justify-content: center; gap: 2px; margin: 10px 0 2px; }
 .bt-dots button { display: grid; place-items: center; min-width: 18px; height: 22px; padding: 0 3px; border: 0; background: none; cursor: pointer; color: var(--ink); }
-.bt-dots i { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); opacity: 0.5; }
+.bt-dots i { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
 .bt-dots .on i { width: 18px; height: 6px; border-radius: 3px; background: var(--ink); opacity: 1; }
 .bt-dots svg { width: 10px; height: 10px; fill: var(--muted); }
 .bt-sides { margin-top: 12px; }
@@ -200,7 +206,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-chip.big { min-width: 54px; height: 40px; font-size: 1.15rem; border-radius: 11px; }
 .svc-tag.small { min-width: 0; padding: 2px 6px; font-size: 0.7rem; border-radius: 5px; }
 .svc-tag.tiny { min-width: 0; padding: 1px 5px; font-size: 0.65rem; border-radius: 4px; }
-.svc-tag .fare { margin-left: 3px; font-size: 0.8em; opacity: 0.85; }
+.svc-tag .fare { margin-left: 3px; font-size: 0.8em; }
 .bt-dir { grid-area: dir; align-self: start; padding-top: 2px; font-size: 0.95rem; line-height: 1.3; color: var(--muted); }
 .bt-dir b { color: var(--ink); font-weight: 600; }
 .bt-big { grid-area: big; justify-self: end; font: 700 2.6rem/0.9 var(--display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -221,8 +227,8 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-then { grid-area: then; justify-self: end; font: 600 0.85rem/1.2 var(--display); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* A service not running: greyed, its words where the minutes go. */
 .bt-row.stopped { color: var(--muted); }
-.bt-row.stopped .bt-dir, .bt-row.stopped .bt-dir b { color: var(--faint); font-weight: 500; }
-.bt-chip.muted { background: color-mix(in srgb, var(--svc) 30%, var(--surface-2)); color: var(--muted); }
+.bt-row.stopped .bt-dir, .bt-row.stopped .bt-dir b { color: var(--muted); font-weight: 500; }
+.bt-chip.muted { background: color-mix(in srgb, var(--svc) 30%, var(--surface-2)); color: var(--ink); }
 .bt-row.stopped .bt-big.none { color: var(--muted); font-weight: 600; }
 /* No minutes after it: its line takes the row's width. */
 .bt-row.stopped .bt-meta { grid-column: 1 / -1; color: var(--muted); }
@@ -234,14 +240,14 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-ends > div { display: flex; align-items: center; gap: 6px; }
 .bt-status { display: grid; gap: 2px; margin-left: auto; text-align: right; }
 .bt-error { color: var(--warn-ink); }
-.bt-hint { margin-top: 6px; padding: 0 6px; font-size: 0.78rem; color: var(--faint); }
+.bt-hint { margin-top: 6px; padding: 0 6px; font-size: 0.78rem; color: var(--muted); }
 .bt-empty { padding: 28px 4px; text-align: center; }
 .bt-peek { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; margin: 16px 0 4px; padding: 11px 14px; border: 1px dashed var(--line-strong); border-radius: 12px; background: none; color: var(--muted); font: inherit; font-size: 0.85rem; text-align: left; cursor: pointer; }
 .bt-peek b { color: var(--ink); font-weight: 600; }
 .bt-peek-chips { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .bt-peek svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .bt-find { padding: 28px 4px 8px; display: grid; gap: 10px; justify-items: start; }
-.bt-find h1 { font: 700 1.6rem/1.15 var(--display); letter-spacing: -0.02em; }
+.bt-find h2 { font: 700 1.6rem/1.15 var(--display); letter-spacing: -0.02em; }
 .bt-btn-icon { width: 14px; height: 14px; fill: currentColor; }
 
 /* A page of its own (a stop, a line): Back to where it came from. */
@@ -251,7 +257,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 
 /* A service's line: its stops down a line in its colour, its buses on it. */
 .bt-line-title { display: flex; align-items: center; gap: 12px; padding: 8px 4px 0; }
-.bt-line-title h1 { font: 700 2.2rem/1 var(--display); letter-spacing: -0.025em; }
+.bt-line-title h2 { font: 700 2.2rem/1 var(--display); letter-spacing: -0.025em; }
 .bt-line-title .hint { margin-top: 4px; font-size: 0.85rem; }
 .bt-summary { margin: 10px 4px 0; font-size: 0.85rem; color: var(--ink); }
 .bt-summary:empty { display: none; }
@@ -325,6 +331,11 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
 }
 .map-status[hidden] { display: none; }
+/* The stops as a list (map.js StopList): seen only while it has the focus. */
+.map-stops { display: flex; gap: 6px; max-width: 100%; }
+.map-stops select { width: auto; min-width: 0; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
+.map-stops .btn { flex: none; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
+.map-stops:not(:focus-within) { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
 
 /* A stop's or a bus's details, over the bottom of the map. */
 .map-sheet {
@@ -342,6 +353,18 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
   gap: 12px;
 }
 .map-sheet[hidden] { display: none; }
+/* A short window (a phone on its side, or zoomed in a long way): the sheet
+   leaves more of the map, and MapLibre's buttons stay above it. */
+@media (max-height: 420px) {
+  .map-sheet { max-height: 50%; padding: 10px 14px 12px; gap: 8px; }
+  /* The buttons side by side, not stacked: they fit between the pills and the sheet. */
+  .map .maplibregl-ctrl-bottom-right { display: flex; align-items: flex-end; }
+  /* With the sheet open there's room for one: Back to campus (the keys and a pinch still zoom). */
+  .map-tab:has(.map-sheet) .maplibregl-ctrl-group:has(.maplibregl-ctrl-zoom-in) { display: none; }
+}
+@media (max-width: 699.98px) {
+  .map-tab:has(.map-sheet) .maplibregl-ctrl-bottom-right { bottom: var(--sheet-h, 0px); }
+}
 @media (min-width: 700px) {
   .map-sheet { inset: auto auto 16px 16px; width: 360px; border-radius: 18px; max-height: calc(100% - 96px); }
 }
@@ -364,8 +387,9 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
   padding: 3px 8px;
   border-radius: 7px;
   background: var(--svc, var(--muted));
-  /* White or dark, whichever reads on the colour (inkOn in account/dom.js). */
-  color: var(--svc-ink, #fff);
+  /* White or dark, whichever reads on the colour (inkOn in account/dom.js);
+     with no colour of its own, the page's on its grey. */
+  color: var(--svc-ink, var(--bg));
   font-weight: 700;
   font-size: 0.85rem;
   border: 0;
@@ -432,7 +456,7 @@ body.sky, body.sky-dusk, body.sky-night {
 }
 body.sky-dawn, body.sky-day, body.sky-golden {
   --k-bg: #fafaf9; --k-surface: rgb(255 255 255 / 0.5); --k-surface-2: rgb(255 255 255 / 0.65); --k-ink: #1c1917; --k-muted: #36312d; --k-faint: #3a3633;
-  --k-line: rgb(28 25 23 / 0.16); --k-line-strong: rgb(28 25 23 / 0.3); --k-accent: #9a3412; --k-accent-soft: rgb(154 52 18 / 0.12); --k-scheme: light;
+  --k-line: rgb(28 25 23 / 0.16); --k-line-strong: rgb(28 25 23 / 0.6); --k-accent: #9a3412; --k-accent-soft: rgb(154 52 18 / 0.12); --k-scheme: light;
   --k-good: #14532d; --k-warn: #78350f; --k-bad: #701818; --k-chip: rgb(255 255 255 / 0.65); --k-accent-small: #6c2710;
   --h-win: #dbeafe;
 }
@@ -470,7 +494,7 @@ body.sky:not(.on-map, .on-settings, .on-buses)::before {
   content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--end); pointer-events: none;
   background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--end) * 0.5), var(--s2) calc(var(--end) * 0.86), var(--s3) var(--end));
 }
-body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips, body.sky .where-box, body.sky .sky-head {
+body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head {
   --bg: var(--k-bg); --surface: var(--k-surface); --surface-2: var(--k-surface-2); --ink: var(--k-ink); --muted: var(--k-muted); --faint: var(--k-faint);
   --line: var(--k-line); --line-strong: var(--k-line-strong); --accent: var(--k-accent); --accent-soft: var(--k-accent-soft);
   --good: var(--k-good); --good-ink: var(--k-good); --warn: var(--k-warn); --warn-ink: var(--k-warn); --bad: var(--k-bad); --bad-ink: var(--k-bad);
@@ -478,6 +502,8 @@ body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips, body
 }
 /* The card's top, with a short room above its words: the card is the
    picture, not the sky. At night the moon is in it. */
+/* A focus ring in the sky's ink: the accent can be under 3:1 on a day sky. */
+body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head { --focus: var(--k-ink); }
 .sky-head { position: relative; isolation: isolate; padding-top: var(--room); --room: 34px; --moon: 28px; }
 .nearby-sky { --room: 26px; --moon: 22px; }
 /* Small words in the accent (a countdown, the trip's phase, when the next
@@ -531,7 +557,7 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 .horizon .beam { opacity: 0.12; }
 .horizon .dim { opacity: 0.6; }
 .horizon .bus { fill: #24211e; }
-.horizon .stripe { fill: #e53935; }
+.horizon .stripe { fill: #d32f2f; }
 .horizon .win { fill: var(--h-win); }
 .horizon .tyre { fill: #151311; }
 .horizon .hub { fill: #8a847d; }
@@ -552,3 +578,8 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 /* The road in words, under it on the ground: the scene has none. */
 .road-line { display: flex; align-items: center; gap: 8px; margin-top: -12px; font-size: 1rem; }
 .day-done.open .going { margin-top: 4px; }
+
+/* Less see-through, when the device asks: the glass on the sky solid. */
+@media (prefers-reduced-transparency: reduce) {
+  body.sky:not(.on-map, .on-settings, .on-buses) > .nav, body.sky .app-chips:not(.map-pills), body.sky .where-box, body.sky .sky-head { --surface: var(--k-bg); --surface-2: var(--k-bg); --k-chip: var(--k-bg); }
+}

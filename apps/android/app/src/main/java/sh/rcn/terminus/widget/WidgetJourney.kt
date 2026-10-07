@@ -32,6 +32,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import sh.rcn.terminus.CardStyle
+import sh.rcn.terminus.Ink
 import sh.rcn.terminus.Journey
 import sh.rcn.terminus.JourneyBus
 import sh.rcn.terminus.JourneyText
@@ -55,8 +56,18 @@ internal fun WidgetJourney(answer: NextAnswer, journey: Journey, style: String, 
     }
 }
 
-private val white = ColorProvider(Color.White, Color.White)
 private fun fixed(argb: Long) = ColorProvider(Color(argb), Color(argb))
+
+/** A service's code on its colour: white or near-black, whichever reads there ([Ink]). */
+private fun inkOn(argb: Long) = fixed(Ink.on(argb))
+
+/** The big line's lines: one, or two when the phone's text is scaled up, so it wraps rather than cuts. */
+@Composable
+internal fun headLines(): Int = if (LocalContext.current.resources.configuration.fontScale > 1.15f) 2 else 1
+
+/** How much wider a column of times is with the phone's text scaled up. */
+@Composable
+private fun widen(): Float = LocalContext.current.resources.configuration.fontScale.coerceIn(1f, 1.8f)
 
 private fun headline(answer: NextAnswer): String = answer.leaveHeadline(ServerClock.now()) ?: L.s(R.string.leave_now)
 
@@ -66,7 +77,7 @@ private fun Headline(answer: NextAnswer, large: Boolean) {
     Text(
         headline(answer),
         style = TextStyle(color = if (answer.leaveLate) colors.error else colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
-        maxLines = 1,
+        maxLines = headLines(),
     )
 }
 
@@ -128,7 +139,7 @@ private fun Route(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
             return@Row
         }
         Point(bus.stop, bus.board, false, w)
-        Stretch(journey.ride.orEmpty(), bus.svc, fixed(bus.color), 4.dp)
+        Stretch(journey.ride.orEmpty(), bus.svc, fixed(bus.color), 4.dp, svcColor = bus.color)
         if (four) {
             Point(journey.toStop, journey.arriveStop ?: "", false, w)
             Stretch(journey.walkEnd, null, colors.outline, 2.dp)
@@ -154,20 +165,20 @@ private fun Point(name: String, time: String, you: Boolean, width: Dp = 56.dp) {
     Column(GlanceModifier.width(width), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(GlanceModifier.height(CAPTION))
         Box(GlanceModifier.size(DOT).cornerRadius(DOT / 2).background(if (you) colors.primary else colors.onSurface)) {}
-        Text(name, style = TextStyle(color = colors.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), maxLines = 1)
+        Text(name, style = TextStyle(color = colors.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), maxLines = headLines())
         Text(time, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 11.sp, textAlign = TextAlign.Center), maxLines = 1)
     }
 }
 
 /** Between two points: the walk's minutes, or the bus and its ride, over a bar. */
 @Composable
-private fun RowScope.Stretch(caption: String, svc: String?, color: androidx.glance.unit.ColorProvider, thick: Dp) {
+private fun RowScope.Stretch(caption: String, svc: String?, color: androidx.glance.unit.ColorProvider, thick: Dp, svcColor: Long = 0L) {
     val colors = GlanceTheme.colors
     Column(GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(GlanceModifier.height(CAPTION), verticalAlignment = Alignment.CenterVertically) {
             svc?.let {
                 Box(GlanceModifier.cornerRadius(4.dp).background(color).padding(horizontal = 4.dp)) {
-                    Text(it, style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = 11.sp), maxLines = 1)
+                    Text(it, style = TextStyle(color = inkOn(svcColor), fontWeight = FontWeight.Bold, fontSize = 11.sp), maxLines = 1)
                 }
                 Spacer(GlanceModifier.width(4.dp))
             }
@@ -189,7 +200,7 @@ private fun Ticket(answer: NextAnswer, journey: Journey, large: Boolean, roomy: 
         val side = if (large) 52.dp else 44.dp
         if (bus != null) {
             Box(GlanceModifier.size(side).cornerRadius(12.dp).background(fixed(bus.color)), contentAlignment = Alignment.Center) {
-                Text(bus.svc, style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = if (large) 20.sp else 17.sp), maxLines = 1)
+                Text(bus.svc, style = TextStyle(color = inkOn(bus.color), fontWeight = FontWeight.Bold, fontSize = if (large) 20.sp else 17.sp), maxLines = 1)
             }
         } else {
             Box(GlanceModifier.size(side).cornerRadius(12.dp).background(colors.surfaceVariant), contentAlignment = Alignment.Center) {
@@ -240,10 +251,10 @@ private fun Steps(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
 private fun StepLine(time: String, what: String, bus: JourneyBus?, late: Boolean = false) {
     val colors = GlanceTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = GlanceModifier.padding(top = 3.dp)) {
-        Text(time, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.width(64.dp))
+        Text(time, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = headLines(), modifier = GlanceModifier.width(64.dp * widen()))
         bus?.let {
             Box(GlanceModifier.cornerRadius(5.dp).background(fixed(it.color)).padding(horizontal = 5.dp, vertical = 1.dp)) {
-                Text(it.svc, style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp), maxLines = 1)
+                Text(it.svc, style = TextStyle(color = inkOn(it.color), fontWeight = FontWeight.Bold, fontSize = 12.sp), maxLines = 1)
             }
             Spacer(GlanceModifier.width(6.dp))
         }

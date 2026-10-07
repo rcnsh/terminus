@@ -36,6 +36,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -154,8 +157,8 @@ internal fun <T> TwoColumns(items: List<T>, modifier: Modifier = Modifier, gap: 
     }
 }
 
-/** A small heading over a group, in capitals: "YOUR STOPS". */
+/** A small heading over a group, in capitals: "YOUR STOPS". Said as written ("Your stops"), not spelt out as capitals. */
 @Composable
 internal fun Label(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = color, modifier = modifier)
+    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = color, modifier = modifier.semantics { heading(); contentDescription = text })
 }

@@ -108,3 +108,80 @@ export const Icon = ({ paths, size, ...props }) =>
 
 /** Prefers reduced motion, read when asked. */
 export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/*
+ * One status line for screen readers on each page, unseen, in the page from
+ * the start: a live region only speaks a change, so it must be there before
+ * the words are. Parts that redraw often (the card, Nearby, the offline
+ * banner) say a short line here when what they mean changes, instead of
+ * being live regions themselves and read out whole on every redraw.
+ */
+let spoken = null;
+let lastSaid = '';
+let sayTimer = null;
+function speaker() {
+  if (spoken?.isConnected) return spoken;
+  spoken = Object.assign(document.createElement('div'), { className: 'sr-only' });
+  spoken.setAttribute('role', 'status');
+  document.body.append(spoken);
+  return spoken;
+}
+if (globalThis.document?.body) speaker();
+
+/**
+ * Says `text` once on the page's status line, unless it was the last thing
+ * said: the same card drawn again says nothing. `again`: say it even so.
+ */
+export function announce(text, { again = false } = {}) {
+  if (!text || (!again && text === lastSaid)) return;
+  lastSaid = text;
+  const el = speaker();
+  // Emptied first, then filled a moment later: the same words twice are a change.
+  el.textContent = '';
+  clearTimeout(sayTimer);
+  sayTimer = setTimeout(() => (el.textContent = text), 50);
+}
+
+/**
+ * A row's Remove (`button`) pressed: once the row has gone, the focus goes to
+ * the row now in its place (or the one before, at the end of the list), else
+ * to `fallback`, a heading with tabindex="-1". Without it, focus would be
+ * lost to the top of the page.
+ */
+export function refocusAfterRemove(button, fallback) {
+  noteRow(button)(fallback);
+}
+
+/**
+ * refocusAfterRemove for a Remove that waits on the server first: notes where
+ * the row is now, while it's still on the page, and returns the function to
+ * call once the list has been loaded again (with its `fallback`).
+ */
+export function noteRow(button) {
+  const row = button.closest('li, details');
+  const list = row?.parentElement;
+  const rows = () => (list?.isConnected ? [...list.children].filter((c) => c.matches('li, details')) : []);
+  const at = rows().indexOf(row);
+  return (fallback) =>
+    focusSoon(() => {
+      // Not yet redrawn: the row is still there.
+      if (row?.isConnected) return null;
+      const left = rows();
+      const next = left[Math.min(at, left.length - 1)];
+      return next?.querySelector('summary, button, a, select, input') ?? (typeof fallback === 'function' ? fallback() : fallback);
+    });
+}
+
+/**
+ * Focuses `el` once it's on the page, after the redraw under way: `el` is a
+ * function returning the element, asked again until it is there (or 10 tries).
+ * `preventScroll`: leave every scroller where it is (a pager the redraw has
+ * just put back on its page would otherwise jump to the focused one).
+ */
+export function focusSoon(el, { preventScroll = false } = {}, tries = 10) {
+  requestAnimationFrame(() => {
+    const node = typeof el === 'function' ? el() : el;
+    if (node?.isConnected && node.getClientRects().length) node.focus({ preventScroll });
+    else if (tries > 1) focusSoon(el, { preventScroll }, tries - 1);
+  });
+}

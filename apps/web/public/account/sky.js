@@ -7,7 +7,8 @@
 // ends on a <Horizon>, and the sky reaches down to it. The hour only picks
 // classes (app.css draws the colours). Android draws the same scene from the
 // same numbers (NightSky.kt).
-import { html, reducedMotion, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '../assets/ui.js';
+import { Icon, html, reducedMotion, store, useEffect, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
+import { t } from './dom.js';
 import { PHASES, parallax, phaseAt } from './daylight.js';
 
 export { phaseAt } from './daylight.js';
@@ -100,6 +101,25 @@ const busParts = (fill, band, dim = -1) => html`
 /** How much bigger than its numbers the horizon with the road is drawn: the bus and your stop are the picture. */
 const ROAD_SCALE = 1.25;
 
+/** The driving shuttles paused (the button on each road with them): all of them at once. */
+const paused = store(false);
+
+const PAUSE = '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
+const PLAY = '<path d="M7 4.5v15l12-7.5z"/>';
+
+/**
+ * Pause or play the shuttles driving along the road: anything that moves
+ * on its own for more than a few seconds can be stopped (WCAG 2.2.2).
+ */
+export function DriveToggle() {
+  const now = useStore(paused);
+  // With less motion asked for they stand anyway: nothing to pause.
+  if (useMedia('(prefers-reduced-motion: reduce)')) return null;
+  return html`<button type="button" class="drive-toggle" aria-pressed=${String(now)} aria-label=${t('Pause the moving buses')} onClick=${() => paused.set(!now)}>
+    <${Icon} paths=${now ? PLAY : PAUSE} />
+  </button>`;
+}
+
 /** How many shuttles may be driving along the page's horizons at once, and how many are. */
 const MAX_DRIVING = 2;
 let driving = 0;
@@ -173,7 +193,10 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
   const [w, setW] = useState(0);
   // Shuttles only pull out while the road is on screen.
   const [seen, setSeen] = useState(false);
-  const moving = drive?.length > 0 && !reducedMotion();
+  // Less motion, asked for even after the page opened: the shuttles stand.
+  const still = useMedia('(prefers-reduced-motion: reduce)');
+  const stopped = useStore(paused);
+  const moving = drive?.length > 0 && !still;
   useLayoutEffect(() => {
     const el = box.current;
     const ground = on && grounds[on];
@@ -183,7 +206,7 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
     setW(Math.round(el.clientWidth));
     const sized = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
     sized.observe(el);
-    const shown = moving && new IntersectionObserver(([e]) => setSeen(e.isIntersecting));
+    const shown = drive?.length > 0 && new IntersectionObserver(([e]) => setSeen(e.isIntersecting));
     if (shown) shown.observe(el);
     return () => {
       sized.disconnect();
@@ -208,7 +231,7 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
   const bx = bus ? Math.round(sx - 44 - Math.min(1, Math.max(0, bus.far)) * (sx - 56)) : 0;
   const passing = at(0.58) - 19;
   return html`
-    <div class=${low ? 'horizon low' : 'horizon'} ref=${box} aria-hidden="true">
+    <div class=${`${low ? 'horizon low' : 'horizon'}${stopped ? ' paused' : ''}`} ref=${box} aria-hidden="true">
       ${w > 0 &&
       html`<svg width=${w} height=${Math.round(h * k)} viewBox=${`0 ${top} ${vw} ${h}`}>
         <g class="depth">
@@ -263,8 +286,8 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
         !bus &&
         shuttle &&
         (moving
-          ? html`<${Lane} colours=${drive} vw=${vw} y=${53} back=${true} go=${seen} />
-              <${Lane} colours=${drive} vw=${vw} y=${57} go=${seen} first=${true} />`
+          ? html`<${Lane} colours=${drive} vw=${vw} y=${53} back=${true} go=${seen && !stopped} />
+              <${Lane} colours=${drive} vw=${vw} y=${57} go=${seen && !stopped} first=${true} />`
           : drive?.length
             ? html`<g class="parked" transform=${`translate(${passing} 57)`} style=${{ '--svc': drive[0] }}>
                 <path class="beam" d=${BEAM} />

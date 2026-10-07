@@ -13,7 +13,7 @@
 // icons (/map/*), routes and stops (/campus), buses (/buses), arrivals
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
-import { html, reducedMotion, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '/assets/ui.js';
+import { focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
 import { inkOn, send, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
@@ -56,6 +56,32 @@ const selected = store(null);
 const status = store(null);
 /** The open sheet: { stop: code } or { bus: id }, or null. */
 const sheet = store(null);
+/** What had the focus when the sheet opened, for it to go back to when the sheet closes. */
+let opener = null;
+/** A stop to centre in what its sheet leaves uncovered, once the sheet is drawn. */
+let centreOn = null;
+
+/** Opens `what` ({ stop } or { bus }) in the sheet, or closes it (null). */
+function openSheet(what) {
+  const was = sheet.get();
+  if (what && !was) {
+    const f = document.activeElement;
+    opener = f && f !== document.body && !f.closest('.map-sheet') ? f : null;
+  }
+  sheet.set(what);
+  // Closed: focus back where it was (a stop in the list, the map), else the map.
+  if (!what && was) {
+    const back = opener;
+    opener = null;
+    focusSoon(() => (back?.isConnected ? back : (document.getElementById('map-stops') ?? map?.getCanvas())));
+  }
+}
+
+/** A stop opened from elsewhere (Nearby, the list of stops): its sheet, the map centred on it above the sheet. */
+function showStop(code) {
+  centreOn = code;
+  openSheet({ stop: code });
+}
 /** Each bus as it last came from the API, by id (for its sheet). */
 const shown = store(new Map());
 
@@ -82,6 +108,12 @@ const styleUrl = () => `/map/style.json?theme=${dark() ? 'dark' : 'light'}&lang=
 /** The page's ink and paper, for what's drawn over the street map. */
 const pageInk = () => (dark() ? '#f2efeb' : '#1c1917');
 const pagePaper = () => (dark() ? '#1a1816' : '#ffffff');
+/**
+ * The edge round a route line and a bus: on the light street map a dark
+ * one, so a pale line (A2's yellow, K's blue) still stands out from the
+ * streets at 3:1; on the dark map the page's own colour does that.
+ */
+const edgeOf = () => (dark() ? pagePaper() : '#57534e');
 const colorOf = (svc) => campusData.get()?.routes[svc]?.color ?? '#8a939c';
 const svcVars = (svc) => `--svc:${colorOf(svc)};--svc-ink:${inkOn(colorOf(svc))}`;
 
@@ -247,7 +279,7 @@ function addLayers() {
   map.addSource('stretch', { type: 'geojson', data: empty });
 
   const width = ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 4, 18, 7];
-  map.addLayer({ id: 'route-casing', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': paper, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 7, 18, 11], 'line-opacity': 0.9 } });
+  map.addLayer({ id: 'route-casing', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': edgeOf(), 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 7, 18, 11], 'line-opacity': 0.9 } });
   map.addLayer({ id: 'routes', type: 'line', source: 'routes', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': width } });
   // The chosen service, drawn again on top of the others.
   map.addLayer({ id: 'route-on', type: 'line', source: 'routes', filter: ['==', ['get', 'svc'], ''], layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 6, 18, 9] } });
@@ -321,12 +353,13 @@ const busSize = (zoom) => Math.max(0.64, Math.min(1, 0.64 + ((zoom - 13) * 0.36)
 function paintBus() {
   const paper = pagePaper();
   const color = colorOf(selected.get());
-  // At 2 pixels a point: 11 across the disc, with a 2.5 ring.
+  // At 2 pixels a point: 11 across the disc, with a 2.5 ring, and on the
+  // light map a thin dark edge round that, so the white ring shows on pale streets.
   const size = 60;
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const g = c.getContext('2d');
-  for (const [r, fill] of [[27, paper], [22, color]]) {
+  for (const [r, fill] of [...(dark() ? [] : [[29.5, edgeOf()]]), [27, paper], [22, color]]) {
     g.fillStyle = fill;
     g.beginPath();
     g.arc(size / 2, size / 2, r, 0, Math.PI * 2);
@@ -617,8 +650,8 @@ function onClick(e) {
     const [name] = map.queryRenderedFeatures(around(4), { layers: ['stop-names'] });
     if (name) best = { f: name };
   }
-  if (!best) return sheet.set(null);
-  sheet.set(best.f.layer.id === 'buses' ? { bus: best.f.properties.id } : { stop: best.f.properties.code });
+  if (!best) return openSheet(null);
+  openSheet(best.f.layer.id === 'buses' ? { bus: best.f.properties.id } : { stop: best.f.properties.code });
 }
 
 /** Where bus feature [f] is drawn on screen: its point, moved by its offset
@@ -660,7 +693,7 @@ function Pills() {
   const svc = useStore(selected);
   if (!campus) return null;
   return html`
-    <nav class="app-chips map-pills" aria-label=${t('Show a service and its buses')}>
+    <div class="app-chips map-pills" role="group" aria-label=${t('Show a service and its buses')}>
       ${Object.keys(campus.routes)
         .sort()
         .map(
@@ -670,7 +703,48 @@ function Pills() {
             </button>
           `,
         )}
-    </nav>
+    </div>
+  `;
+}
+
+/**
+ * The map's stops as a list, for a keyboard or a screen reader: a stop picked
+ * and then Open (or Enter) opens its sheet, as tapping it on the map does.
+ * Not on picking alone: on Windows and Linux the arrow keys pick as they
+ * move through the list. Seen only while it has the focus; the Buses tab has
+ * every stop and bus in words too.
+ */
+function StopList() {
+  const campus = useStore(campusData);
+  const [code, setCode] = useState('');
+  const stops = useMemo(() => [...(campus?.stops ?? [])].sort((a, b) => a.name.localeCompare(b.name)), [campus]);
+  if (!campus) return null;
+  const open = () => code && showStop(code);
+  return html`
+    <form
+      class="map-stops"
+      onSubmit=${(e) => {
+        e.preventDefault();
+        open();
+      }}
+    >
+      <label class="sr-only" for="map-stops">${t('Stops on this map')}</label>
+      <select
+        id="map-stops"
+        value=${code}
+        onChange=${(e) => setCode(e.currentTarget.value)}
+        onKeyDown=${(e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          open();
+        }}
+      >
+        <option value="">${t('Open a stop…')}</option>
+        ${stops.map((x) => html`<option value=${x.code} key=${x.code}>${x.name}</option>`)}
+      </select>
+      <button type="submit" class="btn">${t('Open')}</button>
+    </form>
+    <p class="sr-only">${t('The Buses tab lists every stop and its buses in words.')}</p>
   `;
 }
 
@@ -679,13 +753,41 @@ function Status() {
   return html`<div class="map-status" role="status" hidden=${!text}>${text ?? ''}</div>`;
 }
 
-/** The sheet's frame: the title, a line under it, and Close. */
-function Frame({ title, sub, children, box }) {
+/**
+ * The sheet's frame: the title, a line under it, and Close. Opened, the focus
+ * is on its title (`id` changes with what it's about); Escape closes it.
+ */
+function Frame({ id, title, sub, children, box }) {
+  const head = useRef(null);
+  useEffect(() => {
+    head.current?.focus({ preventScroll: true });
+  }, [id]);
+  // How tall it is, for the map's buttons to sit above it on a phone (app.css).
+  useLayoutEffect(() => {
+    const el = box.current;
+    const tab = el?.closest('.map-tab');
+    if (!tab) return;
+    const sized = new ResizeObserver(() => tab.style.setProperty('--sheet-h', `${el.offsetHeight}px`));
+    sized.observe(el);
+    return () => {
+      sized.disconnect();
+      tab.style.removeProperty('--sheet-h');
+    };
+  }, []);
   return html`
-    <section class="map-sheet" aria-live="polite" ref=${box}>
+    <section
+      class="map-sheet"
+      aria-labelledby="sheet-title"
+      ref=${box}
+      onKeyDown=${(e) => {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        openSheet(null);
+      }}
+    >
       <div class="sheet-head">
-        <div><h2>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
-        <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => sheet.set(null)}>×</button>
+        <div><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
+        <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => openSheet(null)}>×</button>
       </div>
       ${children}
     </section>
@@ -697,7 +799,7 @@ function BusSheet({ id, box }) {
   const buses = useStore(shown);
   const b = buses.get(id);
   useEffect(() => {
-    if (!b) sheet.set(null);
+    if (!b) openSheet(null);
   }, [b]);
   useEffect(() => {
     markOpen(b ?? null);
@@ -705,7 +807,7 @@ function BusSheet({ id, box }) {
   useEffect(() => () => markOpen(null), []);
   if (!b) return null;
   return html`
-    <${Frame} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.at ? t('At {0}', b.at.name) : b.stretch && b.nextStop ? t('Between {0} and {1}', b.stretch.last.name, b.nextStop.name) : null} box=${box}>
+    <${Frame} id=${`bus-${id}`} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.at ? t('At {0}', b.at.name) : b.stretch && b.nextStop ? t('Between {0} and {1}', b.stretch.last.name, b.nextStop.name) : null} box=${box}>
       <div class="sheet-rows">
         ${b.nextStop && html`<div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop.name}</span></div>`}
         ${b.crowd && html`<div class="sheet-row"><span>${t('Crowding')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}
@@ -794,7 +896,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
     }
   };
   return html`
-    <${Frame} title=${stop.name} box=${box}>
+    <${Frame} id=${`stop-${code}`} title=${stop.name} box=${box}>
       <div class="sheet-rows">
         ${!board && html`<div class="hint">${t('Checking…')}</div>`}
         ${board?.text && html`<div class="hint">${board.text}</div>`}
@@ -844,16 +946,14 @@ export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
   // A stop opened from elsewhere: its sheet, then the map centred in what the sheet leaves uncovered.
   useEffect(() => {
     if (!focus || state !== 'ready') return;
-    sheet.set({ stop: focus });
+    showStop(focus);
     onFocused?.();
   }, [focus, state]);
-  const centring = useRef(null);
-  if (focus && state === 'ready') centring.current = focus;
   useLayoutEffect(() => {
-    const code = centring.current;
+    const code = centreOn;
     const stop = code && campusData.get()?.stops.find((s) => s.code === code);
-    if (!stop || open?.stop !== code) return;
-    centring.current = null;
+    if (!stop || open?.stop !== code || !map) return;
+    centreOn = null;
     const go = () => map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), 17), padding: { top: 70, bottom: (sheetBox.current?.offsetHeight ?? 0) + 20 }, duration: 600 });
     if (map.loaded()) go();
     else map.once('load', go);
@@ -865,6 +965,7 @@ export function MapTab({ visible: on, focus, onFocused, onGoTo, onSaved }) {
     </div>
     <div class="map-top">
       <${Pills} />
+      <${StopList} />
       <${Status} />
     </div>
     ${open?.stop && html`<${StopSheet} code=${open.stop} box=${sheetBox} onGoTo=${onGoTo} onSaved=${onSaved} active=${on} />`}

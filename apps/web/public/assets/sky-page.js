@@ -10,7 +10,7 @@
 // data-drive (shuttles drive across, over and over, each a service at random).
 // A page's script can draw one itself with drawHorizon().
 import { html, render } from './ui.js';
-import { Horizon, NightSky } from '/account/sky.js';
+import { DriveToggle, Horizon, NightSky } from '/account/sky.js';
 import { LIVERY } from '/account/livery.js';
 
 /**
@@ -19,7 +19,8 @@ import { LIVERY } from '/account/livery.js';
  */
 export function drawHorizon(el, { low = false, stop = false, bus = null, shuttle = true, drive = false } = {}) {
   const colours = drive ? LIVERY.map(([, color]) => color) : null;
-  render(html`<${Horizon} on=${null} low=${low} stop=${stop} bus=${bus} shuttle=${shuttle} drive=${colours} />`, el);
+  // Driving shuttles come with a button to pause them.
+  render(html`<${Horizon} on=${null} low=${low} stop=${stop} bus=${bus} shuttle=${shuttle} drive=${colours} />${drive && html`<${DriveToggle} />`}`, el);
 }
 
 /** A horizon's settings from its markup (see above). */

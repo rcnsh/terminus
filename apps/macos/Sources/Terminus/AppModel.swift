@@ -226,7 +226,7 @@ final class AppModel {
         }
         let left = at.timeIntervalSince(now)
         if left < -30 { return nil }
-        let mins = L("%@m", "\(Int((left / 60).rounded()))")
+        let mins = L("%@ min", "\(Int((left / 60).rounded()))")
         return left < 45 ? "\(plan.service) \(L("now"))" : "\(plan.service) \(plan.quality == "scheduled" ? L("~%@", mins) : mins)"
     }
 

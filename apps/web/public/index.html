@@ -35,7 +35,7 @@
   .top .nav { position: relative; z-index: 2; }
   .top .nav-links .btn.soft { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
   .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: end; padding-top: 44px; }
-  .sky-chip .beta { margin: 0 0 0 4px; background: var(--accent-soft); color: var(--accent); }
+  .sky-chip .beta { margin: 0 0 0 4px; background: var(--accent-soft); color: var(--k-accent-small); }
   .hero h1 { font-size: clamp(2.8rem, 6.4vw, 4.8rem); line-height: 1.02; letter-spacing: -0.035em; margin-top: 18px; }
   .hero h1 em { font-style: normal; color: var(--accent); }
   .hero .lede { font-size: 1.15rem; color: var(--muted); margin: 18px 0 28px; max-width: 32rem; }
@@ -70,7 +70,7 @@
   .pn-tag .dot { width: 6px; height: 6px; background: currentColor; }
   .pn-body { flex: 1; padding: 0 16px; }
   .pn-road { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12.5px; }
-  .svc { display: inline-grid; place-items: center; padding: 1px 6px; border-radius: 5px; font-weight: 800; font-size: 10.5px; line-height: 1.4; color: #fff; background: var(--svc); }
+  .svc { display: inline-grid; place-items: center; padding: 1px 6px; border-radius: 5px; font-weight: 800; font-size: 10.5px; line-height: 1.4; color: var(--svc-ink, #fff); background: var(--svc); }
   .steps { list-style: none; margin: 14px 0 0; padding: 0; }
   .steps li { display: grid; grid-template-columns: 2.9rem 22px minmax(0, 1fr); column-gap: 10px; min-height: 48px; }
   .steps li.end { min-height: 0; }
@@ -97,14 +97,14 @@
   .lede-sm { color: var(--muted); margin-top: 8px; max-width: 36rem; }
 
   /* What it does, each shown as the app shows it. */
-  .does { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+  .does { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
   .does > div { display: grid; grid-template-rows: auto 1fr; gap: 16px; padding: 18px; border-radius: 24px; background: var(--surface-2); }
   .does h3 { font-size: 1.1rem; margin-bottom: 4px; }
   .does p { color: var(--muted); font-size: 0.95rem; }
   .show { display: grid; align-content: center; min-height: 170px; padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; }
-  .week { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 0.75rem; }
+  .week { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; font-size: 0.75rem; }
   .week b { text-align: center; color: var(--muted); font-weight: 600; }
-  .week span { padding: 6px 2px; border-radius: 8px; text-align: center; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+  .week span { min-width: 0; overflow-wrap: anywhere; padding: 6px 2px; border-radius: 8px; text-align: center; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
   .week span.off { background: none; border: 1px dashed var(--line-strong); color: var(--muted); font-weight: 500; }
   .show .pn-lead { font-size: 1.5rem; color: var(--ink); }
   .show .pn-lead em { font-style: normal; color: var(--accent); }
@@ -135,7 +135,7 @@
   .setup p { color: var(--muted); font-size: 0.93rem; }
 
   /* Everywhere: the widget, the Mac, the web. */
-  .places { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+  .places { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
   .places figure { margin: 0; display: grid; gap: 14px; align-content: start; padding: 14px 14px 20px; border-radius: 24px; background: var(--surface-2); }
   .places figcaption { padding: 0 4px; }
   .places h3 { font-size: 1.05rem; margin-bottom: 4px; }
@@ -173,12 +173,12 @@
   .foot { margin-top: 0; border-top: 0; }
 
   @media (max-width: 860px) {
-    .hero { grid-template-columns: 1fr; padding-top: 20px; gap: 8px; }
+    .hero { grid-template-columns: minmax(0, 1fr); padding-top: 20px; gap: 8px; }
     .hero-copy { padding-bottom: 28px; }
     .hero-phone { margin-bottom: -300px; }
     .after-hero { padding-top: 300px; }
-    .does, .places { grid-template-columns: 1fr; }
-    .setup { grid-template-columns: 1fr; gap: 22px; }
+    .does, .places { grid-template-columns: minmax(0, 1fr); }
+    .setup { grid-template-columns: minmax(0, 1fr); gap: 22px; }
     .setup::before { top: 11px; bottom: 30px; left: 9px; right: auto; width: 4px; height: auto; }
     .setup > div { display: grid; grid-template-columns: 22px 1fr; column-gap: 16px; }
     .setup > div::before { grid-row: span 2; margin: 0; }
@@ -201,7 +201,7 @@
   <header class="wrap nav">
     <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
     <nav class="nav-links">
-      <button type="button" class="nav-menu hide-sm" id="dl-button" popovertarget="dl-menu" aria-haspopup="true" aria-expanded="false">Download<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button type="button" class="nav-menu hide-sm" id="dl-button" popovertarget="dl-menu" aria-expanded="false">Download<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
       <a href="/docs" class="hide-sm">API</a>
       <a href="https://github.com/rcnsh/terminus" class="hide-sm gh" aria-label="terminus on GitHub"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
       <a class="btn small soft open-app" href="/app/">Open the app</a>
@@ -246,10 +246,10 @@
             <div data-horizon data-stop data-bus="#34a853 0.3 live"></div>
           </div>
           <div class="pn-body">
-            <p class="pn-road"><span class="svc" style="--svc:#34a853">R2</span> <span>reaches <b>PGP</b> in 9 min</span></p>
+            <p class="pn-road"><span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span> <span>reaches <b>PGP</b> in 9 min</span></p>
             <ol class="steps">
               <li class="start walk"><span class="time">09:39</span><span class="rail"></span><span class="what"><strong>Leave</strong><small>3 min walk</small></span></li>
-              <li class="ride" style="--svc:#34a853"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853">R2</span></strong><small>10 min ride</small></span></li>
+              <li class="ride" style="--svc:#34a853;--svc-ink:#1c1917"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span></strong><small>10 min ride</small></span></li>
               <li class="end"><span class="time">09:52</span><span class="rail"></span><span class="what"><strong>UTown</strong></span></li>
             </ol>
             <p class="pn-backup">Or go now: D2 at 09:37 from PGP</p>
@@ -295,7 +295,7 @@
         <p class="pn-lead">Leave in <em>6 min</em></p>
         <ol class="steps">
           <li class="start walk"><span class="time">09:39</span><span class="rail"></span><span class="what"><strong>Leave</strong><small>3 min walk</small></span></li>
-          <li class="end"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853">R2</span></strong></span></li>
+          <li class="end"><span class="time">09:42</span><span class="rail"></span><span class="what"><strong>PGP <span class="svc" style="--svc:#34a853;--svc-ink:#1c1917">R2</span></strong></span></li>
         </ol>
       </div>
       <div><h3>Leave at the right time</h3><p>The latest bus that still gets you there, walks along campus paths at your pace, and a bus earlier when yours is usually busy.</p></div>
@@ -305,7 +305,7 @@
         <div class="sign">
           <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>Kent Ridge MRT</strong><span class="plate-walk">3 min walk</span></div>
           <div class="sign-row"><span class="svc" style="--svc:#8e44c9">D2</span><span class="road"><i class="live" style="--svc:#8e44c9;--far:0.2"></i><i class="live later" style="--svc:#8e44c9;--far:0.8"></i></span><span class="eta">2 min</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#e53935">A1</span><span class="road"><i style="--svc:#e53935;--far:0.6"></i></span><span class="eta">~9 min</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#d32f2f">A1</span><span class="road"><i style="--svc:#d32f2f;--far:0.6"></i></span><span class="eta">~9 min</span></div>
         </div>
       </div>
       <div><h3>The right side of the road</h3><p>It picks the stop going your way, even when the one across the road is closer. Or check anywhere with one tap.</p></div>
@@ -347,9 +347,9 @@
       <div class="web" aria-hidden="true">
         <div class="sign">
           <div class="sign-plate"><svg class="plate-bus" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg><strong>UTown</strong><span class="plate-walk">1 min walk</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#2b9ad6">K</span><span class="road"><i class="live" style="--svc:#2b9ad6;--far:0.15"></i></span><span class="eta">1 min</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#f57c1f">R1</span><span class="road"><i class="live" style="--svc:#f57c1f;--far:0.5"></i></span><span class="eta">6 min</span></div>
-          <div class="sign-row"><span class="svc" style="--svc:#e53935">A1</span><span class="road"><i style="--svc:#e53935;--far:0.75"></i></span><span class="eta">~11 min</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#2b9ad6;--svc-ink:#1c1917">K</span><span class="road"><i class="live" style="--svc:#2b9ad6;--far:0.15"></i></span><span class="eta">1 min</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#f57c1f;--svc-ink:#1c1917">R1</span><span class="road"><i class="live" style="--svc:#f57c1f;--far:0.5"></i></span><span class="eta">6 min</span></div>
+          <div class="sign-row"><span class="svc" style="--svc:#d32f2f">A1</span><span class="road"><i style="--svc:#d32f2f;--far:0.75"></i></span><span class="eta">~11 min</span></div>
         </div>
       </div>
       <figcaption><h3>On the web</h3><p>Every bus near you, and the campus map, in any browser. Add it to your home screen like an app.</p></figcaption>
