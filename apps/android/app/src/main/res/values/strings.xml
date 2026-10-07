@@ -214,7 +214,7 @@
     <string name="import_from_nusmods">Import from NUSMods</string>
     <string name="no_home_stop">No home stop yet</string>
     <string name="no_live_data">No live data</string>
-    <string name="no_location">Couldn\'t get your location. Pick your stop instead.</string>
+    <string name="no_location">Couldn\'t get your location. Choose your stop instead.</string>
     <string name="no_reminders">No reminders</string>
     <string name="no_stops_near">No stops near you</string>
     <string name="none_yet">None yet</string>
@@ -407,7 +407,7 @@
     <string name="about">About</string>
     <string name="send_feedback">Send feedback</string>
     <string name="about_what">terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable.</string>
-    <string name="about_independent">terminus is an independent student project, not affiliated with NUS. Bus times come from NUS\'s live shuttle times. Walking routes and the map use data from OpenStreetMap contributors.</string>
+    <string name="about_independent">terminus is an independent student project, not affiliated with NUS. Live bus times come from NUS. Walking routes and the map use data from OpenStreetMap contributors.</string>
     <string name="about_aup">Use terminus in line with the NUS Acceptable Use Policy for IT Resources.</string>
     <string name="about_version">Version %1$s</string>
     <string name="status">Status</string>

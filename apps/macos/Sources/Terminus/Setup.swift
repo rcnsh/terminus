@@ -118,7 +118,7 @@ final class SetupModel {
     /// home stops. What happened, to show under the button.
     func pickNearestStop(app: AppModel, campus: Campus) async -> String {
         guard let loc = await app.whereAmI(), let near = campus.nearest(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) else {
-            return L("Couldn't get this Mac's location. Pick your stop instead.")
+            return L("Couldn't get this Mac's location. Choose your stop instead.")
         }
         setHomeStops([near.code] + homeStops.filter { $0 != near.code })
         return L("Picked %@. Change it if you use a different stop.", near.name)
@@ -711,7 +711,7 @@ private struct PermissionsStep: View {
         Text(L("Notifications")).font(.headline)
         Text(L("A reminder 5 minutes before you need to leave for class, and another when it's time to go."))
             .fixedSize(horizontal: false, vertical: true)
-        if app.leaveAlerts { Hint(L("On.")) } else { Button(L("Turn on leave-by alerts")) { app.setLeaveAlerts(true) } }
+        if app.leaveAlerts { Hint(L("On.")) } else { Button(L("Turn on leave alerts")) { app.setLeaveAlerts(true) } }
         Text(L("Location")).font(.headline).padding(.top, 10)
         Text(L("So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored."))
             .fixedSize(horizontal: false, vertical: true)
