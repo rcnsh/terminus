@@ -1,7 +1,7 @@
 #!/bin/sh
 # The street map's files, onto R2 under map/ (served by apps/api/src/map.ts):
 #   campus.pmtiles   the campus cut from the latest Protomaps build of
-#                    OpenStreetMap (about 4 MB)
+#                    OpenStreetMap, zoom 12 and up (about 3.3 MB)
 #   fonts/           Noto Sans label glyphs (Regular, Medium, Italic)
 #   sprites/v4/      the light and dark map icons
 #
@@ -54,10 +54,14 @@ for i in 0 1 2 3 4 5 6 7 8 9 10; do
 done
 [ -n "$build" ] || { echo "no Protomaps build found in the last 10 days"; exit 1; }
 echo "Protomaps build $build"
-pmtiles extract "https://build.protomaps.com/$build.pmtiles" "$OUT/campus.pmtiles" --bbox="$BBOX"
+# From zoom 12 up: every client's map stops zooming out at 13 (with
+# 512-pixel tiles, one level of tile per level of map), so the world-wide
+# levels below were a quarter of the file, downloaded by every phone and Mac
+# for offline use and never drawn. 12 is a level to spare.
+pmtiles extract "https://build.protomaps.com/$build.pmtiles" "$OUT/campus.pmtiles" --bbox="$BBOX" --minzoom=12
 pmtiles verify "$OUT/campus.pmtiles"
 size=$(wc -c <"$OUT/campus.pmtiles" | tr -d ' ')
-# About 4 MB; far off that and the cut went wrong.
+# About 3.3 MB; far off that and the cut went wrong.
 if [ "$size" -lt 1000000 ] || [ "$size" -gt 20000000 ]; then
   echo "campus.pmtiles is $size bytes; not uploading"; exit 1
 fi
