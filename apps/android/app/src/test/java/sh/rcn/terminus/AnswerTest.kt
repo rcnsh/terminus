@@ -139,18 +139,21 @@ class AnswerTest {
         } catch (_: ParseError) {}
     }
 
-    @Test fun aRetryKeepsTheAnswersOwnMoments() {
+    @Test fun anOfflineRedrawKeepsTheAnswersOwnMoments() {
         val a = golden("class-bus")
         val fetched = ms(a.asOf)
         val card = a.card!!
-        // The soonest of the card's change, its staleAt and the plan's refresh.
-        val first = listOfNotNull(a.refreshAtMs, card.nextChangeAtMs, card.staleAtMs).filter { it > fetched }.min()
-        assertEquals(first, Refresher.pendingAt(a, fetched))
-        // Past the change, staleAt is still waiting for its redraw.
-        card.staleAtMs?.let { stale ->
-            assertTrue(Refresher.pendingAt(a, stale - 1)!! <= stale)
-            assertNull(Refresher.pendingAt(a, listOfNotNull(a.refreshAtMs, card.nextChangeAtMs, stale).max()))
-        }
+        // The soonest of the card's change, its staleAt and "Leave now".
+        val first = listOfNotNull(card.nextChangeAtMs, card.staleAtMs, a.leaveAtMs).filter { it > fetched }.min()
+        assertEquals(first, Refresher.redrawAt(a, fetched))
+        // Just before the leave time, the leave time is next ("Leave by" to "Leave now").
+        a.leaveAtMs?.let { leave -> assertTrue(Refresher.redrawAt(a, leave - 1)!! <= leave) }
+        // Past every moment, nothing more to redraw for.
+        assertNull(Refresher.redrawAt(a, listOfNotNull(card.nextChangeAtMs, card.staleAtMs, a.leaveAtMs).max()))
+        // On the bus: the next stop.
+        val r = golden("riding")
+        val ride = r.card!!.ride!!
+        assertTrue(Refresher.redrawAt(r, ride.boardMs)!! <= RideStyle.nextRedrawAt(ride, ride.boardMs)!!)
     }
 
     @Test fun refreshWaitsForTheNextChangeButNotTooSoon() {
