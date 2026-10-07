@@ -360,14 +360,20 @@ body.sky-dusk .horizon :is(.lit, .beam), body.sky-night .horizon :is(.lit, .beam
 .horizon .win { fill: var(--h-win); }
 .horizon .tyre { fill: #151311; }
 .horizon .hub { fill: #8a847d; }
+.horizon .arch { fill: rgb(0 0 0 / 0.35); }
+.horizon .lamp { fill: #fef3c7; }
+.horizon .tail { fill: #ef4444; }
 /* Your stop's sign (a bus on it), and your bus in its colour on the way to it. */
 .horizon .sign line { stroke: var(--h-post); stroke-width: 1.6; }
 .horizon .sign rect { fill: var(--h-post); }
 .horizon .sign .mark { fill: var(--h-post-ink); }
 .horizon .coming .body { fill: var(--svc); }
 .horizon .coming .band { fill: #fff; opacity: 0.85; }
-.horizon .coming.guess .body { fill: none; stroke: var(--svc); stroke-width: 1.5; }
-.horizon .coming.guess :is(.band, .win) { display: none; }
+/* A timetable guess is the same bus drawn in outline, so it never passes for live. */
+.horizon .coming.guess :is(.body, .arch) { fill: none; stroke: var(--svc); stroke-width: 1.2; stroke-linejoin: round; }
+.horizon .coming.guess .roof { stroke-width: 0.8; }
+.horizon .coming.guess .win { fill: none; stroke: var(--svc); stroke-width: 0.6; }
+.horizon .coming.guess :is(.band, .lamp, .tail) { display: none; }
 /* The road in words, under it on the ground: the scene has none. */
 .road-line { display: flex; align-items: center; gap: 8px; margin-top: -12px; font-size: 1rem; }
 .day-done.open .going { margin-top: 4px; }
