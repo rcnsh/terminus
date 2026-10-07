@@ -46,7 +46,12 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +63,7 @@ import sh.rcn.terminus.CardStyle
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Ride
+import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.Suggestion
 import sh.rcn.terminus.Upcoming
 import sh.rcn.terminus.widget.clock
@@ -74,6 +80,13 @@ internal fun AnswerCard(
     onSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> },
     onPlace: (String) -> Unit = {},
 ) {
+    // Said when the card changes (a new bus, the trip's next phase), and
+    // only then: nothing in it ticks. A node of its own, as the card's words
+    // count down every second and must not be read out each time.
+    Box {
+    Spoken.announcement(answer)?.let { said ->
+        Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = said })
+    }
     // On the page, not in a box: the answer is the screen. A minimum height
     // keeps what's under it from jumping as answers come and go.
     Column(
@@ -106,28 +119,39 @@ internal fun AnswerCard(
         // web and the Mac. The styled cards fall through to the plain one.
         val old = stale(answer)
         // A trip by bus or on foot, drawn in the style chosen in Settings › Appearance.
+        // Read as one sentence of the server's words, not a word at a time
+        // round the line; the buttons under it stay their own.
         answer.card?.journey?.takeIf { !answer.arrived && !old }?.let { journey ->
-            JourneyCard(answer, journey, CardStyle.pref(LocalContext.current), lead)
+            val said = spokenCard(answer, withLead = true)
+            Column(Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = said }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                JourneyCard(answer, journey, CardStyle.pref(LocalContext.current), lead)
+            }
             Actions(answer, onAction, busy, onSuggestion)
             return@Column
         }
         if (answer.isClassPlan && !old) {
-            SkyHead { lead(); ClassPlan(answer) }
+            val said = spokenCard(answer, withLead = true)
+            Column(Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = said }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SkyHead { lead(); ClassPlan(answer) }
+            }
             SkyGround()
             Actions(answer, onAction, busy, onSuggestion)
             return@Column
         }
         // The server's ("Going to KR MRT", "Long gap · Home"); worked out here only for an older server.
-        val heading = answer.card?.heading ?: when {
+        val head = answer.card?.heading ?: when {
             answer.mode == "nearby" -> stringResource(R.string.chip_nearby)
             answer.why == "gap-home" -> stringResource(R.string.long_gap, answer.destLabel.orEmpty())
             else -> answer.destLabel
         }
         SkyHead {
             lead()
-            heading?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            head?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { heading() }) }
             val ctx = LocalContext.current
             val muted = MaterialTheme.colorScheme.onSurfaceVariant
+            // The rest as one sentence, under the heading.
+            val said = if (old) null else spokenCard(answer, withLead = false)
+            Column(if (said == null) Modifier else Modifier.clearAndSetSemantics { contentDescription = said }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 answer.clockLabel { clock(ctx, it) },
                 style = MaterialTheme.typography.headlineMedium,
@@ -147,10 +171,36 @@ internal fun AnswerCard(
             }
             // The alternative is already at the end of `detail`.
             answer.qualityText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
         }
         SkyGround()
         Actions(answer, onAction, busy, onSuggestion)
     }
+    }
+}
+
+/**
+ * The card as a screen reader says it: the server's words as sentences
+ * ([Spoken.summary]), then how long until it's time to go, to the minute.
+ * [withLead]: the notice and warning over the card too, when they're inside
+ * the group rather than read on their own.
+ */
+@Composable
+private fun spokenCard(answer: NextAnswer, withLead: Boolean): String {
+    val ctx = LocalContext.current
+    // The sentence rounds to the minute: checked every 10 s is plenty.
+    val now by produceState(ServerClock.now(), answer) {
+        while (true) {
+            value = ServerClock.now()
+            delay(10_000)
+        }
+    }
+    val lead = if (!withLead) emptyList() else listOfNotNull(answer.card?.notice, answer.card?.warning)
+    return listOfNotNull(
+        lead.joinToString("") { "${Spoken.spell(it).trimEnd('.', '。')}. " }.ifEmpty { null },
+        Spoken.summary(true, answer, null, now) { clock(ctx, it) },
+        Spoken.countdown(answer, now)?.let { "$it." },
+    ).joinToString(" ")
 }
 
 /** Whether [answer] is past its staleAt ([isOld]), checked again when that comes. */
@@ -191,10 +241,10 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
         Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, w.mapsUri())) } },
-                modifier = Modifier.weight(1f).height(48.dp),
-            ) { Text(stringResource(R.string.directions_to, w.name), maxLines = 1) }
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text(stringResource(R.string.directions_to, w.name), maxLines = 2, overflow = TextOverflow.Ellipsis) }
             if (skips.isNotEmpty()) SkipMenu(skips, onAction, busy, label = null)
-            else actions.firstOrNull()?.let { a -> OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.height(48.dp)) { Text(a.label, maxLines = 1) } }
+            else actions.firstOrNull()?.let { a -> OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(a.label, maxLines = 2, overflow = TextOverflow.Ellipsis) } }
         }
     }
     val rest = if (walkTo != null && skips.isEmpty()) actions.drop(1) else actions
