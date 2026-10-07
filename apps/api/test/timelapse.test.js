@@ -20,6 +20,8 @@ import { pointAlong } from '../src/buses.ts';
 import { shapeFor } from '../src/campus.ts';
 import { inService } from '../src/resolve.ts';
 import { GRAPH } from '../src/graph.ts';
+import { BUNDLED } from '../src/calendar.ts';
+import { CALENDAR_DATA_KEY, resetCalendar } from '../src/calendarsync.ts';
 import { busesAt, countBySvc, decodeDay, FADE_MS, GAP_MS, haversineM, placeAt, pointAt, timeOn } from '../../web/public/admin/timelapse/replay.js';
 
 /** Singapore wall time on a date, as epoch ms. */
@@ -213,6 +215,22 @@ test('each round asks each running service at most once, spread across the inter
   for (const svc of RUNNING) assert.equal(twice.filter((s) => s === svc).length, 2, `${svc}: once per 30 s`);
   // Each one counted as a real request to NUS.
   assert.equal(h.ae.rows('timelapse').filter((r) => r.blobs[1] === 'upstream').length, RUNNING.length * 2);
+});
+
+test('a public holiday known only from KV runs holiday hours: services not running are not asked', async () => {
+  const holiday = { ...BUNDLED, generated: '2099-01-01', holidays: [...BUNDLED.holidays, { date: DATE, name: 'A holiday announced late' }] };
+  resetCalendar();
+  try {
+    const h = harness({ buses: { D2: [busOn('D2', 400)] }, kv: makeKV({ [CALENDAR_DATA_KEY]: holiday }) });
+    await start(h);
+    await runUntil(h, FROZEN_NOW + 30_000 - 1);
+    const asked = [...new Set(h.busCalls().map((r) => r.body.route_code))].sort();
+    const onHoliday = Object.keys(GRAPH.routes).filter((svc) => inService(GRAPH, svc, FROZEN_NOW)).sort();
+    assert.ok(onHoliday.length < RUNNING.length, `holiday services: ${onHoliday}`);
+    assert.deepEqual(asked, onHoliday);
+  } finally {
+    resetCalendar();
+  }
 });
 
 test('an alarm that runs late moves the rest later: no burst, no service asked again too soon', async () => {
