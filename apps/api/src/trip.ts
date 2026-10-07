@@ -243,9 +243,25 @@ function stub(env: Env, userId: string): DurableObjectStub | null {
   return env.TRIPS.get(env.TRIPS.idFromName(userId));
 }
 
+/**
+ * How long a call to the Trip object may take. It answers in milliseconds;
+ * one that's stuck (a busy or restarting object) mustn't hold up the card,
+ * which works without it.
+ */
+export const TRIP_TIMEOUT_MS = 3_000;
+
+/** The Trip object's answer, or a thrown error once it's taken too long. */
+function ask(s: DurableObjectStub, path: string, init?: RequestInit): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('trip object timed out')), TRIP_TIMEOUT_MS);
+  });
+  return Promise.race([s.fetch(`https://trip/${path}`, init), late]).finally(() => timer && clearTimeout(timer));
+}
+
 /** A change sent to the Trip object (tripdo.ts), as JSON. */
 function post(s: DurableObjectStub, path: string, body: unknown): Promise<Response> {
-  return s.fetch(`https://trip/${path}`, {
+  return ask(s, path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -257,7 +273,7 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
   const s = stub(env, userId);
   if (!s) return null;
   try {
-    const res = await s.fetch(`https://trip/day?date=${sgtDate(nowMs)}`);
+    const res = await ask(s, `day?date=${sgtDate(nowMs)}`);
     if (!res.ok) return null;
     const day = (await res.json()) as DayRecord | null;
     return day && (Object.keys(day.trips).length || Object.keys(day.plans ?? {}).length || day.watch || day.followed) ? day : null;
@@ -313,7 +329,7 @@ export async function clearTrip(env: Env, userId: string): Promise<void> {
   const s = stub(env, userId);
   if (!s) return;
   try {
-    const res = await s.fetch('https://trip/clear', { method: 'POST' });
+    const res = await ask(s, 'clear', { method: 'POST' });
     if (!res.ok) throw new Error(`status ${res.status}`);
   } catch (err) {
     console.error('trip state not cleared', err instanceof Error ? err.message : typeof err);
