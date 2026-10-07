@@ -689,7 +689,10 @@ Settings. It uses the same routes as the account page, with the session cookie.
   its own. Anyone who has already imported the new semester, or has never
   imported one, is skipped. It goes once per semester, 400 users a run, with
   `term:reminded` in KV marking the semester and the last user reached, as
-  `trips:armed` does. A tap opens the timetable settings on the web, and the
+  `trips:armed` does. The mark is saved before the batch is sent, so a mark
+  that can't be saved sends nothing rather than the batch every run; a batch
+  that reached no device at all (push itself failing) is marked back and
+  sent again the next run. A tap opens the timetable settings on the web, and the
   app on Android. The Mac app has no push, so it isn't told.
 
 ### Every trip, detected
