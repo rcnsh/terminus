@@ -2,8 +2,6 @@ package sh.rcn.terminus.widget
 
 import sh.rcn.terminus.ServerClock
 import android.content.Context
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -76,6 +74,8 @@ import sh.rcn.terminus.ui.eta
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.TimeZone
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /**
  * Two widgets in the picker. "Next bus" is one glanceable line; "Next bus +
@@ -321,7 +321,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             else answer.qualityText?.let { Text(it, style = muted, maxLines = 1) }
                         }
                         ButtonRow(ctx, bottom, large)
-                        Footer(ctx, fetchedAt, error, roomy)
+                        // Smaller, no line of its own: the data quality goes in the footer.
+                        Footer(ctx, fetchedAt, error, roomy, note = answer.qualityText.takeIf { !large && !old })
                     }
                     else -> {
                         val heading = listOfNotNull(
@@ -359,7 +360,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
                         }
                         ButtonRow(ctx, bottom, large)
-                        Footer(ctx, fetchedAt, error, roomy)
+                        Footer(ctx, fetchedAt, error, roomy, note = answer.qualityText.takeIf { !large && !old })
                     }
                 }
             }
@@ -390,12 +391,13 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     /**
      * "Updated 17:14", with any problem in front, where there's room.
      * [updating]: say "Updating…" here; the other layouts say it on a line of their own.
+     * [note]: the data quality ("Timetable estimate"), on a widget with no line for it.
      */
     @Composable
-    private fun Footer(ctx: Context, fetchedAt: Long?, error: String?, roomy: Boolean, updating: Boolean = false) {
+    private fun Footer(ctx: Context, fetchedAt: Long?, error: String?, roomy: Boolean, updating: Boolean = false, note: String? = null) {
         val stamp = fetchedAt?.let { L.s(R.string.updated_at, clock(ctx, it)) }
         val problem = error?.let { if (it == UPDATING) L.s(R.string.updating).takeIf { updating } else it }
-        val foot = listOfNotNull(problem, stamp).joinToString(" · ")
+        val foot = listOfNotNull(problem, note, stamp).joinToString(" · ")
         if (roomy && foot.isNotEmpty()) Text(foot, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp), maxLines = 1)
     }
 
