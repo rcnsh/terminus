@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
@@ -119,6 +121,7 @@ import sh.rcn.terminus.MapGeoJson
 import sh.rcn.terminus.MapStop
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Slides
+import sh.rcn.terminus.Spoken
 import kotlin.math.abs
 
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts), with room to spare. */
@@ -555,7 +558,8 @@ internal fun inkOn(c: Color): Color = Color(Ink.on(c.toArgb().toLong() and 0xFFF
 internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
     val shape = RoundedCornerShape(7.dp)
     val content: @Composable () -> Unit = {
-        Text(svc, color = inkOn(color), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp).widthIn(min = 24.dp))
+        val said = stringResource(R.string.a11y_bus, svc)
+        Text(svc, color = inkOn(color), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, modifier = Modifier.semantics { contentDescription = said }.padding(horizontal = 8.dp, vertical = 3.dp).widthIn(min = 24.dp))
     }
     if (onClick == null) Surface(shape = shape, color = color, content = content)
     else Surface(onClick = onClick, shape = shape, color = color, content = content)
@@ -643,6 +647,8 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
                         // The server's words ("4 min", "~6 min", "now"); worked out here for an older server.
                         val s = r.etaS ?: 0
                         val min = stringResource(R.string.map_min, s / 60)
+                        // Said in words: "about 6 minutes, timetable", where the screen has "~6 min".
+                        val said = Spoken.eta(r.etaS, r.quality)
                         Text(
                             r.eta ?: when {
                                 s < 60 -> stringResource(R.string.map_arriving)
@@ -650,6 +656,7 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
                                 else -> min
                             },
                             fontWeight = FontWeight.SemiBold,
+                            modifier = if (said == null) Modifier else Modifier.semantics { contentDescription = said },
                         )
                     }
                 }

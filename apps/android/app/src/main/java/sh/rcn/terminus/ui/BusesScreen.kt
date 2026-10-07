@@ -97,6 +97,7 @@ import sh.rcn.terminus.Pins
 import sh.rcn.terminus.Stopped
 import sh.rcn.terminus.R
 import sh.rcn.terminus.ServerClock
+import sh.rcn.terminus.Spoken
 import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
@@ -651,7 +652,8 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
             },
             color = if (arriving) c.primary else if (quality == "live") c.onSurface else c.onSurfaceVariant,
             maxLines = 1,
-            modifier = Modifier.semantics { contentDescription = eta },
+            // "about 6 minutes", not "tilde 6 min": the tag beside it says live or timetable.
+            modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: eta },
         )
         arriving -> Text(stringResource(R.string.map_arriving), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = c.primary)
         else -> {
@@ -664,7 +666,7 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
                 // A timetabled time isn't drawn as boldly as a bus seen.
                 color = if (quality == "live") c.onSurface else c.onSurfaceVariant,
                 maxLines = 1,
-                modifier = Modifier.semantics { contentDescription = L.s(R.string.n_min, BusTimes.minutes(etaS)) },
+                modifier = Modifier.semantics { contentDescription = Spoken.eta(etaS, quality, withQuality = false) ?: L.s(R.string.n_min, BusTimes.minutes(etaS)) },
             )
         }
     }
@@ -739,8 +741,9 @@ private fun SwipeFor(name: String, onClick: () -> Unit) {
 /** A service as it's painted on the bus, larger, for the board's rows and the line's heading. */
 @Composable
 private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolean = false) {
+    val said = stringResource(if (paid) R.string.a11y_bus_paid else R.string.a11y_bus, svc)
     Box(
-        Modifier.widthIn(min = if (big) 64.dp else 46.dp).height(if (big) 44.dp else 32.dp).background(Color(color), RoundedCornerShape(if (big) 12.dp else 9.dp)).padding(horizontal = 8.dp),
+        Modifier.semantics(mergeDescendants = true) { contentDescription = said }.widthIn(min = if (big) 64.dp else 46.dp).height(if (big) 44.dp else 32.dp).background(Color(color), RoundedCornerShape(if (big) 12.dp else 9.dp)).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(badgeText(svc, paid), color = inkOn(Color(color)), fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else 15.sp, maxLines = 1)
