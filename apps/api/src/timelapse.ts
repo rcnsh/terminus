@@ -265,17 +265,19 @@ export function recorderFor(env: Env, date: string): DurableObjectStub | null {
  * recorder keeps itself going with its alarm from then on; this only starts
  * it each morning, and again after the switch comes back on.
  *
- * Once a day, at the first run after the window opens, the past week's
- * recorders are asked too, switch or not: one still holding a day whose
- * alarm is gone (its retries ran out) is woken to write it and empty
- * itself. One holding nothing does nothing, and stores nothing.
+ * Once a day, at the first run after the window opens, the past
+ * HELD_DAYS + 1 days' recorders are asked too, switch or not: one still
+ * holding a day whose alarm is gone (its retries ran out) is woken to write
+ * it and empty itself. The extra day reaches a day whose retries ran until
+ * HELD_DAYS after its close, past the last morning that asked it. One
+ * holding nothing does nothing, and stores nothing.
  */
 export async function ensureRecorder(env: Env, nowMs: number): Promise<void> {
   if (!env.TIMELAPSE || !inWindow(nowMs)) return;
   const date = serviceDate(nowMs);
   const start = (d: string) => askRecorder(recorderFor(env, d)!, `/start?date=${d}`, { method: 'POST' });
   if (nowMs - windowOf(date).open < CRON_MS) {
-    await Promise.allSettled(Array.from({ length: HELD_DAYS }, (_, i) => start(serviceDate(nowMs - (i + 1) * DAY_MS))));
+    await Promise.allSettled(Array.from({ length: HELD_DAYS + 1 }, (_, i) => start(serviceDate(nowMs - (i + 1) * DAY_MS))));
   }
   if (!(await timelapseEnabled(env))) return;
   await start(date);
