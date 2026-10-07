@@ -156,7 +156,10 @@ export async function dayPlan(
             item.leave = a.leave ?? null;
             item.timing = a.timing ?? null;
           })
-          .catch(() => {}),
+          // The row goes without its leave-by rather than failing the day,
+          // but say so: an empty leave-by is otherwise indistinguishable from
+          // one that had nothing to say. The error's name only, never the trip.
+          .catch((e: unknown) => console.error('day leave-by failed', e instanceof Error ? e.name : typeof e)),
       );
     }
     items.push(item);
