@@ -694,22 +694,6 @@ function OfflineCard({ item, step }) {
 }
 
 const mins = (s) => Math.round(s / 60);
-const SWAP = '<path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/>';
-
-/**
- * The stop across the road first, as on the phone: stops either side of a
- * road are a few metres apart, within the location's error, so the nearest
- * can be the wrong side. Kept while the nearest stop is the same, for up to
- * an hour.
- */
-const swapped = store(null);
-const SWAP_KEEP_MS = 60 * 60_000;
-function nearbyOrder(stops, swap, now) {
-  const first = stops[0];
-  const twin = first?.opposite ? stops.find((s) => s.stop.code === first.opposite) : null;
-  const active = Boolean(twin && swap && now - swap.at <= SWAP_KEEP_MS && swap.from === first.stop.code && swap.to === twin.stop.code);
-  return { twin, active, shown: active ? [twin, first, ...stops.slice(1).filter((s) => s !== twin)] : stops };
-}
 
 /** A bus from the side, for a stop's name plate. */
 const BUS = '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11h15M8 21v-3M16 21v-3"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/>';
@@ -727,11 +711,9 @@ const etaText = (b) => (b.etaS == null ? '–' : b.etaS < 60 ? t('Arriving') : b
  * live. The name opens the stop on the map.
  */
 function NearbyCard({ stops }) {
-  const swap = useStore(swapped);
-  const { twin, active, shown } = nearbyOrder(stops, swap, Date.now());
   return html`
     <div class="widget nearby" aria-live="polite">
-      ${shown.map(
+      ${stops.map(
         (s, i) => html`
           <section class=${i === 0 ? 'stop-sign nearest' : 'stop-sign'} key=${s.stop.code}>
             <header class="plate">
@@ -746,15 +728,6 @@ function NearbyCard({ stops }) {
                 }}
               >${s.stop.name}</button>
               <span class="plate-walk">${t('{0} min walk', Math.max(1, mins(s.walkS)))}</span>
-              ${i === 0 &&
-              twin &&
-              html`<button
-                type="button"
-                class="swap"
-                aria-label=${t('Show {0} instead', (active ? stops[0] : twin).stop.name)}
-                title=${t('Show {0} instead', (active ? stops[0] : twin).stop.name)}
-                onClick=${() => swapped.set(active ? null : { from: stops[0].stop.code, to: twin.stop.code, at: Date.now() })}
-              ><${Icon} paths=${SWAP} /></button>`}
             </header>
             ${s.board.length
               ? s.board.map(

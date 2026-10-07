@@ -14,7 +14,8 @@ import sh.rcn.terminus.NearbyStop
  * each other are a few metres apart, within GPS error, so the nearest stop
  * can be the wrong side. A tap on the swap button puts the twin first and the
  * nearest one second; it stays swapped while the nearest stop is the same
- * one, for up to [KEEP_MS].
+ * one, for up to [KEEP_MS]. The widget shows only the first few stops, so
+ * the button is there only when the twin isn't one of them.
  */
 object NearbySwap {
     const val KEEP_MS = 60 * 60_000L
@@ -41,6 +42,17 @@ object NearbySwap {
         if (!active(stops, swap, now)) return stops
         val twin = twin(stops)!!
         return listOf(twin, stops.first()) + stops.drop(1).filter { it.code != twin.code }
+    }
+
+    /**
+     * The stop the swap button offers: the nearest stop's twin, or the nearest
+     * one again while swapped. None when the twin is already among the stops
+     * on screen (`onScreen`), since there's nothing to swap for; a swap made
+     * before then can always be undone.
+     */
+    fun offer(stops: List<NearbyStop>, swap: Swap?, now: Long, onScreen: Collection<String>): NearbyStop? {
+        if (active(stops, swap, now)) return stops.firstOrNull()
+        return twin(stops)?.takeIf { it.code !in onScreen }
     }
 }
 

@@ -9,19 +9,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -30,7 +23,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +33,6 @@ import sh.rcn.terminus.L
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.R
 import sh.rcn.terminus.parseColor
-import sh.rcn.terminus.widget.NearbySwap
 
 /**
  * The stops near you as their signs: the name plate with the walk there,
@@ -55,14 +46,8 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
         Text(if (loading) stringResource(R.string.checking) else stringResource(R.string.nothing_yet))
         return
     }
-    // The stop across the road first, as on the widget: the nearest one by GPS
-    // can be the wrong side. Kept while the nearest stop is the same, for up to an hour.
-    var swap by remember { mutableStateOf<NearbySwap.Swap?>(null) }
-    val now = System.currentTimeMillis()
-    val shown = NearbySwap.order(stops, swap, now)
-    val twin = NearbySwap.twin(stops)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        for ((i, s) in shown.withIndex()) {
+        for ((i, s) in stops.withIndex()) {
             val big = i == 0
             // The sign opens its stop on the map, with its services and what's coming.
             StopSign(
@@ -70,14 +55,7 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
                 Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.on_the_map, s.name)) { onOpenStop(s.code) },
                 big = big,
                 trailing = {
-                    Text(if (s.walkS < 60) stringResource(R.string.here) else stringResource(R.string.min_walk, (s.walkS + 30) / 60), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = if (i == 0 && twin != null) 0.dp else 6.dp))
-                    if (i == 0 && twin != null) {
-                        val swapped = NearbySwap.active(stops, swap, now)
-                        val other = if (swapped) stops.first() else twin
-                        IconButton(onClick = { swap = if (swapped) null else NearbySwap.Swap(stops.first().code, twin.code, System.currentTimeMillis()) }, modifier = Modifier.size(40.dp)) {
-                            Icon(painterResource(R.drawable.ic_swap), contentDescription = stringResource(R.string.nearby_swap, other.name))
-                        }
-                    }
+                    Text(if (s.walkS < 60) stringResource(R.string.here) else stringResource(R.string.min_walk, (s.walkS + 30) / 60), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 6.dp))
                 },
             ) {
                 if (!s.available) Text(stringResource(R.string.no_live_data), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(14.dp))

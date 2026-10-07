@@ -49,10 +49,6 @@ final class AppModel {
         didSet { UserDefaults.standard.set(try? JSONEncoder().encode(added), forKey: "addedPlaces") }
     }
 
-    /// Nearby's swap: the stop across the road shown first while the nearest
-    /// stop is the same one, for up to an hour.
-    var nearbySwap: (from: String, to: String, at: Date)?
-
     /// Always the planned trip: this is what the menu bar shows.
     var plan: NextAnswer? { answers[.plan] }
     var target: Target = .plan
@@ -570,7 +566,6 @@ final class AppModel {
         needsSetup = false
         anonymous = false
         added = []
-        nearbySwap = nil
         answers = [:]
         day = nil
         dayFetched = nil

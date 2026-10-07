@@ -492,8 +492,11 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             return
         }
         val walk = if (first.walkS < 60) L.s(R.string.here) else L.s(R.string.min_walk, (first.walkS + 30) / 60)
-        // The other side of the road, a tap away: the stop shown second when swapped.
-        val other = if (NearbySwap.active(api.orEmpty(), chosen.swap, now)) stops.getOrNull(1) else api?.let(NearbySwap::twin)
+        // The next stops, a line each where there's room, when their times are fresh.
+        val next = if (chosen.error == UPDATING || old) emptyList() else stops.drop(1).take(if (large) 2 else 1).filter { departures(it, age, 3).isNotEmpty() }
+        val others = next.map { L.s(R.string.stop_departures, it.name, departures(it, age, 3)) }
+        // The other side of the road, a tap away, unless it's one of the stops shown.
+        val other = NearbySwap.offer(api.orEmpty(), chosen.swap, now, (listOf(first) + next).map { it.code })
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(L.s(R.string.nearby_line, first.name, walk), style = muted, maxLines = 1, modifier = GlanceModifier.defaultWeight())
             if (other != null) SwapButton(other, api!!.first().code)
@@ -503,7 +506,6 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             style = TextStyle(color = if (old) colors.onSurfaceVariant else colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
             maxLines = 1,
         )
-        val others = stops.drop(1).take(if (large) 2 else 1).mapNotNull { s -> departures(s, age, 3).takeIf { it.isNotEmpty() }?.let { L.s(R.string.stop_departures, s.name, it) } }
         val lines = when {
             chosen.error == UPDATING -> listOf(L.s(R.string.updating))
             old -> listOf(L.s(R.string.old_times))

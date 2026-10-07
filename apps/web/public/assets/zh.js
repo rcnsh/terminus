@@ -470,7 +470,6 @@ window.TERMINUS_ZH = {
  "Next: {0}, where you get off": "下一站：{0}，在这里下车",
  "Next: {0} · {1} stops to go": "下一站：{0} · 还有 {1} 站",
  "Ride progress": "行程进度",
- "Show {0} instead": "改看 {0}",
  "Go later today at…": "今天晚些时候出发…",
  "Plan it": "安排",
  "Couldn't add it. Check your connection.": "无法添加。请检查网络连接。",
