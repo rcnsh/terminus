@@ -56,6 +56,54 @@ test('the table takes the median: a few made-up rides cannot drag it', async () 
   assert.equal((await buildTable(db, FROZEN_NOW)).svcs.D2.s, 100);
 });
 
+test('the table in SQL is the same as the one worked out row by row', async () => {
+  // The old way: every ride read into memory, grouped and sorted in JS.
+  const CLAMP = [45, 240];
+  const median = (xs) => {
+    const v = [...xs].sort((a, b) => a - b);
+    const mid = v.length >> 1;
+    return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+  };
+  const clamp = (x) => Math.round(Math.min(CLAMP[1], Math.max(CLAMP[0], x)));
+  const reference = (rows) => {
+    const bySvc = new Map();
+    for (const r of rows) {
+      const hours = bySvc.get(r.svc) ?? new Map();
+      hours.set(r.hour, [...(hours.get(r.hour) ?? []), r.seconds / r.hops]);
+      bySvc.set(r.svc, hours);
+    }
+    const svcs = {};
+    for (const [svc, byHour] of bySvc) {
+      const all = [...byHour.values()].flat();
+      if (all.length < MIN_RIDES) continue;
+      const hours = {};
+      for (const [hour, xs] of byHour) if (xs.length >= MIN_RIDES) hours[String(hour)] = clamp(median(xs));
+      svcs[svc] = { n: all.length, s: clamp(median(all)), hours };
+    }
+    return svcs;
+  };
+
+  const db = makeD1();
+  // A fixed pseudo-random spread: odd and even counts, ties, uneven hops,
+  // halves that round, and rides older than the table keeps.
+  let seed = 7;
+  const rand = (n) => Math.floor(((seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648) * n);
+  const day = (ms) => new Date(ms + 8 * 3_600_000).toISOString().slice(0, 10);
+  const ins = db._db.prepare("INSERT INTO ride_times (svc, from_code, to_code, hops, seconds, daytype, hour, day) VALUES (?, 'A', 'B', ?, ?, 'term', ?, ?)");
+  const kept = [];
+  const cutoff = day(FROZEN_NOW - 120 * 86_400_000);
+  for (let i = 0; i < 3000; i++) {
+    const r = { svc: ['A1', 'A2', 'D1', 'D2', 'K', 'BTC'][rand(6)], hops: 1 + rand(9), hour: 7 + rand(16), day: day(FROZEN_NOW - rand(140) * 86_400_000) };
+    r.seconds = r.hops * (30 + rand(270)) + rand(3);
+    ins.run(r.svc, r.hops, r.seconds, r.hour, r.day);
+    if (r.day >= cutoff) kept.push(r);
+  }
+  const table = await buildTable(db, FROZEN_NOW);
+  const want = reference(kept);
+  assert.ok(Object.keys(want).length >= 5 && Object.values(want).some((v) => Object.keys(v.hours).length > 3));
+  assert.deepEqual(table.svcs, want);
+});
+
 test('the cron makes the table once a day and prunes rides older than it keeps', async () => {
   const env = { ...makeEnv(), DB: makeD1() };
   await recordRide(env.DB, GRAPH, ride(FROZEN_NOW - 200 * 86_400_000), FROZEN_NOW - 200 * 86_400_000 + HOPS * 100_000);
