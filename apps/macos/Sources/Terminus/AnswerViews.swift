@@ -209,7 +209,7 @@ struct AnswerDetail: View {
                                     .offset(x: w * Double(i) / Double(max(1, hops)) + 1)
                             }
                             Image(systemName: "bus.fill")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(inkOn(color ?? "#000000"))
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(tint))
@@ -230,8 +230,18 @@ struct AnswerDetail: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L("Ride progress"))
-                .accessibilityValue(ride.stops.map(\.name).joined(separator: ", "))
+                .accessibilityValue(Self.spoken(ride.stops.map(\.name), passed: passed))
             }
+        }
+
+        /// "Next stop: COM 3. 2 more stops, getting off at UTown.": where the
+        /// bus is and how far is left, not every stop's name.
+        nonisolated static func spoken(_ stops: [String], passed: Int) -> String {
+            let last = stops.count - 1
+            guard last > 0 else { return stops.first ?? "" }
+            let next = min(passed + 1, last)
+            let left = last - min(passed, last - 1)
+            return left <= 1 ? L("Next stop: %@, where you get off.", stops[last]) : L("Next stop: %@. %@ stops to go, getting off at %@.", stops[next], "\(left)", stops[last])
         }
     }
 
@@ -240,9 +250,12 @@ struct AnswerDetail: View {
         let text: String
         var body: some View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14)
+                // The words say it all; the icon is only for the eye.
+                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14).accessibilityHidden(true)
                 Text(text).font(.callout).fixedSize(horizontal: false, vertical: true)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spokenTimes(text))
         }
     }
 }
@@ -269,7 +282,7 @@ struct NearbyList: View {
                 ForEach(all) { s in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text(s.stop.name).font(.system(size: 13, weight: .semibold))
+                            Text(s.stop.name).font(.system(size: 13, weight: .semibold)).accessibilityAddTraits(.isHeader)
                             Spacer()
                             Text(s.walkS < 60 ? L("You're here") : L("%@ min walk", "\((s.walkS + 30) / 60)"))
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -299,6 +312,7 @@ struct NearbyList: View {
 /// Wraps onto more lines instead of squeezing when a stop has many services.
 struct FlowPills: View {
     let rows: [BoardRow]
+    @Environment(\.colorSchemeContrast) private var contrast
     /// At most this many after the next one: a pill, not a timetable.
     nonisolated static let laterShown = 2
 
@@ -318,7 +332,7 @@ struct FlowPills: View {
                     }
                     let later = Self.later(r)
                     (Text(Self.eta(r)).foregroundColor(.secondary)
-                        + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(Color.secondary.opacity(0.55)))
+                        + Text(later.isEmpty ? "" : " · " + later.joined(separator: " · ")).foregroundColor(Color.secondary.opacity(contrast == .increased ? 0.85 : 0.55)))
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .contentTransition(.numericText())
                 }
@@ -412,9 +426,21 @@ private struct RemovedRow: View {
 
 /// One of today's entries; anything still to come has an × on hover to take it off today.
 private struct TodayRow: View {
+    /// Its status in words: what the dimming, the strike and the bold say.
+    private var status: String {
+        switch item.status {
+        case "done": L("Over")
+        case "skipped": L("Skipped")
+        case "next", "now": L("Next")
+        default: ""
+        }
+    }
+
     let item: DayPlan.Item
     let onRemove: (DayPlan.Item) -> Void
     @State private var hovering = false
+    @FocusState private var removeFocused: Bool
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         let past = item.status == "done" || item.status == "skipped"
@@ -428,19 +454,24 @@ private struct TodayRow: View {
             }
             Spacer(minLength: 0)
             if item.removable == true {
+                // Shown on hover, and when the keyboard reaches it. VoiceOver
+                // has the row's action instead, so it isn't offered twice.
                 Button { onRemove(item) } label: { Image(systemName: "xmark").font(.caption.weight(.semibold)) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .opacity(hovering ? 1 : 0)
+                    .focused($removeFocused)
+                    .opacity(hovering || removeFocused ? 1 : 0)
                     .help(L("Remove from today"))
-                    .accessibilityLabel(L("Remove %@ from today", item.title))
+                    .accessibilityHidden(true)
             }
         }
-        .opacity(past ? 0.5 : 1)
+        .opacity(past ? (contrast == .increased ? 0.7 : 0.5) : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         // One element per row; the hover-only × is its "Remove from today" action.
         .accessibilityElement(children: .combine)
+        // Dimmed or struck through on screen: said in words.
+        .accessibilityValue(status)
         .accessibilityActions {
             if item.removable == true { Button(L("Remove from today")) { onRemove(item) } }
         }

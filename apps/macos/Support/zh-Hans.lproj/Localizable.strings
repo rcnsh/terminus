@@ -374,3 +374,7 @@
 "Next stop: %@" = "下一站：%@";
 "Zoom in" = "放大";
 "Zoom out" = "缩小";
+"Next stop: %@, where you get off." = "下一站：%@，在这里下车。";
+"Next stop: %@. %@ stops to go, getting off at %@." = "下一站：%1$@。还有 %2$@ 站，在 %3$@ 下车。";
+"Over" = "已结束";
+"Skipped" = "已跳过";

@@ -404,3 +404,11 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     let old = SetupModel.Limits(nil)
     #expect(old.homeStops == 3 && old.places == 12 && old.placeLabel == 24 && old.homeWalkMin == 0...30, "today's values without them")
 }
+
+/// VoiceOver hears where the bus is and how far is left, not every stop.
+@Test func theRideIsSpokenAsTheNextStopAndWhatsLeft() {
+    let stops = ["PGP", "Kent Ridge MRT", "LT27", "UTown"]
+    #expect(AnswerDetail.RideLine.spoken(stops, passed: 0) == "Next stop: Kent Ridge MRT. 3 stops to go, getting off at UTown.")
+    #expect(AnswerDetail.RideLine.spoken(stops, passed: 2) == "Next stop: UTown, where you get off.")
+    #expect(AnswerDetail.RideLine.spoken(stops, passed: 3) == "Next stop: UTown, where you get off.")
+}
