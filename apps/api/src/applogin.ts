@@ -23,7 +23,28 @@
 
 import type { Env } from './types.ts';
 import { mailName } from './site.ts';
-import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, takeMailBudget, takeGlobalMail, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
+import {
+  type Client,
+  type Live,
+  type User,
+  ACCOUNT_TTL,
+  addEmailTo,
+  anonymousGone,
+  hasSetup,
+  hashToken,
+  inboxKey,
+  takeMailBudget,
+  takeGlobalMail,
+  loadProfileJson,
+  newPairCode,
+  newToken,
+  profileFor,
+  removeAnonymous,
+  saveProfileJson,
+  sendMail,
+  sessionFor,
+  userFor,
+} from './accounts.ts';
 import { m } from './i18n.ts';
 
 export { hasSetup } from './accounts.ts';
@@ -124,7 +145,7 @@ async function sendApproval(env: Env, email: string, device: string, code: strin
   const t = m();
   device ||= t.aDevice;
   const why = t.codeWhyApp(site, device);
-  await env.EMAIL!.send({
+  await sendMail(env, {
     from: { email: env.EMAIL_FROM!, name: mailName(env) },
     to: email,
     subject: t.codeSubject(code),
@@ -269,9 +290,8 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
   if (row.status === 'pending' || row.status === 'blocked') return { status: 'pending' };
   if (row.status !== 'approved') return { status: row.status === 'denied' ? 'denied' : 'expired' };
 
-  // Spent here, so two racing polls can't both be handed a token.
   const req = await db
-    .prepare("UPDATE login_requests SET status = 'done' WHERE id = ? AND status = 'approved' RETURNING email, device_name, anon_user_id, platform")
+    .prepare("SELECT email, device_name, anon_user_id, platform FROM login_requests WHERE id = ? AND status = 'approved'")
     .bind(id)
     .first<{ email: string; device_name: string; anon_user_id: string | null; platform: Client['platform'] }>();
   if (!req) return { status: 'expired' };
@@ -283,27 +303,28 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
     ? await db.prepare('SELECT id FROM users WHERE id = ? AND email IS NULL').bind(req.anon_user_id).first<{ id: string }>()
     : null;
 
-  let userId: string;
+  // Every change below runs in one batch with the session and the spend, so
+  // a failure part way (a web sign-in giving the email to another account
+  // meanwhile, say) leaves the request approved for the next poll, and of
+  // two racing polls only one is handed a token.
+  const live: Live = { sql: "EXISTS (SELECT 1 FROM login_requests WHERE id = ? AND status = 'approved')", params: [id] };
+  const work: D1PreparedStatement[] = [];
   let outcome: Outcome;
   if (!existing && anon) {
-    await db.prepare('UPDATE users SET email = ?, email_added = ? WHERE id = ? AND email IS NULL').bind(req.email, nowMs, anon.id).run();
     // The device's old anonymous token is replaced by the one returned here.
-    await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(anon.id).run();
-    userId = anon.id;
+    work.push(...addEmailTo(db, anon.id, req.email, nowMs, live));
     outcome = 'added-email';
   } else if (!existing) {
-    userId = (await ensureUser(db, req.email, nowMs, 'app')).id;
+    work.push(userFor(db, req.email, nowMs, 'app', live));
     outcome = 'created';
   } else {
-    userId = existing.id;
     outcome = 'signed-in';
     if (anon) {
       const mine = await loadProfileJson(db, anon.id);
       if (!hasSetup(mine)) {
-        await removeAnonymous(db, anon.id, userId);
-      } else if (!hasSetup(await loadProfileJson(db, userId))) {
-        await saveProfileJson(db, userId, mine, nowMs);
-        await removeAnonymous(db, anon.id, userId);
+        work.push(...anonymousGone(db, anon.id, existing.id, live));
+      } else if (!hasSetup(await loadProfileJson(db, existing.id))) {
+        work.push(profileFor(db, existing.id, mine, nowMs, live), ...anonymousGone(db, anon.id, existing.id, live));
         outcome = 'moved-setup';
       } else {
         // Kept until the app says which setup wins.
@@ -311,7 +332,27 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
       }
     }
   }
-  const token = await openSession(db, userId, 'device', req.device_name, nowMs, client);
+  const token = newToken();
+  const tokenHash = await hashToken(token);
+  let out: D1Result[];
+  try {
+    out = await db.batch([
+      ...work,
+      sessionFor(db, tokenHash, req.email, 'device', req.device_name, nowMs, client, live),
+      db
+        .prepare("UPDATE login_requests SET status = 'done' WHERE id = ? AND status = 'approved' AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?) RETURNING id")
+        .bind(id, tokenHash),
+    ]);
+  } catch (err) {
+    // Nothing was changed: the app's next poll tries again.
+    console.error('app sign-in: could not finish, left for the next poll:', err instanceof Error ? err.message : String(err));
+    return { status: 'pending' };
+  }
+  const userId = (out.at(-2)?.results?.[0] as { user_id: string } | undefined)?.user_id;
+  // Spent by a racing poll, or the account changed under it: pending lets a
+  // request that's still approved finish on the next poll, and a spent one
+  // then reads as expired.
+  if (!userId || !out.at(-1)?.results?.length) return { status: 'pending' };
   const removed = anon && (outcome === 'signed-in' || outcome === 'moved-setup') ? anon.id : undefined;
   return { status: 'approved', token, email: req.email, outcome, userId, device: req.device_name, removed };
 }

@@ -57,7 +57,9 @@ class Store(context: Context) {
 
     /** The widget's last answer, as the raw JSON plus when it was fetched. */
     fun saveAnswer(json: JSONObject, fetchedAtMs: Long) {
-        prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs) }
+        // A fresh answer from anywhere (the app, the live notification, a
+        // skip) ends a run of failed refreshes, so the back-off starts over.
+        prefs.edit { putString(KEY_ANSWER, json.toString()).putLong(KEY_FETCHED, fetchedAtMs).putInt(KEY_REFRESH_FAILS, 0) }
         // The app shortcuts follow the saved places (a no-op when they haven't changed).
         runCatching { Shortcuts.update(app, NextAnswer.parse(json).places) }
     }
@@ -137,10 +139,25 @@ class Store(context: Context) {
         get() = prefs.getString(KEY_ALERTED, null)
         set(value) = prefs.edit { putString(KEY_ALERTED, value) }
 
-    /** The Firebase token last sent to /me/push, so it's only sent when it changes. */
+    /** The Firebase token last sent to /me/push, so it's only sent when it changes (or now and then, Push). */
     var pushToken: String?
         get() = prefs.getString(KEY_PUSH, null)
         set(value) = prefs.edit { putString(KEY_PUSH, value) }
+
+    /** When the server last took [pushToken], epoch ms. */
+    var pushSentAt: Long
+        get() = prefs.getLong(KEY_PUSH_AT, 0)
+        set(value) = prefs.edit { putLong(KEY_PUSH_AT, value) }
+
+    /** When a push last reached this phone, epoch ms. */
+    var pushHeardAt: Long
+        get() = prefs.getLong(KEY_PUSH_HEARD, 0)
+        set(value) = prefs.edit { putLong(KEY_PUSH_HEARD, value) }
+
+    /** Background refreshes that failed in a row, for the back-off (Refresher). */
+    var refreshFailures: Int
+        get() = prefs.getInt(KEY_REFRESH_FAILS, 0)
+        set(value) = prefs.edit { putInt(KEY_REFRESH_FAILS, value) }
 
     /** Where you usually go, counted on this phone for the widget's buttons (Destinations). */
     fun destinationUses(): Map<String, Destinations.Use> = Destinations.parse(prefs.getString(KEY_DEST_USE, null))
@@ -229,6 +246,9 @@ class Store(context: Context) {
         const val KEY_NEEDS_SETUP = "needs-setup"
         const val KEY_EMAIL = "email"
         const val KEY_PUSH = "push-token"
+        const val KEY_PUSH_AT = "push-sent-at"
+        const val KEY_PUSH_HEARD = "push-heard-at"
+        const val KEY_REFRESH_FAILS = "refresh-failures"
         const val KEY_ALERTED = "leave-alerted"
         const val KEY_SWIPED_TODAY = "swiped-today"
         const val KEY_SWIPE_PEEKS = "swipe-peeks"

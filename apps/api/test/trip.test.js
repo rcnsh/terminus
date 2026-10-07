@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { ASSUME_MS, RIDE_GRACE_MS, endOfDayMs, phaseFor, sgtDate } from '../src/trip.ts';
+import { ASSUME_MS, RIDE_GRACE_MS, TRIP_TIMEOUT_MS, clearTrip, endOfDayMs, loadDay, phaseFor, saveSignals, sgtDate } from '../src/trip.ts';
 import { Trip } from '../src/tripdo.ts';
 import { GRAPH } from '../src/graph.ts';
 import { indexGraph, rideStops, serviceEndsAt } from '../src/resolve.ts';
@@ -1187,4 +1187,20 @@ test('a day keeps at most so many trip records', async () => {
   const after = await inst.storage.get('day');
   assert.equal(Object.keys(after.trips).length, MAX_DAY_TRIPS + 1, 'nothing new past the cap');
   assert.equal(after.trips[SECOND], undefined);
+});
+
+test('a Trip object that never answers costs the card its trip state, not the card', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const stuck = { idFromName: (n) => n, get: () => ({ fetch: () => new Promise(() => {}) }) };
+  const env = { TRIPS: stuck };
+  const error = console.error;
+  console.error = () => {};
+  t.after(() => (console.error = error));
+  const day = loadDay(env, 'u1', FROZEN_NOW);
+  const save = saveSignals(env, 'u1', [{ key: 'k', rec: null }], FROZEN_NOW);
+  const clear = clearTrip(env, 'u1');
+  t.mock.timers.tick(TRIP_TIMEOUT_MS);
+  assert.equal(await day, null, 'no state, as when the object fails');
+  await assert.rejects(save, /timed out/, 'a change says it failed, as it does on an error');
+  assert.equal(await clear, undefined, 'clearing goes on without it');
 });

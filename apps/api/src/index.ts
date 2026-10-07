@@ -19,7 +19,7 @@ import { appVersion, authConfigured, getSession } from './auth.ts';
 import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
 import { fmsConfigured, getBuses } from './fms.ts';
 import { shortStop } from './format.ts';
-import { boardAt, displayName, indexGraph, serviceEndsAt, serviceResumesAt, stoppedReason } from './resolve.ts';
+import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResumesAt, stoppedReason } from './resolve.ts';
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
@@ -40,7 +40,9 @@ import { landingPage } from './landing.ts';
 import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { allResidences, residenceWalkMin } from './residences.ts';
-import { callerFor } from './access.ts';
+import { ACCOUNTS_DOWN, callerOrDown, d1Unavailable } from './access.ts';
+import { fcmEnabled } from './push.ts';
+import { webPushEnabled } from './webpush.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
 
@@ -193,7 +195,8 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
     // it's only near rather than across).
     stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code), ...twinOf(stop, idx.byCode) },
     board,
-    asOf: new Date(sa.stale ? sa.fetchedAt : nowMs).toISOString(),
+    // As old as the times on the board (counted from now in boardAt).
+    asOf: new Date(boardAsOf([sa], nowMs)).toISOString(),
     available: sa.available,
   });
 }
@@ -339,6 +342,9 @@ async function handleHealth(req: Request, url: URL, env: Env, nowMs: number): Pr
         accounts: accountsConfigured(env),
         email: Boolean(env.EMAIL && env.EMAIL_FROM),
         alerts: Boolean(env.EMAIL && env.EMAIL_FROM && env.ALERT_EMAIL),
+        // Set and usable: a secret that won't parse turns that push off.
+        pushAndroid: fcmEnabled(env),
+        pushWeb: webPushEnabled(env),
       },
       // From the cron probe: whether the NUS feed answered, and since when.
       upstream: u ? { up: u.up, since: new Date(u.since).toISOString(), checkedAt: new Date(u.checkedAt).toISOString(), cronStale } : null,
@@ -368,9 +374,11 @@ const ME_DEPS: MeDeps = { graph: GRAPH, publicGraph: GRAPH_PUBLIC, answerFor, co
 const KEYED = ['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs'];
 
 export default {
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     scopeCache(env);
-    ctx.waitUntil(runCron(env, Date.now()));
+    // Awaited, not left to waitUntil: a run that outlives the handler could be
+    // cut off partway, with the trigger's history still saying it succeeded.
+    await runCron(env, Date.now());
   },
 
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -406,7 +414,11 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // and the map alone asks every 5 s. A key has its own ceiling wherever
     // it's used from; a request with neither is limited by IP.
     if (keyed) {
-      const caller = await callerFor(env, req, nowMs, ctx);
+      const { caller, down } = await callerOrDown(env, req, nowMs, ctx);
+      if (down) {
+        logError(env, url.pathname);
+        return json({ error: ACCOUNTS_DOWN }, 503, { 'retry-after': '30' });
+      }
       const bucket =
         caller?.kind === 'key' ? { rl: env.RL_PUBLIC, key: `key:${caller.keyId}` }
         : caller?.kind === 'account' ? { rl: env.RL_ME, key: `acct:${caller.userId}` }
@@ -483,6 +495,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // dashboard. The path only: the query can hold coordinates.
     console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
     logError(env, url.pathname);
+    // D1 down for a moment (on /me/*, say) is worth trying again; the apps
+    // read a 503 that way, and a 500 as a fault.
+    if (d1Unavailable(err)) return json({ error: ACCOUNTS_DOWN }, 503, { 'retry-after': '30' });
     return json({ error: 'something went wrong on our side' }, 500);
   }
 }

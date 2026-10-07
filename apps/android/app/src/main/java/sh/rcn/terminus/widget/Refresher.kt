@@ -7,6 +7,8 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -49,6 +51,10 @@ import java.util.concurrent.TimeUnit
  *   (`refreshAt`). An idle-safe alarm, not a delayed job: Doze defers jobs
  *   for hours, and a departed bus must not sit bright.
  * - a 30-minute periodic job as the floor, in case an alarm is missed.
+ * - after a failed refresh, again with a back-off (1, 2, 4, 8, then every
+ *   15 min) rather than waiting for the floor, which Doze stretches.
+ * - the alarm redraws the widget at once, network or not, so an answer
+ *   past its `staleAt` dims (isOld) while the refresh waits for a network.
  * - after a reboot or app update, and on a time or timezone change.
  *
  * Leave alerts (LeaveAlerts) ride on the same chain, so it also runs with no
@@ -65,9 +71,15 @@ object Refresher {
     private const val FALLBACK_MS = 15 * 60_000L
     /** The day plan kept for offline is fetched again after this long. */
     private const val DAY_MAX_AGE_MS = 60 * 60_000L
+    private const val EXTRAS = "terminus-refresh-extras"
 
-    /** Fetch the planned answer, cache it, and redraw every widget. */
-    suspend fun refresh(ctx: Context, fast: Boolean = false) {
+    /**
+     * Fetch the planned answer, cache it, and redraw every widget. With
+     * [extras] off (a push, whose handler has seconds), only the answer:
+     * today's plan for offline and the widgets showing a place or Nearby
+     * follow in a job (ExtrasWorker).
+     */
+    suspend fun refresh(ctx: Context, fast: Boolean = false, extras: Boolean = true) {
         val store = Store(ctx)
         val token = store.token
         if (token == null) {
@@ -84,16 +96,12 @@ object Refresher {
             val json = api.nextJson(Target.Plan, loc?.latitude, loc?.longitude, Locator.accOf(loc))
             val now = System.currentTimeMillis()
             store.saveAnswer(json, now)
-            // Today's plan, kept for when the phone goes offline (OfflineDay):
-            // when the one kept is another day's or an hour old.
-            val kept = store.lastDay()
-            if (kept == null || kept.first.date != OfflineDay.sgtDate(now) || now - kept.second > DAY_MAX_AGE_MS) {
-                runCatching { store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now) }
-            }
+            if (extras) keepDay(api, store, loc, now)
             store.lastError = null
             scheduleNext(ctx, NextAnswer.parse(json), now)
-            // Signed in with no push address sent yet (a new session, or a new Firebase token).
-            if (store.pushToken == null) Push.register(ctx)
+            // No push address sent yet (a new session, or a new Firebase
+            // token), or not sent again for a while (Push.due).
+            if (Push.due(store)) Push.register(ctx)
         } catch (e: ApiError) {
             // Only the token this request was sent with is dead: one stored
             // since (signed in again meanwhile) stays.
@@ -104,10 +112,13 @@ object Refresher {
             } else {
                 armFromCache(ctx, store)
                 armOfflineRedraw(ctx, store)
+                retryLater(ctx, store)
             }
             store.lastError = if (e.status == 401) L.s(R.string.device_removed) else e.message
         } catch (e: ParseError) {
             store.lastError = L.s(R.string.unexpected_answer)
+            armFromCache(ctx, store)
+            retryLater(ctx, store)
         } catch (e: kotlinx.coroutines.CancellationException) {
             // Replaced by a newer refresh (refreshSoon): not offline, nothing to record.
             throw e
@@ -115,10 +126,79 @@ object Refresher {
             store.lastError = L.s(R.string.offline)
             armFromCache(ctx, store)
             armOfflineRedraw(ctx, store)
+            retryLater(ctx, store)
         }
         // Widgets showing a place or Nearby (phase 8.3) keep counting down too.
+        if (extras) runCatching { WidgetModes.refreshChosen(ctx) } else queueExtras(ctx)
+        redrawWidgets(ctx)
+    }
+
+    /**
+     * Today's plan, kept for when the phone goes offline (OfflineDay): when
+     * the one kept is another day's or an hour old.
+     */
+    private suspend fun keepDay(api: Api, store: Store, loc: android.location.Location?, now: Long) {
+        val kept = store.lastDay()
+        if (kept == null || kept.first.date != OfflineDay.sgtDate(now) || now - kept.second > DAY_MAX_AGE_MS) {
+            runCatching { store.saveDay(api.dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc)), now) }
+        }
+    }
+
+    /** What [refresh] leaves out without [extras], run once there's time and a network. */
+    suspend fun extras(ctx: Context) {
+        val store = Store(ctx)
+        val token = store.token ?: return
+        val loc = Locator.lastKnown(ctx)
+        keepDay(Api(token, hour12 = hour12(ctx)), store, loc, System.currentTimeMillis())
         runCatching { WidgetModes.refreshChosen(ctx) }
         redrawWidgets(ctx)
+    }
+
+    private fun queueExtras(ctx: Context) {
+        val work = OneTimeWorkRequestBuilder<ExtrasWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(ctx).enqueueUniqueWork(EXTRAS, ExistingWorkPolicy.REPLACE, work)
+    }
+
+    /**
+     * A failed refresh is tried again after [retryDelay], through the
+     * refresh alarm, rather than at the 30-minute floor: the widget and the
+     * leave alerts would otherwise go quiet until then. Offline, the alarm
+     * only redraws until a network is back (RefreshReceiver). This alarm
+     * replaces the one [scheduleNext] set, so it comes no later than the
+     * moment that one was for (the card changing, "Leave now", the next
+     * stop on the ride, or going stale).
+     */
+    private fun retryLater(ctx: Context, store: Store) {
+        if (!active(ctx)) return
+        val failures = store.refreshFailures
+        store.refreshFailures = failures + 1
+        val now = ServerClock.now()
+        val pending = store.lastAnswer()?.let { (answer, fetchedAt) -> nextRefreshAt(answer, ServerClock.fromDevice(fetchedAt), now, widget = widgetCount(ctx) > 0) }
+        val at = listOfNotNull(now + retryDelay(failures), pending).min()
+        ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(ServerClock.toDevice(at), alarmIntent(ctx))
+    }
+
+    /**
+     * Called by the refresh alarm, which only queues a refresh that waits
+     * for a network: the widget is redrawn now regardless, so an answer
+     * past its `staleAt` dims rather than staying bright. With no network
+     * it says Offline and moves on through the day plan kept for it.
+     */
+    suspend fun redrawWhileWaiting(ctx: Context) {
+        val store = Store(ctx)
+        if (store.paired && !online(ctx)) {
+            store.lastError = L.s(R.string.offline)
+            armOfflineRedraw(ctx, store)
+        }
+        redrawWidgets(ctx)
+    }
+
+    private fun online(ctx: Context): Boolean {
+        val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return true
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     /** Offline when a leave check fires: the last answer's time beats no heads-up. */
@@ -133,7 +213,13 @@ object Refresher {
      */
     fun armOfflineRedraw(ctx: Context, store: Store) {
         if (widgetCount(ctx) == 0) return
-        val at = OfflineDay.nextChangeAt(store.lastDay()?.first, ServerClock.now()) ?: return
+        val now = ServerClock.now()
+        // The last answer's own moments too, day plan or not ("Leave now",
+        // the next stop on the ride, going stale): the alarm that set off
+        // this redraw may have come before them, and nothing else is armed
+        // for them while refreshes wait for a network.
+        val own = store.lastAnswer()?.first?.let { redrawAt(it, now) }
+        val at = listOfNotNull(OfflineDay.nextChangeAt(store.lastDay()?.first, now), own).minOrNull() ?: return
         ctx.getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ServerClock.toDevice(at) + 1_000, redrawIntent(ctx))
     }
 
@@ -168,6 +254,18 @@ object Refresher {
         // On the bus: at each stop, so the progress bar and the arrival move on.
         val local = card?.ride?.takeIf { widget && card.phase == "riding" }?.let { r -> RideStyle.nextRedrawAt(r, now) }?.coerceAtLeast(now + MIN_LOCAL_GAP_MS)
         return listOfNotNull(server, local).minOrNull() ?: (fetchedAt + FALLBACK_MS).coerceAtLeast(now + MIN_LOCAL_GAP_MS)
+    }
+
+    /**
+     * When a widget showing [answer] next looks different with no new
+     * answer (server clock): its card changing or going stale, "Leave by"
+     * turning into "Leave now", or the next stop on the ride.
+     */
+    internal fun redrawAt(answer: NextAnswer, now: Long): Long? {
+        val card = answer.card
+        val ride = card?.ride?.takeIf { card.phase == "riding" }?.let { RideStyle.nextRedrawAt(it, now) }
+        val leave = answer.leaveAtMs?.takeIf { answer.mode != "rest" }
+        return listOfNotNull(card?.nextChangeAtMs, card?.staleAtMs, leave, ride).filter { it > now }.minOrNull()
     }
 
     /** Arm the next refresh, and the leave alert. Only while something needs them. [fetchedAt] is on the phone's clock. */
@@ -240,6 +338,16 @@ class RefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
     }
 }
 
+class ExtrasWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result {
+        Refresher.extras(applicationContext)
+        return Result.success()
+    }
+}
+
+/** Retry waits after [failures] failed refreshes in a row: 1, 2, 4, 8, then 15 minutes. */
+internal fun retryDelay(failures: Int): Long = (60_000L shl failures.coerceIn(0, 4)).coerceAtMost(15 * 60_000L)
+
 /**
  * The refresh alarm, plus the system events after which the widget's
  * pre-drawn text is wrong: a reboot or app update (alarms are gone, the cache
@@ -256,6 +364,7 @@ class RefreshReceiver : BroadcastReceiver() {
                 if (Refresher.active(context)) {
                     Refresher.refreshSoon(context)
                     Refresher.schedule(context)
+                    finishAsync(Dispatchers.Default) { Refresher.redrawWhileWaiting(context) }
                 }
             }
             // Offline: the widget's day-plan line moves on; then the next such moment.

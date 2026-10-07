@@ -96,7 +96,8 @@ const en = {
   /** An estimate: "~5 min", "~9:41". */
   approx: ((s: string) => `~${s}`) as Fn<[string]>,
   noTimes: 'no times',
-  staleLabel: ((svc: string, eta: string, ageMin: number) => `${svc} · ${eta} (${ageMin} min ago)`) as Fn<[string, string, number]>,
+  /** An old reading's age: "(3 min ago)"; under a minute, "(<1 min ago)", never "(0 min ago)". */
+  staleLabel: ((svc: string, eta: string, ageMin: number) => `${svc} · ${eta} (${ageMin < 1 ? '<1' : ageMin} min ago)`) as Fn<[string, string, number]>,
 
   // The answer's detail line (format.ts)
   crossRoad: 'cross the road',
@@ -112,7 +113,7 @@ const en = {
   crowdMedium: 'crowding: medium',
   crowdHigh: 'crowding: high',
   directionUnconfirmed: 'direction unconfirmed',
-  minOld: ((n: number) => `${n} min old`) as Fn<[number]>,
+  minOld: ((n: number) => (n < 1 ? 'under a minute old' : `${n} min old`)) as Fn<[number]>,
   estimated: 'estimated',
   /** The headline bus is a public one, with a fare. */
   publicBus: 'public bus',
@@ -399,7 +400,7 @@ const zh: Msgs = {
   nMin: (n) => `${n} 分钟`,
   approx: (s) => `约 ${s}`,
   noTimes: '暂无时间',
-  staleLabel: (svc, eta, ageMin) => `${svc} · ${eta}（${ageMin} 分钟前）`,
+  staleLabel: (svc, eta, ageMin) => `${svc} · ${eta}（${ageMin < 1 ? '不到 1' : ageMin} 分钟前）`,
 
   crossRoad: '过马路',
   walkToStop: (t) => zs`步行${t}`,
@@ -414,7 +415,7 @@ const zh: Msgs = {
   crowdMedium: '拥挤程度：中',
   crowdHigh: '拥挤程度：高',
   directionUnconfirmed: '方向未确认',
-  minOld: (n) => `${n} 分钟前的数据`,
+  minOld: (n) => `${n < 1 ? '不到 1' : n} 分钟前的数据`,
   estimated: '估计',
   publicBus: '公共巴士',
   liveUnavailable: '暂无实时时间',
@@ -679,6 +680,7 @@ export const ERRORS_ZH: Record<string, string> = {
   'too many attempts, try again in a minute': '尝试次数太多，请一分钟后再试',
   'enter a valid email address': '请输入有效的邮箱',
   'the human check failed, try again': '人机验证没有通过，请再试一次',
+  'the human check is not answering, try again in a minute': '人机验证暂时没有响应，请一分钟后再试',
   'sign-in is busy, try again in a minute': '登录繁忙，请一分钟后再试',
   'pairing is busy, try again in a minute': '配对繁忙，请一分钟后再试',
   'could not send the email, try again later': '邮件发送失败，请稍后再试',
@@ -723,6 +725,8 @@ export const ERRORS_ZH: Record<string, string> = {
   "no timelapse for that day": "那天没有延时回放",
   "timelapse storage is not configured": "延时回放存储未配置",
   "walkPace must be slow, normal or fast": "walkPace 必须是 slow、normal 或 fast",
+  'your settings were changed on another device; try again': '你的设置刚在另一台设备上改过，请再试一次',
+  "terminus can't reach your account right now; try again in a minute": 'terminus 现在无法读取你的账户，请一分钟后再试',
 };
 
 /** An error message in the current language. Unknown ones stay English. */

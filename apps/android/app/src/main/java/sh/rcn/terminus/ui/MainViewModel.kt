@@ -568,23 +568,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 internal fun installedFromPlay(ctx: android.content.Context): Boolean =
     runCatching { ctx.packageManager.getInstallSourceInfo(ctx.packageName).installingPackageName == "com.android.vending" }.getOrDefault(false)
 
-/** The answer on Now is fetched again this often while it's on screen: the API caches 15 s, so sooner shows nothing new. */
-internal const val POLL_MS = 30_000L
-/** Nor sooner than this after the last fetch, whatever the answer says. */
-internal const val POLL_MIN_MS = 5_000L
-
 /**
- * When to fetch [answer] again, fetched at [polledAt] (both on the server's
- * clock): at the moment the server says it changes by itself (the card's
- * `nextChangeAt`, the plan's `refreshAt`) when that's sooner than the usual
- * [POLL_MS], but never within [POLL_MIN_MS]. A moment already past when it
- * was fetched isn't one to wait for.
+ * The answer on Now is fetched again this often while it's on screen: the
+ * API caches 15 s, so sooner shows nothing new. Not sooner at the server's
+ * own moments (the card's `nextChangeAt`, the plan's `refreshAt`) either: a
+ * leave time that keeps sliding (a late bus) moves them a few seconds on
+ * with every answer, which brought the polling down to every 5 s. The
+ * countdown ticks on the phone in between; the Mac and the server's trip
+ * engine wait 30 s too.
  */
-internal fun nextPollAt(answer: NextAnswer?, polledAt: Long): Long {
-    val mark = listOfNotNull(answer?.card?.nextChangeAtMs, answer?.refreshAtMs).filter { it > polledAt }.minOrNull()
-    val at = mark?.coerceAtLeast(polledAt + POLL_MIN_MS) ?: Long.MAX_VALUE
-    return minOf(at, polledAt + POLL_MS)
-}
+internal const val POLL_MS = 30_000L
 
 /** Today is fetched again with the answer once it's this old. */
 private const val DAY_MAX_AGE_MS = 120_000L

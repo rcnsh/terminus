@@ -147,9 +147,18 @@ object LeaveAlerts {
         // The words follow the trip: the ride or the next way there; before
         // that, when to leave.
         val ride = card?.ride?.takeIf { card.phase == "riding" }
-        val (title, body) = when {
+        val (title, said) = when {
             card?.phase == "riding" || card?.phase == "missed" -> (card.line ?: answer.label) to answer.detail
             else -> (answer.leaveHeadline(now) ?: return) to (answer.catchLine ?: answer.destLabel.orEmpty())
+        }
+        val store = Store(ctx)
+        // Posted from the last answer when a fresh one couldn't be had
+        // (offline): past its staleAt, its times aren't confirmed. Not
+        // isOld, which also counts a card this version couldn't read.
+        val body = if (card?.staleAtMs?.let { now >= it } == true) {
+            store.lastAnswer()?.second?.let { listOf(L.s(R.string.unconfirmed_checked, fmt(it)), said).filter { s -> s.isNotEmpty() }.joinToString(" · ") } ?: said
+        } else {
+            said
         }
         val where = listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · ")
         val open = PendingIntent.getActivity(
@@ -157,7 +166,6 @@ object LeaveAlerts {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         // Sound for the heads-up, once; quiet for the rest.
-        val store = Store(ctx)
         val moment = if (card?.phase == "riding" || card?.phase == "missed") store.leaveAlertedMoment else "leave:${answer.classAtMs}"
         val alert = moment != store.leaveAlertedMoment
         store.leaveAlertedMoment = moment
@@ -176,8 +184,10 @@ object LeaveAlerts {
             .apply { skipAction(ctx, answer)?.let { addAction(it) } }
             .build()
         nm.notify(NOTIFICATION_ID, n)
-        // The bus's place on the bar is the clock's estimate: move it on at each stop.
-        val redraw = ride?.let { RideStyle.nextRedrawAt(it, now) }
+        // The bus's place on the bar is the clock's estimate: move it on at
+        // each stop. A second late, so the last one (getting off) is surely
+        // past it and drops the countdown rather than leaving it to run below zero.
+        val redraw = ride?.let { RideStyle.nextRedrawAt(it, now) }?.plus(1_000)
         if (redraw != null) setAlarm(ctx, ACTION_RIDE, redraw) else cancelAlarm(ctx, ACTION_RIDE)
     }
 
@@ -261,8 +271,9 @@ class LeaveReceiver : BroadcastReceiver() {
         when (intent.action) {
             // A fresh answer re-arms or posts, through Refresher -> LeaveAlerts.arm.
             // Fetched right here: the alarm's idle allowance is seconds long,
-            // and a queued job could run after the heads-up was due.
-            LeaveAlerts.ACTION_CHECK -> finishAsync(Dispatchers.IO) { Refresher.refresh(context, fast = true) }
+            // and a queued job could run after the heads-up was due. Only
+            // /me/next here; the day plan and chosen widgets follow in a job.
+            LeaveAlerts.ACTION_CHECK -> finishAsync(Dispatchers.IO) { Refresher.refresh(context, fast = true, extras = false) }
             LeaveAlerts.ACTION_NOW -> LeaveAlerts.leaveNow(context)
             LeaveAlerts.ACTION_RIDE -> LeaveAlerts.redrawRide(context)
             LeaveAlerts.ACTION_SKIP -> {

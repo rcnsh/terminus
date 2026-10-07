@@ -20,7 +20,7 @@ export const TTL = {
    *  outage must not turn every request into another call to NUS. */
   failMemoS: 20,
   /** After the feed refuses our version or keys (10009, 10000), or its host
-   *  answers 429 or 5xx, stop calling it for this long. */
+   *  answers 429 or 5xx or not at all (a timeout), stop calling it for this long. */
   breakerS: 60,
   /** After a refused call, a fresh token is minted at most once per this in
    *  a data centre: the calls in between retry with it, or not at all. */
@@ -118,7 +118,8 @@ export const PUBLIC = {
  */
 export const TIMELAPSE = {
   /** Each service is asked once per this, the services spread across it.
-   *  Never below MIN_POLL_MS, whatever this says (pollInterval()). */
+   *  Never below MIN_POLL_MS, whatever this says, and longer when there are
+   *  too many services for maxPollsPerDay (pollInterval()). */
   pollMs: 30_000,
   /** The Singapore-time window it records in. It may cross midnight: the
    *  day is the date the window opened, until it closes the next morning. */
@@ -128,6 +129,9 @@ export const TIMELAPSE = {
    *  idleSleepMs (before the first bus, or a gap in service). */
   idleRounds: 6,
   idleSleepMs: 15 * 60_000,
+  /** The most polls in a day, whatever stops.json lists: with more services
+   *  than eight, pollInterval() lengthens the interval to keep under it. */
+  maxPollsPerDay: 17_280,
 } as const;
 
 /** The floor under TIMELAPSE.pollMs, enforced in code. */

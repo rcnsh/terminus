@@ -23,7 +23,7 @@ const zh = (fn) => withLang('zh', fn);
 test('a board row says its time in words, with "~" for a timetable time', () => {
   assert.equal(etaText(240, 'live'), '4 min');
   assert.equal(etaText(360, 'scheduled'), '~6 min');
-  assert.equal(etaText(240, 'stale'), '4 min', 'an old live time is still not a guess');
+  assert.equal(etaText(240, 'stale'), '~4 min', 'an old live time, counted down since, is a guess as on the card');
   assert.equal(etaText(20, 'live'), 'now');
   assert.equal(etaText(20, 'scheduled'), 'now', '"~now" says nothing more than "now"');
   assert.equal(zh(() => etaText(360, 'scheduled')), '约 6 分钟');
@@ -40,6 +40,7 @@ test('"then" names up to three later buses, each timetable one marked', () => {
   ];
   assert.equal(thenText(later), 'then 12, ~20, 25 min');
   assert.equal(zh(() => thenText(later)), '之后 12、约 20、25 分钟');
+  assert.equal(thenText([{ etaS: 720, quality: 'stale' }]), 'then ~12 min', 'an old reading is a guess too');
   // Never "0": a bus under a minute away is still a minute.
   assert.equal(thenText([{ etaS: 10, quality: 'live' }]), 'then 1 min');
 });
@@ -59,6 +60,8 @@ test('the card title is the departure as a clock time, marked when it is an esti
   assert.equal(titleOf(place, true), 'A1 · 9:09 AM');
   assert.equal(titleOf({ ...place, quality: 'scheduled' }, false), 'A1 · ~09:09');
   assert.equal(zh(() => titleOf({ ...place, quality: 'scheduled' }, false)), 'A1 · 约 09:09');
+  // An old reading aged to now is no more exact than a guess.
+  assert.equal(titleOf({ ...place, quality: 'stale' }, false), 'A1 · ~09:09');
   // No time to count down to: the label as it is.
   assert.equal(titleOf(await load('class-walk'), false), 'Walk · 3 min');
   assert.equal(titleOf({ ...place, quality: 'unknown' }, false), place.label);
@@ -174,6 +177,7 @@ test('outside a trip the glance is a clock time, never a minute count that a men
   assert.equal(cardFor(place, true).glance, 'A1 9:09a');
   assert.equal(cardFor({ ...place, quality: 'scheduled' }).glance, 'A1 ~09:09');
   assert.equal(zh(() => cardFor({ ...place, quality: 'scheduled' }).glance), 'A1 约 09:09');
+  assert.equal(cardFor({ ...place, quality: 'stale' }).glance, 'A1 ~09:09');
   // The same as the title, without the separator.
   assert.equal(cardFor(place).glance, cardFor(place).title.replace(' · ', ' '));
   // With no time to give, the label's own words.

@@ -84,36 +84,29 @@ export async function mayRecordRide(env: Env, db: D1Database, userId: string, sv
   return true;
 }
 
-/** The middle value: a handful of made-up rides can't drag it far. */
-function median(xs: number[]): number {
-  const v = [...xs].sort((a, b) => a - b);
-  const mid = v.length >> 1;
-  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
-}
+/**
+ * The middle value of seconds per stop, for each group of rides (`by`):
+ * the one in the middle, or the mean of the two either side of it, so a
+ * handful of made-up rides can't drag it far. In SQL, so the 120 days of
+ * rides stay in D1 and only a row per group comes back.
+ */
+const medianSql = (by: string) => `
+  WITH r AS (
+    SELECT svc, hour, CAST(seconds AS REAL) / hops AS x,
+           ROW_NUMBER() OVER (PARTITION BY ${by} ORDER BY CAST(seconds AS REAL) / hops) AS i,
+           COUNT(*) OVER (PARTITION BY ${by}) AS n
+      FROM ride_times WHERE day >= ?)
+  SELECT svc, hour, n, AVG(x) AS med FROM r WHERE i IN ((n + 1) / 2, (n + 2) / 2) GROUP BY ${by}`;
 
 /** Seconds per stop from the rides kept: each service, and each hour with enough of its own. */
 export async function buildTable(db: D1Database, nowMs: number): Promise<HopTable> {
   const since = sgtDate(nowMs - RIDE_KEEP_DAYS * 86_400_000);
-  const { results } = await db
-    .prepare('SELECT svc, hour, seconds, hops FROM ride_times WHERE day >= ?')
-    .bind(since)
-    .all<{ svc: string; hour: number; seconds: number; hops: number }>();
+  type Row = { svc: string; hour: number; n: number; med: number };
+  const [bySvc, byHour] = await db.batch<Row>([db.prepare(medianSql('svc')).bind(since), db.prepare(medianSql('svc, hour')).bind(since)]);
   const svcs: HopTable['svcs'] = {};
-  // Seconds per stop of each ride, by service and by hour.
-  const bySvc = new Map<string, Map<number, number[]>>();
-  for (const r of results ?? []) {
-    const hours = bySvc.get(r.svc) ?? new Map<number, number[]>();
-    hours.set(r.hour, [...(hours.get(r.hour) ?? []), r.seconds / r.hops]);
-    bySvc.set(r.svc, hours);
-  }
   const clamp = (x: number) => Math.round(Math.min(CLAMP[1], Math.max(CLAMP[0], x)));
-  for (const [svc, byHour] of bySvc) {
-    const all = [...byHour.values()].flat();
-    if (all.length < MIN_RIDES) continue;
-    const hours: Record<string, number> = {};
-    for (const [hour, xs] of byHour) if (xs.length >= MIN_RIDES) hours[String(hour)] = clamp(median(xs));
-    svcs[svc] = { n: all.length, s: clamp(median(all)), hours };
-  }
+  for (const r of bySvc.results ?? []) if (r.n >= MIN_RIDES) svcs[r.svc] = { n: r.n, s: clamp(r.med), hours: {} };
+  for (const r of byHour.results ?? []) if (r.n >= MIN_RIDES && svcs[r.svc]) svcs[r.svc].hours[String(r.hour)] = clamp(r.med);
   return { made: new Date(nowMs).toISOString(), svcs };
 }
 

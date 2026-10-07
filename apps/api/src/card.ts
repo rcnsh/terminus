@@ -309,7 +309,7 @@ export function cardFor(a: MeAnswer, h12 = false, trip: TripView = { key: null, 
  */
 export function titleOf(a: MeAnswer, h12: boolean): string {
   if (!timedAt(a)) return a.label;
-  return `${a.label.split(' · ')[0]} · ${approx(a.quality === 'scheduled', clockAt(Date.parse(a.departsAt!), h12))}`;
+  return `${a.label.split(' · ')[0]} · ${approx(roughly(a), clockAt(Date.parse(a.departsAt!), h12))}`;
 }
 
 /** The answer has a departure to give as a clock time: not a sort key ('unknown'), and not nothing running. */
@@ -527,7 +527,7 @@ function v1(a: MeAnswer, h12: boolean): V1 {
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const same = timed && l.board && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt!)) < 60_000;
   if (timed && !same) {
-    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(a.quality === 'scheduled', at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
+    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(roughly(a), at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
   }
   card.note = l.note ?? null;
   card.estimate = l.estimated ? m().estimateNote : null;
@@ -553,6 +553,9 @@ const PHASE_TEXT: Record<Phase, (() => string) | null> = {
 /** "~9:41" for an estimate, "9:41" otherwise. */
 const approx = (estimated: boolean | undefined, clock: string) => (estimated ? m().approx(clock) : clock);
 
+/** The answer's times are no more exact than a guess: a timetable's, or an old reading aged to now (as etaPhrase says). */
+const roughly = (a: MeAnswer): boolean => a.quality === 'scheduled' || a.quality === 'stale';
+
 /** The time in a message made by `make(time)`, or null when `text` isn't one: "Day starts 09:00" -> "09:00". */
 function slotOf(text: string, make: (t: string) => string): string | null {
   const [pre, post] = make('\u0000').split('\u0000');
@@ -565,18 +568,28 @@ function slotOf(text: string, make: (t: string) => string): string | null {
  * class starting, the ride ending. Null outside a trip. The Trip object
  * wakes at this to push; the card's nextChangeAt also counts going stale.
  */
-export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number): number | null {
+export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGapMs = 0): number | null {
   if (!trip.key) return null;
   const marks: number[] = [];
   const l = a.leave ?? null;
   const plan = trip.plan ?? null;
   if (plan?.board && !answered(trip)) marks.push(Date.parse(plan.board), Date.parse(plan.board) + ASSUME_MS);
-  if (l?.at) marks.push(Date.parse(l.at) - DUE_MS, Date.parse(l.at));
+  // The leave-by's marks, no sooner than `leaveGapMs` from now (see LEAVE_GAP_MS).
+  if (l?.at) for (const t of [Date.parse(l.at) - DUE_MS, Date.parse(l.at)]) if (t > nowMs) marks.push(Math.max(t, nowMs + leaveGapMs));
   if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
   const onBus = trip.rec?.boarded ?? (trip.assumed ? plan : null);
   if (trip.phase === 'riding' && onBus?.arrive) marks.push(Date.parse(onBus.arrive) + RIDE_GRACE_MS);
   return marks.filter((m) => m > nowMs).sort((x, y) => x - y)[0] ?? null;
 }
+
+/**
+ * The soonest the card asks to be fetched again for its leave-by. A late bus
+ * keeps sliding the leave-by a few seconds ahead of now, and refetching at it
+ * would poll every few seconds. The client already says "Leave now" itself
+ * once `leave.at` passes, so this only delays the server's phase words (due,
+ * heading) by up to this much; the Trip object and the Mac wait 30 s too.
+ */
+export const LEAVE_GAP_MS = 30_000;
 
 /** Someone said what happened (or detection did); having been at the stop isn't that. */
 const answered = (trip: TripView) => trip.rec !== undefined && trip.rec.kind !== 'waiting';
@@ -628,7 +641,7 @@ function v2(
   // A clock time, never "4 min": a glance (the Mac's menu bar, a tile) can
   // sit unrefreshed for minutes, and a clock time stays true until the bus
   // leaves. The label as it is when there's no time to give.
-  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(a.quality === 'scheduled', short(a.departsAt!))}` : a.label.replace(' · ', ' ');
+  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}` : a.label.replace(' · ', ' ');
   if (card.kind === 'rest') {
     const from = slotOf(a.label, m().dayStarts);
     glance = from ? m().fromGlance(from) : m().doneToday;
@@ -653,7 +666,7 @@ function v2(
   }
   const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);
   if (phase === 'riding' && onBus) {
-    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${m().offAtTime(offStop(onBus) ?? a.dest?.label ?? m().yourStop, approx(a.quality === 'scheduled', at(onBus.arrive)))}` : ''}`;
+    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${m().offAtTime(offStop(onBus) ?? a.dest?.label ?? m().yourStop, approx(roughly(a), at(onBus.arrive)))}` : ''}`;
     glance = onBus.arrive ? m().offGlance(short(onBus.arrive)) : m().onThe(onBus.svc);
   }
   glance = glance.slice(0, 12);
@@ -675,7 +688,7 @@ function v2(
 
   // The next moment this card changes by itself: the trip's next phase, or
   // the answer going stale, whichever is sooner.
-  const phaseAt = nextPhaseAt(a, trip, nowMs);
+  const phaseAt = nextPhaseAt(a, trip, nowMs, LEAVE_GAP_MS);
   const next = [phaseAt, card.staleAt ? Date.parse(card.staleAt) : null].filter((m): m is number => m !== null && m > nowMs).sort((x, y) => x - y)[0];
 
   return {

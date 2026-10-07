@@ -35,6 +35,8 @@ const SLIDE_MAX_M = 1_500;
 /** No answer for longer than this (the screen was off, the tab hidden, the
  *  connection lost): every bus jumps to where it is now. */
 const STALE_MS = 15_000;
+/** A poll for the buses gives up after this long, so the next one can go. */
+const BUSES_TIMEOUT_MS = 10_000;
 /** A bus at a stop is drawn this far beside the dot, to its left (the kerb:
  *  buses drive on the left), and each one behind it this much further back
  *  along the road: pixels at full size (zoom 17), smaller zoomed out. */
@@ -86,8 +88,8 @@ const pagePaper = () => (dark() ? '#1a1816' : '#ffffff');
 const colorOf = (svc) => campusData.get()?.routes[svc]?.color ?? '#8a939c';
 const svcVars = (svc) => `--svc:${colorOf(svc)};--svc-ink:${inkOn(colorOf(svc))}`;
 
-async function getJSON(path) {
-  const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
+async function getJSON(path, timeoutMs) {
+  const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' }, timeoutMs });
   if (res.status === 401) {
     location.replace('/account/?next=/app/');
     throw new Error('signed out');
@@ -414,7 +416,8 @@ async function pollBuses() {
   const svc = selected.get();
   if (!svc || !visible) return;
   try {
-    const data = await getJSON(`/buses?svc=${encodeURIComponent(svc)}`);
+    // The next poll waits for this one: a call that hangs would stop the map, so it's given up on.
+    const data = await getJSON(`/buses?svc=${encodeURIComponent(svc)}`, BUSES_TIMEOUT_MS);
     if (svc !== selected.get()) return;
     // `stale`: the feed didn't answer, and these are where the buses last were.
     const old = data.available && data.stale === true;
@@ -427,6 +430,8 @@ async function pollBuses() {
   } catch (err) {
     if (err.message === 'signed out' || svc !== selected.get()) return;
     status.set(navigator.onLine ? t('Live buses aren’t available right now.') : t('Live buses need a connection.'));
+    // The buses drawn are from the last answer: faded once that's old, so they don't pass for live.
+    if (Date.now() - lastAnswer > STALE_MS) dim(true);
   }
   // Not again once the map's tab is hidden while this one was on its way.
   if (visible && document.visibilityState === 'visible') busTimer = setTimeout(pollBuses, BUSES_MS);

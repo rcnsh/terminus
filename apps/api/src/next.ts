@@ -4,7 +4,7 @@
  * card can say what phase it's in (trip.ts).
  */
 
-import type { Answer, Env, Graph, MeAnswer, PlaceChip, ResolveInput, StopArrivals, Why } from './types.ts';
+import type { Answer, Env, FeedState, Graph, MeAnswer, PlaceChip, ResolveInput, StopArrivals, Why } from './types.ts';
 import type { MeDeps } from './me.ts';
 import {
   HOME_BY_MIN,
@@ -25,7 +25,7 @@ import {
   upcomingClass,
 } from './profile.ts';
 import { type ImportedTrip, venueAt, venueToStop } from './nusmods.ts';
-import { indexGraph, serviceEndsAt } from './resolve.ts';
+import { feedFor, indexGraph, serviceEndsAt } from './resolve.ts';
 import { haversineM } from './geo.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { sgt } from './config.ts';
@@ -237,6 +237,17 @@ function rideStopArrivals(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boar
   return deps.collectArrivals(env, ctx, [b.alightCode!], nowMs, graph).then((byStop) => byStop.get(b.alightCode!));
 }
 
+/**
+ * The feed the bus you're on is reported by, when it answered fresh. At a
+ * shelter both feeds call at, the stop's own fetch time and state are the
+ * two together (the older, stale when either is); the bus's times count
+ * from its own feed's fetch.
+ */
+export function rideFeed(sa: StopArrivals | undefined, b: Pick<Boarded, 'paid'>): FeedState | null {
+  const feed = feedFor(sa, b.paid === true);
+  return feed && feed.available !== false && !feed.stale ? feed : null;
+}
+
 /** The service as the feed's rows name it: a public bus's route (`151/1`) when its number can't. */
 const rideSvc = (b: Boarded): string => b.route ?? b.svc;
 
@@ -248,11 +259,12 @@ const rideSvc = (b: Boarded): string => b.route ?? b.svc;
 export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<string | null> {
   if (!b.plate || !b.alightCode) return null;
   const sa = await rideStopArrivals(env, ctx, deps, b, nowMs);
-  if (!sa?.available || sa.stale) return null;
+  const feed = rideFeed(sa, b);
+  if (!sa || !feed) return null;
   // A loop can list the same bus twice at one stop; the first pass is the one.
   const etas = sa.arrivals.filter((x) => x.plate === b.plate && x.svc === rideSvc(b) && x.etaS !== null).map((x) => x.etaS!);
   if (!etas.length) return null;
-  const at = sa.fetchedAt + Math.min(...etas) * 1000;
+  const at = feed.fetchedAt + Math.min(...etas) * 1000;
   return at > nowMs ? isoSeconds(at) : null;
 }
 
@@ -265,8 +277,9 @@ export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
 export async function nextArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<string | null> {
   if (!b.alightCode) return null;
   const sa = await rideStopArrivals(env, ctx, deps, b, nowMs);
-  if (!sa?.available || sa.stale) return null;
-  const due = sa.arrivals.filter((x) => x.svc === rideSvc(b) && x.etaS !== null).map((x) => sa.fetchedAt + x.etaS! * 1000).filter((at) => at > nowMs);
+  const feed = rideFeed(sa, b);
+  if (!sa || !feed) return null;
+  const due = sa.arrivals.filter((x) => x.svc === rideSvc(b) && x.etaS !== null).map((x) => feed.fetchedAt + x.etaS! * 1000).filter((at) => at > nowMs);
   return due.length ? isoSeconds(Math.min(...due)) : null;
 }
 

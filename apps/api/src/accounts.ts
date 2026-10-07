@@ -192,6 +192,30 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   return 'sent';
 }
 
+/** How long an email may take to send before it counts as failed. */
+export const MAIL_TIMEOUT_MS = 20_000;
+
+/**
+ * Sends through the Email binding, failing after MAIL_TIMEOUT_MS like any
+ * other failed send: one that hangs would otherwise hold a sign-in open
+ * until the Worker is cut off, with its link or request never cleaned up.
+ * The send itself can't be cancelled, so one that finishes after this
+ * still arrives, with a link or code its caller has already deleted; the
+ * limit is long so that stays rare.
+ */
+export async function sendMail(env: Env, msg: EmailMessageBuilder): Promise<void> {
+  if (!env.EMAIL) throw new Error('email sending not configured');
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('email send timed out')), MAIL_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([env.EMAIL.send(msg), timeout]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
 /**
  * Worded to look like what it is. A subject of "Sign in to ..." over a lone
  * link is the shape of a phishing mail, and filters treat it as one.
@@ -200,7 +224,7 @@ async function sendLink(env: Env, email: string, link: string, code: string, ori
   const site = new URL(origin).host;
   const t = m();
   const why = t.codeWhyWeb(site);
-  await env.EMAIL!.send({
+  await sendMail(env, {
     from: { email: env.EMAIL_FROM!, name: mailName(env) },
     to: email,
     subject: t.codeSubject(code),
@@ -246,15 +270,84 @@ export async function redeemLink(db: D1Database, token: string, nowMs: number, a
 }
 
 async function spendLink(db: D1Database, hash: string, nowMs: number, anonId: string | null): Promise<Redeemed | null> {
-  // DELETE ... RETURNING makes the link single-use even under two racing POSTs.
   const row = await db
-    .prepare('DELETE FROM magic_links WHERE token_hash = ? RETURNING email, expires')
-    .bind(hash)
-    .first<{ email: string; expires: number }>();
-  if (!row || row.expires < nowMs) return null;
+    .prepare('SELECT email FROM magic_links WHERE token_hash = ? AND expires >= ?')
+    .bind(hash, nowMs)
+    .first<{ email: string }>();
+  if (!row) return null;
+  // The account work, the session and spending the link are one batch: a
+  // failure part way leaves the link to try again, and of two racing POSTs
+  // only the one that finds it still there does anything.
+  const live: Live = { sql: 'EXISTS (SELECT 1 FROM magic_links WHERE token_hash = ? AND expires >= ?)', params: [hash, nowMs] };
+  const claim = await claimEmail(db, row.email, anonId, nowMs, live);
+  const token = newToken();
+  const tokenHash = await hashToken(token);
+  const out = await db.batch([
+    ...claim.statements,
+    sessionFor(db, tokenHash, row.email, 'web', null, nowMs, NO_CLIENT, live),
+    db.prepare('DELETE FROM magic_links WHERE token_hash = ? AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?) RETURNING email').bind(hash, tokenHash),
+  ]);
+  if (!out.at(-1)?.results?.length) return null;
+  return { token, ...(claim.removed ? { removed: claim.removed } : {}) };
+}
 
-  const { userId, removed } = await claimEmail(db, row.email, anonId, nowMs);
-  return { token: await openSession(db, userId, 'web', null, nowMs), ...(removed ? { removed } : {}) };
+/**
+ * What must hold for a sign-in's statements to run: its link, code or
+ * request not yet spent. Every statement of the sign-in's batch carries it,
+ * and the batch's last statement spends it. D1 runs a batch as one
+ * transaction, so a failure anywhere leaves it unspent to try again, and a
+ * second sign-in racing it finds it false and changes nothing.
+ */
+export interface Live {
+  sql: string;
+  params: unknown[];
+}
+
+/** A statement that runs only while `live` holds. `{live}` in the SQL is
+ *  replaced by the condition; nothing after it may take a parameter. */
+export function whileLive(db: D1Database, sql: string, params: unknown[], live: Live): D1PreparedStatement {
+  return db.prepare(sql.replace('{live}', live.sql)).bind(...params, ...live.params);
+}
+
+/** A new session for the account with this email, made only while `live` holds. Returns its user_id. */
+export function sessionFor(db: D1Database, tokenHash: string, email: string, kind: 'web' | 'device', name: string | null, nowMs: number, client: Client, live: Live): D1PreparedStatement {
+  return whileLive(
+    db,
+    `INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client)
+     SELECT ?, id, ?, ?, ?, ?, ?, ?, ? FROM users WHERE email = ? AND {live} RETURNING user_id`,
+    [tokenHash, kind, name, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null, client.platform, client.client, email],
+    live,
+  );
+}
+
+/** A new account for the email, unless one has it already, made only while `live` holds. */
+export function userFor(db: D1Database, email: string, nowMs: number, via: 'web' | 'app', live: Live): D1PreparedStatement {
+  return whileLive(
+    db,
+    'INSERT INTO users (id, email, created, last_seen, via) SELECT ?, ?, ?, ?, ? WHERE {live} ON CONFLICT(email) DO NOTHING',
+    [crypto.randomUUID(), email, nowMs, nowMs, via],
+    live,
+  );
+}
+
+/** Gives an anonymous account the email; its old sessions go, replaced by the
+ *  one the caller opens. Only while `live` holds, and the sessions only once
+ *  the email is really its (another sign-in may have given it one first). */
+export function addEmailTo(db: D1Database, anonId: string, email: string, nowMs: number, live: Live): D1PreparedStatement[] {
+  return [
+    whileLive(db, 'UPDATE users SET email = ?, email_added = ? WHERE id = ? AND email IS NULL AND {live}', [email, nowMs, anonId], live),
+    whileLive(db, 'DELETE FROM sessions WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND email = ?) AND {live}', [anonId, anonId, email], live),
+  ];
+}
+
+/** saveProfileJson, only while `live` holds. */
+export function profileFor(db: D1Database, userId: string, profile: unknown, nowMs: number, live: Live): D1PreparedStatement {
+  return whileLive(
+    db,
+    'INSERT INTO profiles (user_id, json, updated) SELECT ?, ?, ? WHERE {live} ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = MAX(excluded.updated, profiles.updated + 1)',
+    [userId, JSON.stringify(profile), nowMs],
+    live,
+  );
 }
 
 /**
@@ -262,22 +355,19 @@ async function spendLink(db: D1Database, hash: string, nowMs: number, anonId: st
  * one. A new email goes to that account, setup and all. An email that has
  * an account already wins: the browser's setup moves to it only when it
  * has none of its own, and the browser's account goes. (The apps ask which
- * setup to keep; a browser's is a minute to redo.)
+ * setup to keep; a browser's is a minute to redo.) Reads now; the changes
+ * come back as statements for the caller's batch, guarded by `live`.
  */
-export async function claimEmail(db: D1Database, email: string, anonId: string | null, nowMs: number): Promise<{ userId: string; removed?: string }> {
+export async function claimEmail(db: D1Database, email: string, anonId: string | null, nowMs: number, live: Live): Promise<{ statements: D1PreparedStatement[]; removed?: string }> {
   const existing = await db.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first<User>();
   const anon = anonId ? await db.prepare('SELECT id FROM users WHERE id = ? AND email IS NULL').bind(anonId).first<{ id: string }>() : null;
-  if (!anon) return { userId: (existing ?? (await ensureUser(db, email, nowMs))).id };
-  if (!existing) {
-    await db.prepare('UPDATE users SET email = ?, email_added = ? WHERE id = ? AND email IS NULL').bind(email, nowMs, anon.id).run();
-    // Its old session is replaced by the one the caller opens.
-    await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(anon.id).run();
-    return { userId: anon.id };
-  }
+  if (!anon) return { statements: existing ? [] : [userFor(db, email, nowMs, 'web', live)] };
+  if (!existing) return { statements: addEmailTo(db, anon.id, email, nowMs, live) };
+  const statements: D1PreparedStatement[] = [];
   const mine = await loadProfileJson(db, anon.id);
-  if (hasSetup(mine) && !hasSetup(await loadProfileJson(db, existing.id))) await saveProfileJson(db, existing.id, mine, nowMs);
-  await removeAnonymous(db, anon.id, existing.id);
-  return { userId: existing.id, removed: anon.id };
+  if (hasSetup(mine) && !hasSetup(await loadProfileJson(db, existing.id))) statements.push(profileFor(db, existing.id, mine, nowMs, live));
+  statements.push(...anonymousGone(db, anon.id, existing.id, live));
+  return { statements, removed: anon.id };
 }
 
 /** A profile worth keeping: somewhere to go or somewhere to start. */
@@ -289,10 +379,17 @@ export function hasSetup(json: unknown): boolean {
 
 /** Deletes an anonymous account once it's been signed in elsewhere; its reports move with it. */
 export async function removeAnonymous(db: D1Database, anonId: string, intoUserId: string): Promise<void> {
-  await db.batch([
-    db.prepare('UPDATE feedback SET user_id = ? WHERE user_id = ?').bind(intoUserId, anonId),
-    db.prepare('DELETE FROM users WHERE id = ? AND email IS NULL').bind(anonId),
-  ]);
+  await db.batch(anonymousGone(db, anonId, intoUserId, ALWAYS));
+}
+
+const ALWAYS: Live = { sql: '1', params: [] };
+
+/** removeAnonymous's statements, only while `live` holds. */
+export function anonymousGone(db: D1Database, anonId: string, intoUserId: string, live: Live): D1PreparedStatement[] {
+  return [
+    whileLive(db, 'UPDATE feedback SET user_id = ? WHERE user_id = ? AND {live}', [intoUserId, anonId], live),
+    whileLive(db, 'DELETE FROM users WHERE id = ? AND email IS NULL AND {live}', [anonId], live),
+  ];
 }
 
 /** A sign-in code waiting in KV: hashes of the code and of its link's token,
@@ -348,8 +445,11 @@ export async function redeemCode(env: Env, db: D1Database, email: string, code: 
     if (spent.code_tries >= ACCOUNT_TTL.codeTries) await env.KV.delete(key).catch(() => {});
     return null;
   }
+  // Dropped only once the link's batch has answered: one that fails leaves
+  // the code to be typed again, as it leaves the link.
+  const redeemed = await spendLink(db, pending.t, nowMs, anonId);
   await env.KV.delete(key).catch(() => {});
-  return spendLink(db, pending.t, nowMs, anonId);
+  return redeemed;
 }
 
 export async function ensureUser(db: D1Database, email: string, nowMs: number, via: 'web' | 'app' = 'web'): Promise<User> {
@@ -490,7 +590,9 @@ export async function authenticate(
         .bind(nowMs, client.client, client.platform, client.platform, client.client, hash),
       db.prepare('UPDATE users SET last_seen = ? WHERE id = ?').bind(nowMs, row.id),
     ]);
-    if (ctx) ctx.waitUntil(touch.catch(() => {}));
+    // Logged when it fails: the cron deletes anonymous accounts by last_seen,
+    // so a touch that keeps failing would lose accounts still in use.
+    if (ctx) ctx.waitUntil(touch.catch((err) => console.error('last_seen not updated:', err instanceof Error ? err.message : String(err))));
     else await touch;
   }
   return { user: { id: row.id, email: row.email }, kind: row.kind, tokenHash: hash };
@@ -555,13 +657,22 @@ export async function redeemPairCode(
   nowMs: number,
   client: Client = NO_CLIENT,
 ): Promise<{ token: string; email: string | null } | null> {
-  const row = await db
-    .prepare('DELETE FROM pair_codes WHERE code = ? RETURNING user_id, expires')
-    .bind(code)
-    .first<{ user_id: string; expires: number }>();
-  if (!row || row.expires < nowMs) return null;
-  const token = await openSession(db, row.user_id, 'device', name, nowMs, client);
-  const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(row.user_id).first<{ email: string | null }>();
+  // The session and spending the code in one batch: a failure leaves the
+  // code to try again, and of two racing redeems only the first gets a session.
+  const token = newToken();
+  const tokenHash = await hashToken(token);
+  const [made] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client)
+         SELECT ?, user_id, 'device', ?, ?, ?, NULL, ?, ? FROM pair_codes WHERE code = ? AND expires >= ? RETURNING user_id`,
+      )
+      .bind(tokenHash, name, nowMs, nowMs, client.platform, client.client, code, nowMs),
+    db.prepare('DELETE FROM pair_codes WHERE code = ? AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)').bind(code, tokenHash),
+  ]);
+  const userId = (made?.results?.[0] as { user_id: string } | undefined)?.user_id;
+  if (!userId) return null;
+  const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(userId).first<{ email: string | null }>();
   return { token, email: user?.email ?? null };
 }
 
@@ -610,7 +721,7 @@ export async function mailDeviceAdded(env: Env, email: string | null, name: stri
   const device = name.trim() || t.aDevice;
   const when = t.singaporeTime(new Date(nowMs + 8 * 3_600_000).toISOString().replace('T', ' ').slice(0, 16));
   const site = siteOrigin(env);
-  await env.EMAIL.send({
+  await sendMail(env, {
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: email,
     subject: t.deviceAddedSubject(device),
@@ -627,13 +738,42 @@ export async function loadProfileJson(db: D1Database, userId: string): Promise<u
   return row ? JSON.parse(row.json) : null;
 }
 
-export async function saveProfileJson(db: D1Database, userId: string, profile: unknown, nowMs: number): Promise<void> {
-  await db
+/** The saved profile and its version: `updated`, which a conditional write compares. */
+export async function loadProfileRow(db: D1Database, userId: string): Promise<{ json: unknown; updated: number } | null> {
+  const row = await db.prepare('SELECT json, updated FROM profiles WHERE user_id = ?').bind(userId).first<{ json: string; updated: number }>();
+  return row ? { json: JSON.parse(row.json), updated: row.updated } : null;
+}
+
+/** Saves the profile whatever was there; returns its new version. Every
+ *  write's version is later than the one it replaces, even within a
+ *  millisecond, so a conditional write can't mistake one for another. */
+export async function saveProfileJson(db: D1Database, userId: string, profile: unknown, nowMs: number): Promise<number> {
+  const row = await db
     .prepare(
-      'INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = excluded.updated',
+      'INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = MAX(excluded.updated, profiles.updated + 1) RETURNING updated',
     )
     .bind(userId, JSON.stringify(profile), nowMs)
-    .run();
+    .first<{ updated: number }>();
+  return row?.updated ?? nowMs;
+}
+
+/**
+ * Saves the profile only if it is still at version `from` (null: none saved
+ * yet). Returns the new version, or null when another write got there first.
+ */
+export async function saveProfileIf(db: D1Database, userId: string, profile: unknown, nowMs: number, from: number | null): Promise<number | null> {
+  const json = JSON.stringify(profile);
+  const row =
+    from === null
+      ? await db
+          .prepare('INSERT INTO profiles (user_id, json, updated) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING RETURNING updated')
+          .bind(userId, json, nowMs)
+          .first<{ updated: number }>()
+      : await db
+          .prepare('UPDATE profiles SET json = ?, updated = ? WHERE user_id = ? AND updated = ? RETURNING updated')
+          .bind(json, Math.max(nowMs, from + 1), userId, from)
+          .first<{ updated: number }>();
+  return row?.updated ?? null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -723,22 +863,38 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
  * it passes, so the check can ship before the widget is set up.
  */
 export async function verifyTurnstile(env: Env, token: unknown, ip: string | null, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  return (await checkTurnstile(env, token, ip, fetchImpl)) === 'ok';
+}
+
+/**
+ * verifyTurnstile, telling a failed check ('failed', the visitor's) from
+ * Turnstile itself not answering ('unavailable', worth trying again).
+ */
+export async function checkTurnstile(env: Env, token: unknown, ip: string | null, fetchImpl: typeof fetch = fetch): Promise<'ok' | 'failed' | 'unavailable'> {
   if (!env.TURNSTILE_SECRET) {
     // No Turnstile at all (tests, local dev) is allowed. A site key without
     // its secret is a broken rotation, and must not quietly open sign-in.
     if (env.TURNSTILE_SITE_KEY) console.error('TURNSTILE_SITE_KEY is set but TURNSTILE_SECRET is not; refusing sign-ins');
-    return !env.TURNSTILE_SITE_KEY;
+    return env.TURNSTILE_SITE_KEY ? 'failed' : 'ok';
   }
-  if (typeof token !== 'string' || !token) return false;
+  if (typeof token !== 'string' || !token) return 'failed';
   const body = new FormData();
   body.set('secret', env.TURNSTILE_SECRET);
   body.set('response', token);
   if (ip) body.set('remoteip', ip);
   try {
     const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body, signal: AbortSignal.timeout(5000) });
-    const out = (await res.json()) as { success?: boolean };
-    return out.success === true;
-  } catch {
-    return false;
+    const out = (await res.json()) as { success?: boolean; 'error-codes'?: string[] };
+    if (out.success === true) return 'ok';
+    // A failed check is the visitor's; Turnstile's own fault is logged, or
+    // sign-in would quietly stop for everyone with nobody knowing why.
+    if (!res.ok || out['error-codes']?.includes('internal-error')) {
+      console.error('Turnstile siteverify failed:', res.status, (out['error-codes'] ?? []).join(','));
+      return 'unavailable';
+    }
+    return 'failed';
+  } catch (err) {
+    console.error('Turnstile siteverify failed:', err instanceof Error ? err.message : String(err));
+    return 'unavailable';
   }
 }

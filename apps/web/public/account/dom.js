@@ -19,12 +19,43 @@ export function locationError(err) {
 let quietUntil = 0;
 
 /**
+ * How long a call may take, unless its caller says otherwise. Wi-Fi that
+ * drops everything (a lecture theatre's, a captive portal before sign-in)
+ * would otherwise leave "Checking…" up for minutes, with the next timed
+ * refresh piling another hung call on top.
+ */
+const SEND_TIMEOUT_MS = 20_000;
+
+/**
+ * How long a write may take. A timetable import or a profile save can be
+ * slow on a phone's connection, and the server may finish it after the page
+ * has given up, so a write waits longer before saying it failed.
+ */
+const WRITE_TIMEOUT_MS = 60_000;
+
+/** A signal that aborts after `ms` (AbortSignal.timeout, where the browser has it). */
+export function timeout(ms) {
+  if (AbortSignal.timeout) return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
+/** The error for a call that got no usable answer: nothing back in time, or a page that isn't terminus's. */
+const unreachable = () => new Error(t("Couldn't reach terminus. Check your connection."));
+
+/**
  * fetch(), unless the server asked this page to slow down: then it throws
  * at once, with status 429, until Retry-After (at most 5 minutes) is up.
+ * Gives up after `timeoutMs` (SEND_TIMEOUT_MS), reading the body included.
  */
-export async function send(path, init) {
+export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) {
   if (Date.now() < quietUntil) throw Object.assign(new Error(t('terminus is busy. Try again in a minute.')), { status: 429 });
-  const res = await fetch(path, init);
+  // No answer in time, or none at all (offline: the browser's own "Failed
+  // to fetch" or "Load failed", in English whatever the page's language).
+  const res = await fetch(path, { signal: timeout(timeoutMs), ...init }).catch((err) => {
+    throw ['TimeoutError', 'AbortError', 'TypeError'].includes(err?.name) ? unreachable() : err;
+  });
   noteServerDate(res);
   if (res.status === 429) {
     const s = Number(res.headers.get('retry-after'));
@@ -33,17 +64,35 @@ export async function send(path, init) {
   return res;
 }
 
-/** A same-origin JSON call; throws with the server's error message and status. */
-export async function api(path, { method = 'GET', body } = {}) {
+/**
+ * A same-origin JSON call; throws with the server's error message and status.
+ * Reads give up after SEND_TIMEOUT_MS, writes after WRITE_TIMEOUT_MS.
+ */
+export async function api(path, { method = 'GET', body, timeoutMs = method === 'GET' ? SEND_TIMEOUT_MS : WRITE_TIMEOUT_MS } = {}) {
   const res = await send(path, {
     method,
+    timeoutMs,
     // The API writes answers and errors in the page's language.
     headers: { 'accept-language': window.i18n?.header ?? 'en', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     credentials: 'same-origin',
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(sentence(data.error) || `HTTP ${res.status}`), { status: res.status });
+  // A body cut off part way (the time ran out, the connection dropped) is
+  // no answer; only an empty one (a 204) stands for {}. An error keeps its
+  // status either way.
+  const text = await res.text().catch(() => {
+    if (res.ok) throw unreachable();
+    return null;
+  });
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    // Not JSON: a captive portal's sign-in page, or a proxy's error page.
+  }
+  if (!res.ok) throw Object.assign(new Error(sentence(data?.error) || `HTTP ${res.status}`), { status: res.status });
+  // A 200 that isn't the API's answer must not pass for one.
+  if (data === null || typeof data !== 'object') throw unreachable();
   return data;
 }
 

@@ -56,7 +56,21 @@ object Push {
         return true
     }
 
-    /** Sends this phone's token to the server when it's new. Call once paired, and at start. */
+    /**
+     * The same token is sent again after this long: the server drops one
+     * that Firebase stopped delivering to, and nothing tells the phone. At
+     * most twice a day, one small request.
+     */
+    private const val RESEND_MS = 12 * 60 * 60_000L
+
+    /** Push is relied on alone only with a token sent and a push heard within this. */
+    private const val TRUST_MS = 24 * 60 * 60_000L
+
+    /** No token sent for this session yet, or not for [RESEND_MS]. */
+    fun due(store: Store, now: Long = System.currentTimeMillis()): Boolean =
+        store.pushToken == null || now - store.pushSentAt >= RESEND_MS
+
+    /** Sends this phone's token to the server when it's new or [due]. Call once paired, at start, and from refreshes. */
     fun register(ctx: Context) {
         if (!Store(ctx).paired || !init(ctx)) return
         FirebaseMessaging.getInstance().token.addOnSuccessListener { send(ctx.applicationContext, it) }
@@ -65,9 +79,12 @@ object Push {
     fun send(ctx: Context, token: String) {
         val store = Store(ctx)
         val auth = store.token ?: return
-        if (token == store.pushToken) return
+        if (token == store.pushToken && !due(store)) return
         CoroutineScope(Dispatchers.IO).launch {
-            runCatching { Api(auth).registerPush(token) }.onSuccess { store.pushToken = token }
+            runCatching { Api(auth).registerPush(token) }.onSuccess {
+                store.pushToken = token
+                store.pushSentAt = System.currentTimeMillis()
+            }
         }
     }
 
@@ -76,8 +93,17 @@ object Push {
         Store(ctx).pushToken = null
     }
 
-    /** This phone hears about changes by push. */
-    fun active(ctx: Context): Boolean = Store(ctx).pushToken != null && available(ctx)
+    /**
+     * This phone hears about changes by push: a token the server took, and
+     * a push that arrived, both within [TRUST_MS]. Otherwise the alarms keep
+     * the trip in step too (LeaveAlerts.followUp), in case the server has
+     * dropped the token.
+     */
+    fun active(ctx: Context): Boolean {
+        val store = Store(ctx)
+        val now = System.currentTimeMillis()
+        return store.pushToken != null && now - store.pushSentAt < TRUST_MS && now - store.pushHeardAt < TRUST_MS && available(ctx)
+    }
 }
 
 /** Firebase is ready before anything else runs, including a push that starts the process. */
@@ -97,11 +123,13 @@ class PushService : FirebaseMessagingService() {
 
     /** The card changed: fetch it, and let the widgets and the trip's notification follow. */
     override fun onMessageReceived(message: RemoteMessage) {
+        Store(applicationContext).pushHeardAt = System.currentTimeMillis()
         if (message.data["kind"] == "term") return TermReminder.post(applicationContext, message.data)
         if (message.data["kind"] != "card") return
         val ctx = applicationContext
-        // A background thread with a few seconds to spare; the fetch is one request.
-        runBlocking { Refresher.refresh(ctx, fast = true) }
+        // A background thread with a few seconds to spare: only the answer
+        // here, one request; the rest of a refresh follows in a job.
+        runBlocking { Refresher.refresh(ctx, fast = true, extras = false) }
         // The live notification runs from "due" until you're there.
         if (message.data["phase"] in LiveService.TRIP_PHASES) LiveService.start(ctx)
     }

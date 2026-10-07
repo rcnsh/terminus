@@ -495,7 +495,7 @@ export interface BoardRow {
   stopped?: StoppedReason;
   /** When it next starts (ISO), or null when no start is found. Only on a row that isn't running. */
   resumesAt?: string | null;
-  /** `etaS` in words: "4 min", "now", "~6 min" for a timetable time. Null with no time. */
+  /** `etaS` in words: "4 min", "now", "~6 min" for a timetable or stale time. Null with no time. */
   eta: string | null;
   /** The next few buses after it: "then 12, ~20 min". Null when the feed gives none.
    *  Not called `then`, which would make a row look like a promise to `await`. */
@@ -507,20 +507,27 @@ export interface BoardRow {
 /** How many later buses a row's `then` names: more is noise on a phone. */
 export const THEN_MAX = 3;
 
-/** A time on a board, in words: a timetable time is marked as an estimate ("~6 min"), but not "now", which "~" can't make vaguer. */
+/**
+ * A time on a board, in words: a timetable time is marked as an estimate
+ * ("~6 min"), and so is a stale one, counted down from an old reading as the
+ * card's are; but not "now", which "~" can't make vaguer.
+ */
 export function etaText(etaS: number, quality: Quality): string {
   const t = mins(etaS);
-  return quality === 'scheduled' && t !== m().now ? m().approx(t) : t;
+  return approxQ(quality) && t !== m().now ? m().approx(t) : t;
 }
+
+/** Whether a board time is a guess rather than a fresh live one. */
+const approxQ = (q: Quality): boolean => q === 'scheduled' || q === 'stale';
 
 /**
  * "then 12, ~20 min": the later buses as whole minutes (never under 1, as a
- * row's own time never says "0 min"), each timetable one marked. Null with none.
+ * row's own time never says "0 min"), each timetable or stale one marked. Null with none.
  */
 export function thenText(later: { etaS: number; quality: Quality }[]): string | null {
   if (!later.length) return null;
   const n = (s: number) => String(Math.max(1, Math.round(s / 60)));
-  return m().thenMin(listOf(later.slice(0, THEN_MAX).map((x) => (x.quality === 'scheduled' ? m().approx(n(x.etaS)) : n(x.etaS)))));
+  return m().thenMin(listOf(later.slice(0, THEN_MAX).map((x) => (approxQ(x.quality) ? m().approx(n(x.etaS)) : n(x.etaS)))));
 }
 
 /** `towards` in words (see BoardRow.toText). */
@@ -549,6 +556,23 @@ export function towardsFrom(idx: GraphIndex, svc: string, stopCode: string): str
   const end = r.loop ? r.seq[0] : r.seq[r.seq.length - 1];
   const codes = next === end ? [next] : [next, end];
   return codes.map((c) => displayName(idx.byCode.get(c), c));
+}
+
+/**
+ * How far past its time a bus on a board is taken as gone. The feed's times
+ * are whole minutes, so one listed as arriving may still be at the stop a
+ * little after; past this, it has left.
+ */
+export const BOARD_GONE_S = 60;
+
+/**
+ * When the boards made from these stops' arrivals are from: the oldest
+ * fetch among the feeds that answered (a cached or stale answer's original
+ * time), else now. Clients say "Updated N ago" from it.
+ */
+export function boardAsOf(sas: (StopArrivals | undefined)[], nowMs: number): number {
+  const times = sas.filter((sa): sa is StopArrivals => sa !== undefined && sa.available !== false).map((sa) => sa.fetchedAt);
+  return times.length ? Math.min(nowMs, ...times) : nowMs;
 }
 
 /**
@@ -581,9 +605,14 @@ export function boardAt(
     const available = feed !== undefined && feed.available !== false;
     const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === svc);
     const { usable, ambiguousBerth } = resolveBerths(forSvc);
+    // The feed's times count from its fetch, and a cached or stale answer is
+    // that much older: counted from now, as scoreOptions does, and a bus
+    // whose time is well past is gone, not "now".
+    const ageS = feed && available ? Math.max(0, (nowMs - feed.fetchedAt) / 1000) : 0;
     const etas = usable
-      .filter((a) => a.etaS != null)
-      .sort((a, b) => (a.etaS as number) - (b.etaS as number));
+      .filter((a) => a.etaS != null && (a.etaS as number) - ageS >= -BOARD_GONE_S)
+      .map((a) => ({ ...a, etaS: Math.max(0, Math.round((a.etaS as number) - ageS)) }))
+      .sort((a, b) => a.etaS - b.etaS);
 
     let quality: Quality;
     let etaS: number | null = null;
@@ -624,7 +653,7 @@ export function boardAt(
     // Each later bus keeps its own quality: a timetabled one after a live one stays a guess.
     const later = etas.slice(1).map((a) => {
       const q = aged(a.scheduled ? 'scheduled' : 'live');
-      return { etaS: a.etaS as number, quality: q, eta: etaText(a.etaS as number, q) };
+      return { etaS: a.etaS, quality: q, eta: etaText(a.etaS, q) };
     });
     const towards = towardsFrom(idx, svc, stopCode);
 
@@ -716,6 +745,7 @@ export function scoreOptions(
       let opensInS = 0;
       // When the service stops today, for the guesses below: a bus guessed
       // after it is no bus. Null when its hours are unknown or it isn't running.
+      const running = inService(graph, leg.svc, nowMs);
       const endsAt = serviceEndsAt(graph, leg.svc, nowMs);
       const pastEnd = (s: number) => endsAt !== null && fetchedAt + s * 1000 > endsAt;
 
@@ -727,17 +757,19 @@ export function scoreOptions(
         // road) is an estimate, however exact it looks.
         quality = catchable.scheduled ? 'scheduled' : 'live';
         arrival = catchable;
-      } else if (etas.length) {
+      } else if (etas.length && running) {
         // Every listed bus leaves before you can get there: the first one
-        // after the last listed, a headway apart, that you can reach.
+        // after the last listed, a headway apart, that you can reach. Not
+        // once the service has closed: the feed still lists its last buses,
+        // and there is no bus after them to guess (below).
         const headway = headwayFor(graph, leg.svc);
         boardS = (etas[etas.length - 1].etaS as number) + headway;
         if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
         if (pastEnd(boardS)) continue; // that was the last bus
         quality = 'scheduled';
-      } else if (!inService(graph, leg.svc, nowMs)) {
+      } else if (!running) {
         // The published hours are ours, not the feed's, so this holds even
-        // when we have no data at all.
+        // when we have no data at all, or only buses you can't reach.
         const opens = opts.openBy !== undefined ? serviceResumesAt(graph, leg.svc, nowMs) : null;
         if (opens === null || opens > opts.openBy!) continue; // ended, or not started in time
         // It starts before you need it: a bus somewhere in the headway after

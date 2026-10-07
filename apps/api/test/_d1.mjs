@@ -30,7 +30,14 @@ export function makeD1() {
     async run() {
       // Like D1: a statement that returns rows gives them back, in batch() too.
       const st = db.prepare(sql);
-      if (st.columns().length) return { results: st.all(...params).map((r) => ({ ...r })), success: true, meta: { changes: 0 } };
+      if (st.columns().length) {
+        const results = st.all(...params).map((r) => ({ ...r }));
+        // D1 counts the rows an UPDATE/DELETE ... RETURNING changed; a plain
+        // SELECT changes none (changes() would still hold the last write's count).
+        const writes = /^\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql);
+        const changes = writes ? Number(db.prepare('SELECT changes() AS n').get().n) : 0;
+        return { results, success: true, meta: { changes } };
+      }
       const r = st.run(...params);
       return { success: true, meta: { changes: Number(r.changes) } };
     },

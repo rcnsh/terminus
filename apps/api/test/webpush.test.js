@@ -97,8 +97,8 @@ test('the web app gets the public key, subscribes, and a nudge arrives signed an
   assert.equal((await call('/me/push', { method: 'POST', cookie, body: { subscription: b.subscription } })).status, 200);
   assert.match(await pushToken(), /^web:\{"endpoint":"https:\/\/web\.push\.apple\.com/);
 
-  const sent = await nudgeUser(env, userId, { phase: 'due', urgent: true, remind: true }, Date.now());
-  assert.equal(sent, 1);
+  const out = await nudgeUser(env, userId, { phase: 'due', urgent: true, remind: true }, Date.now());
+  assert.deepEqual(out, { sent: 1, failed: 0 });
   const [p] = pushes;
   assert.equal(p.url, ENDPOINT);
   assert.equal(p.headers.get('content-encoding'), 'aes128gcm');
@@ -120,8 +120,9 @@ test('the web app gets the public key, subscribes, and a nudge arrives signed an
 test('nothing is pushed to the web app when there is nothing to show', async () => {
   const { env, call, cookie, pushes, userId } = await setup();
   await call('/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } });
-  assert.equal(await nudgeUser(env, userId, { phase: 'idle', urgent: false }, Date.now()), 0, 'an idle card');
-  assert.equal(await nudgeUser(env, userId, { phase: 'due', urgent: true, remind: false }, Date.now()), 0, 'reminders off for the trip');
+  // Nothing sent, and nothing failed: there was nothing to send.
+  assert.deepEqual(await nudgeUser(env, userId, { phase: 'idle', urgent: false }, Date.now()), { sent: 0, failed: 0 }, 'an idle card');
+  assert.deepEqual(await nudgeUser(env, userId, { phase: 'due', urgent: true, remind: false }, Date.now()), { sent: 0, failed: 0 }, 'reminders off for the trip');
   assert.equal(pushes.length, 0);
 });
 
@@ -129,7 +130,7 @@ test('a subscription the push service has dropped is forgotten', async () => {
   const { env, call, cookie, status, userId, pushToken } = await setup();
   await call('/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } });
   status.code = 410;
-  assert.equal(await nudgeUser(env, userId, { phase: 'due', urgent: true }, Date.now()), 0);
+  assert.deepEqual(await nudgeUser(env, userId, { phase: 'due', urgent: true }, Date.now()), { sent: 0, failed: 0 });
   assert.equal(await pushToken(), null);
 });
 
@@ -147,4 +148,14 @@ test('a bad subscription is refused, and without a VAPID key web push says it is
   delete env.VAPID_PRIVATE_KEY;
   assert.equal((await call('/me/push/key', { cookie })).status, 503);
   assert.equal((await call('/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } })).status, 503);
+});
+
+test('a kept subscription is skipped, not failed, once the VAPID key is gone', async () => {
+  const { env, call, cookie, pushes, userId, pushToken } = await setup();
+  await call('/me/push', { method: 'POST', cookie, body: { subscription: (await browser()).subscription } });
+  delete env.VAPID_PRIVATE_KEY;
+  // Nobody could be reached, which isn't a failure to try again at every wake; the subscription stays.
+  assert.deepEqual(await nudgeUser(env, userId, { phase: 'due', urgent: true }, Date.now()), { sent: 0, failed: 0 });
+  assert.equal(pushes.length, 0);
+  assert.match(await pushToken(), /^web:/);
 });

@@ -103,7 +103,7 @@ const answerExample = {
 export const API_VERSION = '2.4.2';
 
 export function openApiSpec(origin: string): Record<string, unknown> {
-  return {
+  return withAccountsDown({
     openapi: '3.1.0',
     info: {
       title: 'terminus API',
@@ -126,6 +126,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           '`x-api-key` header (or as a bearer token). A signed-in session or a paired device works too. Each key ' +
           'is limited to 60 requests a minute. Arrivals are cached for 15 seconds per stop, so repeated requests ' +
           'for the same stop do not reach the NUS feed. Please do not poll many stops in bulk.',
+        '',
+        'When the account database cannot be reached for a moment, any call that needs a key or a session answers 503 with ' +
+          '`Retry-After`: wait that long and try again.',
       ].join('\n'),
     },
     servers: [{ url: origin }],
@@ -238,7 +241,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Arrivals at one stop',
           description:
-            'Lists the next arrivals for every service at one stop. There is no destination, so walking time and route direction are not considered. Uses the same 15-second per-stop cache as `/next` and `/trip`. `stop.opposite` is the stop across the road (or one easily mistaken for it), whose board is a second `/arrivals` call away. Each row says where the service goes from here (`towards`), how full its next bus is (`crowd`) and when the service stops running today (`endsAt`).',
+            'Lists the next arrivals for every service at one stop. There is no destination, so walking time and route direction are not considered. Uses the same 15-second per-stop cache as `/next` and `/trip`. `stop.opposite` is the stop across the road (or one easily mistaken for it), whose board is a second `/arrivals` call away. Each row says where the service goes from here (`towards`), how full its next bus is (`crowd`) and when the service stops running today (`endsAt`). `etaS` already counts from the moment of the request, also when the times are cached or stale: do not add it to `asOf`, which says how old the times are.',
           operationId: 'getArrivals',
           parameters: [
             {
@@ -484,7 +487,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Health',
           security: [],
           description:
-            'Returns stop graph details and which settings are configured (whether each is set, never its value). With `probe=1` and the operator token in the `x-health-token` header it also checks that the upstream auth token works. Answers 503 when the NUS feed is confirmed down, the monitor has stopped running, or the calendar data has run out.',
+            'Returns stop graph details and which settings are configured (whether each is set, never its value): `pushAndroid` and `pushWeb` say whether push to the Android app (Firebase) and to the web app (Web Push) is set up with a usable key. With `probe=1` and the operator token in the `x-health-token` header it also checks that the upstream auth token works. Answers 503 when the NUS feed is confirmed down, the monitor has stopped running, or the calendar data has run out.',
           operationId: 'getHealth',
           parameters: [
             {
@@ -505,7 +508,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     now: '2026-09-28T01:14:02.000Z',
                     sgt: '09:14 day1',
                     graph: { generated: '2026-09-28T13:27:41Z', source: 'uNivUS bus proxy via scripts/scrape_stops.py', stops: 33, services: ['A1', 'A2', 'D1', 'D2', 'K', 'P', 'R1', 'R2'] },
-                    config: { auth: true, proxy: true, analytics: true },
+                    config: { auth: true, proxy: true, analytics: true, pushAndroid: true, pushWeb: true },
                   },
                 },
               },
@@ -524,8 +527,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           requestBody: jsonBody({ type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } }, { email: 'you@u.nus.edu' }),
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, message: { type: 'string' } } }),
-            '400': errorResponse('Not an email address.'),
+            '400': errorResponse('Not an email address, or the human check failed.'),
             '429': errorResponse('Too many attempts from this IP, or too many sign-in emails for everyone this minute.'),
+            '503': errorResponse('The human check (Turnstile) is not answering. Try again after `Retry-After` seconds.'),
           },
         },
       },
@@ -560,6 +564,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '201': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
             '400': errorResponse('The human check failed.'),
             '429': errorResponse('Too many new accounts, from this IP or overall.'),
+            '503': errorResponse('The human check (Turnstile) is not answering. Try again after `Retry-After` seconds.'),
           },
         },
       },
@@ -749,7 +754,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     },
                   },
                 },
-                asOf: { type: 'string', format: 'date-time' },
+                asOf: { type: 'string', format: 'date-time', description: 'When the oldest times on these boards were fetched (a cached or `stale` answer’s original fetch time), so "updated N ago" is true.' },
               },
             }),
             '400': errorResponse('No coordinates and no home set.'),
@@ -1015,6 +1020,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         get: {
           tags: ['Account'],
           summary: 'Your setup',
+          description: 'The `ETag` header is the profile’s version (`"0"` before it is first saved). Send it back as `If-Match` on PUT to save only if no other device saved since.',
           operationId: 'getProfile',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ $ref: '#/components/schemas/Profile' }), '401': errorResponse('No valid session.') },
@@ -1022,11 +1028,20 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         put: {
           tags: ['Account'],
           summary: 'Replace your setup',
-          description: 'Replaces the whole profile. Missing fields are reset to their defaults.',
+          description:
+            'Replaces the whole profile. Missing fields are reset to their defaults. Optional: send `If-Match` with the `ETag` from the GET the edit started from, ' +
+            'and the save happens only if the profile is still that version (412 otherwise: read it again and redo the edit). Without it, the last save wins. ' +
+            'The new version comes back as `ETag`.',
           operationId: 'putProfile',
           security: [{ bearer: [] }, { cookie: [] }],
+          parameters: [{ name: 'If-Match', in: 'header', required: false, schema: { type: 'string', example: '"1767225600000"' }, description: 'The `ETag` of the profile this edit started from.' }],
           requestBody: jsonBody({ $ref: '#/components/schemas/Profile' }),
-          responses: { '200': ok({ $ref: '#/components/schemas/Profile' }), '400': errorResponse('Invalid field; the message names it.'), '401': errorResponse('No valid session.') },
+          responses: {
+            '200': ok({ $ref: '#/components/schemas/Profile' }),
+            '400': errorResponse('Invalid field; the message names it.'),
+            '401': errorResponse('No valid session.'),
+            '412': errorResponse('Sent with If-Match, and another device saved the profile since.'),
+          },
         },
       },
       '/me/once': {
@@ -1036,14 +1051,18 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             '"Science library at 14:00 today": `place` (a favourite\'s key) or `to` (a stop, place or room code), `atMin` (minutes past midnight, Singapore time), and optionally `label` ' +
             'and `date` (today by default, up to a week ahead). Kept in the profile\'s `once` and planned like a class that day, with its leave-by, ' +
-            'question and "Not going". Answers with the new /me/next.',
+            'question and "Not going". Answers with the new /me/next. A save from another device at the same moment is kept: the trip is added to it.',
           operationId: 'meOnce',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
             { type: 'object', required: ['atMin'], properties: { place: { type: 'string' }, to: { type: 'string' }, atMin: { type: 'integer' }, label: { type: 'string' }, date: { type: 'string', format: 'date' } } },
             { to: 'CLB', atMin: 840, label: 'Science library' },
           ),
-          responses: { '200': ok({ type: 'object', description: 'The same as GET /me/next.' }), '400': errorResponse('Unknown place, a time already past, or too many.') },
+          responses: {
+            '200': ok({ type: 'object', description: 'The same as GET /me/next.' }),
+            '400': errorResponse('Unknown place, a time already past, or too many.'),
+            '409': errorResponse('Other devices kept saving the profile meanwhile; try again.'),
+          },
         },
       },
       '/me/import': {
@@ -1064,6 +1083,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             }),
             '400': errorResponse('Not a NUSMods share link.'),
             '401': errorResponse('No valid session.'),
+            '409': errorResponse('Other devices kept saving the profile meanwhile; try again.'),
           },
         },
       },
@@ -1361,6 +1381,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': { description: 'The day file, gzipped JSON.', content: { 'application/gzip': {} } },
             '404': errorResponse('No operator token, or no recording for that day.'),
+            '503': errorResponse('The recorder holding the day did not answer within 10 s. Wait for `Retry-After`.'),
           },
         },
       },
@@ -1390,7 +1411,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '206': { description: 'The range asked for.', content: { 'application/vnd.pmtiles': {} } },
             '304': { description: 'Your copy is current (`If-None-Match`).' },
             '404': errorResponse('No street map uploaded yet.'),
+            '416': { description: 'The range starts past the end of the file.' },
             '429': errorResponse('Too many reads of parts not yet cached, from one IP. Wait for `Retry-After`.'),
+            '503': errorResponse('The file could not be read just now (parts already cached are still served). Wait for `Retry-After`.'),
           },
         },
       },
@@ -1405,7 +1428,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             { name: 'fontstack', in: 'path', required: true, schema: { type: 'string', enum: ['Noto Sans Regular', 'Noto Sans Medium', 'Noto Sans Italic'] } },
             { name: 'range', in: 'path', required: true, schema: { type: 'string' }, example: '0-255' },
           ],
-          responses: { '200': { description: 'The glyphs.', content: { 'application/x-protobuf': {} } }, '404': errorResponse('No such font or range.') },
+          responses: { '200': { description: 'The glyphs.', content: { 'application/x-protobuf': {} } }, '404': errorResponse('No such font or range.'), '503': errorResponse('Could not be read just now. Wait for `Retry-After`.') },
         },
       },
       '/map/sprites/v4/{sprite}': {
@@ -1416,7 +1439,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           operationId: 'mapSprite',
           security: [],
           parameters: [{ name: 'sprite', in: 'path', required: true, schema: { type: 'string', enum: ['light.json', 'light.png', 'light@2x.json', 'light@2x.png', 'dark.json', 'dark.png', 'dark@2x.json', 'dark@2x.png'] } }],
-          responses: { '200': { description: 'The sheet or its index.', content: { 'image/png': {}, 'application/json': {} } }, '404': errorResponse('Not uploaded.') },
+          responses: { '200': { description: 'The sheet or its index.', content: { 'image/png': {}, 'application/json': {} } }, '404': errorResponse('Not uploaded.'), '503': errorResponse('Could not be read just now. Wait for `Retry-After`.') },
         },
       },
       '/download/latest.json': {
@@ -1614,11 +1637,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later', 'color', 'towards', 'crowd', 'endsAt', 'running', 'eta', 'laterText', 'toText'],
           properties: {
             svc: { type: 'string' },
-            etaS: { type: ['integer', 'null'] },
+            etaS: { type: ['integer', 'null'], description: 'Seconds from the request until the bus arrives, counted from now even when the feed’s answer is older (a bus whose time passed over a minute ago is left out).' },
             eta: {
               type: ['string', 'null'],
               example: '~6 min',
-              description: '`etaS` in words, in the request’s language: "4 min", "now" under 45 seconds, and a `~` on a `scheduled` time ("~6 min", Chinese "约 6 分钟"). Null when `etaS` is. Show it as it is.',
+              description: '`etaS` in words, in the request’s language: "4 min", "now" under 45 seconds, and a `~` on a `scheduled` or `stale` time ("~6 min", Chinese "约 6 分钟"). Null when `etaS` is. Show it as it is.',
             },
             laterText: {
               type: ['string', 'null'],
@@ -1673,7 +1696,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               },
             },
             board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
-            asOf: { type: 'string', format: 'date-time' },
+            asOf: { type: 'string', format: 'date-time', description: 'When the times on the board were fetched: a cached or `stale` answer’s original fetch time, so "updated N ago" is true.' },
             available: { type: 'boolean', description: 'False when the upstream feed could not be reached.' },
           },
         },
@@ -2102,7 +2125,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       },
                     },
                     warning: { type: ['string', 'null'], example: 'Last D2 from UTown in 18 min' },
-                    nextChangeAt: { type: ['string', 'null'], format: 'date-time', description: 'When this card is next expected to change by itself (the next phase, or going stale): fetch again then.' },
+                    nextChangeAt: { type: ['string', 'null'], format: 'date-time', description: 'When this card is next expected to change by itself (the next phase, or going stale): fetch again then. A leave-by counts here no sooner than 30 s ahead, so a late bus sliding it does not mean polling every few seconds.' },
                     remind: { type: 'boolean', description: 'False when the user turned reminders off for this trip. See `remindAt`.' },
                     suggestion: {
                       type: ['object', 'null'],
@@ -2243,7 +2266,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
       },
     },
-  };
+  });
 }
 
 /** How wide the docs bar's hills are, in pixels: wider than any screen. */
@@ -2332,4 +2355,23 @@ export function docsPage(phase: Phase): string {
   <elements-api apiDescriptionUrl="/openapi.json" router="hash" layout="responsive"></elements-api>
 </body>
 </html>`;
+}
+
+const ACCOUNTS_DOWN_503 = errorResponse('The account database could not be reached just now. Wait for `Retry-After` and try again.');
+
+/**
+ * Lists the accounts-down 503 on every operation that needs a key or a
+ * session (all but those that opt out with `security: []`), so each one
+ * says it can happen rather than only the overview.
+ */
+function withAccountsDown(spec: Record<string, unknown>): Record<string, unknown> {
+  const paths = spec.paths as Record<string, Record<string, { security?: unknown[]; responses?: Record<string, unknown> }>>;
+  for (const ops of Object.values(paths)) {
+    for (const op of Object.values(ops)) {
+      if (!op || typeof op !== 'object' || !op.responses) continue;
+      if (Array.isArray(op.security) && op.security.length === 0) continue;
+      op.responses['503'] ??= ACCOUNTS_DOWN_503;
+    }
+  }
+  return spec;
 }

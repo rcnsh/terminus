@@ -78,7 +78,6 @@ import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.R
-import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.soonOnCampus
 import sh.rcn.terminus.widget.clock
@@ -117,22 +116,14 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
     }
     val openSettings = { ctx.openAppSettings() }
 
-    // Keep the answer fresh while the app is on screen: every 30 s, or
-    // sooner at the moment the server says the card changes (nextPollAt).
-    // The answer lands after the fetch starts, so the wait is worked out
-    // again every few seconds rather than once.
+    // Keep the answer fresh while the app is on screen: every 30 s (POLL_MS).
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             // Location may have been allowed in system settings meanwhile.
             hasLocation = Locator.hasForeground(ctx)
             while (true) {
                 vm.load()
-                val polled = ServerClock.now()
-                while (true) {
-                    val wait = nextPollAt(vm.state.value.answer, polled) - ServerClock.now()
-                    if (wait <= 0) break
-                    delay(wait.coerceAtMost(POLL_MIN_MS))
-                }
+                delay(POLL_MS)
             }
         }
     }
