@@ -7,6 +7,13 @@
 export const t = (en, ...args) => (globalThis.window?.i18n ? window.i18n.t(en, ...args) : en.replace(/\{(\d+)\}/g, (_, i) => String(args[i] ?? '')));
 export const locale = () => globalThis.window?.i18n?.locale;
 
+/** Why the browser gave no location (a GeolocationPositionError), in the page's language: its own message is English. */
+export function locationError(err) {
+  if (err?.code === 1) return t('Location is off for this site. Choose your stop instead.');
+  if (err?.code === 3) return t('Finding your location took too long. Choose your stop instead.');
+  return t("Couldn't find your location. Choose your stop instead.");
+}
+
 // After a 429, nothing is sent until the server's Retry-After has passed:
 // a page that keeps polling at full speed only keeps the limit tripped.
 let quietUntil = 0;
