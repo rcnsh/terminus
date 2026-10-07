@@ -56,7 +56,7 @@ import { mayRecordRide, recordRide } from './ridetimes.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
 import { cardFor, nextPhaseAt } from './card.ts';
-import { feedDownSince } from './monitor.ts';
+import { feedDownSince, termNoticeFor } from './monitor.ts';
 import { RIDE, WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
 import { GRAPH_PUBLIC, nearbyTwin, twinOf } from './graph.ts';
@@ -817,6 +817,14 @@ export const ME_ROUTES: MeRoute[] = [
       const label = [...profile.trips, ...profile.manual].find((t) => classKey(t) === trip)?.label ?? null;
       await setPref(db, session.user.id, trip, pref as PrefKind, choice, label, nowMs);
       return json({ ok: true, choices: await listPrefs(db, session.user.id) });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/me/notice',
+    // The new semester's reminder, for an app that was pushed only its kind (push.ts).
+    run: async ({ db, session, nowMs }) => {
+      return json({ notice: termNoticeFor((await loadProfileJson(db, session.user.id)) as Parameters<typeof termNoticeFor>[0], nowMs) });
     },
   },
   {

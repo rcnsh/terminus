@@ -927,6 +927,31 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: { '200': ok({ type: 'object', description: 'ok, and `choices` as in GET /me/choices.' }), '400': errorResponse('No such suggestion or choice.') },
         },
       },
+      '/me/notice': {
+        get: {
+          tags: ['Account'],
+          summary: 'The new semester’s reminder',
+          description:
+            'The week before a semester starts, the reminder to import its timetable, for an account whose timetable is from an earlier semester; otherwise null. The Android app fetches it when a push says only `kind: term`, so the words do not travel through Firebase. Both languages, unless the account chose one in Settings.',
+          operationId: 'meNotice',
+          security: [{ bearer: [] }, { cookie: [] }],
+          responses: {
+            '200': ok(
+              {
+                type: 'object',
+                properties: {
+                  notice: {
+                    type: ['object', 'null'],
+                    properties: { title: { type: 'string' }, body: { type: 'string' }, zhTitle: { type: 'string' }, zhBody: { type: 'string' } },
+                  },
+                },
+              },
+              { notice: { title: 'Sem 1 2026/27 starts Mon 10 Aug', body: 'Import your new timetable from NUSMods, so your plans are right from the first day.', zhTitle: '2026/27 第 1 学期将于 8月10日（周一）开始', zhBody: '从 NUSMods 导入新课表，让第一天起的行程安排都准确无误。' } },
+            ),
+            '401': errorResponse('No valid session.'),
+          },
+        },
+      },
       '/me/choices': {
         get: {
           tags: ['Account'],

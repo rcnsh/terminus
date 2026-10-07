@@ -351,6 +351,22 @@ export function termNotice(term: { acadYear: string; semester: number }, start: 
 }
 
 /**
+ * The reminder a profile is due now, in the words its language setting asks
+ * for (both when it follows the device), or null: no semester starting
+ * within the week, no timetable, or the new one already imported. The cron
+ * pushes it; GET /me/notice gives it to an app that was pushed only its kind.
+ */
+export function termNoticeFor(p: { trips?: unknown; term?: { acadYear: string; semester: number } | null; lang?: unknown } | null, nowMs: number): Notice | null {
+  const soon = semesterSoon(nowMs);
+  if (!soon || !p || !Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) return null;
+  const both = termNotice(soon.term, soon.start);
+  // A language chosen in Settings wins over each device's.
+  if (p.lang === 'en') return { ...both, zhTitle: both.title, zhBody: both.body };
+  if (p.lang === 'zh') return { title: both.zhTitle, body: both.zhBody, zhTitle: both.zhTitle, zhBody: both.zhBody };
+  return both;
+}
+
+/**
  * The week before semester 1 or 2 starts: a push to everyone with a
  * timetable from an earlier semester, to import the new one. Not to anyone
  * who has already imported it, nor to anyone with no timetable at all. Once
@@ -370,21 +386,17 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   )
     .bind(after, batch)
     .all<{ user_id: string; json: string }>();
-  const both = termNotice(soon.term, soon.start);
-  // A language chosen in Settings wins over each device's.
-  const en: Notice = { ...both, zhTitle: both.title, zhBody: both.body };
-  const zh: Notice = { title: both.zhTitle, body: both.zhBody, zhTitle: both.zhTitle, zhBody: both.zhBody };
   let sent = 0;
   const due: { userId: string; notice: Notice }[] = [];
   for (const r of results) {
-    let p: { trips?: unknown[]; term?: { acadYear: string; semester: number } | null; lang?: string } = {};
+    let p: Parameters<typeof termNoticeFor>[0] = null;
     try {
       p = JSON.parse(r.json);
     } catch {
       continue;
     }
-    if (!Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) continue;
-    due.push({ userId: r.user_id, notice: p.lang === 'en' ? en : p.lang === 'zh' ? zh : both });
+    const notice = termNoticeFor(p, nowMs);
+    if (notice) due.push({ userId: r.user_id, notice });
   }
   for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
     const n = await Promise.all(due.slice(i, i + ARM_AT_ONCE).map((u) => remindUser(env, u.userId, u.notice, nowMs).catch(() => 0)));
