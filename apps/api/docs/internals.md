@@ -242,7 +242,10 @@ get one of three ways:
 - **`POST /auth/anon`** on first launch: an account with no email
   (`users.email` is NULL), so the app is useful before any sign-in. Limited
   per IP (`RL_AUTH`) and globally (`RL_ANON`); the cron deletes anonymous
-  accounts unused for 60 days (`users.last_seen`).
+  accounts unused for 60 days (`users.last_seen`). That sweep, with expired
+  sessions, idle devices, old trip outcomes and crowd sightings, runs once a
+  Singapore day (KV `housekeeping:day`), since each reads a whole table;
+  expired sign-in links and codes go every run.
 - **Sign-in approved from the email** ([src/applogin.ts](../src/applogin.ts),
   modelled on RFC 8628). `POST /auth/app/start {email, name}` returns
   `{request, poll, match}` and emails a 6-character code (in the subject
