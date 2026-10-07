@@ -64,6 +64,13 @@ extension View {
     func announced(_ message: String) -> some View {
         onAppear { announce(message) }.onChange(of: message) { _, m in announce(m) }
     }
+
+    /// Says `message` when this view appears and when `key` changes, not at
+    /// each change of its words: a count that ticks over is heard only when
+    /// what it means does.
+    func announced(_ message: String, when key: some Equatable) -> some View {
+        onAppear { announce(message) }.onChange(of: key) { _, _ in announce(message) }
+    }
 }
 
 /// Says `message` to VoiceOver now; nothing for nil or empty.
