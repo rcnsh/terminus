@@ -383,3 +383,5 @@
 "%@ results" = "%@ 个结果";
 "Tab %@ of %@" = "第 %1$@ 个，共 %2$@ 个";
 "Destinations" = "目的地";
+"Email" = "邮箱";
+"NUSMods share link" = "NUSMods 分享链接";
