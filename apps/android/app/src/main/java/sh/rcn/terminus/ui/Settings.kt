@@ -21,6 +21,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -67,6 +69,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -111,6 +114,7 @@ import sh.rcn.terminus.Lang
 import sh.rcn.terminus.Clock
 import sh.rcn.terminus.L
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
@@ -156,17 +160,29 @@ internal fun SettingsScreen(
     var open by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
     // A NUSMods link shared into the app: straight to Timetable, to import it.
     LaunchedEffect(state.sharedLink) { if (state.sharedLink != null) open = SettingsPage.Timetable }
-    // How far a back gesture has gone, for the page to follow it. Kept after
-    // the gesture completes, so the page slides away from where it was let go.
+    // The list and its pages are one transition that a back gesture can
+    // seek, as Android's own apps do: the list is drawn under the page from
+    // the start, sliding and fading in as the page goes, rather than the
+    // page moving over nothing. Let go, and it carries on from there.
+    val pages = remember { SeekableTransitionState(open) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(open) { pages.animateTo(open) }
+    // How far a back gesture has gone, for the page to shrink as it follows.
+    // Kept after the gesture completes, so it leaves at the size it was let go.
     var backProgress by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(open) { if (open != null) backProgress = 0f }
     BackHandler(enabled = open == null, onBack = onClose)
     PredictiveBackHandler(enabled = open != null) { events ->
+        val page = open
         try {
-            events.collect { backProgress = it.progress }
+            events.collect {
+                backProgress = it.progress
+                pages.seekTo(it.progress, targetState = null)
+            }
             open = null
         } catch (e: CancellationException) {
             backProgress = 0f
+            scope.launch { pages.animateTo(page) }
             throw e
         }
     }
@@ -183,32 +199,38 @@ internal fun SettingsScreen(
                 }
             }
         }
-        AnimatedContent(
-            targetState = open,
+        rememberTransition(pages, label = "settings page").AnimatedContent(
             transitionSpec = {
                 if (targetState != null) {
                     (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(300)))
                         .togetherWith(slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 4 } + fadeOut(tween(200)))
                 } else {
-                    (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 4 } + fadeIn(tween(300)))
-                        .togetherWith(slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(200)))
+                    // Back: the page stays solid as it slides off, so a back gesture
+                    // holds a page, not a ghost of one; the list fades up behind it.
+                    ((slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 4 } + fadeIn(tween(300)))
+                        .togetherWith(slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it }))
+                        .apply { targetContentZIndex = -1f }
                 }
             },
             modifier = Modifier.weight(1f),
-            label = "settings page",
         ) { page ->
             if (page == null) {
                 SettingsList(state, main, if (state.message != null) 0.dp else top, bottom) { open = it }
             } else {
                 Column(
                     Modifier.fillMaxSize().graphicsLayer {
-                        // Following the back gesture: the page shrinks a little and moves towards the edge.
+                        // Following the back gesture (the transition slides it): the page
+                        // shrinks a little into a card with rounded corners and a shadow,
+                        // lifted off the list behind it.
                         val scale = 1f - backProgress * 0.1f
                         scaleX = scale
                         scaleY = scale
-                        translationX = backProgress * size.width * 0.15f
-                        alpha = 1f - backProgress * 0.3f
-                    }.padding(bottom = bottom),
+                        if (backProgress > 0f) {
+                            shape = RoundedCornerShape((backProgress * 5f).coerceAtMost(1f) * 28.dp.toPx())
+                            clip = true
+                            shadowElevation = 8.dp.toPx()
+                        }
+                    }.background(MaterialTheme.colorScheme.background).padding(bottom = bottom),
                 ) {
                     // The title in a slim band of the list's sky; the page itself plain.
                     SkyBand(skyPhase(ui), if (state.message != null) 0.dp else top) {
