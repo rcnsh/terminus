@@ -98,3 +98,24 @@ GROUP BY day, outcome ORDER BY day
 `upstream` plus `error` per day is the recorder's real extra load. At the defaults it is
 at most 17,280 (8 services, one poll each per 30 s, 18 hours), and less on
 the days the services keep shorter hours.
+
+## Trip signals
+
+Each trip signal (`/me/signal`: on the bus, missed, not going, arrived,
+and the rest) writes a `signal` row: `blob2` is the kind, and nothing
+else, so it counts how often each is used, never by whom or where.
+
+```sql
+SELECT blob2 AS signal, SUM(_sample_interval) AS n
+FROM terminus WHERE blob1 = 'signal' GROUP BY signal ORDER BY n DESC
+```
+
+## What the rows hold about people
+
+None holds an account, email, IP address or coordinates, and none is
+indexed by person. An `answer` or `arrival` row's stop is the one nearest
+the caller when the app sent a location, `double6` is the walk to it, and
+`blob4` is the destination (a class's venue, a place): together with the
+time, that is a rough idea of where someone was and where they were
+going. The privacy policy says so; don't add anything finer.
+

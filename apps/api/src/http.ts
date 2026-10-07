@@ -101,9 +101,9 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
 
 /**
  * Browser-facing hardening on every response. The CSP lists exactly what
- * the site loads: Turnstile, the QR library from cdnjs, Google Fonts, the
- * map's workers, and Cloudflare Web Analytics (its beacon script, which
- * Cloudflare adds to each page, and where it reports page loads). /docs
+ * the site loads: Turnstile, the QR library from cdnjs, the map's workers,
+ * and Cloudflare Web Analytics (its beacon script, which Cloudflare adds to
+ * each page, and where it reports page loads). Fonts are our own. /docs
  * additionally loads Stoplight Elements from unpkg (pinned with SRI there).
  * The CDNs are allowed only for those files, not whole hosts: either serves
  * any library ever published, and an old one can be made to run a page's
