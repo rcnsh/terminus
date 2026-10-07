@@ -404,7 +404,7 @@ export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Prom
 
 const REMINDED_KEY = 'term:reminded';
 /** Users whose reminder reached no device, asked again on later runs:
- *  `{ term, users: [[user id, lang, tries]] }`. Its own key, as KV takes one
+ *  `{ term, run, users: [[user id, tries]] }`. Its own key, as KV takes one
  *  write a second to a key and the mark is written before the sends. */
 const REMIND_RETRY_KEY = 'term:retry';
 /** Runs a failed reminder is tried again (two hours of the cron), so push
@@ -412,6 +412,8 @@ const REMIND_RETRY_KEY = 'term:retry';
 const REMIND_TRIES = 8;
 /** A user due a reminder: id, the language chosen in Settings ('' for the device's), tries so far. */
 type Due = [string, string, number];
+/** Retried users' profiles read at once (D1 binds at most 100 values). */
+const PROFILES_AT_ONCE = 50;
 /** Not before 10 in the morning, Singapore time. */
 const REMIND_FROM_HOUR = 10;
 
@@ -429,22 +431,25 @@ export function termNotice(term: { acadYear: string; semester: number }, start: 
  * timetable from an earlier semester, to import the new one. Not to anyone
  * who has already imported it, nor to anyone with no timetable at all. Once
  * per semester, in batches like armTrips; the KV mark is "<year> <sem>" when
- * done and "<year> <sem> <last user id>" while under way. Users no device
- * took are kept under REMIND_RETRY_KEY and tried again on later runs.
+ * done and "<year> <sem> <last user id>" while under way, then "#<run>".
+ * Users no device took are kept under REMIND_RETRY_KEY, stamped with the
+ * run, and tried again on later runs.
  */
 export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {
   if (!env.DB || !pushEnabled(env)) return 0;
   const soon = semesterSoon(nowMs);
   if (!soon || new Date(nowMs + 8 * 3_600_000).getUTCHours() < REMIND_FROM_HOUR) return 0;
   const id = `${soon.term.acadYear} ${soon.term.semester}`;
-  const mark = (await env.KV.get(REMINDED_KEY)) ?? '';
-  let retry: { term: string; users: Due[] } | null = null;
+  const [mark, markRun] = ((await env.KV.get(REMINDED_KEY)) ?? '').split('#');
+  let retry: { term: string; run: number; users: [string, number][] } | null = null;
   try {
     retry = JSON.parse((await env.KV.get(REMIND_RETRY_KEY)) ?? 'null');
   } catch {
     retry = null;
   }
-  if (retry?.term !== id) retry = null;
+  // Only the list the last run left counts. One whose run could not save it
+  // is older, and holds users that run has already reached.
+  if (retry?.term !== id || !Array.isArray(retry.users) || String(retry.run) !== markRun) retry = null;
   if (mark === id && !retry) return 0;
   const after = mark.startsWith(`${id} `) ? mark.slice(id.length + 1) : '';
   const { results } = mark === id
@@ -454,14 +459,27 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
       )
         .bind(after, batch)
         .all<{ user_id: string; json: string }>();
+  // Retried users are read again, so one who has imported the new semester
+  // since, or changed language, is skipped or told in the new one.
+  const triesOf = new Map(retry?.users ?? []);
+  const ids = [...triesOf.keys()];
+  const rows: { user_id: string; json: string; tries: number }[] = [];
+  for (let i = 0; i < ids.length; i += PROFILES_AT_ONCE) {
+    const some = ids.slice(i, i + PROFILES_AT_ONCE);
+    const { results: got } = await env.DB.prepare(`SELECT user_id, json FROM profiles WHERE user_id IN (${some.map(() => '?').join(', ')})`)
+      .bind(...some)
+      .all<{ user_id: string; json: string }>();
+    for (const r of got) rows.push({ ...r, tries: triesOf.get(r.user_id) ?? 0 });
+  }
+  for (const r of results) rows.push({ ...r, tries: 0 });
   const both = termNotice(soon.term, soon.start);
   // A language chosen in Settings wins over each device's.
   const en: Notice = { ...both, zhTitle: both.title, zhBody: both.body };
   const zh: Notice = { title: both.zhTitle, body: both.zhBody, zhTitle: both.zhTitle, zhBody: both.zhBody };
   const notice = (lang: string) => (lang === 'en' ? en : lang === 'zh' ? zh : both);
   let sent = 0;
-  const due: Due[] = [...(retry?.users ?? [])];
-  for (const r of results) {
+  const due: Due[] = [];
+  for (const r of rows) {
     let p: { trips?: unknown[]; term?: { acadYear: string; semester: number } | null; lang?: string } = {};
     try {
       p = JSON.parse(r.json);
@@ -469,15 +487,15 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
       continue;
     }
     if (!Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) continue;
-    due.push([r.user_id, p.lang === 'en' || p.lang === 'zh' ? p.lang : '', 0]);
+    due.push([r.user_id, p.lang === 'en' || p.lang === 'zh' ? p.lang : '', r.tries]);
   }
   // The batch is marked before it's sent, so a mark that can't be saved
   // sends nothing rather than the same batch every run. The mark moves on
   // whatever the sends do, so one user who can't be reached holds up no one.
-  if (mark !== id) {
-    const done = results.length < batch;
-    await env.KV.put(REMINDED_KEY, done ? id : `${id} ${results[results.length - 1].user_id}`, { expirationTtl: 30 * 86_400 });
-  }
+  // Its new run stamp sets aside the retry list just read: should the one
+  // this run leaves fail to save, no one tried now is sent it again.
+  const done = mark === id || results.length < batch;
+  await env.KV.put(REMINDED_KEY, `${done ? id : `${id} ${results[results.length - 1].user_id}`}#${nowMs}`, { expirationTtl: 30 * 86_400 });
   const failed: Due[] = [];
   for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
     const some = due.slice(i, i + ARM_AT_ONCE);
@@ -489,9 +507,11 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   const again = failed.filter(([, , tries]) => tries < REMIND_TRIES).slice(0, ARM_BATCH);
   if (failed.length) console.error('term reminders not sent', failed.length);
   if (again.length) {
-    await env.KV.put(REMIND_RETRY_KEY, JSON.stringify({ term: id, users: again }), { expirationTtl: 30 * 86_400 });
+    const users = again.map(([userId, , n]): [string, number] => [userId, n]);
+    await env.KV.put(REMIND_RETRY_KEY, JSON.stringify({ term: id, run: nowMs, users }), { expirationTtl: 30 * 86_400 });
   } else if (retry) {
-    await env.KV.delete(REMIND_RETRY_KEY);
+    // Left in place, the old list is set aside by the mark's run stamp anyway.
+    await env.KV.delete(REMIND_RETRY_KEY).catch((e) => console.error('term retry not cleared', (e as Error)?.name ?? 'error'));
   }
   return sent;
 }
