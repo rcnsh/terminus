@@ -122,12 +122,13 @@ export interface Notice {
 
 /**
  * The new semester's reminder (monitor.ts): a notification the apps show as
- * it is, rather than a card to fetch. Returns how many devices it went to.
+ * it is, rather than a card to fetch. Says how many devices took it and how
+ * many failed; none of either means there was nobody it could go to.
  */
-export async function remindUser(env: Env, userId: string, notice: Notice, nowMs: number): Promise<number> {
+export async function remindUser(env: Env, userId: string, notice: Notice, nowMs: number): Promise<Delivered> {
   const words = { title: notice.title, body: notice.body, zhTitle: notice.zhTitle, zhBody: notice.zhBody };
   const out = await deliver(env, userId, { web: { kind: 'term', ...words }, fcm: { kind: 'term', ...words }, urgent: false, collapse: 'term', ttlS: 2 * 86_400 }, nowMs);
-  return out.sent;
+  return out;
 }
 
 interface Delivery {

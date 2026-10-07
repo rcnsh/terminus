@@ -505,8 +505,13 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   const failed: Due[] = [];
   for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
     const some = due.slice(i, i + ARM_AT_ONCE);
-    const n = await Promise.all(some.map(([userId, lang]) => remindUser(env, userId, notice(lang), nowMs).catch(() => 0)));
-    some.forEach(([userId, lang, tries], j) => (n[j] ? (sent += n[j]) : failed.push([userId, lang, tries + 1])));
+    const n = await Promise.all(some.map(([userId, lang]) => remindUser(env, userId, notice(lang), nowMs).catch(() => ({ sent: 0, failed: 1 }))));
+    // Only a send that failed is worth trying again; a user with no device
+    // it could go to (no usable key, every token gone) would fail every time.
+    some.forEach(([userId, lang, tries], j) => {
+      sent += n[j].sent;
+      if (n[j].sent === 0 && n[j].failed > 0) failed.push([userId, lang, tries + 1]);
+    });
   }
   // Users no device took (push itself failing, say) are tried again on the
   // next runs, up to REMIND_TRIES times, so a token that never works stops.

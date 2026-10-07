@@ -240,6 +240,25 @@ test('the week before a semester, push users with an older timetable are reminde
   assert.equal(await remindTerm(env, Date.now()), 0, 'no timetable to bring up to date');
 });
 
+test('a semester reminder for someone with no device left to reach is not tried again', async () => {
+  const { call, phone, env, clock } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
+  clock(Date.parse('2026-08-04T10:30:00+08:00'));
+  // The app was uninstalled: Firebase says the token is gone, so it's dropped
+  // and there is nobody left to send to, which no retry would change.
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init) =>
+    String(url).startsWith('https://fcm.googleapis.com/') ? Response.json({ error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } }, { status: 404 }) : real(url, init);
+  try {
+    assert.equal(await remindTerm(env, Date.now()), 0);
+  } finally {
+    globalThis.fetch = real;
+  }
+  assert.equal(await env.KV.get('term:retry'), null);
+});
+
 test('a semester reminder that reaches nobody is tried again; one whose mark cannot be saved is not sent', async () => {
   const { call, phone, fcm, env, clock } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
