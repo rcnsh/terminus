@@ -20,6 +20,12 @@ import { busesTabIndex } from '/account/search.js';
 const REFRESH_MS = 15_000;
 /** As many stops as the profile keeps pinned (its `limits`; 8 before it has loaded). */
 const pinMax = () => limit('pinnedStops', 8);
+/**
+ * Times older than this have missed a refresh at least (the API's own
+ * answers are at most 15 s old): counted down here from when they were
+ * true, and no longer shown as live.
+ */
+const OLD_MS = 2 * REFRESH_MS;
 /** "Runs until" shows for a service ending within this long. */
 const ENDS_SOON_MS = 2 * 3600_000;
 
@@ -150,12 +156,21 @@ function pagesOf(n, pinned) {
 }
 const homePages = () => pagesOf(nearest.get(), pins());
 
+/** A timed refresh still on its way: the next one waits for it, rather than piling up on a slow connection. */
+let pending = null;
+
 /** The board on screen, fetched again: the page shown, the stop's own page, or the line. */
 function refresh() {
+  if (pending) return;
+  pending = refreshNow()?.finally(() => {
+    pending = null;
+  });
+}
+function refreshNow() {
   const r = route.get();
   if (r.kind === 'line') return loadLine(r.svc, r.stop);
   const code = r.kind === 'stop' ? r.code : homePages()[active.get()]?.code;
-  if (code) loadBoard(shownCode(code));
+  return code ? loadBoard(shownCode(code)) : null;
 }
 
 /** A board just brought on screen: fetched unless it's fresh. */
@@ -275,6 +290,28 @@ function Big({ r }) {
   return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
 }
 
+/**
+ * Row `r` from an answer as of `asOf`, as it stands at `now` (both on the
+ * server's clock). Once the answer is OLD_MS old (refreshes failing), its
+ * times are counted down from then, a bus long due has no time, and a live
+ * time says "Last known": nothing old passes for live.
+ */
+function aged(r, asOf, now) {
+  const s = (now - asOf) / 1000;
+  if (r?.etaS == null || !(s * 1000 > OLD_MS)) return r;
+  const left = r.etaS - s;
+  return {
+    ...r,
+    old: true,
+    // Worded here from etaS (Big's own way), not the server's words from then.
+    eta: null,
+    etaS: left > -60 ? Math.max(0, left) : null,
+    quality: r.quality === 'live' ? 'stale' : r.quality,
+    laterText: null,
+    later: r.later?.map((x) => ({ ...x, etaS: x.etaS - s })).filter((x) => x.etaS > 0),
+  };
+}
+
 /** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */
 const thenText = (r) => r.laterText ?? (r.later?.length ? t('then {0} min', r.later.map((x) => mins(x.etaS)).join(t(', '))) : '');
 
@@ -333,7 +370,7 @@ function StoppedRow({ r, stop }) {
 /** A service's row on a board. Tapped, its line; a public bus has none here. */
 function Row({ r, stop }) {
   if (r.running === false) return html`<${StoppedRow} r=${r} stop=${stop} />`;
-  const cls = `bt-row${r.etaS != null && r.etaS < 60 && r.quality === 'live' ? ' soon' : ''}`;
+  const cls = `bt-row${r.etaS != null && r.etaS < 60 && r.quality === 'live' ? ' soon' : ''}${r.old ? ' old' : ''}`;
   const body = html`
     <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
     <span class="bt-dir"><${Towards} r=${r} /></span>
@@ -353,6 +390,11 @@ function Updated({ asOf }) {
   return html`<span class="bt-updated">${s < 5 ? t('Updated just now') : s < 60 ? t('Updated {0} s ago', s) : t('Updated {0} min ago', Math.floor(s / 60))}</span>`;
 }
 
+/** How old the times are, and under it why they couldn't be updated, if they couldn't. */
+function Status({ asOf, error }) {
+  return html`${error && html`<span class="bt-error">${error}</span>`}<${Updated} asOf=${asOf} />`;
+}
+
 /** A stop's board, then the services ending soon, and when it was updated. */
 function Board({ code }) {
   const all = useStore(boards);
@@ -362,11 +404,11 @@ function Board({ code }) {
   const ending = b.board.filter((r) => r.endsAt && Date.parse(r.endsAt) > now && Date.parse(r.endsAt) - now <= ENDS_SOON_MS);
   return html`
     ${b.board.length
-      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${r} stop=${code} />`)}</div>`
+      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.asOf, now)} stop=${code} />`)}</div>`
       : html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`}
     <div class="bt-foot">
       <div class="bt-ends">${ending.map((r) => html`<div key=${r.svc}><${Chip} svc=${r.svc} color=${r.color} cls="small" /> ${t('Runs until {0}', clock(r.endsAt))}</div>`)}</div>
-      <div class="bt-status">${b.error ? html`<span class="bt-error">${b.error}</span>` : html`<${Updated} asOf=${b.asOf} />`}</div>
+      <div class="bt-status"><${Status} asOf=${b.asOf} error=${b.error} /></div>
     </div>
     ${b.board.some((r) => !r.paid) && html`<p class="bt-hint">${t('Tap a service to see its whole line.')}</p>`}
   `;
@@ -630,7 +672,7 @@ function LinePage({ svc, stop }) {
       ? html`<p class="bt-stopped-note">${stoppedWords(data.stopped, data.resumesAt, now).filter(Boolean).map((w, i) => html`<span key=${i}>${w}</span>`)}</p>`
       : html`<p class="bt-summary">${[data.available ? running : null, ends].filter(Boolean).join(' · ')}</p>`}
     ${!data.available && !stopped && html`<p class="bt-note">${t('Bus positions are unavailable right now.')}</p>`}
-    <div class="bt-line-label"><span class="eyebrow">${t('{0} stops', n)}</span>${mine.error ? html`<span class="bt-error">${mine.error}</span>` : html`<${Updated} asOf=${mine.asOf} />`}</div>
+    <div class="bt-line-label"><span class="eyebrow">${t('{0} stops', n)}</span><span class="bt-status"><${Status} asOf=${mine.asOf} error=${mine.error} /></span></div>
     <ol class="bt-route" style=${svcVars(color)}>
       ${data.stops.map((s, i) => {
         const here = buses.filter((b) => b.at === i);
@@ -646,7 +688,7 @@ function LinePage({ svc, stop }) {
                 ${here.map((b) => html`<span class="bt-bus-info" key=${b.id}><${Plate} b=${b} /></span>`)}
                 ${s.services?.length > 0 && html`<span class="bt-others">${s.services.map((x) => html`<${Chip} key=${x} svc=${x} cls="tiny" />`)}</span>`}
               </span>
-              ${isMine && html`<${YourTime} r=${data.stop.row} />`}
+              ${isMine && html`<${YourTime} r=${aged(data.stop.row, mine.asOf, now)} />`}
             </button>
           </li>
           ${between.map(
