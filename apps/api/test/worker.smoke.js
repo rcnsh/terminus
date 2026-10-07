@@ -1174,34 +1174,62 @@ test('/map/style.json is a quiet light or dark map with every URL on our own dom
 });
 
 test('files served without the Worker get the same headers from _headers', async () => {
-  const { readFile } = await import('node:fs/promises');
+  const { readFile, readdir } = await import('node:fs/promises');
   const { withSecurityHeaders } = await import('../src/http.ts');
+  const { openApiSpec } = await import('../src/openapi.ts');
+  // Cloudflare's own matching, for runWorkerFirst and _headers alike: `*`
+  // is any run of characters, across `/` too.
+  const glob = (p) => new RegExp(`^${p.split('*').map((s) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')).join('.*')}$`);
   const config = await readFile(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
-  const skipped = [...config.matchAll(/"!(\/[\w-]+\/\*)"/g)].map((m) => m[1]).sort();
-  assert.deepEqual(skipped, ['/assets/*', '/vendor/*']);
+  const first = JSON.parse(config.match(/runWorkerFirst: (\[[^\]]*\])/)[1]);
+  const skip = first.filter((p) => p.startsWith('!')).map((p) => glob(p.slice(1)));
+  const skips = (path) => skip.some((r) => r.test(path));
 
   // _headers: a path, then its indented headers.
-  const rules = new Map();
-  let at = null;
+  const rules = [];
   for (const line of (await readFile(new URL('../../web/public/_headers', import.meta.url), 'utf8')).split('\n')) {
     if (!line.trim() || line.startsWith('#')) continue;
-    if (!/^\s/.test(line)) rules.set((at = line.trim()), {});
+    if (!/^\s/.test(line)) rules.push({ re: glob(line.trim()), set: {} });
     else {
       const [name, ...value] = line.trim().split(':');
-      rules.get(at)[name.toLowerCase()] = value.join(':').trim();
+      rules.at(-1).set[name.toLowerCase()] = value.join(':').trim();
     }
   }
-  assert.deepEqual([...rules.keys()].sort(), skipped, 'every path that skips the Worker has its headers');
+  const { fileURLToPath } = await import('node:url');
+  const { join, relative } = await import('node:path');
+  const root = fileURLToPath(new URL('../../web/public/', import.meta.url));
+  const files = (await readdir(root, { recursive: true, withFileTypes: true }))
+    .filter((f) => f.isFile() && f.name !== '_headers')
+    .map((f) => `/${relative(root, join(f.parentPath, f.name))}`);
+  const skipped = files.filter(skips);
+  assert.ok(skipped.includes('/app/app.js') && skipped.includes('/account/account.css') && skipped.includes('/sw.js'), 'the pages\' scripts and styles skip the Worker');
   for (const path of skipped) {
-    const viaWorker = Object.fromEntries(withSecurityHeaders(new Response('', { headers: { 'content-type': 'text/javascript' } }), path.replace('*', 'x.js')).headers);
+    // Nothing that skips it is a page, which would need the CSP.
+    assert.ok(!path.endsWith('.html'), `${path} is a page`);
+    const set = {};
+    for (const r of rules.filter((x) => x.re.test(path))) {
+      for (const [k, v] of Object.entries(r.set)) {
+        // Cloudflare appends a header two rules both set.
+        assert.ok(!(k in set), `${path}: two rules set ${k}`);
+        set[k] = v;
+      }
+    }
+    delete set['cache-control'];
+    const viaWorker = Object.fromEntries(withSecurityHeaders(new Response('', { headers: { 'content-type': 'text/javascript' } }), path).headers);
     delete viaWorker['content-type'];
-    assert.deepEqual(rules.get(path), viaWorker, `${path}: the headers the Worker would give`);
+    assert.deepEqual(set, viaWorker, `${path}: the headers the Worker would give`);
   }
-  // Nothing under them is a page, which would need the CSP.
-  const { readdir } = await import('node:fs/promises');
-  for (const dir of ['assets', 'vendor']) {
-    const files = await readdir(new URL(`../../web/public/${dir}/`, import.meta.url), { recursive: true });
-    assert.equal(files.filter((f) => f.endsWith('.html')).length, 0, `no pages in ${dir}/`);
+  // Pages, and everything the Worker itself answers, still reach it.
+  for (const path of files.filter((f) => f.endsWith('.html'))) assert.ok(!skips(path.replace(/index\.html$/, '')), `${path} reaches the Worker`);
+  const routes = Object.keys(openApiSpec(BASE).paths).map((p) => p.replace(/\{[^}]+\}/g, 'x'));
+  for (const path of [...routes, '/', '/map/style.json', '/map/campus.pmtiles', '/map/fonts/Noto%20Sans%20Regular/0-255.pbf', '/map/sprites/v4/light.png', '/map/sprites/v4/light.json', '/download/latest.json', '/robots.txt', '/llms.txt', '/status.json']) {
+    assert.ok(!skips(path), `${path} reaches the Worker`);
+  }
+  // Only the versioned /vendor/ folders, and the fonts, are kept without asking.
+  const kept = rules.filter((r) => r.set['cache-control']).map((r) => String(r.re));
+  assert.deepEqual(kept, [String(glob('/assets/fonts/*')), String(glob('/vendor/*'))]);
+  for (const dir of (await readdir(new URL('../../web/public/vendor/', import.meta.url), { withFileTypes: true })).filter((d) => d.isDirectory())) {
+    assert.match(dir.name, /\d+\.\d+\.\d+$/, `vendor/${dir.name} carries its version`);
   }
 });
 

@@ -72,10 +72,13 @@ export default defineConfig(({ mode }) => {
 			},
 			// The Worker runs first for the pages (security headers, the CSP, the
 			// beta's badge) and everything it answers. Scripts, styles and images
-			// skip it: static files are free, a Worker request is not. Their
-			// headers come from ../web/public/_headers instead.
+			// skip it: static files are free, a Worker request is not, and a page
+			// asks for a dozen or more of them. Their headers come from
+			// ../web/public/_headers instead. `*` matches across `/`, so "/*.js"
+			// is every script at any depth; nothing the Worker answers ends in
+			// .js or .css (a test checks).
 			assets: {
-				runWorkerFirst: ["/*", "!/assets/*", "!/vendor/*"],
+				runWorkerFirst: ["/*", "!/assets/*", "!/vendor/*", "!/*.js", "!/*.css", "!/favicon.*", "!/manifest.webmanifest"],
 			},
 			// Nothing here needs more than a fraction of this: it stops a bug
 			// that loops from running up the bill, one request at a time.
