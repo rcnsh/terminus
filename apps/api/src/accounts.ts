@@ -246,15 +246,84 @@ export async function redeemLink(db: D1Database, token: string, nowMs: number, a
 }
 
 async function spendLink(db: D1Database, hash: string, nowMs: number, anonId: string | null): Promise<Redeemed | null> {
-  // DELETE ... RETURNING makes the link single-use even under two racing POSTs.
   const row = await db
-    .prepare('DELETE FROM magic_links WHERE token_hash = ? RETURNING email, expires')
-    .bind(hash)
-    .first<{ email: string; expires: number }>();
-  if (!row || row.expires < nowMs) return null;
+    .prepare('SELECT email FROM magic_links WHERE token_hash = ? AND expires >= ?')
+    .bind(hash, nowMs)
+    .first<{ email: string }>();
+  if (!row) return null;
+  // The account work, the session and spending the link are one batch: a
+  // failure part way leaves the link to try again, and of two racing POSTs
+  // only the one that finds it still there does anything.
+  const live: Live = { sql: 'EXISTS (SELECT 1 FROM magic_links WHERE token_hash = ? AND expires >= ?)', params: [hash, nowMs] };
+  const claim = await claimEmail(db, row.email, anonId, nowMs, live);
+  const token = newToken();
+  const tokenHash = await hashToken(token);
+  const out = await db.batch([
+    ...claim.statements,
+    sessionFor(db, tokenHash, row.email, 'web', null, nowMs, NO_CLIENT, live),
+    db.prepare('DELETE FROM magic_links WHERE token_hash = ? AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?) RETURNING email').bind(hash, tokenHash),
+  ]);
+  if (!out.at(-1)?.results?.length) return null;
+  return { token, ...(claim.removed ? { removed: claim.removed } : {}) };
+}
 
-  const { userId, removed } = await claimEmail(db, row.email, anonId, nowMs);
-  return { token: await openSession(db, userId, 'web', null, nowMs), ...(removed ? { removed } : {}) };
+/**
+ * What must hold for a sign-in's statements to run: its link, code or
+ * request not yet spent. Every statement of the sign-in's batch carries it,
+ * and the batch's last statement spends it. D1 runs a batch as one
+ * transaction, so a failure anywhere leaves it unspent to try again, and a
+ * second sign-in racing it finds it false and changes nothing.
+ */
+export interface Live {
+  sql: string;
+  params: unknown[];
+}
+
+/** A statement that runs only while `live` holds. `{live}` in the SQL is
+ *  replaced by the condition; nothing after it may take a parameter. */
+export function whileLive(db: D1Database, sql: string, params: unknown[], live: Live): D1PreparedStatement {
+  return db.prepare(sql.replace('{live}', live.sql)).bind(...params, ...live.params);
+}
+
+/** A new session for the account with this email, made only while `live` holds. Returns its user_id. */
+export function sessionFor(db: D1Database, tokenHash: string, email: string, kind: 'web' | 'device', name: string | null, nowMs: number, client: Client, live: Live): D1PreparedStatement {
+  return whileLive(
+    db,
+    `INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client)
+     SELECT ?, id, ?, ?, ?, ?, ?, ?, ? FROM users WHERE email = ? AND {live} RETURNING user_id`,
+    [tokenHash, kind, name, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null, client.platform, client.client, email],
+    live,
+  );
+}
+
+/** A new account for the email, unless one has it already, made only while `live` holds. */
+export function userFor(db: D1Database, email: string, nowMs: number, via: 'web' | 'app', live: Live): D1PreparedStatement {
+  return whileLive(
+    db,
+    'INSERT INTO users (id, email, created, last_seen, via) SELECT ?, ?, ?, ?, ? WHERE {live} ON CONFLICT(email) DO NOTHING',
+    [crypto.randomUUID(), email, nowMs, nowMs, via],
+    live,
+  );
+}
+
+/** Gives an anonymous account the email; its old sessions go, replaced by the
+ *  one the caller opens. Only while `live` holds, and the sessions only once
+ *  the email is really its (another sign-in may have given it one first). */
+export function addEmailTo(db: D1Database, anonId: string, email: string, nowMs: number, live: Live): D1PreparedStatement[] {
+  return [
+    whileLive(db, 'UPDATE users SET email = ?, email_added = ? WHERE id = ? AND email IS NULL AND {live}', [email, nowMs, anonId], live),
+    whileLive(db, 'DELETE FROM sessions WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND email = ?) AND {live}', [anonId, anonId, email], live),
+  ];
+}
+
+/** saveProfileJson, only while `live` holds. */
+export function profileFor(db: D1Database, userId: string, profile: unknown, nowMs: number, live: Live): D1PreparedStatement {
+  return whileLive(
+    db,
+    'INSERT INTO profiles (user_id, json, updated) SELECT ?, ?, ? WHERE {live} ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated = excluded.updated',
+    [userId, JSON.stringify(profile), nowMs],
+    live,
+  );
 }
 
 /**
@@ -262,22 +331,19 @@ async function spendLink(db: D1Database, hash: string, nowMs: number, anonId: st
  * one. A new email goes to that account, setup and all. An email that has
  * an account already wins: the browser's setup moves to it only when it
  * has none of its own, and the browser's account goes. (The apps ask which
- * setup to keep; a browser's is a minute to redo.)
+ * setup to keep; a browser's is a minute to redo.) Reads now; the changes
+ * come back as statements for the caller's batch, guarded by `live`.
  */
-export async function claimEmail(db: D1Database, email: string, anonId: string | null, nowMs: number): Promise<{ userId: string; removed?: string }> {
+export async function claimEmail(db: D1Database, email: string, anonId: string | null, nowMs: number, live: Live): Promise<{ statements: D1PreparedStatement[]; removed?: string }> {
   const existing = await db.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first<User>();
   const anon = anonId ? await db.prepare('SELECT id FROM users WHERE id = ? AND email IS NULL').bind(anonId).first<{ id: string }>() : null;
-  if (!anon) return { userId: (existing ?? (await ensureUser(db, email, nowMs))).id };
-  if (!existing) {
-    await db.prepare('UPDATE users SET email = ?, email_added = ? WHERE id = ? AND email IS NULL').bind(email, nowMs, anon.id).run();
-    // Its old session is replaced by the one the caller opens.
-    await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(anon.id).run();
-    return { userId: anon.id };
-  }
+  if (!anon) return { statements: existing ? [] : [userFor(db, email, nowMs, 'web', live)] };
+  if (!existing) return { statements: addEmailTo(db, anon.id, email, nowMs, live) };
+  const statements: D1PreparedStatement[] = [];
   const mine = await loadProfileJson(db, anon.id);
-  if (hasSetup(mine) && !hasSetup(await loadProfileJson(db, existing.id))) await saveProfileJson(db, existing.id, mine, nowMs);
-  await removeAnonymous(db, anon.id, existing.id);
-  return { userId: existing.id, removed: anon.id };
+  if (hasSetup(mine) && !hasSetup(await loadProfileJson(db, existing.id))) statements.push(profileFor(db, existing.id, mine, nowMs, live));
+  statements.push(...anonymousGone(db, anon.id, existing.id, live));
+  return { statements, removed: anon.id };
 }
 
 /** A profile worth keeping: somewhere to go or somewhere to start. */
@@ -289,10 +355,17 @@ export function hasSetup(json: unknown): boolean {
 
 /** Deletes an anonymous account once it's been signed in elsewhere; its reports move with it. */
 export async function removeAnonymous(db: D1Database, anonId: string, intoUserId: string): Promise<void> {
-  await db.batch([
-    db.prepare('UPDATE feedback SET user_id = ? WHERE user_id = ?').bind(intoUserId, anonId),
-    db.prepare('DELETE FROM users WHERE id = ? AND email IS NULL').bind(anonId),
-  ]);
+  await db.batch(anonymousGone(db, anonId, intoUserId, ALWAYS));
+}
+
+const ALWAYS: Live = { sql: '1', params: [] };
+
+/** removeAnonymous's statements, only while `live` holds. */
+export function anonymousGone(db: D1Database, anonId: string, intoUserId: string, live: Live): D1PreparedStatement[] {
+  return [
+    whileLive(db, 'UPDATE feedback SET user_id = ? WHERE user_id = ? AND {live}', [intoUserId, anonId], live),
+    whileLive(db, 'DELETE FROM users WHERE id = ? AND email IS NULL AND {live}', [anonId], live),
+  ];
 }
 
 /** A sign-in code waiting in KV: hashes of the code and of its link's token,
@@ -555,13 +628,22 @@ export async function redeemPairCode(
   nowMs: number,
   client: Client = NO_CLIENT,
 ): Promise<{ token: string; email: string | null } | null> {
-  const row = await db
-    .prepare('DELETE FROM pair_codes WHERE code = ? RETURNING user_id, expires')
-    .bind(code)
-    .first<{ user_id: string; expires: number }>();
-  if (!row || row.expires < nowMs) return null;
-  const token = await openSession(db, row.user_id, 'device', name, nowMs, client);
-  const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(row.user_id).first<{ email: string | null }>();
+  // The session and spending the code in one batch: a failure leaves the
+  // code to try again, and of two racing redeems only the first gets a session.
+  const token = newToken();
+  const tokenHash = await hashToken(token);
+  const [made] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client)
+         SELECT ?, user_id, 'device', ?, ?, ?, NULL, ?, ? FROM pair_codes WHERE code = ? AND expires >= ? RETURNING user_id`,
+      )
+      .bind(tokenHash, name, nowMs, nowMs, client.platform, client.client, code, nowMs),
+    db.prepare('DELETE FROM pair_codes WHERE code = ? AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)').bind(code, tokenHash),
+  ]);
+  const userId = (made?.results?.[0] as { user_id: string } | undefined)?.user_id;
+  if (!userId) return null;
+  const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(userId).first<{ email: string | null }>();
   return { token, email: user?.email ?? null };
 }
 
