@@ -226,7 +226,7 @@ private struct Pills: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(campus.services, id: \.self) { svc in
-                    let hex = campus.routes[svc]?.color ?? "#8a939c"
+                    let hex = campus.color(svc)
                     let c = Color(hex: hex) ?? .gray
                     let on = svc == selected
                     Button { choose(svc) } label: {
@@ -385,7 +385,7 @@ private struct StopCard: View {
                         VStack(spacing: 5) {
                             ForEach(board.rows, id: \.svc) { r in
                                 HStack {
-                                    SvcTag(svc: r.svc, hex: campus.routes[r.svc]?.color ?? "#8a939c")
+                                    SvcTag(svc: r.svc, hex: campus.color(r.svc))
                                     Spacer()
                                     Text(eta(r)).font(.system(size: 12, weight: .semibold)).monospacedDigit()
                                 }
@@ -401,7 +401,7 @@ private struct StopCard: View {
             HStack(spacing: 5) {
                 ForEach(stop.services, id: \.self) { svc in
                     Button { if map.selected != svc { map.choose(svc) } } label: {
-                        SvcTag(svc: svc, hex: campus.routes[svc]?.color ?? "#8a939c")
+                        SvcTag(svc: svc, hex: campus.color(svc))
                     }
                     .buttonStyle(.plain)
                     .help(L("%@: show its line and live buses", svc))
@@ -454,6 +454,12 @@ private func zoomed(_ stops: Double...) -> NSExpression {
     for s in stops { j.append(s) }
     return E(j)
 }
+
+/// GeoJSON as a shape for a source.
+private func shape(_ data: Data) -> MLNShape? { try? MLNShape(data: data, encoding: String.Encoding.utf8.rawValue) }
+
+/// Your dot, and the halo round it.
+private let meBlue = NSColor(rgb: 0x2B7BF3)
 
 /// MapLibre's own view, drawn from the model: sources and layers are added
 /// once each time a style loads, then only their data and filters change.
@@ -533,11 +539,9 @@ private struct CampusMapView: NSViewRepresentable {
             self.campus = campus
         }
 
-        private var paper: NSColor { dark ? NSColor(red: 0x1A / 255, green: 0x18 / 255, blue: 0x16 / 255, alpha: 1) : .white }
-        private var ink: NSColor {
-            dark ? NSColor(red: 0xF2 / 255, green: 0xEF / 255, blue: 0xEB / 255, alpha: 1) : NSColor(red: 0x1C / 255, green: 0x19 / 255, blue: 0x17 / 255, alpha: 1)
-        }
-        private var color: String { map.selected.flatMap { campus.routes[$0]?.color } ?? "#8a939c" }
+        private var paper: NSColor { dark ? NSColor(rgb: 0x1A1816) : .white }
+        private var ink: NSColor { NSColor(rgb: dark ? 0xF2EFEB : 0x1C1917) }
+        private var color: String { campus.color(map.selected) }
         private var path: RoutePath? { map.selected.flatMap { campus.routes[$0]?.path } }
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
@@ -556,7 +560,7 @@ private struct CampusMapView: NSViewRepresentable {
         // MARK: layers
 
         private func source(_ id: String, _ data: Data) -> MLNShapeSource {
-            MLNShapeSource(identifier: id, shape: try? MLNShape(data: data, encoding: String.Encoding.utf8.rawValue), options: nil)
+            MLNShapeSource(identifier: id, shape: shape(data), options: nil)
         }
 
         private func line(_ id: String, _ src: MLNSource, color: NSExpression, width: NSExpression) -> MLNLineStyleLayer {
@@ -565,6 +569,18 @@ private struct CampusMapView: NSViewRepresentable {
             l.lineWidth = width
             l.lineCap = NSExpression(forConstantValue: "round")
             l.lineJoin = NSExpression(forConstantValue: "round")
+            return l
+        }
+
+        /// A bus's icon, turned with the road and drawn at its offset from where it is.
+        private func busIcon(_ id: String, image: String, _ src: MLNSource) -> MLNSymbolStyleLayer {
+            let l = MLNSymbolStyleLayer(identifier: id, source: src)
+            l.iconImageName = NSExpression(forConstantValue: image)
+            l.iconScale = zoomed(13, 0.64, 17, 1)
+            l.iconRotation = E(["get", "heading"])
+            l.iconRotationAlignment = NSExpression(forConstantValue: "map")
+            l.iconOffset = E(["get", "offset"])
+            l.iconAllowsOverlap = NSExpression(forConstantValue: true)
             return l
         }
 
@@ -618,39 +634,26 @@ private struct CampusMapView: NSViewRepresentable {
 
             let halo = MLNCircleStyleLayer(identifier: "me-halo", source: me)
             halo.circleRadius = NSExpression(forConstantValue: 14)
-            halo.circleColor = NSExpression(forConstantValue: NSColor(red: 0x2B / 255, green: 0x7B / 255, blue: 0xF3 / 255, alpha: 1))
+            halo.circleColor = NSExpression(forConstantValue: meBlue)
             halo.circleOpacity = NSExpression(forConstantValue: 0.18)
             style.addLayer(halo)
             let dot = MLNCircleStyleLayer(identifier: "me", source: me)
             dot.circleRadius = NSExpression(forConstantValue: 6.5)
-            dot.circleColor = NSExpression(forConstantValue: NSColor(red: 0x2B / 255, green: 0x7B / 255, blue: 0xF3 / 255, alpha: 1))
+            dot.circleColor = NSExpression(forConstantValue: meBlue)
             dot.circleStrokeColor = NSExpression(forConstantValue: NSColor.white)
             dot.circleStrokeWidth = NSExpression(forConstantValue: 2.5)
             style.addLayer(dot)
 
             // An icon, not a circle, so a bus at a stop can sit beside the dot
             // (its offset is per bus, and turns with the road).
-            let size = zoomed(13, 0.64, 17, 1)
-            let ring = MLNSymbolStyleLayer(identifier: "bus-on", source: buses)
-            ring.iconImageName = NSExpression(forConstantValue: "bus-on")
-            ring.iconScale = size
             // The offset is in the bus's own frame, so the ring turns with
             // the bus too, or it lands beside it.
-            ring.iconRotation = E(["get", "heading"])
-            ring.iconRotationAlignment = NSExpression(forConstantValue: "map")
-            ring.iconOffset = E(["get", "offset"])
-            ring.iconAllowsOverlap = NSExpression(forConstantValue: true)
+            let ring = busIcon("bus-on", image: "bus-on", buses)
             ring.iconIgnoresPlacement = NSExpression(forConstantValue: true)
             ring.predicate = NSPredicate(format: "id == %@", "")
             style.addLayer(ring)
             for (id, image) in [("buses", "bus"), ("bus-heading", "heading")] {
-                let l = MLNSymbolStyleLayer(identifier: id, source: buses)
-                l.iconImageName = NSExpression(forConstantValue: image)
-                l.iconScale = size
-                l.iconRotation = E(["get", "heading"])
-                l.iconRotationAlignment = NSExpression(forConstantValue: "map")
-                l.iconOffset = E(["get", "offset"])
-                l.iconAllowsOverlap = NSExpression(forConstantValue: true)
+                let l = busIcon(id, image: image, buses)
                 // Stop names keep clear of buses (they move to another side of their dot).
                 l.iconIgnoresPlacement = NSExpression(forConstantValue: id == "bus-heading")
                 style.addLayer(l)
@@ -686,9 +689,9 @@ private struct CampusMapView: NSViewRepresentable {
                 (style.layer(withIdentifier: "bus-on") as? MLNSymbolStyleLayer)?.predicate = NSPredicate(format: "id == %@", open?.id ?? "")
                 style.setImage(Self.busImage(fill: NSColor(hex: color), ring: paper), forName: "bus")
             }
-            (style.source(withIdentifier: "stretch") as? MLNShapeSource)?.shape = try? MLNShape(data: stretchData, encoding: String.Encoding.utf8.rawValue)
+            (style.source(withIdentifier: "stretch") as? MLNShapeSource)?.shape = shape(stretchData)
             let meData = map.me.map { MapGeoJson.me(lat: $0.lat, lon: $0.lon) } ?? MapGeoJson.empty
-            (style.source(withIdentifier: "me") as? MLNShapeSource)?.shape = try? MLNShape(data: meData, encoding: String.Encoding.utf8.rawValue)
+            (style.source(withIdentifier: "me") as? MLNShapeSource)?.shape = shape(meData)
 
             // Buses slide to each new place along their line (see Slides).
             if slidesFor != selected { slides = Slides(); slidesFor = selected; lastBuses = [] }
@@ -704,7 +707,7 @@ private struct CampusMapView: NSViewRepresentable {
         private func drawBuses() {
             guard let src = view?.style?.source(withIdentifier: "buses") as? MLNShapeSource else { return }
             let data = MapGeoJson.buses(svc: map.selected ?? "", color: color, slides.at(ProcessInfo.processInfo.systemUptime))
-            src.shape = try? MLNShape(data: data, encoding: String.Encoding.utf8.rawValue)
+            src.shape = shape(data)
         }
 
         /// Redraws the buses each frame while one is on its way.
@@ -837,8 +840,5 @@ private final class SizedMapView: MLNMapView {
 
 private extension NSColor {
     /// "#rrggbb"; grey for anything else.
-    convenience init(hex: String) {
-        let v = hex.count == 7 && hex.hasPrefix("#") ? UInt32(hex.dropFirst(), radix: 16) ?? 0x8A939C : 0x8A939C
-        self.init(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
-    }
+    convenience init(hex: String) { self.init(rgb: hexRGB(hex) ?? 0x8A939C) }
 }
