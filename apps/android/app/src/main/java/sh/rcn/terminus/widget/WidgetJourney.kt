@@ -130,7 +130,7 @@ private fun Route(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
         Stretch(journey.ride.orEmpty(), bus.svc, fixed(bus.color), 4.dp)
         if (four) {
             Point(journey.toStop, journey.arriveStop ?: "", false, w)
-            Stretch(journey.walkEnd!!, null, colors.outline, 2.dp)
+            Stretch(journey.walkEnd, null, colors.outline, 2.dp)
             Point(journey.place, journey.arrive ?: "", false, w)
         } else {
             Point(if (journey.walkEnd != null) journey.place else journey.toStop, journey.arrive ?: "", false, w)

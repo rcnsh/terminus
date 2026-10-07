@@ -323,9 +323,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private var dayJob: Job? = null
-
-    /** Today's timeline; kept as it was when offline. */
     /** "Leave earlier" or "No thanks" on a suggestion; the card then comes back without it. */
     fun choose(s: sh.rcn.terminus.Suggestion, accept: Boolean) {
         val token = store.token ?: return
@@ -407,6 +404,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(answers = it.answers + (Target.Plan to answer), rawAnswers = it.rawAnswers + (Target.Plan to json.toString()), fetchedAt = now) }
     }
 
+    private var dayJob: Job? = null
+
+    /** Today's timeline; kept as it was when offline. */
     fun loadDay() {
         val token = store.token ?: return
         if (dayJob?.isActive == true) return
@@ -563,7 +563,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 }
-
 
 /** Installed by the Play Store, rather than the APK from the website. */
 internal fun installedFromPlay(ctx: android.content.Context): Boolean =
