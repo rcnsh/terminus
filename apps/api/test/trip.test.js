@@ -624,6 +624,29 @@ test('a suggestion turned down is not offered again, and never during a trip', a
   assert.equal((await next(phone)).card.suggestion, null);
 });
 
+test('how a trip went keeps the day it happened, never the time', async () => {
+  const { env, phone, signal } = await setup();
+  await signal(phone, { kind: 'missed' });
+  const { at, day } = env.DB._db.prepare('SELECT at, day FROM trip_outcomes').get();
+  assert.equal(day, sgtDate(FROZEN_NOW));
+  assert.equal(at, endOfDayMs(FROZEN_NOW) - 86_400_000, 'the start of that day in Singapore');
+  assert.equal(sgtDate(at), day);
+});
+
+test('migration 0012 rounds the trip history already kept to the start of its day', async () => {
+  const { readFileSync } = await import('node:fs');
+  const db = makeD1();
+  db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', NULL, 0, 0)`);
+  // 23:59:59 and 00:00:01 in Singapore, either side of midnight.
+  const late = Date.parse('2026-10-01T15:59:59Z');
+  const early = Date.parse('2026-10-01T16:00:01Z');
+  db.exec(`INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES ('u', 'a', '2026-10-01', 'missed', ${late}), ('u', 'b', '2026-10-02', 'missed', ${early})`);
+  db.exec(readFileSync(new URL('../migrations/0012_trip_outcome_days.sql', import.meta.url), 'utf8'));
+  const rows = db._db.prepare('SELECT trip_key, day, at FROM trip_outcomes ORDER BY trip_key').all();
+  assert.deepEqual(rows.map((r) => [r.trip_key, r.at]), [['a', Date.parse('2026-09-30T16:00:00Z')], ['b', Date.parse('2026-10-01T16:00:00Z')]]);
+  assert.ok(rows.every((r) => sgtDate(r.at) === r.day), 'each still on its own day');
+});
+
 test('trip outcomes are in the export and go with the account', async () => {
   const { env, call, cookie, phone, signal } = await setup();
   await signal(phone, { kind: 'missed' });

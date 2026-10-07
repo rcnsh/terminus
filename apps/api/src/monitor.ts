@@ -8,6 +8,7 @@
  */
 
 import { KEEP_DAYS } from './outcomes.ts';
+import { FEEDBACK_KEEP_DAYS } from './feedback.ts';
 import type { Env } from './types.ts';
 import { fetchArrivals } from './fms.ts';
 import { fetchPublicArrivals, ltaConfigured } from './lta.ts';
@@ -253,7 +254,8 @@ async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switche
 
 /**
  * Delete expired sign-in links and requests, pairing codes, web sessions,
- * idle devices, and anonymous accounts nobody has used for 60 days. With
+ * idle devices, anonymous accounts nobody has used for 60 days, and trip
+ * history and reports past their time. With
  * `env`, each deleted account's trip state goes too, as when an account is
  * deleted by hand, rather than at midnight.
  */
@@ -267,6 +269,8 @@ export async function housekeeping(db: D1Database, nowMs: number, env?: Env): Pr
     db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
     // Trip outcomes are kept KEEP_DAYS days.
     db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
+    // Reports are kept FEEDBACK_KEEP_DAYS.
+    db.prepare('DELETE FROM feedback WHERE created < ?').bind(nowMs - FEEDBACK_KEEP_DAYS * 86_400_000),
   ]);
   if (!env) return;
   const ids = ((idle?.results ?? []) as Array<{ id: string }>).map((r) => r.id);

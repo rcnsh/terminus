@@ -162,6 +162,18 @@ test('housekeeping removes expired links, codes, sessions and idle devices only'
   assert.deepEqual(left('sessions', 'token_hash'), ['d-used', 'w-new']);
 });
 
+test('housekeeping: reports are kept a year', async () => {
+  const { FEEDBACK_KEEP_DAYS } = await import('../src/feedback.ts');
+  const db = makeD1();
+  const now = Date.UTC(2026, 9, 1);
+  db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', 'a@b.c', 0, ${now})`);
+  const report = (id, created) => db.exec(`INSERT INTO feedback (id, user_id, created, kind, note, platform) VALUES ('${id}', 'u', ${created}, 'other', 'x', 'web')`);
+  report('old', now - FEEDBACK_KEEP_DAYS * 86_400_000 - 1);
+  report('new', now - (FEEDBACK_KEEP_DAYS - 1) * 86_400_000);
+  await housekeeping(db, now);
+  assert.deepEqual(db._db.prepare('SELECT id FROM feedback').all().map((r) => r.id), ['new']);
+});
+
 test('a refused version: the alert gives the one-line KV fix and NUS\'s whole response', async () => {
   const e = env();
   const body = '{"code":"10009","msg":"We have a new release of uNivUS","data":{"store":"https://example.test/new"}}';
