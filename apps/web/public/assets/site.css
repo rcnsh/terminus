@@ -77,7 +77,7 @@
 }
 
 * { box-sizing: border-box; }
-/* Component display rules (.layout, .nav-links...) must never beat [hidden]. */
+/* Component display rules (.nav-links, .row...) must never beat [hidden]. */
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {

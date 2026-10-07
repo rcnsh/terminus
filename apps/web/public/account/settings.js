@@ -2,8 +2,9 @@
 // app's Settings tab (/app/#settings). Your account, your day as a route
 // down a card (home stop, classes, hours, pace), each stop a row, then the
 // rest as tiles, each opening its page (settings-pages.js): one at a time
-// on a phone, sliding in from the side; side by side on a wide screen. The address names the page (#trips, or
-// #settings/trips in the web app), so Back and a reload keep it.
+// on a phone, sliding in from the side; side by side on a wide screen. The
+// address names the page (#trips, or #settings/trips in the web app), so
+// Back and a reload keep it.
 
 import { Icon, html, reducedMotion, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clockOpts, locale, spaced, t } from './dom.js';
