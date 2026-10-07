@@ -309,9 +309,16 @@ export class TimelapseRecorder {
         if (p < 0) p = meta.plates.push(b.plate) - 1;
         buses.push(...encodeBus({ plate: b.plate, lat: b.lat, lon: b.lon, along: along.get(b.plate) ?? null }, p));
       }
-      this.schema().exec('INSERT INTO samples (dt, svc, buses) VALUES (?, ?, ?)', live.fetchedAt - meta.lastT, svc, JSON.stringify(buses));
-      meta.lastT = live.fetchedAt;
-      meta.last[svc] = live.fetchedAt;
+      // The row and the times that date it, saved together: a reset between
+      // the two would skew every later row's dt or keep this reading twice.
+      const dt = live.fetchedAt - meta.lastT;
+      const next: Meta = { ...meta, lastT: live.fetchedAt, last: { ...meta.last, [svc]: live.fetchedAt } };
+      this.storage.transactionSync(() => {
+        this.schema().exec('INSERT INTO samples (dt, svc, buses) VALUES (?, ?, ?)', dt, svc, JSON.stringify(buses));
+        this.write('meta', next);
+      });
+      meta.lastT = next.lastT;
+      meta.last = next.last;
       return live.buses.length;
     } finally {
       await Promise.allSettled(pending);
