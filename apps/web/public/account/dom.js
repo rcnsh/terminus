@@ -19,6 +19,13 @@ let quietUntil = 0;
  */
 const SEND_TIMEOUT_MS = 20_000;
 
+/**
+ * How long a write may take. A timetable import or a profile save can be
+ * slow on a phone's connection, and the server may finish it after the page
+ * has given up, so a write waits longer before saying it failed.
+ */
+const WRITE_TIMEOUT_MS = 60_000;
+
 /** A signal that aborts after `ms` (AbortSignal.timeout, where the browser has it). */
 export function timeout(ms) {
   if (AbortSignal.timeout) return AbortSignal.timeout(ms);
@@ -37,8 +44,10 @@ const unreachable = () => new Error(t("Couldn't reach terminus. Check your conne
  */
 export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) {
   if (Date.now() < quietUntil) throw Object.assign(new Error(t('terminus is busy. Try again in a minute.')), { status: 429 });
+  // No answer in time, or none at all (offline: the browser's own "Failed
+  // to fetch" or "Load failed", in English whatever the page's language).
   const res = await fetch(path, { signal: timeout(timeoutMs), ...init }).catch((err) => {
-    throw err?.name === 'TimeoutError' || err?.name === 'AbortError' ? unreachable() : err;
+    throw ['TimeoutError', 'AbortError', 'TypeError'].includes(err?.name) ? unreachable() : err;
   });
   noteServerDate(res);
   if (res.status === 429) {
@@ -48,16 +57,26 @@ export async function send(path, { timeoutMs = SEND_TIMEOUT_MS, ...init } = {}) 
   return res;
 }
 
-/** A same-origin JSON call; throws with the server's error message and status. */
-export async function api(path, { method = 'GET', body } = {}) {
+/**
+ * A same-origin JSON call; throws with the server's error message and status.
+ * Reads give up after SEND_TIMEOUT_MS, writes after WRITE_TIMEOUT_MS.
+ */
+export async function api(path, { method = 'GET', body, timeoutMs = method === 'GET' ? SEND_TIMEOUT_MS : WRITE_TIMEOUT_MS } = {}) {
   const res = await send(path, {
     method,
+    timeoutMs,
     // The API writes answers and errors in the page's language.
     headers: { 'accept-language': window.i18n?.header ?? 'en', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     credentials: 'same-origin',
   });
-  const text = await res.text().catch(() => null);
+  // A body cut off part way (the time ran out, the connection dropped) is
+  // no answer; only an empty one (a 204) stands for {}. An error keeps its
+  // status either way.
+  const text = await res.text().catch(() => {
+    if (res.ok) throw unreachable();
+    return null;
+  });
   let data = null;
   try {
     data = text ? JSON.parse(text) : {};
