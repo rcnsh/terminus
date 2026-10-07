@@ -125,6 +125,12 @@ for buses every 5 s. `/health`, `/status.json`, `/admin/stats`,
 reads R2 (`RL_MAP`, 300 a minute): a piece already in the edge cache is
 never refused, so a lecture hall can open the map at once.
 
+When D1 can't be reached, checking the key or session behind a keyed
+route is tried once more, then answered 503 with `Retry-After: 30`
+(`callerOrDown` in access.ts); a D1 outage anywhere else under `/me` is a
+503 too (`d1Unavailable`), so the apps try again rather than report a
+fault. A schema fault (a missing column) stays a 500.
+
 Every 429 carries `Retry-After`, and every client waits it out, at most 5
 minutes, sending nothing meanwhile (web `send()` in `account/dom.js`,
 Android `Quiet`, Mac `Quiet`). A refused request still costs a Worker

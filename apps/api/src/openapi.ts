@@ -126,6 +126,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           '`x-api-key` header (or as a bearer token). A signed-in session or a paired device works too. Each key ' +
           'is limited to 60 requests a minute. Arrivals are cached for 15 seconds per stop, so repeated requests ' +
           'for the same stop do not reach the NUS feed. Please do not poll many stops in bulk.',
+        '',
+        'When the account database cannot be reached for a moment, any call that needs a key or a session answers 503 with ' +
+          '`Retry-After`: wait that long and try again.',
       ].join('\n'),
     },
     servers: [{ url: origin }],

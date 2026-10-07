@@ -51,6 +51,39 @@ export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: Exe
   return session ? { kind: 'account', userId: session.user.id } : null;
 }
 
+/** The answer when D1 can't be reached to check who's asking. */
+export const ACCOUNTS_DOWN = "terminus can't reach your account right now; try again in a minute";
+
+/**
+ * Whether an error is D1 being unreachable or overloaded for a moment, worth
+ * a 503 and a retry, rather than a fault in the code or the schema (a
+ * missing column or a broken constraint stays a 500).
+ */
+export function d1Unavailable(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  // D1's own errors say so ("D1_ERROR: Network connection lost."); a
+  // timeout from a fetch to NUS doesn't, and isn't about accounts.
+  return /\bD1\b|D1_/.test(msg) && !/constraint|no such (?:table|column)|syntax error/i.test(msg);
+}
+
+/**
+ * callerFor, tried once more on an error, since D1 sometimes drops a single
+ * query. Null with `down` when it still fails: the caller answers 503 rather
+ * than a bare 500, so the apps know to try again.
+ */
+export async function callerOrDown(env: Env, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<{ caller: Caller | null; down: boolean }> {
+  try {
+    return { caller: await callerFor(env, req, nowMs, ctx), down: false };
+  } catch {
+    try {
+      return { caller: await callerFor(env, req, nowMs, ctx), down: false };
+    } catch (err) {
+      console.error('callerFor: D1 failed twice:', err instanceof Error ? err.message : String(err));
+      return { caller: null, down: true };
+    }
+  }
+}
+
 export interface KeyInfo {
   id: string;
   name: string;

@@ -758,7 +758,8 @@ test('an unexpected error is logged and answered with a bare 500', async () => {
   const errors = [];
   const orig = console.error;
   console.error = (...a) => errors.push(a.join(' '));
-  env.DB.prepare = () => { throw new Error('D1_ERROR: secret internals'); };
+  // A fault (here a missing column), not D1 being away for a moment.
+  env.DB.prepare = () => { throw new Error('D1_ERROR: no such column: secret_internals'); };
   const r = await call(env, '/me?lat=1.29&lon=103.77', { cookie: '__Host-tm_s=whatever' });
   console.error = orig;
   assert.equal(r.status, 500);
@@ -1337,4 +1338,37 @@ test('a one-off trip added while another device saves is not lost, nor is the ot
   db.prepare = prepare;
   const saved = (await (await call(env, '/me/profile', { cookie })).json()).once.map((o) => o.to).sort();
   assert.deepEqual(saved, ['COM3', 'KR-MRT', 'UTOWN']);
+});
+
+test('D1 down: the answers and /me say 503 with Retry-After; one dropped query is tried again', async () => {
+  const { env, email } = setup();
+  delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
+  const cookie = await signIn(env, email);
+  const log = console.error;
+  console.error = () => {};
+  const prepare = env.DB.prepare;
+  try {
+    let fails = 1;
+    env.DB.prepare = (sql) => {
+      if (fails > 0) {
+        fails--;
+        throw new Error('D1_ERROR: Network connection lost.');
+      }
+      return prepare(sql);
+    };
+    assert.equal((await call(env, '/campus', { cookie })).status, 200, 'a single dropped query is retried');
+
+    env.DB.prepare = () => {
+      throw new Error('D1_ERROR: Network connection lost.');
+    };
+    for (const path of ['/campus', '/me']) {
+      const r = await call(env, path, { cookie });
+      assert.equal(r.status, 503, path);
+      assert.equal(r.headers.get('retry-after'), '30');
+      assert.deepEqual(await r.json(), { error: "terminus can't reach your account right now; try again in a minute" });
+    }
+  } finally {
+    env.DB.prepare = prepare;
+    console.error = log;
+  }
 });
