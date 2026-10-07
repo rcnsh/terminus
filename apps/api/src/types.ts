@@ -95,12 +95,17 @@ export interface Arrival {
   crowd: Crowd | null;
   plate: string | null;
   /**
-   * Raw `busStopCode` from the feed. At a stop a route passes twice this
-   * carries a per-visit suffix -- COM3 returns both `COM3-D2-S` and
+   * The feed's own code for the stop the row is for. At a stop a route
+   * passes twice it differs per visit -- COM3 returns both `COM3-D2-S` and
    * `COM3-D2-E` -- so it is the only thing distinguishing the two passes.
-   * Null where the feed gives a bare code.
+   * Opaque: compared, never read. Null where the feed gives a bare code.
    */
   berth: string | null;
+  /**
+   * The bus ends its run at this stop, so it can't be boarded here (the
+   * feed's `-E` berth, read by normalize()). Absent otherwise.
+   */
+  ends?: true;
   /**
    * The time is from the operator's timetable, not a bus on the road (a
    * public bus LTA reports as unmonitored). Absent for a live time, and for

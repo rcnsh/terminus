@@ -519,7 +519,9 @@
    "weekday": [
     "07:56",
     "08:11"
-   ]
+   ],
+   "saturday": null,
+   "sunday": null
   },
   "33/1": {
    "weekday": [
@@ -553,7 +555,9 @@
    "weekday": [
     "16:19",
     "18:47"
-   ]
+   ],
+   "saturday": null,
+   "sunday": null
   },
   "95": {
    "weekday": [
@@ -573,7 +577,9 @@
    "weekday": [
     "17:41",
     "18:45"
-   ]
+   ],
+   "saturday": null,
+   "sunday": null
   },
   "96": {
    "weekday": [
@@ -593,13 +599,17 @@
    "weekday": [
     "08:17",
     "09:47"
-   ]
+   ],
+   "saturday": null,
+   "sunday": null
   },
   "96B": {
    "weekday": [
     "16:33",
     "18:25"
-   ]
+   ],
+   "saturday": null,
+   "sunday": null
   }
  },
  "headwayS": {

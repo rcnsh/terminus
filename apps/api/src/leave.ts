@@ -125,12 +125,13 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
 
   // The feed this service came from, at a shelter two feeds answer for.
   const feed = feedFor(sa, Boolean(leg.paid));
+  // A public bus's timetabled time is a time, but not a live one: it stays estimated.
   const live =
     sa && feed && feed.available !== false
       ? resolveBerths(sa.arrivals.filter((a) => a.svc === leg.svc)).usable
           .filter((a) => a.etaS != null)
-          .map((a) => feed.fetchedAt + (a.etaS as number) * 1000)
-          .sort((a, b) => a - b)
+          .map((a) => ({ at: feed.fetchedAt + (a.etaS as number) * 1000, estimated: a.scheduled === true }))
+          .sort((a, b) => a.at - b.at)
       : [];
 
   if (!live.length) {
@@ -144,9 +145,9 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
   }
 
   const earliest = nowMs + walk;
-  const buses = live.filter((t) => t >= earliest).map((at) => ({ at, estimated: false }));
+  const buses = live.filter((t) => t.at >= earliest);
   // Past the last live time, one headway at a time.
-  for (let t = live[live.length - 1] + headway; t <= latestBoard || !buses.length; t += headway) {
+  for (let t = live[live.length - 1].at + headway; t <= latestBoard || !buses.length; t += headway) {
     if (t >= earliest) buses.push({ at: t, estimated: true });
   }
 

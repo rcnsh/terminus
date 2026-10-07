@@ -73,6 +73,17 @@ test('class: past the live times, projected by headway and marked estimated', ()
   assert.equal(l.estimated, true);
 });
 
+test('class: a timetabled time (a public bus LTA does not see) is a time, but stays estimated', () => {
+  const arriveBy = { atMs: NOW + 40 * MIN, venueWalkS: 0 };
+  const sa = arrivals(5, 12, 25);
+  sa.arrivals[2] = { ...sa.arrivals[2], scheduled: true };
+  const l = leaveBy({ ...base, ...one(best(), sa), arriveBy });
+  assert.equal(Date.parse(l.board), NOW + 25 * MIN, 'the bus it would take');
+  assert.equal(l.estimated, true);
+  // Live, the same bus is not estimated.
+  assert.equal(leaveBy({ ...base, ...one(best(), arrivals(5, 12, 25)), arriveBy }).estimated, false);
+});
+
 test('class hours ahead with no live times: a full headway early', () => {
   const arriveBy = { atMs: NOW + 180 * MIN, venueWalkS: 0 };
   const b = best({ quality: 'scheduled' });

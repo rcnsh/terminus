@@ -184,7 +184,12 @@ def build(shuttle: dict, stops: list, routes: list, services: list) -> dict:
             "saturday": [hhmm(first.get("SAT_FirstBus")), hhmm(first.get("SAT_LastBus"))],
             "sunday": [hhmm(first.get("SUN_FirstBus")), hhmm(first.get("SUN_LastBus"))],
         }
-        hours[key] = {d: w for d, w in h.items() if all(w)}
+        # Both times "-" is a day it doesn't run (95B, 96A and the other
+        # weekday-only services at weekends): null, which the Worker reads
+        # as "not today". Left out, the day would be "hours unknown, assume
+        # running", and a guessed bus would be offered all weekend. Only one
+        # of the two missing is unknown, and left out.
+        hours[key] = {d: (w if all(w) else None) for d, w in h.items() if all(w) or not any(w)}
         freq = [mean_minutes(info.get(f)) for f in ("AM_Peak_Freq", "AM_Offpeak_Freq", "PM_Peak_Freq", "PM_Offpeak_Freq")]
         freq = [f for f in freq if f]
         if freq:

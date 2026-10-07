@@ -388,7 +388,7 @@ export function resolveBerths(rows: Arrival[]): { usable: Arrival[]; ambiguousBe
   // Drop the run that TERMINATES here rather than preferring the one marked
   // -S: route P starts at a bare `KV` and ends at `KV-P-E`, so a start suffix
   // is not guaranteed but an end suffix is what makes a row unboardable.
-  const notEnding = rows.filter((a) => a.berth == null || !a.berth.endsWith('-E'));
+  const notEnding = rows.filter((a) => !a.ends);
 
   // Every run terminates here and none departs. Show them, but do not pretend
   // to be confident about a bus that ends its journey as you reach it.

@@ -24,7 +24,7 @@ import {
   nearestStop,
   walkAllTheWayS,
 } from '../src/resolve.ts';
-import { arrivalsProblem, busesProblem, crowdFromLoad, normalize, normalizeBuses, parseCrowd, parseEtaS, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
+import { arrivalsProblem, busesProblem, crowdFromLoad, hasList, normalize, normalizeBuses, parseCrowd, parseEtaS, parseSeconds, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
@@ -750,7 +750,7 @@ test('at a terminus, the boardable berth is -S and never -E', () => {
   // case the rule exists for. A bus terminating in 2 minutes must lose to a
   // bus departing in 12.
   const inverted = [
-    { svc: 'D2', etaS: 120, crowd: null, plate: 'ARRIVING', berth: 'COM3-D2-E' },
+    { svc: 'D2', etaS: 120, crowd: null, plate: 'ARRIVING', berth: 'COM3-D2-E', ends: true },
     { svc: 'D2', etaS: 720, crowd: null, plate: 'DEPARTING', berth: 'COM3-D2-S' },
   ];
   const picked = resolveBerths(inverted);
@@ -1046,6 +1046,89 @@ test('a bus list whose rows lost their plates or positions is a changed feed, no
   assert.equal(busesProblem({ activebus: [{ vehplate: 'PD726D', lat: 0, lng: 0 }] }), null, 'no fix yet is a real bus without a place');
   assert.match(busesProblem({ activebus: [{ busPlate: 'PD726D', lat: 1.29, lng: 103.77 }] }), /no row has a plate/);
   assert.match(busesProblem({ activebus: [{ vehplate: 'PD726D', position: [1.29, 103.77] }] }), /no row has a position/);
+});
+
+test('a bus list whose values changed is a changed feed, not "no buses"', () => {
+  const at = { lat: 1.2949, lng: 103.7735 };
+  // The fields are all there; not one bus can be read from them.
+  for (const rows of [
+    [{ vehplate: 'PD726D', lat: at.lng, lng: at.lat }], // swapped
+    [{ vehplate: 'PD726D', lat: null, lng: null }],
+    [{ vehplate: 'PD726D', lat: '1,2949', lng: '103,7735' }],
+    [{ vehplate: null, ...at }],
+    [{ vehplate: '-', ...at }],
+  ]) assert.match(busesProblem({ activebus: rows }), /no bus has a plate and a position it can read/, JSON.stringify(rows));
+  // One readable bus among them is a board.
+  assert.equal(busesProblem({ activebus: [{ vehplate: 'PD1', lat: null, lng: null }, { vehplate: 'PD2', ...at }] }), null);
+});
+
+test('a list under a name it does not know is only a list of rows, never the hints beside it', () => {
+  const result = CONNECTX_FIXTURE.ShuttleServiceResult;
+  assert.ok(Array.isArray(result.hints) && result.hints.every((h) => typeof h === 'string'), 'the real reply carries hints');
+  const { shuttles, ...rest } = result;
+  // Gone, null, or not a list: no board, so the fetch throws, never "no bus".
+  for (const board of [rest, { ...rest, shuttles: null }, { ...rest, shuttles: {} }, { ...rest, shuttles: 'none' }, { ...rest, busServices: [] }]) {
+    assert.equal(hasList({ ShuttleServiceResult: board }), false, JSON.stringify(Object.keys(board)));
+    assert.deepEqual(normalize({ ShuttleServiceResult: board }), []);
+  }
+  // Renamed with its rows, it's still the board.
+  const renamed = { ShuttleServiceResult: { ...rest, busServices: shuttles } };
+  assert.equal(hasList(renamed), true);
+  assert.equal(normalize(renamed).length, normalize(CONNECTX_FIXTURE).length);
+  assert.equal(arrivalsProblem(renamed), null);
+  // An empty board under its own name is real.
+  assert.equal(hasList({ ShuttleServiceResult: { ...rest, shuttles: [] } }), true);
+});
+
+test('every row needs a time it can read, so one changed service cannot hide behind the rest', () => {
+  const result = CONNECTX_FIXTURE.ShuttleServiceResult;
+  const etas = (f) => ({ ShuttleServiceResult: { ...result, shuttles: result.shuttles.map((s) => ({ ...s, _etas: s._etas.map(f) })) } });
+  // The fields inside `_etas` renamed: every time gone.
+  assert.match(arrivalsProblem(etas(({ eta, eta_s, ...e }) => ({ ...e, etaMin: eta, etaSec: eta_s }))), /no row has an arrival time/);
+  // Or in another format.
+  assert.match(arrivalsProblem(etas(({ eta: _m, eta_s: _s, ...e }) => ({ ...e, eta: '07:15' }))), /a time it cannot read/);
+  // Null everywhere is not "-".
+  assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: null }] }), /no row has an arrival time/);
+  // One service changed among good ones.
+  assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: '09:04' }, { name: 'D1', arrivalTime: '3' }] }), /a time it cannot read \(D2\)/);
+  assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrival_min: '4' }, { name: 'D1', arrivalTime: '3' }] }), /no arrival time for D2/);
+  // The first time gone, the next would pass for the soonest bus.
+  assert.match(arrivalsProblem({ timings: [{ name: 'D2', nextArrivalTime: '9' }, { name: 'D1', arrivalTime: '3' }] }), /no arrival time for D2/);
+  // A time past a week is a changed unit or an absolute time.
+  assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: 1_756_336_500 }] }), /a time it cannot read/);
+  // The feed's own "no bus" passes, in each shape.
+  assert.equal(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: '-', nextArrivalTime: '-' }, { name: 'D1', arrivalTime: 'Arr' }] }), null);
+  assert.equal(arrivalsProblem({ shuttles: [{ name: 'D2', _etas: [] }, { name: 'D1', _etas: [{ eta_s: 60 }] }], hints: ['x'] }), null);
+});
+
+test('seconds are a number or digits; blanks and other types are no time, not "arriving now"', () => {
+  for (const v of [' ', '', '-', false, true, [], [5], {}, '0x1F', '1e3', null, undefined, -5, NaN, Infinity]) assert.equal(parseSeconds(v), null, JSON.stringify(v));
+  assert.equal(parseSeconds(0), 0);
+  assert.equal(parseSeconds(' 42 '), 42);
+  assert.equal(parseSeconds(12.4), 12);
+  // Blank seconds beside good minutes: the minutes.
+  assert.equal(normalize({ shuttles: [{ name: 'D2', _etas: [{ eta_s: ' ', eta: 5 }] }] })[0].etaS, 300);
+});
+
+test('a time to go past a week is no time: a changed unit, an epoch, an overflow', () => {
+  assert.equal(parseEtaS(1_756_336_500), null);
+  assert.equal(parseEtaS(1e308), null);
+  assert.equal(parseSeconds(1e20), null);
+  // A long weekend's next bus is days away, and real.
+  assert.equal(parseSeconds(3 * 86_400), 3 * 86_400);
+  assert.equal(parseEtaS('420'), 420 * 60, 'the after-midnight case, hours away');
+});
+
+test('service names are read as the graph spells them', () => {
+  assert.deepEqual(normalize({ timings: [{ name: 'd2', arrivalTime: '3' }, { name: ' D 1 ', arrivalTime: '4' }] }).map((a) => a.svc), ['D2', 'D1']);
+  assert.deepEqual(normalize({ timings: [{ name: 'Z9', arrivalTime: '3' }] }).map((a) => a.svc), ['Z9'], 'an unknown one as it is');
+  assert.deepEqual(normalize({ timings: [{ name: { id: 'D2' }, arrivalTime: '3' }, { name: true, arrivalTime: '3' }] }), [], 'only a string or a number is a name');
+});
+
+test('a run ending here is flagged by normalize, the only code that reads the -E suffix', () => {
+  const all = normalize(CONNECTX_FIXTURE);
+  assert.ok(all.some((a) => a.ends));
+  for (const a of all) assert.equal(a.ends === true, a.berth.endsWith('-E'), a.berth);
 });
 
 test('normalize handles the raw ConnectX ShuttleService shape', () => {

@@ -61,8 +61,9 @@ const HEADING_SLACK_DEG = 60;
  *  stop: pulled in at the bay, plus GPS error. Stops are 136 m apart or more
  *  on every route, so a bus is never within this of two. */
 const AT_STOP_M = 40;
-/** A bus's track counts for this long without an update: a bus standing at
- *  a terminus keeps its side. How far it may have gone grows with the time. */
+/** A bus's track counts for this long after the feed last reported it: a
+ *  bus standing at a terminus keeps its side, however long it stands there.
+ *  How far it may have gone grows with the time since it last moved. */
 const TRACK_MS = 600_000;
 /** How far a bus can go along its line between updates: back (GPS error),
  *  and ahead, as metres plus metres a second (72 km/h, faster than a bus). */
@@ -98,6 +99,11 @@ export interface Track {
   /** That position. */
   lat: number;
   lon: number;
+  /** When the feed last reported the bus, moved or not (ms). The track
+   *  lasts TRACK_MS from this: a bus reported standing still for longer is
+   *  still where its track says. Absent on a track from before it was kept:
+   *  `at` stands in. */
+  seen?: number;
   /** Moving fixes in a row whose heading said the other way. */
   doubt: number;
   /** Since when it's been off its line while held at `along`; null on it. */
@@ -233,10 +239,14 @@ const onward = (kept: Track | null, fix: Fix, along: number, now: number, doubt 
   at: kept && kept.lat === fix.lat && kept.lon === fix.lon ? kept.at : now,
   lat: fix.lat,
   lon: fix.lon,
+  seen: now,
   doubt,
   offSince: null,
   held,
 });
+
+/** When a track was last reported, for how long it lasts (TRACK_MS). */
+const seenAt = (t: Track) => t.seen ?? t.at;
 
 const best = <T>(xs: T[], better: (a: T, b: T) => boolean): T | null => xs.reduce<T | null>((b, x) => (b == null || better(x, b) ? x : b), null);
 
@@ -256,11 +266,11 @@ export function follow(
   const cum = cumulative(shape.line);
   const total = cum[cum.length - 1];
   const found = candidates(shape, fix);
-  const kept = track && now - track.at < TRACK_MS && now >= track.at ? track : null;
+  const kept = track && now - seenAt(track) < TRACK_MS && now >= track.at ? track : null;
 
   if (kept) {
     // The same reading again (the feed holds a position for 15-20 s): the same answer.
-    if (fix.lat === kept.lat && fix.lon === kept.lon && kept.offSince == null) return { place: pointAlong(shape, kept.along), track: kept, kept: true };
+    if (fix.lat === kept.lat && fix.lon === kept.lon && kept.offSince == null) return { place: pointAlong(shape, kept.along), track: { ...kept, seen: now }, kept: true };
     const ageS = (now - kept.at) / 1000;
     // Metres driven from the track to `along`. Round a loop, up to
     // HOLD_BACK_M behind is behind, not a lap ahead: after a long wait, the
@@ -277,7 +287,7 @@ export function follow(
     if (!found.length) {
       // Off its line: a GPS jump, held for a moment; longer, it's really off.
       if (kept.offSince == null || now - kept.offSince < HOLD_OFF_MS) {
-        return { place: pointAlong(shape, kept.along), track: { ...kept, offSince: kept.offSince ?? now, held: true }, kept: true };
+        return { place: pointAlong(shape, kept.along), track: { ...kept, offSince: kept.offSince ?? now, held: true, seen: now }, kept: true };
       }
       return { place: null, track: null, kept: false };
     }
@@ -312,7 +322,7 @@ export function follow(
     const back = (along: number) => (loop && total > 0 ? (((kept.along - along) % total) + total) % total : kept.along - along);
     const atLoopEnd = loop && total > 0 && total - kept.along <= HOLD_BACK_M;
     if (now - kept.at < (atLoopEnd ? TRACK_MS : HOLD_BACK_MS) && found.every((c) => back(c.along) > TRACK_BACK_M && back(c.along) <= HOLD_BACK_M)) {
-      return { place: pointAlong(shape, kept.along), track: { ...kept, held: true }, kept: true };
+      return { place: pointAlong(shape, kept.along), track: { ...kept, held: true, seen: now }, kept: true };
     }
     // Nowhere it could have driven to: start again from this fix.
   }
@@ -405,7 +415,7 @@ export async function placeBuses(
   const byCode = new Map(graph.stops.map((s) => [s.code, s]));
   const stops = shape ? shape.stops.map((c) => byCode.get(c) ?? null) : [];
   const next: Record<string, Track> = {};
-  for (const [id, t] of Object.entries(tracks)) if (now - t.at < TRACK_MS) next[id] = t;
+  for (const [id, t] of Object.entries(tracks)) if (now - seenAt(t) < TRACK_MS) next[id] = t;
   if (!shape) return { buses: [], tracks: next };
   const total = cumulative(shape.line).at(-1) ?? 0;
   const stopOf = (k: number | null) => (k == null ? null : { code: shape.stops[k], name: byCode.get(shape.stops[k])?.name ?? shape.stops[k] });

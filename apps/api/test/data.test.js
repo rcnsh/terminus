@@ -74,6 +74,8 @@ test('public.json: hours are HH:MM windows and headways are minutes-scale second
   for (const [key, h] of Object.entries(pub.serviceHours)) {
     assert.ok(pub.routes[key], `hours for unknown ${key}`);
     for (const win of Object.values(h)) {
+      // null: it doesn't run that day.
+      if (win === null) continue;
       assert.equal(win.length, 2);
       for (const t of win) assert.match(t, /^([01]\d|2[0-3]):[0-5]\d$/, `${key}: ${t}`);
     }

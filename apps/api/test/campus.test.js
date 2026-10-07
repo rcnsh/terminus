@@ -161,7 +161,7 @@ test('boardAt: the buses after the next one come in later, soonest first, each k
       { svc: 'D2', etaS: 900, crowd: null, plate: 'PA2', berth: 'COM3-D2-S', scheduled: true },
       { svc: 'D2', etaS: 240, crowd: null, plate: 'PA1', berth: 'COM3-D2-S' },
       // A run ending here is not a bus you can board, now or later.
-      { svc: 'D2', etaS: 60, crowd: null, plate: 'PA0', berth: 'COM3-D2-E' },
+      { svc: 'D2', etaS: 60, crowd: null, plate: 'PA0', berth: 'COM3-D2-E', ends: true },
       { svc: 'D1', etaS: 120, crowd: null, plate: 'PB1', berth: null },
     ],
     fetchedAt: nowMs,

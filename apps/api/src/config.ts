@@ -118,13 +118,21 @@ export const TIMELAPSE = {
    *  day is the date the window opened, until it closes the next morning. */
   hours: { start: '06:30', end: '00:30' },
   /** Rounds in a row with no bus on any service before it stops: for the
-   *  day once it has seen buses, else for idleSleepMs (before the first bus). */
+   *  day once it has seen buses and no service is in its hours, else for
+   *  idleSleepMs (before the first bus, or a gap in service). */
   idleRounds: 6,
   idleSleepMs: 15 * 60_000,
 } as const;
 
 /** The floor under TIMELAPSE.pollMs, enforced in code. */
 export const MIN_POLL_MS = 15_000;
+
+/** The furthest ahead a feed's arrival time can be and still be a bus, in
+ *  either feed. After midnight every shuttle time is the next morning's,
+ *  about 7 h away, and a service off for a long weekend is days away; past
+ *  a week it's a changed unit (seconds read as minutes) or an absolute
+ *  time read as a relative one. */
+export const MAX_ETA_S = 7 * 86_400;
 
 /** Hard cap from the API contract. `format.ts` targets much shorter. */
 export const LABEL_MAX = 40;
