@@ -231,6 +231,14 @@ export const dayKey = (date: string) => `timelapse/${date}.json.gz`;
 /* The recorder, from the Worker                                        */
 /* ------------------------------------------------------------------ */
 
+/** How long a recorder keeps a closed day that R2 refused, trying again,
+ *  and how many days back /timelapse/days looks for one. A week is plenty
+ *  to notice. */
+export const HELD_DAYS = 7;
+
+/** The cron runs every 15 minutes. */
+const CRON_MS = 15 * 60_000;
+
 /** The recorder for day [date]. In Asia, near the feed and most of its users,
  *  so the edge cache it reads is likely the one the map fills. */
 export function recorderFor(env: Env, date: string): DurableObjectStub | null {
@@ -243,11 +251,21 @@ export function recorderFor(env: Env, date: string): DurableObjectStub | null {
  * today's recorder is running (it does nothing when it already is). The
  * recorder keeps itself going with its alarm from then on; this only starts
  * it each morning, and again after the switch comes back on.
+ *
+ * Once a day, at the first run after the window opens, the past week's
+ * recorders are asked too, switch or not: one still holding a day whose
+ * alarm is gone (its retries ran out) is woken to write it and empty
+ * itself. One holding nothing does nothing, and stores nothing.
  */
 export async function ensureRecorder(env: Env, nowMs: number): Promise<void> {
-  if (!env.TIMELAPSE || !inWindow(nowMs) || !(await timelapseEnabled(env))) return;
+  if (!env.TIMELAPSE || !inWindow(nowMs)) return;
   const date = serviceDate(nowMs);
-  await recorderFor(env, date)!.fetch(`https://timelapse.internal/start?date=${date}`, { method: 'POST' });
+  const start = (d: string) => recorderFor(env, d)!.fetch(`https://timelapse.internal/start?date=${d}`, { method: 'POST' });
+  if (nowMs - windowOf(date).open < CRON_MS) {
+    await Promise.allSettled(Array.from({ length: HELD_DAYS }, (_, i) => start(serviceDate(nowMs - (i + 1) * DAY_MS))));
+  }
+  if (!(await timelapseEnabled(env))) return;
+  await start(date);
 }
 
 /* ------------------------------------------------------------------ */
@@ -263,9 +281,6 @@ export interface RecorderStatus {
   state: string;
 }
 
-/** How many days back /timelapse/days looks for a recorder still holding
- *  its day, R2 having refused it. Its retries go on; a week is plenty to notice. */
-const HELD_DAYS = 7;
 
 /**
  * GET /timelapse/days and /timelapse/days/:date, for the operator or a
