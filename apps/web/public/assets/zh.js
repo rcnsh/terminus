@@ -489,6 +489,8 @@ window.TERMINUS_ZH = {
  "Plan it": "安排",
  "Couldn't add it. Check your connection.": "无法添加。请检查网络连接。",
  "Couldn't reach terminus. Check your connection.": "无法连接 terminus。请检查网络连接。",
+ "Couldn't load your classes and trip history. Check your connection.": "无法加载你的课和行程记录。请检查网络连接。",
+ "Couldn't load your API keys. Check your connection.": "无法加载你的 API 密钥。请检查网络连接。",
  "Theme": "主题",
  "Card style": "卡片样式",
  "How the card shows a trip by bus. Only in this browser.": "卡片如何显示坐车的行程。仅限这个浏览器。",
