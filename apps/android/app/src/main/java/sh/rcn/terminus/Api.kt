@@ -419,9 +419,23 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
     }
 }
 
-/** A service due at a stop. `color` (#rrggbb), the service's colour, comes with /me/nearby's rows. */
-/** A service at a stop and its next bus. `paid`: a public bus, with a fare. */
-data class BoardRow(val svc: String, val etaS: Int?, val quality: String, val color: String? = null, val paid: Boolean = false)
+/**
+ * A service at a stop and its next bus. `color` (#rrggbb), the service's
+ * colour, comes with /me/nearby's rows. `paid`: a public bus, with a fare.
+ * `later`: the buses after the next one the feed knows, soonest first.
+ */
+data class BoardRow(val svc: String, val etaS: Int?, val quality: String, val color: String? = null, val paid: Boolean = false, val later: List<LaterBus> = emptyList())
+
+/** A bus after the next one, with its own quality: a timetabled one stays a guess. */
+data class LaterBus(val etaS: Int, val quality: String)
+
+private fun parseLater(r: JSONObject): List<LaterBus> {
+    val a = r.optJSONArray("later") ?: return emptyList()
+    return (0 until a.length()).mapNotNull { k ->
+        val b = a.optJSONObject(k) ?: return@mapNotNull null
+        if (b.isNull("etaS")) null else LaterBus(b.getInt("etaS"), b.optString("quality"))
+    }
+}
 
 data class NearbyStop(
     val code: String,
@@ -946,7 +960,7 @@ fun parseNearby(json: JSONObject): List<NearbyStop> {
             opposite = if (s.isNull("opposite")) null else s.optString("opposite").ifEmpty { null },
             board = (0 until board.length()).map { j ->
                 val r = board.getJSONObject(j)
-                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"), if (r.isNull("color")) null else r.optString("color").ifEmpty { null }, r.optBoolean("paid", false))
+                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"), if (r.isNull("color")) null else r.optString("color").ifEmpty { null }, r.optBoolean("paid", false), parseLater(r))
             },
         )
     }
