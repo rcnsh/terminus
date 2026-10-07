@@ -37,24 +37,24 @@ function site(mode: string | undefined) {
 	if (mode !== "beta") throw new Error(`unknown mode ${mode}: use --mode beta, or none for the stable site`);
 	if (!BETA.d1 || !BETA.kv) throw new Error("the beta's D1 and KV ids aren't in cloudflare.config.ts yet");
 	return {
-			name: "terminus-beta",
-			domain: "beta.terminus.rcn.sh",
-			d1: { name: "terminus-beta", id: BETA.d1 },
-			kv: BETA.kv,
-			downloads: "terminus-beta-downloads",
-			dataset: "terminus_beta",
-			rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005", map: "2006", pair: "2007" },
-			env: {
-				PUBLIC_ORIGIN: bindings.text("https://beta.terminus.rcn.sh"),
-				AE_DATASET: bindings.text("terminus_beta"),
-				TIMELAPSE_ENABLED: bindings.text("off"),
-			},
-		};
-	}
+		name: "terminus-beta",
+		domain: "beta.terminus.rcn.sh",
+		d1: { name: "terminus-beta", id: BETA.d1 },
+		kv: BETA.kv,
+		downloads: "terminus-beta-downloads",
+		dataset: "terminus_beta",
+		rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005", map: "2006", pair: "2007" },
+		env: {
+			PUBLIC_ORIGIN: bindings.text("https://beta.terminus.rcn.sh"),
+			AE_DATASET: bindings.text("terminus_beta"),
+			TIMELAPSE_ENABLED: bindings.text("off"),
+		},
+	};
+}
 
-	export default defineConfig(({ mode }) => {
-		const s = site(mode);
-		return {
+export default defineConfig(({ mode }) => {
+	const s = site(mode);
+	return {
 		worker: {
 			name: s.name,
 			compatibilityDate: "2025-01-15",
