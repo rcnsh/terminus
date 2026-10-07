@@ -576,11 +576,24 @@ test('delete account removes every row for the user', async () => {
   const { token } = await (await call(env, '/pair', { method: 'POST', body: { code } })).json();
   assert.equal((await call(env, '/me', { method: 'DELETE', token })).status, 403, 'a device cannot delete the account');
 
+  // Something in every table that holds the account's data.
+  assert.ok((await call(env, '/me/keys', { method: 'POST', cookie, body: { name: 'My script' } })).ok);
+  assert.ok((await call(env, '/me/feedback', { method: 'POST', cookie, body: { kind: 'other', note: 'hello', platform: 'web' } })).ok);
+  const userId = db._db.prepare('SELECT id FROM users').get().id;
+  db.exec(`INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES ('${userId}', 'home:1080', '2026-10-01', 'arrived', 0)`);
+  db.exec(`INSERT INTO trip_prefs (user_id, trip_key, pref, label, set_at) VALUES ('${userId}', 'home:1080', 'quiet', 'Home', 0)`);
+  db.exec(`INSERT INTO login_requests (id, email, poll_hash, link_hash, code_hash, match, device_name, platform, status, created, expires)
+    VALUES ('r', '${INVITED}', 'p', 'l', 'c', 7, 'Pixel', 'android', 'pending', 0, ${Date.now() + 60_000})`);
+  // A sign-in code still waiting in KV for the address.
+  const codeKey = `code:${await hashToken(INVITED)}`;
+  await env.KV.put(codeKey, '{}');
+
   const res = await call(env, '/me', { method: 'DELETE', cookie });
   assert.equal(res.status, 200);
-  for (const t of ['users', 'sessions', 'profiles', 'pair_codes', 'magic_links']) {
+  for (const t of ['users', 'sessions', 'profiles', 'pair_codes', 'magic_links', 'api_keys', 'feedback', 'trip_outcomes', 'trip_prefs', 'login_requests']) {
     assert.equal(db._db.prepare(`SELECT count(*) AS n FROM ${t}`).get().n, 0, t);
   }
+  assert.equal(await env.KV.get(codeKey), null, 'the waiting sign-in code');
   assert.equal((await call(env, '/me', { token })).status, 401);
 });
 
@@ -595,6 +608,24 @@ test('export returns the profile and sessions, never token hashes', async () => 
   assert.equal(body.profile.gapHours, 3);
   assert.equal(body.sessions.length, 1);
   assert.doesNotMatch(JSON.stringify(body), /[0-9a-f]{64}/);
+  for (const k of ['created', 'lastSeen', 'startedIn', 'emailAdded', 'askFrom', 'today', 'signInRequests']) assert.ok(k in body, k);
+});
+
+test('export: each device with its app, version and push address, as the policy lists them', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  await call(env, '/pair', { method: 'POST', body: { code, name: 'Pixel 8' } });
+  db.exec(`UPDATE sessions SET platform = 'android', client = 'android/2.4.2', push_token = 'fcm-token' WHERE kind = 'device'`);
+  const body = await (await call(env, '/me/export', { cookie })).json();
+  const phone = body.sessions.find((s) => s.kind === 'device');
+  assert.deepEqual({ name: phone.name, platform: phone.platform, app: phone.app, push: phone.push }, {
+    name: 'Pixel 8',
+    platform: 'android',
+    app: 'android/2.4.2',
+    push: { service: 'firebase', address: 'fcm-token' },
+  });
+  assert.equal(body.sessions.find((s) => s.kind === 'web').push, null);
 });
 
 test('sign out everywhere ends every session', async () => {
@@ -1095,7 +1126,7 @@ test('/me without any token is a plain 401 and does not count as a guess', async
   assert.equal((await call(env, '/me', { token: 'nonsense' })).status, 429, 'a presented bad token still counts');
 });
 
-test('feedback: a wrong answer is kept with the account, emailed with the address, exported and deleted with it', async () => {
+test('feedback: a wrong answer is kept with the account, its note emailed without who or what, exported and deleted with it', async () => {
   const { env, email, db } = setup();
   env.ALERT_EMAIL = 'ops@example.test';
   const cookie = await signIn(env, email);
@@ -1108,9 +1139,10 @@ test('feedback: a wrong answer is kept with the account, emailed with the addres
   assert.equal(res.status, 201, 'from a paired device too');
   const sent = email.sent.at(-1);
   assert.equal(sent.to, 'ops@example.test');
-  assert.match(sent.subject, /D2 · 4 min at Prince George's Park \(live\)/);
-  assert.match(sent.text, new RegExp(INVITED));
+  assert.equal(sent.subject, 'terminus wrong answer: It never came');
   assert.match(sent.text, /It never came/);
+  // The inbox keeps mail after the account goes: the address and the answer stay on the dashboard.
+  assert.doesNotMatch(`${sent.subject}\n${sent.text}`, new RegExp(`${INVITED}|PGP|Prince George|D2`));
 
   const row = db._db.prepare('SELECT kind, note, platform, app_version, context FROM feedback').get();
   assert.deepEqual({ ...row }, { kind: 'wrong', note: 'It never came', platform: 'mac', app_version: '1.3.9', context: JSON.stringify(answer) });
@@ -1247,9 +1279,9 @@ test('feedback emails to the operator stop at fifty a day; the reports are still
   env.ALERT_EMAIL = 'ops@example.test';
   const f = { kind: 'other', note: 'x', platform: 'web', appVersion: null, context: null };
   const day = Date.UTC(2026, 9, 1, 2, 0, 0);
-  for (let i = 0; i < OPERATOR_MAILS_PER_DAY + 5; i++) await mailFeedback(env, `f${i}`, 'a@u.nus.edu', f, day);
+  for (let i = 0; i < OPERATOR_MAILS_PER_DAY + 5; i++) await mailFeedback(env, `f${i}`, f, day);
   assert.equal(email.sent.length, OPERATOR_MAILS_PER_DAY);
-  await mailFeedback(env, 'next', 'a@u.nus.edu', f, day + 86_400_000);
+  await mailFeedback(env, 'next', f, day + 86_400_000);
   assert.equal(email.sent.length, OPERATOR_MAILS_PER_DAY + 1, 'a new day');
 });
 

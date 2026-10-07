@@ -113,7 +113,7 @@ pnpm run deploy
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
 | `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store` (503 if its recorder doesn't answer within 10 s). Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
-| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. It needs a note, and an account with an email: an anonymous one gets 403. |
+| `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a note, and an account with an email: an anonymous one gets 403. |
 
 `/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and `/stops/pairs` need an API key
 (made on the account page, sent as `x-api-key`) or a signed-in session. They're
@@ -352,8 +352,11 @@ The signals live in a Durable Object per user (`Trip` in
 only touched on a day with classes, keeps that day's signals and nothing
 else (a location is reduced to what it means: at the stop, or arrived), and
 an alarm deletes everything at the next Singapore midnight. Deleting an
-account empties it at once (`clearTrip`), and so does signing an anonymous
-account into another one.
+account empties it at once (`clearTrip`, tried twice), and so does signing
+an anonymous account into another one, or the cron deleting an idle one.
+An emptied object keeps only a `gone` mark until midnight and refuses
+every write, so a `/me/next` already under way when the account went
+can't store its trip again.
 
 ### One plan, and push
 
@@ -396,7 +399,9 @@ account into another one.
   only where to get off; ten minutes after the arrival (`RIDE_GRACE_MS`)
   you're taken to be there.
 - **Outcomes** ([src/outcomes.ts](../src/outcomes.ts), `trip_outcomes`, 35
-  days): what detection saw (boarded, missed, arrived) and "Not going";
+  days): what detection saw (boarded, missed, arrived) and "Not going",
+  with the day it happened (`at` is that day's start, never the moment:
+  migration 0012);
   three misses of one class in 30 days suggest a bus earlier (`ArriveBy.oneEarlier`);
   three skips in a row offer to stop reminders (`card.remind: false`). Choices
   are `trip_prefs`; a turned-down suggestion waits 30 days.
@@ -448,7 +453,10 @@ metres, its accuracy plus a walking pace times its age (the apps and the web
 app work this out, `Locator.uncertaintyM`). Over 200 m (`MAX_FIX_ACC_M`) the
 fix is dropped and the answer follows the timetable: a cell-tower fix, or a
 precise one from ten minutes ago, planned the trip from the wrong side of
-campus and said so with confidence.
+campus and said so with confidence. Every location is rounded to four
+decimal places, about 11 metres, as it is read (`roundCoord` in http.ts,
+used by `coordsFrom` and `fixOf`), whoever sends it: the apps round too,
+but a script with an API key needn't.
 
 `GET /me/day` is today's timeline, worked out with the same planner. A
 class you're on the bus to carries `onBus` (the bus, where to get off, the
@@ -750,7 +758,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   (`remindTerm` in monitor.ts) pushes each device of a user whose imported
   timetable is an older semester's: `{kind: 'term', title, body, zhTitle,
   zhBody}`, worded by the server in both languages, since the device picks
-  its own. Anyone who has already imported the new semester, or has never
+  its own. Android from 2.5.0 (`fetchesNotice`, by the session's
+  `x-terminus-client`) is sent only `{kind: 'term'}` and fetches the words
+  from `GET /me/notice`, so they don't pass through Google; older versions
+  can only show what they're sent. Web pushes are encrypted for the browser
+  and keep the words. Anyone who has already imported the new semester, or has never
   imported one, is skipped. It goes once per semester, 400 users a run, with
   `term:reminded` in KV marking the semester and the last user reached, as
   `trips:armed` does. The mark is saved before the batch is sent, so a mark
@@ -809,8 +821,8 @@ end is one row in `ride_times` (migration 0008): service, stops, hops,
 seconds, hour and kind of day, plate. No user, device or location. Rides
 under 30 s or over 300 s a stop are dropped as mistakes, and so are rides
 from accounts under 3 days old and a second ride on the same service in the
-same hour from one account (a short-lived KV mark, so the rows still hold no
-user). Taps never count:
+same hour from one account (a short-lived KV mark named by a hash of the
+account, service and hour, so neither the rows nor the mark name a user). Taps never count:
 they are minutes out either way. Once a day from 04:00 the cron prunes rows
 older than 120 days and writes seconds per stop to KV (`ride:hops`): per
 service with at least 10 rides, and per hour of the day with 10 of its own,

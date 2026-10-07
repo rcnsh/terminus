@@ -49,8 +49,16 @@ export function numParam(url: URL, key: string): number | null {
 }
 
 /**
- * The caller's location from `lat`, `lon` and, when sent, `acc` (metres):
- * a fix too rough to say where you are counts as none (MAX_FIX_ACC_M).
+ * A coordinate to four decimal places, about 11 metres: as precise as an
+ * answer needs, and what the privacy policy promises. The apps round
+ * before sending; this holds for any other caller of the API too.
+ */
+export const roundCoord = (x: number): number => Math.round(x * 10_000) / 10_000;
+
+/**
+ * The caller's location from `lat`, `lon` and, when sent, `acc` (metres),
+ * rounded (roundCoord): a fix too rough to say where you are counts as none
+ * (MAX_FIX_ACC_M).
  */
 export function coordsFrom(url: URL): { lat: number | null; lon: number | null } {
   const lat = numParam(url, 'lat');
@@ -59,7 +67,7 @@ export function coordsFrom(url: URL): { lat: number | null; lon: number | null }
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { lat: null, lon: null };
   const acc = numParam(url, 'acc');
   if (acc !== null && acc > MAX_FIX_ACC_M) return { lat: null, lon: null };
-  return { lat, lon };
+  return { lat: roundCoord(lat), lon: roundCoord(lon) };
 }
 
 /**

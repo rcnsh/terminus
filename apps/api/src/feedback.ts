@@ -1,10 +1,12 @@
 /**
  * "This was wrong" reports. The apps and the account page send the answer the
  * user was looking at with a note; it's stored for checking against what the
- * buses actually did, and emailed to the operator so a bad answer is seen the
- * day it happens. Only accounts with an email can send one, and every report
- * needs a note: an anonymous answer with nothing said can't be acted on or
- * replied to, and anonymous accounts cost nothing to make.
+ * buses actually did, and the note is emailed to the operator so a bad answer
+ * is seen the day it happens. Who sent it and the answer stay on the
+ * dashboard: an inbox keeps mail after the account is deleted. Only accounts
+ * with an email can send one, and every report needs a note: an anonymous
+ * answer with nothing said can't be acted on or replied to, and anonymous
+ * accounts cost nothing to make. Reports are kept FEEDBACK_KEEP_DAYS.
  */
 
 import type { Env } from './types.ts';
@@ -20,6 +22,9 @@ export const FEEDBACK_LIMITS = {
   /** Per account per day, so a stuck button can't fill the table or the inbox. */
   perDay: 10,
 };
+
+/** Reports older than this are deleted by the cron. */
+export const FEEDBACK_KEEP_DAYS = 365;
 
 const PLATFORMS = ['android', 'mac', 'web'] as const;
 type Platform = (typeof PLATFORMS)[number];
@@ -82,8 +87,12 @@ export function summarize(context: string | null): string {
 /** Feedback emails to the operator a day, across everyone; past it, reports are only on the dashboard. */
 export const OPERATOR_MAILS_PER_DAY = 50;
 
-/** Emails the operator, with the reporter's address so you can reply. */
-export async function mailFeedback(env: Env, id: string, accountEmail: string, f: FeedbackInput, nowMs: number): Promise<void> {
+/**
+ * Emails the operator the note. Not the reporter's address nor the answer:
+ * the dashboard has both, and the inbox would keep them after the account
+ * is deleted.
+ */
+export async function mailFeedback(env: Env, id: string, f: FeedbackInput, nowMs: number): Promise<void> {
   if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL) return;
   // A soft cap (KV is not atomic): new accounts are cheap, the inbox is not.
   const sentKey = `feedback:mailed:${new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10)}`;
@@ -91,15 +100,11 @@ export async function mailFeedback(env: Env, id: string, accountEmail: string, f
   if (sent >= OPERATOR_MAILS_PER_DAY) return;
   await env.KV.put(sentKey, String(sent + 1), { expirationTtl: 2 * 86_400 }).catch(() => {});
   const text = [
-    `${f.kind === 'wrong' ? 'A wrong answer' : 'Feedback'} from ${accountEmail} on ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}, ${new Date(nowMs).toISOString()}.`,
+    `${f.kind === 'wrong' ? 'A wrong answer' : 'Feedback'} on ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}, ${new Date(nowMs).toISOString()}.`,
     '',
     `They said: ${f.note}`,
     '',
-    `The answer: ${summarize(f.context)}`,
-    '',
-    f.context ? JSON.stringify(JSON.parse(f.context), null, 2) : '',
-    '',
-    `Report ${id}; all reports are on the dashboard at ${siteOrigin(env)}/admin.`,
+    `Report ${id}. Who sent it${f.context ? ' and the answer they saw' : ''}: the dashboard at ${siteOrigin(env)}/admin.`,
   ].join('\n');
   await sendMail(env, {
     from: { email: env.EMAIL_FROM, name: mailName(env) },
@@ -107,7 +112,7 @@ export async function mailFeedback(env: Env, id: string, accountEmail: string, f
     // Their words, on one line: a subject is a header. Matching control
     // characters is the point here.
     // oxlint-disable-next-line no-control-regex
-    subject: `terminus feedback: ${f.kind === 'wrong' ? summarize(f.context) : f.note.slice(0, 60)}`.replace(/[\x00-\x1f\x7f]+/g, ' '),
+    subject: `terminus ${f.kind === 'wrong' ? 'wrong answer' : 'feedback'}: ${f.note.slice(0, 60)}`.replace(/[\x00-\x1f\x7f]+/g, ' '),
     text,
   });
 }

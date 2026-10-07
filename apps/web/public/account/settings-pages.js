@@ -3,7 +3,7 @@
 // profile (profile.js).
 
 import { Fill, MARK, Rich, html, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clock, clockOpts, locale, locationError, spaced, t } from './dom.js';
+import { api, clock, clockOpts, forgetAccountHere, locale, locationError, spaced, t } from './dom.js';
 import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
   campus,
@@ -1030,6 +1030,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
   const everywhere = async () => {
     if (!confirm(t('Sign out of every browser and device, including this one?'))) return;
     await api('/me/sessions', { method: 'DELETE' });
+    await forgetAccountHere();
     location.reload();
   };
   const remove = async () => {
@@ -1037,6 +1038,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
     if (typed !== 'DELETE') return;
     try {
       await api('/me', { method: 'DELETE' });
+      await forgetAccountHere();
       location.href = '/';
     } catch (err) {
       setMsg(err.message);

@@ -13,7 +13,7 @@
 // they were fetched, so the page can say it's showing old times.
 
 import { Fill, Icon, MARK, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
-import { api, clock, hour12, inkOn, send, serverNow, t } from '/account/dom.js';
+import { ADDED_PLACES_KEY, api, clock, forgetAccountHere, hour12, inkOn, send, serverNow, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
@@ -88,7 +88,7 @@ const ADDED_MAX = 5;
 const added = store(readAdded());
 function readAdded() {
   try {
-    const list = JSON.parse(localStorage.getItem('added-places') ?? '[]');
+    const list = JSON.parse(localStorage.getItem(ADDED_PLACES_KEY) ?? '[]');
     return Array.isArray(list) ? list.filter((x) => typeof x?.to === 'string' && typeof x?.label === 'string').slice(0, ADDED_MAX) : [];
   } catch {
     return [];
@@ -97,7 +97,7 @@ function readAdded() {
 function keepAdded(list) {
   added.set(list);
   try {
-    localStorage.setItem('added-places', JSON.stringify(list));
+    localStorage.setItem(ADDED_PLACES_KEY, JSON.stringify(list));
   } catch {
     // Storage blocked: the tabs last until the page closes.
   }
@@ -123,6 +123,8 @@ async function get(path) {
   if (res.status === 401) {
     // Sign in on the account page, then come back here. In the installed app
     // on iOS this is its own sign-in: its storage is separate from Safari's.
+    // It was signed out, or deleted, elsewhere: what this browser kept of it goes.
+    await forgetAccountHere();
     location.replace('/account/?next=/app/');
     throw new Error('signed out');
   }

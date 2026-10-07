@@ -67,7 +67,9 @@ async function seedTrip(env, userId) {
 /** Whether a user still has trip state today (signals or a pending alarm). */
 async function hasTrip(env, userId) {
   const day = await (await env.TRIPS.get(userId).fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
-  return day !== null || env.TRIPS.alarms.has(userId);
+  // A cleared object keeps only its "gone" mark (and that mark's alarm) until midnight.
+  const kept = [...(env.TRIPS.instances.get(userId)?.storage._map.keys() ?? [])].filter((k) => k !== 'gone' && k !== 'deleteAt');
+  return day !== null || kept.length > 0;
 }
 
 /** The approval link's secret from the latest email. */

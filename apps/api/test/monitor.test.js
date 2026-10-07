@@ -379,7 +379,7 @@ test('cron: the large tables are swept once a Singapore day, the short-lived cod
   await runCron({ ...e, DB: db }, day + 15 * 60_000);
   await runCron({ ...e, DB: db }, day + 86_400_000);
   console.error = orig;
-  assert.deepEqual(swept.filter((n) => n >= 3), [7, 3, 7]);
+  assert.deepEqual(swept.filter((n) => n >= 3), [8, 3, 8]);
 });
 
 test('cron: a failed daily sweep is tried again on the next run', async () => {
@@ -390,7 +390,7 @@ test('cron: a failed daily sweep is tried again on the next run', async () => {
   let fail = true;
   db.batch = async (s) => {
     sizes.push(s.length);
-    if (fail && s.length === 7) { fail = false; throw new Error('D1 busy'); }
+    if (fail && s.length === 8) { fail = false; throw new Error('D1 busy'); }
     return batch(s);
   };
   const orig = console.error;
@@ -400,7 +400,7 @@ test('cron: a failed daily sweep is tried again on the next run', async () => {
   await runCron({ ...e, DB: db }, day + 15 * 60_000);
   await runCron({ ...e, DB: db }, day + 30 * 60_000);
   console.error = orig;
-  assert.deepEqual(sizes.filter((n) => n >= 3), [7, 7, 3]);
+  assert.deepEqual(sizes.filter((n) => n >= 3), [8, 8, 3]);
 });
 
 test('the hot and housekeeping lookups use an index, not a table scan', () => {
@@ -409,6 +409,18 @@ test('the hot and housekeeping lookups use an index, not a table scan', () => {
   assert.match(plan("SELECT svc, stop, slot, n, packed FROM crowd_stats WHERE daytype = 'term' AND n >= 3 AND stop IN ('COM3', 'UTOWN')"), /USING INDEX crowd_stats_lookup/);
   assert.match(plan("UPDATE sessions SET push_token = NULL WHERE push_token = 'x'"), /USING INDEX sessions_push/);
   assert.match(plan('DELETE FROM users INDEXED BY users_anon_idle WHERE email IS NULL AND last_seen < 5'), /USING INDEX users_anon_idle/);
+});
+
+test('housekeeping: reports are kept a year', async () => {
+  const { FEEDBACK_KEEP_DAYS } = await import('../src/feedback.ts');
+  const db = makeD1();
+  const now = Date.UTC(2026, 9, 1);
+  db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('u', 'a@b.c', 0, ${now})`);
+  const report = (id, created) => db.exec(`INSERT INTO feedback (id, user_id, created, kind, note, platform) VALUES ('${id}', 'u', ${created}, 'other', 'x', 'web')`);
+  report('old', now - FEEDBACK_KEEP_DAYS * 86_400_000 - 1);
+  report('new', now - (FEEDBACK_KEEP_DAYS - 1) * 86_400_000);
+  await housekeeping(db, now);
+  assert.deepEqual(db._db.prepare('SELECT id FROM feedback').all().map((r) => r.id), ['new']);
 });
 
 test('a refused version: the alert gives the one-line KV fix and NUS\'s whole response', async () => {

@@ -5,7 +5,9 @@
  * One row per trip per day in `trip_outcomes`: what detection saw from the
  * phone's location (boarded, missed, arrived) or "Not going" (skipped). terminus
  * never asks what happened. Rows from before that may say `none` (a question
- * nobody answered); nothing reads them any more. Kept 35 days. From it:
+ * nobody answered); nothing reads them any more. Kept 35 days. `at` is the
+ * start of that day, not the moment: the suggestions only count days, and a
+ * time of day would say when you got off a bus. From it:
  *
  * - **Three misses of the same trip in 30 days** suggest leaving one bus
  *   earlier for it. Only a suggestion; nothing changes until it's accepted.
@@ -14,7 +16,7 @@
  * Accepted and turned-down suggestions are `trip_prefs`, per weekly trip.
  */
 
-import { sgtDate } from './trip.ts';
+import { endOfDayMs, sgtDate } from './trip.ts';
 import { m } from './i18n.ts';
 
 export type Outcome = 'boarded' | 'missed' | 'skipped' | 'arrived' | 'none';
@@ -59,7 +61,7 @@ export async function recordOutcome(db: D1Database, userId: string, key: string,
     .prepare(
       'INSERT INTO trip_outcomes (user_id, trip_key, day, outcome, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id, trip_key, day) DO UPDATE SET outcome = excluded.outcome, at = excluded.at',
     )
-    .bind(userId, key, sgtDate(nowMs), outcome, nowMs)
+    .bind(userId, key, sgtDate(nowMs), outcome, endOfDayMs(nowMs) - DAY_MS)
     .run();
 }
 
