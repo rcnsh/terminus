@@ -247,7 +247,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         ).joinToString(" · ")
         val refreshing = stringResource(R.string.refreshing)
         // One quiet line, as the web shows it: "Updated 9:41 · Is this wrong?",
-        // and "✓ Reported, thanks" in the link's place once it's sent.
+        // and "✓ Reported, thanks" in the link's place for a few seconds once it's sent.
         val small = MaterialTheme.typography.bodySmall
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Row(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -258,7 +258,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
             Text(footer, style = small, color = muted, modifier = Modifier.weight(1f, fill = false))
             if (!state.showNearby && state.answer != null) {
                 if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
-                if (state.reportedFor == state.target) {
+                if (state.reportShown) {
                     Text("✓ " + stringResource(R.string.reported_thanks), style = small, color = goodColor())
                 } else {
                     var reporting by remember { mutableStateOf<String?>(null) }
