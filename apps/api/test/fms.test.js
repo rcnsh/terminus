@@ -81,6 +81,13 @@ test('the device id is made only when none is stored, and a failed read makes no
   assert.match(made, /^[0-9a-f]{16}$/);
   assert.equal(await fresh.KV.get('auth:deviceid'), made);
   assert.equal(await deviceId(fresh), made);
+
+  // Two isolates both found none: the one whose write lost takes the stored id next.
+  const raced = makeEnv();
+  const lost = await deviceId(raced);
+  await raced.KV.put('auth:deviceid', 'abcdef0123456789');
+  assert.notEqual(lost, 'abcdef0123456789');
+  assert.equal(await deviceId(raced), 'abcdef0123456789');
 });
 
 test("fetchedAt is when the call that answered went out, not when the fetch began", async () => {
