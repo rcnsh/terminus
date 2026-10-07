@@ -67,8 +67,11 @@ let busTimer = null;
 let watchId = null;
 /** Each bus's slide, by id: from where it was drawn to where it is now. */
 let glides = new Map();
-/** When the last answer came (performance.now()), to tell a stale map. */
+/** When the last answer came (Date.now(), which counts a device's sleep,
+ *  unlike performance.now() in some browsers), to tell a stale map. */
 let lastAnswer = -Infinity;
+/** The last answer's buses are last-known places (the feed didn't answer): drawn faded. */
+let dimmed = false;
 let glide = null;
 /** The whole-campus view, for the button back to it. */
 let fit = null;
@@ -305,6 +308,7 @@ function addLayers() {
   map.addLayer(bus('buses', 'bus'));
   map.addLayer(bus('bus-heading', 'heading'));
   highlight();
+  dim(dimmed);
   markOpen(openBus);
   drawBuses(frameAt(performance.now()));
 }
@@ -364,6 +368,13 @@ function arrow(fill) {
   return g.getImageData(0, 0, size, size);
 }
 
+/** Buses at their last-known places, faded so they don't pass for live; or back to full. */
+function dim(on) {
+  dimmed = on;
+  if (!map?.getLayer('buses')) return;
+  for (const id of ['buses', 'bus-heading', 'bus-on']) map.setPaintProperty(id, 'icon-opacity', on ? 0.4 : 1);
+}
+
 /** The chosen service stands out; the rest step back. */
 function highlight() {
   if (!map?.getLayer('routes')) return;
@@ -388,6 +399,7 @@ function choose(svc) {
   shown.set(new Map());
   glides = new Map();
   drawBuses([]);
+  dim(false);
   highlight();
   if (map) paintBus();
   status.set(null);
@@ -404,9 +416,13 @@ async function pollBuses() {
   try {
     const data = await getJSON(`/buses?svc=${encodeURIComponent(svc)}`);
     if (svc !== selected.get()) return;
+    // `stale`: the feed didn't answer, and these are where the buses last were.
+    const old = data.available && data.stale === true;
     if (!data.available) status.set(t('Live buses aren’t available right now.'));
+    else if (old) status.set(t('Bus positions may be out of date'));
     else if (!data.buses.length) status.set(t('No {0} buses running right now.', svc));
     else status.set(data.buses.length === 1 ? t('1 bus on {0}', svc) : t('{0} buses on {1}', data.buses.length, svc));
+    dim(old);
     moveTo(data.buses.map((b) => ({ ...b, svc, color: colorOf(svc) })));
   } catch (err) {
     if (err.message === 'signed out' || svc !== selected.get()) return;
@@ -427,9 +443,12 @@ document.addEventListener('visibilitychange', () => {
  * answer.
  */
 function moveTo(buses) {
+  // Animation frames are timed by performance.now(); how long since the last
+  // answer by the wall clock, which keeps counting while the device sleeps.
   const now = performance.now();
-  const stale = now - lastAnswer > STALE_MS;
-  lastAnswer = now;
+  const wall = Date.now();
+  const stale = wall - lastAnswer > STALE_MS;
+  lastAnswer = wall;
   const reduce = reducedMotion();
   const path = pathOf(campusData.get()?.routes[selected.get()]?.line);
   shown.set(new Map(buses.map((b) => [b.id, b])));
@@ -623,12 +642,15 @@ function directions(s) {
 /** How crowded a bus is, as the feed says: low, medium or high. */
 const crowdWord = (c) => ({ low: t('Low'), medium: t('Medium'), high: t('High') })[c] ?? null;
 const mins = (s) => Math.round(s / 60);
-const when = (b) => (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
+/** The server's words for when ("4 min", "~6 min", "now"); worded here only for an older server's answer. */
+const when = (b) => b.eta ?? (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
 
-function SvcTag({ svc, onClick }) {
+/** A public bus (`paid`) has its own colour from the board, and a $ for its fare. */
+function SvcTag({ svc, onClick, color, paid }) {
+  const style = color ? `--svc:${color};--svc-ink:${inkOn(color)}` : svcVars(svc);
   return onClick
-    ? html`<button type="button" class="svc-tag" style=${svcVars(svc)} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`
-    : html`<span class="svc-tag" style=${svcVars(svc)}>${svc}</span>`;
+    ? html`<button type="button" class="svc-tag" style=${style} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`
+    : html`<span class="svc-tag" style=${style}>${svc}${paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span>`;
 }
 
 function Pills() {
@@ -698,21 +720,37 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
   const [board, setBoard] = useState(null);
   const [saveMsg, setSaveMsg] = useState(null);
   const [saving, setSaving] = useState(false);
+  // The profile has been asked for (it may still fail): until then, which buses to ask for isn't known.
+  const [asked, setAsked] = useState(false);
 
   // Fresh each time: a favourite may have been added or removed elsewhere since.
   useEffect(() => {
     setSaveMsg(null);
-    reloadProfile().catch(() => {});
+    reloadProfile()
+      .catch(() => {})
+      .finally(() => setAsked(true));
   }, [code]);
 
+  // The public buses there too when the account has them on, as the Buses tab.
+  const pub = p?.publicBuses === true;
+  const known = Boolean(p) || asked;
   useEffect(() => {
     setBoard(null);
-    if (!active) return;
+    if (!active || !known) return;
     let timer = null;
     let gone = false;
+    // Paused while the page is hidden, as the buses are; fetched again when it's back.
+    const again = () => {
+      clearTimeout(timer);
+      if (!gone && !document.hidden) timer = setTimeout(load, ARRIVALS_MS);
+    };
+    const back = () => {
+      clearTimeout(timer);
+      if (!gone && !document.hidden) load();
+    };
     const load = async () => {
       try {
-        const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}`);
+        const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub ? '&public=1' : ''}`);
         if (gone) return;
         const list = data.available ? data.board.filter((b) => b.etaS !== null) : [];
         setBoard(list.length ? { list } : { text: data.available ? t('No buses due') : t('No times right now') });
@@ -720,14 +758,16 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
         if (gone || err.message === 'signed out') return;
         setBoard({ text: navigator.onLine ? t('No times right now') : t('Live times need a connection.') });
       }
-      if (!gone) timer = setTimeout(load, ARRIVALS_MS);
+      again();
     };
     load();
+    document.addEventListener('visibilitychange', back);
     return () => {
       gone = true;
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', back);
     };
-  }, [code, active]);
+  }, [code, active, pub, known]);
 
   if (!stop) return null;
   const same = p?.places.find((x) => x.to === stop.code);
@@ -752,7 +792,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
         ${board?.list?.map(
           (b) => html`
             <div class="sheet-row" key=${`${b.svc}-${b.etaS}`}>
-              <${SvcTag} svc=${b.svc} />
+              <${SvcTag} svc=${b.svc} color=${b.paid ? b.color : null} paid=${b.paid} />
               <span class="when">${when(b)}${b.crowd && html`<span class="crowd">${t('Crowding: {0}', crowdWord(b.crowd).toLowerCase())}</span>`}</span>
             </div>
           `,

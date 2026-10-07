@@ -13,7 +13,7 @@
 // they were fetched, so the page can say it's showing old times.
 
 import { Icon, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
-import { api, clock, hour12, inkOn, send, t } from '/account/dom.js';
+import { api, clock, hour12, inkOn, send, serverNow, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
@@ -25,6 +25,8 @@ const REFRESH_MS = 30_000;
 /** How often the timed refresh asks for Today too: it moves slowly, and
  *  each one is an answer per class on the server. */
 const DAY_MS = 120_000;
+/** Sooner than that at the card's own marks (nextChangeAt, refreshAt), but never sooner than this from now. */
+const MARK_MIN_MS = 5_000;
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 // iPadOS says it's a Mac; one with a touch screen is an iPad.
@@ -125,13 +127,16 @@ async function get(path) {
   return { data: await res.json(), cached: cached ? Number(cached) : null };
 }
 
+/** A time on this device's clock (the service worker's x-terminus-cached) on the server's, for showing. */
+const onServerClock = (localMs) => localMs + serverNow() - Date.now();
+
 /** The banner for a card fetched at `cachedAt` by the service worker, or none for a live one. */
 function stale(cachedAt) {
   if (cachedAt === null) {
     slowTries = 0;
     return void banner.set(null);
   }
-  const at = clock(new Date(cachedAt).toISOString());
+  const at = clock(new Date(onServerClock(cachedAt)).toISOString());
   // Online, the kept copy means the network was too slow or the server
   // failing (sw.js): try again sooner than the timed refresh, then less
   // often (8 s, 16 s), and only while Now is on screen. Past that the timed
@@ -148,6 +153,23 @@ let slowTries = 0;
 
 /** Whether Now is what the user is looking at: the timed refreshes wait otherwise. */
 const nowShown = () => document.visibilityState === 'visible' && tab.get() === 'now';
+
+/**
+ * The card says when it will change by itself (card.nextChangeAt: the bus
+ * leaving, time to go) and the plan when it moves on (refreshAt): fetched
+ * again at the sooner, never sooner than MARK_MIN_MS from now, when that's
+ * before the next 30 s refresh. A mark the answer already got past isn't
+ * one: the server had it in hand, and waiting on it would ask every 5 s.
+ */
+let markTimer = null;
+function atMarks(a) {
+  clearTimeout(markTimer);
+  const asOf = Date.parse(a?.asOf ?? '');
+  const marks = [a?.card?.nextChangeAt, a?.refreshAt].map((x) => Date.parse(x ?? '')).filter((m) => Number.isFinite(m) && !(m <= asOf));
+  if (!marks.length) return;
+  const wait = Math.max(MARK_MIN_MS, Math.min(...marks) - serverNow());
+  if (wait < REFRESH_MS) markTimer = setTimeout(() => nowShown() && refresh({ timed: true }), wait);
+}
 
 /** A query string: the 12-hour style, and the other params given. */
 function query(params = {}) {
@@ -192,6 +214,8 @@ let planAt = 0;
 /** The card and Today. [timed]: by the clock, not something the user did, so Today is asked for at most every DAY_MS. */
 async function refresh({ timed = false } = {}) {
   const mine = ++generation;
+  // This refresh's answer sets the next mark.
+  clearTimeout(markTimer);
   const to = target.get();
   if (to.kind === 'nearby') return refreshNearby(mine);
   try {
@@ -215,7 +239,7 @@ async function refresh({ timed = false } = {}) {
     // Offline with an answer gone stale (or none kept): the next thing on the
     // day plan the service worker kept, with its leave-by from then.
     const offline = !next || next.cached !== null;
-    const fallback = offline && to.kind === 'plan' && (!next || isStale(next.data)) ? offlineNext(plan?.data, Date.now()) : null;
+    const fallback = offline && to.kind === 'plan' && (!next || isStale(next.data)) ? offlineNext(plan?.data, serverNow()) : null;
     if (fallback) {
       card.set({ offline: fallback });
       stale(plan.cached ?? Date.now());
@@ -226,7 +250,9 @@ async function refresh({ timed = false } = {}) {
     card.set({ a: next.data });
     seen.set(seenKey(to), next.data);
     stale(next.cached);
-    updated.set(t('Updated {0}', clock(new Date(next.cached ?? Date.now()).toISOString())));
+    // A kept card is old already: its marks have passed, and the slow retry asks again.
+    if (next.cached === null) atMarks(next.data);
+    updated.set(t('Updated {0}', clock(new Date(next.cached === null ? serverNow() : onServerClock(next.cached)).toISOString())));
     if (JSON.stringify(next.data.places ?? []) !== JSON.stringify(places.get())) places.set(next.data.places ?? []);
   } catch (err) {
     if (err.message === 'signed out' || mine !== generation) return;
@@ -315,7 +341,7 @@ async function refreshNearby(mine) {
     const { data } = await get(`/me/nearby${query(at)}`);
     if (mine !== generation) return;
     stale(null);
-    updated.set(t('Updated {0}', clock(new Date().toISOString())));
+    updated.set(t('Updated {0}', clock(new Date(serverNow()).toISOString())));
     card.set(data.stops?.length ? { nearby: data.stops } : { text: t('No campus bus stops near you.') });
   } catch (err) {
     if (err.message !== 'signed out' && mine === generation) card.set({ text: t('Nearby needs a connection.') });
@@ -696,28 +722,33 @@ function Where() {
   `;
 }
 
+/** A /me/day item's name: the server's `title` ("Home, from UTown"), else worded here (an older kept plan). */
+const itemTitle = (it) => it.title ?? (it.kind === 'home' ? t('Home, from {0}', it.fromName ?? t('your last class')) : it.label);
+
 /**
- * The offline card: the day plan's next item, worded as the Today list words
- * it. Always an estimate (it was planned a while ago), so always "~"; the
- * class's start time is there so a "Leave now" after it has started reads
- * as late, and a trip home says from when.
+ * The offline card: the day plan's next item (offline.js picks it), as the
+ * Android and Mac apps show it: the class and when it starts, then its
+ * leave-by in the server's own line ("Leave by ~09:36 · R2 from PGP") while
+ * that's still ahead, else "Leave now" and how. A trip home says from when.
  */
 function OfflineCard({ item, step }) {
   if (step === 'home') {
     return html`
       <div class="widget offline-plan" aria-live="polite">
         <div class="where">${clock(item.startsAt)}</div>
-        <div class="big">${t('Home, from {0}', item.fromName ?? t('your last class'))}</div>
+        <div class="big">${itemTitle(item)}</div>
       </div>
     `;
   }
   const l = item.leave;
   const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
+  // Planned a while ago, so an estimate: the server's line already says "~".
+  const line = step === 'leaveBy' && item.line ? item.line : null;
   return html`
     <div class="widget offline-plan" aria-live="polite">
-      <div class="where">${`${t('Next class · {0}', item.label)} · ${t('starts {0}', clock(item.startsAt))}`}</div>
-      <div class="big">${step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now')}</div>
-      ${how && html`<div class="detail">${how.charAt(0).toUpperCase() + how.slice(1)}</div>`}
+      <div class="where">${`${itemTitle(item)} · ${t('starts {0}', clock(item.startsAt))}`}</div>
+      <div class="big">${line ?? (step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now'))}</div>
+      ${!line && how && html`<div class="detail">${how.charAt(0).toUpperCase() + how.slice(1)}</div>`}
     </div>
   `;
 }
@@ -738,8 +769,8 @@ const RoadBus = ({ bus, next }) => html`<span
   style=${{ '--far': Math.min(1, Math.max(0, bus.etaS / ROAD_S)) }}
 ></span>`;
 
-/** "4 min", "Arriving", "~6 min" for a timetable guess, or "–". */
-const etaText = (b) => (b.etaS == null ? '–' : b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
+/** The server's "4 min", "now", "~6 min" for a timetable guess, or "–". Worded here only for an older server's answer (or a kept copy). */
+const etaText = (b) => (b.etaS == null ? '–' : (b.eta ?? (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)))));
 
 /**
  * Nearby: the stops around you as their signs, the name plate with the walk
@@ -824,14 +855,14 @@ function CardArea() {
 const LAST_MARK = 23 * 60 + 55;
 /** Half an hour from now on campus, on a five-minute mark: where "Go later" starts. Null once that's past LAST_MARK. */
 function soonOnCampus() {
-  const sgt = new Date(Date.now() + 8 * 3600_000);
+  const sgt = new Date(serverNow() + 8 * 3600_000);
   const min = Math.ceil((sgt.getUTCHours() * 60 + sgt.getUTCMinutes() + 30) / 5) * 5;
   return min <= LAST_MARK ? min : null;
 }
 const hhmmOf = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 /** The date on campus `days` from today (YYYY-MM-DD), and its weekday (0 is Sunday). */
 function campusDay(days) {
-  const d = new Date(Date.now() + 8 * 3600_000 + days * 86_400_000);
+  const d = new Date(serverNow() + 8 * 3600_000 + days * 86_400_000);
   return { date: d.toISOString().slice(0, 10), weekday: d.getUTCDay() };
 }
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(d));
@@ -987,9 +1018,11 @@ function Today() {
               </li>
             `;
           }
-          const title = it.kind === 'home' ? t('Home, from {0}', it.fromName ?? t('your last class')) : it.label;
+          const title = itemTitle(it);
+          // The server's line ("Leave by ~09:36 · R2 from PGP", "Not going"; none once done), else worded here.
           let sub = null;
-          if (it.status === 'skipped') sub = t('Not going');
+          if (it.line !== undefined) sub = it.line;
+          else if (it.status === 'skipped') sub = t('Not going');
           else if (it.onBus) sub = [t('On the {0}', it.onBus.svc), it.onBus.off ? t('off at {0}', it.onBus.off) : null, it.onBus.arrive ? t('arrive {0}', clock(it.onBus.arrive)) : null].filter(Boolean).join(' · ');
           else if (it.status !== 'done' && it.leave?.at) {
             const how = it.leave.svc ? t('{0} from {1}', it.leave.svc, it.leave.stop ?? it.fromName) : t('walk');

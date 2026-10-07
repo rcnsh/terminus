@@ -150,8 +150,15 @@ export function residenceFor(homeStops) {
   return residencesByName().find((r) => [...r.stops].sort().join() === key) ?? null;
 }
 
-/** A residence's walk to its stops, in minutes at a normal pace. */
-export const residenceWalkMin = (r) => Math.max(1, Math.round(r.walkM / 1.3 / 60));
+/** A residence's walk to its stops, in minutes at a normal pace: /campus says (`walkMin`); worked out only from an older answer without it. */
+export const residenceWalkMin = (r) => r.walkMin ?? Math.max(1, Math.round(r.walkM / 1.3 / 60));
+
+/**
+ * One of the account's limits (the profile's `limits`: pinnedStops, label,
+ * homeWalkMin, …), so the page holds to what the server will take; `fallback`
+ * until the profile has loaded, or from a server that doesn't send them.
+ */
+export const limit = (key, fallback) => profile.get()?.limits?.[key] ?? fallback;
 
 /**
  * Adds a favourite, called what was picked, short, as it reads on a button

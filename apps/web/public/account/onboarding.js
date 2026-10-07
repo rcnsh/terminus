@@ -4,7 +4,7 @@
 
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { api, browserHour12, clock, inkOn, t } from './dom.js';
-import { campus, profile, ResidenceOptions, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast } from './profile.js';
+import { campus, limit, profile, ResidenceOptions, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast } from './profile.js';
 import { CLOCKS, StopSelect } from './settings-pages.js';
 
 const PACES = [
@@ -203,6 +203,9 @@ function Home({ nav }) {
   const [picked, setPicked] = useState(() => residences.find((r) => r.stops[0] === current[0]) ?? null);
   const [mode, setMode] = useState(picked ? 'hall' : current.length ? 'off' : null);
   const [msg, setMsg] = useState('');
+  // The walk the account can save (the profile's limits), and how many home stops.
+  const range = limit('homeWalkMin', { min: 0, max: 30 });
+  const stopsMax = limit('homeStops', 3);
   const pick = (r) => {
     setPicked(r);
     setMode(r ? 'hall' : 'off');
@@ -261,7 +264,7 @@ function Home({ nav }) {
       <div class="ob-signs">${yours.map((code) => html`<${StopSign} code=${code} key=${code} />`)}</div>`}
     <label for="ob-walk">${t('Walk from home to that stop')}</label>
     <div class="row tight">
-      <input id="ob-walk" type="number" min="0" max="30" step="1" aria-label=${t('Minutes from home to your stop')} value=${walk} onInput=${(e) => setWalk(e.currentTarget.value)} />
+      <input id="ob-walk" type="number" min=${range.min} max=${range.max} step="1" aria-label=${t('Minutes from home to your stop')} value=${walk} onInput=${(e) => setWalk(e.currentTarget.value)} />
       <span>${t('minutes')}</span>
     </div>
     <p class="hint">${t('Used when the app does not have your location.')}</p>
@@ -272,8 +275,8 @@ function Home({ nav }) {
           const v = Number(walk);
           // A residence brings all its stops; otherwise the one chosen here first.
           if (mode === 'hall' && picked) x.home = { stops: [...picked.stops] };
-          else if (stop) x.home = { stops: [stop, ...current.filter((code) => code !== stop)].slice(0, 3) };
-          if (Number.isInteger(v) && v >= 0 && v <= 30) x.homeWalkMin = v;
+          else if (stop) x.home = { stops: [stop, ...current.filter((code) => code !== stop)].slice(0, stopsMax) };
+          if (Number.isInteger(v) && v >= range.min && v <= range.max) x.homeWalkMin = v;
         })}
     />
   `;

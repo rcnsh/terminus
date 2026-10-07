@@ -268,11 +268,6 @@ async function shellFile(req, path, event) {
 // the trip goes on; it only buzzes when the push says it's worth it.
 
 const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
-/** A time in the card's own style (`card.h12`, the account's choice), so it reads like the card's times. */
-const hhmm = (iso, h12 = HOUR12) =>
-  new Date(iso)
-    .toLocaleTimeString([], { ...(h12 ? { hour: 'numeric', hour12: true } : { hour: '2-digit', hour12: false }), minute: '2-digit', timeZone: 'Asia/Singapore' })
-    .replace(/([上下]午)(\d)/, '$1 $2');
 
 self.addEventListener('push', (event) => {
   let nudge = {};
@@ -311,8 +306,7 @@ async function notifyFromCard(urgent, fetched) {
     const body = zh ? '你的行程有变化。打开 terminus 查看。' : 'Your trip has changed. Open terminus to see it.';
     return self.registration.showNotification('terminus', { body, tag: 'trip', icon: '/assets/icons/icon-192.png' });
   }
-  // The server wrote the card in the account's language; the few words here follow it.
-  const zh = /[\u4e00-\u9fff]/.test(`${a.label} ${a.detail ?? ''}`);
+  // Every word is the card's, written by the server in the account's language.
   const c = a.card;
   let title;
   let body;
@@ -320,10 +314,13 @@ async function notifyFromCard(urgent, fetched) {
     title = c.line ?? a.label;
     body = a.detail ?? '';
   } else {
-    title = c.phase !== 'waiting' && a.leave?.at && Date.now() >= Date.parse(a.leave.at) ? (zh ? '现在出发' : 'Leave now') : (c.leaveBy ?? a.label);
+    // Its leave-by gone: the phase's "Time to get going" rather than an old "Leave by".
+    const gone = c.phase !== 'waiting' && a.leave?.at && Date.now() >= Date.parse(a.leave.at);
+    title = (gone ? c.phaseText : null) ?? c.leaveBy ?? c.glance ?? a.label;
     body = c.catch ?? a.dest?.label ?? '';
   }
-  const where = [a.dest?.label, a.timing?.classAt ? (zh ? `${hhmm(a.timing.classAt, c?.h12)} 开始` : `starts ${hhmm(a.timing.classAt, c?.h12)}`) : null].filter(Boolean).join(' · ');
+  // "To CS2030 @ COM1 · starts 10:00", or the heading ("Heading home").
+  const where = c.journey?.title ?? c.heading ?? a.dest?.label ?? '';
   // Nothing asks what happened. The one button, before you've left, is the
   // card's "Not going" (its words the server's); a tap anywhere else
   // opens the app. Browsers without buttons (iOS) just leave it out.
