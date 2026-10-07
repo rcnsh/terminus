@@ -164,6 +164,13 @@ after it the feed knows (`later`), and
   when its hours are unknown or it isn't running;
 - `running`: true on every row, unless asked for the stopped ones (below).
 
+Times count from the request, as `scoreOptions` does: a cached or stale
+answer's times are less its age, and a bus whose time passed more than a
+minute ago (`BOARD_GONE_S`; the feed's times are whole minutes) is left
+out. A live time from a stale feed is `stale`. The response's `asOf` is the
+oldest fetch the board used (`boardAsOf`), so the apps' "Updated N ago" is
+as old as the times are.
+
 A service outside its hours (`inService`) with no time from the feed is
 left off the board. With `?stopped=1` (`/arrivals`, `/me/nearby`; `/line`
 always asks this way) it's listed after every running row, by name, with

@@ -19,7 +19,7 @@ import { appVersion, authConfigured, getSession } from './auth.ts';
 import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
 import { fmsConfigured, getBuses } from './fms.ts';
 import { shortStop } from './format.ts';
-import { boardAt, displayName, indexGraph, serviceEndsAt, serviceResumesAt, stoppedReason } from './resolve.ts';
+import { boardAsOf, boardAt, displayName, indexGraph, serviceEndsAt, serviceResumesAt, stoppedReason } from './resolve.ts';
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
@@ -195,7 +195,8 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
     // it's only near rather than across).
     stop: { code: stop.code, name: stop.name, longName: displayName(stop, stop.code), ...twinOf(stop, idx.byCode) },
     board,
-    asOf: new Date(sa.stale ? sa.fetchedAt : nowMs).toISOString(),
+    // As old as the times on the board (counted from now in boardAt).
+    asOf: new Date(boardAsOf([sa], nowMs)).toISOString(),
     available: sa.available,
   });
 }

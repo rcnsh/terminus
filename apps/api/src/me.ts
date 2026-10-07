@@ -51,7 +51,7 @@ import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from '.
 import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
-import { boardAt, displayName, indexGraph, rideStops } from './resolve.ts';
+import { boardAsOf, boardAt, displayName, indexGraph, rideStops } from './resolve.ts';
 import { CORRIDOR_M, type Fix, atStopOf, departedAt, detect, fixOf, mayDetect, onRoute } from './detect.ts';
 import { mayRecordRide, recordRide } from './ridetimes.ts';
 import { haversineM } from './geo.ts';
@@ -1397,5 +1397,6 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
       board: boardAt(graph, idx, stop.code, sa, nowMs, { stopped }),
     };
   });
-  return json({ stops, asOf: new Date(nowMs).toISOString() });
+  // As old as the oldest times on it, so "Updated N ago" is true.
+  return json({ stops, asOf: new Date(boardAsOf(picked.map((c) => byStop.get(c.stop.code)), nowMs)).toISOString() });
 }
