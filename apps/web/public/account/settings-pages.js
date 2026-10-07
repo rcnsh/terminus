@@ -26,6 +26,8 @@ import { Celestial, Horizon } from './sky.js';
 import { pickedStop } from './search.js';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(d));
+const FULL_DAYS = [t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), t('Thursday'), t('Friday'), t('Saturday')];
+/** The week as a timetable lists it: Monday first. */
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 /** Devices paired, for Devices' line in the list; null until loaded. */
@@ -357,15 +359,15 @@ function Choices() {
           <span class="field-label">${r.history === 1 ? t('1 trip recorded.') : t('{0} trips recorded.', r.history)}</span>
           <div class="field-control">
             <button
-        class="btn small ghost"
-        type="button"
-        onClick=${async () => {
-          if (!confirm(t("Clear your trip history? Your settings won't change."))) return;
-          await api('/me/history', { method: 'DELETE' });
-          toast(t('Trip history cleared'));
-          lists.set((n) => n + 1);
-        }}
-      >${t('Clear trip history')}</button>
+              class="btn small ghost"
+              type="button"
+              onClick=${async () => {
+                if (!confirm(t("Clear your trip history? Your settings won't change."))) return;
+                await api('/me/history', { method: 'DELETE' });
+                toast(t('Trip history cleared'));
+                lists.set((n) => n + 1);
+              }}
+            >${t('Clear trip history')}</button>
           </div>
         </div>
       </div>
@@ -606,7 +608,7 @@ function AddClass() {
       <form class="grid" onSubmit=${submit}>
         <label>${t('Day')}
           <select name="day" required value=${day} onChange=${(e) => setDay(e.currentTarget.value)}>
-            ${[1, 2, 3, 4, 5, 6, 0].map((d) => html`<option value=${String(d)} key=${d}>${[t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), t('Thursday'), t('Friday'), t('Saturday')][d]}</option>`)}
+            ${DAY_ORDER.map((d) => html`<option value=${String(d)} key=${d}>${FULL_DAYS[d]}</option>`)}
           </select>
         </label>
         <label>${t('Starts')} <input name="start" type="time" required value=${start} onInput=${(e) => setStart(e.currentTarget.value)} /></label>
@@ -1070,70 +1072,69 @@ function Keys() {
     <section class="trips-group">
       <h3 class="eyebrow">${t('API keys')}</h3>
       <div class="card settings-list">
-      ${keys.length > 0 &&
-      html`<ul class="list group-body">
-        ${keys.map(
-          (k) => html`<li key=${k.id}>
-            <span><strong>${k.name}</strong><div class="meta">${`…${k.hint} · ${t('made {0}', shortDate(k.created))} · ${k.lastUsed ? t('used {0}', shortDate(k.lastUsed)) : t('never used')}`}</div></span>
+        ${keys.length > 0 &&
+        html`<ul class="list group-body">
+          ${keys.map(
+            (k) => html`<li key=${k.id}>
+              <span><strong>${k.name}</strong><div class="meta">${`…${k.hint} · ${t('made {0}', shortDate(k.created))} · ${k.lastUsed ? t('used {0}', shortDate(k.lastUsed)) : t('never used')}`}</div></span>
+              <button
+                type="button"
+                class="remove"
+                aria-label=${t('Revoke {0}', k.name)}
+                onClick=${async () => {
+                  if (!confirm(t('Revoke "{0}"? Anything using it stops working straight away.', k.name))) return;
+                  await api(`/me/keys/${k.id}`, { method: 'DELETE' });
+                  setMade(null);
+                  load();
+                }}
+              >${t('Revoke')}</button>
+            </li>`,
+          )}
+        </ul>`}
+        <form
+          class="field row"
+          onSubmit=${async (e) => {
+            e.preventDefault();
+            setMsg('');
+            try {
+              const r = await api('/me/keys', { method: 'POST', body: { name: name.trim() } });
+              setName('');
+              setMade(r.key);
+              load();
+            } catch (err) {
+              setMsg(err.message);
+            }
+          }}
+        >
+          <input name="name" maxlength="40" required placeholder=${t("What it's for, e.g. My script")} aria-label=${t('Key name')} value=${name} onInput=${(e) => setName(e.currentTarget.value)} />
+          <button type="submit" class="btn small">${t('Create')}</button>
+        </form>
+        ${made &&
+        html`<div class="new-key group-body">
+          <p class="warn-text">${t("Copy this key now. It won't be shown again.")}</p>
+          <div class="row">
+            <code>${made}</code>
             <button
               type="button"
-              class="remove"
-              aria-label=${t('Revoke {0}', k.name)}
+              class="btn small"
               onClick=${async () => {
-                if (!confirm(t('Revoke "{0}"? Anything using it stops working straight away.', k.name))) return;
-                await api(`/me/keys/${k.id}`, { method: 'DELETE' });
-                setMade(null);
-                load();
+                try {
+                  await navigator.clipboard.writeText(made);
+                  toast(t('Copied'));
+                } catch {
+                  toast(t('Select the key and copy it'));
+                }
               }}
-            >${t('Revoke')}</button>
-          </li>`,
-        )}
-      </ul>`}
-      <form
-        class="field row"
-        onSubmit=${async (e) => {
-          e.preventDefault();
-          setMsg('');
-          try {
-            const r = await api('/me/keys', { method: 'POST', body: { name: name.trim() } });
-            setName('');
-            setMade(r.key);
-            load();
-          } catch (err) {
-            setMsg(err.message);
-          }
-        }}
-      >
-        <input name="name" maxlength="40" required placeholder=${t("What it's for, e.g. My script")} aria-label=${t('Key name')} value=${name} onInput=${(e) => setName(e.currentTarget.value)} />
-        <button type="submit" class="btn small">${t('Create')}</button>
-      </form>
-      ${made &&
-      html`<div class="new-key group-body">
-        <p class="warn-text">${t("Copy this key now. It won't be shown again.")}</p>
-        <div class="row">
-          <code>${made}</code>
-          <button
-            type="button"
-            class="btn small"
-            onClick=${async () => {
-              try {
-                await navigator.clipboard.writeText(made);
-                toast(t('Copied'));
-              } catch {
-                toast(t('Select the key and copy it'));
-              }
-            }}
-          >${t('Copy')}</button>
-        </div>
-        <p class="hint">${t('Try it:')} <code>${`curl -H "x-api-key: ${made}" "${location.origin}/arrivals?stop=COM3"`}</code></p>
-      </div>`}
-      ${msg && html`<p class="hint group-body" role="status">${msg}</p>`}
+            >${t('Copy')}</button>
+          </div>
+          <p class="hint">${t('Try it:')} <code>${`curl -H "x-api-key: ${made}" "${location.origin}/arrivals?stop=COM3"`}</code></p>
+        </div>`}
+        ${msg && html`<p class="hint group-body" role="status">${msg}</p>`}
       </div>
       <${Rich} as="p" class="hint group-hint" text=${t('For your own scripts and projects. See the <a href="/docs">API docs</a>; send the key in the <code>x-api-key</code> header.')} />
     </section>
   `;
 }
-
 
 /* ---------- About, Feedback ---------- */
 

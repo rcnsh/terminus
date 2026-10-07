@@ -41,6 +41,13 @@ export const styleHint = (s) =>
     steps: t('The trip as a line down the card, as on a route map.'),
   })[s];
 
+/** Whole seconds until it's time to leave, or null once it is (or with no time to leave by). */
+function secondsToLeave(a, j, now) {
+  const at = a.leave ? Date.parse(a.leave.at) : null;
+  if (at == null || j.leave == null || now >= at) return null;
+  return Math.floor((at - now) / 1000);
+}
+
 /**
  * "Leave in 4 min", "Leave in 1 min 5 s", "Leave in 45 s", then "Leave now".
  * At the stop it's the bus to wait for ("D2 at 4:05 PM"), as the server says
@@ -48,9 +55,8 @@ export const styleHint = (s) =>
  */
 export function leaveIn(a, j, now) {
   if (a.card.phase === 'waiting') return a.card.leaveBy ?? t('Leave now');
-  const at = a.leave ? Date.parse(a.leave.at) : null;
-  if (at == null || j.leave == null || now >= at) return t('Leave now');
-  const left = Math.floor((at - now) / 1000);
+  const left = secondsToLeave(a, j, now);
+  if (left === null) return t('Leave now');
   if (left >= 120) return t('Leave in {0} min', Math.round(left / 60));
   if (left >= 60) return t('Leave in {0} min {1} s', Math.floor(left / 60), left % 60);
   return t('Leave in {0} s', Math.max(1, left));
@@ -63,9 +69,8 @@ export function leaveIn(a, j, now) {
  */
 function leaveTime(a, j, now) {
   if (a.card.phase === 'waiting') return null;
-  const at = a.leave ? Date.parse(a.leave.at) : null;
-  if (at == null || j.leave == null || now >= at) return null;
-  const left = Math.floor((at - now) / 1000);
+  const left = secondsToLeave(a, j, now);
+  if (left === null) return null;
   if (left >= 120) return t('{0} min', Math.round(left / 60));
   if (left >= 60) return t('{0} min {1} s', Math.floor(left / 60), left % 60);
   return t('{0} s', Math.max(1, left));
@@ -104,6 +109,12 @@ function busIn(j, now) {
   if (left <= 0) return null;
   return left >= 120 ? t('in {0} min', Math.round(left / 60)) : t('in {0} min {1} s', Math.floor(left / 60), left % 60);
 }
+
+/** The crowd is the headline bus's: a class's leave-by bus can be another. */
+const crowdOf = (a) => (a.card.kind !== 'class' ? a.card.crowd : null);
+
+/** "Live" with its dot, then how busy the bus is, as tags. */
+const LiveTags = ({ live, crowd }) => html`${live && html`<span class="tag live"><span class="dot"></span>${t('Live')}</span>`}${crowd && html`<span class="tag">${crowd}</span>`}`;
 
 /** The service as painted on the bus; a public bus (with a fare) carries a $ so the fare is never a surprise. */
 const Badge = ({ bus, big = false }) => html`<span class=${big ? 'bus-badge big' : 'bus-badge'} style=${{ background: bus.color, color: inkOn(bus.color) }}>${bus.svc}${bus.paid ? html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>` : ''}</span>`;
@@ -289,8 +300,7 @@ function Ticket({ a, j, now, late, top }) {
 function Steps({ a, j, now, late, top }) {
   const b = backup(a, j);
   const under = [by(a, j, now), j.slack].filter(Boolean).join(' · ');
-  // The crowd is the headline bus's: a class's leave-by bus can be another.
-  const crowd = a.card.kind !== 'class' ? a.card.crowd : null;
+  const crowd = crowdOf(a);
   const soon = busIn(j, now);
   return html`
     ${top(html`
@@ -299,7 +309,7 @@ function Steps({ a, j, now, late, top }) {
       ${(under || j.live || crowd) &&
       html`<div class="steps-under">
         ${under && html`<span class=${`under${late}`}>${under}</span>`}
-        ${j.live && html`<span class="tag live"><span class="dot"></span>${t('Live')}</span>`}${crowd && html`<span class="tag">${crowd}</span>`}
+        <${LiveTags} live=${j.live} crowd=${crowd} />
       </div>`}
     `)}
     <ol class="line">
@@ -337,12 +347,11 @@ const LinePoint = ({ time, dot, line = null, color = null, below = '', late = fa
 /** Live, the crowd, and the backup bus, under the trip. */
 function Tags({ a, j }) {
   const b = backup(a, j);
-  // The crowd is the headline bus's: a class's leave-by bus can be another.
-  const crowd = a.card.kind !== 'class' ? a.card.crowd : null;
+  const crowd = crowdOf(a);
   return html`
     ${(j.live || crowd) &&
     html`<div class="tags">
-      ${j.live && html`<span class="tag live"><span class="dot"></span>${t('Live')}</span>`}${crowd && html`<span class="tag">${crowd}</span>`}
+      <${LiveTags} live=${j.live} crowd=${crowd} />
     </div>`}
     ${b && html`<div class="backup">${b}</div>`}
   `;

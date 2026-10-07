@@ -335,6 +335,9 @@ function Travel({ nav }) {
   `;
 }
 
+/** Where you are on the track: on its lane line, round the far bend. */
+const RUNNER = [325 + 67.5 * Math.cos((-50 * Math.PI) / 180), 75 + 67.5 * Math.sin((-50 * Math.PI) / 180)];
+
 /**
  * A running track, from above: the lap's time at your pace in the infield,
  * and you on the far bend. The track's own red, the same in light and dark.
@@ -346,8 +349,8 @@ const Track = ({ min }) => html`
       <rect x="7.5" y="7.5" width="385" height="135" rx="67.5" fill="none" stroke="rgb(255 255 255 / 0.45)" stroke-width="1" />
       <rect x="15" y="15" width="370" height="120" rx="60" class="infield" />
       <line x1="200" y1="0" x2="200" y2="15" stroke="#fff" stroke-width="3" />
-      <circle cx=${325 + 67.5 * Math.cos(-50 * Math.PI / 180)} cy=${75 + 67.5 * Math.sin(-50 * Math.PI / 180)} r="7.5" fill="#fff" />
-      <circle cx=${325 + 67.5 * Math.cos(-50 * Math.PI / 180)} cy=${75 + 67.5 * Math.sin(-50 * Math.PI / 180)} r="5" class="you" />
+      <circle cx=${RUNNER[0]} cy=${RUNNER[1]} r="7.5" fill="#fff" />
+      <circle cx=${RUNNER[0]} cy=${RUNNER[1]} r="5" class="you" />
     </svg>
     <div class="ob-track-text"><strong>${t('{0} min', min)}</strong><span>${t('a lap at your pace')}</span></div>
   </div>

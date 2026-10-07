@@ -5,7 +5,7 @@
 // on a phone, sliding in from the side; side by side on a wide screen. The address names the page (#trips, or
 // #settings/trips in the web app), so Back and a reload keep it.
 
-import { Icon, html, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
+import { Icon, html, reducedMotion, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clockOpts, locale, spaced, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
@@ -54,9 +54,12 @@ export function offerImport(link) {
 /** Minutes past midnight as a time of day, in the clock the person chose. */
 const hm = (min) => spaced(new Date(2000, 0, 1, Math.floor(min / 60), min % 60).toLocaleTimeString(locale() ?? [], clockOpts()));
 
+/** The walking pace chosen, in words: Normal until one is. */
+const paceName = (p) => ({ slow: t('Slow'), normal: t('Normal'), fast: t('Fast') })[p.walkPace ?? 'normal'] ?? t('Normal');
+
 /** What each group has set: a line under its name in the list. */
 function summaries({ p, me, notifyOn, devices, imported }) {
-  const pace = { slow: t('Slow'), normal: t('Normal'), fast: t('Fast') }[p.walkPace ?? 'normal'] ?? t('Normal');
+  const pace = paceName(p);
   const home = p.home?.stops?.[0];
   const classes = p.trips.length + p.manual.length;
   return {
@@ -152,7 +155,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
     const out = l.node === 'side' ? side_.current : nodes[l.node];
     const into = view.shown ? nodes[view.shown] : side_.current;
     if (!out || !into) return setView((v) => ({ ...v, leaving: null }));
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduce = reducedMotion();
     const timing = { duration: reduce ? 150 : 300, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
     const forward = l.forward;
     const gone = forward ? 'translateX(-25%)' : 'translateX(100%)';
@@ -288,7 +291,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
                 ['trips', t('Home stop'), stopName(p.home?.stops?.[0] ?? '') || t('Choose your stop'), !p.home?.stops?.length],
                 ['timetable', t('Timetable'), noClasses && !reimport ? t('Import from NUSMods') : sum.timetable, noClasses || reimport],
                 ['trips', t('Show buses between'), `${hm(p.dayStartMin ?? 360)} – ${hm(p.dayEndMin ?? 1080)}`, false],
-                ['trips', t('Walking pace'), { slow: t('Slow'), normal: t('Normal'), fast: t('Fast') }[p.walkPace ?? 'normal'] ?? t('Normal'), false],
+                ['trips', t('Walking pace'), paceName(p), false],
               ].map(
                 ([id, label, value, todo], i) => html`<button
                   type="button"
