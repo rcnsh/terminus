@@ -18,7 +18,7 @@
 import type { Arrival, Crowd, Env, Graph, StopArrivals } from './types.ts';
 import { TTL } from './config.ts';
 import { timedFetch } from './http.ts';
-import { CACHE_BASE, cachedFetch } from './edgecache.ts';
+import { cacheBase, cachedFetch } from './edgecache.ts';
 import { indexGraph } from './resolve.ts';
 
 export const LTA_BASE = 'https://datamall2.mytransport.sg/ltaodataservice/';
@@ -140,14 +140,14 @@ export async function getPublicArrivals(env: Env, ctx: ExecutionContext, graph: 
   return cachedFetch<StopArrivals>({
     ctx,
     nowMs,
-    key: `${CACHE_BASE}/public/${encodeURIComponent(ltaCode)}`,
-    failKey: `${CACHE_BASE}/failed-public/${encodeURIComponent(ltaCode)}`,
+    key: `${cacheBase()}/public/${encodeURIComponent(ltaCode)}`,
+    failKey: `${cacheBase()}/failed-public/${encodeURIComponent(ltaCode)}`,
     fetch: () => fetchPublicArrivals(env, graph, code, ltaCode, nowMs),
     freshMs: TTL.arrivalsMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
-    breaker: { key: `${CACHE_BASE}/breaker-public`, trips: (err) => err instanceof LtaRefused, maxAgeS: TTL.breakerS },
+    breaker: { key: `${cacheBase()}/breaker-public`, trips: (err) => err instanceof LtaRefused, maxAgeS: TTL.breakerS },
     inflight,
   });
 }

@@ -2,7 +2,7 @@
  * The timelapse recorder (src/timelapse.ts, src/timelapsedo.ts) and the
  * replay that reads its days back (apps/web/public/admin/timelapse/replay.js).
  *
- * The recorder is the one scheduled reader of the NUS feed, so most of this
+ * The recorder is the one poller of the NUS feed, so most of this
  * is about what it must NOT do: ask faster than its floor, ask outside its
  * hours, ask with the breaker open or the switch off, or ask NUS at all when
  * the edge cache already has the answer.
@@ -229,6 +229,57 @@ test('a failed poll records nothing, but a request that reached NUS still counts
   h.ns.alarms.set(DATE, FROZEN_NOW + 1_000);
   await h.ns.fireDue(FROZEN_NOW + 1_000);
   assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['error', 'failed']);
+});
+
+test('an alarm that throws after asking, run again by the platform, does not ask again', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  const inst = h.ns.instances.get(DATE);
+  const real = inst.poll;
+  // The request went out, then something after it threw (placement, storage, CPU).
+  inst.poll = async function (...args) {
+    await real.apply(this, args);
+    throw new Error('boom');
+  };
+  await assert.rejects(h.ns.fireDue(FROZEN_NOW));
+  inst.poll = real;
+  assert.equal(h.busCalls().length, 1);
+  // The platform retries a thrown alarm within seconds; past the 5 s cache.
+  Date.now = () => FROZEN_NOW + 6_000;
+  await inst.alarm();
+  assert.equal(h.busCalls().length, 1, 'not asked again within pollMs');
+  assert.ok(h.ns.alarms.get(DATE) >= FROZEN_NOW + 30_000, 'it waits out pollMs instead');
+});
+
+test('a feed failing round after round is asked less and less often, and as usual once it answers', async () => {
+  const h = harness();
+  const down = makeFetch({ fail: true });
+  globalThis.fetch = down;
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 10 * 60_000 - 1);
+  // Rounds at 0, 30, 90, 210, 450 s: 2, 4, then 8 times pollMs apart.
+  const services = RUNNING.length;
+  assert.ok(down.counts.shuttle <= 5 * services, `asked ${down.counts.shuttle} times in ten minutes`);
+  assert.equal((await status(h)).state, 'polling', 'an outage still is not an idle day');
+  // Back up: the next round answers, and the one after is pollMs later again.
+  const up = makeFetch({ buses: { D2: [busOn('D2', 400)] } });
+  globalThis.fetch = up;
+  h.fetchImpl.requests.length = 0;
+  const next = h.ns.alarms.get(DATE);
+  await runUntil(h, next + 240_000 + 30_000 - 1);
+  const asked = up.requests.filter((r) => r.url.endsWith('/active-bus') && r.body.route_code === RUNNING[0]).map((r) => r.at);
+  assert.ok(asked.length >= 2);
+  assert.equal(asked[1] - asked[0], 30_000, 'back to every pollMs');
+});
+
+test('a retry inside a poll is counted as the request to NUS it is', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  const feed = makeFetch({ buses: { [RUNNING[0]]: [busOn('D2', 400)] }, reject: 1, rejectCode: '10008' });
+  globalThis.fetch = feed;
+  await h.ns.fireDue(FROZEN_NOW);
+  // A refused call, a fresh token, and the call again: three requests.
+  assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['retry', 'retry', 'upstream']);
 });
 
 test('no service is asked twice within pollMs, even when the next round has fewer services', async () => {

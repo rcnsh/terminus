@@ -47,8 +47,11 @@ export async function collectArrivals(
   const settled = await Promise.all(
     codes.map(async (code) => {
       const stop = idx.byCode.get(code);
-      const pub = stop ? publicCodeOf(stop) : null;
-      const shuttle = stop ? shuttleCalls(stop) : true;
+      // Not a stop (a food court's code, say): nothing to ask either feed,
+      // which would only refuse it, and a refusal costs NUS a retry.
+      if (!stop) return unreached(code, nowMs);
+      const pub = publicCodeOf(stop);
+      const shuttle = shuttleCalls(stop);
       // A failed stop still gets an entry, marked unavailable. Dropping it here
       // would make "we could not reach the feed" indistinguishable from "the
       // feed says no bus is coming", and the second one gets a headway guess.

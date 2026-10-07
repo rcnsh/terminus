@@ -33,13 +33,17 @@ affiliated with NUS.
 2. **Don't add load on NUS.** Arrivals are cached 15 s per stop
    (`TTL.arrivalsMs`), live buses 5 s per service (`TTL.busesMs`), all in
    `src/config.ts`. Never lower these, poll in bulk, or scan for endpoints.
-   Upstream failures back off (`failMemoS`, `breakerS`). The same goes for
-   LTA DataMall, the public buses' feed (`src/lta.ts`): one call per stop
+   Upstream failures back off (`failMemoS`, `breakerS`): a refused version
+   or key, or a 429 or 5xx from a NUS host, opens the breaker; a failed
+   token mint isn't tried again for `failMemoS`; a refused call is retried
+   once, with a token minted at most once a minute (`remintGapS`). These
+   limits hold per Cloudflare data centre, whose cache every isolate there
+   shares. The same goes for LTA DataMall, the public buses' feed (`src/lta.ts`): one call per stop
    per 15 s, through the same cache (`src/edgecache.ts`).
 
    **One exception: the timelapse recorder**
    (`src/timelapse.ts`, `src/timelapsedo.ts`). It is the only code that
-   reads the NUS feed on a schedule rather than on request. Its limits:
+   polls the NUS feed on a schedule rather than on request. Its limits:
    - **Rate:** each service's live buses once per `TIMELAPSE.pollMs` (30 s),
      spread across that time, never below `MIN_POLL_MS` (15 s, enforced in
      code). Arrivals are never polled.
@@ -52,9 +56,19 @@ affiliated with NUS.
      without a deploy. Otherwise the `TIMELAPSE_ENABLED` var applies: on for
      the stable site, off for the beta, off when unset.
 
-   At most 17,280 requests a day, every one counted on the dashboard. Don't add another poller, don't widen this one's
+   - **Back-off:** after a round in which no service answered, the next
+     waits 2, 4, then 8 times as long.
+
+   At most 17,280 polls a day, and every request counted on the dashboard
+   (a retry inside a poll too). Don't add another poller, don't widen this one's
    hours or rate, don't point it at arrivals or LTA, and don't reuse its
    alarm for anything else that calls NUS.
+
+   Two other scheduled reads exist, small and bounded; don't grow them.
+   The 15-minute cron's health check asks NUS for one stop and LTA for one
+   stop each run, past the cache on purpose (`src/monitor.ts`). Each push
+   user's Trip object (`src/tripdo.ts`) wakes at most every 30 s to
+   recompute the card, asking for its stops through the cache.
 3. **`normalize()` / `normalizeBuses()` in `src/fms.ts` are the only code that
    touches the raw feed shape.** The feed is undocumented and changes, so
    they're tolerant and everything downstream assumes clean types. When the

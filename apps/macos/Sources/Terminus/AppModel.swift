@@ -741,7 +741,9 @@ final class AppModel {
         for mark in [plan?.departure?.addingTimeInterval(31), plan?.planChanges, plan?.nextChange].compactMap({ $0 }) where mark > now {
             d = min(d, mark.timeIntervalSince(now))
         }
-        return max(d, 5)
+        // A leave-by that keeps sliding (a late bus) would otherwise bring the
+        // refresh down to seconds; the server's own trip engine waits 30 s too.
+        return max(d, 30)
     }
 
     private func kick() { start() }

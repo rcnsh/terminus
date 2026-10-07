@@ -19,9 +19,12 @@ export const TTL = {
   /** After a failed fetch for a stop, don't ask again for this long. An
    *  outage must not turn every request into another call to NUS. */
   failMemoS: 20,
-  /** After the feed refuses our version or keys (10009, 10000), stop calling
-   *  it for this long: a fresh token cannot fix either. */
+  /** After the feed refuses our version or keys (10009, 10000), or its host
+   *  answers 429 or 5xx, stop calling it for this long. */
   breakerS: 60,
+  /** After a refused call, a fresh token is minted at most once per this in
+   *  a data centre: the calls in between retry with it, or not at all. */
+  remintGapS: 60,
   /** How long an isolate trusts the version string it read from KV. A new
    *  one written to config:appVersion is live everywhere within this. */
   versionMemoMs: 60_000,
@@ -101,8 +104,9 @@ export const PUBLIC = {
 } as const;
 
 /**
- * The timelapse recorder (timelapse.ts, timelapsedo.ts): the ONE scheduled
- * reader of the NUS feed. Everything else fetches on demand. It asks for each
+ * The timelapse recorder (timelapse.ts, timelapsedo.ts): the ONE poller of
+ * the NUS feed. Answers fetch on demand; the cron's health check and the
+ * Trip objects read a stop at a time (CLAUDE.md, rule 2). It asks for each
  * service's buses through the same edge cache as the map, so a poll a user
  * already paid for costs NUS nothing, and it never asks faster than this.
  */

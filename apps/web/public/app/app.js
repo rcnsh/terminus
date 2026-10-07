@@ -22,6 +22,9 @@ import { offlineNext } from '/app/offline.js';
 
 /** The answer refreshes this often while the app is on screen (the API caches 15 s). */
 const REFRESH_MS = 30_000;
+/** How often the timed refresh asks for Today too: it moves slowly, and
+ *  each one is an answer per class on the server. */
+const DAY_MS = 120_000;
 
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 // iPadOS says it's a Mac; one with a touch screen is an iPad.
@@ -124,16 +127,27 @@ async function get(path) {
 
 /** The banner for a card fetched at `cachedAt` by the service worker, or none for a live one. */
 function stale(cachedAt) {
-  if (cachedAt === null) return void banner.set(null);
+  if (cachedAt === null) {
+    slowTries = 0;
+    return void banner.set(null);
+  }
   const at = clock(new Date(cachedAt).toISOString());
-  // Online, the kept copy means the network was too slow (sw.js): try again soon.
+  // Online, the kept copy means the network was too slow or the server
+  // failing (sw.js): try again sooner than the timed refresh, then less
+  // often (8 s, 16 s), and only while Now is on screen. Past that the timed
+  // refresh is soon enough: a struggling server isn't helped by more.
   if (navigator.onLine) {
     banner.set(t('Slow connection. Showing the update from {0}.', at));
     clearTimeout(slowRetry);
-    slowRetry = setTimeout(refresh, 8_000);
+    const wait = 8_000 * 2 ** slowTries++;
+    if (wait < REFRESH_MS) slowRetry = setTimeout(() => nowShown() && refresh({ timed: true }), wait);
   } else banner.set(t("You're offline. Showing the update from {0}.", at));
 }
 let slowRetry = null;
+let slowTries = 0;
+
+/** Whether Now is what the user is looking at: the timed refreshes wait otherwise. */
+const nowShown = () => document.visibilityState === 'visible' && tab.get() === 'now';
 
 /** A query string: the 12-hour style, and the other params given. */
 function query(params = {}) {
@@ -171,7 +185,12 @@ async function here({ ask = false } = {}) {
 /** Counts refreshes: one that finishes after a newer one started (a chip tapped meanwhile) is dropped. */
 let generation = 0;
 
-async function refresh() {
+/** The last Today and when it came: a timed refresh reuses it for DAY_MS. */
+let lastPlan = null;
+let planAt = 0;
+
+/** The card and Today. [timed]: by the clock, not something the user did, so Today is asked for at most every DAY_MS. */
+async function refresh({ timed = false } = {}) {
   const mine = ++generation;
   const to = target.get();
   if (to.kind === 'nearby') return refreshNearby(mine);
@@ -179,13 +198,16 @@ async function refresh() {
     const at = await here();
     const params = { ...(to.kind === 'place' ? { place: to.key } : to.kind === 'stop' ? { to: to.to } : {}), ...at };
     // Today gets the location too: its next class is planned from here, as the card is.
-    const [nextR, dayR] = await Promise.allSettled([get(`/me/next${query(params)}`), get(`/me/day${query(at ?? {})}`)]);
+    const askDay = !timed || !lastPlan || Date.now() - planAt >= DAY_MS;
+    const [nextR, dayR] = await Promise.allSettled([get(`/me/next${query(params)}`), askDay ? get(`/me/day${query(at ?? {})}`) : Promise.resolve(lastPlan)]);
     if (mine !== generation) return;
     if (nextR.status === 'rejected' && nextR.reason?.message === 'signed out') return;
     const next = nextR.status === 'fulfilled' ? nextR.value : null;
     if (next?.data?.walkSpeedMs) walkSpeed.set(next.data.walkSpeedMs);
     const plan = dayR.status === 'fulfilled' ? dayR.value : null;
-    if (plan) {
+    if (plan && askDay) {
+      lastPlan = plan;
+      planAt = Date.now();
       day.set(plan.data);
       // What was taken off before this refresh started is gone from it now.
       removed.set((m) => new Map([...m].filter(([, at]) => at >= mine)));
@@ -1096,10 +1118,10 @@ async function start() {
   window.addEventListener('hashchange', showTab);
   showTab();
   await first;
-  const nowShown = () => document.visibilityState === 'visible' && tab.get() === 'now';
-  setInterval(() => nowShown() && refresh(), REFRESH_MS);
-  document.addEventListener('visibilitychange', () => nowShown() && refresh());
-  window.addEventListener('online', refresh);
+  setInterval(() => nowShown() && refresh({ timed: true }), REFRESH_MS);
+  document.addEventListener('visibilitychange', () => nowShown() && refresh({ timed: true }));
+  // Back online: every open page at once, so only the ones on screen.
+  window.addEventListener('online', () => nowShown() && refresh());
 }
 
 start();

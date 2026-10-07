@@ -155,7 +155,7 @@ export function makeAnalytics() {
  * so the forced-refresh retry can be exercised. Every proxy request is kept in
  * `requests` so tests can assert on headers and body.
  */
-export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null, fcm = null, publicStops = {}, publicStatus = 200, publicFail = false } = {}) {
+export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, rejectCode = '10009', hang = false, raw = null, mintReject = null, mintStatus = 200, proxyStatus = 200, fcm = null, publicStops = {}, publicStatus = 200, publicFail = false } = {}) {
   const counts = { auth: 0, shuttle: 0, public: 0 };
   const requests = [];
   const mints = [];
@@ -165,6 +165,8 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
     if (url.includes('get-access-token')) {
       counts.auth++;
       mints.push(JSON.parse(init.body ?? '{}'));
+      // The auth host itself failing: a gateway's 5xx, a 429.
+      if (mintStatus !== 200) return new Response('unavailable', { status: mintStatus });
       // A mint refused the way NUS refuses one: HTTP 200, a code, no token.
       if (mintReject) return Response.json({ code: mintReject, msg: 'We have a new release of uNivUS', data: null });
       tokenSerial++;
@@ -196,6 +198,7 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
       const headers = new Headers(init.headers);
       const body = JSON.parse(init.body ?? '{}');
       requests.push({ url, method: init.method, headers, body, at: Date.now() });
+      if (proxyStatus !== 200) return Response.json({ code: '?', msg: 'busy' }, { status: proxyStatus });
       if (reject > 0) {
         reject--;
         return Response.json({ code: rejectCode, msg: rejectCode === '10009' ? 'We have a new release of uNivUS' : 'token invalid', data: null });
