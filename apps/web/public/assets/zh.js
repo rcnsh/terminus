@@ -646,5 +646,11 @@ window.TERMINUS_ZH = {
  "{0} stops": "{0} 个车站",
  "Next: {0}": "下一站：{0}",
  "Ends here": "本站为终点站",
+ "Stopped for today": "今天已停运",
+ "Not running yet": "尚未开始运行",
+ "No service today": "今天不运行",
+ "Starts at {0}": "{0} 开始",
+ "Back tomorrow at {0}": "明天 {0} 恢复",
+ "Back {0} at {1}": "{0} {1} 恢复",
  "Which stop": "哪个车站",
 };

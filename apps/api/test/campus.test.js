@@ -6,7 +6,7 @@ import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/campus.ts';
-import { boardAt, indexGraph, towardsFrom } from '../src/resolve.ts';
+import { boardAt, indexGraph, serviceResumesAt, stoppedReason, towardsFrom } from '../src/resolve.ts';
 import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/graph.ts';
 
 const GRAPH = graphJson;
@@ -235,6 +235,58 @@ test('boardAt: a public bus has no colour of its own and still says where it goe
     assert.ok(r.towards.every((t) => typeof t === 'string' && t.length), JSON.stringify(r.towards));
     assert.ok(!r.svc.includes('/'), 'shown by its number, not its route key');
   }
+});
+
+// Singapore time, as epoch ms: October 2026 has no public holidays on these days.
+const sgtAt = (day, h, m = 0) => Date.UTC(2026, 9, day, h - 8, m);
+const iso = (ms) => new Date(ms).toISOString();
+
+test('stopped services: ended for today, not yet started, or no service today, and when each is back', () => {
+  // Wednesday 7 October, 21:30: R1 finished at 19:30 and is back Thursday at 07:40.
+  assert.equal(stoppedReason(REAL, 'R1', sgtAt(7, 21, 30)), 'ended');
+  assert.equal(iso(serviceResumesAt(REAL, 'R1', sgtAt(7, 21, 30))), '2026-10-07T23:40:00.000Z');
+  // Saturday 10 October, 09:00: R1 doesn't run at weekends; back Monday 12th at 07:40.
+  assert.equal(stoppedReason(REAL, 'R1', sgtAt(10, 9)), 'noService');
+  assert.equal(iso(serviceResumesAt(REAL, 'R1', sgtAt(10, 9))), iso(sgtAt(12, 7, 40)));
+  // A weekday at 06:00: K starts at 07:04.
+  assert.equal(stoppedReason(REAL, 'K', sgtAt(7, 6)), 'notYet');
+  assert.equal(iso(serviceResumesAt(REAL, 'K', sgtAt(7, 6))), iso(sgtAt(7, 7, 4)));
+  // Running: no reason. Unknown hours count as running, and have no next start.
+  assert.equal(stoppedReason(REAL, 'R1', sgtAt(7, 12)), null);
+  assert.equal(stoppedReason(REAL, 'Z9', sgtAt(7, 3)), null);
+  assert.equal(serviceResumesAt(REAL, 'Z9', sgtAt(7, 3)), null);
+  // Christmas Day 2026 is a Friday and a public holiday: Sunday hours, so R1 is
+  // off from the Thursday evening until Monday 28th.
+  assert.equal(stoppedReason(REAL, 'R1', Date.UTC(2026, 11, 25, 2)), 'noService');
+  assert.equal(iso(serviceResumesAt(REAL, 'R1', Date.UTC(2026, 11, 24, 13))), iso(Date.UTC(2026, 11, 27, 23, 40)));
+  // Never runs: nothing found.
+  const never = { ...REAL, serviceHours: { X: { weekday: null, saturday: null, sunday: null } } };
+  assert.equal(stoppedReason(never, 'X', sgtAt(7, 12)), 'noService');
+  assert.equal(serviceResumesAt(never, 'X', sgtAt(7, 12)), null);
+});
+
+test('boardAt with stopped: services outside their hours come last, greyed, unless the feed still has a bus', () => {
+  const idx = indexGraph(REAL);
+  const nowMs = sgtAt(7, 21, 30); // R1 and R2 have finished
+  const sa = { code: 'PGP', arrivals: [{ svc: 'K', etaS: 120, crowd: 'low', plate: 'PK1', berth: null }], fetchedAt: nowMs, stale: false, available: true };
+  const plain = boardAt(REAL, idx, 'PGP', sa, nowMs);
+  assert.ok(plain.every((r) => r.running === true && !('stopped' in r) && !('resumesAt' in r)), 'unchanged without it, apart from running');
+  assert.ok(!plain.some((r) => r.svc === 'R1'));
+  const rows = boardAt(REAL, idx, 'PGP', sa, nowMs, { stopped: true });
+  assert.deepEqual(rows.slice(0, plain.length), plain, 'the running rows as before, first');
+  const off = rows.slice(plain.length);
+  assert.deepEqual(off.map((r) => r.svc), ['R1', 'R2'], 'then the stopped ones, by name');
+  const r1 = off[0];
+  assert.deepEqual(r1, {
+    svc: 'R1', etaS: null, quality: 'ended', ambiguousBerth: false, later: [], color: '#f57c1f',
+    towards: r1.towards, crowd: null, endsAt: null, running: false, stopped: 'ended', resumesAt: '2026-10-07T23:40:00.000Z',
+  });
+  // The feed still reporting an R1 at PGP: the feed wins, and it is a running row.
+  const late = { ...sa, arrivals: [...sa.arrivals, { svc: 'R1', etaS: 300, crowd: null, plate: 'PR1', berth: null }] };
+  const r1Live = boardAt(REAL, idx, 'PGP', late, nowMs, { stopped: true }).find((r) => r.svc === 'R1');
+  assert.equal(r1Live.running, true);
+  assert.equal(r1Live.etaS, 300);
+  assert.equal('stopped' in r1Live, false);
 });
 
 test('food courts are in the search, each with both of its stops', () => {

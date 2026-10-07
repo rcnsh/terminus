@@ -1311,6 +1311,8 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   if (twin && !picked.some((c) => c.stop.code === twin.stop.code)) picked.push(twin);
 
   const byStop = await deps.collectArrivals(env, ctx, picked.map((c) => c.stop.code), nowMs, graph);
+  // `?stopped=1`: the services not running now too, for the Buses tab.
+  const stopped = url.searchParams.get('stopped') === '1';
   const stops = picked.map(({ stop, distM, footM: foot }) => {
     const sa = byStop.get(stop.code)!;
     return {
@@ -1319,7 +1321,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
       distM: Math.round(distM),
       walkS: Math.round(foot / paceSpeed(profile.walkPace)),
       available: sa.available !== false,
-      board: boardAt(graph, idx, stop.code, sa, nowMs),
+      board: boardAt(graph, idx, stop.code, sa, nowMs, { stopped }),
     };
   });
   return json({ stops, asOf: new Date(nowMs).toISOString() });

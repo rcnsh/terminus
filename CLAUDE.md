@@ -107,6 +107,10 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
 - the timelapse recorder on the fake buses. `POST /__stub/timelapse?minutes=N`
   records N minutes at once, moving the clock ahead. Then open
   `/admin/timelapse/` (token `dev`).
+- every service running at any hour, unless `STUB_HOURS=real` (real hours,
+  and no buses or times outside them). `STUB_NOW=2026-10-07T13:30:00Z`
+  starts the clock there (a Wednesday 21:30 in Singapore: R1 and R2 have
+  stopped); `POST /__stub/at?t=<ISO>` moves it later.
 
 It serves `apps/web/public` from disk, so a reload shows your change. Use it
 with a headless browser (Playwright plus Chromium) to check web UI changes,

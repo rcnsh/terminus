@@ -440,6 +440,12 @@ data class BoardRow(
     val endsAtMs: Long? = null,
     /** The route ends at this stop: the server gave `towards` and it's empty. An older server gives none. */
     val endsHere: Boolean = false,
+    /** False: a service that calls here but isn't running now (asked for with `stopped=1`). */
+    val running: Boolean = true,
+    /** Why it isn't: "ended" (done for today), "notYet" (later today), "noService" (not today). */
+    val stopped: String? = null,
+    /** When it next starts; null when none was found. */
+    val resumesAtMs: Long? = null,
 )
 
 /** A bus after the next one, with its own quality: a timetabled one stays a guess. */
@@ -464,10 +470,14 @@ fun parseBoardRow(r: JSONObject): BoardRow = BoardRow(
     towards = r.optJSONArray("towards").stringList().filter { it.isNotBlank() },
     crowd = r.optStringOrNull("crowd")?.takeIf { it in CROWDS },
     endsAtMs = r.optStringOrNull("endsAt")?.let(::parseInstant),
+    running = r.optBoolean("running", true),
+    stopped = r.optStringOrNull("stopped")?.takeIf { it in STOPPED },
+    resumesAtMs = r.optStringOrNull("resumesAt")?.let(::parseInstant),
     endsHere = r.optJSONArray("towards")?.let { a -> (0 until a.length()).none { a.optString(it).isNotBlank() } } ?: false,
 )
 
 private val CROWDS = setOf("low", "medium", "high")
+internal val STOPPED = setOf("ended", "notYet", "noService")
 
 data class NearbyStop(
     val code: String,
@@ -590,7 +600,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun arrivals(stop: String): StopBoard = StopBoard.parse(request("GET", "/arrivals?stop=${enc(stop)}"))
 
     /** The same board whole, for the Buses tab: every row, the stop's name and its twin. */
-    suspend fun board(stop: String): Board = Board.parse(request("GET", "/arrivals?stop=${enc(stop)}"))
+    suspend fun board(stop: String): Board = Board.parse(request("GET", "/arrivals?stop=${enc(stop)}&stopped=1"))
 
     /** One service's whole line; with [stop], that stop's board row for it too. */
     suspend fun line(svc: String, stop: String? = null): Line =
@@ -665,8 +675,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     suspend fun nearby(lat: Double?, lon: Double?, acc: Double? = null): List<NearbyStop> = parseNearby(nearbyJson(lat, lon, acc))
 
-    suspend fun nearbyJson(lat: Double?, lon: Double?, acc: Double? = null): JSONObject {
-        val q = if (lat != null && lon != null) listOfNotNull("lat=${coord(lat)}", "lon=${coord(lon)}", acc?.let { "acc=${Math.round(it)}" }) else emptyList()
+    /** [stopped]: the services not running now too, greyed on the Buses tab; Nearby and the widgets leave them out. */
+    suspend fun nearbyJson(lat: Double?, lon: Double?, acc: Double? = null, stopped: Boolean = false): JSONObject {
+        val q = (if (lat != null && lon != null) listOfNotNull("lat=${coord(lat)}", "lon=${coord(lon)}", acc?.let { "acc=${Math.round(it)}" }) else emptyList()) +
+            listOfNotNull("stopped=1".takeIf { stopped })
         return request("GET", "/me/nearby" + query(q))
     }
 

@@ -76,6 +76,10 @@ data class Line(
     val here: LineHere?,
     val available: Boolean,
     val asOfMs: Long?,
+    /** False: the service isn't running now; [stopped] and [resumesAtMs] say why and until when. */
+    val running: Boolean = true,
+    val stopped: String? = null,
+    val resumesAtMs: Long? = null,
 ) {
     /**
      * The line as it's drawn, top to bottom: every stop with the buses at
@@ -122,6 +126,9 @@ data class Line(
                 here = here?.takeIf { it.index in stops.indices },
                 available = o.optBoolean("available", true),
                 asOfMs = o.optStringOrNull("asOf")?.let(::parseInstant),
+                running = o.optBoolean("running", true),
+                stopped = o.optStringOrNull("stopped")?.takeIf { it in STOPPED },
+                resumesAtMs = o.optStringOrNull("resumesAt")?.let(::parseInstant),
             )
         }
     }
@@ -162,6 +169,50 @@ object BusTimes {
 
     /** How long ago [asOfMs] was, in whole seconds, never negative. */
     fun ageS(asOfMs: Long, nowMs: Long): Long = ((nowMs - asOfMs) / 1000).coerceAtLeast(0)
+}
+
+/**
+ * What a service that isn't running says instead of a time: why
+ * ("Stopped for today") and, when it's known, when it's back ("Back
+ * tomorrow at 7:40 am"). Pure, for the tests; [Stopped.lines] words it.
+ */
+data class Stopped(val why: String, val back: Back?) {
+    /** When it starts again: later [today] ("Starts at"), [tomorrow], or on [weekday] (0 = Sunday). */
+    data class Back(val minute: Int, val today: Boolean, val tomorrow: Boolean, val weekday: Int)
+
+    /** The two lines, in the app's language; [h12] for 7:40 am rather than 07:40. */
+    fun lines(h12: Boolean): Pair<String, String?> {
+        val first = L.s(
+            when (why) {
+                "notYet" -> R.string.buses_not_yet
+                "noService" -> R.string.buses_no_service
+                else -> R.string.buses_stopped_today
+            },
+        )
+        val b = back ?: return first to null
+        val time = if (h12) hhmm12(b.minute) else hhmm(b.minute)
+        val second = when {
+            b.today -> L.s(R.string.buses_starts_at, time)
+            b.tomorrow -> L.s(R.string.buses_back_tomorrow, time)
+            else -> L.s(R.string.buses_back_on, dayName(b.weekday), time)
+        }
+        return first to second
+    }
+
+    companion object {
+        private val SG = ZoneId.of("Asia/Singapore")
+
+        /** A row or line not running, at [nowMs]; null for one that is. The days are Singapore's. */
+        fun of(running: Boolean, why: String?, resumesAtMs: Long?, nowMs: Long): Stopped? {
+            if (running) return null
+            val back = resumesAtMs?.takeIf { it > nowMs }?.let { at ->
+                val then = Instant.ofEpochMilli(at).atZone(SG)
+                val days = java.time.temporal.ChronoUnit.DAYS.between(Instant.ofEpochMilli(nowMs).atZone(SG).toLocalDate(), then.toLocalDate())
+                Back(then.hour * 60 + then.minute, today = days <= 0L, tomorrow = days == 1L, weekday = then.dayOfWeek.value % 7)
+            }
+            return Stopped(why ?: "ended", back)
+        }
+    }
 }
 
 /** The account's pinned stops, as the profile keeps them. */

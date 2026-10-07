@@ -320,6 +320,23 @@ test('/arrivals names the stop across the road, and each row says where it goes'
   assert.equal(pgp.stop.oppositeName, "Prince George's Park Foyer");
 });
 
+test('/arrivals?stopped=1 adds the services not running, after the others; without it nothing changes but `running`', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: [{ name: 'K', arrivalTime: '2', passengers: 'low' }] } });
+  const cache = installGlobals(fetchImpl);
+  Date.now = () => Date.UTC(2026, 9, 7, 13, 30); // Wednesday 21:30 in Singapore: R1 and R2 have finished
+  const plain = await (await call('/arrivals?stop=PGP', { fetchImpl, cache })).res.json();
+  assert.ok(plain.board.every((r) => r.running === true && !('stopped' in r)));
+  assert.ok(!plain.board.some((r) => r.svc === 'R1'));
+  const all = await (await call('/arrivals?stop=PGP&stopped=1', { fetchImpl, cache })).res.json();
+  assert.deepEqual(all.board.slice(0, plain.board.length), plain.board);
+  const off = all.board.slice(plain.board.length);
+  assert.deepEqual(off.map((r) => [r.svc, r.running, r.stopped, r.resumesAt]), [
+    ['R1', false, 'ended', '2026-10-07T23:40:00.000Z'],
+    ['R2', false, 'ended', '2026-10-08T00:20:00.000Z'],
+  ]);
+  assert.equal(fetchImpl.counts.shuttle, 1, 'the same cached read');
+});
+
 test('/arrivals on an unknown stop is a 400, not a fabricated empty board', async () => {
   const fetchImpl = makeFetch({});
   const { res } = await call('/arrivals?stop=narnia', { fetchImpl });
@@ -424,6 +441,35 @@ test('/line: a service’s stops in order, its buses on them, and with a stop th
   assert.equal('stop' in bare, false);
   assert.deepEqual(bare.buses, []);
   assert.equal(plain.counts.shuttle, 1);
+});
+
+test('/line says whether the service is running, and its row at the stop comes even when it is not', async () => {
+  const fetchImpl = makeFetch({ buses: { R1: [] } });
+  const cache = installGlobals(fetchImpl);
+  Date.now = () => Date.UTC(2026, 9, 10, 1); // Saturday 09:00 in Singapore: no R1 at weekends
+  const body = await (await call('/line?svc=R1&stop=PGP', { fetchImpl, cache })).res.json();
+  assert.equal(body.running, false);
+  assert.equal(body.stopped, 'noService');
+  assert.equal(body.resumesAt, '2026-10-11T23:40:00.000Z', 'Monday 07:40');
+  assert.equal(body.endsAt, null);
+  assert.deepEqual([body.stop.row.svc, body.stop.row.running, body.stop.row.stopped], ['R1', false, 'noService']);
+  Date.now = () => Date.UTC(2026, 9, 7, 4); // Wednesday noon
+  const on = await (await call('/line?svc=R1', { fetchImpl, cache })).res.json();
+  assert.deepEqual([on.running, on.stopped, on.resumesAt], [true, null, null]);
+});
+
+test('/line: a bus still out after hours means the service is running, never "stopped" over a moving bus', async () => {
+  const shape = (await import('../data/shapes.json', { with: { type: 'json' } })).default.routes.R1;
+  const i = Math.floor(shape.line.length / 3);
+  const [aLon, aLat] = shape.line[i];
+  const [bLon, bLat] = shape.line[i + 1];
+  const heading = (Math.atan2((bLon - aLon) * Math.cos((aLat * Math.PI) / 180), bLat - aLat) * 180) / Math.PI;
+  const fetchImpl = makeFetch({ buses: { R1: [{ vehplate: 'PD500A', lat: (aLat + bLat) / 2, lng: (aLon + bLon) / 2, speed: 30, direction: (heading + 360) % 360 }] } });
+  const cache = installGlobals(fetchImpl);
+  Date.now = () => Date.UTC(2026, 9, 7, 11, 45); // Wednesday 19:45 in Singapore: R1's hours end at 19:30
+  const body = await (await call('/line?svc=R1', { fetchImpl, cache })).res.json();
+  assert.equal(body.buses.length, 1);
+  assert.deepEqual([body.running, body.stopped, body.resumesAt], [true, null, null]);
 });
 
 test('/line: an unknown service or a stop it doesn’t call at is a 400, and costs nothing upstream', async () => {

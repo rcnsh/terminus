@@ -17,7 +17,7 @@ import { appVersion, authConfigured, getSession } from './auth.ts';
 import { candidates, lookUp, parseVersion, versionString } from './appversion.ts';
 import { fmsConfigured, getBuses } from './fms.ts';
 import { shortStop } from './format.ts';
-import { boardAt, displayName, indexGraph, serviceEndsAt } from './resolve.ts';
+import { boardAt, displayName, indexGraph, serviceEndsAt, serviceResumesAt, stoppedReason } from './resolve.ts';
 import { buildCampusMap, buildDestinations, ROUTE_COLORS } from './campus.ts';
 import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
@@ -183,7 +183,8 @@ async function handleArrivals(url: URL, env: Env, ctx: ExecutionContext, nowMs: 
   // the feed", not "no bus is coming" -- those are different answers, and
   // /next never lets this surface as a 500, so /arrivals must not either.
   const sa = (await collectArrivals(env, ctx, [code], nowMs, graph)).get(code)!;
-  const board = boardAt(graph, idx, code, sa, nowMs);
+  // `?stopped=1`: the services not running now too, for the Buses tab.
+  const board = boardAt(graph, idx, code, sa, nowMs, { stopped: url.searchParams.get('stopped') === '1' });
   return json({
     // Its twin, for "This side | Across the road" (or the twin's name, when
     // it's only near rather than across).
@@ -237,13 +238,22 @@ async function handleLine(url: URL, env: Env, ctx: ExecutionContext, nowMs: numb
   ]);
   const placed = live ? await trackedBuses(GRAPH, svc, live, ctx) : [];
   const ends = serviceEndsAt(GRAPH, svc, nowMs);
+  // A bus out on the line runs, whatever the hours say: the feed is the
+  // truth and the hours a hint, as on a board, so the page never says
+  // "Stopped" over a moving bus.
+  const stopped = placed.length ? null : stoppedReason(GRAPH, svc, nowMs);
+  const resumes = stopped ? serviceResumesAt(GRAPH, svc, nowMs) : null;
   return json({
     svc,
     color: ROUTE_COLORS[svc] ?? null,
     endsAt: ends === null ? null : new Date(ends).toISOString(),
+    // By its hours unless a bus is out; `stopped` and `resumesAt` are null while it runs.
+    running: stopped === null,
+    stopped,
+    resumesAt: resumes === null ? null : new Date(resumes).toISOString(),
     stops: lineStops(idx, svc),
     buses: busesOnLine(route.seq, route.loop, placed),
-    ...(code ? { stop: { code, index, row: boardAt(GRAPH, idx, code, sa, nowMs).find((r) => r.svc === svc) ?? null } } : {}),
+    ...(code ? { stop: { code, index, row: boardAt(GRAPH, idx, code, sa, nowMs, { stopped: true }).find((r) => r.svc === svc) ?? null } } : {}),
     available: Boolean(live),
     asOf: new Date(live?.stale ? live.fetchedAt : nowMs).toISOString(),
   }, 200, { 'cache-control': 'private, max-age=5' });
