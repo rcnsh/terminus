@@ -21,7 +21,8 @@ import {
 } from './profile.ts';
 import type { ImportedTrip } from './nusmods.ts';
 import { sgt } from './config.ts';
-import { isoSeconds } from './format.ts';
+import { isoSeconds, named } from './format.ts';
+import { clockAt } from './clock.ts';
 import { indexGraph } from './resolve.ts';
 import { tripAnswer } from './next.ts';
 import { ASSUME_MS, type DayRecord, dayState, leaveOf, offStop, sgtDate } from './trip.ts';
@@ -51,6 +52,12 @@ export interface DayItem {
    *  when it gets there (ISO), in place of a leave-by. */
   onBus?: { svc: string; off: string | null; arrive: string | null } | null;
   timing?: Timing | null;
+  /** The row's first line: the class, or "Home, from COM 3". */
+  title: string;
+  /** Its second line: "Leave by ~09:38 · D2 from PGP" (with "~10 min late"
+   *  when it will be), "On the D2 · off at UTown · arrive 09:52", "Not going".
+   *  Null once it's done, and with nothing to say. */
+  line: string | null;
   /** Can be taken off today (send `skipped` with `key`; `reset` puts it
    *  back): anything not done yet. Removed entries aren't listed. */
   removable: boolean;
@@ -114,6 +121,8 @@ export async function dayPlan(
       kind: 'class',
       key,
       label: c.label,
+      title: c.label,
+      line: null,
       status,
       from,
       fromName: name(from),
@@ -157,6 +166,8 @@ export async function dayPlan(
   }
   if (prev && homeStop && !state.skipped.has(`home:${endOf(prev)}`)) items.push(homeItem(`home:${endOf(prev)}`, prev, null));
   await Promise.all(pending);
+  // Worded once every leave-by is in.
+  for (const it of items) it.line = dayLine(it, h12);
 
   // The day's hours, stretched for early and late classes (as /me/next rests).
   const r = restSide(profile, nowMs);
@@ -181,6 +192,8 @@ export async function dayPlan(
       kind: 'home',
       key,
       label: m().home,
+      title: m().homeFrom(name(after.to) ?? m().yourLastClass),
+      line: null,
       status,
       from: after.to,
       fromName: name(after.to),
@@ -191,4 +204,23 @@ export async function dayPlan(
       removable: status !== 'done',
     };
   }
+}
+
+/**
+ * A Today row's second line (see DayItem.line). The apps each used to build
+ * it from `leave`, `onBus` and `timing`; now they show this.
+ */
+export function dayLine(it: DayItem, h12: boolean): string | null {
+  if (it.status === 'skipped') return m().notGoing;
+  if (it.status === 'done') return null;
+  const at = (iso: string) => clockAt(Date.parse(iso), h12);
+  if (it.onBus) {
+    const b = it.onBus;
+    return [m().onThe(b.svc), b.off ? m().offAt(b.off) : null, b.arrive ? m().arriveAt(at(b.arrive)) : null].filter(Boolean).join(' · ');
+  }
+  const l = it.leave;
+  if (!l?.at) return null;
+  const by = m().leaveBy(l.estimated ? m().approx(at(l.at)) : at(l.at));
+  const how = l.svc ? m().svcFrom(named({ svc: l.svc, paid: l.paid }), l.stop ?? it.fromName ?? '') : m().walk;
+  return [by, how, it.timing?.status === 'late' ? it.timing.text : null].filter(Boolean).join(' · ');
 }

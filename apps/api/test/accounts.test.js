@@ -5,6 +5,8 @@ import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { hashToken, newPairCode, normalizePairCode } from '../src/accounts.ts';
+import { WALK } from '../src/config.ts';
+import { GRAPH } from '../src/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
 import residencesJson from '../data/residences.json' with { type: 'json' };
 
@@ -991,6 +993,32 @@ test('/campus lists PGP and UTown Residence first, marked common, then the rest 
   const rest = residences.slice(2).map((r) => r.name);
   assert.deepEqual(rest, [...rest].sort((a, b) => a.localeCompare(b)));
   assert.ok(residences.slice(2).every((r) => r.common === false));
+});
+
+test('/campus gives each residence its walk in minutes, at the normal pace, never under one', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const { residences } = await (await call(env, '/campus', { cookie })).json();
+  for (const r of residences) assert.equal(r.walkMin, Math.max(1, Math.round(r.walkM / WALK.speedMs / 60)), r.code);
+  // PGP's own stop is a short walk: the rounding is the clients' old one.
+  assert.ok(residences.every((r) => Number.isInteger(r.walkMin) && r.walkMin >= 1));
+});
+
+test('the profile comes with its limits, wherever it is sent, and they are the ones enforced', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const want = { pinnedStops: 8, label: 60, places: 12, placeLabel: 24, homeStops: 3, homeWalkMin: { min: 0, max: 30 }, trips: 100, usual: 30, once: 10 };
+  const got = await (await call(env, '/me/profile', { cookie })).json();
+  assert.deepEqual(got.limits, want);
+  // Sent back whole, as the apps do, the limits are ignored, not an error.
+  const put = await call(env, '/me/profile', { method: 'PUT', cookie, body: { ...got, homeWalkMin: want.homeWalkMin.max } });
+  assert.equal(put.status, 200);
+  assert.deepEqual((await put.json()).limits, want);
+  assert.equal((await call(env, '/me/profile', { method: 'PUT', cookie, body: { homeWalkMin: want.homeWalkMin.max + 1 } })).status, 400);
+  const stops = GRAPH.stops.map((x) => x.code);
+  assert.equal((await call(env, '/me/profile', { method: 'PUT', cookie, body: { pinnedStops: stops.slice(0, want.pinnedStops) } })).status, 200);
+  assert.equal((await call(env, '/me/profile', { method: 'PUT', cookie, body: { pinnedStops: stops.slice(0, want.pinnedStops + 1) } })).status, 400);
+  assert.equal((await call(env, '/me/profile', { method: 'PUT', cookie, body: { places: [{ key: 'x', label: 'x'.repeat(want.placeLabel + 1), to: 'COM3' }] } })).status, 400);
 });
 
 test('API keys: made on the account page, shown once, work anywhere, revocable', async () => {

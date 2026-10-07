@@ -58,6 +58,9 @@
       "title": "CS2030，10:00 开始",
       "where": "在 COM 3",
       "off": null
-    }
+    },
+    "title": "今天没有课",
+    "heading": null,
+    "remindAt": null
   }
 }

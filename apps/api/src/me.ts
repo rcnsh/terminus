@@ -40,7 +40,7 @@ import {
   sessionCookie,
   PLATFORMS,
 } from './accounts.ts';
-import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
+import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, profileLimits, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
 import { type Planned, hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, isHomeKey, loadDay, markFollowed, savePlan, saveSignal, saveSignals, sgtDate, watchTrip } from './trip.ts';
@@ -479,7 +479,9 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'GET',
     path: '/me/profile',
     run: async ({ deps, db, session }) => {
-      return json(await getProfile(db, session.user.id, deps.graph));
+      // The limits ride along, so clients needn't hard-code them; a client
+      // that sends the whole profile back sends them too, and they're ignored.
+      return json({ ...(await getProfile(db, session.user.id, deps.graph)), limits: profileLimits() });
     },
   },
   {
@@ -494,7 +496,7 @@ export const ME_ROUTES: MeRoute[] = [
       // One-off trips are done with once their day has passed.
       r.profile.once = r.profile.once.filter((o) => o.date >= sgtDate(nowMs));
       await saveProfileJson(db, session.user.id, r.profile, nowMs);
-      return json(r.profile);
+      return json({ ...r.profile, limits: profileLimits() });
     },
   },
   {
@@ -564,7 +566,7 @@ export const ME_ROUTES: MeRoute[] = [
       profile.share = share;
       profile.term = r.term;
       await saveProfileJson(db, session.user.id, profile, nowMs);
-      return json({ profile, unresolved: r.unresolved, missing: r.missing, online: r.online, term });
+      return json({ profile: { ...profile, limits: profileLimits() }, unresolved: r.unresolved, missing: r.missing, online: r.online, term });
     },
   },
   {
@@ -1131,7 +1133,7 @@ export async function handleMe(
     const r = await mergeAnonymous(db, session.user.id, body.anon, keep, nowMs);
     if (r === 'not-anonymous') return json({ error: 'that token is not an anonymous account' }, 400);
     await clearTrip(env, r.removed);
-    return json({ ok: true, profile: await getProfile(db, session.user.id, deps.graph) });
+    return json({ ok: true, profile: { ...(await getProfile(db, session.user.id, deps.graph)), limits: profileLimits() } });
   }
 
   if (!session) {

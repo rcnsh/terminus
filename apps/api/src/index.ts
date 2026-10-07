@@ -39,7 +39,7 @@ import { handleDownload } from './downloads.ts';
 import { landingPage } from './landing.ts';
 import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
-import { allResidences } from './residences.ts';
+import { allResidences, residenceWalkMin } from './residences.ts';
 import { callerFor } from './access.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
@@ -58,7 +58,7 @@ const STOP_PAIRS = stopPairs(GRAPH);
 // The common ones come first, so a client matching home stops back to a
 // residence (every UTown college shares UTOWN) lands on the likelier one.
 const RESIDENCE_LIST = allResidences()
-  .map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0], common: r.common === true }))
+  .map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0], walkMin: residenceWalkMin(Object.values(r.stops)[0]), common: r.common === true }))
   .sort((a, b) => Number(b.common) - Number(a.common) || a.name.localeCompare(b.name));
 
 export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam };

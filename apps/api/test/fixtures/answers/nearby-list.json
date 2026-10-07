@@ -21,7 +21,8 @@
           "later": [
             {
               "etaS": 840,
-              "quality": "live"
+              "quality": "live",
+              "eta": "14 min"
             }
           ],
           "color": "#8e44c9",
@@ -31,7 +32,10 @@
           ],
           "crowd": "low",
           "endsAt": "2026-08-27T15:00:00.000Z",
-          "running": true
+          "running": true,
+          "eta": "4 min",
+          "laterText": "then 14 min",
+          "toText": "to TCOMS, COM 3"
         },
         {
           "svc": "A2",
@@ -46,7 +50,10 @@
           ],
           "crowd": null,
           "endsAt": "2026-08-27T15:00:00.000Z",
-          "running": true
+          "running": true,
+          "eta": null,
+          "laterText": null,
+          "toText": "to TCOMS, Kent Ridge Bus Terminal"
         },
         {
           "svc": "K",
@@ -58,7 +65,10 @@
           "towards": [],
           "crowd": null,
           "endsAt": "2026-08-27T15:04:00.000Z",
-          "running": true
+          "running": true,
+          "eta": null,
+          "laterText": null,
+          "toText": "Ends here"
         }
       ]
     },
@@ -83,7 +93,8 @@
           "later": [
             {
               "etaS": 840,
-              "quality": "live"
+              "quality": "live",
+              "eta": "14 min"
             }
           ],
           "color": "#8e44c9",
@@ -93,7 +104,10 @@
           ],
           "crowd": "low",
           "endsAt": "2026-08-27T15:00:00.000Z",
-          "running": true
+          "running": true,
+          "eta": "4 min",
+          "laterText": "then 14 min",
+          "toText": "to Kent Ridge MRT, COM 3"
         },
         {
           "svc": "R2",
@@ -103,7 +117,8 @@
           "later": [
             {
               "etaS": 1080,
-              "quality": "live"
+              "quality": "live",
+              "eta": "18 min"
             }
           ],
           "color": "#34a853",
@@ -113,7 +128,10 @@
           ],
           "crowd": "medium",
           "endsAt": "2026-08-27T11:30:00.000Z",
-          "running": true
+          "running": true,
+          "eta": "6 min",
+          "laterText": "then 18 min",
+          "toText": "to Opp HSSML, Kent Vale"
         },
         {
           "svc": "A1",
@@ -123,7 +141,8 @@
           "later": [
             {
               "etaS": 1140,
-              "quality": "live"
+              "quality": "live",
+              "eta": "19 min"
             }
           ],
           "color": "#e53935",
@@ -133,7 +152,10 @@
           ],
           "crowd": "high",
           "endsAt": "2026-08-27T15:00:00.000Z",
-          "running": true
+          "running": true,
+          "eta": "9 min",
+          "laterText": "then 19 min",
+          "toText": "to Kent Ridge MRT, Kent Ridge Bus Terminal"
         },
         {
           "svc": "K",
@@ -148,7 +170,10 @@
           ],
           "crowd": null,
           "endsAt": "2026-08-27T15:04:00.000Z",
-          "running": true
+          "running": true,
+          "eta": null,
+          "laterText": null,
+          "toText": "to Kent Ridge MRT, Prince George's Park Foyer"
         },
         {
           "svc": "R1",
@@ -160,7 +185,10 @@
           "towards": [],
           "crowd": null,
           "endsAt": "2026-08-27T11:30:00.000Z",
-          "running": true
+          "running": true,
+          "eta": null,
+          "laterText": null,
+          "toText": "Ends here"
         }
       ]
     }

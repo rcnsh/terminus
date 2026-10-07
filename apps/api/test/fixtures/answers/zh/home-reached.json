@@ -64,6 +64,9 @@
       "title": "CS2030，06:30 开始",
       "where": "在 COM 3",
       "off": null
-    }
+    },
+    "title": "你已到家",
+    "heading": "回家",
+    "remindAt": null
   }
 }

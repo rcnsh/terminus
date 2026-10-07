@@ -12,9 +12,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
+import { installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
+import { Trip } from '../src/tripdo.ts';
 
 const DIR = new URL('./fixtures/answers/', import.meta.url);
 const UPDATE = process.env.UPDATE_GOLDEN === '1';
@@ -31,9 +32,13 @@ for (const code of ['PGP', 'PGPR', 'COM3', 'UTOWN', 'KR-MRT', 'KR-MRT-OPP', 'CLB
   ];
 }
 
-async function account(profile) {
-  installGlobals(makeFetch({ byStop: FEED }));
-  const env = { ...makeEnv(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test' };
+/**
+ * An account with `profile`, signed in on the web. `feed` replaces the fake
+ * feed; `trips` binds the trip engine, for a case that has a trip under way.
+ */
+async function account(profile, { feed = FEED, trips = false } = {}) {
+  installGlobals(makeFetch({ byStop: feed }));
+  const env = { ...makeEnv(), DB: makeD1(), EMAIL: makeEmail(), EMAIL_FROM: 'x@example.test', ...(trips ? { TRIPS: makeDurableObjects(Trip) } : {}) };
   const call = async (path, init = {}) => {
     const ctx = makeCtx();
     const res = await worker.fetch(new Request(BASE + path, init), env, ctx);
@@ -45,7 +50,12 @@ async function account(profile) {
   const cookie = verify.headers.get('set-cookie').split(';')[0];
   const put = await call('/me/profile', { method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(profile) });
   assert.equal(put.status, 200, await put.clone().text());
-  return (path) => call(path, { headers: { cookie } }).then((r) => r.json());
+  const get = (path) => call(path, { headers: { cookie } }).then((r) => r.json());
+  get.post = async (path, body) => {
+    const res = await call(path, { method: 'POST', headers: { cookie, origin: BASE, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal(res.status, 200, await res.clone().text());
+  };
+  return get;
 }
 
 const THU = 4; // FROZEN_NOW is Thursday 2026-08-27, 09:00 SGT
@@ -77,7 +87,14 @@ const CASES = {
   'evening-home': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, places }, `/me/next?${CLB}`],
   'rest': [{ home: { stops: ['PGP'] }, dayStartMin: 600, dayEndMin: 1200, manual: [cls(780, 'COM3', 'CS2030 @ COM1')], places }, '/me/next'],
   'home': [{ home: { stops: ['PGPR', 'PGP'] }, manual: [cls(420, 'COM3', 'CS2030 @ COM1')], places }, `/me/next?${DORM}`],
-  'setup': [{}, '/me/next'],
+  // A class to go to, but no home stop and no location: nowhere to start from.
+  'setup': [{ manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next'],
+  // A new account with nothing in it: no timetable yet, said plainly.
+  'no-timetable': [{}, '/me/next'],
+  // On the bus to a class: the ride, with its stops, in place of the journey.
+  'riding': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', { trips: true, before: (get) => get.post('/me/signal', { kind: 'boarded' }) }],
+  // The feed answers with no buses at all: every time is a timetable estimate, marked "~".
+  'scheduled': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=mrt', { feed: {} }],
   'nearby-list': [{ home: { stops: ['PGP'] } }, `/me/nearby?${DORM}`],
   // The day the apps keep for when they're offline (see offline-day.json):
   // a class, a long gap home, a class, the way home.
@@ -91,9 +108,10 @@ const RUNS = [
   ['zh ', { lang: 'zh' }, new URL('./zh/', DIR)],
 ];
 
-for (const [name, [profile, path]] of Object.entries(CASES)) for (const [tag, extra, dir] of RUNS) {
+for (const [name, [profile, path, opts = {}]] of Object.entries(CASES)) for (const [tag, extra, dir] of RUNS) {
   test(`golden: ${tag}${name}`, async () => {
-    const get = await account({ ...profile, ...extra });
+    const get = await account({ ...profile, ...extra }, opts);
+    await opts.before?.(get);
     const body = await get(path);
     const file = new URL(`${name}.json`, dir);
     const text = JSON.stringify(body, null, 2) + '\n';

@@ -137,8 +137,21 @@
       "slack": null,
       "live": false,
       "backup": null,
-      "why": "A1 would be 31 min"
+      "why": "A1 would be 31 min",
+      "title": "To Home",
+      "place": "Home",
+      "byText": null,
+      "walkText": "15 min walk",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "Arrive 09:15",
+      "arriveWhere": "at PGP",
+      "backupText": "A1 would be 31 min",
+      "summary": "15 min walk · A1 would be 31 min"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "Walk · 15 min",
+    "heading": "Heading home",
+    "remindAt": null
   }
 }

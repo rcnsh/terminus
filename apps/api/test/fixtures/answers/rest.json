@@ -58,6 +58,9 @@
       "title": "CS2030 at 13:00",
       "where": "At COM 3",
       "off": null
-    }
+    },
+    "title": "Day starts 10:00",
+    "heading": null,
+    "remindAt": null
   }
 }

@@ -33,6 +33,8 @@ import { ROUTE_COLORS } from './campus.ts';
 import { haversineM } from './geo.ts';
 import { isPublic, publicRideS, rideMetres, svcName } from './public.ts';
 import { footM, stopFootM } from './walk.ts';
+import { mins } from './format.ts';
+import { listOf, m } from './i18n.ts';
 import { type HomeWalk, residenceStops } from './residences.ts';
 
 export { haversineM };
@@ -475,8 +477,9 @@ export interface BoardRow {
   ambiguousBerth: boolean;
   /** A public bus, with a fare. Absent for a shuttle. */
   paid?: true;
-  /** The buses after that one, soonest first, as far as the feed knows them. */
-  later: { etaS: number; quality: Quality }[];
+  /** The buses after that one, soonest first, as far as the feed knows them,
+   *  each with its time in words (`eta`, as the row's). */
+  later: { etaS: number; quality: Quality; eta: string }[];
   /** The service's colour (#rrggbb), as on the buses; null for one NUS hasn't painted. */
   color: string | null;
   /** Where it goes from here: the next stop's name, then the stop the route
@@ -492,6 +495,38 @@ export interface BoardRow {
   stopped?: StoppedReason;
   /** When it next starts (ISO), or null when no start is found. Only on a row that isn't running. */
   resumesAt?: string | null;
+  /** `etaS` in words: "4 min", "now", "~6 min" for a timetable time. Null with no time. */
+  eta: string | null;
+  /** The next few buses after it: "then 12, ~20 min". Null when the feed gives none.
+   *  Not called `then`, which would make a row look like a promise to `await`. */
+  laterText: string | null;
+  /** `towards` in words: "to Central Library, Kent Vale"; "Ends here" at the end of the line. */
+  toText: string;
+}
+
+/** How many later buses a row's `then` names: more is noise on a phone. */
+export const THEN_MAX = 3;
+
+/** A time on a board, in words: a timetable time is marked as an estimate ("~6 min"), but not "now", which "~" can't make vaguer. */
+export function etaText(etaS: number, quality: Quality): string {
+  const t = mins(etaS);
+  return quality === 'scheduled' && t !== m().now ? m().approx(t) : t;
+}
+
+/**
+ * "then 12, ~20 min": the later buses as whole minutes (never under 1, as a
+ * row's own time never says "0 min"), each timetable one marked. Null with none.
+ */
+export function thenText(later: { etaS: number; quality: Quality }[]): string | null {
+  if (!later.length) return null;
+  const n = (s: number) => String(Math.max(1, Math.round(s / 60)));
+  return m().thenMin(listOf(later.slice(0, THEN_MAX).map((x) => (x.quality === 'scheduled' ? m().approx(n(x.etaS)) : n(x.etaS)))));
+}
+
+/** `towards` in words (see BoardRow.toText). */
+export function towardsText(towards: string[]): string {
+  if (!towards.length) return m().endsHere;
+  return towards.length > 1 ? m().towardsTwo(towards[0], towards[1]) : m().towardsOne(towards[0]);
 }
 
 /** A stop's name as a sign would give it ("Central Library", not "CLB"). */
@@ -573,6 +608,9 @@ export function boardAt(
         running: false,
         stopped: stoppedReason(graph, svc, nowMs) ?? 'ended',
         resumesAt: resumes === null ? null : new Date(resumes).toISOString(),
+        eta: null,
+        laterText: null,
+        toText: towardsText(towardsFrom(idx, svc, stopCode)),
       });
       continue;
     } else if (!available) {
@@ -584,7 +622,11 @@ export function boardAt(
     const aged = (q: Quality): Quality => (feed?.stale && q === 'live' ? 'stale' : q);
     quality = aged(quality);
     // Each later bus keeps its own quality: a timetabled one after a live one stays a guess.
-    const later = etas.slice(1).map((a) => ({ etaS: a.etaS as number, quality: aged(a.scheduled ? 'scheduled' : 'live') }));
+    const later = etas.slice(1).map((a) => {
+      const q = aged(a.scheduled ? 'scheduled' : 'live');
+      return { etaS: a.etaS as number, quality: q, eta: etaText(a.etaS as number, q) };
+    });
+    const towards = towardsFrom(idx, svc, stopCode);
 
     const ends = serviceEndsAt(graph, svc, nowMs);
     out.push({
@@ -595,10 +637,15 @@ export function boardAt(
       ...(pub ? { paid: true as const } : {}),
       later,
       color: ROUTE_COLORS[svcName(svc)] ?? null,
-      towards: towardsFrom(idx, svc, stopCode),
+      towards,
       crowd: etas[0]?.crowd ?? null,
       endsAt: ends === null ? null : new Date(ends).toISOString(),
       running: true,
+      // Worded here, so every client says the same: the apps used to each
+      // build these from the numbers, and drifted.
+      eta: etaS === null ? null : etaText(etaS, quality),
+      laterText: thenText(later),
+      toText: towardsText(towards),
     });
   }
 

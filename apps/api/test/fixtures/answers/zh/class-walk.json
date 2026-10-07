@@ -164,8 +164,21 @@
       "slack": "早到 3 分钟",
       "live": false,
       "backup": null,
-      "why": "搭 D1 要 16 分钟"
+      "why": "搭 D1 要 16 分钟",
+      "title": "去 CS2030 @ COM1 · 10:00 开始",
+      "place": "CS2030",
+      "byText": "09:53 前出发",
+      "walkText": "步行 3 分钟",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "09:57 到达 · 早到 3 分钟",
+      "arriveWhere": "在 COM 3",
+      "backupText": "搭 D1 要 16 分钟",
+      "summary": "09:57 到达 · 步行 3 分钟 · 搭 D1 要 16 分钟"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "步行 · 3 分钟",
+    "heading": "下一节课 · CS2030 @ COM1",
+    "remindAt": "2026-08-27T01:48:32Z"
   }
 }

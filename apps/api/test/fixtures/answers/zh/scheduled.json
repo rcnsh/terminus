@@ -1,0 +1,142 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.75
+  },
+  "quality": "scheduled",
+  "asOf": "2026-08-27T01:00:00.000Z",
+  "arrivals": [],
+  "label": "A1 · 约 11 分钟",
+  "detail": "PGP · 步行 5 分钟 · 约 13 分钟 到 KR MRT · 步行要 16 分钟 · 估计 · 或 D2，约 11 分钟后",
+  "alt": "D2 · 约 11 分钟 · PGP",
+  "departsAt": "2026-08-27T01:11:20Z",
+  "arriveAt": "2026-08-27T01:12:55Z",
+  "bus": {
+    "svc": "A1",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 300,
+    "rideS": 95,
+    "board": "2026-08-27T01:11:20Z",
+    "arrive": "2026-08-27T01:12:55Z",
+    "estimated": true,
+    "toStop": "KR MRT"
+  },
+  "altBus": {
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 300,
+    "rideS": 95,
+    "board": "2026-08-27T01:11:20Z",
+    "arrive": "2026-08-27T01:12:55Z",
+    "estimated": true,
+    "toStop": "KR MRT"
+  },
+  "leave": {
+    "at": "2026-08-27T01:06:00Z",
+    "estimated": true,
+    "svc": "A1",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "board": "2026-08-27T01:11:20Z",
+    "arrive": "2026-08-27T01:12:55Z",
+    "note": null,
+    "walkS": 300,
+    "rideS": 95,
+    "toStop": "KR MRT"
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "KR-MRT",
+    "label": "KR MRT",
+    "why": "place"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T01:11:50Z",
+    "crowd": null,
+    "quality": "按时刻表估计",
+    "leaveBy": "约 09:06 前出发",
+    "leaveVia": "在 PGP 搭 约 09:11 的 A1",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "A1 约 09:11",
+    "line": "A1 · 约 11 分钟 · PGP",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:11:50Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": {
+      "name": "PGP",
+      "lat": 1.291765,
+      "lon": 103.780419
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": "约 09:06",
+      "walk": "5 分钟",
+      "bus": {
+        "svc": "A1",
+        "color": "#e53935",
+        "stop": "PGP",
+        "board": "约 09:11"
+      },
+      "boardAt": "2026-08-27T01:11:20Z",
+      "ride": "2 分钟",
+      "off": null,
+      "to": "KR MRT",
+      "toStop": "KR MRT",
+      "arrive": "约 09:12",
+      "walkEnd": null,
+      "arriveStop": "约 09:12",
+      "slack": null,
+      "live": false,
+      "backup": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP",
+        "board": "约 09:11"
+      },
+      "why": null,
+      "title": "去 KR MRT",
+      "place": "KR MRT",
+      "byText": "约 09:06 前出发",
+      "walkText": "步行 5 分钟",
+      "rideText": "乘车 2 分钟",
+      "walkEndText": null,
+      "arriveText": "约 09:12 到达",
+      "arriveWhere": "在 KR MRT",
+      "backupText": "或在 PGP 搭 约 09:11 的 D2",
+      "summary": "步行到 PGP · 约 09:11 的 A1"
+    },
+    "upcoming": null,
+    "title": "A1 · 约 09:11",
+    "heading": "去 KR MRT",
+    "remindAt": null
+  }
+}

@@ -126,6 +126,14 @@ const en = {
   fasterOnFoot: 'Faster on foot',
   fromStop: ((stop: string) => `from ${stop}`) as Fn<[string]>,
 
+  // A stop's board rows (resolve.ts): the Buses tab, Nearby, a stop on the map
+  /** The buses after the next, in minutes: "then 12, ~20 min". */
+  thenMin: ((times: string) => `then ${times} min`) as Fn<[string]>,
+  /** Where a service goes from a stop: the next stop, then where it ends. */
+  towardsOne: ((stop: string) => `to ${stop}`) as Fn<[string]>,
+  towardsTwo: ((next: string, end: string) => `to ${next}, ${end}`) as Fn<[string, string]>,
+  endsHere: 'Ends here',
+
   // Clock and lateness (clock.ts)
   am: 'AM',
   pm: 'PM',
@@ -191,6 +199,29 @@ const en = {
   backOnCampus: 'Back on campus',
   undoHome: 'Undo: going home',
   undoTo: ((label: string) => `Undo: going to ${label}`) as Fn<[string]>,
+  // The small line above the card (card.heading)
+  headClass: ((label: string) => `Next class · ${label}`) as Fn<[string]>,
+  headGap: ((label: string) => `Long gap · ${label}`) as Fn<[string]>,
+  headHome: 'Heading home',
+  headPlace: ((label: string) => `Going to ${label}`) as Fn<[string]>,
+  // The trip as steps, worded (card.journey)
+  journeyTo: ((dest: string) => `To ${dest}`) as Fn<[string]>,
+  startsShort: ((t: string) => `starts ${t}`) as Fn<[string]>,
+  byTime: ((t: string) => `by ${t}`) as Fn<[string]>,
+  arriveCap: ((t: string) => `Arrive ${t}`) as Fn<[string]>,
+  /** A class's sooner bus: "Or go now: R2 at 09:06 from PGP". */
+  orGoNowFrom: ((svc: string, t: string, stop: string) => `Or go now: ${svc} at ${t} from ${stop}`) as Fn<[string, string, string]>,
+  /** A trip's other bus: "Or A1 at 09:09 from PGP". */
+  orBusFrom: ((svc: string, t: string, stop: string) => `Or ${svc} at ${t} from ${stop}`) as Fn<[string, string, string]>,
+  rideFor: ((t: string) => `${t} ride`) as Fn<[string]>,
+  walkFrom: ((t: string, stop: string) => `${t} walk from ${stop}`) as Fn<[string, string]>,
+  walkToPlace: ((place: string) => `Walk to ${place}`) as Fn<[string]>,
+  atStop: ((stop: string) => `at ${stop}`) as Fn<[string]>,
+  /** A bus and its time, short: "D2 09:42". */
+  busTime: ((svc: string, t: string) => `${svc} ${t}`) as Fn<[string, string]>,
+  // Today's timeline (day.ts)
+  homeFrom: ((from: string) => `Home, from ${from}`) as Fn<[string]>,
+  yourLastClass: 'your last class',
 
   // Rest, the next class, will I make it (profile.ts, calendar.ts)
   dayStarts: ((t: string) => `Day starts ${t}`) as Fn<[string]>,
@@ -366,6 +397,11 @@ const zh: Msgs = {
   fasterOnFoot: '走路更快',
   fromStop: (stop) => `从 ${stop} 出发`,
 
+  thenMin: (times) => `之后 ${times} 分钟`,
+  towardsOne: (stop) => `开往 ${stop}`,
+  towardsTwo: (next, end) => `经 ${next}，开往 ${end}`,
+  endsHere: '本站为终点站',
+
   am: '上午',
   pm: '下午',
   clock12: (hm, pm) => `${pm ? '下午' : '上午'}\u00a0${hm}`,
@@ -424,6 +460,23 @@ const zh: Msgs = {
   backOnCampus: '回学校了',
   undoHome: '撤销：回家',
   undoTo: (label) => `撤销：去 ${label}`,
+  headClass: (label) => `下一节课 · ${label}`,
+  headGap: (label) => `空档较长 · ${label === '家' ? '回家' : label}`,
+  headHome: '回家',
+  headPlace: (label) => `去 ${label}`,
+  journeyTo: (dest) => (dest === '家' ? '回家' : `去 ${dest}`),
+  startsShort: (t) => `${t} 开始`,
+  byTime: (t) => `${t} 前出发`,
+  arriveCap: (t) => `${t} 到达`,
+  orGoNowFrom: (svc, t, stop) => `或现在走：在 ${stop} 搭 ${t} 的 ${svc}`,
+  orBusFrom: (svc, t, stop) => `或在 ${stop} 搭 ${t} 的 ${svc}`,
+  rideFor: (t) => `乘车 ${t}`,
+  walkFrom: (t, stop) => `从 ${stop} 步行 ${t}`,
+  walkToPlace: (place) => `步行到 ${place}`,
+  atStop: (stop) => `在 ${stop}`,
+  busTime: (svc, t) => `${t} 的 ${svc}`,
+  homeFrom: (from) => `回家，从 ${from} 出发`,
+  yourLastClass: '上一节课',
 
   dayStarts: (t) => `${t} 开始一天`,
   doneForToday: '今天结束了',
@@ -540,6 +593,11 @@ const MSGS: Record<Lang, Msgs> = { en, zh };
 /** The current request's messages. */
 export function m(): Msgs {
   return MSGS[lang()];
+}
+
+/** A short list in running text: "12, 20" in English, "12、20" in Chinese. */
+export function listOf(items: string[]): string {
+  return items.join(lang() === 'zh' ? '、' : ', ');
 }
 
 /** One language's messages, for tests and the review sheet. */

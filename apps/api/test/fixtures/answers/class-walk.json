@@ -164,8 +164,21 @@
       "slack": "3 min early",
       "live": false,
       "backup": null,
-      "why": "D1 would be 16 min"
+      "why": "D1 would be 16 min",
+      "title": "To CS2030 @ COM1 · starts 10:00",
+      "place": "CS2030",
+      "byText": "by 09:53",
+      "walkText": "3 min walk",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "Arrive 09:57 · 3 min early",
+      "arriveWhere": "at COM 3",
+      "backupText": "D1 would be 16 min",
+      "summary": "arrive 09:57 · 3 min walk · D1 would be 16 min"
     },
-    "upcoming": null
+    "upcoming": null,
+    "title": "Walk · 3 min",
+    "heading": "Next class · CS2030 @ COM1",
+    "remindAt": "2026-08-27T01:48:32Z"
   }
 }
