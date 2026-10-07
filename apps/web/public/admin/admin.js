@@ -30,14 +30,19 @@ function remember(t) {
 
 let memory = null;
 
+/** Drops the token, from the tab and from this page. */
+function forget() {
+  remember(null);
+  memory = null;
+}
+
 async function load() {
   const t = memory ?? token();
   if (!t) return view.set({ locked: true, msg: '', stats: null, note: '' });
   const res = await fetch('/admin/stats', { headers: { 'x-health-token': t }, cache: 'no-store' }).catch(() => null);
   if (!res) return view.set((v) => ({ ...v, note: "Couldn't reach terminus." }));
   if (res.status === 404) {
-    remember(null);
-    memory = null;
+    forget();
     return view.set({ locked: true, msg: 'That token was not accepted.', stats: null, note: '' });
   }
   if (!res.ok) return view.set((v) => ({ ...v, note: `The stats answered ${res.status}.` }));
@@ -50,8 +55,7 @@ async function load() {
 }
 
 function lock() {
-  remember(null);
-  memory = null;
+  forget();
   view.set({ locked: true, msg: '', stats: null, note: '' });
 }
 
@@ -128,10 +132,11 @@ function Timelapse({ an }) {
 
 function Dashboard({ s, note }) {
   const a = s.accounts ?? {};
-  const pct = (n) => (a.total ? ` (${Math.round((n / a.total) * 100)}%)` : '');
+  /** " (40%)": `n` as a share of `d`, or nothing without a `d`. */
+  const of = (n, d) => (d ? ` (${Math.round((n / d) * 100)}%)` : '');
+  const pct = (n) => of(n, a.total);
   // Accounts in the apps: installs, how many finished setup, how many added an email.
   const ap = s.apps ?? {};
-  const of = (n, d) => (d ? ` (${Math.round((n / d) * 100)}%)` : '');
   const byDay = new Map((s.signups ?? []).map((r) => [r.day, r.n]));
   const names = { android: 'Android', mac: 'Mac', ios: 'iPhone', unknown: 'Not seen since pairing' };
   const fb = s.feedback ?? { latest: [], last7d: 0 };
