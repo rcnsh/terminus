@@ -13,12 +13,19 @@
  *
  * Glossary: leave 出发, board/catch 搭, get off 下车, stop 车站, bus 巴士,
  * walk 步行, timetable 课表, class 课, favourite 收藏, Today 今天,
- * Nearby 附近, widget 小组件, Settings 设置, sign in 登录, device 设备,
- * busy (a bus) 很挤, crowding 拥挤程度 (low 低, medium 中,
- * high 高), estimate 估计, live 实时, an email address 邮箱 ("添加邮箱"),
- * an email sent 电子邮件. A space between Chinese and Latin letters or digits
- * ("9:41 的 D2"), full-width punctuation in Chinese. The website and the
- * apps follow the same glossary.
+ * Nearby 附近, widget 小组件, Settings 设置, sign in 登录, sign out 退出登录,
+ * device 设备, pair 配对, sign-in code 验证码, pairing code 配对代码,
+ * expired (a code, link or request) 失效, service 线路 (a drawn route line
+ * or walking directions 路线), scheduled (a guessed bus time) 按时刻表,
+ * home stop 家附近的车站, shuttle 校园巴士, public bus 公共巴士, fare 车费,
+ * account 账户, trip 行程, location (the setting) 定位 (where you are 位置),
+ * a bus that's often packed 很挤, crowding 拥挤程度 (low 低, medium 中,
+ * high 高; on the Buses tab Seats 有座位, Busy 有点挤, Packed 很挤),
+ * estimate 估计, live 实时, an email address 邮箱 ("添加邮箱"), an email
+ * sent 邮件. A space between Chinese and Latin letters or digits
+ * ("9:41 的 D2"), none between two Chinese words ("搭约 9:41 的 D2"),
+ * full-width punctuation in Chinese. The website and the apps follow the
+ * same glossary.
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
