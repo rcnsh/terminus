@@ -126,7 +126,7 @@
 /* A slim band of sky at the top of a page (privacy, the full policy), as
    Settings' pages have it: the header and the title in it, the low hills
    at its foot. */
-.sky-band .band-title { padding: 18px 0 4px; }
+.sky-band .band-title { padding-top: 18px; padding-bottom: 4px; }
 .sky-band .band-title h1 { font-size: clamp(2.1rem, 5vw, 3rem); letter-spacing: -0.03em; }
 .sky-band .band-title p { color: var(--muted); margin-top: 4px; }
 .sky-band .band-title .back { display: inline-block; margin-bottom: 8px; color: var(--ink); text-decoration: none; font-size: 0.9rem; }
