@@ -16,11 +16,13 @@
  */
 
 import type { Env } from './types.ts';
-import { WEB_PREFIX, type WebSubscription, b64url, parseSubscription, sendWebPush, webPushEnabled } from './webpush.ts';
+import { WEB_PREFIX, type WebSubscription, b64url, parseSubscription, sendWebPush, warnUnusable, webPushEnabled } from './webpush.ts';
 
 const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const TOKEN_KV = 'fcm:access';
 const TOKEN_TTL_S = 50 * 60;
+/** Google answers in well under a second; a hung call mustn't hold up the other devices, or the Trip object's alarm. */
+const FCM_TIMEOUT_MS = 5_000;
 
 interface ServiceAccount {
   project_id: string;
@@ -43,14 +45,19 @@ function account(env: Env): ServiceAccount | null {
   if (!env.FCM_SERVICE_ACCOUNT) return null;
   try {
     const a = JSON.parse(env.FCM_SERVICE_ACCOUNT) as ServiceAccount;
-    return a.project_id && a.client_email && a.private_key ? a : null;
+    if (a.project_id && a.client_email && a.private_key) return a;
   } catch {
-    return null;
+    // Unreadable: said once below, like one missing a field.
   }
+  warnUnusable('FCM_SERVICE_ACCOUNT');
+  return null;
 }
 
+/** Whether push to Android (FCM) is set up. */
+export const fcmEnabled = (env: Env) => account(env) !== null;
+
 /** Whether push is set up at all. */
-export const pushEnabled = (env: Env) => account(env) !== null || webPushEnabled(env);
+export const pushEnabled = (env: Env) => fcmEnabled(env) || webPushEnabled(env);
 
 const b64urlText = (s: string) => b64url(new TextEncoder().encode(s));
 
@@ -73,6 +80,7 @@ async function accessToken(env: Env, a: ServiceAccount, nowMs: number): Promise<
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: await signJwt(a, Math.floor(nowMs / 1000)) }),
+    signal: AbortSignal.timeout(FCM_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`fcm oauth ${res.status}`);
   const { access_token } = (await res.json()) as { access_token?: string };
@@ -81,11 +89,17 @@ async function accessToken(env: Env, a: ServiceAccount, nowMs: number): Promise<
   return access_token;
 }
 
+/** What a delivery did: how many devices it reached, and how many it should have but didn't. */
+export interface Delivered {
+  sent: number;
+  failed: number;
+}
+
 /**
- * Nudges every device of a user that registered for push. Returns how many
- * were sent. Never throws: push is a nicety on top of the apps' own refresh.
+ * Nudges every device of a user that registered for push. Never throws:
+ * push is a nicety on top of the apps' own refresh.
  */
-export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: number, exceptTokenHash?: string): Promise<number> {
+export async function nudgeUser(env: Env, userId: string, nudge: Nudge, nowMs: number, exceptTokenHash?: string): Promise<Delivered> {
   // Every web push shows a notification (iOS insists), so nothing to show
   // means nothing sent: an idle card, or reminders off for the trip.
   const quiet = nudge.phase === 'idle' || nudge.remind === false;
@@ -112,7 +126,8 @@ export interface Notice {
  */
 export async function remindUser(env: Env, userId: string, notice: Notice, nowMs: number): Promise<number> {
   const words = { title: notice.title, body: notice.body, zhTitle: notice.zhTitle, zhBody: notice.zhBody };
-  return deliver(env, userId, { web: { kind: 'term', ...words }, fcm: { kind: 'term', ...words }, urgent: false, collapse: 'term', ttlS: 2 * 86_400 }, nowMs);
+  const out = await deliver(env, userId, { web: { kind: 'term', ...words }, fcm: { kind: 'term', ...words }, urgent: false, collapse: 'term', ttlS: 2 * 86_400 }, nowMs);
+  return out.sent;
 }
 
 interface Delivery {
@@ -127,71 +142,118 @@ interface Delivery {
 }
 
 /** Sends one message to every device of a user that takes push, and clears tokens that are gone. */
-async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, exceptTokenHash?: string): Promise<number> {
+async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, exceptTokenHash?: string): Promise<Delivered> {
+  const out: Delivered = { sent: 0, failed: 0 };
+  const db = env.DB;
+  if (!pushEnabled(env) || !db) return out;
   const a = account(env);
-  if (!pushEnabled(env) || !env.DB) return 0;
+  let results: { token_hash: string; push_token: string }[];
   try {
-    const { results } = await env.DB.prepare('SELECT token_hash, push_token FROM sessions WHERE user_id = ? AND push_token IS NOT NULL AND token_hash != ?')
+    ({ results } = await db.prepare('SELECT token_hash, push_token FROM sessions WHERE user_id = ? AND push_token IS NOT NULL AND token_hash != ?')
       .bind(userId, exceptTokenHash ?? '')
-      .all<{ token_hash: string; push_token: string }>();
-    if (!results.length) return 0;
-    let bearer: string | null = null;
-    let sent = 0;
-    for (const r of results) {
-      if (r.push_token.startsWith(WEB_PREFIX)) {
-        if (!msg.web) continue;
-        let sub: WebSubscription | null = null;
-        try {
-          sub = parseSubscription(JSON.parse(r.push_token.slice(WEB_PREFIX.length)));
-        } catch {
-          // Unreadable: treated as gone, like a subscription that fails its checks.
-        }
-        // One browser's failure (a key that won't import, a service that hangs) mustn't stop the rest.
-        const out = sub
-          ? await sendWebPush(env, sub, msg.web, { urgent: msg.urgent, nowMs, topic: msg.collapse, ttlS: msg.ttlS }).catch((err) => {
-              console.error('web push', String(err));
-              return 'failed' as const;
-            })
-          : 'gone';
-        if (out === 'sent') sent++;
-        else if (out === 'gone') await env.DB.prepare('UPDATE sessions SET push_token = NULL WHERE token_hash = ?').bind(r.token_hash).run();
-        continue;
-      }
-      if (!a) continue;
-      const send = (token: string) =>
-        fetch(`https://fcm.googleapis.com/v1/projects/${a.project_id}/messages:send`, {
-          method: 'POST',
-          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-          body: JSON.stringify({
-            message: {
-              token: r.push_token,
-              data: msg.fcm,
-              android: { priority: msg.urgent ? 'HIGH' : 'NORMAL', ttl: `${msg.ttlS}s`, collapse_key: msg.collapse },
-            },
-          }),
-        });
-      bearer ??= await accessToken(env, a, nowMs);
-      let res = await send(bearer);
-      if (res.status === 401) {
-        // The access token went stale before its cache entry did: a new one, and once more.
-        await env.KV.delete(TOKEN_KV).catch(() => {});
-        bearer = await accessToken(env, a, nowMs);
-        res = await send(bearer);
-      }
-      if (res.ok) {
-        sent++;
-      } else if (res.status === 404 || res.status === 400) {
-        // UNREGISTERED or INVALID_ARGUMENT: the app was uninstalled or the token is stale.
-        await env.DB.prepare('UPDATE sessions SET push_token = NULL WHERE token_hash = ?').bind(r.token_hash).run();
-      } else {
-        console.error('fcm send', res.status);
-      }
-    }
-    return sent;
+      .all<{ token_hash: string; push_token: string }>());
   } catch (err) {
     console.error('push failed', err instanceof Error ? err.message : typeof err);
-    return 0;
+    return { sent: 0, failed: 1 };
   }
+  const forget = (tokenHash: string) => db.prepare('UPDATE sessions SET push_token = NULL WHERE token_hash = ?').bind(tokenHash).run();
+  const fcm: Fcm = { bearer: null, down: false };
+  for (const r of results) {
+    // One device's failure (a key that won't import, a service that hangs) mustn't stop the rest.
+    try {
+      const res = r.push_token.startsWith(WEB_PREFIX) ? await toBrowser(env, r.push_token, msg, nowMs) : a ? await toAndroid(env, a, fcm, r.push_token, msg, nowMs) : 'skip';
+      if (res === 'sent') out.sent++;
+      else if (res === 'failed') out.failed++;
+      else if (res === 'gone') await forget(r.token_hash);
+    } catch (err) {
+      console.error('push failed', err instanceof Error ? err.message : typeof err);
+      out.failed++;
+    }
+  }
+  return out;
+}
+
+type Outcome = 'sent' | 'failed' | 'gone' | 'skip';
+
+async function toBrowser(env: Env, pushToken: string, msg: Delivery, nowMs: number): Promise<Outcome> {
+  if (!msg.web) return 'skip';
+  let sub: WebSubscription | null = null;
+  try {
+    sub = parseSubscription(JSON.parse(pushToken.slice(WEB_PREFIX.length)));
+  } catch {
+    // Unreadable: treated as gone, like a subscription that fails its checks.
+  }
+  if (!sub) return 'gone';
+  return sendWebPush(env, sub, msg.web, { urgent: msg.urgent, nowMs, topic: msg.collapse, ttlS: msg.ttlS }).catch((err) => {
+    console.error('web push', String(err));
+    return 'failed' as const;
+  });
+}
+
+/** One delivery's FCM access token, shared by its devices; `down` once it couldn't be had. */
+interface Fcm {
+  bearer: string | null;
+  down: boolean;
+}
+
+async function toAndroid(env: Env, a: ServiceAccount, fcm: Fcm, pushToken: string, msg: Delivery, nowMs: number): Promise<Outcome> {
+  // Without an access token no device can be sent to: asking again for each would only wait longer.
+  if (fcm.down) return 'failed';
+  const send = (token: string) =>
+    fetch(`https://fcm.googleapis.com/v1/projects/${a.project_id}/messages:send`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          token: pushToken,
+          data: msg.fcm,
+          android: { priority: msg.urgent ? 'HIGH' : 'NORMAL', ttl: `${msg.ttlS}s`, collapse_key: msg.collapse },
+        },
+      }),
+      signal: AbortSignal.timeout(FCM_TIMEOUT_MS),
+    });
+  try {
+    fcm.bearer ??= await accessToken(env, a, nowMs);
+  } catch (err) {
+    fcm.down = true;
+    throw err;
+  }
+  let res = await send(fcm.bearer);
+  if (res.status === 401) {
+    // The access token went stale before its cache entry did: a new one, and once more.
+    await env.KV.delete(TOKEN_KV).catch(() => {});
+    fcm.bearer = null;
+    try {
+      fcm.bearer = await accessToken(env, a, nowMs);
+    } catch (err) {
+      fcm.down = true;
+      throw err;
+    }
+    res = await send(fcm.bearer);
+  }
+  if (res.ok) return 'sent';
+  const why = await fcmError(res);
+  if (why.tokenGone) return 'gone';
+  // Never the token: the status and FCM's code say what went wrong.
+  console.error('fcm send', res.status, why.code);
+  return 'failed';
+}
+
+type FcmErrorBody = {
+  error?: { status?: string; details?: { errorCode?: string; fieldViolations?: { field?: string }[] }[] };
+};
+
+/**
+ * Whether FCM's error says this device's token is no good: UNREGISTERED (the
+ * app was uninstalled), or a 400 that names the token as the bad field. Any
+ * other 400 is our message's fault, and must not cost every phone its token.
+ */
+export async function fcmError(res: Response): Promise<{ tokenGone: boolean; code: string }> {
+  const body = (await res.json().catch(() => null)) as FcmErrorBody | null;
+  const details = Array.isArray(body?.error?.details) ? body.error.details : [];
+  const code = details.find((d) => typeof d?.errorCode === 'string')?.errorCode ?? body?.error?.status ?? '';
+  const badToken = details.some((d) => Array.isArray(d?.fieldViolations) && d.fieldViolations.some((v) => v?.field === 'message.token'));
+  return { tokenGone: res.status === 404 || code === 'UNREGISTERED' || (res.status === 400 && badToken), code };
 }
 
 /** How many of a user's devices take push. */
