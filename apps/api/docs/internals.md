@@ -329,10 +329,15 @@ for the trip in progress or the `trip` key a card action or `/me/day`
 names. Clients show `card.actions` as buttons and never decide them.
 
 The signals live in a Durable Object per user (`Trip` in
-[src/trip.ts](../src/trip.ts), bound as `TRIPS`, keyed by user id). It's
+[src/trip.ts](../src/trip.ts), bound as `TRIPS`, keyed by user id, created
+in Asia with `locationHint: 'apac'`). It's
 only touched on a day with classes, keeps that day's signals and nothing
 else (a location is reduced to what it means: at the stop, or arrived), and
-an alarm deletes everything at the next Singapore midnight. Deleting an
+an alarm deletes everything at the next Singapore midnight. A request reads
+the day once and sends everything it changes in one `POST /update`
+(`updateTrip`): a signal with being followed, or a reached trip, a plan and
+a watch. The object writes only what changed and sets its alarm only when
+the time moves. Deleting an
 account empties it at once (`clearTrip`), and so does signing an anonymous
 account into another one.
 
@@ -387,7 +392,11 @@ account into another one.
   class start, ride end; not at `staleAt`). At each wake it works out the card
   again, nudges the user's devices (`sessions.push_token`) if the phase
   changed, and schedules the next wake; with no device taking
-  push it stops. A nudge is a data message, `{kind: 'card', phase}`, high
+  push it stops. The day's `watch` is the wake pending, absent once it
+  stops, and a card asks again only when none is pending or its own would
+  be more than 30 s sooner (`needsWatch`): the leave-by moves by seconds
+  with each refresh, and a later one needs nothing, since the object plans
+  its next wake afresh each time it wakes. A nudge is a data message, `{kind: 'card', phase}`, high
   priority for due and missed; the app fetches /me/next
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).

@@ -797,7 +797,7 @@ test('"Not on campus today" skips every trip left today on every device; "Back o
   const get = t.TRIPS.get.bind(t.TRIPS);
   t.TRIPS.get = (id) => {
     const stub = get(id);
-    return { ...stub, fetch: (url, init) => (String(url).endsWith('/signal') && saves.push(url), stub.fetch(url, init)) };
+    return { ...stub, fetch: (url, init) => (String(url).endsWith('/update') && saves.push(url), stub.fetch(url, init)) };
   };
   const off = await (await t.signal(t.phone, { kind: 'away' })).json();
   assert.equal(saves.length, 1);
@@ -1187,4 +1187,51 @@ test('a day keeps at most so many trip records', async () => {
   const after = await inst.storage.get('day');
   assert.equal(Object.keys(after.trips).length, MAX_DAY_TRIPS + 1, 'nothing new past the cap');
   assert.equal(after.trips[SECOND], undefined);
+});
+
+test('a fix at the stop sends its signal and being followed to the Trip object in one request', async () => {
+  const t = await setup();
+  const first = await t.next(t.phone);
+  t.clock(Date.parse(first.leave.at) - 60_000);
+  const plan = (await t.next(t.phone)).leave;
+  t.clock(Date.parse(plan.board) - 60_000);
+  const s = stopAt(plan.stopCode);
+  const calls = [];
+  const get = t.TRIPS.get.bind(t.TRIPS);
+  t.TRIPS.get = (id, opts) => {
+    const stub = get(id, opts);
+    return { ...stub, fetch: (url, init) => (calls.push({ method: init?.method ?? 'GET', body: init?.body && JSON.parse(init.body) }), stub.fetch(url, init)) };
+  };
+  const waiting = await (await t.signal(t.phone, { kind: 'location', lat: s.lat, lon: s.lon, speed: 0, acc: 10 })).json();
+  assert.equal(waiting.card.phase, 'waiting');
+  // The day read, then one change carrying both.
+  assert.deepEqual(calls.map((c) => c.method), ['GET', 'POST']);
+  assert.equal(calls[1].body.items[0].rec.kind, 'waiting');
+  assert.equal(calls[1].body.followed, Date.now());
+});
+
+test('a change to the Trip object that changes nothing writes nothing, and the alarm is set only when it moves', async () => {
+  installGlobals(makeFetch({}));
+  const trips = makeDurableObjects(Trip);
+  const s = trips.get('u1');
+  const date = sgtDate(FROZEN_NOW);
+  const deleteAt = endOfDayMs(FROZEN_NOW);
+  const update = async (u) => (await s.fetch('https://trip/update', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ date, deleteAt, ...u }) })).json();
+  await update({ followed: FROZEN_NOW, watch: { userId: 'u1', at: FROZEN_NOW + 600_000 } });
+  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 600_000);
+  const storage = trips.instances.get('u1').storage;
+  const writes = [];
+  for (const op of ['put', 'delete', 'setAlarm']) {
+    const real = storage[op].bind(storage);
+    storage[op] = (...args) => (writes.push([op, args[0]]), real(...args));
+  }
+  // The same again, and a later watch: the wake already pending stands.
+  await update({ followed: FROZEN_NOW });
+  const day = await update({ watch: { userId: 'u1', at: FROZEN_NOW + 900_000 } });
+  assert.deepEqual(writes, []);
+  assert.equal(day.watch, FROZEN_NOW + 600_000, 'the wake actually pending');
+  // A sooner one moves it.
+  await update({ watch: { userId: 'u1', at: FROZEN_NOW + 300_000 } });
+  assert.deepEqual(writes.map(([op]) => op).sort(), ['put', 'put', 'setAlarm']);
+  assert.equal(trips.alarms.get('u1'), FROZEN_NOW + 300_000);
 });
