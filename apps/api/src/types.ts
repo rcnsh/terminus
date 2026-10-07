@@ -490,4 +490,10 @@ export interface ResolveInput {
   hopS?: (svc: string) => number | null;
   /** Count the public buses at the stops too (the profile's `publicBuses`). */
   publicBuses?: boolean;
+  /**
+   * false: not logged to Analytics Engine. For answers nobody asked for (the
+   * Trip object's wakes, each class's leave-by on /me/day), which would cost
+   * rows and count as answers on the dashboard.
+   */
+  log?: boolean;
 }

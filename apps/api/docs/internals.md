@@ -40,8 +40,10 @@ hour, like the Worker's small pages.
 The landing page is sent with the current release's version (from
 `latest.json`, remembered for five minutes) and, for someone with a live
 session, Account in place of Sign in, both written in by `src/landing.ts`
-so nothing changes once the page is up. It's `private, no-cache` with no
-ETag, so a browser never shows its own older copy. The version carries its
+so nothing changes once the page is up. It's `private, no-cache`, with a
+weak ETag of its own made from the file's ETag, the version, signed in or
+not and the beta (`landingEtag`), so a browser gets a 304 only while its
+copy is what it would be sent, never the file's own 304. The version carries its
 English in `data-t`, which `i18n.js` words in Chinese.
 
 ---
@@ -102,13 +104,13 @@ pnpm run deploy
 | `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
 | `GET /line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/buses` read, plus one `/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
 | `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group), each with its walk to its nearest stop in metres (`walkM`) and in whole minutes at the normal pace (`walkMin`, never under 1). Written once per isolate, with an ETag: a client revalidating gets a 304. |
-| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. |
+| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; the ETag itself is looked up at most every 5 minutes per data centre, so a new upload is seen within 5 minutes. Fonts and icons never change at their path (new icons get a new folder, like `v4`), so they're kept by path alone, with no look at R2. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
-| `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. |
+| `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. Each isolate reads `latest.json` and the appcast from R2 at most every five minutes, as long as they're cached for. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
-| `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
+| `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. The [status page](../../web/public/status) shows it. |
 | `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set, and the timelapse recorder's polls by what they cost NUS). Needs `x-health-token`; anything else gets a 404. |
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
 | `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store`. Needs `x-health-token` (operator or timelapse token). |
@@ -120,7 +122,10 @@ pnpm run deploy
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
-for buses every 5 s. `/health`, `/status.json`, `/admin/stats`,
+for buses every 5 s. For `/buses` only, each isolate remembers who it let
+in for 30 s (`recentCallerFor` in `src/access.ts`), so a poll doesn't
+look the session up in D1 again: a session signed out or a key revoked can
+still see the buses that long, and nothing else. `/health`, `/status.json`, `/admin/stats`,
 `/timelapse/*` and `/download/*` stay limited by IP. `/map/*` is limited by IP only where it
 reads R2 (`RL_MAP`, 300 a minute): a piece already in the edge cache is
 never refused, so a lecture hall can open the map at once.
@@ -1125,8 +1130,11 @@ only secrets. Everything else in `.dev.vars.example` is a URL or a version.
 
 ## Analytics
 
-Every answer writes one decision row, plus one row per timed arrival, to a
-Workers Analytics Engine dataset. Two purposes: checking whether the direction
+Every answer someone asks for (`/next`, `/trip`, `/me/next`) writes one
+decision row, plus one row per timed arrival, to a Workers Analytics Engine
+dataset. Answers the server works out for itself are not logged
+(`log: false`): the Trip object's wakes, and each class's leave-by on
+`/me/day`. They would cost rows and count as answers on the dashboard. Two purposes: checking whether the direction
 algorithm is right, which nothing else measures, and inter-stop
 travel times from the feed's own predictions (`plate` is the join key), a
 cross-check on the ride times detection measures. Queries and

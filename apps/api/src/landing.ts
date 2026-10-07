@@ -10,30 +10,24 @@
  */
 
 import type { Env } from './types.ts';
-import { type Latest, RELEASE_VERSION } from './downloads.ts';
+import { RELEASE_VERSION, latestRelease, resetReleaseMemos } from './downloads.ts';
 import { authenticate } from './accounts.ts';
-
-/** latest.json changes only with a release; /download/latest.json is cached as long. */
-const VERSION_MEMO_MS = 300_000;
-let memo: { at: number; version: string | null } | null = null;
+import { matchesEtag } from './map.ts';
+import { isBeta } from './site.ts';
 
 /** Only a version as release.sh writes it goes into the page. */
 const VERSION = new RegExp(`^${RELEASE_VERSION}$`);
 
-/** The current release's version, from latest.json, or null. */
+/** The current release's version, from latest.json (kept as downloads.ts keeps it), or null. */
 export async function latestVersion(env: Env, nowMs: number): Promise<string | null> {
   if (!env.DOWNLOADS) return null;
-  if (memo && nowMs - memo.at < VERSION_MEMO_MS) return memo.version;
-  let version: string | null = null;
   try {
-    const obj = await env.DOWNLOADS.get('latest.json');
-    const v = obj ? ((await obj.json()) as Partial<Latest>).version : null;
-    version = typeof v === 'string' && VERSION.test(v) ? v : null;
+    const v = (await latestRelease(env.DOWNLOADS, nowMs))?.version;
+    return typeof v === 'string' && VERSION.test(v) ? v : null;
   } catch {
     // No version is the page as written: its script asks for it.
+    return null;
   }
-  memo = { at: nowMs, version };
-  return version;
 }
 
 /**
@@ -52,9 +46,20 @@ export function fillLanding(html: string, opts: { version: string | null; signed
 }
 
 /**
- * The landing page as served. Always the whole page, never a 304 from the
- * browser's copy, which may say Sign in or name an older version; private,
- * as it depends on who asks.
+ * The page's ETag: weak, from everything that goes into it (the file's own
+ * ETag, the version, signed in or not, and the beta's mark), so a browser
+ * revalidating gets a 304 only while what it has is what it would get.
+ */
+export async function landingEtag(assetEtag: string, version: string | null, signedIn: boolean, beta: boolean): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([assetEtag, version, signedIn, beta]))));
+  return `W/"${Array.from(digest.slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('')}"`;
+}
+
+/**
+ * The landing page as served: private, as it depends on who asks, and
+ * checked every time (no-cache). Never the file's own 304, as the browser's
+ * copy may say Sign in or name an older version; a 304 only for the page's
+ * own ETag (landingEtag).
  */
 export async function landingPage(req: Request, assets: Fetcher, env: Env, nowMs: number, ctx?: ExecutionContext): Promise<Response> {
   const [res, version, session] = await Promise.all([
@@ -63,14 +68,27 @@ export async function landingPage(req: Request, assets: Fetcher, env: Env, nowMs
     env.DB ? authenticate(env.DB, req, nowMs, ctx).catch(() => null) : null,
   ]);
   if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('text/html')) return res;
+  const signedIn = session !== null;
   const headers = new Headers(res.headers);
+  const assetEtag = res.headers.get('etag');
   for (const h of ['etag', 'last-modified', 'content-length']) headers.delete(h);
   headers.set('cache-control', 'private, no-cache');
-  const body = req.method === 'HEAD' ? null : fillLanding(await res.text(), { version, signedIn: session !== null });
+  // Without the file's ETag there's nothing to tell one copy from the next: always the page.
+  if (assetEtag) {
+    const etag = await landingEtag(assetEtag, version, signedIn, isBeta(env));
+    headers.set('etag', etag);
+    if (matchesEtag(req, etag.slice(2))) {
+      await res.body?.cancel();
+      // No content-type: nothing for the beta's mark (markBeta) to rewrite.
+      headers.delete('content-type');
+      return new Response(null, { status: 304, headers });
+    }
+  }
+  const body = req.method === 'HEAD' ? null : fillLanding(await res.text(), { version, signedIn });
   return new Response(body, { status: res.status, headers });
 }
 
 /** For tests: forget the memoised version. */
 export function resetLandingMemo(): void {
-  memo = null;
+  resetReleaseMemos();
 }

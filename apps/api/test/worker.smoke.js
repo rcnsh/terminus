@@ -210,6 +210,22 @@ test('/docs is the API documentation, rendered from /openapi.json', async () => 
   }
 });
 
+test('/openapi.json and /docs are built once and sent the same', async () => {
+  const { openApiJson, openApiSpec, docsPageFor, docsPage } = await import('../src/openapi.ts');
+  const a = openApiJson(BASE);
+  assert.equal(openApiJson(BASE), a, 'the same string, not rebuilt');
+  assert.deepEqual(JSON.parse(a), openApiSpec(BASE));
+  assert.equal(JSON.parse(openApiJson('https://other.test')).servers[0].url, 'https://other.test', 'per origin');
+  for (let i = 0; i < 20; i++) openApiJson(`https://h${i}.test`);
+  assert.deepEqual(JSON.parse(openApiJson(BASE)), openApiSpec(BASE), 'many origins: still right');
+  assert.equal(docsPageFor('dusk'), docsPage('dusk'));
+  const { res } = await call('/openapi.json');
+  assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8');
+  assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  assert.equal(await res.text(), openApiJson(BASE));
+});
+
 test('the OpenAPI spec documents exactly the routes that exist', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
   const { res } = await call('/openapi.json', { fetchImpl });
@@ -896,16 +912,28 @@ test('downloads serve whatever latest.json points at', async () => {
     async get(k) {
       if (!files.has(k)) return null;
       const v = files.get(k);
-      return { body: v, size: v.length, json: async () => JSON.parse(v) };
+      reads.push(k);
+      return { body: v, size: v.length, json: async () => JSON.parse(v), text: async () => v };
     },
   };
+  const reads = [];
   const env = { ...makeEnv(), DOWNLOADS: bucket };
-  const get = async (p) => (await call(p, { fetchImpl: makeFetch({}), env })).res;
+  // latest.json and the appcast are kept five minutes: a put shows once
+  // that has passed (the clock moves on with each).
+  let at = FROZEN_NOW;
+  const putLater = (k, v) => {
+    put(k, v);
+    at += 300_000;
+  };
+  const get = async (p) => {
+    const cache = installGlobals(makeFetch({}), at);
+    return (await call(p, { env, cache })).res;
+  };
 
   assert.equal((await get('/download/android')).status, 404, 'no release yet');
   put('releases/1.0.0/terminus-1.0.0.apk', 'APK');
   put('releases/1.0.0/terminus-1.0.0-mac.zip', 'ZIP');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.0', released: '2026-09-29',
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.0/terminus-1.0.0-mac.zip', sha256: 'bb', size: 3 },
@@ -922,7 +950,7 @@ test('downloads serve whatever latest.json points at', async () => {
 
   // From 1.3.8 the Mac app is a signed DMG.
   put('releases/1.0.1/terminus-1.0.1.dmg', 'DMG');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.1', released: '2026-10-01',
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
@@ -930,7 +958,7 @@ test('downloads serve whatever latest.json points at', async () => {
   // One APK per CPU type from 2.1: the arm64 one unless the app asks for its own.
   put('releases/1.0.1/terminus-1.0.1.apk', 'ARM64');
   put('releases/1.0.1/terminus-1.0.1-armv7.apk', 'ARMV7');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.1', released: '2026-10-01',
     android: { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
     androidAbis: {
@@ -952,10 +980,17 @@ test('downloads serve whatever latest.json points at', async () => {
 
   // Sparkle: the appcast, and release files by their versioned path.
   assert.equal((await get('/download/appcast.xml')).status, 404, 'no appcast yet');
-  put('appcast.xml', '<rss/>');
+  putLater('appcast.xml', '<rss/>');
   const feed = await get('/download/appcast.xml');
   assert.equal(feed.headers.get('content-type'), 'application/xml; charset=utf-8');
   assert.equal(await feed.text(), '<rss/>');
+  // Read from R2 once in five minutes, not on every request.
+  assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.1');
+  const before = reads.length;
+  assert.equal(await (await get('/download/appcast.xml')).text(), '<rss/>');
+  assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.1');
+  assert.equal((await get('/download/latest.json')).headers.get('cache-control'), 'public, max-age=300');
+  assert.deepEqual(reads.slice(before), [], 'both kept');
   const byPath = await get('/download/releases/1.0.1/terminus-1.0.1.dmg');
   assert.equal(byPath.status, 200);
   assert.equal(byPath.headers.get('content-type'), 'application/x-apple-diskimage');
@@ -978,7 +1013,17 @@ test('/status.json: the feed state and outages, public and cached', async () => 
   const now = Date.now();
   await kv.put('monitor:upstream', JSON.stringify({ up: false, since: now - 3_600_000, reason: 'auth rejected: code=10009 secret detail', checkedAt: now - 60_000 }));
   await kv.put('monitor:incidents', JSON.stringify([{ start: now - 3_600_000, end: null, cause: 'version' }]));
-  res = (await call('/status.json', { fetchImpl: makeFetch({}), env })).res;
+  // Each isolate reads the records once a minute, not three KV reads a request.
+  const cache = installGlobals(makeFetch({}), now + 59_000);
+  let reads = 0;
+  const get = kv.get.bind(kv);
+  kv.get = (...a) => (reads++, get(...a));
+  res = (await call('/status.json', { env, cache })).res;
+  assert.equal((await res.json()).feed, 'unknown', 'kept for a minute');
+  assert.equal(reads, 0);
+  Date.now = () => now + 60_000;
+  res = (await call('/status.json', { env, cache })).res;
+  assert.equal(reads, 3);
   assert.equal(res.headers.get('cache-control'), 'public, max-age=60');
   const s = await res.json();
   assert.equal(s.feed, 'down');
@@ -1136,6 +1181,72 @@ test('reads from R2 for the map are limited per IP; pieces in the edge cache are
   assert.equal((await get('/map/fonts/Noto%20Sans%20Medium/1-5.pbf')).status, 404);
   assert.equal(headCalls, before);
   assert.equal(asked.length, 2);
+});
+
+test('fonts and icons are kept by path: no look at R2 for what the edge has, and a current copy is a 304', async () => {
+  const files = new Map([['map/sprites/v4/light@2x.png', 'PNG-BYTES']]);
+  const bucket = rangedBucket(files);
+  const heads = bucket.head;
+  let headCalls = 0;
+  bucket.head = (k) => (headCalls++, heads(k));
+  const asked = [];
+  const RL_MAP = { limit: async ({ key }) => (asked.push(key), { success: asked.length <= 1 }) };
+  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p, headers = {}) => (await call(p, { env, cache, headers: { 'cf-connecting-ip': '203.0.113.9', ...headers } })).res;
+
+  const first = await get('/map/sprites/v4/light@2x.png');
+  assert.equal(first.status, 200);
+  assert.equal(await first.text(), 'PNG-BYTES');
+  const etag = first.headers.get('etag');
+  assert.ok(etag);
+  assert.equal(first.headers.get('content-length'), '9');
+  assert.equal(first.headers.get('cache-control'), 'public, max-age=2592000');
+  // Days later, past any look at the file, still from the edge: R2 isn't asked, nor the limit.
+  Date.now = () => FROZEN_NOW + 3 * 86_400_000;
+  for (let i = 0; i < 3; i++) {
+    const again = await get('/map/sprites/v4/light@2x.png');
+    assert.equal(again.status, 200);
+    assert.equal(again.headers.get('etag'), etag);
+    assert.equal(again.headers.get('content-length'), '9');
+    assert.equal(again.headers.get('content-type'), 'image/png');
+    assert.equal(await again.text(), 'PNG-BYTES');
+  }
+  const kept = await get('/map/sprites/v4/light@2x.png', { 'if-none-match': `W/${etag}` });
+  assert.equal(kept.status, 304);
+  assert.equal(kept.headers.get('etag'), etag);
+  assert.equal(headCalls, 0, 'never a head()');
+  assert.equal(bucket.gets, 1, 'one read');
+  assert.equal(asked.length, 1, 'limited only where R2 was read');
+  // A file not in the cache, past the limit, waits.
+  assert.equal((await get('/map/sprites/v4/dark.json')).status, 429);
+});
+
+test('a piece of the map in the edge cache is served even once R2 may not be read', async () => {
+  const files = new Map([['map/campus.pmtiles', 'PMTiles-0123456789']]);
+  const bucket = rangedBucket(files);
+  const heads = bucket.head;
+  let headCalls = 0;
+  bucket.head = (k) => (headCalls++, heads(k));
+  let open = true;
+  const RL_MAP = { limit: async () => ({ success: open }) };
+  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
+
+  assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).text(), 'PMTiles');
+  assert.equal(headCalls, 1);
+  open = false;
+  // Past the time the file's ETag is trusted: the limit says no reads, but the piece is in the cache.
+  Date.now = () => FROZEN_NOW + 10 * 60_000;
+  const piece = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
+  assert.equal(piece.status, 206);
+  assert.equal(piece.headers.get('content-range'), 'bytes 0-6/18');
+  assert.equal(piece.headers.get('content-length'), '7');
+  assert.equal(await piece.text(), 'PMTiles');
+  assert.equal(headCalls, 1, 'R2 not asked');
+  // A piece that isn't cached still waits.
+  assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).status, 429);
 });
 
 test('/campus is the same bytes every time, with an ETag a client can revalidate with', async () => {

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import { installGlobals, makeEnv, makeFetch, FROZEN_NOW } from './_stubs.mjs';
 import { fetchActiveBuses, fetchArrivals } from '../src/fms.ts';
-import { UpstreamRejected } from '../src/auth.ts';
+import { UpstreamRejected, deviceId } from '../src/auth.ts';
 
 test('fetchArrivals and fetchActiveBuses retry a rejection once with a fresh token', async () => {
   for (const [name, call] of [
@@ -54,4 +54,20 @@ test('without the proxy configured, nothing is asked', async () => {
   await assert.rejects(fetchArrivals(env, 'COM3', FROZEN_NOW), /bus proxy not configured/);
   await assert.rejects(fetchActiveBuses(env, 'D2', FROZEN_NOW), /bus proxy not configured/);
   assert.equal(fetch.counts.shuttle + fetch.counts.auth, 0);
+});
+
+test('the device id is read from KV once, then kept; a new one is made only when none is stored', async () => {
+  const env = makeEnv();
+  delete env.NEXTBUS_DEVICE_ID;
+  const get = env.KV.get.bind(env.KV);
+  let reads = 0;
+  env.KV.get = (k, ...rest) => {
+    if (k === 'auth:deviceid') reads++;
+    return get(k, ...rest);
+  };
+  const made = await deviceId(env);
+  assert.match(made, /^[0-9a-f]{16}$/);
+  assert.equal(await deviceId(env), made, 'the stored id, stable');
+  assert.equal(await deviceId(env), made);
+  assert.equal(reads, 2, 'read once to find none, once to find it stored, then kept');
 });
