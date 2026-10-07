@@ -46,6 +46,13 @@ export interface CachedOptions<T> {
    * few seconds, like the map, is better served by a wait than a stale jump).
    */
   raceMs?: number;
+  /**
+   * Whether a failure quiets this key for failMemoS. Absent: every failure
+   * does. One that says nothing of the next call (a refusal of a version
+   * already switched away from) shouldn't quiet the key for the isolates
+   * that would be answered.
+   */
+  memoes?: (err: unknown) => boolean;
   /** The feed's breaker: tripped by a failure that `trips`, it quiets every key that names it. */
   breaker?: { key: string; trips: (err: unknown) => boolean; maxAgeS: number };
   /** One in-flight fetch per key per isolate. The caller owns the map, so each feed has its own. */
@@ -156,7 +163,7 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
         return fresh;
       }, async (err) => {
         const reason = String((err as Error)?.message ?? err);
-        await cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {});
+        if (o.memoes?.(err) ?? true) await cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {});
         if (o.breaker?.trips(err)) await cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(() => {});
         throw err;
       })

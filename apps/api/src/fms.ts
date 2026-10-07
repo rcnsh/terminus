@@ -552,6 +552,7 @@ export async function getArrivals(
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
+    memoes: notOutdated,
     breaker: BREAKER,
     inflight,
   });
@@ -571,6 +572,10 @@ export function tripsBreaker(err: unknown): boolean {
   if (err instanceof UpstreamUnreachable) return true;
   return err instanceof UpstreamHttpError && (err.status === 429 || err.status >= 500);
 }
+
+/** Whether a failure quiets its stop or service for failMemoS: all but a
+ *  refusal of a version already switched away from, as with the breaker. */
+const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected && err.outdated);
 
 /** The shuttle feed's breaker: such a failure stops every call for breakerS. */
 const BREAKER = {
@@ -678,6 +683,7 @@ export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, now
     freshMs: TTL.busesMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
+    memoes: notOutdated,
     breaker: BREAKER,
     inflight: inflightBuses,
   });
