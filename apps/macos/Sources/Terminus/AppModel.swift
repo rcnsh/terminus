@@ -306,12 +306,13 @@ final class AppModel {
             try? await Task.sleep(for: .seconds(6))
             if !Task.isCancelled { removed = nil }
         }
-        let at = removedAt
+        let at = removedAt, date = day?.date
         Task {
             // Refused (or offline): back where it was, with why under it, as on the web.
             if let message = await sendDay("skipped", item.key, token: token) {
                 if removed?.key == item.key { removed = nil; removedTask?.cancel() }
-                if day?.items.contains(where: { $0.key == item.key }) == false { day?.items.insert(item, at: min(at, day?.items.count ?? 0)) }
+                // Only into the day it was taken off: past midnight, Today is another list.
+                if day?.date == date, day?.items.contains(where: { $0.key == item.key }) == false { day?.items.insert(item, at: min(at, day?.items.count ?? 0)) }
                 removeFailed = (item.key, message)
                 removeFailedTask?.cancel()
                 removeFailedTask = Task {
