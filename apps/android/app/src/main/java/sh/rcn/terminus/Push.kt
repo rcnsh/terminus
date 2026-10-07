@@ -123,7 +123,8 @@ object TermReminder {
     /** The reminder's words from the server, or null (signed out, offline, or no reminder due). */
     suspend fun fetch(ctx: Context): Map<String, String>? {
         val token = Store(ctx).token ?: return null
-        return runCatching { Api(token).notice() }.getOrNull()
+        // Fast timeouts: this runs inside the few seconds Firebase gives a message.
+        return runCatching { Api(token, fast = true).notice() }.getOrNull()
     }
 
     fun post(ctx: Context, data: Map<String, String>) {

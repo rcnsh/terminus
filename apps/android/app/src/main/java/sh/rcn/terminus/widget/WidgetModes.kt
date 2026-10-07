@@ -101,7 +101,7 @@ object WidgetModes {
 
     /** Back to the timetable, with nothing kept of the answer shown: for signing out. */
     fun forget(prefs: MutablePreferences) {
-        for (k in listOf(MODE, MODE_LABEL, MODE_AT, MODE_JSON, MODE_FETCHED, MODE_ERROR)) prefs.remove(k)
+        for (k in listOf(MODE, MODE_LABEL, MODE_AT, MODE_JSON, MODE_FETCHED, MODE_ERROR, NearbySwap.FROM, NearbySwap.TO, NearbySwap.AT)) prefs.remove(k)
     }
 
     /**

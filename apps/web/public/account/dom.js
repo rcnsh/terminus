@@ -42,12 +42,15 @@ export async function forgetAccountHere() {
   } catch {
     // Storage blocked: nothing was kept.
   }
-  try {
+  // Unsubscribing asks the push service, which can be slow offline: signing
+  // out waits two seconds at most.
+  const unsubscribe = (async () => {
     const reg = await globalThis.navigator?.serviceWorker?.getRegistration('/app/');
     await (await reg?.pushManager?.getSubscription())?.unsubscribe();
-  } catch {
+  })().catch(() => {
     // No service worker, or push never set up.
-  }
+  });
+  await Promise.race([unsubscribe, new Promise((r) => setTimeout(r, 2000))]);
 }
 
 /** A same-origin JSON call; throws with the server's error message and status. */
