@@ -40,7 +40,7 @@ struct Pair: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            TextField("you@u.nus.edu", text: $email)
+            TextField(L("Email"), text: $email, prompt: Text(verbatim: "you@u.nus.edu"))
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.emailAddress)
                 .onSubmit { if emailOK { model.signIn(email: email.trimmingCharacters(in: .whitespaces)) } }
@@ -193,6 +193,7 @@ struct CodeField: View {
     var onEdit: () -> Void = {}
     let onComplete: (String) -> Void
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Sent already: a stray key on full boxes doesn't send it again.
     @State private var sent: String?
 
@@ -241,6 +242,6 @@ struct CodeField: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(current ? Color.brand : .primary.opacity(0.12), lineWidth: current ? 2 : 1)
             )
-            .animation(.easeOut(duration: 0.12), value: current)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: current)
     }
 }

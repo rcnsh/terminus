@@ -309,7 +309,7 @@ private struct TripsGroup<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.headline)
+            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) { content }
                     .padding(6)
