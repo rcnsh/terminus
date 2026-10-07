@@ -280,31 +280,30 @@ internal fun SettingsScreen(
  * opening its page, what isn't set yet in the accent; then the
  * rest as tiles, each saying what's set. Notifications all off shows in
  * amber: it's the setting that changes the most. About is under them.
- * The list is plain, on the page: the sky is only in the band at the top
- * of each page. [top] and [bottom]: the status bar's and the tab bar's room,
- * inside the scrolling.
+ * The title is in the same slim band of the sky as each page's, so opening
+ * one doesn't change the top; the list is plain under it and scrolls, as a
+ * page does. [top] and [bottom]: the status bar's and the tab bar's room.
  */
 @Composable
 private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bottom: Dp, onOpen: (SettingsPage) -> Unit) {
     val ui by main.state.collectAsStateWithLifecycle()
     val profile = state.profile
-    val scroll = rememberScrollState()
-    NightStatusBar(false)
-    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
+        SkyBand(skyPhase(), top) {
+            TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
+        }
         Column(
             Modifier
-                .fillMaxSize()
-                .verticalScroll(scroll)
-                .padding(top = top, bottom = bottom)
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = bottom)
                 .padding(horizontal = 16.dp),
         ) {
-            TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             AccountTile(state, ui, onOpen)
             Spacer(Modifier.height(20.dp))
             SettingsGround(state, ui, profile, onOpen)
         }
-        StatusStrip(null, top, scroll)
     }
 }
 

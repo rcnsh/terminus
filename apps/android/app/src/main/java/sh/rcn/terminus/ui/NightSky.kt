@@ -297,7 +297,7 @@ private fun dip(lo: Float, hi: Float): Float {
  * hill is [page]'s own colour, so the sky meets the ground instead of fading
  * into the page. On the road, [road]'s sign and bus, or a shuttle going by.
  * Drawn [scale] times its numbers; [far] is in pixels. [withSun]: false for
- * just the hills (the band at the top of Settings' pages).
+ * just the hills (the band at the top of Settings and its pages).
  */
 private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase, road: Road, far: Float, scale: Float = 1f, withSun: Boolean = true) {
     val d = 1.dp.toPx() * scale
@@ -546,7 +546,7 @@ internal fun smallAccent() = LocalSkyTones.current?.smallAccent ?: MaterialTheme
 
 /**
  * A tab's sky ([SkyState]) that scrolls with [scroll], in [phase] and the
- * page's theme: Now's, and Settings' list's. Still while the phone's
+ * page's theme: Now's. Still while the phone's
  * "Remove animations" is on (checked again on coming back to the app).
  */
 @Composable
@@ -584,7 +584,7 @@ internal fun StatusStrip(sky: SkyState?, top: Dp, scroll: ScrollState) {
     )
 }
 
-/** How much of the horizon the band at the top of Settings' pages shows: the city's top to the near hill. */
+/** How much of the horizon Settings' band shows: the city's top to the near hill. */
 private val LOW = 52.dp
 
 /** A few stars beside a page's title in the band, clear of the title: across (0–1), down (0–1 of the title's row). */
@@ -594,9 +594,9 @@ private val BAND_STARS = listOf(
 )
 
 /**
- * A slim band of the sky at the top of one of Settings' pages, in [phase]:
- * from the top of the screen, [top] for the status bar, then [content] (the
- * back arrow and the title) in the sky's ink with the moon on the right at
+ * A slim band of the sky at the top of Settings' list and of each of its
+ * pages, in [phase]: from the top of the screen, [top] for the status bar,
+ * then [content] (the title, with the back arrow on a page) in the sky's ink with the moon on the right at
  * night, ending on the low horizon (just the hills, no road). The page's
  * controls stay on the plain page under it. As the web's (.page-band).
  */
