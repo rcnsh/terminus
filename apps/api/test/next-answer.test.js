@@ -72,6 +72,13 @@ test('no bus is guessed after the service stops for the night', () => {
   // The last listed bus leaves before you can get there: no headway after it either.
   const listed = boards(codesOf(cands), now, { PGP: [{ svc: 'D2', etaS: 60 }] });
   assert.ok(!scoreOptions(GRAPH, cands, listed, now).some((o) => o.svc === 'D2'), 'after the last bus');
+  // Past the close itself, with the last bus still listed out of reach: no
+  // guessed bus after it ("D2 · ~11 min · estimated" at 23:02).
+  const later = at('2026-08-27T23:02');
+  const stillListed = boards(codesOf(cands), later, { PGP: [{ svc: 'D2', etaS: 60 }] });
+  assert.ok(!scoreOptions(GRAPH, cands, stillListed, later).some((o) => o.svc === 'D2'), 'after the close');
+  // With a class's openBy, the next start is tomorrow: still nothing tonight.
+  assert.ok(!scoreOptions(GRAPH, cands, stillListed, later, undefined, { openBy: at('2026-08-27T23:30') }).some((o) => o.svc === 'D2'));
 });
 
 test('a leave-by never boards a bus after the service has stopped', () => {

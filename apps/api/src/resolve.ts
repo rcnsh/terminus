@@ -716,6 +716,7 @@ export function scoreOptions(
       let opensInS = 0;
       // When the service stops today, for the guesses below: a bus guessed
       // after it is no bus. Null when its hours are unknown or it isn't running.
+      const running = inService(graph, leg.svc, nowMs);
       const endsAt = serviceEndsAt(graph, leg.svc, nowMs);
       const pastEnd = (s: number) => endsAt !== null && fetchedAt + s * 1000 > endsAt;
 
@@ -727,17 +728,19 @@ export function scoreOptions(
         // road) is an estimate, however exact it looks.
         quality = catchable.scheduled ? 'scheduled' : 'live';
         arrival = catchable;
-      } else if (etas.length) {
+      } else if (etas.length && running) {
         // Every listed bus leaves before you can get there: the first one
-        // after the last listed, a headway apart, that you can reach.
+        // after the last listed, a headway apart, that you can reach. Not
+        // once the service has closed: the feed still lists its last buses,
+        // and there is no bus after them to guess (below).
         const headway = headwayFor(graph, leg.svc);
         boardS = (etas[etas.length - 1].etaS as number) + headway;
         if (headway > 0 && boardS < earliest) boardS += Math.ceil((earliest - boardS) / headway) * headway;
         if (pastEnd(boardS)) continue; // that was the last bus
         quality = 'scheduled';
-      } else if (!inService(graph, leg.svc, nowMs)) {
+      } else if (!running) {
         // The published hours are ours, not the feed's, so this holds even
-        // when we have no data at all.
+        // when we have no data at all, or only buses you can't reach.
         const opens = opts.openBy !== undefined ? serviceResumesAt(graph, leg.svc, nowMs) : null;
         if (opens === null || opens > opts.openBy!) continue; // ended, or not started in time
         // It starts before you need it: a bus somewhere in the headway after
