@@ -28,6 +28,7 @@ import { breakerOpen, getBuses } from './fms.ts';
 import { trackedPlacement } from './buses.ts';
 import { inService } from './resolve.ts';
 import { logPoll } from './analytics.ts';
+import { loadCalendar } from './calendarsync.ts';
 import { buildDayFile, dayKey, encodeBus, gzip, lineKeys, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
 import type { DayFile, RecorderStatus, Row } from './timelapse.ts';
 
@@ -165,6 +166,10 @@ export class TimelapseRecorder {
     const now = Date.now();
     const meta = this.read<Meta>('meta');
     if (!meta) return;
+    // The calendar the rest of the Worker answers from: a public holiday
+    // known only from KV runs Sunday hours, and services that aren't
+    // running then mustn't be asked.
+    await loadCalendar(this.env, now);
     const { close } = windowOf(meta.date);
     if (now >= close) return this.close(meta);
     if (meta.state === 'off' || meta.state === 'done') return this.storage.setAlarm(close);

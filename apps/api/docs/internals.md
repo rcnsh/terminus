@@ -1365,7 +1365,9 @@ LTA every 15 minutes, past the cache) and each push user's Trip object
 - **Hours.** Only inside `TIMELAPSE.hours`, 06:30 to 00:30 Singapore time.
   The window crosses midnight, so a day is the date its window opened, until
   it closes the next morning. Within it, only services inside their own
-  operating hours (`inService`), checked again before each poll. No service
+  operating hours (`inService`, on the same calendar as the rest of the
+  Worker, so a holiday known only from KV runs holiday hours), checked
+  again before each poll. No service
   is asked again within `pollMs` of its last ask, across rounds too (a round
   with fewer services has shorter slots). After `idleRounds` rounds
   in a row (3 minutes) in which every running service answered and no bus was out
