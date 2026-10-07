@@ -216,6 +216,23 @@ test('a stale answer\'s card counts from the request: its next change is never i
   assert.ok(Date.parse(card.nextChangeAt) > now, card.nextChangeAt);
 });
 
+test('a leave-by sliding just ahead of now asks for a refetch no sooner than 30 s', async () => {
+  const { nextPhaseAt, LEAVE_GAP_MS } = await import('../src/card.ts');
+  const { default: fixture } = await import('./fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { card: _card, refreshAt: _r, ...answer } = fixture;
+  const now = Date.parse(answer.asOf);
+  const trip = { key: 'k', phase: 'due' };
+  // A late bus: leave in 5 s, and the next fetch would say 5 s again.
+  const sliding = { ...answer, leave: { ...answer.leave, at: new Date(now + 5_000).toISOString() } };
+  const card = cardFor(sliding, false, trip, null, now);
+  assert.equal(Date.parse(card.nextChangeAt), now + LEAVE_GAP_MS);
+  // The Trip object keeps the exact time (it has its own gap).
+  assert.equal(nextPhaseAt(sliding, trip, now), now + 5_000);
+  // A leave-by further off is kept to the second.
+  const later = { ...answer, leave: { ...answer.leave, at: new Date(now + 90_000).toISOString() } };
+  assert.equal(Date.parse(cardFor(later, false, trip, null, now).nextChangeAt), now + 90_000);
+});
+
 /* Fares. */
 
 test('walking is free: a public bus must beat it by its fare too', () => {

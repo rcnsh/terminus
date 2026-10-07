@@ -2120,7 +2120,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       },
                     },
                     warning: { type: ['string', 'null'], example: 'Last D2 from UTown in 18 min' },
-                    nextChangeAt: { type: ['string', 'null'], format: 'date-time', description: 'When this card is next expected to change by itself (the next phase, or going stale): fetch again then.' },
+                    nextChangeAt: { type: ['string', 'null'], format: 'date-time', description: 'When this card is next expected to change by itself (the next phase, or going stale): fetch again then. A leave-by counts here no sooner than 30 s ahead, so a late bus sliding it does not mean polling every few seconds.' },
                     remind: { type: 'boolean', description: 'False when the user turned reminders off for this trip. See `remindAt`.' },
                     suggestion: {
                       type: ['object', 'null'],

@@ -568,18 +568,28 @@ function slotOf(text: string, make: (t: string) => string): string | null {
  * class starting, the ride ending. Null outside a trip. The Trip object
  * wakes at this to push; the card's nextChangeAt also counts going stale.
  */
-export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number): number | null {
+export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGapMs = 0): number | null {
   if (!trip.key) return null;
   const marks: number[] = [];
   const l = a.leave ?? null;
   const plan = trip.plan ?? null;
   if (plan?.board && !answered(trip)) marks.push(Date.parse(plan.board), Date.parse(plan.board) + ASSUME_MS);
-  if (l?.at) marks.push(Date.parse(l.at) - DUE_MS, Date.parse(l.at));
+  // The leave-by's marks, no sooner than `leaveGapMs` from now (see LEAVE_GAP_MS).
+  if (l?.at) for (const t of [Date.parse(l.at) - DUE_MS, Date.parse(l.at)]) if (t > nowMs) marks.push(Math.max(t, nowMs + leaveGapMs));
   if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
   const onBus = trip.rec?.boarded ?? (trip.assumed ? plan : null);
   if (trip.phase === 'riding' && onBus?.arrive) marks.push(Date.parse(onBus.arrive) + RIDE_GRACE_MS);
   return marks.filter((m) => m > nowMs).sort((x, y) => x - y)[0] ?? null;
 }
+
+/**
+ * The soonest the card asks to be fetched again for its leave-by. A late bus
+ * keeps sliding the leave-by a few seconds ahead of now, and refetching at it
+ * would poll every few seconds. The client already says "Leave now" itself
+ * once `leave.at` passes, so this only delays the server's phase words (due,
+ * heading) by up to this much; the Trip object and the Mac wait 30 s too.
+ */
+export const LEAVE_GAP_MS = 30_000;
 
 /** Someone said what happened (or detection did); having been at the stop isn't that. */
 const answered = (trip: TripView) => trip.rec !== undefined && trip.rec.kind !== 'waiting';
@@ -678,7 +688,7 @@ function v2(
 
   // The next moment this card changes by itself: the trip's next phase, or
   // the answer going stale, whichever is sooner.
-  const phaseAt = nextPhaseAt(a, trip, nowMs);
+  const phaseAt = nextPhaseAt(a, trip, nowMs, LEAVE_GAP_MS);
   const next = [phaseAt, card.staleAt ? Date.parse(card.staleAt) : null].filter((m): m is number => m !== null && m > nowMs).sort((x, y) => x - y)[0];
 
   return {
