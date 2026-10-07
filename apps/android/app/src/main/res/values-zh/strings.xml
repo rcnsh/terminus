@@ -55,6 +55,12 @@
     <string name="a11y_show_list">以列表显示</string>
     <string name="email_label">邮箱</string>
     <string name="report_note">你的说明</string>
+    <string name="a11y_page">第 %1$d 页，共 %2$d 页</string>
+    <string name="a11y_open_line">查看 %1$s 线路</string>
+    <string name="a11y_open_stop">查看这个车站的巴士</string>
+    <string name="a11y_change_stop">更改 %1$s 的车站</string>
+    <string name="a11y_expanded">已展开</string>
+    <string name="a11y_collapsed">已收起</string>
     <string name="a11y_about">"约 "</string>
     <string name="a11y_bus">%1$s 巴士</string>
     <string name="a11y_bus_paid">公共巴士 %1$s，需付车费</string>

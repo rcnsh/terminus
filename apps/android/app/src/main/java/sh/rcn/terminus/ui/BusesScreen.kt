@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -66,6 +68,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -424,7 +427,8 @@ private fun StopPage(
 @Composable
 private fun Dots(count: Int, current: Int, nearestFirst: Boolean) {
     val c = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+    val said = stringResource(R.string.a11y_page, current + 1, count)
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp).clearAndSetSemantics { contentDescription = said }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         for (i in 0 until count) {
             if (i == 0 && nearestFirst) {
                 Icon(painterResource(R.drawable.ic_near), contentDescription = null, tint = if (current == 0) c.onSurface else c.outline, modifier = Modifier.padding(horizontal = 3.dp).size(10.dp))
@@ -442,13 +446,13 @@ private fun Dots(count: Int, current: Int, nearestFirst: Boolean) {
 @Composable
 private fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     val c = MaterialTheme.colorScheme
-    Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(14.dp)).background(c.secondaryContainer).padding(4.dp)) {
+    Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(14.dp)).background(c.secondaryContainer).padding(4.dp).selectableGroup()) {
         for ((i, text) in options.withIndex()) {
             val on = i == selected
             Box(
                 Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp))
                     .background(if (on) c.surface else Color.Transparent)
-                    .clickable(role = Role.Tab) { onSelect(i) }
+                    .selectable(selected = on, role = Role.Tab) { onSelect(i) }
                     .padding(vertical = 9.dp, horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -501,7 +505,7 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
     Row(
         Modifier.fillMaxWidth()
             .background(if (arriving) c.primaryContainer else Color.Transparent)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc), onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -541,7 +545,7 @@ private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick
     val (why, back) = stopped.lines(remember { hour12(ctx) })
     Row(
         Modifier.fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc), onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -849,7 +853,7 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (here) c.primaryContainer else Color.Transparent)
                         .then(if (here) Modifier.onGloballyPositioned { onHere(it.positionInParent().y.toInt()) } else Modifier)
-                        .clickable(role = Role.Button) { onStop(item.stop.code) },
+                        .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_stop)) { onStop(item.stop.code) },
                 ) {
                     Rail(color, first, last, bus = item.buses.isNotEmpty(), here = here)
                     Column(Modifier.weight(1f).padding(vertical = 10.dp).padding(end = 10.dp)) {
