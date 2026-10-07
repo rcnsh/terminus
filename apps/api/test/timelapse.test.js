@@ -749,6 +749,34 @@ test('a day still retrying a week after its close is cleaned up by the next morn
   assert.deepEqual(await status(h), { date: null, samples: 0, state: 'idle' }, 'storage deleted');
 });
 
+test('the tables are made once, /status counts nothing, and an empty recorder asked for its status stays empty', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  // A past day's recorder, never started (or emptied at its close): asking makes nothing.
+  assert.deepEqual(await status(h, '2026-08-26'), { date: null, samples: 0, state: 'idle' });
+  const past = h.ns.instances.get('2026-08-26').storage.sql;
+  assert.deepEqual(past.exec("SELECT name FROM sqlite_master WHERE type = 'table'").toArray(), [], 'no tables made by a read');
+
+  await start(h);
+  const sql = h.ns.instances.get(DATE).storage.sql;
+  const queries = [];
+  const exec = sql.exec.bind(sql);
+  sql.exec = (q, ...args) => (queries.push(q), exec(q, ...args));
+  await runUntil(h, FROZEN_NOW + 60_000 - 1);
+  const samples = (await status(h)).samples;
+  assert.equal(samples, RUNNING.length * 2, 'kept in meta as rows were added');
+  assert.equal(queries.filter((q) => /CREATE TABLE/.test(q)).length, 0, 'made once, when the day started');
+  assert.equal(queries.filter((q) => /COUNT\(\*\) AS n FROM samples/.test(q)).length, 0);
+
+  // At the close the tables go, and a status afterwards doesn't bring them back.
+  const { close } = windowOf(DATE);
+  h.ns.alarms.set(DATE, close);
+  Date.now = () => close;
+  await h.ns.fireDue(close);
+  assert.ok(h.bucket._written.has(`timelapse/${DATE}.json.gz`));
+  assert.deepEqual(await status(h), { date: null, samples: 0, state: 'idle' });
+  assert.deepEqual(exec("SELECT name FROM sqlite_master WHERE type = 'table'").toArray(), []);
+});
+
 /* ------------------------------------------------------------------ */
 /* The routes                                                          */
 /* ------------------------------------------------------------------ */

@@ -64,6 +64,9 @@ interface Meta {
    *  that changes a line mid-day would measure `along` on a line the day
    *  doesn't have. */
   lines?: Record<string, string>;
+  /** Rows kept so far, for /status without counting them each time. A day
+   *  begun before this was kept counts its rows once. */
+  samples?: number;
 }
 
 /**
@@ -82,6 +85,8 @@ export class TimelapseRecorder {
   private readonly state: DurableObjectState;
   private readonly storage: DurableObjectStorage;
   private readonly env: Env;
+  /** The tables are known to exist: made or checked once per instance, not on every call. */
+  private ready = false;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -90,24 +95,30 @@ export class TimelapseRecorder {
     scopeCache(env);
   }
 
-  /** The tables, again after deleteAll() at the end of a day. */
+  /** The tables for a write, made if they aren't there (again after deleteAll() at the end of a day). */
   private schema(): SqlStorage {
     const sql = this.storage.sql;
-    sql.exec('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
-    sql.exec('CREATE TABLE IF NOT EXISTS samples (n INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER NOT NULL, svc TEXT NOT NULL, buses TEXT NOT NULL)');
+    if (!this.ready) {
+      sql.exec('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
+      sql.exec('CREATE TABLE IF NOT EXISTS samples (n INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER NOT NULL, svc TEXT NOT NULL, buses TEXT NOT NULL)');
+      this.ready = true;
+    }
     return sql;
   }
 
-  /** Whether there are tables at all: a read mustn't create them, or asking
-   *  about a day nobody recorded (/timelapse/days asks about a week of them)
-   *  would leave storage behind that nothing ever deletes. */
-  private hasTables(): boolean {
-    return this.storage.sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").toArray().length > 0;
+  /**
+   * The tables for a read, or null when there are none: /timelapse/days asks
+   * the past week's recorders, most of them closed and empty, and a read
+   * mustn't make tables there for nothing.
+   */
+  private tables(): SqlStorage | null {
+    const sql = this.storage.sql;
+    if (!this.ready) this.ready = sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('meta', 'samples')").one().n === 2;
+    return this.ready ? sql : null;
   }
 
   private read<T>(k: string): T | null {
-    if (!this.hasTables()) return null;
-    const row = this.schema().exec<{ v: string }>('SELECT v FROM meta WHERE k = ?', k).toArray()[0];
+    const row = this.tables()?.exec<{ v: string }>('SELECT v FROM meta WHERE k = ?', k).toArray()[0];
     return row ? (JSON.parse(row.v) as T) : null;
   }
 
@@ -116,8 +127,7 @@ export class TimelapseRecorder {
   }
 
   private count(): number {
-    if (!this.hasTables()) return 0;
-    return this.schema().exec<{ n: number }>('SELECT COUNT(*) AS n FROM samples').one().n;
+    return this.tables()?.exec<{ n: number }>('SELECT COUNT(*) AS n FROM samples').one().n ?? 0;
   }
 
   async fetch(req: Request): Promise<Response> {
@@ -129,7 +139,7 @@ export class TimelapseRecorder {
       return this.state.blockConcurrencyWhile(() => this.start(date));
     }
     if (req.method === 'GET' && url.pathname === '/status') {
-      const status: RecorderStatus = { date: meta?.date ?? null, samples: meta ? this.count() : 0, state: meta?.state ?? 'idle' };
+      const status: RecorderStatus = { date: meta?.date ?? null, samples: meta ? (meta.samples ?? this.count()) : 0, state: meta?.state ?? 'idle' };
       return Response.json(status);
     }
     if (req.method === 'GET' && url.pathname === '/day') {
@@ -147,7 +157,7 @@ export class TimelapseRecorder {
     if (!meta) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || now >= close) return Response.json({ state: 'closed' });
       const map = mapSnapshot();
-      meta = { date, t0: now, lastT: now, state: 'polling', round: null, idle: 0, seen: false, last: {}, plates: [], pollMs: pollInterval(), asked: {}, lines: lineKeys(map) };
+      meta = { date, t0: now, lastT: now, state: 'polling', round: null, idle: 0, seen: false, last: {}, plates: [], pollMs: pollInterval(), asked: {}, lines: lineKeys(map), samples: 0 };
       // The lines the day's `along`s are measured on, kept with it.
       this.write('map', map);
       this.write('meta', meta);
@@ -323,13 +333,15 @@ export class TimelapseRecorder {
       // The row and the times that date it, saved together: a reset between
       // the two would skew every later row's dt or keep this reading twice.
       const dt = live.fetchedAt - meta.lastT;
-      const next: Meta = { ...meta, lastT: live.fetchedAt, last: { ...meta.last, [svc]: live.fetchedAt } };
+      const samples = meta.samples === undefined ? this.count() + 1 : meta.samples + 1;
+      const next: Meta = { ...meta, lastT: live.fetchedAt, last: { ...meta.last, [svc]: live.fetchedAt }, samples };
       this.storage.transactionSync(() => {
         this.schema().exec('INSERT INTO samples (dt, svc, buses) VALUES (?, ?, ?)', dt, svc, JSON.stringify(buses));
         this.write('meta', next);
       });
       meta.lastT = next.lastT;
       meta.last = next.last;
+      meta.samples = samples;
       return live.buses.length;
     } finally {
       await Promise.allSettled(pending);
@@ -353,6 +365,8 @@ export class TimelapseRecorder {
    */
   private async close(meta: Meta): Promise<void> {
     try {
+      // Counted, not read from meta: the day is written only if it has rows,
+      // and this runs once a day.
       const samples = this.count();
       if (samples > 0) {
         if (!this.env.DOWNLOADS) throw new Error('no DOWNLOADS bucket');
@@ -369,5 +383,7 @@ export class TimelapseRecorder {
       await this.storage.deleteAlarm();
       await this.storage.deleteAll();
     }
+    // The tables went with the rest.
+    this.ready = false;
   }
 }

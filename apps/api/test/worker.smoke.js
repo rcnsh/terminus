@@ -213,6 +213,22 @@ test('/docs is the API documentation, rendered from /openapi.json', async () => 
   }
 });
 
+test('/openapi.json and /docs are built once and sent the same', async () => {
+  const { openApiJson, openApiSpec, docsPageFor, docsPage } = await import('../src/openapi.ts');
+  const a = openApiJson(BASE);
+  assert.equal(openApiJson(BASE), a, 'the same string, not rebuilt');
+  assert.deepEqual(JSON.parse(a), openApiSpec(BASE));
+  assert.equal(JSON.parse(openApiJson('https://other.test')).servers[0].url, 'https://other.test', 'per origin');
+  for (let i = 0; i < 20; i++) openApiJson(`https://h${i}.test`);
+  assert.deepEqual(JSON.parse(openApiJson(BASE)), openApiSpec(BASE), 'many origins: still right');
+  assert.equal(docsPageFor('dusk'), docsPage('dusk'));
+  const { res } = await call('/openapi.json');
+  assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8');
+  assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  assert.equal(await res.text(), openApiJson(BASE));
+});
+
 test('the OpenAPI spec documents exactly the routes that exist', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
   const { res } = await call('/openapi.json', { fetchImpl });
@@ -919,16 +935,23 @@ test('downloads serve whatever latest.json points at', async () => {
     async get(k) {
       if (!files.has(k)) return null;
       const v = files.get(k);
-      return { body: v, size: v.length, json: async () => JSON.parse(v) };
+      reads.push(k);
+      return { body: v, size: v.length, json: async () => JSON.parse(v), text: async () => v };
     },
   };
+  const reads = [];
   const env = { ...makeEnv(), DOWNLOADS: bucket };
-  const get = async (p) => (await call(p, { fetchImpl: makeFetch({}), env })).res;
+  // latest.json and the appcast are read on every request: a put shows at once.
+  const putLater = put;
+  const get = async (p) => {
+    const cache = installGlobals(makeFetch({}), FROZEN_NOW);
+    return (await call(p, { env, cache })).res;
+  };
 
   assert.equal((await get('/download/android')).status, 404, 'no release yet');
   put('releases/1.0.0/terminus-1.0.0.apk', 'APK');
   put('releases/1.0.0/terminus-1.0.0-mac.zip', 'ZIP');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.0', released: '2026-09-29',
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.0/terminus-1.0.0-mac.zip', sha256: 'bb', size: 3 },
@@ -945,7 +968,7 @@ test('downloads serve whatever latest.json points at', async () => {
 
   // From 1.3.8 the Mac app is a signed DMG.
   put('releases/1.0.1/terminus-1.0.1.dmg', 'DMG');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.1', released: '2026-10-01',
     android: { file: 'releases/1.0.0/terminus-1.0.0.apk', sha256: 'aa', size: 3 },
     mac: { file: 'releases/1.0.1/terminus-1.0.1.dmg', sha256: 'cc', size: 3 },
@@ -953,7 +976,7 @@ test('downloads serve whatever latest.json points at', async () => {
   // One APK per CPU type from 2.1: the arm64 one unless the app asks for its own.
   put('releases/1.0.1/terminus-1.0.1.apk', 'ARM64');
   put('releases/1.0.1/terminus-1.0.1-armv7.apk', 'ARMV7');
-  put('latest.json', JSON.stringify({
+  putLater('latest.json', JSON.stringify({
     version: '1.0.1', released: '2026-10-01',
     android: { file: 'releases/1.0.1/terminus-1.0.1.apk', sha256: 'a64', size: 5 },
     androidAbis: {
@@ -975,10 +998,16 @@ test('downloads serve whatever latest.json points at', async () => {
 
   // Sparkle: the appcast, and release files by their versioned path.
   assert.equal((await get('/download/appcast.xml')).status, 404, 'no appcast yet');
-  put('appcast.xml', '<rss/>');
+  putLater('appcast.xml', '<rss/>');
   const feed = await get('/download/appcast.xml');
   assert.equal(feed.headers.get('content-type'), 'application/xml; charset=utf-8');
   assert.equal(await feed.text(), '<rss/>');
+  // Read from R2 on every request, so a release is live the moment it's put.
+  const before = reads.length;
+  assert.equal(await (await get('/download/appcast.xml')).text(), '<rss/>');
+  assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.1');
+  assert.equal((await get('/download/latest.json')).headers.get('cache-control'), 'public, max-age=300');
+  assert.deepEqual(reads.slice(before), ['appcast.xml', 'latest.json', 'latest.json'], 'neither kept');
   const byPath = await get('/download/releases/1.0.1/terminus-1.0.1.dmg');
   assert.equal(byPath.status, 200);
   assert.equal(byPath.headers.get('content-type'), 'application/x-apple-diskimage');
@@ -1001,7 +1030,17 @@ test('/status.json: the feed state and outages, public and cached', async () => 
   const now = Date.now();
   await kv.put('monitor:upstream', JSON.stringify({ up: false, since: now - 3_600_000, reason: 'auth rejected: code=10009 secret detail', checkedAt: now - 60_000 }));
   await kv.put('monitor:incidents', JSON.stringify([{ start: now - 3_600_000, end: null, cause: 'version' }]));
-  res = (await call('/status.json', { fetchImpl: makeFetch({}), env })).res;
+  // Each isolate reads the records once a minute, not three KV reads a request.
+  const cache = installGlobals(makeFetch({}), now + 59_000);
+  let reads = 0;
+  const get = kv.get.bind(kv);
+  kv.get = (...a) => (reads++, get(...a));
+  res = (await call('/status.json', { env, cache })).res;
+  assert.equal((await res.json()).feed, 'unknown', 'kept for a minute');
+  assert.equal(reads, 0);
+  Date.now = () => now + 60_000;
+  res = (await call('/status.json', { env, cache })).res;
+  assert.equal(reads, 3);
   assert.equal(res.headers.get('cache-control'), 'public, max-age=60');
   const s = await res.json();
   assert.equal(s.feed, 'down');
@@ -1215,6 +1254,72 @@ test('reads from R2 for the map are limited per IP; pieces in the edge cache are
   assert.equal(asked.length, 2);
 });
 
+test('fonts and icons are kept by path: no look at R2 for what the edge has, and a current copy is a 304', async () => {
+  const files = new Map([['map/sprites/v4/light@2x.png', 'PNG-BYTES']]);
+  const bucket = rangedBucket(files);
+  const heads = bucket.head;
+  let headCalls = 0;
+  bucket.head = (k) => (headCalls++, heads(k));
+  const asked = [];
+  const RL_MAP = { limit: async ({ key }) => (asked.push(key), { success: asked.length <= 1 }) };
+  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p, headers = {}) => (await call(p, { env, cache, headers: { 'cf-connecting-ip': '203.0.113.9', ...headers } })).res;
+
+  const first = await get('/map/sprites/v4/light@2x.png');
+  assert.equal(first.status, 200);
+  assert.equal(await first.text(), 'PNG-BYTES');
+  const etag = first.headers.get('etag');
+  assert.ok(etag);
+  assert.equal(first.headers.get('content-length'), '9');
+  assert.equal(first.headers.get('cache-control'), 'public, max-age=2592000');
+  // Days later, past any look at the file, still from the edge: R2 isn't asked, nor the limit.
+  Date.now = () => FROZEN_NOW + 3 * 86_400_000;
+  for (let i = 0; i < 3; i++) {
+    const again = await get('/map/sprites/v4/light@2x.png');
+    assert.equal(again.status, 200);
+    assert.equal(again.headers.get('etag'), etag);
+    assert.equal(again.headers.get('content-length'), '9');
+    assert.equal(again.headers.get('content-type'), 'image/png');
+    assert.equal(await again.text(), 'PNG-BYTES');
+  }
+  const kept = await get('/map/sprites/v4/light@2x.png', { 'if-none-match': `W/${etag}` });
+  assert.equal(kept.status, 304);
+  assert.equal(kept.headers.get('etag'), etag);
+  assert.equal(headCalls, 0, 'never a head()');
+  assert.equal(bucket.gets, 1, 'one read');
+  assert.equal(asked.length, 1, 'limited only where R2 was read');
+  // A file not in the cache, past the limit, waits.
+  assert.equal((await get('/map/sprites/v4/dark.json')).status, 429);
+});
+
+test('a piece of the map in the edge cache is served even once R2 may not be read', async () => {
+  const files = new Map([['map/campus.pmtiles', 'PMTiles-0123456789']]);
+  const bucket = rangedBucket(files);
+  const heads = bucket.head;
+  let headCalls = 0;
+  bucket.head = (k) => (headCalls++, heads(k));
+  let open = true;
+  const RL_MAP = { limit: async () => ({ success: open }) };
+  const env = { ...makeEnv(), DOWNLOADS: bucket, RL_MAP };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
+
+  assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).text(), 'PMTiles');
+  assert.equal(headCalls, 1);
+  open = false;
+  // Past the time the file's ETag is trusted: the limit says no reads, but the piece is in the cache.
+  Date.now = () => FROZEN_NOW + 10 * 60_000;
+  const piece = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
+  assert.equal(piece.status, 206);
+  assert.equal(piece.headers.get('content-range'), 'bytes 0-6/18');
+  assert.equal(piece.headers.get('content-length'), '7');
+  assert.equal(await piece.text(), 'PMTiles');
+  assert.equal(headCalls, 1, 'R2 not asked');
+  // A piece that isn't cached still waits.
+  assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).status, 429);
+});
+
 test('/campus is the same bytes every time, with an ETag a client can revalidate with', async () => {
   const cache = installGlobals(makeFetch({}));
   const first = (await call('/campus', { cache })).res;
@@ -1251,34 +1356,62 @@ test('/map/style.json is a quiet light or dark map with every URL on our own dom
 });
 
 test('files served without the Worker get the same headers from _headers', async () => {
-  const { readFile } = await import('node:fs/promises');
+  const { readFile, readdir } = await import('node:fs/promises');
   const { withSecurityHeaders } = await import('../src/http.ts');
+  const { openApiSpec } = await import('../src/openapi.ts');
+  // Cloudflare's own matching, for runWorkerFirst and _headers alike: `*`
+  // is any run of characters, across `/` too.
+  const glob = (p) => new RegExp(`^${p.split('*').map((s) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&')).join('.*')}$`);
   const config = await readFile(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
-  const skipped = [...config.matchAll(/"!(\/[\w-]+\/\*)"/g)].map((m) => m[1]).sort();
-  assert.deepEqual(skipped, ['/assets/*', '/vendor/*']);
+  const first = JSON.parse(config.match(/runWorkerFirst: (\[[^\]]*\])/)[1]);
+  const skip = first.filter((p) => p.startsWith('!')).map((p) => glob(p.slice(1)));
+  const skips = (path) => skip.some((r) => r.test(path));
 
   // _headers: a path, then its indented headers.
-  const rules = new Map();
-  let at = null;
+  const rules = [];
   for (const line of (await readFile(new URL('../../web/public/_headers', import.meta.url), 'utf8')).split('\n')) {
     if (!line.trim() || line.startsWith('#')) continue;
-    if (!/^\s/.test(line)) rules.set((at = line.trim()), {});
+    if (!/^\s/.test(line)) rules.push({ re: glob(line.trim()), set: {} });
     else {
       const [name, ...value] = line.trim().split(':');
-      rules.get(at)[name.toLowerCase()] = value.join(':').trim();
+      rules.at(-1).set[name.toLowerCase()] = value.join(':').trim();
     }
   }
-  assert.deepEqual([...rules.keys()].sort(), skipped, 'every path that skips the Worker has its headers');
+  const { fileURLToPath } = await import('node:url');
+  const { join, relative } = await import('node:path');
+  const root = fileURLToPath(new URL('../../web/public/', import.meta.url));
+  const files = (await readdir(root, { recursive: true, withFileTypes: true }))
+    .filter((f) => f.isFile() && f.name !== '_headers')
+    .map((f) => `/${relative(root, join(f.parentPath, f.name))}`);
+  const skipped = files.filter(skips);
+  assert.ok(skipped.includes('/app/app.js') && skipped.includes('/account/account.css') && skipped.includes('/sw.js'), 'the pages\' scripts and styles skip the Worker');
   for (const path of skipped) {
-    const viaWorker = Object.fromEntries(withSecurityHeaders(new Response('', { headers: { 'content-type': 'text/javascript' } }), path.replace('*', 'x.js')).headers);
+    // Nothing that skips it is a page, which would need the CSP.
+    assert.ok(!path.endsWith('.html'), `${path} is a page`);
+    const set = {};
+    for (const r of rules.filter((x) => x.re.test(path))) {
+      for (const [k, v] of Object.entries(r.set)) {
+        // Cloudflare appends a header two rules both set.
+        assert.ok(!(k in set), `${path}: two rules set ${k}`);
+        set[k] = v;
+      }
+    }
+    delete set['cache-control'];
+    const viaWorker = Object.fromEntries(withSecurityHeaders(new Response('', { headers: { 'content-type': 'text/javascript' } }), path).headers);
     delete viaWorker['content-type'];
-    assert.deepEqual(rules.get(path), viaWorker, `${path}: the headers the Worker would give`);
+    assert.deepEqual(set, viaWorker, `${path}: the headers the Worker would give`);
   }
-  // Nothing under them is a page, which would need the CSP.
-  const { readdir } = await import('node:fs/promises');
-  for (const dir of ['assets', 'vendor']) {
-    const files = await readdir(new URL(`../../web/public/${dir}/`, import.meta.url), { recursive: true });
-    assert.equal(files.filter((f) => f.endsWith('.html')).length, 0, `no pages in ${dir}/`);
+  // Pages, and everything the Worker itself answers, still reach it.
+  for (const path of files.filter((f) => f.endsWith('.html'))) assert.ok(!skips(path.replace(/index\.html$/, '')), `${path} reaches the Worker`);
+  const routes = Object.keys(openApiSpec(BASE).paths).map((p) => p.replace(/\{[^}]+\}/g, 'x'));
+  for (const path of [...routes, '/', '/map/style.json', '/map/campus.pmtiles', '/map/fonts/Noto%20Sans%20Regular/0-255.pbf', '/map/sprites/v4/light.png', '/map/sprites/v4/light.json', '/download/latest.json', '/robots.txt', '/llms.txt', '/status.json']) {
+    assert.ok(!skips(path), `${path} reaches the Worker`);
+  }
+  // Only the versioned /vendor/ folders, and the fonts, are kept without asking.
+  const kept = rules.filter((r) => r.set['cache-control']).map((r) => String(r.re));
+  assert.deepEqual(kept, [String(glob('/assets/fonts/*')), String(glob('/vendor/*'))]);
+  for (const dir of (await readdir(new URL('../../web/public/vendor/', import.meta.url), { withFileTypes: true })).filter((d) => d.isDirectory())) {
+    assert.match(dir.name, /\d+\.\d+\.\d+$/, `vendor/${dir.name} carries its version`);
   }
 });
 

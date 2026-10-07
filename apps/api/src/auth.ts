@@ -176,6 +176,13 @@ export function extractSession(body: unknown, nowMs: number): Session | null {
 }
 
 /**
+ * The device id once read from KV, per namespace: it never changes there, so
+ * every NUS call needn't read it again. A freshly made one isn't kept, so an
+ * isolate that lost a race to write the first id picks up the winner's.
+ */
+const deviceIds = new WeakMap<object, string>();
+
+/**
  * A stable device id. Any 16 hex characters are accepted -- it is an Android
  * ID, not a secret -- but it should stay stable so we look like one install
  * rather than a new device on every cold start.
@@ -200,9 +207,6 @@ export async function deviceId(env: Env): Promise<string> {
   await env.KV.put(KV_DEVICE, id).catch(() => {});
   return id;
 }
-
-/** The device id, once read from KV, per KV binding (as `memos`). */
-const deviceIds = new WeakMap<object, string>();
 
 /** Forget this isolate's remembered version, after writing a new one. */
 export function forgetAppVersion(env: Env): void {

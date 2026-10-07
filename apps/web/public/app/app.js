@@ -19,6 +19,7 @@ import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
+import { preloadMap } from '/app/map-files.js';
 
 /** The answer refreshes this often while the app is on screen (the API caches 15 s). */
 const REFRESH_MS = 30_000;
@@ -474,6 +475,8 @@ async function showTab() {
   const from = tab.get();
   if (next === from) return;
   const mine = ++switches;
+  // The map's code starts now, not after the fade (if a touch hasn't started it already).
+  if (next === 'map') preloadMap();
   const animate = from !== null && document.visibilityState === 'visible';
   if (from !== null) scrolled[from] = window.scrollY;
   if (animate) {
@@ -518,7 +521,8 @@ async function openSettings() {
   settings.set({ status: 'loading', mod: null });
   try {
     if (!me.get()) me.set((await get('/me')).data);
-    const [mod] = await Promise.all([import('/account/settings.js'), loadProfile(), loadCampus()]);
+    // settings-pages.js too, at once: otherwise it's found only once settings.js arrives.
+    const [mod] = await Promise.all([import('/account/settings.js'), import('/account/settings-pages.js'), loadProfile(), loadCampus()]);
     settings.set({ status: 'ready', mod });
     if (shared) mod.offerImport(shared);
     shared = null;
@@ -1140,7 +1144,14 @@ function TabBar() {
     <nav class="tabbar" aria-label="terminus">
       ${TABBAR.map(
         (x) => html`
-          <a href=${x.href} data-tab=${x.id} key=${x.id} aria-current=${now === x.id ? 'page' : undefined}>
+          <a
+            href=${x.href}
+            data-tab=${x.id}
+            key=${x.id}
+            aria-current=${now === x.id ? 'page' : undefined}
+            onPointerDown=${x.id === 'map' ? preloadMap : undefined}
+            onPointerEnter=${x.id === 'map' ? preloadMap : undefined}
+          >
             <${Icon} paths=${x.icon} />
             <span>${x.label()}</span>
           </a>

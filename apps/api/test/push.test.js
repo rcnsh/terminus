@@ -11,6 +11,8 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
 import { armTrips, remindTerm } from '../src/monitor.ts';
+import { DUE_MS, endOfDayMs, sgtDate } from '../src/trip.ts';
+import { remindUser } from '../src/push.ts';
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
@@ -437,6 +439,29 @@ test('an access token that went stale is replaced, and the push still goes', asy
   assert.equal(fcm.oauth, 2, 'a new access token for the retry');
 });
 
+test('the access token is kept in the isolate: one KV read, not one per push batch', async () => {
+  const { call, phone, env, fcm } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const userId = env.DB._db.prepare('SELECT id FROM users').get().id;
+  const get = env.KV.get.bind(env.KV);
+  let reads = 0;
+  env.KV.get = (k, ...rest) => {
+    if (k === 'fcm:access') reads++;
+    return get(k, ...rest);
+  };
+  const notice = { title: 't', body: 'b', zhTitle: 't', zhBody: 'b' };
+  const t0 = Date.now();
+  assert.equal((await remindUser(env, userId, notice, t0)).sent, 1);
+  assert.equal(reads, 1, 'nothing kept yet: KV, then a new token');
+  assert.equal(fcm.oauth, 1);
+  assert.equal((await remindUser(env, userId, notice, t0 + 60_000)).sent, 1);
+  assert.equal((await remindUser(env, userId, notice, t0 + 49 * 60_000)).sent, 1);
+  assert.equal(reads, 1, 'the same token, without asking KV');
+  assert.equal(fcm.oauth, 1);
+  await remindUser(env, userId, notice, t0 + 51 * 60_000);
+  assert.equal(reads, 2, 'past when its KV entry would have gone, asked again');
+});
+
 test('a token Firebase no longer knows is dropped', async () => {
   const { phone, call, next, fcm, pushTokens, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-gone' } });
@@ -746,4 +771,53 @@ test('/health says which push is set up; a key that will not parse is push off, 
   const said = logged.filter((l) => l.includes('FCM_SERVICE_ACCOUNT'));
   assert.equal(said.length, 1, 'once per isolate');
   assert.ok(!said[0].includes('not a secret'), 'never the value');
+});
+
+/** Records the changes each request sends to the Trip objects. */
+function sentToTrips(TRIPS) {
+  const sent = [];
+  const get = TRIPS.get.bind(TRIPS);
+  TRIPS.get = (id, opts) => {
+    const stub = get(id, opts);
+    return { ...stub, fetch: (url, init) => (init?.method === 'POST' && sent.push(JSON.parse(init.body)), stub.fetch(url, init)) };
+  };
+  return sent;
+}
+
+test('refreshing while the leave-by moves by seconds asks the Trip object to watch only when sooner, and the push is never late', async () => {
+  const { call, phone, next, fcm, TRIPS, clock, wakeUntil } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const sent = sentToTrips(TRIPS);
+  const marks = new Set();
+  let last;
+  for (let i = 0; i < 12; i++) {
+    last = await next(phone);
+    marks.add(Date.parse(last.leave.at));
+    clock(Date.now() + 20_000);
+  }
+  assert.ok(marks.size > 1, 'the leave-by moved between refreshes');
+  const watches = sent.filter((u) => u.watch).map((u) => u.watch.at);
+  assert.ok(watches.length >= 1 && watches.length < 12, `a watch only when it brings the wake sooner, not one per refresh (${watches.length})`);
+  for (let i = 1; i < watches.length; i++) assert.ok(watches[i] < watches[i - 1], 'each watch is sooner than the one pending');
+  // The wake booked is no later than the latest card's own "due".
+  assert.ok(Math.min(...watches) <= Date.parse(last.leave.at) - DUE_MS, 'the push is not late');
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.equal(fcm.sent[0].data.phase, 'due');
+});
+
+test('a Trip object that stopped waking is asked again by the next request', async () => {
+  const { call, phone, next, TRIPS, clock, alarm } = await setup();
+  // Nobody to tell yet: the object wakes once and stops.
+  await next(phone);
+  clock(alarm());
+  await TRIPS.fireAlarms();
+  const user = [...TRIPS.instances.keys()][0];
+  const day = await (await TRIPS.get(user).fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
+  assert.equal(day?.watch, undefined, 'no wake pending, and the day says so');
+  // A phone registers; its next refresh has the object watch again.
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const sent = sentToTrips(TRIPS);
+  await next(phone);
+  assert.equal(sent.filter((u) => u.watch).length, 1);
+  assert.ok(alarm() < endOfDayMs(Date.now()), 'waking before midnight');
 });

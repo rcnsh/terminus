@@ -46,7 +46,8 @@ import {
 import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, profileLimits, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
 import { type Planned, hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
-import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, clearTrip, isHomeKey, loadDay, markFollowed, savePlan, saveSignal, saveSignals, sgtDate, watchTrip } from './trip.ts';
+import { unlogged } from './answer.ts';
+import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, type TripUpdate, clearTrip, isHomeKey, loadDay, needsWatch, saveSignals, sgtDate, updateTrip } from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
@@ -749,7 +750,8 @@ export const ME_ROUTES: MeRoute[] = [
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
       if (key !== now.trip.key && !knownTrip(profile, key, nowMs)) return json({ error: 'no such trip today' }, 400);
       const current = key === now.trip.key;
-      let followedDay: DayRecord | null = null;
+      // Being followed: the card stops asking what happened (see DayRecord.followed).
+      let followed: number | undefined;
       // After the planned bus has left, "On it" and "Missed it" are about that
       // bus (the plan), not the next one the answer has moved on to.
       const p = current ? now.trip.plan : null;
@@ -768,11 +770,8 @@ export const ME_ROUTES: MeRoute[] = [
         case 'location': {
           // Only what the location means is kept, never the location (detect.ts).
           const fix = fixOf(body);
-          // Being followed: the card stops asking what happened. Noted once a minute at most.
-          if (fix && current && !(day?.followed && nowMs - day.followed < 60_000)) {
-            const marked = await markFollowed(env, session.user.id, nowMs).catch(() => null);
-            if (marked) followedDay = marked;
-          }
+          // Noted once a minute at most, with the signal when there is one.
+          if (fix && current && !(day?.followed && nowMs - day.followed < 60_000)) followed = nowMs;
           rec = current && fix ? await recordFromFix({ env, ctx, deps, userId: session.user.id, now, prev: day?.trips[key], label, fix, homeStops: profile.home?.stops ?? [], nowMs }) : undefined;
           break;
         }
@@ -804,7 +803,14 @@ export const ME_ROUTES: MeRoute[] = [
         default:
           rec = { kind, at: nowMs, label };
       }
-      const next = rec === undefined ? (followedDay ?? day) : await saveSignal(env, session.user.id, key, rec, nowMs);
+      // One request to the Trip object for the signal and being followed.
+      // Only the signal must be kept: being followed alone is let go on a failure.
+      const next =
+        rec !== undefined
+          ? await updateTrip(env, session.user.id, { items: [{ key, rec }], followed }, nowMs)
+          : followed !== undefined
+            ? ((await updateTrip(env, session.user.id, { followed }, nowMs).catch(() => null)) ?? day)
+            : day;
       logSignal(env, rec?.detected ? `detected:${rec.kind}` : kind);
       // What happened to the trip, for what terminus learns (outcomes.ts).
       const outcome = rec ? OUTCOME_OF[rec.kind] : undefined;
@@ -1279,29 +1285,40 @@ async function nextWithTrip(
   local?: { savePlan: (key: string, plan: Boarded) => Promise<void> },
 ) {
   const { answer, trip } = await planned(url, env, ctx, nowMs, deps, profile, day, prefs);
-  const keepPlan = local ? local.savePlan : (key: string, plan: Boarded) => savePlan(env, userId, key, plan, nowMs);
-  // At home (this request's location): the trip home is over, for every device.
+  // What this request changes in the Trip object, sent in one request at the end.
+  const update: Omit<TripUpdate, 'date' | 'deleteAt'> = {};
   // At the destination, or home (this request's location): that trip is over, for every device.
   if (trip.reached && !local) {
     const label = isHomeKey(trip.reached) ? 'Home' : (answer.dest?.label ?? undefined);
     const onBus = day?.trips[trip.reached]?.kind === 'boarded' ? day.trips[trip.reached].boarded : undefined;
-    ctx.waitUntil(saveSignal(env, userId, trip.reached, { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) }, nowMs).then(() => undefined).catch(outcomeFailed));
+    update.items = [{ key: trip.reached, rec: { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) } }];
   }
   // Remember which bus the trip is for, so every device says it and detection
   // watches it: from when it's due, or before then when it was planned from
   // where the phone is (the widget and the Mac would otherwise each plan
   // from where the timetable puts you). Written only when the plan changes.
-  if (trip.planChanged && trip.key && trip.plan && (trip.phase !== 'idle' || trip.plan.located)) ctx.waitUntil(keepPlan(trip.key, trip.plan));
+  if (trip.planChanged && trip.key && trip.plan && (trip.phase !== 'idle' || trip.plan.located)) {
+    if (local) ctx.waitUntil(local.savePlan(trip.key, trip.plan));
+    else update.plans = { [trip.key]: trip.plan };
+  }
   // When the plan itself moves on (class starts, day ends). Only the planned
   // answer has one; a place or a stop never changes by itself.
   const isPlan = !url.searchParams.get('place') && !url.searchParams.get('to');
   const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
   // The display-ready card, in the client's 12- or 24-hour style.
   const card = cardFor(full, hour12(url, profile), trip, await feedDownSince(env, nowMs), nowMs);
-  // Push: have the Trip object wake when this card next changes, to tell the phones.
+  // Push: have the Trip object wake when this card next changes, to tell the
+  // phones, unless it already wakes about then or sooner.
   const at = nextPhaseAt(full, trip, nowMs);
-  if (!local && at !== null && pushEnabled(env) && day?.watch !== at && classesOn(profile, nowMs).length) {
-    ctx.waitUntil(watchTrip(env, userId, at, nowMs));
+  if (!local && at !== null && pushEnabled(env) && needsWatch(day, at, nowMs) && classesOn(profile, nowMs).length) {
+    update.watch = { userId, at };
+  }
+  if (update.items || update.plans || update.watch) {
+    // The answer doesn't wait for it; a failure loses the plan or a push, not the card.
+    ctx.waitUntil(updateTrip(env, userId, update, nowMs).then(
+      () => undefined,
+      (err: unknown) => console.error('trip state not saved', err instanceof Error ? err.message : typeof err),
+    ));
   }
   // The user's walking speed, for walk times the apps show themselves (search).
   // The walk from the stop is in the card's journey; the raw seconds stay here.
@@ -1327,7 +1344,7 @@ export async function tripCardFor(
   if (!classesOn(profile, nowMs).length) return null;
   const prefs = await prefsFor(env.DB, userId, profile, nowMs);
   const url = new URL('https://terminus.internal/me/next');
-  const { body, trip } = await nextWithTrip(url, env, ctx, nowMs, deps, profile, day, userId, prefs, { savePlan: savePlanLocal });
+  const { body, trip } = await nextWithTrip(url, env, ctx, nowMs, unlogged(deps), profile, day, userId, prefs, { savePlan: savePlanLocal });
   return { key: trip.key, phase: body.card.phase, remind: body.card.remind !== false, wakeAt: nextPhaseAt(body, trip, nowMs) };
 }
 

@@ -49,14 +49,31 @@ const TYPES: Record<string, string> = {
   zip: 'application/zip',
 };
 
-export async function handleDownload(path: string, env: Env, url?: URL): Promise<Response | null> {
+/**
+ * A small release file's text, or null when there is none. Read from R2
+ * every time, not remembered: a release must show on the landing page and
+ * in the download links the moment release.sh uploads it, and one small
+ * read per request costs next to nothing.
+ */
+async function releaseText(bucket: R2Bucket, key: string): Promise<string | null> {
+  const obj = await bucket.get(key);
+  return obj ? obj.text() : null;
+}
+
+/** The current release as latest.json names it, or null before the first. */
+export async function latestRelease(bucket: R2Bucket): Promise<Latest | null> {
+  const text = await releaseText(bucket, LATEST);
+  return text === null ? null : (JSON.parse(text) as Latest);
+}
+
+export async function handleDownload(path: string, env: Env, url: URL): Promise<Response | null> {
   if (!path.startsWith('/download/')) return null;
   if (!env.DOWNLOADS) return json({ error: 'downloads are not configured' }, 503);
 
   if (path === '/download/appcast.xml') {
-    const feed = await env.DOWNLOADS.get(APPCAST);
-    if (!feed) return json({ error: 'no release yet' }, 404);
-    return new Response(feed.body, {
+    const feed = await releaseText(env.DOWNLOADS, APPCAST);
+    if (feed === null) return json({ error: 'no release yet' }, 404);
+    return new Response(feed, {
       headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=300' },
     });
   }
@@ -64,9 +81,8 @@ export async function handleDownload(path: string, env: Env, url?: URL): Promise
   const release = RELEASE_FILE.exec(path);
   if (release) return serveFile(env.DOWNLOADS, release[1]);
 
-  const latestObj = await env.DOWNLOADS.get(LATEST);
-  if (!latestObj) return json({ error: 'no release yet' }, 404);
-  const latest = (await latestObj.json()) as Latest;
+  const latest = await latestRelease(env.DOWNLOADS);
+  if (!latest) return json({ error: 'no release yet' }, 404);
 
   if (path === '/download/latest.json') {
     return json(latest, 200, { 'cache-control': 'public, max-age=300' });

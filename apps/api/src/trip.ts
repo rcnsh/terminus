@@ -153,9 +153,35 @@ export interface DayRecord {
    *  minute): while it's recent, the trip is being followed and nobody is
    *  asked what happened (card.ts). Never where. */
   followed?: number;
-  /** When the object was last asked to wake (the card's nextChangeAt, epoch
-   *  ms), so the Worker only asks again when that changes. Push only. */
+  /** When the object next wakes to push (epoch ms), or absent when it
+   *  won't: the Worker asks again only when that would be sooner
+   *  (needsWatch). Push only. */
   watch?: number;
+}
+
+/**
+ * Whether a request should ask the Trip object to wake at `atMs`: when it
+ * isn't going to wake at all, or would wake any later than `atMs`. Even a
+ * few seconds count: the leave-by's push has only WALK.boardBufferS to
+ * spare. A later or equal `atMs` needs nothing: the object works out the
+ * card afresh when it wakes, and wakes again at that card's own next change.
+ */
+export function needsWatch(day: DayRecord | null, atMs: number, nowMs: number): boolean {
+  const w = day?.watch;
+  return w === undefined || w <= nowMs || atMs < w;
+}
+
+/** Changes to today's record, any of them in one request (see updateTrip). */
+export interface TripUpdate {
+  date: string;
+  /** The next Singapore midnight, when everything goes. */
+  deleteAt: number;
+  /** Trip records; null deletes one. */
+  items?: Array<{ key: string; rec: TripRecord | null }>;
+  followed?: number;
+  plans?: Record<string, Boarded>;
+  /** Wake at `at` (no later than a wake already pending) to push the card. */
+  watch?: { userId: string; at: number };
 }
 
 /** A trip is being followed by location while its last fix is this recent (fixes come every 20 s). */
@@ -240,7 +266,8 @@ export function phaseFor(a: MeAnswer, rec: TripRecord | undefined, nowMs: number
 
 function stub(env: Env, userId: string): DurableObjectStub | null {
   if (!env.TRIPS) return null;
-  return env.TRIPS.get(env.TRIPS.idFromName(userId));
+  // Its users are in Singapore, like the timelapse recorder's.
+  return env.TRIPS.get(env.TRIPS.idFromName(userId), { locationHint: 'apac' });
 }
 
 /**
@@ -284,40 +311,21 @@ export async function loadDay(env: Env, userId: string, nowMs: number): Promise<
   }
 }
 
-/** Remembers the bus a trip's plan says to catch (see DayRecord.plans). */
-export async function savePlan(env: Env, userId: string, key: string, plan: Boarded, nowMs: number): Promise<void> {
+/**
+ * Sends any of today's changes to the Trip object in one request, and
+ * answers with the day as it then stands (null without the binding).
+ */
+export async function updateTrip(env: Env, userId: string, u: Omit<TripUpdate, 'date' | 'deleteAt'>, nowMs: number): Promise<DayRecord | null> {
   const s = stub(env, userId);
-  if (!s) return;
-  try {
-    const res = await post(s, 'plan', { date: sgtDate(nowMs), key, plan, deleteAt: endOfDayMs(nowMs) });
-    if (!res.ok) throw new Error(`status ${res.status}`);
-  } catch (err) {
-    // Only the question at departure depends on it.
-    console.error('trip plan not saved', err instanceof Error ? err.message : typeof err);
-  }
-}
-
-/** Records a signal for one trip today; `null` clears that trip ("reset"). */
-export async function saveSignal(env: Env, userId: string, key: string, rec: TripRecord | null, nowMs: number): Promise<DayRecord | null> {
-  return saveSignals(env, userId, [{ key, rec }], nowMs);
+  if (!s) return null;
+  const res = await post(s, 'update', { ...u, date: sgtDate(nowMs), deleteAt: endOfDayMs(nowMs) } satisfies TripUpdate);
+  if (!res.ok) throw new Error(`trip update failed: ${res.status}`);
+  return (await res.json()) as DayRecord;
 }
 
 /** Several trips' records in one call to the Trip object (null deletes one). */
 export async function saveSignals(env: Env, userId: string, items: { key: string; rec: TripRecord | null }[], nowMs: number): Promise<DayRecord | null> {
-  const s = stub(env, userId);
-  if (!s) return null;
-  const res = await post(s, 'signal', { date: sgtDate(nowMs), items, deleteAt: endOfDayMs(nowMs) });
-  if (!res.ok) throw new Error(`trip signal failed: ${res.status}`);
-  return (await res.json()) as DayRecord;
-}
-
-/** Notes that a location just came in for today's trip (see DayRecord.followed). */
-export async function markFollowed(env: Env, userId: string, nowMs: number): Promise<DayRecord | null> {
-  const s = stub(env, userId);
-  if (!s) return null;
-  const res = await post(s, 'followed', { date: sgtDate(nowMs), at: nowMs, deleteAt: endOfDayMs(nowMs) });
-  if (!res.ok) throw new Error(`trip followed failed: ${res.status}`);
-  return (await res.json()) as DayRecord;
+  return updateTrip(env, userId, { items }, nowMs);
 }
 
 /**
@@ -349,11 +357,8 @@ export async function clearTrip(env: Env, userId: string): Promise<void> {
  * ask again.
  */
 export async function watchTrip(env: Env, userId: string, atMs: number, nowMs: number): Promise<boolean> {
-  const s = stub(env, userId);
-  if (!s) return true;
   try {
-    const res = await post(s, 'watch', { userId, date: sgtDate(nowMs), at: atMs, deleteAt: endOfDayMs(nowMs) });
-    if (!res.ok) throw new Error(`status ${res.status}`);
+    await updateTrip(env, userId, { watch: { userId, at: atMs } }, nowMs);
     return true;
   } catch (err) {
     console.error('trip watch failed', err instanceof Error ? err.message : typeof err);
