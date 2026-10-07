@@ -182,7 +182,8 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
 
     if (url.includes('bus-proxy')) {
       counts.shuttle++;
-      if (fail) throw new TypeError('upstream unreachable');
+      // As workerd throws it: a plain Error, not Node's TypeError.
+      if (fail) throw new Error('Network connection lost.');
       // Never answers; only an abort signal ends it.
       if (hang) {
         return new Promise((_, rej) => {
@@ -216,7 +217,7 @@ export function makeFetch({ byStop = {}, buses = {}, fail = false, reject = 0, r
     if (url.startsWith('https://datamall2.mytransport.sg/')) {
       counts.public++;
       requests.push({ url, method: init.method ?? 'GET', headers: new Headers(init.headers), body: null });
-      if (publicFail) throw new TypeError('upstream unreachable');
+      if (publicFail) throw new Error('Network connection lost.');
       if (publicStatus !== 200) return new Response('refused', { status: publicStatus });
       const code = new URL(url).searchParams.get('BusStopCode') ?? '';
       return Response.json(ltaPayload(code, publicStops[code] ?? []));
