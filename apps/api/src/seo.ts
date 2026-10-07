@@ -11,7 +11,7 @@ import { isBeta, STABLE_ORIGIN } from './site.ts';
 import type { Env } from './types.ts';
 
 /** The pages in the sitemap, on the stable site. */
-export const SITEMAP_PAGES = ['/', '/privacy/', '/privacy/zh/', '/status/', '/docs'];
+export const SITEMAP_PAGES = ['/', '/privacy/', '/privacy/zh/', '/privacy/policy/', '/privacy/policy/zh/', '/status/', '/docs'];
 
 export const SITEMAP = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

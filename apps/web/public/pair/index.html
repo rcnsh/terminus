@@ -14,10 +14,28 @@
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/i18n.js"></script>
 <style>
-  main { padding-top: 32px; }
-  .code { margin: 18px 0 14px; }
-  ol { padding-left: 20px; }
-  li { margin: 8px 0; }
+  /* The card from sign-in: the shuttles' livery with the mark on it (pair.js),
+     the code on split-flap tiles, then what to do as a route line. */
+  main { padding-top: 12px; }
+  .pair-card { padding: 32px 28px 24px; text-align: center; border-radius: 26px; }
+  .pair-card .livery { height: 150px; border-radius: 26px 26px 0 0; }
+  .pair-card h1 { font-size: 1.6rem; letter-spacing: -0.02em; }
+  .pair-card .sub { color: var(--muted); margin-top: 4px; }
+  .code { margin: 18px 0 10px; }
+  .expires { color: var(--muted); font-size: 0.88rem; }
+  .careful { margin-top: 16px; padding: 12px 14px; border-radius: 14px; text-align: left; font-size: 0.88rem; color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+  .group-h { margin: 28px 4px 8px; font: 600 0.75rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  :lang(zh) .group-h { letter-spacing: 0.02em; }
+  .steps { list-style: none; margin: 0; padding: 18px 20px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
+  .steps li { position: relative; display: grid; grid-template-columns: 22px 1fr; column-gap: 16px; padding-bottom: 22px; }
+  .steps li:last-child { padding-bottom: 0; }
+  .steps li::before { content: ''; position: relative; z-index: 1; width: 18px; height: 18px; margin: 2px 0 0 2px; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--accent); background: var(--surface); }
+  .steps li::after { content: ''; position: absolute; left: 9px; top: 14px; bottom: -6px; width: 4px; border-radius: 2px; background: var(--accent); }
+  .steps li:last-child::after { display: none; }
+  .steps li:last-child::before { width: 22px; height: 22px; margin: 0; border-width: 6px; }
+  .steps h2 { font-size: 1rem; }
+  .steps p { color: var(--muted); font-size: 0.93rem; }
+  .steps .btn { margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -25,20 +43,21 @@
   <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
 </header>
 <main class="wrap narrow">
-  <div class="card">
-    <p class="eyebrow">Pair a device</p>
+  <div class="card pair-card">
+    <div id="livery"></div>
+    <h1>Add this device</h1>
+    <p class="sub">Type this code in terminus on the new device.</p>
     <p class="code" id="code">------</p>
-    <p class="hint">This code works once, for 10 minutes.</p>
-    <p class="hint">Only use a code you made on your own account page. Someone else's would sign this device in to their account.</p>
+    <p class="expires">This code works once, for 10 minutes.</p>
+    <p class="careful">Only use a code you made on your own account page. Someone else's would sign this device in to their account.</p>
   </div>
-  <div class="card" style="margin-top:16px">
-    <h2 style="font-size:1.15rem;margin-bottom:8px">This phone doesn't have terminus yet</h2>
-    <ol>
-      <li><a href="/download/android">Download the Android app</a> and install it.</li>
-      <li>Scan the QR code on the account page again, or open the app and type the code above.</li>
-    </ol>
-    <p class="hint">On a Mac, open the terminus menu bar app and type the code.</p>
-  </div>
+
+  <p class="group-h">This phone doesn't have terminus yet</p>
+  <ol class="steps">
+    <li><div><h2>Install the app</h2><p>Android 12 or later.</p><a class="btn small" href="/download/android">Download the Android app</a></div></li>
+    <li><div><h2>Open it and tap “Pair with a code instead”</h2><p>Or scan the QR code on the account page again.</p></div></li>
+    <li><div><h2>Type the code above</h2><p>On a Mac, open the terminus menu bar app and type the code.</p></div></li>
+  </ol>
 </main>
 <script type="module" src="/pair/pair.js"></script>
 </body>

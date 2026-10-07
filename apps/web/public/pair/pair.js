@@ -1,9 +1,10 @@
 // The page a pairing QR code opens on a phone without terminus: the code,
 // as the account page showed it, on six split-flap tiles like a departure
-// board's (dark in light and dark, as the boards are). Only ever displayed,
-// never sent anywhere.
+// board's (dark in light and dark, as the boards are), under the livery as
+// on sign-in. Only ever displayed, never sent anywhere.
 
 import { html, render } from '/assets/ui.js';
+import { Livery } from '/account/livery.js';
 
 const code = (new URLSearchParams(location.search).get('code') || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
 const Code = () =>
@@ -14,3 +15,4 @@ const Code = () =>
 const box = document.getElementById('code');
 box.replaceChildren();
 render(html`<${Code} />`, box);
+render(html`<${Livery} />`, document.getElementById('livery'));

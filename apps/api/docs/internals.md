@@ -27,6 +27,17 @@ the landing page and `GET /docs` the API documentation. The OpenAPI spec lives
 in [src/openapi.ts](../src/openapi.ts) and a test fails if a route and the spec
 drift apart.
 
+The website's own pages (the landing page, `/status/`, `/privacy/` and the
+full policy at `/privacy/policy/`, `/pair/`, and the not-found page) wear
+the web app's sky: `assets/sky.css` is app.css's palette on an element,
+`assets/sky-phase.js` puts the hour on `<html data-sky>` before the page is
+drawn, and `assets/sky-page.js` draws the horizon and the night with the
+app's own `sky.js` (web-sky.test.js keeps the colours and the hours the
+same). An address the website doesn't have, asked for by a browser, gets
+`/not-found/` with a 404 (`sitePage` in index.ts); anything else gets the
+plain 404. `/docs` takes its bar's band from pagesky.ts, at Singapore's
+hour, like the Worker's small pages.
+
 ---
 
 ## Quick start

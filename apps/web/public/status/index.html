@@ -14,36 +14,54 @@
 <script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/i18n.js"></script>
+<script src="/assets/sky-phase.js"></script>
+<link rel="stylesheet" href="/assets/sky.css">
 <style>
-  main { padding-top: 32px; }
-  h1 { font-size: 2.2rem; margin-bottom: 20px; }
-  h2 { font-size: 1.2rem; margin: 40px 0 12px; }
-  .now { display: flex; gap: 14px; align-items: flex-start; }
-  .now .dot { width: 12px; height: 12px; margin-top: 8px; flex: none; }
-  .now .dot.bad { background: var(--bad); }
-  .now strong { display: block; font: 600 1.3rem/1.3 var(--display); letter-spacing: -0.02em; }
-  .now p { margin: 4px 0 0; }
-  .incidents { list-style: none; padding: 0; margin: 0; }
-  .incidents li { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px 0; border-bottom: 1px solid var(--line); }
-  .incidents li:last-child { border-bottom: 0; }
-  .incidents .when { font-weight: 600; }
-  .incidents .what { color: var(--muted); font-size: 0.9rem; }
-  .incidents .how-long { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .ongoing { color: var(--bad-ink); font-weight: 600; }
+  /* The feed's state is the picture: a live shuttle in its colour on the
+     road when NUS's feed answers, the same bus in outline (the apps' sign
+     for a timetable guess) when it doesn't. Outages follow as a route line. */
+  .head .nav-links .btn.ghost { background: var(--surface); }
+  .state { padding-top: 36px; }
+  .state h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); letter-spacing: -0.035em; margin-top: 10px; }
+  .state p { color: var(--muted); margin-top: 10px; max-width: 34rem; }
+  .state .sky-chip { margin-top: 16px; }
+  .state .sky-chip .dot { background: currentColor; }
+  .state .up { color: var(--good); }
+  .state .down, .state .paused { color: var(--warn); }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 24px; }
+  .facts div { padding: 14px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+  .facts strong { display: block; font: 700 1.3rem/1.2 var(--display); font-variant-numeric: tabular-nums; }
+  .facts small { color: var(--muted); font-size: 0.85rem; }
+  h2 { font-size: 1.3rem; margin: 44px 0 18px; }
+  .outages { list-style: none; margin: 0; padding: 0; }
+  .outages li { position: relative; display: grid; grid-template-columns: 22px 1fr auto; column-gap: 16px; padding-bottom: 22px; }
+  .outages li:last-child { padding-bottom: 0; }
+  .outages li::before { content: ''; position: relative; z-index: 1; width: 18px; height: 18px; margin: 3px 0 0 2px; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--line-strong); background: var(--bg); }
+  .outages li::after { content: ''; position: absolute; left: 9px; top: 18px; bottom: 0; width: 4px; background: radial-gradient(circle, var(--line-strong) 1.8px, transparent 2.2px) 50% 0 / 4px 9px repeat-y; }
+  .outages li:last-child::after { display: none; }
+  .outages li.ongoing-now::before { border-color: var(--warn); }
+  .outages .when { font-weight: 600; }
+  .outages .what { color: var(--muted); font-size: 0.92rem; }
+  .outages .how-long { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .outages .ongoing { color: var(--warn-ink); font-weight: 600; }
+  @media (max-width: 640px) { .facts { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-<header class="wrap nav">
-  <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
-  <nav class="nav-links"><a class="btn small ghost" href="/account">Account</a></nav>
-</header>
+<section class="sky-panel head">
+  <div data-stars></div>
+  <header class="wrap nav">
+    <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
+    <nav class="nav-links"><a class="btn small ghost" href="/account">Account</a></nav>
+  </header>
+  <!-- Whether the live feed is working, drawn by status.js; the road under it too. -->
+  <div class="wrap narrow state" id="state" aria-live="polite"><p class="eyebrow">Status</p><h1>Checking…</h1></div>
+  <div id="road" style="margin-top:12px"></div>
+</section>
 
 <main class="wrap narrow">
-  <h1>Status</h1>
-  <!-- Whether the live feed is working, and recent outages: drawn by status.js. -->
-  <div id="status"></div>
-
-  <p class="hint" style="margin-top:24px">terminus checks NUS's shuttle feed every 15 minutes. When the feed is down, the apps show estimated times based on the timetable and label them as estimates. Outages are on NUS's side; terminus works around them until the feed is back.</p>
+  <div id="history"></div>
+  <p class="hint" style="margin-top:28px">terminus checks NUS's shuttle feed every 15 minutes. When the feed is down, the apps show estimated times based on the timetable and label them as estimates. Outages are on NUS's side; terminus works around them until the feed is back.</p>
 </main>
 
 <footer class="foot">
@@ -52,6 +70,7 @@
     <nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/docs">API</a><a href="/account">Account</a></nav>
   </div>
 </footer>
+<script type="module" src="/assets/sky-page.js"></script>
 <script type="module" src="/status/status.js"></script>
 </body>
 </html>

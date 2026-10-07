@@ -1,0 +1,127 @@
+/* The hour's sky on the website's own pages (the landing page, status,
+   privacy, pair, not found): the web app's sky (app/app.css body.sky), on an
+   element instead of the page. Its colours are app.css's, rule for rule
+   (web-sky.test.js keeps them the same); sky-phase.js puts the hour on
+   <html data-sky> before the page is drawn; sky-page.js draws the horizon
+   and the night with sky.js, as Now does. */
+
+.sky-panel {
+  --s0: #121a33; --s1: #181a30; --s2: #24243a; --s3: #2e2a44; --h-far: #3a3550; --h-tree: #5b5568; --h-city: #45405f;
+  --h-road: #d6cfc7; --h-post: #1c1917; --h-post-ink: #fafaf9; --sun: transparent;
+}
+.sky-panel, [data-sky="dusk"] .sky-panel, [data-sky="night"] .sky-panel {
+  --k-bg: #121a33; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
+  --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
+  --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
+  --h-win: #fde9c9;
+}
+[data-sky="dawn"] .sky-panel, [data-sky="day"] .sky-panel, [data-sky="golden"] .sky-panel {
+  --k-bg: #fafaf9; --k-surface: rgb(255 255 255 / 0.5); --k-surface-2: rgb(255 255 255 / 0.65); --k-ink: #1c1917; --k-muted: #36312d; --k-faint: #3a3633;
+  --k-line: rgb(28 25 23 / 0.16); --k-line-strong: rgb(28 25 23 / 0.3); --k-accent: #9a3412; --k-accent-soft: rgb(154 52 18 / 0.12); --k-scheme: light;
+  --k-good: #14532d; --k-warn: #78350f; --k-bad: #701818; --k-chip: rgb(255 255 255 / 0.65); --k-accent-small: #6c2710;
+  --h-win: #dbeafe;
+}
+[data-sky="dawn"] .sky-panel { --s0: #8fc1e8; --s1: #b7d6ee; --s2: #f1d6c2; --s3: #f7c9a4; --h-far: #b3b0c3; --h-tree: #6a7568; --h-city: #cfc8d8; --sun: #fff1d6; }
+[data-sky="day"] .sky-panel { --s0: #5ea8e5; --s1: #8ec4ec; --s2: #c7e2f4; --s3: #e3f0f8; --h-far: #9fbcae; --h-tree: #4f6f58; --h-city: #b7cbd9; }
+[data-sky="golden"] .sky-panel { --s0: #78aadb; --s1: #a7c3dc; --s2: #f0cf9c; --s3: #f4b46c; --h-far: #c4a983; --h-tree: #5e5a42; --h-city: #dcc6a2; --sun: #ffe2a8; }
+[data-sky="dusk"] .sky-panel { --s0: #2c3566; --s1: #4a4275; --s2: #6c4260; --s3: #e08a62; --h-far: #4b3f62; --h-tree: #2c2440; --h-city: #7d6a90; --sun: #ffb37a; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sky-panel {
+    --k-bg: #0f0e0d; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
+    --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
+    --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
+    --h-road: #2c2926; --h-post: #d6d3d1; --h-post-ink: #0f0e0d; --h-far: #191826; --h-tree: #121110;
+  }
+  :root:not([data-theme="light"])[data-sky="dawn"] .sky-panel { --s0: #1d3550; --s1: #2a465f; --s2: #5c4d58; --s3: #8a6656; --h-far: #2a3446; --h-tree: #151c24; --h-city: #3d4658; --sun: #f3dcc0; --h-win: #b9c7d6; }
+  :root:not([data-theme="light"])[data-sky="day"] .sky-panel { --s0: #173350; --s1: #1f4262; --s2: #2d5674; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --h-win: #b9c7d6; }
+  :root:not([data-theme="light"])[data-sky="golden"] .sky-panel { --s0: #1f3550; --s1: #334356; --s2: #5e4a37; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --h-win: #b9c7d6; }
+  :root:not([data-theme="light"])[data-sky="dusk"] .sky-panel { --s0: #1a1c3a; --s1: #322b54; --s2: #6c4260; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --sun: #f0915e; }
+}
+:root[data-theme="dark"] .sky-panel {
+  --k-bg: #0f0e0d; --k-surface: rgb(255 255 255 / 0.08); --k-surface-2: rgb(255 255 255 / 0.13); --k-ink: #f5f3f0; --k-muted: #e7e5e4; --k-faint: #d6d3d1;
+  --k-line: rgb(255 255 255 / 0.18); --k-line-strong: rgb(255 255 255 / 0.34); --k-accent: #fb923c; --k-accent-soft: rgb(251 146 60 / 0.18); --k-scheme: dark;
+  --k-good: #86efac; --k-warn: #fcd34d; --k-bad: #fecaca; --k-chip: rgb(0 0 0 / 0.22); --k-accent-small: #fed7aa;
+  --h-road: #2c2926; --h-post: #d6d3d1; --h-post-ink: #0f0e0d; --h-far: #191826; --h-tree: #121110;
+}
+:root[data-theme="dark"][data-sky="dawn"] .sky-panel { --s0: #1d3550; --s1: #2a465f; --s2: #5c4d58; --s3: #8a6656; --h-far: #2a3446; --h-tree: #151c24; --h-city: #3d4658; --sun: #f3dcc0; --h-win: #b9c7d6; }
+:root[data-theme="dark"][data-sky="day"] .sky-panel { --s0: #173350; --s1: #1f4262; --s2: #2d5674; --s3: #3f6b86; --h-far: #20384a; --h-tree: #132330; --h-city: #35506a; --h-win: #b9c7d6; }
+:root[data-theme="dark"][data-sky="golden"] .sky-panel { --s0: #1f3550; --s1: #334356; --s2: #5e4a37; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --h-win: #b9c7d6; }
+:root[data-theme="dark"][data-sky="dusk"] .sky-panel { --s0: #1a1c3a; --s1: #322b54; --s2: #6c4260; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --sun: #f0915e; }
+
+/* The sky behind the panel, top to bottom, and the words over it in its ink:
+   dark on a light sky, light on a dark one. The page's own colour (--bg)
+   stays, for the near hill the panel ends on. */
+.sky-panel {
+  position: relative; isolation: isolate;
+  background: linear-gradient(var(--s0) 0, var(--s1) 50%, var(--s2) 86%, var(--s3) 100%);
+  --surface: var(--k-surface); --surface-2: var(--k-surface-2); --ink: var(--k-ink); --muted: var(--k-muted); --faint: var(--k-faint);
+  --line: var(--k-line); --line-strong: var(--k-line-strong); --accent: var(--k-accent); --accent-soft: var(--k-accent-soft);
+  --good: var(--k-good); --good-ink: var(--k-good); --warn: var(--k-warn); --warn-ink: var(--k-warn); --bad: var(--k-bad); --bad-ink: var(--k-bad);
+  color-scheme: var(--k-scheme); color: var(--ink);
+}
+/* Small coloured words sit on the sky's chip, darker than a dark sky and
+   lighter than a light one, so they read wherever they fall. */
+.sky-panel .sky-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: var(--k-chip); font-size: 0.85rem; font-weight: 600; }
+/* The accent's stronger shade, for words smaller than a headline. */
+.sky-panel .accent-small { color: var(--k-accent-small); }
+/* The orange button keeps its own colours over any sky; a quiet one is glass. */
+.sky-panel .btn.accent { background: #fb923c; color: #1c1917; }
+.sky-panel .btn.ghost { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
+.sky-panel .nav-links a, .sky-panel .nav-menu { color: var(--ink); }
+.sky-panel .nav-links a:hover, .sky-panel .nav-menu:hover { opacity: 0.8; }
+.sky-panel .brand img { box-shadow: none; }
+
+/* The stars and the moon (sky.js NightSky), at night only, behind the words. */
+.sky-panel .night-sky { position: absolute; z-index: -1; inset: 0; pointer-events: none; display: none; --room: var(--sky-room, 240px); }
+[data-sky="night"] .sky-panel .night-sky { display: block; }
+.sky-panel .night-sky .star { position: absolute; width: 2.4px; height: 2.4px; border-radius: 50%; background: #fff; }
+.sky-panel .night-sky .moon { position: absolute; top: var(--moon-top, 84px); right: 7%; width: var(--moon, 40px); height: var(--moon, 40px); border-radius: 50%; background: #fde9c9;
+  -webkit-mask: radial-gradient(44.6% 44.6% at 76% 28%, transparent 97%, #000 100%); mask: radial-gradient(44.6% 44.6% at 76% 28%, transparent 97%, #000 100%); }
+
+/* The horizon (sky.js Horizon): across the panel, the near hill in the
+   page's colour, the rest in the hour's. As app.css draws it on Now. */
+.sky-panel .horizon { display: block; width: 100%; height: 115px; }
+.sky-panel .horizon.low { height: 52px; }
+.sky-panel .horizon svg { display: block; }
+.sky-panel .horizon .far { fill: var(--h-far); }
+.sky-panel .horizon .tree { fill: var(--h-tree); }
+.sky-panel .horizon .city { fill: var(--h-city); }
+.sky-panel .horizon .pole { stroke: var(--h-tree); stroke-width: 1.2; }
+.sky-panel .horizon .flag-red { fill: #ef3340; }
+.sky-panel .horizon .flag-white { fill: #f2efeb; }
+.sky-panel .horizon .near { fill: var(--bg); }
+.sky-panel .horizon .road { stroke: var(--h-road); stroke-width: 1.5; stroke-dasharray: 6 6; }
+.sky-panel .horizon .sun { display: none; fill: var(--sun); }
+[data-sky="dawn"] .sky-panel .horizon .sun.dawn, [data-sky="golden"] .sky-panel .horizon .sun.golden, [data-sky="dusk"] .sky-panel .horizon .sun.dusk { display: inline; }
+.sky-panel .horizon.low .sun { display: none; }
+.sky-panel .horizon :is(.lit, .beam) { display: none; fill: #fde9c9; }
+[data-sky="dusk"] .sky-panel .horizon :is(.lit, .beam), [data-sky="night"] .sky-panel .horizon :is(.lit, .beam) { display: inline; }
+.sky-panel .horizon .beam { opacity: 0.12; }
+.sky-panel .horizon .dim { opacity: 0.6; }
+.sky-panel .horizon .bus { fill: #24211e; }
+.sky-panel .horizon .stripe { fill: #e53935; }
+.sky-panel .horizon .win { fill: var(--h-win); }
+.sky-panel .horizon .tyre { fill: #151311; }
+.sky-panel .horizon .hub { fill: #8a847d; }
+.sky-panel .horizon .arch { fill: rgb(0 0 0 / 0.35); }
+.sky-panel .horizon .lamp { fill: #fef3c7; }
+.sky-panel .horizon .tail { fill: #ef4444; }
+.sky-panel .horizon .sign line { stroke: var(--h-post); stroke-width: 1.6; }
+.sky-panel .horizon .sign rect { fill: var(--h-post); }
+.sky-panel .horizon .sign .mark { fill: var(--h-post-ink); }
+.sky-panel .horizon .coming .body { fill: var(--svc); }
+.sky-panel .horizon .coming .band { fill: #fff; opacity: 0.85; }
+/* A timetable guess is the same bus in outline, so it never passes for live. */
+.sky-panel .horizon .coming.guess :is(.body, .arch) { fill: none; stroke: var(--svc); stroke-width: 1.2; stroke-linejoin: round; }
+.sky-panel .horizon .coming.guess .roof { stroke-width: 0.8; }
+.sky-panel .horizon .coming.guess .win { fill: none; stroke: var(--svc); stroke-width: 0.6; }
+.sky-panel .horizon .coming.guess :is(.band, .lamp, .tail) { display: none; }
+
+/* A slim band of sky at the top of a page (privacy, the full policy), as
+   Settings' pages have it: the header and the title in it, the low hills
+   at its foot. */
+.sky-band .band-title { padding: 18px 0 4px; }
+.sky-band .band-title h1 { font-size: clamp(2.1rem, 5vw, 3rem); letter-spacing: -0.03em; }
+.sky-band .band-title p { color: var(--muted); margin-top: 4px; }
+.sky-band .band-title .back { display: inline-block; margin-bottom: 8px; color: var(--ink); text-decoration: none; font-size: 0.9rem; }
+.sky-band .night-sky { --sky-room: 150px; --moon: 30px; --moon-top: 70px; }

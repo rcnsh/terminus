@@ -544,13 +544,6 @@ a.settings-row { text-decoration: none; }
 .place-tile span { font-size: 0.8rem; color: var(--muted); }
 .done-hint { margin: 12px 0 0; font-size: 0.85rem; }
 
-/* The livery over the sign-in card (app.js Livery): the stripes edge to edge,
-   the mark on them with a ring of the card round it. */
-.livery { position: relative; height: 180px; margin: -32px -28px 18px; overflow: hidden; border-radius: var(--radius) var(--radius) 0 0; }
-.livery svg { display: block; width: 100%; height: 100%; }
-.livery-accent { fill: var(--accent-bright); }
-.livery-mark { position: absolute; left: 50%; bottom: 6px; width: 76px; height: 76px; transform: translateX(-50%); border-radius: 20px; box-shadow: 0 0 0 6px var(--surface); }
-
 /* A stop's sign (Nearby in the web app, your stops in setup): its name on a
    plate a shade off the card, the bus mark in the accent, what's there under
    it. Not inverted: in the dark a near-white plate glared off every stop. */

@@ -21,9 +21,10 @@ function setup() {
   return { db, email, env };
 }
 
-async function call(env, path, { method = 'GET', body, token, form, cookie, key } = {}) {
+async function call(env, path, { method = 'GET', body, token, form, cookie, key, accept } = {}) {
   const headers = {};
   if (key) headers['x-api-key'] = key;
+  if (accept) headers.accept = accept;
   let payload;
   if (body !== undefined) {
     headers['content-type'] = 'application/json';
@@ -1116,4 +1117,21 @@ test('the pairing QR code opens the pair page in a browser, not an API error', a
   assert.equal(await res.text(), 'page for /pair');
   // POST is still the API.
   assert.equal((await call(env, '/pair', { method: 'POST', body: { code: 'nope' } })).status, 400);
+});
+
+test('a page that isn\'t there is the not-found page for a browser, still a 404', async () => {
+  const { env } = setup();
+  const pages = { '/not-found/': 'no bus stops here' };
+  env.ASSETS = { fetch: async (req) => {
+    const page = pages[new URL(req.url).pathname];
+    return page ? new Response(page, { headers: { 'content-type': 'text/html' } }) : new Response('not found', { status: 404 });
+  } };
+  const browser = await call(env, '/no-such-page', { accept: 'text/html,application/xhtml+xml' });
+  assert.equal(browser.status, 404);
+  assert.match(browser.headers.get('content-type'), /text\/html/);
+  assert.equal(await browser.text(), 'no bus stops here');
+  // A script or a client asking for something missing gets the plain 404.
+  const script = await call(env, '/no-such-page.js', { accept: '*/*' });
+  assert.equal(script.status, 404);
+  assert.equal(await script.text(), 'not found');
 });
