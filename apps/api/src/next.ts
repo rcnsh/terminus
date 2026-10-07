@@ -201,7 +201,7 @@ export async function tripAnswer(
   const answer = await deps.answerFor(env, ctx, input, dest.label, nowMs);
   // For a class, say whether you'll make it: stop arrival plus the walk
   // from the stop to the venue, against the start time.
-  const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs, h12) : null;
+  const timing = dest.trip ? timingFor(answer.arriveAt, dest.trip, venueWalkS, nowMs, h12, answer.leave?.estimated === true) : null;
   const endWalk = endWalkS > 0 ? { endWalk: { s: endWalkS, inLeave: input.arriveBy != null } } : {};
   return { ...answer, mode: 'trip', dest: destOf(dest), timing, places, ...endWalk };
 }
@@ -266,7 +266,7 @@ function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, plac
   if (dest.trip && b.arrive) {
     const venueM = dest.trip.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
     const walkS = Math.round(venueM / paceSpeed(profile.walkPace));
-    timing = timingFor(b.arrive, dest.trip, walkS, nowMs, h12);
+    timing = timingFor(b.arrive, dest.trip, walkS, nowMs, h12, !live);
     // Late: "~3 min late"; otherwise only the spare time, as the arrival is already said.
     if (timing) detail += ` · ${timing.status === 'late' ? timing.text : slackText((Date.parse(timing.classAt) - Date.parse(timing.reachAt!)) / 1000)}`;
   }

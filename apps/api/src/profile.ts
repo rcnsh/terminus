@@ -667,13 +667,15 @@ export function classStartMs(trip: ImportedTrip, nowMs: number): number {
   return midnight + trip.arriveByMin * 60_000;
 }
 
-export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number, h12 = false): Timing | null {
+/** `estimated`: the arrival is a guess (a timetable bus, a ride without a
+ *  measured time), so its clock gets the same "~" as the card's. */
+export function timingFor(arriveAtIso: string | null | undefined, trip: ImportedTrip, walkToVenueS: number, nowMs: number, h12 = false, estimated = false): Timing | null {
   if (!arriveAtIso || walkToVenueS > MAX_VENUE_WALK_S) return null;
   const classAt = classStartMs(trip, nowMs);
   const reachMs = Date.parse(arriveAtIso) + walkToVenueS * 1000;
   const slackS = Math.round((classAt - reachMs) / 1000);
   const status: OnTime = slackS >= ON_TIME_SLACK_S ? 'on-time' : slackS >= 0 ? 'tight' : 'late';
   // Same words as the class card (clock.ts): the colour carries "tight".
-  const text = status === 'late' ? m().lateBy(Math.max(1, Math.round(-slackS / 60))) : m().arrive(clockAt(reachMs, h12), slackText(slackS));
+  const text = status === 'late' ? m().lateBy(Math.max(1, Math.round(-slackS / 60))) : m().arrive(estimated ? m().approx(clockAt(reachMs, h12)) : clockAt(reachMs, h12), slackText(slackS));
   return { status, text, classAt: isoSeconds(classAt), reachAt: isoSeconds(reachMs) };
 }

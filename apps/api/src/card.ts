@@ -653,7 +653,7 @@ function v2(
   }
   const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);
   if (phase === 'riding' && onBus) {
-    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${m().offAtTime(offStop(onBus) ?? a.dest?.label ?? m().yourStop, at(onBus.arrive))}` : ''}`;
+    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${m().offAtTime(offStop(onBus) ?? a.dest?.label ?? m().yourStop, approx(a.quality === 'scheduled', at(onBus.arrive)))}` : ''}`;
     glance = onBus.arrive ? m().offGlance(short(onBus.arrive)) : m().onThe(onBus.svc);
   }
   glance = glance.slice(0, 12);
