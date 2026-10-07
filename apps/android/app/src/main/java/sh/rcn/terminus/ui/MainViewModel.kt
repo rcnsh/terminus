@@ -286,10 +286,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * A card button: "On the D2", "Missed it", "Not going". The server records
-     * it for every device and answers with the new planned answer.
+     * it for every device and answers with the new planned answer. "Not going"
+     * is a swipe off Today by another name, so it goes the same way: off the
+     * list at once, with the same Undo bar.
      */
     fun signal(action: CardAction) {
         val token = store.token ?: return
+        if (action.id == "skipped") _state.value.day?.items?.firstOrNull { it.key == action.trip }?.let { removeFromToday(it, swiped = false); return }
         if (_state.value.signalling) return
         _state.update { it.copy(signalling = true, error = null) }
         viewModelScope.launch {
@@ -342,11 +345,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Swiped off Today: taken off today, whatever it is (a timetabled class,
-     * one you added, a one-off trip, the trip home). Gone from the list at
-     * once, with Undo for a few seconds.
+     * Swiped off Today, or "Not going" on the card: taken off today, whatever
+     * it is (a timetabled class, one you added, a one-off trip, the trip
+     * home). Gone from the list at once, with Undo for a few seconds.
      */
-    fun removeFromToday(item: DayItem) {
+    fun removeFromToday(item: DayItem, swiped: Boolean = true) {
         val token = store.token ?: return
         _state.update { s ->
             s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item, removeError = null)
@@ -355,8 +358,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val ctx = getApplication<Application>()
             try {
                 applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key))
-                store.swipedToday = true
-                _state.update { it.copy(swipeHint = false, swipePeek = false) }
+                if (swiped) {
+                    store.swipedToday = true
+                    _state.update { it.copy(swipeHint = false, swipePeek = false) }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

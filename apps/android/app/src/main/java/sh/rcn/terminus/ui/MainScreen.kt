@@ -225,10 +225,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                 // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
                 val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
                 OfflinePlanOr(offline, state.answer, state.fetchedAt, state.day) {
-                    // Undo once: in the removed entry's row while it's there, not on the card as well.
-                    val undoing = state.removed?.key
-                    val answer = state.answer?.let { a -> if (undoing == null || a.card == null) a else a.copy(card = a.card.copy(actions = a.card.actions.filterNot { it.id == "reset" && it.trip == undoing })) }
-                    AnswerCard(answer, state.loading, vm::signal, state.signalling, vm::choose, onPlace = { vm.select(Target.SavedPlace(it)) })
+                    AnswerCard(state.answer, state.loading, vm::signal, state.signalling, vm::choose, onPlace = { vm.select(Target.SavedPlace(it)) })
                 }
             }
         }

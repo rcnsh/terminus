@@ -138,7 +138,7 @@ internal fun AnswerCard(
 @OptIn(ExperimentalLayoutApi::class)
 /**
  * The server's buttons (plans only: "Not going", "Not on campus today",
- * undo), in its order: the first one filled, the rest outlined. Then
+ * "Back on campus"), in its order: the first one filled, the rest outlined. Then
  * anything terminus has to suggest.
  */
 @Composable
@@ -146,7 +146,9 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
     // "Catch the D2 at Museum", and you don't know where Museum is: walking
     // directions there, as the one filled button; the server's go beside it.
     val walkTo = answer.card?.walkTo
-    val all = answer.card?.actions.orEmpty()
+    // The server's "Undo: going to UTown" isn't shown: "Not going" offers
+    // Undo in the bar at the foot of the screen, as a swipe off Today does.
+    val all = answer.card?.actions.orEmpty().filter { it.id != "reset" }
     // "Not going" and "Not on campus today" are the same no for this class
     // and for the whole day. With both on the card they share one menu, so
     // they don't crowd out what the card is for.
