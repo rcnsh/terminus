@@ -17,7 +17,7 @@ import type { Suggestion } from './outcomes.ts';
 import { GRAPH } from './graph.ts';
 import { indexGraph } from './resolve.ts';
 import { targetStops } from './landmarks.ts';
-import { mins, named, shortStop } from './format.ts';
+import { isoSeconds as iso, mins, named, shortStop } from './format.ts';
 import { routeColor } from './campus.ts';
 import { WALK } from './config.ts';
 import { m } from './i18n.ts';
@@ -216,8 +216,6 @@ const QUALITY: Partial<Record<Quality, () => string>> = {
   stale: () => m().qualityStale,
   unknown: () => m().qualityUnknown,
 };
-/** The note under an estimated leave-by. */
-export const estimateNote = () => m().estimateNote;
 
 function kindOf(a: MeAnswer): CardKind {
   if (a.mode === 'rest') return 'rest';
@@ -239,8 +237,6 @@ function staleAtOf(a: MeAnswer, kind: CardKind): number | null {
   }
   return marks.length ? Math.min(...marks) : null;
 }
-
-const iso = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 
 type V2 = 'phase' | 'phaseText' | 'glance' | 'line' | 'actions' | 'warning' | 'nextChangeAt' | 'remind' | 'suggestion' | 'ride' | 'detected' | 'walkTo';
 type V1 = Omit<Card, V2 | 'notice' | 'h12' | 'journey' | 'upcoming'>;

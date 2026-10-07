@@ -28,7 +28,7 @@ import { indexGraph, serviceEndsAt } from './resolve.ts';
 import { haversineM } from './geo.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { sgt } from './config.ts';
-import { shortStop } from './format.ts';
+import { isoSeconds, shortStop } from './format.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { atHome } from './residences.ts';
 import { paceSpeed } from './walk.ts';
@@ -233,7 +233,7 @@ export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
   const etas = sa.arrivals.filter((x) => x.plate === b.plate && x.svc === b.svc && x.etaS !== null).map((x) => x.etaS!);
   if (!etas.length) return null;
   const at = sa.fetchedAt + Math.min(...etas) * 1000;
-  return at > nowMs ? isoAt(at) : null;
+  return at > nowMs ? isoSeconds(at) : null;
 }
 
 /**
@@ -247,11 +247,7 @@ export async function nextArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
   const sa = (await deps.collectArrivals(env, ctx, [b.alightCode], nowMs)).get(b.alightCode);
   if (!sa?.available || sa.stale) return null;
   const due = sa.arrivals.filter((x) => x.svc === b.svc && x.etaS !== null).map((x) => sa.fetchedAt + x.etaS! * 1000).filter((at) => at > nowMs);
-  return due.length ? isoAt(Math.min(...due)) : null;
-}
-
-function isoAt(ms: number): string {
-  return new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+  return due.length ? isoSeconds(Math.min(...due)) : null;
 }
 
 /** On the bus you said you'd caught: where it gets you, not the next bus. */
