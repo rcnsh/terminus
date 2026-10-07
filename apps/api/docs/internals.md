@@ -669,7 +669,8 @@ Settings. It uses the same routes as the account page, with the session cookie.
   object of every user with a push address to watch the day, 400 users a
   run, 20 at a time; each 15-minute run carries on after the last user the
   one before armed (`trips:armed` in KV holds the date and that user, then
-  the date alone when the day is done). It works out the card, wakes at each
+  the date alone when the day is done). A Trip object that doesn't take the
+  request goes on `trips:retry`, and later runs that day ask only those again. It works out the card, wakes at each
   change and pushes, and on a day without classes it stops. Saving a subscription also refreshes the card, so a Trip object that
   woke before the subscription existed is asked again.
 - **What a push shows.** A web push must show a notification (iOS insists).
