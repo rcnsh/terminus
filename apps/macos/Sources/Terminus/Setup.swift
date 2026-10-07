@@ -457,7 +457,7 @@ final class SetupModel {
     }
 
     private func object(_ data: Data) throws -> [String: Any] {
-        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ApiError(status: 0, message: L("Unexpected response from terminus")) }
+        guard let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ApiError(status: 0, message: L("terminus sent something this version can't read.")) }
         return o
     }
 }
