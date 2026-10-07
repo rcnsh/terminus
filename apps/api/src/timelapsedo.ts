@@ -202,7 +202,16 @@ export class TimelapseRecorder {
         // Kept before asking: an alarm that throws after the request is run
         // again by the platform within seconds, and must find it asked.
         this.write('meta', meta);
-        const buses = await this.poll(meta, svc, now);
+        let buses: number | null = null;
+        try {
+          buses = await this.poll(meta, svc, now);
+        } catch (err) {
+          // Something after the request failed (placing the buses, storage):
+          // a failed poll, and on to the next service. Thrown, the alarm's
+          // retries would find this service asked too recently and wait, so
+          // one service failing every time would stop the round for good.
+          console.error('timelapse', svc, err instanceof Error ? err.message : String(err));
+        }
         if (buses !== null) {
           round.buses += buses;
           round.answered++;

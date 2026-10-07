@@ -1382,7 +1382,9 @@ LTA every 15 minutes, past the cache) and each push user's Trip object
   failure memo is shorter than a round, so without this an outage would be
   asked at the full rate all day. Each service's `asked` time is saved
   before its request, so an alarm that throws afterwards, which the platform
-  runs again within seconds, doesn't ask again.
+  runs again within seconds, doesn't ask again. A poll that throws after
+  its request (placing the buses, storage) counts as a failed poll and the
+  round moves on, so one service failing every time can't stall the day.
 - **Kill switch.** KV `config:timelapse` set to `off` (or `on`) wins.
   Otherwise the `TIMELAPSE_ENABLED` var applies: `on` for the stable site,
   `off` for the beta (so the two never poll twice), and off when unset or
