@@ -245,7 +245,43 @@ test('an alert that fails to send is retried on the next run', async () => {
   e.EMAIL.send = send;
   await checkUpstream(e, 4000, fail('network'));
   assert.equal(e.EMAIL.sent.length, 1);
+  await checkUpstream(e, 5000, fail('network'));
+  assert.equal(e.EMAIL.sent.length, 1, 'not again');
   assert.equal((await readUpstream(e)).pending, null);
+});
+
+/**
+ * KV as Cloudflare runs it: a second write to a key within a second is
+ * refused (429). Each check here is its own run, a second or more apart.
+ */
+function oneWritePerKey(e) {
+  const put = e.KV.put.bind(e.KV);
+  const written = new Set();
+  e.KV.put = async (k, ...rest) => {
+    if (written.has(k)) throw new Error('KV PUT failed: 429 Too Many Requests');
+    written.add(k);
+    return put(k, ...rest);
+  };
+  return () => written.clear();
+}
+
+test('each alert goes once, with KV taking one write a second to a key', async () => {
+  for (const beta of [false, true]) {
+    const e = beta ? { ...env(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' } : env();
+    const nextRun = oneWritePerKey(e);
+    const quiet = console.error;
+    const errors = [];
+    console.error = (...a) => errors.push(a.join(' '));
+    const steps = [ok, ok, fail('network'), fail('network'), fail('network'), fail('network'), ok, ok, ok, ok];
+    for (const [i, probe] of steps.entries()) {
+      nextRun();
+      await checkUpstream(e, 1000 * (i + 1), probe);
+    }
+    console.error = quiet;
+    assert.deepEqual(errors, [], beta ? 'beta' : 'stable');
+    assert.deepEqual(e.EMAIL.sent.map((m) => m.subject.match(/down|recovered/)[0]), beta ? [] : ['down', 'recovered']);
+    assert.equal((await readUpstream(e)).pending, null);
+  }
 });
 
 test('cron: a KV failure in one step does not stop the others', async () => {
