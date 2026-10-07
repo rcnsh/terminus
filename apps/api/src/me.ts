@@ -18,7 +18,7 @@ import {
   deleteAccount,
   endAllSessions,
   exportAccount,
-  verifyTurnstile,
+  checkTurnstile,
   endSession,
   listDevices,
   loadProfileJson,
@@ -974,9 +974,10 @@ export async function handleMe(
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     if (!email) return json({ error: 'enter a valid email address' }, 400);
-    if (!(await verifyTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip')))) {
-      return json({ error: 'the human check failed, try again' }, 400);
-    }
+    const human = await checkTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip'));
+    // Turnstile itself not answering isn't the visitor's fault: say so, and when to try again.
+    if (human === 'unavailable') return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
+    if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
     let outcome;
     try {
       outcome = await requestLink(env, db, email, linkOrigin(url, env), nowMs, body?.next === '/app/');
@@ -1056,9 +1057,10 @@ export async function handleMe(
     // can run Turnstile, so it does, on top of the app's limits.
     if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429);
     const body = await readJson(req);
-    if (!(await verifyTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip')))) {
-      return json({ error: 'the human check failed, try again' }, 400);
-    }
+    const human = await checkTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip'));
+    // Turnstile itself not answering isn't the visitor's fault: say so, and when to try again.
+    if (human === 'unavailable') return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
+    if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
     if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
       return json({ error: 'terminus is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     }
