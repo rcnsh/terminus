@@ -97,10 +97,17 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
  * map's workers, and Cloudflare Web Analytics (its beacon script, which
  * Cloudflare adds to each page, and where it reports page loads). /docs
  * additionally loads Stoplight Elements from unpkg (pinned with SRI there).
+ * The CDNs are allowed only for those files, not whole hosts: either serves
+ * any library ever published, and an old one can be made to run a page's
+ * text as script, which would undo the CSP if HTML were ever injected.
  */
+/** The QR library on the account page (settings-pages.js loads it, with SRI). */
+export const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+/** Stoplight Elements for /docs (openapi.ts), pinned so a release can't change the page underneath us. */
+export const ELEMENTS = 'https://unpkg.com/@stoplight/elements@9.0.25';
 const CSP_BASE = [
   "default-src 'self'",
-  "script-src 'self' https://cdnjs.cloudflare.com https://challenges.cloudflare.com https://static.cloudflareinsights.com",
+  `script-src 'self' ${QR_LIB} https://challenges.cloudflare.com https://static.cloudflareinsights.com`,
   'frame-src https://challenges.cloudflare.com',
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
@@ -115,7 +122,7 @@ const CSP_BASE = [
 ];
 const CSP_SITE = CSP_BASE.join('; ');
 const CSP_DOCS = CSP_BASE.map((d) =>
-  d.startsWith('script-src') || d.startsWith('style-src') ? `${d} https://unpkg.com` : d.startsWith('img-src') ? `${d} https:` : d.startsWith('font-src') ? `${d} data: https://unpkg.com` : d,
+  d.startsWith('script-src') || d.startsWith('style-src') ? `${d} ${ELEMENTS}/` : d.startsWith('img-src') ? `${d} https:` : d.startsWith('font-src') ? `${d} data: ${ELEMENTS}/` : d,
 ).join('; ');
 
 export function withSecurityHeaders(res: Response, path: string): Response {

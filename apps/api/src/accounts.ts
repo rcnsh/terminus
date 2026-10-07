@@ -120,7 +120,17 @@ export function normalizePairCode(raw: unknown): string | null {
 /* Sign-in links                                                      */
 /* ------------------------------------------------------------------ */
 
-export type LinkOutcome = 'sent' | 'blocked' | 'cooldown';
+export type LinkOutcome = 'sent' | 'blocked' | 'cooldown' | 'busy';
+
+/**
+ * One ceiling on sign-in emails for everyone: a botnet past Turnstile must
+ * not be able to spend the whole email quota or the sender's reputation.
+ * Taken only when an email is about to go, so requests that send nothing
+ * (an address in its cooldown) can't use it up and block everyone's sign-in.
+ */
+export async function takeGlobalMail(env: Env): Promise<boolean> {
+  return !env.RL_MAIL || (await env.RL_MAIL.limit({ key: 'mail:global' })).success;
+}
 
 /**
  * Creates a sign-in link and emails it. Sign-up is open; addresses on the
@@ -130,7 +140,9 @@ export type LinkOutcome = 'sent' | 'blocked' | 'cooldown';
 export async function requestLink(env: Env, db: D1Database, email: string, origin: string, nowMs: number, toApp = false): Promise<LinkOutcome> {
   const inbox = inboxKey(email);
   const blocked = await db.prepare('SELECT 1 FROM blocklist WHERE email IN (?, ?)').bind(email, inbox).first();
-  if (blocked) return 'blocked';
+  // It spends from the ceiling as a sent email would, so a busy minute
+  // answers the same for it and doesn't reveal the blocklist.
+  if (blocked) return (await takeGlobalMail(env)) ? 'blocked' : 'busy';
 
   const recent = await db
     .prepare('SELECT 1 FROM magic_links WHERE email = ? AND created > ?')
@@ -140,6 +152,7 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   // Per inbox too, so +tags and dots cannot mail one person over and over.
   const coolKey = `mail:${await hashToken(inbox)}`;
   if (await env.KV.get(coolKey).catch(() => null)) return 'cooldown';
+  if (!(await takeGlobalMail(env))) return 'busy';
   if (!(await takeMailBudget(env, inbox, nowMs))) return 'cooldown';
 
   const token = newToken();
@@ -425,12 +438,21 @@ async function newAnonymousUser(db: D1Database, via: 'app' | 'web', nowMs: numbe
 export function tokenFrom(req: Request): string | null {
   const auth = req.headers.get('authorization');
   if (auth?.startsWith('Bearer ')) return auth.slice(7).trim() || null;
+  return cookieToken(req);
+}
+
+function cookieToken(req: Request): string | null {
   const cookie = req.headers.get('cookie') ?? '';
   for (const part of cookie.split(';')) {
     const [k, ...v] = part.trim().split('=');
     if (k === SESSION_COOKIE) return v.join('=') || null;
   }
   return null;
+}
+
+/** Whether the browser sent its session cookie, whatever else the request carries. */
+export function hasSessionCookie(req: Request): boolean {
+  return cookieToken(req) !== null;
 }
 
 export async function authenticate(
@@ -620,8 +642,19 @@ export async function saveProfileJson(db: D1Database, userId: string, profile: u
 /* ------------------------------------------------------------------ */
 
 /** Signs out every browser and device on the account. */
-export async function endAllSessions(db: D1Database, userId: string): Promise<number> {
-  const r = await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+/**
+ * Signs out every device, and cancels what could still turn into a new one:
+ * pairing codes, unspent sign-in links (and so their codes), and app sign-ins
+ * not yet collected. Otherwise a stolen device could make a pairing code just
+ * before the owner signs out everywhere, and pair again after.
+ */
+export async function endAllSessions(db: D1Database, user: User): Promise<number> {
+  const [r] = await db.batch([
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM pair_codes WHERE user_id = ?').bind(user.id),
+    db.prepare('DELETE FROM magic_links WHERE email = ?').bind(user.email),
+    db.prepare("DELETE FROM login_requests WHERE email = ? AND status IN ('pending', 'approved')").bind(user.email),
+  ]);
   return r.meta?.changes ?? 0;
 }
 

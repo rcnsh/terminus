@@ -179,6 +179,30 @@ test('a refused version: the alert gives the one-line KV fix and NUS\'s whole re
   assert.equal((await readUpstream(e)).detail, null, 'cleared once it recovers');
 });
 
+test('a refusal that echoes our request back has its credentials blanked before the logs and the email', async () => {
+  const e = env();
+  const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJndWVzdCJ9.c2lnbmF0dXJl';
+  const body = JSON.stringify({ code: '10009', msg: 'refused', request: { token: jwt, userid: 'guest-123', deviceid: 'dev-abc', domain: 'nus' }, note: `Bearer ${jwt}` });
+  const refused = async () => {
+    throw new UpstreamRejected('10009', 'auth rejected: code=10009 msg=refused', body);
+  };
+  const logged = [];
+  const log = console.log;
+  console.log = (...a) => logged.push(a.join(' '));
+  try {
+    await checkUpstream(e, 1000, refused);
+    await checkUpstream(e, 2000, refused);
+  } finally {
+    console.log = log;
+  }
+  const text = e.EMAIL.sent[0].text;
+  for (const out of [text, (await readUpstream(e)).detail, logged.join('\n')]) {
+    assert.doesNotMatch(out, /eyJ|guest-123|dev-abc/);
+    assert.match(out, /"msg":"refused"/, 'the rest is kept as the clue');
+    assert.match(out, /"domain":"nus"/);
+  }
+});
+
 test('the KV namespace in the alert commands is the stable one in cloudflare.config.ts', () => {
   const config = readFileSync(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
   const id = /name: "terminus",[\s\S]*?\bkv: "([0-9a-f]+)"/.exec(config)?.[1];

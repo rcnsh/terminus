@@ -143,6 +143,61 @@ test('another site cannot post a sign-in link or a sign-out', async () => {
   assert.equal((await post('/auth/verify', 'same-origin', new URLSearchParams({ t }).toString())).status, 303);
 });
 
+test('a page on a sibling subdomain cannot change the account with the session cookie', async () => {
+  // The beta and any other *.rcn.sh host are the same site, so the Lax
+  // cookie goes with their POSTs. A type that only mentions JSON needs no
+  // preflight, so it's refused as JSON too.
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const raw = async (path, headers, body) => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(new Request(BASE + path, { method: 'POST', headers, body }), env, ctx);
+    await ctx.settle();
+    return res;
+  };
+  const sneaky = { 'content-type': 'text/plain; x=application/json' };
+  assert.equal((await raw('/me/pair-code', { cookie, 'sec-fetch-site': 'same-site' })).status, 403);
+  assert.equal((await raw('/me/feedback', { ...sneaky, cookie, 'sec-fetch-site': 'same-site' }, '{"note":"hi"}')).status, 403);
+  assert.equal((await raw('/auth/code', { ...sneaky, 'sec-fetch-site': 'same-site' }, '{}')).status, 403);
+  // Without the header check (an old browser), the body isn't read as JSON.
+  const before = email.sent.length;
+  assert.equal((await raw('/auth/login', sneaky, JSON.stringify({ email: INVITED }))).status, 400);
+  assert.equal(email.sent.length, before);
+  // Our own pages, and an app's bearer token from anywhere, still work.
+  assert.equal((await raw('/me/pair-code', { cookie, 'sec-fetch-site': 'same-origin' })).status, 200);
+  assert.equal((await raw('/auth/login', { 'content-type': 'application/json; charset=utf-8', 'sec-fetch-site': 'same-origin' }, JSON.stringify({ email: 'other@u.nus.edu' }))).status, 200);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const { token } = await (await call(env, '/pair', { method: 'POST', body: { code } })).json();
+  assert.equal((await raw('/me/pair-code', { authorization: `Bearer ${token}`, cookie, 'sec-fetch-site': 'cross-site' })).status, 200);
+});
+
+test('a repeated sign-in request in its cooldown does not spend the global email ceiling', async () => {
+  const { env } = setup();
+  let spent = 0;
+  env.RL_MAIL = { limit: async ({ key }) => (assert.equal(key, 'mail:global'), spent++, { success: true }) };
+  for (let i = 0; i < 3; i++) await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  assert.equal(spent, 1);
+  env.RL_MAIL = { limit: async () => ({ success: false }) };
+  const busy = await call(env, '/auth/login', { method: 'POST', body: { email: 'new@u.nus.edu' } });
+  assert.equal(busy.status, 429);
+  // A blocked address answers the same as anyone else when it's busy.
+  const blocked = await call(env, '/auth/login', { method: 'POST', body: { email: BLOCKED } });
+  assert.equal(blocked.status, 429);
+});
+
+test('pairing codes have one ceiling for everyone, on lookups and redeems', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  const keys = [];
+  const full = { ...env, RL_PAIR: { limit: async ({ key }) => (keys.push(key), { success: false }) } };
+  assert.equal((await call(full, '/pair/check', { method: 'POST', body: { code } })).status, 429);
+  assert.equal((await call(full, '/pair', { method: 'POST', body: { code } })).status, 429);
+  assert.deepEqual(keys, ['pair:global', 'pair:global']);
+  // The code wasn't spent by the refused tries.
+  assert.equal((await call(env, '/pair', { method: 'POST', body: { code } })).status, 200);
+});
+
 test('an expired link is refused', async () => {
   const { env, email, db } = setup();
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
@@ -536,6 +591,24 @@ test('sign out everywhere ends every session', async () => {
   assert.equal((await call(env, '/me', { cookie })).status, 401);
 });
 
+test('sign out everywhere also cancels pairing codes and sign-in links made before it', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+  // A second browser asks for a link and waits (past the cooldown).
+  const realNow = Date.now;
+  Date.now = () => realNow() + 120_000;
+  try {
+    await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+    const link = email.lastToken();
+    assert.equal((await call(env, '/me/sessions', { method: 'DELETE', cookie })).status, 200);
+    assert.equal((await call(env, '/pair', { method: 'POST', body: { code } })).status, 400);
+    assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t: link } })).status, 400);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test('home keeps stops only: coordinates are dropped on save', async () => {
   const { env, email, db } = setup();
   const cookie = await signIn(env, email);
@@ -733,7 +806,9 @@ test('the sign-in page names the account and refuses a dead link up front; the c
   await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
   const page = await call(env, `/auth/verify?t=${email.lastToken()}`);
   const html = await page.text();
-  assert.match(html, /f•••@u\.nus\.edu/);
+  // The whole address: a masked one (f•••@u.nus.edu) can't be told apart
+  // from a forwarded link to someone else's account at the same domain.
+  assert.match(html, /friend@u\.nus\.edu/);
   assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.equal((await call(env, '/auth/verify?t=nonsense')).status, 400);

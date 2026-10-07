@@ -44,6 +44,28 @@ test('security headers: every response; CSP on HTML only; /docs may load unpkg',
   assert.equal(withSecurityHeaders(new Response(''), '/auth/verify').headers.get('referrer-policy'), 'no-referrer');
 });
 
+test('the CSP allows the CDNs only for the files the site loads from them, not whole hosts', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const page = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/account/');
+  const docs = withSecurityHeaders(new Response('<p>', { headers: { 'content-type': 'text/html' } }), '/docs');
+  const sources = (h) => h.get('content-security-policy').split(/[; ]+/);
+  for (const csp of [sources(page.headers), sources(docs.headers)]) {
+    assert.ok(!csp.includes('https://cdnjs.cloudflare.com'), 'not all of cdnjs');
+    assert.ok(!csp.includes('https://unpkg.com'), 'not all of unpkg');
+  }
+  // The account page's QR library is the one file allowed from cdnjs.
+  const settings = await readFile(new URL('../../web/public/account/settings-pages.js', import.meta.url), 'utf8');
+  const qr = /s\.src = '(https:\/\/cdnjs\.cloudflare\.com\/[^']+)'/.exec(settings)?.[1];
+  assert.ok(qr && sources(page.headers).includes(qr), `the CSP must allow ${qr}`);
+  // /docs loads Elements' files from under the allowed path.
+  const { docsPage } = await import('../src/openapi.ts');
+  const html = docsPage('day');
+  const urls = [...html.matchAll(/(?:src|href)="(https:\/\/unpkg\.com\/[^"]+)"/g)].map((m) => m[1]);
+  assert.ok(urls.length >= 2);
+  const allowed = sources(docs.headers).filter((x) => x.startsWith('https://unpkg.com/'));
+  for (const u of urls) assert.ok(allowed.some((a) => u.startsWith(a)), u);
+});
+
 test('landmarks: every stop that serves one counts; a stop is itself', () => {
   const deck = landmark('the-deck');
   assert.ok(deck, 'codes are case-insensitive');

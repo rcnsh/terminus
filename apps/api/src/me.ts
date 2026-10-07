@@ -25,6 +25,7 @@ import {
   normalizeEmail,
   normalizePairCode,
   tokenFrom,
+  hasSessionCookie,
   linkEmail,
   pairCodeOwner,
   maskEmail,
@@ -163,7 +164,11 @@ function sgtTime(ms: number): string {
 }
 
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
-  if (!(req.headers.get('content-type') ?? '').includes('application/json')) return null;
+  // The exact type, not one that merely mentions it: `text/plain;
+  // x=application/json` is a type a page on another site can send without
+  // asking first, cookie and all.
+  const type = (req.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return null;
   // Refuse a big body before reading it, not after.
   if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return null;
   try {
@@ -216,6 +221,12 @@ async function limited(env: Env, req: Request, scope: string): Promise<boolean> 
   if (!env.RL_AUTH) return false;
   const { success } = await env.RL_AUTH.limit({ key: `${scope}:${clientKey(req)}` });
   return !success;
+}
+
+/** The global ceiling on pairing-code lookups (both /pair and /pair/check). */
+async function pairBusy(env: Env): Promise<boolean> {
+  if (!env.RL_PAIR) return false;
+  return !(await env.RL_PAIR.limit({ key: 'pair:global' })).success;
 }
 
 /** The account's profile, checked against today's stops. `raw`: the saved JSON, when the caller has already read it. */
@@ -439,7 +450,7 @@ export const ME_ROUTES: MeRoute[] = [
     access: 'web',
     run: async ({ db, session }) => {
       // Sign out everywhere, including this browser.
-      const ended = await endAllSessions(db, session.user.id);
+      const ended = await endAllSessions(db, session.user);
       return json({ ok: true, ended }, 200, { 'set-cookie': sessionCookie('', 0) });
     },
   },
@@ -873,12 +884,17 @@ export async function handleMe(
   if (!(path.startsWith('/auth/') || (path === '/pair' && req.method === 'POST') || path === '/pair/check' || path === '/me' || path.startsWith('/me/'))) return null;
   const db = env.DB;
   if (!db) return json({ error: 'accounts are not configured' }, 503);
-  // Form posts that set or end the browser's session come from our own pages.
-  // Without this, another site could post a sign-in link it holds and sign
-  // the visitor in to its account, or sign them out. Apps send no such header.
+  // Changes made with the browser's session, or that start one, come from our
+  // own pages. Without this, another site could post a sign-in link or code
+  // it holds and sign the visitor in to its account, or sign them out. A page
+  // on another subdomain of the same site (the beta, say) gets the Lax cookie
+  // sent with its POSTs, so this also covers every request carrying it.
+  // Apps send no such header; a bearer token isn't sent by a browser on its own.
   const fetchSite = req.headers.get('sec-fetch-site');
-  if (req.method === 'POST' && (path === '/auth/verify' || path === '/auth/approve' || path === '/auth/logout') && fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
-    return json({ error: 'that request came from another site' }, 403);
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS' && fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+    const setsSession = path === '/auth/verify' || path === '/auth/approve' || path === '/auth/logout' || path === '/auth/code' || path === '/auth/anon/web';
+    const bearer = req.headers.get('authorization')?.startsWith('Bearer ') || req.headers.has('x-api-key');
+    if (setsSession || (!bearer && hasSessionCookie(req))) return json({ error: 'that request came from another site' }, 403);
   }
 
   /* ---------- sign-in ---------- */
@@ -901,18 +917,15 @@ export async function handleMe(
     if (!(await verifyTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip')))) {
       return json({ error: 'the human check failed, try again' }, 400);
     }
-    // One ceiling for everyone: a botnet past Turnstile must not be able to
-    // spend the whole email quota or the sender's reputation.
-    if (env.RL_MAIL && !(await env.RL_MAIL.limit({ key: 'mail:global' })).success) {
-      return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
-    }
+    let outcome;
     try {
-      await requestLink(env, db, email, linkOrigin(url, env), nowMs, body?.next === '/app/');
+      outcome = await requestLink(env, db, email, linkOrigin(url, env), nowMs, body?.next === '/app/');
     } catch (err) {
       // The error text can carry the recipient: log its kind only.
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
     }
+    if (outcome === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     // Same answer whether or not the address is blocked or already has an account.
     return json({ ok: true, message: m().checkEmail });
   }
@@ -942,7 +955,7 @@ export async function handleMe(
       const email = safe ? await linkEmail(db, safe, nowMs) : null;
       if (!email) return html(page(m().pageLinkExpired, m().linkExpiredHtml), 400);
       return html(page(m().pageSignIn, `<h1>${m().signInTitle}</h1>
-<p class="hint">${m().continueAs(escapeHtml(maskEmail(email)))}</p>
+<p class="hint">${m().continueAs(escapeHtml(email))}</p>
 <form method="post" action="/auth/verify"><input type="hidden" name="t" value="${safe}">${url.searchParams.get('next') === 'app' ? '<input type="hidden" name="next" value="app">' : ''}<button type="submit" class="btn accent">${m().signInButton}</button></form>`));
     }
     if (req.method === 'POST') {
@@ -1002,9 +1015,6 @@ export async function handleMe(
     // (with the email added) or folded into the account the email has.
     const current = tokenFrom(req) ? await authenticate(db, req, nowMs) : null;
     if (current?.user.email) return json({ error: 'this device is already signed in' }, 409);
-    if (env.RL_MAIL && !(await env.RL_MAIL.limit({ key: 'mail:global' })).success) {
-      return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
-    }
     let started;
     try {
       started = await startAppLogin(env, db, { email, name: deviceName(body), client: clientWith(req, body), anonUserId: current?.user.id ?? null }, linkOrigin(url, env), nowMs);
@@ -1013,6 +1023,7 @@ export async function handleMe(
       return json({ error: 'could not send the email, try again later' }, 502);
     }
     if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, { 'retry-after': '60' });
+    if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     return json({ ...started, expires: new Date(started.expires).toISOString() }, 201);
   }
 
@@ -1081,6 +1092,7 @@ export async function handleMe(
     // Lets an app show whose account a code belongs to before spending it,
     // so a link someone sent you cannot quietly pair your phone to theirs.
     if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
     const owner = code ? await pairCodeOwner(db, code, nowMs) : null;
@@ -1090,6 +1102,7 @@ export async function handleMe(
 
   if (path === '/pair' && req.method === 'POST') {
     if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, { 'retry-after': '60' });
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
     // It goes into the email to the account's owner: cleaned as at /auth/app/start.

@@ -8,6 +8,7 @@
  */
 
 import { horizonSvg, lightInkAt, skyVars } from './pagesky.ts';
+import { ELEMENTS } from './http.ts';
 import type { Phase } from './pagesky.ts';
 
 const quality = {
@@ -510,7 +511,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, message: { type: 'string' } } }),
             '400': errorResponse('Not an email address.'),
-            '429': errorResponse('Too many attempts from this IP.'),
+            '429': errorResponse('Too many attempts from this IP, or too many sign-in emails for everyone this minute.'),
           },
         },
       },
@@ -568,7 +569,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             }),
             '400': errorResponse('Not an email address.'),
             '409': errorResponse('This device is already signed in.'),
-            '429': errorResponse('An email went to this address in the last minute, or too many attempts.'),
+            '429': errorResponse('An email went to this address in the last minute, too many attempts, or too many sign-in emails for everyone this minute.'),
           },
         },
       },
@@ -663,7 +664,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': ok({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
             '400': errorResponse('Wrong or expired code.'),
-            '429': errorResponse('Too many attempts from this IP.'),
+            '429': errorResponse('Too many attempts from this IP, or too many pairing attempts for everyone this minute.'),
           },
         },
       },
@@ -677,7 +678,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': ok({ type: 'object', required: ['account'], properties: { account: { type: 'string', example: 'j•••@u.nus.edu' } } }),
             '400': errorResponse('Wrong or expired code.'),
-            '429': errorResponse('Too many attempts from this IP.'),
+            '429': errorResponse('Too many attempts from this IP, or too many pairing attempts for everyone this minute.'),
           },
         },
       },
@@ -2039,8 +2040,6 @@ export function openApiSpec(origin: string): Record<string, unknown> {
   };
 }
 
-/** Pinned so a breaking Elements release cannot change the page underneath us. */
-const ELEMENTS = 'https://unpkg.com/@stoplight/elements@9.0.25';
 /** How wide the docs bar's hills are, in pixels: wider than any screen. */
 const HZ_W = 4000;
 

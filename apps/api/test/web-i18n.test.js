@@ -178,3 +178,33 @@ test('the privacy summary and the full policy each have a Chinese translation th
     assert.equal(count(page), count(en), dir);
   }
 });
+
+// Rich puts its text in the page as HTML. That's safe only while the text is
+// one of our own sentences: t() of a constant with no blanks. A value filled
+// into a blank ({0}) would be read as markup: a name or a stop from the feed
+// could then run script.
+test('Rich is only ever given t() of a constant, never a value', () => {
+  const files = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(new URL(dir, PUBLIC), { withFileTypes: true })) {
+      if (e.isDirectory() && e.name !== 'vendor') walk(`${dir}${e.name}/`);
+      else if (e.name.endsWith('.js')) files.push(`${dir}${e.name}`);
+    }
+  };
+  walk('');
+  const bad = [];
+  let uses = 0;
+  for (const f of files) {
+    // Imports and the definition aside, every mention is a use.
+    const src = read(f)
+      .replace(/^import\b[\s\S]*?\bfrom\s*'[^']+';?/gm, '')
+      .replace(/^export const Rich = /m, '');
+    for (const m of src.matchAll(/\bRich\b/g)) {
+      uses++;
+      const at = src.slice(m.index - 3, m.index + 400);
+      if (!/^<\$\{Rich\}[^>]*?\btext=\$\{t\('(?:\\.|[^'\\{])*'\)\}/.test(at)) bad.push(`${f}: ${at.slice(0, 120)}`);
+    }
+  }
+  assert.ok(uses >= 4, `found ${uses} uses of Rich`);
+  assert.deepEqual(bad, []);
+});
