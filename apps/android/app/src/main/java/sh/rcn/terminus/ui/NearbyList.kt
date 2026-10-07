@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import sh.rcn.terminus.BoardRow
 import sh.rcn.terminus.L
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.R
@@ -36,9 +37,10 @@ import sh.rcn.terminus.parseColor
 
 /**
  * The stops near you as their signs: the name plate with the walk there,
- * then a row per service, its next bus coming up a short road towards the
- * stop, nearer the sooner it's due. The nearest stop is drawn larger. A
- * timetable guess is an outline, never a filled bus, so it doesn't pass for live.
+ * then a row per service, its buses coming up a short road towards the
+ * stop, nearer the sooner they're due, the next one solid and the rest
+ * faded. The nearest stop is drawn larger. A timetable guess is an outline,
+ * never a filled bus, so it doesn't pass for live.
  */
 @Composable
 internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: (String) -> Unit) {
@@ -69,7 +71,7 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
                     ) {
                         // A fixed column, so every road starts at the same place.
                         Box(Modifier.width(if (row.paid) 52.dp else 34.dp)) { BusBadge(row.svc, color, if (big) 13.sp else 12.sp, paid = row.paid) }
-                        Road(row.etaS, live = row.quality == "live", Color(color), Modifier.weight(1f).height(18.dp))
+                        Road(row, Color(color), Modifier.weight(1f).height(18.dp))
                         Text(
                             eta(row.etaS, row.quality),
                             fontSize = if (big) 18.sp else 15.sp,
@@ -88,12 +90,16 @@ internal fun NearbyList(stops: List<NearbyStop>?, loading: Boolean, onOpenStop: 
 /** How far up the road a bus is drawn: this many seconds away is the far end. */
 private const val ROAD_S = 15 * 60
 
+/** How visible a bus after the next one is: there, but not the one to catch. */
+private const val LATER_ALPHA = 0.35f
+
 /**
- * A short road to the stop (the ring at its end), and the bus on it: filled
- * in its colour when the time is live, an outline when it's a timetable guess.
+ * A short road to the stop (the ring at its end), and the buses on it: filled
+ * in their colour when the time is live, an outline when it's a timetable
+ * guess. The next one is solid and drawn last, on top; the ones after it, faded.
  */
 @Composable
-private fun Road(etaS: Int?, live: Boolean, color: Color, modifier: Modifier) {
+private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
     val road = MaterialTheme.colorScheme.outlineVariant
     val stop = MaterialTheme.colorScheme.onSurface
     val paper = MaterialTheme.colorScheme.surface
@@ -104,14 +110,17 @@ private fun Road(etaS: Int?, live: Boolean, color: Color, modifier: Modifier) {
         drawLine(road, Offset(0f, y), Offset(end, y), 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())))
         drawCircle(paper, ring, Offset(end, y))
         drawCircle(stop, ring, Offset(end, y), style = Stroke(2.5.dp.toPx()))
-        if (etaS == null) return@Canvas
         val w = 18.dp.toPx()
         val h = 12.dp.toPx()
-        val far = (etaS.coerceIn(0, ROAD_S).toFloat() / ROAD_S)
-        val x = (end - ring - w - 2.dp.toPx()) * (1 - far)
-        val at = Offset(x, y - h / 2)
-        if (live) drawRoundRect(color, at, Size(w, h), CornerRadius(4.dp.toPx()))
-        else drawRoundRect(color, at, Size(w, h), CornerRadius(4.dp.toPx()), style = Stroke(2.dp.toPx()))
+        fun bus(etaS: Int, live: Boolean, alpha: Float) {
+            val far = (etaS.coerceIn(0, ROAD_S).toFloat() / ROAD_S)
+            val x = (end - ring - w - 2.dp.toPx()) * (1 - far)
+            val at = Offset(x, y - h / 2)
+            if (live) drawRoundRect(color, at, Size(w, h), CornerRadius(4.dp.toPx()), alpha = alpha)
+            else drawRoundRect(color, at, Size(w, h), CornerRadius(4.dp.toPx()), alpha = alpha, style = Stroke(2.dp.toPx()))
+        }
+        for (b in row.later.asReversed()) bus(b.etaS, b.quality == "live", LATER_ALPHA)
+        row.etaS?.let { bus(it, row.quality == "live", 1f) }
     }
 }
 

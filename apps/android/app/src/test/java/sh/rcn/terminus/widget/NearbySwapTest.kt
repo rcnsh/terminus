@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 import sh.rcn.terminus.NearbyStop
+import sh.rcn.terminus.LaterBus
 import sh.rcn.terminus.parseNearby
 
 /** The swap button on the Nearby widget: the stop across the road first. */
@@ -45,5 +46,12 @@ class NearbySwapTest {
     @Test fun oppositeIsReadAndOptional() {
         val json = JSONObject("""{"stops":[{"stop":{"code":"PGP","name":"PGP"},"opposite":"PGPR","walkS":60,"board":[]},{"stop":{"code":"LT27","name":"LT 27"},"opposite":null,"walkS":90,"board":[]},{"stop":{"code":"S17","name":"S 17"},"walkS":90,"board":[]}]}""")
         assertEquals(listOf("PGPR", null, null), parseNearby(json).map { it.opposite })
+    }
+
+    @Test fun laterBusesAreReadAndOptional() {
+        val json = JSONObject("""{"stops":[{"stop":{"code":"PGP","name":"PGP"},"walkS":60,"board":[{"svc":"D2","etaS":300,"quality":"live","later":[{"etaS":840,"quality":"live"},{"etaS":1500,"quality":"scheduled"}]},{"svc":"K","etaS":null,"quality":"scheduled"}]}]}""")
+        val board = parseNearby(json).single().board
+        assertEquals(listOf(LaterBus(840, "live"), LaterBus(1500, "scheduled")), board[0].later)
+        assertEquals(emptyList<LaterBus>(), board[1].later)
     }
 }
