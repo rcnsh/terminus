@@ -81,3 +81,24 @@ test('the device id is made only when none is stored, and a failed read makes no
   assert.equal(await fresh.KV.get('auth:deviceid'), made);
   assert.equal(await deviceId(fresh), made);
 });
+
+test("fetchedAt is when the call that answered went out, not when the fetch began", async () => {
+  for (const [name, call] of [
+    ['shuttle-service', (env) => fetchArrivals(env, 'COM3', FROZEN_NOW)],
+    ['active-bus', (env) => fetchActiveBuses(env, 'D2', FROZEN_NOW)],
+  ]) {
+    const feed = makeFetch({ reject: 1, rejectCode: '10008' });
+    installGlobals(feed);
+    // Every request to NUS takes 5 s: a mint, a refused call, a re-mint, then the answer.
+    let clock = FROZEN_NOW;
+    Date.now = () => clock;
+    globalThis.fetch = async (input, init) => {
+      const res = await feed(input, init);
+      clock += 5_000;
+      return res;
+    };
+    const out = await call(makeEnv());
+    assert.equal(feed.counts.auth + feed.counts.shuttle, 4, name);
+    assert.equal(out.fetchedAt, FROZEN_NOW + 15_000, name);
+  }
+});
