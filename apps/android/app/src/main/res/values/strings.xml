@@ -10,7 +10,7 @@
     <string name="map_bus_between">Between %1$s and %2$s</string>
     <string name="map_bus_title">%1$s bus</string>
     <string name="map_buses">%1$d buses on %2$s</string>
-    <string name="map_buses_unavailable">Live buses aren’t available right now.</string>
+    <string name="map_buses_unavailable">Live buses aren\'t available right now.</string>
     <string name="map_buses_stale">Bus positions may be out of date</string>
     <string name="map_download_failed">The street map hasn\'t downloaded yet. Routes and stops are still available.</string>
     <string name="map_downloading">Downloading the street map (about 4 MB)…</string>
@@ -24,17 +24,17 @@
     <string name="map_no_buses_due">No buses due</string>
     <string name="map_no_times">No times right now</string>
     <string name="map_one_bus">1 bus on %1$s</string>
-    <string name="map_places_full">Saved places limit reached</string>
+    <string name="map_places_full">Favourites are full</string>
     <string name="map_recentre">Back to campus</string>
-    <string name="map_save_place">Save as place</string>
-    <string name="map_saved_as">Saved as %1$s</string>
+    <string name="map_save_place">Add to favourites</string>
+    <string name="map_saved_as">In your favourites</string>
     <string name="map_services_here">Services here</string>
     <string name="map_times_need_connection">Live times need a connection.</string>
     <string name="map_walking_directions">Walking directions</string>
     <string name="tab_map">Map</string>
     <string name="tab_now">Now</string>
     <string name="widget_name">Next bus</string>
-    <string name="widget_places_name">Next bus + places</string>
+    <string name="widget_places_name">Next bus + favourites</string>
     <string name="widget_places_description">The next bus, plus buttons for your favourites and nearby departures</string>
     <string name="widget_description">The next bus to wherever you\'re going next</string>
     <string name="a11y_checking">Checking</string>
@@ -127,7 +127,6 @@
     <string name="follow_device">Follow this phone</string>
     <string name="follow_trip">Follow this trip</string>
     <string name="free_hint_none">Tap Nearby for buses around you.</string>
-    <string name="free_hint_places">Tap a favourite above, or Nearby for buses around you.</string>
     <string name="friday">Friday</string>
     <string name="friday_short">Fri</string>
     <string name="gap_home">Go home in gaps longer than</string>
@@ -162,7 +161,7 @@
     <string name="importing">Importing…</string>
     <string name="in_min">in %1$d min</string>
     <string name="in_min_s">in %1$d min %2$d s</string>
-    <string name="in_your_timetable">IN YOUR TIMETABLE</string>
+    <string name="in_your_timetable">In your timetable</string>
     <string name="is_this_wrong">Is this wrong?</string>
     <string name="language">Language</string>
     <string name="time_format">Time format</string>
@@ -187,7 +186,6 @@
     <string name="left_ago">Left %1$d min ago</string>
     <string name="live_notification">Live notification during trips</string>
     <string name="loading">Loading…</string>
-    <string name="location">Location</string>
     <string name="location_ask">Allow location so directions start from your nearest stop. Without it, terminus assumes you\'re at your last class or at home.</string>
     <string name="location_text">So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored. Without it, terminus assumes you\'re at your last class or at home.</string>
     <string name="long_gap">%1$s · long gap</string>
@@ -218,7 +216,6 @@
     <string name="no_live_data">No live data</string>
     <string name="no_location">Couldn\'t get your location. Pick your stop instead.</string>
     <string name="no_reminders">No reminders</string>
-    <string name="no_stop_for">No stop found for %1$s. Add those by hand in Settings, under Timetable.</string>
     <string name="no_stops_near">No stops near you</string>
     <string name="none_yet">None yet</string>
     <string name="not_going_today">Not going</string>
@@ -252,8 +249,12 @@
     <string name="one_imported">1 class imported.</string>
     <string name="open_settings">Open settings</string>
     <string name="open_settings_location">Open settings to allow location</string>
-    <string name="open_url">Open %1$s</string>
     <string name="or_list">" or "</string>
+    <!-- Joining a list ("PGP, UTown"), clauses read aloud, and sentences. -->
+    <string name="list_sep">", "</string>
+    <string name="clause_sep">", "</string>
+    <string name="sentence_sep">". "</string>
+    <string name="device_unnamed">Device</string>
     <string name="or_scan">Or scan this with another phone\'s camera:</string>
     <string name="pace_fast">Fast</string>
     <string name="pace_fast_hint">400 m in about 4 min. A brisk pace.</string>
@@ -289,7 +290,7 @@
     <string name="swipe_to_remove">Swipe to remove</string>
     <string name="remove_other">It will be signed out, and you\'ll receive an email confirming this.</string>
     <string name="remove_tab">Remove %1$s</string>
-    <string name="remove_this_phone">This phone is signed out.</string>
+    <string name="remove_this_phone">This phone will be signed out.</string>
     <string name="replace_hint">Replacing changes it on every device signed in to %1$s.</string>
     <string name="replace_with_phone">Replace it with this phone\'s</string>
     <string name="report_failed">Couldn\'t send it. Check your connection and try again.</string>
@@ -298,9 +299,7 @@
     <string name="reported_thanks">Reported, thanks</string>
     <string name="report_title">What was wrong?</string>
     <string name="request_expired">That request expired. Send a new one.</string>
-    <string name="residence_stops">Stops for %1$s: %2$s. terminus won\'t direct you home when you\'re already there.</string>
     <string name="rest_hint_none">No buses are shown until your day starts. Tap Nearby to check anyway.</string>
-    <string name="rest_hint_places">No buses are shown until your day starts. Tap a favourite or Nearby to check anyway.</string>
     <string name="room_code">Room %1$s</string>
     <string name="saturday">Saturday</string>
     <string name="saturday_short">Sat</string>
@@ -318,7 +317,7 @@
     <string name="shortcut_next_class">Next class</string>
     <string name="show_buses_between">Show buses between</string>
     <string name="sign_in">Sign in</string>
-    <string name="sign_in_why">Use the email you signed up with. We\'ll email you a code to type here.</string>
+    <string name="sign_in_why">Use the email you set up terminus with. We\'ll email you a code to type here.</string>
     <string name="sign_out">Sign out</string>
     <string name="sign_out_text">The app and widget will stop showing your timetable. Your account and settings are kept; sign in again with %1$s.</string>
     <string name="sign_out_title">Sign out of this phone?</string>
@@ -349,17 +348,17 @@
     <string name="theme_light">Light</string>
     <string name="thursday">Thursday</string>
     <string name="thursday_short">Thu</string>
-    <string name="time_am">%1$s am</string>
-    <string name="time_pm">%1$s pm</string>
+    <string name="time_am">%1$s AM</string>
+    <string name="time_pm">%1$s PM</string>
     <string name="timetable">Timetable</string>
-    <string name="today_heading">TODAY</string>
+    <string name="today_heading">Today</string>
     <string name="trip_history">Trip history</string>
     <string name="trip_home">The trip home</string>
     <string name="try_again">Try again</string>
     <string name="tuesday">Tuesday</string>
     <string name="tuesday_short">Tue</string>
     <string name="turn_off">Turn off</string>
-    <string name="turn_on_alerts">Turn on leave-by alerts</string>
+    <string name="turn_on_alerts">Turn on leave alerts</string>
     <string name="turn_on_location">Turn on location, or set a home</string>
     <string name="two_things">Two more things</string>
     <string name="two_things_sub">Both are optional. You can change them later in Settings.</string>
@@ -405,11 +404,10 @@
     <string name="history_kept">Kept for 35 days and used only to spot classes you often miss or skip.</string>
     <string name="trips_recorded_one">1 trip recorded</string>
     <string name="trips_recorded_n">%1$d trips recorded</string>
-    <string name="display">Display</string>
     <string name="about">About</string>
     <string name="send_feedback">Send feedback</string>
     <string name="about_what">terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable.</string>
-    <string name="about_independent">terminus is an independent student project, not affiliated with NUS. Bus times come from NUS\'s shuttle feed. Walking routes and the map use data from OpenStreetMap contributors.</string>
+    <string name="about_independent">terminus is an independent student project, not affiliated with NUS. Bus times come from NUS\'s live shuttle times. Walking routes and the map use data from OpenStreetMap contributors.</string>
     <string name="about_aup">Use terminus in line with the NUS Acceptable Use Policy for IT Resources.</string>
     <string name="about_version">Version %1$s</string>
     <string name="status">Status</string>
@@ -422,7 +420,7 @@
     <string name="feedback_placeholder">Ideas, problems, anything: a place you want to go, something that confused you…</string>
     <string name="feedback_from">From</string>
     <string name="feedback_wrong_title">A wrong answer?</string>
-    <string name="feedback_wrong_hint">Press “Is this wrong?” under it, so we see what you saw.</string>
+    <string name="feedback_wrong_hint">Press \"Is this wrong?\" under it, so we see what you saw.</string>
     <string name="feedback_thanks">Thanks. Your feedback was sent.</string>
     <string name="report_needs_email">Add your email to report a wrong answer, so we can reply to you.</string>
     <string name="feedback_needs_email">Add your email to send feedback</string>
@@ -492,7 +490,7 @@
     <string name="pair_on_phone">On a phone</string>
     <string name="pair_on_phone_how">Settings, then Add a device</string>
     <string name="pair_on_web">On the web</string>
-    <string name="pair_on_web_how">%1$s/account, then Pair a device</string>
+    <string name="pair_on_web_how">%1$s/account, then Add a device</string>
     <string name="pair_scan">Or scan the QR code with your phone\'s camera.</string>
     <string name="dur_min_s">%1$d min %2$d s</string>
     <string name="dur_s">%1$d s</string>
@@ -536,7 +534,6 @@
     <string name="buses_this_side">This side</string>
     <string name="buses_across">Across the road</string>
     <string name="buses_towards">to %1$s</string>
-    <string name="buses_towards_sep">", "</string>
     <string name="buses_min">min</string>
     <string name="buses_live">Live</string>
     <string name="buses_scheduled">Scheduled</string>

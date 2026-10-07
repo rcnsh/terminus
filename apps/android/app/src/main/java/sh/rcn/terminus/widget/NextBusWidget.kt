@@ -176,7 +176,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // TalkBack reads the widget as one sentence instead of fragments.
         val spoken = when {
             mode == Mode.Nearby -> nearbySpoken(chosen)
-            offline != null -> OfflineDay.lines(offline) { clock(ctx, it) }.let { listOfNotNull(L.s(R.string.offline), it.head, it.big, it.how).joinToString(". ") }
+            offline != null -> OfflineDay.lines(offline) { clock(ctx, it) }.let { listOfNotNull(L.s(R.string.offline), it.head, it.big, it.how).spoken(tap = false) }
             else -> spokenSummary(ctx, paired, answer, error)
         }
         Box(
@@ -533,7 +533,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val stops = chosen.nearby(System.currentTimeMillis())
         val first = stops?.firstOrNull() ?: return L.s(R.string.a11y_nearby_none, chosen.error ?: L.s(R.string.a11y_checking))
         val age = chosen.fetchedAt?.let { (System.currentTimeMillis() - it) / 1000 } ?: 0L
-        val due = departures(first, age, 3).replace(" · ", ", ").ifEmpty { L.s(R.string.a11y_no_buses) }
+        val due = departures(first, age, 3).replace(" · ", L.s(R.string.clause_sep)).ifEmpty { L.s(R.string.a11y_no_buses) }
         return L.s(R.string.a11y_nearby, first.name, due)
     }
 }
@@ -559,7 +559,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: Str
         return listOfNotNull(
             answer.destLabel?.let { L.s(R.string.a11y_on_the_to, ride.svc, it) } ?: L.s(R.string.on_the, ride.svc),
             L.s(R.string.a11y_off_at, ride.stops.last(), clock(ctx, ride.arriveMs)),
-            ride.nextText(now).replace(" · ", ", "),
+            ride.nextText(now).replace(" · ", L.s(R.string.clause_sep)),
         ).spoken()
     }
     if (answer.isClassPlan && !old) {
@@ -568,15 +568,15 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: Str
         return listOfNotNull(
             answer.destLabel?.let { L.s(R.string.a11y_starts, it, answer.classAtMs?.let(fmt).orEmpty()) },
             answer.leaveHeadline(now),
-            answer.catchLine?.replace(" · ", ", "),
-            answer.goNowLine?.replace(" · ", ", "),
+            answer.catchLine?.replace(" · ", L.s(R.string.clause_sep)),
+            answer.goNowLine?.replace(" · ", L.s(R.string.clause_sep)),
         ).spoken()
     }
     val parts = listOfNotNull(
         answer.destLabel?.let { L.s(R.string.a11y_to, it) },
         if (answer.mode == "rest") answer.label else answer.clockLabel { clock(ctx, it) }.replace(" · ", L.s(R.string.a11y_leaves)),
-        if (old) L.s(R.string.a11y_old) else answer.detail.replace(" · ", ", "),
-        answer.leaveText(ServerClock.now())?.takeIf { !old }?.replace(" · ", ", "),
+        if (old) L.s(R.string.a11y_old) else answer.detail.replace(" · ", L.s(R.string.clause_sep)),
+        answer.leaveText(ServerClock.now())?.takeIf { !old }?.replace(" · ", L.s(R.string.clause_sep)),
         answer.timingText?.takeIf { !old },
         error?.takeIf { it != UPDATING },
     )
@@ -584,7 +584,12 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, error: Str
 }
 
 /** The parts read as sentences, then what a tap does. */
-private fun List<String>.spoken() = joinToString(". ") + "." + L.s(R.string.a11y_open)
+private fun List<String>.spoken(tap: Boolean = true): String {
+    val sep = L.s(R.string.sentence_sep)
+    // A part that's already a sentence ("Couldn't reach terminus.") doesn't get a second stop.
+    val text = map { it.trimEnd('.', '。') }.joinToString(sep)
+    return if (tap) text + sep.trimEnd() + L.s(R.string.a11y_open) else text
+}
 
 /** The app's brand colours, so the widget doesn't take the wallpaper's. */
 private val BrandColors = androidx.glance.material3.ColorProviders(light = BrandLight, dark = BrandDark)

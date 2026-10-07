@@ -720,7 +720,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         return (0 until list.length()).map {
             val d = list.getJSONObject(it)
             Device(
-                d.getString("id"), d.optStringOrNull("name") ?: "Device", d.optStringOrNull("platform"),
+                d.getString("id"), d.optStringOrNull("name") ?: L.s(R.string.device_unnamed), d.optStringOrNull("platform"),
                 d.optLong("created"), d.optLong("lastSeen"), d.optBoolean("current", false),
             )
         }
@@ -898,7 +898,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
                 val stream = if (status in 200..299) conn.inputStream else conn.errorStream
                 val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(text) }.getOrNull()
-                if (status !in 200..299) throw ApiError(status, json?.optString("error", "HTTP $status") ?: "HTTP $status")
+                if (status !in 200..299) throw ApiError(status, json?.optStringOrNull("error") ?: L.s(R.string.something_wrong))
                 // A 200 that isn't JSON is not "offline": the server said something this version can't read.
                 json ?: throw ParseError("not JSON")
             } finally {
