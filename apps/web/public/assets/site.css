@@ -177,7 +177,6 @@ p { margin: 0; }
 .btn.soft { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
 .btn.small { padding: 8px 12px; font-size: 0.875rem; border-radius: 9px; min-height: 40px; }
-.btn.danger { background: transparent; color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
 .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
 .link-btn { background: none; border: 0; padding: 8px 2px; color: var(--accent); font: inherit; cursor: pointer; }
 /* Inside a sentence it's a word like any other: no gap before the full stop. */
@@ -199,13 +198,7 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
 }
 .eyebrow { font: 600 0.75rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .hint { color: var(--muted); font-size: 0.9rem; }
-.pill {
-  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
-  background: var(--surface-2); font-size: 0.8rem; font-weight: 600;
-}
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); display: inline-block; }
-.dot.warn { background: var(--warn); }
-.dot.off { background: var(--faint); }
 
 /* The widget mock: what the phone widget and menu bar show. */
 .widget {

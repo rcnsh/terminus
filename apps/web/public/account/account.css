@@ -185,17 +185,12 @@ a.settings-row { text-decoration: none; }
 }
 
 .card h2 { font-size: 1.15rem; margin-bottom: 4px; }
-.head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.tight input { width: 7.5rem; }
-/* "12:00 AM" needs the room; "12:00 A" was cut off at phone widths. */
-.row.tight input[type="time"] { width: auto; min-width: 9.5rem; }
 .row.tight span { color: var(--muted); font-size: 0.9rem; }
-.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 8px 0 10px; }
 @media (max-width: 560px) {
   .row { flex-wrap: wrap; }
   .row .btn { width: 100%; }
-  .split { grid-template-columns: 1fr; }
 }
 .btn.wide { width: 100%; }
 .locate { margin-top: 10px; font-size: 0.9rem; }
@@ -381,8 +376,6 @@ a.settings-row { text-decoration: none; }
 
 .check { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); cursor: pointer; }
 .check input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
-.ob-check { margin-top: 16px; }
-.ob-check span { display: grid; gap: 2px; }
 
 .ob-apps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 .ob-app { display: grid; align-content: start; gap: 4px; padding: 14px; border: 1px solid var(--line-strong); border-radius: 12px; color: var(--ink); text-decoration: none; transition: border-color 0.15s ease-out; }
@@ -478,9 +471,6 @@ a.settings-row { text-decoration: none; }
 .about-head img { width: 44px; height: 44px; border-radius: 12px; }
 .about-head strong { font: 700 1.2rem var(--display); }
 .about-text { padding: 0 4px; }
-/* Feedback: Send on the right, under the note. */
-.send-row { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: -8px; }
-.send-row .hint { flex: 1; margin: 0; }
 
 /* Send feedback (settings-pages.js Feedback): one card like a message. The
    From line, the note as the card's own body (no box inside the box), then
