@@ -410,6 +410,7 @@ private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: 
                 OutlinedTextField(
                     value = note,
                     onValueChange = { if (it.length <= 1000) note = it },
+                    label = { Text(stringResource(R.string.report_note)) },
                     placeholder = { Text(stringResource(R.string.report_placeholder)) },
                     minLines = 2,
                     maxLines = 5,
