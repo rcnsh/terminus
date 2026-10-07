@@ -23,8 +23,10 @@
   --radius: 14px;
   --shadow: 0 1px 2px rgb(28 25 23 / 0.04), 0 8px 24px -12px rgb(28 25 23 / 0.12);
   /* Chinese (phase 10) falls back to each system's own CJK face. */
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-  --display: "Space Grotesk", var(--font);
+  --font: "Inter", "Inter Fallback", "Inter Fallback Roboto", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  /* Never Inter while Space Grotesk loads: it's wider, so a heading would
+     wrap one way, then the other (fonts.css). */
+  --display: "Space Grotesk", "Space Grotesk Fallback", "Space Grotesk Fallback Roboto", var(--font);
   color-scheme: light;
 }
 /* Dark: the device's own dark mode, unless this browser chose light in
@@ -91,6 +93,9 @@ body {
 }
 body > * { width: 100%; }
 body > main { flex: 1; }
+/* A page its script draws (the account page) keeps the footer out of view
+   until it has, so the footer isn't seen and then pushed away. */
+body > main#root:empty { min-height: 100vh; }
 a { color: var(--accent); text-underline-offset: 3px; }
 img, svg { display: block; }
 /* Chinese: hidden until i18n.js has translated the page, so English never flashes. */

@@ -90,6 +90,7 @@ const page = (title: string, inner: string) => {
 <meta name="robots" content="noindex"><title>${title} · terminus</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/fonts.css">
 <link rel="stylesheet" href="/assets/site.css">
 <style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px;overflow:hidden}.band .brand img{width:28px;height:28px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}

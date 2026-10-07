@@ -11,6 +11,10 @@ body.app { padding-bottom: env(safe-area-inset-bottom); }
 .app-card .widget .chips { display: none; }
 /* One quiet line: "Updated 9:41 · Is this wrong?". */
 .app-card .card-foot { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; margin-top: 12px; }
+/* "Checking…" takes the room the usual card will (a trip: three lines in the
+   sky, its steps below the horizon), so the card arrives in place. */
+.app-card.loading .sky-head { min-height: 7.9rem; }
+.app-card.loading .card-foot { margin-top: 23rem; }
 .app-card .updated { font-size: 0.8rem; }
 .app-card .updated:empty { display: none; }
 .app-card .updated:has(+ :is(.report-open, .report-done))::after { content: '·'; margin-left: 6px; }
@@ -316,8 +320,9 @@ body.sky-dusk { --s0: #2c3566; --s1: #4a4275; --s2: #6c4260; --s3: #e08a62; --h-
 :root[data-theme="dark"] body.sky-golden { --s0: #1f3550; --s1: #334356; --s2: #5e4a37; --s3: #9a6a3c; --h-far: #3a3326; --h-tree: #1a1712; --h-city: #4d4536; --sun: #f3d29a; --h-win: #b9c7d6; }
 :root[data-theme="dark"] body.sky-dusk { --s0: #1a1c3a; --s1: #322b54; --s2: #6c4260; --s3: #b8644f; --h-far: #2b2340; --h-tree: #17121f; --h-city: #4f4266; --sun: #f0915e; }
 /* On Now, down to its horizon. Map and Settings are drawn over a hidden Now,
-   which keeps its sky. */
-body.sky { --end: var(--sky-end); }
+   which keeps its sky. Until sky.js has measured where the horizon is, about
+   where "Checking…" puts it, so the first frame is already under the sky. */
+body.sky { --end: var(--sky-end, 22.5rem); }
 body.sky:not(.on-map, .on-settings)::before {
   content: ''; position: absolute; z-index: -1; inset: 0 0 auto 0; height: var(--end); pointer-events: none;
   background: linear-gradient(var(--s0) 0, var(--s1) calc(var(--end) * 0.5), var(--s2) calc(var(--end) * 0.86), var(--s3) var(--end));
