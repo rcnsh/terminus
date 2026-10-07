@@ -49,6 +49,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.Dp
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -137,11 +139,13 @@ internal fun BusesScreen(
     LaunchedEffect(Unit) { vm.loadCampus() }
     val top = state.stack.lastOrNull()
     BackHandler(enabled = top != null) { vm.back() }
-    Box(Modifier.fillMaxSize().padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())) {
+    // The sky runs up under the status bar; each page keeps the room for it inside its band.
+    val bar = insets.calculateTopPadding()
+    Box(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())) {
         when (top) {
-            null -> Home(state, vm, pins, onPin)
-            is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, onPin)
-            is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap)
+            null -> Home(state, vm, pins, onPin, bar)
+            is BusRoute.Stop -> StopRoute(state, vm, top.code, pins, onPin, bar)
+            is BusRoute.Line -> LineRoute(state, vm, top, onShowOnMap, bar)
         }
     }
 }
@@ -174,11 +178,40 @@ private fun ticking(): Long {
 }
 
 @Composable
-private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: (String) -> Unit) {
+private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: (String) -> Unit, top: Dp) {
     var query by rememberSaveable { mutableStateOf("") }
     BackHandler(enabled = query.isNotEmpty()) { query = "" }
+    val pages = Pins.pages(state.nearest?.code, pins)
+    // The sky stays and what's in it changes: the stop's name swipes in the
+    // band, its board under it, the two pagers kept together.
+    val heads = rememberPagerState { pages.size }
+    val boards = rememberPagerState { pages.size }
+    LaunchedEffect(heads, boards) {
+        snapshotFlow { Triple(heads.isScrollInProgress, heads.currentPage, heads.currentPageOffsetFraction) }.collect { (moving, page, off) ->
+            if (moving && !boards.isScrollInProgress) boards.scrollToPage(page, off)
+        }
+    }
+    LaunchedEffect(heads, boards) {
+        snapshotFlow { Triple(boards.isScrollInProgress, boards.currentPage, boards.currentPageOffsetFraction) }.collect { (moving, page, off) ->
+            if (moving && !heads.isScrollInProgress) heads.scrollToPage(page, off)
+        }
+    }
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize()) {
-        SearchBox(query, { query = it }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        // The dots' line has room for the moon on the right.
+        // Searching, just the field over the hills, so the results start right under it.
+        SkyBand(skyPhase(), top, moonLow = true, moonLine = query.isBlank() && pages.size <= 1, padded = false, moon = query.isBlank()) {
+            Column {
+                SearchBox(query, { query = it }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                if (query.isBlank()) {
+                    // Every header composed, so the band is as tall as the longest name and doesn't jump.
+                    HorizontalPager(heads, Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, beyondViewportPageCount = pages.size, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
+                        Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(state, i, pages.getOrNull(i), pins, vm, onPin) }
+                    }
+                    if (pages.size > 1) Dots(pages.size, boards.currentPage, nearestFirst = true)
+                }
+            }
+        }
         if (query.isNotBlank()) {
             SearchResults(state, query) { hit ->
                 query = ""
@@ -191,32 +224,45 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
             }
             return@Column
         }
-        val pages = Pins.pages(state.nearest?.code, pins)
-        val pager = rememberPagerState { pages.size }
-        val scope = rememberCoroutineScope()
-        val shown = pages.getOrNull(pager.settledPage)
+        val shown = pages.getOrNull(boards.settledPage)
         // The page in view only: swiping past one doesn't ask for it. The
         // nearest stop's twin comes with it, so across the road costs nothing more.
-        val first = pager.settledPage == 0
+        val first = boards.settledPage == 0
         Refreshing(if (first) null else shown, first, state.across) { vm.refreshPage(if (first) null else shown) }
-        HorizontalPager(pager, Modifier.fillMaxSize(), verticalAlignment = Alignment.Top, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
+        HorizontalPager(boards, Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.Top, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
             val code = pages.getOrNull(i)
             val next = pages.getOrNull(i + 1)?.let { stopName(state, it) }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
-                if (i == 0 && code == null) {
-                    NoNearest(state, vm)
-                } else if (code != null) {
-                    val board = state.boards[code]
-                    val label = if (i == 0) {
-                        if (!state.located) stringResource(R.string.buses_near_home)
-                        else board?.distM?.let { stringResource(R.string.buses_nearest_m, it) } ?: stringResource(R.string.buses_nearest)
-                    } else stringResource(R.string.buses_pinned)
-                    StopPage(state, vm, code, label, plainLabel = if (i == 0) stringResource(if (state.located) R.string.buses_nearest else R.string.buses_near_home) else label, nearest = i == 0 && state.located, pins = pins, onPin = onPin, dots = pages.size to i)
-                }
-                if (next != null) SwipeFor(next) { scope.launch { pager.animateScrollToPage(i + 1) } }
+                if (i == 0 && code == null) NoNearest(state, vm)
+                else if (code != null) StopBody(state, vm, code)
+                if (next != null) SwipeFor(next) { scope.launch { boards.animateScrollToPage(i + 1) } }
             }
         }
     }
+}
+
+/** Page [i]'s header in the sky: the nearest stop ([code] null until it's known) or a pinned one. */
+@Composable
+private fun PageHeader(state: BusesUi, i: Int, code: String?, pins: List<String>, vm: BusesViewModel, onPin: (String) -> Unit) {
+    if (code == null) {
+        Column(Modifier.padding(top = 8.dp)) {
+            Text(stringResource(R.string.buses_nearest), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                stringResource(if (state.nearestState == Nearest.Loading) R.string.checking else R.string.buses_find_title),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        return
+    }
+    val board = state.boards[code]
+    val label = if (i == 0) {
+        if (!state.located) stringResource(R.string.buses_near_home)
+        else board?.distM?.let { stringResource(R.string.buses_nearest_m, it) } ?: stringResource(R.string.buses_nearest)
+    } else stringResource(R.string.buses_pinned)
+    val plain = if (i == 0) stringResource(if (state.located) R.string.buses_nearest else R.string.buses_near_home) else label
+    StopHeader(state, vm, code, label, plain, nearest = i == 0 && state.located, pins = pins, onPin = onPin)
 }
 
 /** A stop's name before its board is here: from the campus data, else its code. */
@@ -240,8 +286,9 @@ private fun SearchBox(query: String, onQuery: (String) -> Unit, modifier: Modifi
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
-            focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-            unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            // The sky's glass, so the hour shows through it.
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
         modifier = modifier.fillMaxWidth(),
     )
@@ -301,13 +348,12 @@ private fun NoNearest(state: BusesUi, vm: BusesViewModel) {
     }
     Column(Modifier.padding(top = 16.dp)) {
         when (state.nearestState) {
-            Nearest.Loading -> Text(stringResource(R.string.checking), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Nearest.Loading -> {}
             Nearest.Failed -> {
                 Text(stringResource(R.string.cant_reach), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { scope.launch { vm.refreshNearest(force = true) } }) { Text(stringResource(R.string.try_again)) }
             }
             else -> LinkTile(null, Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.buses_find_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     stringResource(if (hasLocation) R.string.buses_find_text_search else R.string.buses_find_text),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -325,11 +371,20 @@ private fun NoNearest(state: BusesUi, vm: BusesViewModel) {
 
 /** A stop opened from the search or a line: its page, with Back. */
 @Composable
-private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: List<String>, onPin: (String) -> Unit) {
+private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: List<String>, onPin: (String) -> Unit, top: Dp) {
     Refreshing(code, state.across) { vm.refreshPage(code) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
-        BackRow(stringResource(R.string.back)) { vm.back() }
-        StopPage(state, vm, code, if (code in pins) stringResource(R.string.buses_pinned) else null, nearest = false, pins = pins, onPin = onPin, dots = null)
+    Column(Modifier.fillMaxSize()) {
+        // Back, and the stop, in the sky, as on the tab's own pages.
+        SkyBand(skyPhase(), top, moonLow = true) {
+            Column {
+                BackRow(stringResource(R.string.back)) { vm.back() }
+                val label = if (code in pins) stringResource(R.string.buses_pinned) else null
+                StopHeader(state, vm, code, label, label, nearest = false, pins = pins, onPin = onPin)
+            }
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+            StopBody(state, vm, code)
+        }
     }
 }
 
@@ -352,18 +407,22 @@ private fun BackRow(text: String, trailing: @Composable () -> Unit = {}, onBack:
  * One stop's page: what it is ("Nearest stop · 40 m", "Pinned"), its name,
  * the star, this side or across the road, and the board.
  */
+/**
+ * A stop's header, in the sky: what it is ("Nearest stop · 40 m",
+ * "Pinned"), its name, its code and the star. Across the road, the stop
+ * shown is the twin, and the star is for that one.
+ */
 @Composable
-private fun StopPage(
+private fun StopHeader(
     state: BusesUi,
     vm: BusesViewModel,
     code: String,
     label: String?,
     /** The label across the road, where the distance is the other stop's. */
-    plainLabel: String? = label,
+    plainLabel: String?,
     nearest: Boolean,
     pins: List<String>,
     onPin: (String) -> Unit,
-    dots: Pair<Int, Int>?,
 ) {
     val own = state.boards[code]
     val opposite = own?.opposite
@@ -375,7 +434,7 @@ private fun StopPage(
         Column(Modifier.weight(1f)) {
             if (label != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (nearest) Icon(painterResource(R.drawable.ic_near), contentDescription = null, tint = c.primary, modifier = Modifier.size(14.dp))
+                    if (nearest) Icon(painterResource(R.drawable.ic_near), contentDescription = null, tint = smallAccent(), modifier = Modifier.size(14.dp))
                     Text(if (across) plainLabel.orEmpty() else label, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
                 }
             }
@@ -383,11 +442,12 @@ private fun StopPage(
                 board?.name ?: stopName(state, shownCode),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 2.dp).semantics { heading() },
             )
             Text(shownCode, style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant, letterSpacing = 0.8.sp)
         }
-        // The star is for the stop shown: across the road, that one.
         val starOn = shownCode in pins
         val ctx = LocalContext.current
         IconButton(
@@ -395,17 +455,27 @@ private fun StopPage(
                 if (!starOn && pins.size >= vm.pinLimit) android.widget.Toast.makeText(ctx, L.s(R.string.buses_pins_full, vm.pinLimit), android.widget.Toast.LENGTH_SHORT).show()
                 else onPin(shownCode)
             },
-            modifier = Modifier.padding(start = 8.dp).size(44.dp).background(c.secondaryContainer, CircleShape),
+            // A pane of the sky's glass, as the search is.
+            modifier = Modifier.padding(start = 8.dp).size(44.dp).background(c.surfaceVariant, CircleShape),
         ) {
             Icon(
                 painterResource(if (starOn) R.drawable.ic_star_filled else R.drawable.ic_star),
                 contentDescription = stringResource(if (starOn) R.string.buses_unpin else R.string.buses_pin),
-                tint = if (starOn) c.primary else c.onSurfaceVariant,
+                tint = if (starOn) c.primary else c.onSurface,
                 modifier = Modifier.size(22.dp),
             )
         }
     }
-    if (dots != null && dots.first > 1) Dots(dots.first, dots.second, nearestFirst = true)
+}
+
+/** Under the sky: this side or across the road, and the board. */
+@Composable
+private fun StopBody(state: BusesUi, vm: BusesViewModel, code: String) {
+    val own = state.boards[code]
+    val opposite = own?.opposite
+    val across = opposite != null && code in state.across
+    val shownCode = if (across) opposite else code
+    val board = state.boards[shownCode]
     if (opposite != null) {
         Segmented(
             // Labelled from the page's own stop, so they stay put after switching. Two
@@ -761,7 +831,7 @@ private const val GREY = 0xFF8A939CL
 /* ---------- a service's line ---------- */
 
 @Composable
-private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, onShowOnMap: (String) -> Unit) {
+private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, onShowOnMap: (String) -> Unit, top: Dp) {
     val key = lineKey(route.svc, route.from)
     Refreshing(key) { vm.refreshLine(route.svc, route.from) }
     val line = state.lines[key]
@@ -784,7 +854,9 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
             scroll.animateScrollTo((y - gap).coerceAtLeast(0))
         }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+    Column(Modifier.fillMaxSize()) {
+    // Back, the service and how many buses it has out, in the sky; the line on the page.
+    SkyBand(skyPhase(), top, moonLow = true) { Column {
         BackRow(
             route.from?.let { stopName(state, it) } ?: stringResource(R.string.back),
             trailing = {
@@ -809,10 +881,12 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    line.endsAtMs?.let { Text(stringResource(R.string.buses_runs_until, clock(it, h12)), color = c.onSurfaceVariant) }
+                    line.endsAtMs?.let { Text(stringResource(R.string.buses_runs_until, clock(it, h12)), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
         }
+    } }
+    Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
         // Not running: why and when it's back, over the stops (it has no buses to show).
         line?.let { Stopped.of(it.running, it.stopped, it.resumesAtMs, now) }?.let { st ->
             val (why, back) = st.lines(h12)
@@ -834,6 +908,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                 if (line.here != null && line.running) Text(stringResource(R.string.buses_times_here_only), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
             }
         }
+    }
     }
 }
 

@@ -585,6 +585,9 @@ internal fun StatusStrip(sky: SkyState?, top: Dp, scroll: ScrollState) {
     )
 }
 
+/** The line a low moon ([SkyBand]) has to itself, just over the hills. */
+private val MOON_LINE = 24.dp
+
 /** How much of the horizon Settings' band shows: the city's top to the near hill. */
 private val LOW = 52.dp
 
@@ -594,15 +597,29 @@ private val BAND_STARS = listOf(
     floatArrayOf(0.78f, 0.8f, 0.4f), floatArrayOf(0.66f, 0.05f, 0.5f), floatArrayOf(0.95f, 0.85f, 0.45f),
 )
 
+/** The low moon's stars ([SkyBand]): on its line, left of it and right of the page dots. */
+private val LOW_STARS = listOf(
+    floatArrayOf(0.69f, 0.3f, 0.6f), floatArrayOf(0.74f, 0.75f, 0.45f), floatArrayOf(0.79f, 0.2f, 0.7f),
+    floatArrayOf(0.83f, 0.65f, 0.4f), floatArrayOf(0.98f, 0.55f, 0.45f),
+)
+
 /**
  * A slim band of the sky at the top of Settings' list and of each of its
  * pages, in [phase]: from the top of the screen, [top] for the status bar,
  * then [content] (the title, with the back arrow on a page) in the sky's ink with the moon on the right at
  * night, ending on the low horizon (just the hills, no road). The page's
  * controls stay on the plain page under it. As the web's (.page-band).
+ *
+ * A taller band (the Buses tab's search and stop) puts the moon low on
+ * the right, just over the hills, with the stars beside it, clear of a
+ * button at the top right ([moonLow]), on a line of its own unless the
+ * content's last one has room on the right ([moonLine]). Unpadded, [content] runs edge to
+ * edge and keeps its own margins: a pager in it swipes off the screen's
+ * edges rather than 16 dp in. Without [moon], no moon or stars: a band
+ * with only a field in it.
  */
 @Composable
-internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
+internal fun SkyBand(phase: Phase, top: Dp, moonLow: Boolean = false, moonLine: Boolean = moonLow, padded: Boolean = true, moon: Boolean = true, content: @Composable () -> Unit) {
     val page = MaterialTheme.colorScheme.background
     val p = palette(phase, page.luminance() < 0.5f)
     NightStatusBar(p.lightInk)
@@ -612,12 +629,14 @@ internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
             val end = size.height
             drawRect(skyBrush(p, end))
             // Beside the title, on the right: its row is between the status bar and the hills.
-            val row = top.toPx()..(end - LOW.toPx())
+            // Low, the moon and stars keep to the last line over the hills, which
+            // has nothing in it on the right, so none lands on a word however long.
+            val row = if (moonLow) (end - LOW.toPx() - MOON_LINE.toPx())..(end - LOW.toPx()) else top.toPx()..(end - LOW.toPx())
             val mid = (row.start + row.endInclusive) / 2
             val r = 11 * d
             val centre = Offset(size.width - 22 * d - r, mid)
-            if (phase == Phase.NIGHT) {
-                for ((x, y, a) in BAND_STARS) drawCircle(Color.White.copy(alpha = a), 1.1f * d, Offset(size.width * x, row.start + (row.endInclusive - row.start) * y))
+            if (phase == Phase.NIGHT && moon) {
+                for ((x, y, a) in if (moonLow) LOW_STARS else BAND_STARS) drawCircle(Color.White.copy(alpha = a), 1.1f * d, Offset(size.width * x, row.start + (row.endInclusive - row.start) * y))
                 crescent(centre, r + d)
             }
             // The low horizon: the strip's y 6 to 58 dp, at the band's foot.
@@ -629,7 +648,10 @@ internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
         },
     ) {
         Spacer(Modifier.height(top))
-        SkyInk(true, p.lightInk) { Box(Modifier.padding(horizontal = 16.dp)) { content() } }
+        SkyInk(true, p.lightInk) { Box(if (padded) Modifier.padding(horizontal = 16.dp) else Modifier) { content() } }
+        // The moon's own line, under the content, so it never sits on a button;
+        // without it ([moonLine] false), the content's last line leaves the right clear for it.
+        if (moonLow && moonLine) Spacer(Modifier.height(MOON_LINE))
         Spacer(Modifier.height(LOW))
     }
 }

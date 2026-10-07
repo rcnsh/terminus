@@ -14,6 +14,7 @@ import { Fill, Icon, MARK, focusSoon, html, reducedMotion, store, useEffect, use
 import { clock, inkOn, send, serverNow, t } from '/account/dom.js';
 import { campus, edit, limit, loadCampus, profile, reloadProfile, toast } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
+import { Celestial, Horizon } from '/account/sky.js';
 import { busesTabIndex } from '/account/search.js';
 
 /** The page on screen refreshes this often (the API caches arrivals 15 s). */
@@ -438,6 +439,14 @@ function Board({ code }) {
   `;
 }
 
+/**
+ * The sky at the top of a page, as Settings has it (account/sky.js): the
+ * hour's colours, the moon and stars at night, ending on the low hills.
+ * What's in it takes the sky's ink (app.css, .sky-head). Each page has its
+ * own, so it swipes with the page.
+ */
+const Sky = ({ children }) => html`<div class="bt-sky"><div class="sky-head"><${Celestial} band />${children}</div><${Horizon} on=${null} low /></div>`;
+
 /** The dots under a page's name: where it is in the row. The nearest stop's is an arrow. */
 function Dots({ index, count, nearestFirst, onDot }) {
   if (count < 2) return null;
@@ -457,7 +466,7 @@ function Dots({ index, count, nearestFirst, onDot }) {
  * it, This side | Across the road when it has a twin (both stops by
  * name when the twin is only nearby), and its board.
  */
-function StopView({ code, kicker, dots, peek }) {
+function StopView({ code, kicker, dots, peek, above = null }) {
   const p = useStore(profile);
   const all = useStore(boards);
   const side = useStore(across);
@@ -481,6 +490,8 @@ function StopView({ code, kicker, dots, peek }) {
     showBoard(code);
   };
   return html`
+    <${Sky}>
+    ${above}
     <div class="bt-top">
       <div class="bt-title">
         ${kicker && html`<p class="bt-kicker">${kicker}</p>`}
@@ -492,6 +503,7 @@ function StopView({ code, kicker, dots, peek }) {
       </button>
     </div>
     ${dots}
+    <//>
     ${opposite &&
     html`<div class="segmented full bt-sides" role="radiogroup" aria-label=${twinAcross ? t('Side of the road') : t('Which stop')}>
       <label><input type="radio" name=${`side-${code}`} checked=${shown === code} onChange=${() => setSide(false)} /><span>${twinAcross ? t('This side') : (longName(own) ?? stopName(code))}</span></label>
@@ -503,13 +515,14 @@ function StopView({ code, kicker, dots, peek }) {
 }
 
 /** No nearest stop: no location and no home. Search, or allow location. */
-function FindPage() {
+function FindPage({ dots }) {
   const ask = useStore(canAsk);
   return html`
     <div class="bt-find">
       <h2 class="bt-head" tabindex="-1">${t('Find the stop nearest you')}</h2>
       <p class="hint">${t('Or search for a stop above, and pin it with the star to keep it here.')}</p>
       ${ask && html`<button type="button" class="btn small ghost" onClick=${() => findNearest({ ask: true })}><${Icon} paths=${ARROW} class="bt-btn-icon" />${t('Use my location')}</button>`}
+      ${dots}
     </div>
   `;
 }
@@ -563,8 +576,8 @@ function Home() {
         const dots = html`<${Dots} index=${j} count=${pages.length} nearestFirst=${pages[0].kind === 'nearest'} onDot=${turnTo} />`;
         const nextPage = pages[j + 1];
         const peek = nextPage?.code && html`<${Peek} code=${nextPage.code} onClick=${() => turnTo(j + 1)} />`;
-        if (pg.kind === 'loading') return html`<section class="bt-page" key="loading"><p class="hint bt-empty">${t('Checking…')}</p>${dots}${peek}</section>`;
-        if (pg.kind === 'find') return html`<section class="bt-page" key="find"><${FindPage} />${dots}${peek}</section>`;
+        if (pg.kind === 'loading') return html`<section class="bt-page" key="loading"><${Sky}><p class="hint bt-empty">${t('Checking…')}</p>${dots}<//>${peek}</section>`;
+        if (pg.kind === 'find') return html`<section class="bt-page" key="find"><${Sky}><${FindPage} dots=${dots} /><//>${peek}</section>`;
         let kicker;
         if (pg.kind === 'pinned') kicker = html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}`;
         else if (n.fromHome) {
@@ -634,9 +647,8 @@ function StopPage({ code }) {
   useStore(campus);
   const pinned = (p?.pinnedStops ?? []).includes(code);
   return html`
-    <${BackBar} label=${t('Buses')} parent="#buses" />
     <section class="bt-page alone">
-      <${StopView} code=${code} kicker=${pinned ? html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}` : null} />
+      <${StopView} code=${code} above=${html`<${BackBar} label=${t('Buses')} parent="#buses" />`} kicker=${pinned ? html`<${Icon} paths=${STAR} class="bt-kicker-icon star" />${t('Pinned')}` : null} />
     </section>
   `;
 }
@@ -683,11 +695,13 @@ function LinePage({ svc, stop }) {
   const r = c?.routes[svc];
   const where = r && (r.loop ? t('Loop from {0}', stopName(r.seq[0])) : t('{0} to {1}', stopName(r.seq[0]), stopName(r.seq.at(-1))));
   const head = html`
-    <${BackBar} label=${label} parent=${parent} />
-    <div class="bt-line-title">
-      <${Chip} svc=${svc} color=${color} cls="bt-chip big" />
-      <div><h2 class="bt-head" tabindex="-1">${svc}</h2>${where && html`<p class="hint">${where}</p>`}</div>
-    </div>
+    <${Sky}>
+      <${BackBar} label=${label} parent=${parent} />
+      <div class="bt-line-title">
+        <${Chip} svc=${svc} color=${color} cls="bt-chip big" />
+        <div><h2 class="bt-head" tabindex="-1">${svc}</h2>${where && html`<p class="hint">${where}</p>`}</div>
+      </div>
+    <//>
   `;
   if (!data) return html`${head}<p class="hint bt-empty">${mine?.error ?? t('Checking…')}</p>`;
 
@@ -775,5 +789,6 @@ export function BusesTab({ visible, here }) {
 
   if (r.kind === 'line') return html`<${LinePage} svc=${r.svc} stop=${r.stop} />`;
   if (r.kind === 'stop') return html`<${StopPage} code=${r.code} />`;
-  return html`<${Find} /><${Home} />`;
+  // The search at the top of the sky, each page's own sky running on from it.
+  return html`<div class="bt-sky-top"><${Find} /></div><${Home} />`;
 }

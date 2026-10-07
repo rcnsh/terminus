@@ -152,9 +152,48 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 
 /* ---------- Buses (app/buses.js) ---------- */
 
-/* Its search takes the header's place, as Settings' title does. */
+/* Its search takes the header's place, as Settings' title does, at the top
+   of the sky. */
 body.on-buses > .nav { display: none; }
-.buses-tab { max-width: 560px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: 32px; }
+.buses-tab { max-width: 560px; padding-bottom: 32px; }
+
+/* The sky (buses.js Sky), as Settings' band: the search at its top, then
+   each page's own sky from the same colour down to its low hills, so the
+   two meet without a seam and the sky swipes with its page. The stop's
+   name, a line's title and Back sit in it, in the sky's ink (.sky-head). */
+/* Above the pages under it, so its search's list comes down over them. */
+.bt-sky-top { position: relative; z-index: 5; isolation: isolate; margin: 0 -16px; padding: max(12px, env(safe-area-inset-top)) 16px 0; background: var(--s0); }
+/* Overscrolled at the top: still the sky up there. */
+.bt-sky-top::before { content: ''; position: absolute; z-index: -1; inset: -240px 0 auto 0; height: 240px; background: var(--s0); }
+.bt-sky { margin: 0 -16px; padding: 0 16px; background: linear-gradient(var(--s0), var(--s1) 45%, var(--s2) 80%, var(--s3)); }
+.bt-page > .bt-sky { margin: 0 -16px; }
+/* A page of its own starts the sky itself. */
+.bt-page.alone > .bt-sky, .buses-tab > .bt-sky { padding-top: env(safe-area-inset-top); }
+.bt-sky .sky-head { --room: 0px; --moon: 22px; padding-bottom: 2px; }
+/* Stars across the whole sky; the moon low on the right, by the dots, clear of a long name. */
+.bt-sky .celestial { height: 100%; }
+body.sky .bt-sky .night-sky .moon { top: auto; bottom: 0; right: 30px; }
+/* A line's title has its words on the right: the moon up by Back instead. */
+body.sky .buses-tab > .bt-sky .night-sky .moon { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
+/* Within the page, not across the window as on Now. */
+.bt-sky .horizon.low { width: auto; height: 52px; margin: 0 -16px; }
+.bt-sky + .bt-sides { margin-top: 4px; }
+.bt-sky .bt-nav { height: 48px; }
+.bt-sky .bt-kicker-icon { fill: var(--k-accent-small); }
+.bt-sky .bt-find { padding-top: 22px; }
+/* The search box takes the sky's colours; its list comes down over the
+   page, so it keeps the page's own. */
+body.sky .bt-sky-top :is(input, .bt-search-icon) {
+  --surface-2: var(--k-surface-2); --ink: var(--k-ink); --muted: var(--k-muted); --accent: var(--k-accent);
+  color-scheme: var(--k-scheme); color: var(--ink);
+}
+body.sky .bt-sky-top input::placeholder { color: var(--k-muted); opacity: 0.85; }
+/* Wider than a phone, the column's sky has rounded top corners rather than
+   stopping short of the window's edges. */
+@media (min-width: 600px) {
+  .bt-sky-top, .buses-tab > .bt-sky, .bt-page.alone > .bt-sky { margin-top: 12px; border-radius: 18px 18px 0 0; }
+  .bt-sky-top::before { display: none; }
+}
 .bt-search { position: relative; }
 .bt-search input { height: 46px; padding-left: 42px; border-radius: 14px; border-color: var(--line-strong); background: var(--surface-2); }
 .bt-search input:focus-visible { outline-offset: 0; }
