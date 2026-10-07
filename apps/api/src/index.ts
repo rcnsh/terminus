@@ -25,7 +25,7 @@ import { busesOnLine, lineStops, trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
 import { adminStats, isOperator } from './admin.ts';
 import { analyticsEnabled, logError } from './analytics.ts';
-import { docsPage, openApiSpec } from './openapi.ts';
+import { docsPageFor, openApiJson } from './openapi.ts';
 import { phaseAt, sgtMinute } from './pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
@@ -39,7 +39,7 @@ import { handleDownload } from './downloads.ts';
 import { landingPage } from './landing.ts';
 import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
-import { allResidences, residenceWalkMin } from './residences.ts';
+import { residenceList } from './residences.ts';
 import { callerFor } from './access.ts';
 import { handleTimelapse } from './timelapse.ts';
 import { scopeCache } from './edgecache.ts';
@@ -49,17 +49,12 @@ import { isBeta, markBeta, siteOrigin } from './site.ts';
 import { answerFor, arrivedAnswer, collectArrivals, needsSetupAnswer } from './answer.ts';
 import { langOfRequest, m, withLang } from './i18n.ts';
 
-// Pure functions of the static GRAPH -- computed once per isolate, served
-// with a long client cache, same spirit as GRAPH itself.
-const CAMPUS_MAP = buildCampusMap(GRAPH);
-const DESTINATIONS = buildDestinations(GRAPH);
-const STOP_PAIRS = stopPairs(GRAPH);
-// For "Where do you live?": names and stops only. The outlines stay here.
-// The common ones come first, so a client matching home stops back to a
-// residence (every UTown college shares UTOWN) lands on the likelier one.
-const RESIDENCE_LIST = allResidences()
-  .map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0], walkMin: residenceWalkMin(Object.values(r.stops)[0]), common: r.common === true }))
-  .sort((a, b) => Number(b.common) - Number(a.common) || a.name.localeCompare(b.name));
+// Pure functions of the static GRAPH, computed once per isolate on first
+// use (not at module scope: every cold start would pay for them, ~1000
+// destinations included, whatever it was started for), served with a long
+// client cache, same spirit as GRAPH itself: /stops/pairs here, /campus in
+// campusBody.
+let stopPairsMemo: ReturnType<typeof stopPairs> | null = null;
 
 export { GRAPH, answerFor, arrivedAnswer, collectArrivals, coordsFrom, numParam };
 // The trip engine's Durable Object (one per user), bound as TRIPS.
@@ -157,7 +152,8 @@ let campusBody: Promise<{ body: string; etag: string }> | null = null;
 
 async function handleCampus(req: Request): Promise<Response> {
   campusBody ??= (async () => {
-    const body = JSON.stringify({ viewBox: CAMPUS_MAP.viewBox, stops: CAMPUS_MAP.stops, routes: CAMPUS_MAP.routes, destinations: DESTINATIONS, residences: RESIDENCE_LIST });
+    const map = buildCampusMap(GRAPH);
+    const body = JSON.stringify({ viewBox: map.viewBox, stops: map.stops, routes: map.routes, destinations: buildDestinations(GRAPH), residences: residenceList() });
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)));
     return { body, etag: `"${Array.from(digest.slice(0, 12)).map((b) => b.toString(16).padStart(2, '0')).join('')}"` };
   })();
@@ -435,7 +431,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/docs':
         // The landing page at / is a static asset (apps/web). The beta's
         // docs, like its pages, ask not to be indexed.
-        return new Response(docsPage(phaseAt(sgtMinute(nowMs))), {
+        return new Response(docsPageFor(phaseAt(sgtMinute(nowMs))), {
           headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...(isBeta(env) ? { 'x-robots-tag': 'noindex' } : {}) },
         });
       case '/robots.txt':
@@ -448,7 +444,10 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/openapi.json':
         // servers[] is this request's origin, so the docs' "Send API Request"
         // hits whichever deployment is serving them.
-        return jsonCached(openApiSpec(url.origin), 300);
+        // Built once per origin (openApiJson); the headers are jsonCached's.
+        return new Response(openApiJson(url.origin), {
+          headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300', ...CORS },
+        });
       case '/next':
         return await handleNext(url, env, ctx, nowMs);
       case '/trip':
@@ -465,7 +464,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         return await handleCampus(req);
       case '/stops/pairs':
         // Static like /campus: changes only with a new scrape.
-        return jsonCached(STOP_PAIRS, 3600, 'private');
+        return jsonCached((stopPairsMemo ??= stopPairs(GRAPH)), 3600, 'private');
       case '/arrivals':
         return await handleArrivals(url, env, ctx, nowMs);
       case '/buses':

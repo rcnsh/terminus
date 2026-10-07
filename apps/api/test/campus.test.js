@@ -353,3 +353,24 @@ test('search lists each place once: LT3 is a building and a room of the same nam
   }
   assert.equal(dest.filter((d) => d.code === 'LT3').length, 1);
 });
+
+test('code-unit order lists the same buildings and residences as localeCompare did, for the real data', async () => {
+  // buildDestinations keeps the first code of each building (by label and
+  // stop), shortest first: the winner must not depend on the tie-break.
+  const entries = Object.entries(venuesJson.venues);
+  const winners = (cmp) => {
+    const won = new Map();
+    for (const [code, v] of [...entries].sort(([a], [b]) => a.length - b.length || cmp(a, b))) {
+      const label = friendlyLabel(code);
+      if (label && !won.has(`${label}|${v.stop}`)) won.set(`${label}|${v.stop}`, code);
+    }
+    return won;
+  };
+  const units = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  assert.deepEqual(winners(units), winners((a, b) => a.localeCompare(b)));
+
+  const { residenceList } = await import('../src/residences.ts');
+  const list = residenceList();
+  const locale = [...list].sort((a, b) => Number(b.common) - Number(a.common) || a.name.localeCompare(b.name));
+  assert.deepEqual(list.map((r) => r.code), locale.map((r) => r.code));
+});

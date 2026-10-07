@@ -129,3 +129,16 @@ export function residenceStops(lat: number, lon: number, byCode: Map<string, Sto
   }
   return out.length ? out.sort((a, b) => a.footM - b.footM) : null;
 }
+
+/**
+ * For "Where do you live?" on /campus: names and stops only, the outlines
+ * stay here. The common ones come first, so a client matching home stops
+ * back to a residence (every UTown college shares UTOWN) lands on the
+ * likelier one. Names in code-unit order, not localeCompare (which starts
+ * ICU): the same order for the real names (campus.test.js).
+ */
+export function residenceList() {
+  return allResidences()
+    .map(([code, r]) => ({ code, name: r.name, stops: Object.keys(r.stops), walkM: Object.values(r.stops)[0], walkMin: residenceWalkMin(Object.values(r.stops)[0]), common: r.common === true }))
+    .sort((a, b) => Number(b.common) - Number(a.common) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
