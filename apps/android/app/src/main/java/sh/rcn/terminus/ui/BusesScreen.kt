@@ -194,7 +194,8 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize()) {
         // The dots' line has room for the moon on the right.
-        SkyBand(skyPhase(), top, moonLow = true, moonLine = query.isNotBlank() || pages.size <= 1, padded = false) {
+        // Searching, just the field over the hills, so the results start right under it.
+        SkyBand(skyPhase(), top, moonLow = true, moonLine = query.isBlank() && pages.size <= 1, padded = false, moon = query.isBlank()) {
             Column {
                 SearchBox(query, { query = it }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 if (query.isBlank()) {
@@ -203,9 +204,6 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
                         Box(Modifier.padding(horizontal = 16.dp)) { PageHeader(state, i, pages.getOrNull(i), pins, vm, onPin) }
                     }
                     if (pages.size > 1) Dots(pages.size, boards.currentPage, nearestFirst = true)
-                } else {
-                    // A little more room under the search, so the moon's line is clear of it.
-                    Spacer(Modifier.height(12.dp))
                 }
             }
         }

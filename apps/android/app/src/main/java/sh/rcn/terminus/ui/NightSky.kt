@@ -597,6 +597,12 @@ private val BAND_STARS = listOf(
     floatArrayOf(0.78f, 0.8f, 0.4f), floatArrayOf(0.66f, 0.05f, 0.5f), floatArrayOf(0.95f, 0.85f, 0.45f),
 )
 
+/** The low moon's stars ([SkyBand]): on its line, left of it and right of the page dots. */
+private val LOW_STARS = listOf(
+    floatArrayOf(0.69f, 0.3f, 0.6f), floatArrayOf(0.74f, 0.75f, 0.45f), floatArrayOf(0.79f, 0.2f, 0.7f),
+    floatArrayOf(0.83f, 0.65f, 0.4f), floatArrayOf(0.98f, 0.55f, 0.45f),
+)
+
 /**
  * A slim band of the sky at the top of Settings' list and of each of its
  * pages, in [phase]: from the top of the screen, [top] for the status bar,
@@ -609,10 +615,11 @@ private val BAND_STARS = listOf(
  * button at the top right ([moonLow]), on a line of its own unless the
  * content's last one has room on the right ([moonLine]). Unpadded, [content] runs edge to
  * edge and keeps its own margins: a pager in it swipes off the screen's
- * edges rather than 16 dp in.
+ * edges rather than 16 dp in. Without [moon], no moon or stars: a band
+ * with only a field in it.
  */
 @Composable
-internal fun SkyBand(phase: Phase, top: Dp, moonLow: Boolean = false, moonLine: Boolean = moonLow, padded: Boolean = true, content: @Composable () -> Unit) {
+internal fun SkyBand(phase: Phase, top: Dp, moonLow: Boolean = false, moonLine: Boolean = moonLow, padded: Boolean = true, moon: Boolean = true, content: @Composable () -> Unit) {
     val page = MaterialTheme.colorScheme.background
     val p = palette(phase, page.luminance() < 0.5f)
     NightStatusBar(p.lightInk)
@@ -622,13 +629,14 @@ internal fun SkyBand(phase: Phase, top: Dp, moonLow: Boolean = false, moonLine: 
             val end = size.height
             drawRect(skyBrush(p, end))
             // Beside the title, on the right: its row is between the status bar and the hills.
-            // Low, the moon and stars take the last few lines over the hills.
-            val row = if (moonLow) (end - LOW.toPx() - 56 * d)..(end - LOW.toPx()) else top.toPx()..(end - LOW.toPx())
-            val mid = if (moonLow) row.endInclusive - 16 * d else (row.start + row.endInclusive) / 2
+            // Low, the moon and stars keep to the last line over the hills, which
+            // has nothing in it on the right, so none lands on a word however long.
+            val row = if (moonLow) (end - LOW.toPx() - MOON_LINE.toPx())..(end - LOW.toPx()) else top.toPx()..(end - LOW.toPx())
+            val mid = (row.start + row.endInclusive) / 2
             val r = 11 * d
             val centre = Offset(size.width - 22 * d - r, mid)
-            if (phase == Phase.NIGHT) {
-                for ((x, y, a) in BAND_STARS) drawCircle(Color.White.copy(alpha = a), 1.1f * d, Offset(size.width * x, row.start + (row.endInclusive - row.start) * y))
+            if (phase == Phase.NIGHT && moon) {
+                for ((x, y, a) in if (moonLow) LOW_STARS else BAND_STARS) drawCircle(Color.White.copy(alpha = a), 1.1f * d, Offset(size.width * x, row.start + (row.endInclusive - row.start) * y))
                 crescent(centre, r + d)
             }
             // The low horizon: the strip's y 6 to 58 dp, at the band's foot.
