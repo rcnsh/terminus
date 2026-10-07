@@ -47,9 +47,10 @@ async function serviceAccount() {
   return JSON.stringify({ project_id: 'terminus-test', client_email: 'push@terminus-test.iam.gserviceaccount.com', private_key: pem });
 }
 
-async function setup({ push = true } = {}) {
+/** `wrap` puts a fetch of the test's own in front of the fake feed and Firebase. */
+async function setup({ push = true, wrap = (f) => f } = {}) {
   const fcm = { sent: [], dead: new Set() };
-  const fetchImpl = makeFetch({ byStop: FEED, fcm });
+  const fetchImpl = wrap(makeFetch({ byStop: FEED, fcm }));
   installGlobals(fetchImpl);
   const clock = (ms) => installGlobals(fetchImpl, ms);
   let env;
@@ -94,7 +95,7 @@ async function setup({ push = true } = {}) {
     assert.ok(done(), `not done after ${n} wakes`);
     return n;
   };
-  return { env, call, phone, mac, tablet, next, fcm, TRIPS, clock, pushTokens, alarm, wakeUntil };
+  return { env, call, cookie, phone, mac, tablet, next, fcm, TRIPS, clock, pushTokens, alarm, wakeUntil };
 }
 
 test('a device registers its push token; the same token moves with the device', async () => {
@@ -258,4 +259,236 @@ test("another device fetching the card doesn't stop the phone being told", async
     await TRIPS.fireAlarms();
   }
   assert.equal(fcm.sent[0]?.data.phase, 'due', 'the phone still hears it');
+});
+
+const FCM_SEND = 'https://fcm.googleapis.com/v1/projects/';
+/** What FCM says to a message it can't take, by what's wrong with it. */
+const fcmRefusal = (field) =>
+  Response.json(
+    {
+      error: {
+        code: 400,
+        status: 'INVALID_ARGUMENT',
+        details: [
+          { '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError', errorCode: 'INVALID_ARGUMENT' },
+          { '@type': 'type.googleapis.com/google.rpc.BadRequest', fieldViolations: [{ field, description: 'Invalid value' }] },
+        ],
+      },
+    },
+    { status: 400 },
+  );
+/** The Trip object's storage, for the one user in these tests. */
+const stored = (TRIPS) => [...TRIPS.instances.values()][0].storage._map;
+/** Captures console.error while `fn` runs. */
+async function errorsOf(fn) {
+  const logged = [];
+  const error = console.error;
+  console.error = (...args) => logged.push(args.map(String).join(' '));
+  try {
+    await fn();
+  } finally {
+    console.error = error;
+  }
+  return logged;
+}
+
+test('a message FCM refuses keeps the token; a token FCM says is bad is dropped', async () => {
+  let refuse = null;
+  const wrap = (f) => async (url, init) => (refuse && String(url).startsWith(FCM_SEND) ? fcmRefusal(refuse) : f(url, init));
+  const { call, phone, next, pushTokens, TRIPS, clock, alarm } = await setup({ wrap });
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  // A bug in our message: every phone would lose its token, so none does.
+  refuse = 'message.data';
+  const logged = await errorsOf(async () => {
+    for (let i = 0; i < 5 && !stored(TRIPS).has('pushed'); i++) {
+      clock(alarm());
+      await TRIPS.fireAlarms();
+      if (pushTokens().length === 0) break;
+    }
+  });
+  assert.deepEqual(pushTokens(), [{ name: 'Pixel', push_token: 'fcm-phone' }]);
+  assert.ok(logged.some((l) => l.includes('fcm send 400 INVALID_ARGUMENT')), 'logged with its status and code');
+  assert.ok(logged.every((l) => !l.includes('fcm-phone')), 'never the token');
+  // The token itself named as the bad value: that one goes.
+  refuse = 'message.token';
+  clock(alarm());
+  await TRIPS.fireAlarms();
+  assert.deepEqual(pushTokens(), []);
+});
+
+test("one device's failure doesn't keep the push from the user's other devices", async () => {
+  const wrap = (f) => async (url, init) => {
+    if (String(url).startsWith(FCM_SEND) && JSON.parse(init.body).message.token === 'fcm-phone') throw new Error('connection reset');
+    return f(url, init);
+  };
+  const { call, phone, tablet, next, fcm, wakeUntil } = await setup({ wrap });
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await call('/me/push', { method: 'POST', token: tablet, body: { token: 'fcm-tablet' } });
+  await next(phone);
+  await errorsOf(() => wakeUntil(() => fcm.sent.length > 0));
+  assert.deepEqual(fcm.sent.map((m) => [m.token, m.data.phase]), [['fcm-tablet', 'due']]);
+});
+
+test('every call to Firebase has a time limit', async () => {
+  const signals = [];
+  const wrap = (f) => async (url, init) => {
+    if (String(url).startsWith(FCM_SEND) || url === 'https://oauth2.googleapis.com/token') signals.push(init?.signal);
+    return f(url, init);
+  };
+  const { call, phone, next, fcm, wakeUntil } = await setup({ wrap });
+  fcm.expire = 1;
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  await wakeUntil(() => fcm.sent.length > 0);
+  // The token, the send, the new token after a 401 and the send again.
+  assert.equal(signals.length, 4);
+  assert.ok(signals.every((s) => s instanceof AbortSignal));
+});
+
+test('a push no device got is tried again at the next wake', async () => {
+  let down = true;
+  const wrap = (f) => async (url, init) => (down && String(url).startsWith(FCM_SEND) ? new Response('unavailable', { status: 503 }) : f(url, init));
+  const { call, phone, next, fcm, TRIPS, clock, alarm } = await setup({ wrap });
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  await errorsOf(async () => {
+    for (let i = 0; i < 5 && stored(TRIPS).get('day')?.plans === undefined; i++) {
+      clock(alarm());
+      await TRIPS.fireAlarms();
+    }
+  });
+  assert.equal(stored(TRIPS).get('pushed'), undefined, 'not marked as pushed');
+  down = false;
+  clock(alarm());
+  await TRIPS.fireAlarms();
+  assert.ok(fcm.sent.length > 0, 'sent once Firebase is back');
+});
+
+test('a wake that fails is tried again soon, and pushes then', async () => {
+  const { env, call, phone, next, fcm, TRIPS, clock, alarm } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  const prepare = env.DB.prepare.bind(env.DB);
+  let broken = true;
+  env.DB.prepare = (sql) => {
+    if (broken && sql.includes('COUNT(*)')) throw new Error('D1 unavailable');
+    return prepare(sql);
+  };
+  const first = alarm();
+  clock(first);
+  const logged = await errorsOf(() => TRIPS.fireAlarms());
+  assert.ok(logged.some((l) => l.includes('trip wake failed')));
+  assert.equal(alarm(), first + 30_000, 'again in 30 s, not at midnight');
+  // Failing again waits twice as long.
+  clock(alarm());
+  await errorsOf(() => TRIPS.fireAlarms());
+  assert.equal(alarm(), first + 30_000 + 60_000);
+  broken = false;
+  for (let i = 0; i < 5 && !fcm.sent.length; i++) {
+    clock(alarm());
+    await TRIPS.fireAlarms();
+  }
+  assert.equal(fcm.sent[0]?.data.phase, 'due');
+  assert.equal(stored(TRIPS).get('wakeFails'), undefined, 'the count starts again');
+});
+
+test('an alarm run again after the object restarted mid-wake still wakes', async () => {
+  const { call, phone, next, fcm, TRIPS, clock, alarm } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  for (let i = 0; i < 5 && !fcm.sent.length; i++) {
+    const at = alarm();
+    clock(at);
+    // As the alarm leaves it just before the wake: the wake owed moved aside.
+    const m = stored(TRIPS);
+    m.set('waking', m.get('wakeAt'));
+    m.delete('wakeAt');
+    await TRIPS.fireAlarms();
+  }
+  assert.equal(fcm.sent[0]?.data.phase, 'due');
+  assert.equal(stored(TRIPS).get('waking'), undefined);
+});
+
+test('a /clear or a sooner /watch while the object wakes is not undone by it', async () => {
+  // While `gate` is set, a send to Firebase waits for it to open.
+  let gate = null;
+  const wrap = (f) => async (url, init) => {
+    if (gate && String(url).startsWith(FCM_SEND)) {
+      gate.hit = true;
+      await gate.wait;
+    }
+    return f(url, init);
+  };
+  const shut = () => {
+    let open;
+    gate = { hit: false, wait: new Promise((r) => (open = r)) };
+    gate.open = () => {
+      gate = null;
+      open();
+    };
+    return gate;
+  };
+  const { call, phone, next, fcm, TRIPS, clock, alarm } = await setup({ wrap });
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  const [userId] = TRIPS.instances.keys();
+  const trip = TRIPS.get(userId);
+  const date = new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10);
+  const deleteAt = stored(TRIPS).get('deleteAt');
+  /** Wakes the object until it's held sending a push; the wake still running. */
+  const untilSending = async () => {
+    const g = shut();
+    for (let i = 0; i < 5; i++) {
+      clock(alarm());
+      const run = TRIPS.fireAlarms();
+      await new Promise((r) => setTimeout(r, 20));
+      if (g.hit) return { g, run };
+      await run;
+    }
+    assert.fail('never pushed');
+  };
+
+  // A /watch for sooner than the wake would pick, while it's pushing.
+  let { g, run } = await untilSending();
+  const soon = Date.now() + 5_000;
+  await trip.fetch('https://trip/watch', { method: 'POST', body: JSON.stringify({ userId, date, at: soon, deleteAt }) });
+  g.open();
+  await run;
+  assert.equal(fcm.sent.length, 1);
+  assert.equal(stored(TRIPS).get('wakeAt'), soon, 'the sooner wake stays');
+  assert.equal(alarm(), soon);
+
+  // A /clear (the account deleted) while it's pushing: nothing comes back.
+  stored(TRIPS).set('pushed', { key: 'other', phase: 'idle' });
+  ({ g, run } = await untilSending());
+  await trip.fetch('https://trip/clear', { method: 'POST' });
+  g.open();
+  await run;
+  assert.deepEqual([...stored(TRIPS).keys()], [], 'still empty');
+  assert.equal(alarm(), undefined, 'and no alarm left');
+});
+
+test('deleting the account clears its Trip object, alarm and all', async () => {
+  const { call, cookie, phone, next, TRIPS, alarm } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  assert.ok(alarm() !== undefined);
+  assert.equal((await call('/me', { method: 'DELETE', cookie })).status, 200);
+  assert.deepEqual([...stored(TRIPS).keys()], []);
+  assert.equal(alarm(), undefined, 'the alarm goes too, which deleteAll alone leaves');
+});
+
+test('/health says which push is set up; a key that will not parse is push off, said once', async () => {
+  const { env, call } = await setup();
+  const config = async () => (await (await call('/health')).json()).config;
+  assert.deepEqual([(await config()).pushAndroid, (await config()).pushWeb], [true, false]);
+  env.FCM_SERVICE_ACCOUNT = '{"project_id": "terminus-test", "private_key": "not a secret"';
+  const logged = await errorsOf(async () => {
+    assert.equal((await config()).pushAndroid, false);
+    assert.equal((await config()).pushAndroid, false);
+  });
+  const said = logged.filter((l) => l.includes('FCM_SERVICE_ACCOUNT'));
+  assert.equal(said.length, 1, 'once per isolate');
+  assert.ok(!said[0].includes('not a secret'), 'never the value');
 });

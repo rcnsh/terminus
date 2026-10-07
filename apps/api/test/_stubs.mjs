@@ -399,14 +399,18 @@ export function makeDurableObjects(Class, env = {}) {
       async delete(k) {
         return m.delete(k);
       },
+      // As at the Worker's compatibility date: deleteAll leaves the alarm
+      // (from 2026-02-24 it takes it too), so it needs its own deleteAlarm.
       async deleteAll() {
         m.clear();
         db?.close();
         db = null;
-        alarms.delete(name);
       },
       async getAlarm() {
         return alarms.get(name) ?? null;
+      },
+      async deleteAlarm() {
+        alarms.delete(name);
       },
       async setAlarm(at) {
         alarms.set(name, at);
