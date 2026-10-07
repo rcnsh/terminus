@@ -191,6 +191,8 @@ test('timing: on time, tight and late against the class start', () => {
   assert.equal(timingFor(arrive(9, 59), c, 60, now).text, 'Arrive 10:00 · just in time');
   assert.equal(timingFor(arrive(9, 57), c, 60, now, true).text, 'Arrive 9:58\u00a0AM · 2 min early');
   assert.deepEqual([timingFor(arrive(10, 3), c, 120, now).status, timingFor(arrive(10, 3), c, 120, now).text], ['late', '~5 min late']);
+  // A guessed arrival says so, as the card's own "Arrive ~09:58" does: never shown as live.
+  assert.equal(timingFor(arrive(9, 57), c, 60, now, false, true).text, 'Arrive ~09:58 · 2 min early');
   assert.equal(timingFor(null, c, 0, now), null, 'no arrival time, no claim');
 });
 
