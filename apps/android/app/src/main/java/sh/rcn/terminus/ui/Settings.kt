@@ -1,6 +1,12 @@
 package sh.rcn.terminus.ui
 
 import android.content.Intent
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -226,7 +232,8 @@ internal fun SettingsScreen(
 
 /**
  * Settings at a glance, in three levels: who you are; your day, drawn as a
- * short route (home, classes, pace), each stop opening its page; then the
+ * route down the card (home stop, classes, hours, pace), each stop a row
+ * opening its page, what isn't set yet in the accent; then the
  * rest as tiles, each saying what's set. Notifications all off shows in
  * amber: it's the setting that changes the most. About is under them.
  * The list is plain, on the page: the sky is only in the band at the top
@@ -288,20 +295,28 @@ private fun AccountTile(state: AccountState, ui: UiState, onOpen: (SettingsPage)
 private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc?, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
     val muted = c.onSurfaceVariant
-    // Your day, as a route.
+    // Your day, as a route on its side: each stop a row opening its page.
+    val shape = RoundedCornerShape(18.dp)
     Column(
-        Modifier.padding(top = 12.dp).fillMaxWidth().background(c.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, c.outlineVariant, RoundedCornerShape(18.dp)).padding(top = 14.dp, bottom = 8.dp),
+        Modifier.padding(top = 12.dp).fillMaxWidth().clip(shape).background(c.surface)
+            .border(1.dp, c.outlineVariant, shape).padding(top = 14.dp, bottom = 4.dp),
     ) {
         Label(stringResource(R.string.heading_your_day), Modifier.padding(horizontal = 14.dp).semantics { heading() })
-        val home = profile?.homeStops?.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code } ?: stringResource(R.string.no_home_stop)
-        val classes = summary(SettingsPage.Timetable, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips).orEmpty()
-        val pace = profile?.let { stringResource(paceName(it.walkPace)) }.orEmpty()
+        val h12 = hour12(LocalContext.current)
+        val time = { m: Int -> if (h12) hhmm12(m) else hhmm(m) }
+        val home = profile?.homeStops?.firstOrNull()?.let { code -> state.campus?.stopName(code) ?: code }
+        val classes = profile?.let { it.trips.size + it.manual.size }
         DayRoute(
             listOf(
-                Triple(home, stringResource(R.string.step_home), SettingsPage.Trips),
-                Triple(classes, stringResource(R.string.timetable), SettingsPage.Timetable),
-                Triple(pace, stringResource(R.string.walking_pace), SettingsPage.Trips),
+                DayStop(stringResource(R.string.home_stop), home ?: stringResource(R.string.choose_your_stop), home == null && profile != null, SettingsPage.Trips),
+                DayStop(
+                    stringResource(R.string.timetable),
+                    if (classes == 0 && !state.needsReimport) stringResource(R.string.import_from_nusmods) else summary(SettingsPage.Timetable, state, ui.leaveAlerts, ui.liveUpdates, ui.detectTrips).orEmpty(),
+                    classes == 0 || state.needsReimport,
+                    SettingsPage.Timetable,
+                ),
+                DayStop(stringResource(R.string.show_buses_between), profile?.let { "${time(it.dayStartMin)} – ${time(it.dayEndMin)}" }.orEmpty(), false, SettingsPage.Trips),
+                DayStop(stringResource(R.string.walking_pace), profile?.let { stringResource(paceName(it.walkPace)) }.orEmpty(), false, SettingsPage.Trips),
             ),
             onOpen,
         )
@@ -341,25 +356,49 @@ private fun SettingsGround(state: AccountState, ui: UiState, profile: ProfileDoc
     Spacer(Modifier.height(16.dp))
 }
 
-/** Home, classes, pace: three stops on a line, each opening its page. */
+/** One stop on the day's route: what it is, what's set ([todo]: nothing yet, in the accent), and the page it opens. */
+private data class DayStop(val label: String, val value: String, val todo: Boolean, val page: SettingsPage)
+
+/**
+ * Your day's stops down a line, each a row with a chevron like the rest of
+ * Settings, so they read as things to tap. The line runs dot to dot: from
+ * the first dot down, and into the last.
+ */
 @Composable
-private fun DayRoute(stops: List<Triple<String, String, SettingsPage>>, onOpen: (SettingsPage) -> Unit) {
+private fun DayRoute(stops: List<DayStop>, onOpen: (SettingsPage) -> Unit) {
     val c = MaterialTheme.colorScheme
-    Box(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        Canvas(Modifier.matchParentSize()) {
-            val cell = size.width / stops.size
-            val y = 15.dp.toPx()
-            drawLine(c.primary, androidx.compose.ui.geometry.Offset(cell / 2, y), androidx.compose.ui.geometry.Offset(size.width - cell / 2, y), 4.dp.toPx())
-        }
-        Row(Modifier.fillMaxWidth()) {
-            for ((value, label, page) in stops) {
-                Column(
-                    Modifier.weight(1f).clickable(role = Role.Button) { onOpen(page) }.padding(top = 6.dp, bottom = 8.dp, start = 4.dp, end = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(Modifier.size(18.dp).background(c.surface, CircleShape).border(4.dp, c.primary, CircleShape))
-                    Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                    Text(label, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, maxLines = 1)
+    Column(Modifier.padding(top = 4.dp)) {
+        stops.forEachIndexed { i, stop ->
+            Row(
+                Modifier.fillMaxWidth().height(IntrinsicSize.Min).clickable(role = Role.Button) { onOpen(stop.page) }.padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Canvas(Modifier.width(16.dp).fillMaxHeight()) {
+                    val x = size.width / 2
+                    val y = size.height / 2
+                    val w = 3.dp.toPx()
+                    if (i > 0) drawLine(c.primary, Offset(x, 0f), Offset(x, y), w)
+                    if (i < stops.lastIndex) drawLine(c.primary, Offset(x, y), Offset(x, size.height), w)
+                    val r = 7.dp.toPx()
+                    drawCircle(c.surface, r, Offset(x, y))
+                    drawCircle(c.primary, r - 1.75.dp.toPx(), Offset(x, y), style = Stroke(3.5.dp.toPx()))
+                }
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+                            Text(stop.label, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                stop.value,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (stop.todo) c.primary else c.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = c.onSurfaceVariant)
+                    }
+                    if (i < stops.lastIndex) RowDivider()
                 }
             }
         }

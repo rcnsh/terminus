@@ -107,6 +107,7 @@ window.TERMINUS_ZH = {
  "Go to my account": "前往我的账户",
  "Home": "首页",
  "Home stop": "家附近的车站",
+ "Choose your stop": "选择你的车站",
  "Home stops": "家附近的车站",
  "Home, from {0}": "回家，从 {0} 出发",
  "How fast you walk": "你走路多快",

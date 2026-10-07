@@ -1,12 +1,12 @@
 // Settings: the signed-in part of the account page (/account/), and the web
-// app's Settings tab (/app/#settings). Your account, your day as a short
-// route (home stop, classes, pace), then the rest as tiles, each opening its
-// page (settings-pages.js): one at a time on a phone, sliding in from the
-// side; side by side on a wide screen. The address names the page (#trips, or
+// app's Settings tab (/app/#settings). Your account, your day as a route
+// down a card (home stop, classes, hours, pace), each stop a row, then the
+// rest as tiles, each opening its page (settings-pages.js): one at a time
+// on a phone, sliding in from the side; side by side on a wide screen. The address names the page (#trips, or
 // #settings/trips in the web app), so Back and a reload keep it.
 
 import { Icon, html, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
-import { api, t } from './dom.js';
+import { api, clockOpts, locale, spaced, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 import { cardStyle, styleName } from './journey.js';
@@ -49,6 +49,9 @@ const addEmailFromApp = () => location.assign('/account/?add=1&next=/app/');
 export function offerImport(link) {
   importOffer.set(link);
 }
+
+/** Minutes past midnight as a time of day, in the clock the person chose. */
+const hm = (min) => spaced(new Date(2000, 0, 1, Math.floor(min / 60), min % 60).toLocaleTimeString(locale() ?? [], clockOpts()));
 
 /** What each group has set: a line under its name in the list. */
 function summaries({ p, me, notifyOn, devices, imported }) {
@@ -246,6 +249,9 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
     return () => document.body.classList.remove('set-sky');
   }, [skyHere, shown]);
   const sum = summaries({ p, me, notifyOn, devices, imported });
+  // Nothing imported, or a link for a semester that's over: Timetable asks, in the accent.
+  const reimport = me.needsReimport && !imported;
+  const noClasses = p.trips.length + p.manual.length === 0;
   const page = (id, body) => html`
     <${Page} id=${id} title=${TITLES[id]} nodes=${nodes} onBack=${closePage} shown=${shown === id} leaving=${leaving?.node === id ? leaving : null} sky=${skyHere}>${body}<//>
   `;
@@ -276,18 +282,19 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
             <h2 class="eyebrow" id="set-day-title">${t('Your day')}</h2>
             <div class="day-route">
               ${[
-                ['trips', stopName(p.home?.stops?.[0] ?? '') || t('No home stop yet'), t('Home stop')],
-                ['timetable', sum.timetable, t('Timetable')],
-                ['trips', { slow: t('Slow'), normal: t('Normal'), fast: t('Fast') }[p.walkPace ?? 'normal'] ?? t('Normal'), t('Walking pace')],
+                ['trips', t('Home stop'), stopName(p.home?.stops?.[0] ?? '') || t('Choose your stop'), !p.home?.stops?.length],
+                ['timetable', t('Timetable'), noClasses && !reimport ? t('Import from NUSMods') : sum.timetable, noClasses || reimport],
+                ['trips', t('Show buses between'), `${hm(p.dayStartMin ?? 360)} – ${hm(p.dayEndMin ?? 1080)}`, false],
+                ['trips', t('Walking pace'), { slow: t('Slow'), normal: t('Normal'), fast: t('Fast') }[p.walkPace ?? 'normal'] ?? t('Normal'), false],
               ].map(
-                ([id, value, label], i) => html`<button
+                ([id, label, value, todo], i) => html`<button
                   type="button"
-                  class="day-stop"
+                  class="settings-row day-stop"
                   key=${i}
                   ref=${i < 2 ? (n) => (rows[id] = n) : undefined}
                   aria-current=${shown === id ? 'page' : undefined}
                   onClick=${() => (shown === id ? null : openPage(id))}
-                ><span class="day-dot"></span><strong>${value}</strong><span>${label}</span></button>`,
+                ><span class="day-dot" aria-hidden="true"></span><span class="row-text"><span class="row-sum">${label}</span><strong class=${todo ? 'todo' : undefined}>${value}</strong></span><${Icon} paths=${CHEVRON} class="chev" /></button>`,
               )}
             </div>
           </section>
