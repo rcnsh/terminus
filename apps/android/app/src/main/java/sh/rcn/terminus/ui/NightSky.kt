@@ -96,16 +96,16 @@ internal fun phaseAt(min: Int): Phase = when {
 
 /**
  * How far each layer of the sky lags, in dp, as Now scrolls down by [s] dp:
- * the sun, the moon and the stars at half speed, fading out by 160 dp; the
- * clouds a little faster; the far hills and the city sinking behind the near
- * hill, by 18 dp at most. The near hill, the road and your bus stay with the
- * page. The web's numbers (daylight.js parallax).
+ * the moon and the stars at half speed, fading out by 160 dp; the far hills,
+ * the city and a low sun sinking behind the near hill, by 18 dp at most. The
+ * near hill, the road and your bus stay with the page. The web's numbers
+ * (daylight.js parallax).
  */
-internal data class Parallax(val sky: Float, val clouds: Float, val far: Float, val fade: Float)
+internal data class Parallax(val sky: Float, val far: Float, val fade: Float)
 
 internal fun parallax(s: Float): Parallax {
     val y = s.coerceAtLeast(0f)
-    return Parallax(y * 0.5f, y * 0.35f, minOf(y * 0.12f, 18f), (1 - y / 160f).coerceAtLeast(0f))
+    return Parallax(y * 0.5f, minOf(y * 0.12f, 18f), (1 - y / 160f).coerceAtLeast(0f))
 }
 
 /**
@@ -159,9 +159,10 @@ internal val MOON = Color(0xFFFDE9C9)
 
 /**
  * An hour's colours: the sky from top to horizon, the far hills, the trees,
- * the city, the sun and its glow, clouds, a setting sun, and whether the
- * words over it are light. On a dark phone every hour is deep and muted, so
- * the sky never glares; the words are light.
+ * the city, the sun low behind the hills (at dawn, in the golden hour and at
+ * dusk only: it's the time of day, not the weather), and whether the words
+ * over it are light. On a dark phone every hour is deep and muted, so the sky
+ * never glares; the words are light.
  */
 internal class Palette(
     val sky: List<Color>,
@@ -170,9 +171,6 @@ internal class Palette(
     val city: Color,
     val lightInk: Boolean,
     val sun: Color? = null,
-    val glow: Color = Color.Transparent,
-    val cloud: Color? = null,
-    val setting: Color? = null,
     val road: Color,
     val post: Color,
     val postInk: Color,
@@ -189,24 +187,24 @@ internal fun palette(phase: Phase, dark: Boolean): Palette {
     val postInk = c(if (dark) 0xFF0F0E0D else 0xFFFAFAF9)
     val lit = c(0xFFFDE9C9)
     // Dark words on a light sky get a dark label; light words a light one.
-    fun make(sky: List<Long>, far: Long, tree: Long, city: Long, light: Boolean, sun: Long? = null, glow: Color = Color.Transparent, cloud: Color? = null, setting: Long? = null, window: Color) = Palette(
-        sky.map(::c), c(far), c(tree), c(city), light, sun?.let(::c), glow, cloud, setting?.let(::c), road, post, postInk,
+    fun make(sky: List<Long>, far: Long, tree: Long, city: Long, light: Boolean, sun: Long? = null, window: Color) = Palette(
+        sky.map(::c), c(far), c(tree), c(city), light, sun?.let(::c), road, post, postInk,
         pill = if (dark) c(0xFFF5F3F0) else if (light) Color.White else c(0xFF1C1917),
         pillInk = if (dark) c(0xFF0F0E0D) else if (light) c(0xFF1C1917) else Color.White,
         window = window,
     )
     val day = c(if (dark) 0xFFB9C7D6 else 0xFFDBEAFE)
     return if (dark) when (phase) {
-        Phase.DAWN -> make(listOf(0xFF1D3550, 0xFF2A465F, 0xFF5C4D58, 0xFF8A6656), 0xFF2A3446, 0xFF151C24, 0xFF3D4658, true, 0xFFF3DCC0, c(0x4DF3DCC0), window = day)
-        Phase.DAY -> make(listOf(0xFF173350, 0xFF1F4262, 0xFF2D5674, 0xFF3F6B86), 0xFF20384A, 0xFF132330, 0xFF35506A, true, 0xFFFBE3A6, c(0x73FFCD78), c(0x29DCE6F0), window = day)
-        Phase.GOLDEN -> make(listOf(0xFF1F3550, 0xFF334356, 0xFF5E4A37, 0xFF9A6A3C), 0xFF3A3326, 0xFF1A1712, 0xFF4D4536, true, 0xFFF3D29A, c(0x59F3D29A), c(0x24DCE6F0), window = day)
-        Phase.DUSK -> make(listOf(0xFF1A1C3A, 0xFF322B54, 0xFF6C4260, 0xFFB8644F), 0xFF2B2340, 0xFF17121F, 0xFF4F4266, true, setting = 0xFFF0915E, window = lit)
+        Phase.DAWN -> make(listOf(0xFF1D3550, 0xFF2A465F, 0xFF5C4D58, 0xFF8A6656), 0xFF2A3446, 0xFF151C24, 0xFF3D4658, true, 0xFFF3DCC0, window = day)
+        Phase.DAY -> make(listOf(0xFF173350, 0xFF1F4262, 0xFF2D5674, 0xFF3F6B86), 0xFF20384A, 0xFF132330, 0xFF35506A, true, window = day)
+        Phase.GOLDEN -> make(listOf(0xFF1F3550, 0xFF334356, 0xFF5E4A37, 0xFF9A6A3C), 0xFF3A3326, 0xFF1A1712, 0xFF4D4536, true, 0xFFF3D29A, window = day)
+        Phase.DUSK -> make(listOf(0xFF1A1C3A, 0xFF322B54, 0xFF6C4260, 0xFFB8644F), 0xFF2B2340, 0xFF17121F, 0xFF4F4266, true, 0xFFF0915E, window = lit)
         Phase.NIGHT -> make(listOf(0xFF121A33, 0xFF181A30, 0xFF24243A, 0xFF2E2A44), 0xFF191826, 0xFF121110, 0xFF45405F, true, window = lit)
     } else when (phase) {
-        Phase.DAWN -> make(listOf(0xFF8FC1E8, 0xFFB7D6EE, 0xFFF1D6C2, 0xFFF7C9A4), 0xFFB3B0C3, 0xFF6A7568, 0xFFCFC8D8, false, 0xFFFFF1D6, c(0xBFFFD6AA), window = day)
-        Phase.DAY -> make(listOf(0xFF5EA8E5, 0xFF8EC4EC, 0xFFC7E2F4, 0xFFE3F0F8), 0xFF9FBCAE, 0xFF4F6F58, 0xFFB7CBD9, false, 0xFFFFFBEA, c(0xE6FFFADC), c(0xD9FFFFFF), window = day)
-        Phase.GOLDEN -> make(listOf(0xFF78AADB, 0xFFA7C3DC, 0xFFF0CF9C, 0xFFF4B46C), 0xFFC4A983, 0xFF5E5A42, 0xFFDCC6A2, false, 0xFFFFE2A8, c(0xCCFFBE6E), c(0xCCFFFFFF), window = day)
-        Phase.DUSK -> make(listOf(0xFF2C3566, 0xFF4A4275, 0xFF6C4260, 0xFFE08A62), 0xFF4B3F62, 0xFF2C2440, 0xFF7D6A90, true, setting = 0xFFFFB37A, window = lit)
+        Phase.DAWN -> make(listOf(0xFF8FC1E8, 0xFFB7D6EE, 0xFFF1D6C2, 0xFFF7C9A4), 0xFFB3B0C3, 0xFF6A7568, 0xFFCFC8D8, false, 0xFFFFF1D6, window = day)
+        Phase.DAY -> make(listOf(0xFF5EA8E5, 0xFF8EC4EC, 0xFFC7E2F4, 0xFFE3F0F8), 0xFF9FBCAE, 0xFF4F6F58, 0xFFB7CBD9, false, window = day)
+        Phase.GOLDEN -> make(listOf(0xFF78AADB, 0xFFA7C3DC, 0xFFF0CF9C, 0xFFF4B46C), 0xFFC4A983, 0xFF5E5A42, 0xFFDCC6A2, false, 0xFFFFE2A8, window = day)
+        Phase.DUSK -> make(listOf(0xFF2C3566, 0xFF4A4275, 0xFF6C4260, 0xFFE08A62), 0xFF4B3F62, 0xFF2C2440, 0xFF7D6A90, true, 0xFFFFB37A, window = lit)
         Phase.NIGHT -> make(listOf(0xFF121A33, 0xFF181A30, 0xFF24243A, 0xFF2E2A44), 0xFF3A3550, 0xFF5B5568, 0xFF45405F, true, window = lit)
     }
 }
@@ -220,8 +218,11 @@ private val STARS = listOf(
     floatArrayOf(0.58f, 0.98f, 0.3f, 1.0f), floatArrayOf(0.97f, 0.16f, 0.45f, 1.1f),
 )
 
-/** The strip at the foot of the sky where the horizon is drawn. */
-internal val HORIZON = 92.dp
+/** How much bigger than its numbers the horizon with the road is drawn: the bus and your stop are the picture. */
+private const val ROAD_SCALE = 1.25f
+
+/** The strip at the foot of the sky where the horizon is drawn: its 92 dp, [ROAD_SCALE] times. */
+internal val HORIZON = 115.dp
 
 /** The sky behind Now's content, down to the horizon, once something on it has said where that is. */
 internal fun Modifier.skyBehind(sky: SkyState, page: Color, measurer: TextMeasurer): Modifier = drawBehind {
@@ -231,16 +232,16 @@ internal fun Modifier.skyBehind(sky: SkyState, page: Color, measurer: TextMeasur
         Brush.verticalGradient(0f to p.sky[0], 0.5f to p.sky[1], 0.86f to p.sky[2], 1f to p.sky[3], endY = end),
         size = Size(size.width, end),
     )
-    horizon(end - HORIZON.toPx(), page, p, sky.phase == Phase.DUSK || sky.phase == Phase.NIGHT, sky.road, measurer, sky.depth(1.dp.toPx()).far)
+    horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, measurer, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE)
 }
 
 /**
- * The top of what Now shows, up in the sky in the sky's ink, with [room]
- * above it for the sun, the clouds, or the stars and the moon. Off Now (no
- * [LocalSky]), just [content].
+ * The top of what Now shows, up in the sky in the sky's ink, with a short
+ * [room] above it, for the stars and the moon at night: the card is the
+ * picture, not the sky. Off Now (no [LocalSky]), just [content].
  */
 @Composable
-internal fun SkyHead(room: Dp = 66.dp, content: @Composable ColumnScope.() -> Unit) {
+internal fun SkyHead(room: Dp = 34.dp, content: @Composable ColumnScope.() -> Unit) {
     val sky = LocalSky.current
     if (sky == null) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp), content = content)
@@ -248,7 +249,7 @@ internal fun SkyHead(room: Dp = 66.dp, content: @Composable ColumnScope.() -> Un
     }
     SkyInk(true, sky.palette.lightInk) {
         Column(
-            Modifier.fillMaxWidth().drawBehind { celestial(sky.phase, sky.palette, room.toPx(), sky.depth(1.dp.toPx())) }.padding(top = room),
+            Modifier.fillMaxWidth().drawBehind { celestial(sky.phase, room.toPx(), sky.depth(1.dp.toPx())) }.padding(top = room),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             content = content,
         )
@@ -267,36 +268,14 @@ internal fun SkyGround(road: Road = Road()) {
 }
 
 /**
- * What's up in the room above the words at [phase]: the sun and a few
- * clouds, the stars and the moon, or (at dusk) nothing, the sun setting
- * behind the hills. Lagging behind the page as it scrolls, by [depth], and
- * fading behind the words.
+ * What's up in the room above the words at [phase]: the stars and the moon
+ * at night, and nothing by day (the sun stays low, behind the hills).
+ * Lagging behind the page as it scrolls, by [depth], and fading behind the
+ * words.
  */
-private fun DrawScope.celestial(phase: Phase, p: Palette, room: Float, depth: Parallax) {
-    val d = 1.dp.toPx()
-    val fade = depth.fade
-    if (fade <= 0f) return
-    if (phase == Phase.NIGHT) return translate(top = depth.sky * d) { starsAndMoon(room, fade) }
-    val sun = p.sun ?: return
-    // Top and right edge, then size, in dp: low at dawn, high at noon, lower again.
-    val (top, right, across) = when (phase) {
-        Phase.DAWN -> Triple(10f, 30f, 40f)
-        Phase.DAY -> Triple(4f, 44f, 34f)
-        else -> Triple(14f, 24f, 40f)
-    }
-    val r = across / 2 * d
-    val centre = Offset(size.width - right * d - r, (top + depth.sky) * d + r)
-    drawCircle(Brush.radialGradient(0.4f to p.glow, 1f to Color.Transparent, center = centre, radius = r * 2.4f), r * 2.4f, centre, alpha = fade)
-    drawCircle(sun, r, centre, alpha = fade)
-    // Singapore's heaped-up afternoon clouds.
-    val cloud = p.cloud ?: return
-    for ((x, y, s) in listOf(Triple(70f, 34f, 0.9f), Triple(205f, 48f, 0.6f), Triple(150f, 14f, 0.45f))) {
-        fun at(cx: Float, cy: Float) = Offset((x + cx * s) * d, (y + depth.clouds + cy * s) * d)
-        drawOval(cloud, at(-26f, 1f), Size(52 * s * d, 14 * s * d), alpha = fade)
-        drawCircle(cloud, 8 * s * d, at(-10f, 3f), alpha = fade)
-        drawCircle(cloud, 11 * s * d, at(4f, -1f), alpha = fade)
-        drawCircle(cloud, 7 * s * d, at(16f, 4f), alpha = fade)
-    }
+private fun DrawScope.celestial(phase: Phase, room: Float, depth: Parallax) {
+    if (phase != Phase.NIGHT || depth.fade <= 0f) return
+    translate(top = depth.sky * 1.dp.toPx()) { starsAndMoon(room, depth.fade) }
 }
 
 /*
@@ -319,12 +298,16 @@ private fun dip(lo: Float, hi: Float): Float {
 /**
  * Where the sky ends, from [top] down: the hills, a building or two, rain
  * trees, Singapore's flag by the road, and Marina Bay Sands far off in the
- * city, in [p]'s colours, with the lights on when [lights]. The near hill is
- * [page]'s own colour, so the sky meets the ground instead of fading into
- * the page. On the road, [road]'s sign and bus, or a shuttle going by.
+ * city, in [p]'s colours at [phase], with the lights on after dark and the
+ * sun low behind the hills at dawn, in the golden hour and at dusk. The near
+ * hill is [page]'s own colour, so the sky meets the ground instead of fading
+ * into the page. On the road, [road]'s sign and bus, or a shuttle going by.
+ * Drawn [scale] times its numbers; [far] is in pixels. [withSun]: false for
+ * just the hills (the band at the top of Settings' pages).
  */
-private fun DrawScope.horizon(top: Float, page: Color, p: Palette, lights: Boolean, road: Road, measurer: TextMeasurer, far: Float) {
-    val d = 1.dp.toPx()
+private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase, road: Road, measurer: TextMeasurer, far: Float, scale: Float = 1f, withSun: Boolean = true) {
+    val d = 1.dp.toPx() * scale
+    val lights = phase == Phase.DUSK || phase == Phase.NIGHT
     val w = size.width / d
     fun at(x: Float, y: Float) = Offset(x * d, top + y * d)
     fun box(x: Float, y: Float, bw: Float, bh: Float, color: Color, r: Float = 0f) =
@@ -353,13 +336,20 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, lights: Boole
     // Your stop's sign left of the flag, whatever its name's length; the
     // flag right of anything on the road; the city clear of the flag and
     // of the screen's edge.
-    val name = road.stop?.let { measurer.measure(it, TextStyle(color = p.postInk, fontSize = 7.5.sp, fontWeight = FontWeight.Bold)) }
+    val name = road.stop?.let { measurer.measure(it, TextStyle(color = p.postInk, fontSize = 7.5.sp * scale, fontWeight = FontWeight.Bold)) }
     val plate = name?.let { it.size.width / d + 10 } ?: 0f
     val sx = if (name != null) minOf(across(0.7f), across(0.74f) - plate / 2) else 0f
     val flag = across(0.76f)
-    // The far layer sinks behind the near hill as Now scrolls ([far] dp), kept to the strip.
-    clipRect(top = top, bottom = top + 92 * d) { translate(top = far * d) {
-    p.setting?.let { drawCircle(it, 26 * d, at(across(0.5f), 40f)) }
+    // The far layer sinks behind the near hill as Now scrolls ([far]), kept to the strip.
+    clipRect(top = top, bottom = top + 92 * d) { translate(top = far) {
+    // The sun, low: rising at dawn, low in the golden hour, setting at dusk. As the web's (.horizon .sun).
+    p.sun?.takeIf { withSun }?.let { sun ->
+        when (phase) {
+            Phase.DAWN -> drawCircle(sun, 16 * d, at(across(0.3f), 42f))
+            Phase.GOLDEN -> drawCircle(sun, 16 * d, at(across(0.36f), 36f))
+            else -> drawCircle(sun, 26 * d, at(across(0.5f), 40f))
+        }
+    }
     // Marina Bay Sands, far off and pale: three towers and the SkyPark across them, out over the right.
     val mbs = dip(maxOf(across(0.8f) - 40, flag + 30), minOf(across(0.8f) + 40, w - 29))
     if (mbs + 25 <= w) {
@@ -432,7 +422,7 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, lights: Boole
             drawRoundRect(colour, at(x + 0.75f, 57.75f), Size(36.5f * d, 10.5f * d), CornerRadius(3 * d), style = Stroke(1.5f * d))
         }
         tyres(x)
-        val label = measurer.measure(bus.text, TextStyle(color = p.pillInk, fontSize = 8.sp, fontWeight = FontWeight.Bold))
+        val label = measurer.measure(bus.text, TextStyle(color = p.pillInk, fontSize = 8.sp * scale, fontWeight = FontWeight.Bold))
         val lw = label.size.width / d + 14
         val lx = maxOf(4f, minOf(x + 19 - lw / 2, sx - plate / 2 - 4 - lw))
         box(lx, 42f, lw, 12f, p.pill, 6f)
@@ -515,7 +505,7 @@ internal fun SkyInk(on: Boolean, light: Boolean, content: @Composable () -> Unit
     val scheme = when {
         !on -> MaterialTheme.colorScheme
         light -> glass(BrandDark, Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.18f), c(0xFFE7E5E4), c(0xFFFB923C), c(0xFFFECACA), c(0xFFFCD34D))
-        else -> glass(BrandLight, Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.65f), c(0x291C1917), c(0xFF36312D), c(0xFF9A3412), c(0xFF7F1D1D), c(0xFF78350F))
+        else -> glass(BrandLight, Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.65f), c(0x291C1917), c(0xFF36312D), c(0xFF9A3412), c(0xFF701818), c(0xFF78350F))
     }
     val tones = when {
         !on -> null
@@ -560,18 +550,18 @@ internal fun rememberSky(scroll: ScrollState, phase: Phase): SkyState {
 
 /**
  * The status bar's own strip, [top] high, over a tab whose content scrolls
- * under it ([scroll]): clear at the top, so the sky (or the page) shows
+ * under it ([scroll]): clear at the top, so the sky ([sky], if any) or the page shows
  * through, then filled as the content goes under it.
  */
 @Composable
-internal fun StatusStrip(sky: SkyState, top: Dp, scroll: ScrollState) {
+internal fun StatusStrip(sky: SkyState?, top: Dp, scroll: ScrollState) {
     val page = MaterialTheme.colorScheme.background
     Box(
         Modifier
             .fillMaxWidth()
             .height(top)
             .graphicsLayer { alpha = if (top.toPx() > 0f) (scroll.value / top.toPx()).coerceIn(0f, 1f) else 0f }
-            .background(if (sky.end != null) sky.palette.sky[0] else page),
+            .background(if (sky?.end != null) sky.palette.sky[0] else page),
     )
 }
 
@@ -587,8 +577,8 @@ private val BAND_STARS = listOf(
 /**
  * A slim band of the sky at the top of one of Settings' pages, in [phase]:
  * from the top of the screen, [top] for the status bar, then [content] (the
- * back arrow and the title) in the sky's ink with a small sun or moon on the
- * right, ending on the low horizon (just the hills, no road). The page's
+ * back arrow and the title) in the sky's ink with the moon on the right at
+ * night, ending on the low horizon (just the hills, no road). The page's
  * controls stay on the plain page under it. As the web's (.page-band).
  */
 @Composable
@@ -610,14 +600,12 @@ internal fun SkyBand(phase: Phase, top: Dp, content: @Composable () -> Unit) {
             if (phase == Phase.NIGHT) {
                 for ((x, y, a) in BAND_STARS) drawCircle(Color.White.copy(alpha = a), 1.1f * d, Offset(size.width * x, row.start + (row.endInclusive - row.start) * y))
                 crescent(centre, r + d)
-            } else p.sun?.let { sun ->
-                drawCircle(Brush.radialGradient(0.4f to p.glow, 1f to Color.Transparent, center = centre, radius = r * 2.4f), r * 2.4f, centre)
-                drawCircle(sun, r, centre)
             }
             // The low horizon: the strip's y 6 to 58 dp, at the band's foot.
             val strip = end - 58 * d
             clipRect(top = end - LOW.toPx(), bottom = end) {
-                horizon(strip, page, p, phase == Phase.DUSK || phase == Phase.NIGHT, Road(shuttle = false), measurer, 0f)
+                // Just the hills: the sun stays for Now's horizon.
+                horizon(strip, page, p, phase, Road(shuttle = false), measurer, 0f, withSun = false)
             }
         },
     ) {

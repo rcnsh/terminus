@@ -20,13 +20,13 @@ export function phaseAt(min) {
 
 /**
  * How far each layer of the sky lags as Now scrolls down by `s` px, so the
- * far things move slower than the near ones: the sun, the moon and the stars
- * at half speed, fading out by 160 px; the clouds a little faster; the far
- * hills and the city sinking behind the near hill, by 18 px at most. The
- * near hill, the road and your bus stay with the page. Each is how far down
- * the page the layer moves, in px (dp on Android: NightSky.kt parallax).
+ * far things move slower than the near ones: the moon and the stars at half
+ * speed, fading out by 160 px; the far hills, the city and a low sun sinking
+ * behind the near hill, by 18 px at most. The near hill, the road and your
+ * bus stay with the page. Each is how far down the page the layer moves, in
+ * px (dp on Android: NightSky.kt parallax).
  */
 export function parallax(s) {
   const y = Math.max(0, s);
-  return { sky: y * 0.5, clouds: y * 0.35, far: Math.min(y * 0.12, 18), fade: Math.max(0, 1 - y / 160) };
+  return { sky: y * 0.5, far: Math.min(y * 0.12, 18), fade: Math.max(0, 1 - y / 160) };
 }

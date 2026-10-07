@@ -20,11 +20,11 @@ test('every minute of the day has a sky', () => {
 
 test('the sky has depth as Now scrolls: far things lag, near ones stay', () => {
   const at = (s) => Object.values(parallax(s)).map((n) => Math.round(n * 100) / 100);
-  // sky, clouds, far, fade
-  assert.deepEqual(at(0), [0, 0, 0, 1]);
-  assert.deepEqual(at(50), [25, 17.5, 6, 0.69]);
-  assert.deepEqual(at(150), [75, 52.5, 18, 0.06]);
-  assert.deepEqual(at(400), [200, 140, 18, 0]);
+  // sky, far, fade
+  assert.deepEqual(at(0), [0, 0, 1]);
+  assert.deepEqual(at(50), [25, 6, 0.69]);
+  assert.deepEqual(at(150), [75, 18, 0.06]);
+  assert.deepEqual(at(400), [200, 18, 0]);
   // Pulled past the top (a bounce): as at the top.
   assert.deepEqual(at(-20), at(0));
 });
