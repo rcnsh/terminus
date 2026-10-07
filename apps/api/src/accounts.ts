@@ -834,22 +834,38 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
  * it passes, so the check can ship before the widget is set up.
  */
 export async function verifyTurnstile(env: Env, token: unknown, ip: string | null, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  return (await checkTurnstile(env, token, ip, fetchImpl)) === 'ok';
+}
+
+/**
+ * verifyTurnstile, telling a failed check ('failed', the visitor's) from
+ * Turnstile itself not answering ('unavailable', worth trying again).
+ */
+export async function checkTurnstile(env: Env, token: unknown, ip: string | null, fetchImpl: typeof fetch = fetch): Promise<'ok' | 'failed' | 'unavailable'> {
   if (!env.TURNSTILE_SECRET) {
     // No Turnstile at all (tests, local dev) is allowed. A site key without
     // its secret is a broken rotation, and must not quietly open sign-in.
     if (env.TURNSTILE_SITE_KEY) console.error('TURNSTILE_SITE_KEY is set but TURNSTILE_SECRET is not; refusing sign-ins');
-    return !env.TURNSTILE_SITE_KEY;
+    return env.TURNSTILE_SITE_KEY ? 'failed' : 'ok';
   }
-  if (typeof token !== 'string' || !token) return false;
+  if (typeof token !== 'string' || !token) return 'failed';
   const body = new FormData();
   body.set('secret', env.TURNSTILE_SECRET);
   body.set('response', token);
   if (ip) body.set('remoteip', ip);
   try {
     const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body, signal: AbortSignal.timeout(5000) });
-    const out = (await res.json()) as { success?: boolean };
-    return out.success === true;
-  } catch {
-    return false;
+    const out = (await res.json()) as { success?: boolean; 'error-codes'?: string[] };
+    if (out.success === true) return 'ok';
+    // A failed check is the visitor's; Turnstile's own fault is logged, or
+    // sign-in would quietly stop for everyone with nobody knowing why.
+    if (!res.ok || out['error-codes']?.includes('internal-error')) {
+      console.error('Turnstile siteverify failed:', res.status, (out['error-codes'] ?? []).join(','));
+      return 'unavailable';
+    }
+    return 'failed';
+  } catch (err) {
+    console.error('Turnstile siteverify failed:', err instanceof Error ? err.message : String(err));
+    return 'unavailable';
   }
 }
