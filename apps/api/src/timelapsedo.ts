@@ -13,7 +13,8 @@
  * listing no buses for a few minutes), after which it asks again.
  *
  * When the window closes it writes the day to R2 and deletes everything,
- * its alarm included, so a finished day costs nothing.
+ * its alarm too (deleteAll() keeps it at this compatibility date, so it is
+ * deleted first), so a finished day costs nothing.
  *
  * States: `polling`; `resting` (idle, asks again after idleSleepMs); `off`
  * (the kill switch, until the cron finds it on again); `done` (idle after
@@ -358,12 +359,14 @@ export class TimelapseRecorder {
         const body = await gzip(JSON.stringify(this.dayFile(meta)));
         await this.env.DOWNLOADS.put(dayKey(meta.date), body, { httpMetadata: { contentType: 'application/gzip' }, customMetadata: { samples: String(samples) } });
       }
+      await this.storage.deleteAlarm();
       await this.storage.deleteAll();
     } catch (err) {
       console.error('timelapse', meta.date, err instanceof Error ? err.message : String(err));
       const now = Date.now();
       if (now < windowOf(meta.date).close + HELD_DAYS * DAY_MS) return this.storage.setAlarm(now + RETRY_MS);
       console.error('timelapse', meta.date, 'given up: not written to R2');
+      await this.storage.deleteAlarm();
       await this.storage.deleteAll();
     }
   }
