@@ -95,7 +95,7 @@ struct Main: View {
 
             if model.reporting {
                 ReportForm(model: model)
-            } else if model.reportSent {
+            } else if model.showReported {
                 Text("✓ " + L("Reported, thanks")).font(.caption).foregroundStyle(.green).padding(.horizontal, 4)
             }
 

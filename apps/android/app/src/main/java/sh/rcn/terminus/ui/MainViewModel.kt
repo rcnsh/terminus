@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -64,6 +65,8 @@ data class UiState(
     val reportSending: Boolean = false,
     val reportResult: String? = null,
     val reportedFor: Target? = null,
+    /** The card's `line` when the report went: once the card says something else, it's another answer. */
+    val reportedLine: String? = null,
     /** Today's timeline (/me/day), for under the planned answer. */
     val day: DayPlan? = null,
     /** Just swiped off Today, offered back with Undo in a bar at the foot of the screen. */
@@ -78,7 +81,13 @@ data class UiState(
     val signalling: Boolean = false,
 ) {
     val answer: NextAnswer? get() = answers[target]
+
+    /** "✓ Reported, thanks" in place of "Is this wrong?": only on the tab and answer it was sent for. */
+    val reportShown: Boolean get() = reportedFor == target && answer?.card?.line == reportedLine
 }
+
+/** How long "✓ Reported, thanks" stays before "Is this wrong?" comes back. */
+private const val REPORTED_SHOWN_MS = 6_000L
 
 data class PendingPair(val code: String, val account: String)
 
@@ -255,9 +264,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 L.s(R.string.report_failed)
             }
-            _state.update { it.copy(reportSending = false, reportResult = failure, reportedFor = if (failure == null) target else it.reportedFor) }
+            if (failure != null) {
+                _state.update { it.copy(reportSending = false, reportResult = failure) }
+                return@launch
+            }
+            // The answer on screen now, not the one reported: the card may have moved on while
+            // the dialog was open, and the tick should still show that it went.
+            _state.update { it.copy(reportSending = false, reportedFor = target, reportedLine = it.answers[target]?.card?.line) }
+            // The tick is a moment's acknowledgement; then the link is back for the next answer.
+            reportClearJob?.cancel()
+            reportClearJob = viewModelScope.launch {
+                delay(REPORTED_SHOWN_MS)
+                _state.update { it.copy(reportedFor = null, reportedLine = null) }
+            }
         }
     }
+
+    private var reportClearJob: Job? = null
 
     fun clearReportResult() = _state.update { it.copy(reportResult = null) }
 

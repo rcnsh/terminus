@@ -300,10 +300,14 @@ export const Message = ({ text, children, cls = 'widget' }) => html`
   <div class=${cls} aria-live="polite"><div class="detail">${text}</div>${children}</div>
 `;
 
+/** How long "✓ Reported, thanks" stays before "Is this wrong?" comes back. */
+const REPORTED_SHOWN_MS = 6_000;
+
 /**
  * "Is this wrong?": sends the answer on screen (`answer`, as it was when the
  * form was opened: the card refreshes meanwhile) with an optional note. Once
- * sent, the link says so in its place; give it a new `key` for a new answer.
+ * sent, the link says so in its place for a few seconds, or until the card
+ * says something else; give it a new `key` for a new answer.
  */
 export function Report({ answer, anonymous = false }) {
   const [open, setOpen] = useState(false);
@@ -311,11 +315,26 @@ export function Report({ answer, anonymous = false }) {
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
   const [reported, setReported] = useState(null);
-  const [done, setDone] = useState(false);
+  // The card's line when the report went ("Leave by ~09:36 · R2 from PGP"); null when not just sent.
+  const [done, setDone] = useState(null);
   const box = useRef(null);
   useEffect(() => {
     if (open) box.current?.focus();
   }, [open]);
+  const line = answer?.card?.line ?? '';
+  // The line now, for when the send returns: the card may have refreshed meanwhile.
+  const lineNow = useRef(line);
+  lineNow.current = line;
+  // The tick is a moment's acknowledgement, then the link is back for the next answer.
+  useEffect(() => {
+    if (done === null) return;
+    if (line !== done) {
+      setDone(null);
+      return;
+    }
+    const id = setTimeout(() => setDone(null), REPORTED_SHOWN_MS);
+    return () => clearTimeout(id);
+  }, [done, line]);
   const hint = anonymous
     ? t('This sends the answer above and your note. Add an email if you want a reply.')
     : t('This sends the answer above and your note, with your email address so you can get a reply.');
@@ -330,7 +349,7 @@ export function Report({ answer, anonymous = false }) {
       await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note: note.trim(), platform: 'web', context: reported ?? undefined } });
       setOpen(false);
       setNote('');
-      setDone(true);
+      setDone(lineNow.current);
     } catch (err) {
       setMsg(err.message);
     } finally {
@@ -338,9 +357,9 @@ export function Report({ answer, anonymous = false }) {
     }
   };
   return html`
-    ${done && html`<span class="report-done">✓ ${t('Reported, thanks')}</span>`}
+    ${done !== null && html`<span class="report-done">✓ ${t('Reported, thanks')}</span>`}
     ${!open &&
-    !done &&
+    done === null &&
     html`<button
       type="button"
       class="link-btn report-open"

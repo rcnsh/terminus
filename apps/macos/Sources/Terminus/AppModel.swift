@@ -87,6 +87,11 @@ final class AppModel {
     var reportResult: String?
     /// The last report went: "✓ Reported, thanks" under the answer, where the form was.
     var reportSent = false
+    /// The card's line when it went: once the card says something else, it's another answer.
+    private var reportSentLine: String?
+    private var reportClear: Task<Void, Never>?
+    /// The tick shows for a few seconds, and only beside the answer it was sent from.
+    var showReported: Bool { reportSent && shown?.card?.line == reportSentLine }
     /// The answer on screen when the form opened; the refresh loop may replace it meanwhile.
     private var reported: Data?
     var popoverOpen = false {
@@ -633,6 +638,13 @@ final class AppModel {
                 try await Api(token: TokenStore.read()).report(note: note, answer: reported)
                 reporting = false
                 reportSent = true
+                reportSentLine = shown?.card?.line
+                // A moment's acknowledgement, then "Is this wrong?" is back for the next answer.
+                reportClear?.cancel()
+                reportClear = Task {
+                    try? await Task.sleep(for: .seconds(6))
+                    if !Task.isCancelled { reportSent = false }
+                }
             } catch let e as ApiError {
                 reportResult = e.message
             } catch {
