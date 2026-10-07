@@ -134,8 +134,12 @@ async function get(path) {
 /** A time on this device's clock (the service worker's x-terminus-cached) on the server's, for showing. */
 const onServerClock = (localMs) => localMs + serverNow() - Date.now();
 
-/** The banner for a card fetched at `cachedAt` by the service worker, or none for a live one. */
-function stale(cachedAt) {
+/**
+ * The banner for a card fetched at `cachedAt` by the service worker, or none
+ * for a live one. `failed`: the request itself failed (the server answering
+ * an error, say), so it isn't only a slow connection.
+ */
+function stale(cachedAt, failed = false) {
   if (cachedAt === null) {
     slowTries = 0;
     return void banner.set(null);
@@ -146,7 +150,7 @@ function stale(cachedAt) {
   // often (8 s, 16 s), and only while Now is on screen. Past that the timed
   // refresh is soon enough: a struggling server isn't helped by more.
   if (navigator.onLine) {
-    banner.set(t('Slow connection. Showing the update from {0}.', at));
+    banner.set(failed ? t("Couldn't update. Showing the update from {0}.", at) : t('Slow connection. Showing the update from {0}.', at));
     clearTimeout(slowRetry);
     const wait = 8_000 * 2 ** slowTries++;
     if (wait < REFRESH_MS) slowRetry = setTimeout(() => nowShown() && refresh({ timed: true }), wait);
@@ -271,7 +275,9 @@ async function refreshNow(timed) {
     const fallback = offline && to.kind === 'plan' && (!next || isStale(next.data)) ? offlineNext(plan?.data, serverNow()) : null;
     if (fallback) {
       card.set({ offline: fallback });
-      stale(plan.cached ?? Date.now());
+      // When the plan itself was fetched: the service worker's time for a kept
+      // copy, else when this page got it (not now, which would read as fresh).
+      stale(plan.cached ?? planAt, !next);
       updated.set('');
       return;
     }
