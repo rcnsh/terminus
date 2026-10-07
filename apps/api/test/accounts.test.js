@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { hashToken, newPairCode, normalizePairCode } from '../src/accounts.ts';
+import { checkTurnstile, hashToken, newPairCode, normalizePairCode, verifyTurnstile } from '../src/accounts.ts';
 import { WALK } from '../src/config.ts';
 import { GRAPH } from '../src/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
@@ -1369,6 +1369,28 @@ test('D1 down: the answers and /me say 503 with Retry-After; one dropped query i
     }
   } finally {
     env.DB.prepare = prepare;
+    console.error = log;
+  }
+});
+
+test('Turnstile down is logged, not only told to the visitor as a failed check', async () => {
+  const env = { TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  const errors = [];
+  const log = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  try {
+    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => { throw new Error('timed out'); }), false);
+    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => new Response('<html>bad gateway</html>', { status: 502 })), false);
+    assert.equal(errors.length, 2);
+    assert.ok(errors.every((e) => e.startsWith('Turnstile siteverify failed') && !e.includes('visitor-token-7')));
+    // A visitor who fails the check is not an outage.
+    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false, 'error-codes': ['invalid-input-response'] })), false);
+    assert.equal(errors.length, 2);
+    // Told apart, for a caller that would say "try again" rather than "failed".
+    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => { throw new Error('timed out'); }), 'unavailable');
+    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false })), 'failed');
+    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: true })), 'ok');
+  } finally {
     console.error = log;
   }
 });
