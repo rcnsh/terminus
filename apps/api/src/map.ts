@@ -125,14 +125,15 @@ const HEAD_TTL_MS = 5 * 60_000;
 const MAX_CACHED_BYTES = 32 * 1024 * 1024;
 const heads = new Map<string, { etag: string; httpEtag: string; size: number; atMs: number }>();
 
-const knows = (key: string, nowMs: number) => {
-  const known = heads.get(key);
-  return known !== undefined && nowMs - known.atMs < HEAD_TTL_MS;
+/** What this isolate knows of the file, while it still trusts it. */
+const known = (key: string, nowMs: number) => {
+  const head = heads.get(key);
+  return head && nowMs - head.atMs < HEAD_TTL_MS ? head : undefined;
 };
 
 async function headOf(bucket: R2Bucket, key: string, nowMs: number) {
-  const known = heads.get(key);
-  if (known && nowMs - known.atMs < HEAD_TTL_MS) return known;
+  const fresh = known(key, nowMs);
+  if (fresh) return fresh;
   const obj = await bucket.head(key);
   if (!obj) {
     heads.delete(key);
@@ -184,7 +185,7 @@ async function edgePart(
   const fromR2 = async () => ((await mayRead()) ? servePart(req, bucket, key, type, maxAgeS) : slowDown());
   if (!cache) return fromR2();
   const nowMs = Date.now();
-  if (!knows(key, nowMs) && !(await mayRead())) return slowDown();
+  if (!known(key, nowMs) && !(await mayRead())) return slowDown();
   const head = await headOf(bucket, key, nowMs);
   if (!head) return json({ error: 'not found' }, 404);
   const headers = partHeaders(type, maxAgeS, head.httpEtag);

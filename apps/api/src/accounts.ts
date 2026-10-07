@@ -673,7 +673,7 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
   const { results: sessions } = await db
     .prepare('SELECT kind, name, created, last_seen AS lastSeen, expires FROM sessions WHERE user_id = ? ORDER BY created')
     .bind(user.id)
-    .all();
+    .all<{ kind: string; name: string | null; created: number; lastSeen: number; expires: number | null }>();
   const { results: apiKeys } = await db
     .prepare('SELECT name, hint, created, last_used AS lastUsed FROM api_keys WHERE user_id = ? ORDER BY created')
     .bind(user.id)
@@ -688,16 +688,13 @@ export async function exportAccount(db: D1Database, user: User): Promise<Record<
     created: row ? new Date(row.created).toISOString() : null,
     profile,
     ...trips,
-    sessions: sessions.map((x) => {
-      const r = x as { kind: string; name: string | null; created: number; lastSeen: number; expires: number | null };
-      return {
-        kind: r.kind,
-        name: r.name,
-        created: new Date(r.created).toISOString(),
-        lastSeen: new Date(r.lastSeen).toISOString(),
-        expires: r.expires ? new Date(r.expires).toISOString() : null,
-      };
-    }),
+    sessions: sessions.map((r) => ({
+      kind: r.kind,
+      name: r.name,
+      created: new Date(r.created).toISOString(),
+      lastSeen: new Date(r.lastSeen).toISOString(),
+      expires: r.expires ? new Date(r.expires).toISOString() : null,
+    })),
     // Names and dates only: a key itself is never kept.
     apiKeys: apiKeys.map((k) => ({
       name: k.name,

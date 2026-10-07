@@ -34,6 +34,8 @@ test('landing: the version and Account are in the page as sent', () => {
   assert.ok(out.includes('id="account-link">Account</a>'));
   assert.equal(fillLanding(INDEX, { version: null, signedIn: false }), INDEX, 'nothing known: the page as written');
   assert.equal(fillLanding(INDEX, { version: '2.4.2"><script>', signedIn: false }), INDEX, 'only a real version goes in');
+  assert.ok(fillLanding(INDEX, { version: '2.5.0-beta.3', signedIn: false }).includes('Version 2.5.0-beta.3.'), 'a beta version goes in');
+  for (const v of ['2.4', '2.4.2-Beta', '2.4.2-beta.x', ' 2.4.2']) assert.equal(fillLanding(INDEX, { version: v, signedIn: false }), INDEX, `${v} is not a release version`);
 });
 
 test('landing: signed in by a live session only, never a 304, private', async () => {
