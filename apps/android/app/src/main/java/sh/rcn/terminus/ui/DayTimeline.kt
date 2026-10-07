@@ -40,7 +40,7 @@ import androidx.compose.foundation.layout.widthIn
  * away to take it off today, whether it's timetabled or one you added; it
  * goes at once, and a bar at the foot of the screen offers Undo for a few
  * seconds (MainActivity). Until a row has been swiped, the heading says so,
- * and the first few times the first row nudges aside to show what's under it.
+ * and the first time the first row nudges aside a little to show what's under it.
  */
 @Composable
 internal fun DayTimeline(
@@ -79,7 +79,8 @@ private fun Swipeable(item: DayItem, peek: Boolean, onRemove: (DayItem) -> Unit,
     val state = androidx.compose.material3.rememberSwipeToDismissBoxState()
     val remove = stringResource(R.string.remove_from_today)
     val nudge = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
-    val nudgePx = with(androidx.compose.ui.platform.LocalDensity.current) { 180.dp.toPx() }
+    // Just the edge of what's under it: enough to say "this moves", not a swipe of its own.
+    val nudgePx = with(androidx.compose.ui.platform.LocalDensity.current) { 44.dp.toPx() }
     androidx.compose.runtime.LaunchedEffect(state.currentValue) {
         if (state.currentValue != androidx.compose.material3.SwipeToDismissBoxValue.Settled) onRemove(item)
     }
@@ -90,9 +91,11 @@ private fun Swipeable(item: DayItem, peek: Boolean, onRemove: (DayItem) -> Unit,
         androidx.compose.runtime.snapshotFlow { shown }.first { it }
         // Once it has been on screen a moment, so it's seen.
         kotlinx.coroutines.delay(600)
-        nudge.animateTo(-nudgePx, androidx.compose.animation.core.tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-        kotlinx.coroutines.delay(700)
-        nudge.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 300f))
+        // Eased both ways, with no bounce back: a gentle hint, not a jolt.
+        val ease = androidx.compose.animation.core.tween<Float>(320, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        nudge.animateTo(-nudgePx, ease)
+        kotlinx.coroutines.delay(450)
+        nudge.animateTo(0f, ease)
         onPeeked()
     }
     Box(
@@ -100,8 +103,8 @@ private fun Swipeable(item: DayItem, peek: Boolean, onRemove: (DayItem) -> Unit,
             shown = c.size.height > 0 && c.boundsInWindow().height >= c.size.height - 1
         },
     ) {
-        // Under the row while it nudges aside: the same as a swipe to the left shows.
-        if (nudge.value != 0f) RemoveBehind(remove, toEnd = false, Modifier.matchParentSize())
+        // Under the row while it nudges aside: the same red a swipe shows, without the word, which the nudge would cut in half.
+        if (nudge.value != 0f) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp)))
         androidx.compose.material3.SwipeToDismissBox(
             state = state,
             backgroundContent = {
