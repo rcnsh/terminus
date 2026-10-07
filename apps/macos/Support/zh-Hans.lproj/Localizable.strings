@@ -361,3 +361,4 @@
 "Add an email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
 "Add an email to send feedback" = "添加邮箱后才能发送反馈";
 "So we can reply to you. Your setup stays as it is." = "这样我们才能回复你。你的设置会保持不变。";
+"Last checked %@. Times may have changed." = "上次检查：%@。时间可能已有变化。";
