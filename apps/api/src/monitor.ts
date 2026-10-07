@@ -120,6 +120,29 @@ export async function feedDownSince(env: Env, nowMs: number): Promise<number | n
   return since;
 }
 
+/** What /status.json and /health read: the cron's records, which change at most every 15 minutes. */
+export interface StatusRecords {
+  upstream: UpstreamState | null;
+  incidents: Incident[];
+  publicFeed: PublicFeedState | null;
+}
+
+const statusMemo = new WeakMap<object, { at: number; records: StatusRecords }>();
+
+/**
+ * The cron's records, read from KV at most once a minute per isolate (as
+ * feedDownSince is): /status.json is public and polled, and three KV reads a
+ * request cost more than a minute's lag behind a 15-minute check.
+ */
+export async function statusRecords(env: Env, nowMs: number): Promise<StatusRecords> {
+  const kept = statusMemo.get(env.KV);
+  if (kept && nowMs - kept.at < DOWN_MEMO_MS && nowMs >= kept.at) return kept.records;
+  const [upstream, incidents, publicFeed] = await Promise.all([readUpstream(env), readIncidents(env), readPublicFeed(env)]);
+  const records = { upstream, incidents, publicFeed };
+  if (env.KV) statusMemo.set(env.KV, { at: nowMs, records });
+  return records;
+}
+
 export async function readUpstream(env: Env): Promise<UpstreamState | null> {
   return (await readKvJson(env, KEY)) as UpstreamState | null;
 }
