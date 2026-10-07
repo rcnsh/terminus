@@ -50,7 +50,7 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
   return { ok: true, value: { kind, note, platform, appVersion, context } };
 }
 
-/** Stores the report; false when the account has sent its day's worth. */
+/** Stores the report and returns its id; null when the account has sent its day's worth. */
 export async function saveFeedback(db: D1Database, userId: string, f: FeedbackInput, nowMs: number): Promise<string | null> {
   const id = crypto.randomUUID();
   // Counted and inserted in one statement, so reports sent at once can't all

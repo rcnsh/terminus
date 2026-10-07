@@ -1,6 +1,7 @@
+/** Response helpers and query parsing shared by every route. */
+
 import { MAX_FIX_ACC_M, TTL } from './config.ts';
 import { errorText } from './i18n.ts';
-/** Response helpers and query parsing shared by every route. */
 
 export const CORS = {
   'access-control-allow-origin': '*',
@@ -89,7 +90,6 @@ export async function timedFetch(what: string, url: string, init: RequestInit, m
     throw err;
   }
 }
-
 
 /**
  * Browser-facing hardening on every response. The CSP lists exactly what

@@ -336,7 +336,6 @@ export function makeBucket(readFrom) {
   return bucket;
 }
 
-/** Installs caches/fetch globals. Call per test to get a clean cache. */
 /**
  * Thursday 2026-08-27, 09:00 SGT. Inside every service's operating window.
  *
@@ -348,6 +347,7 @@ export function makeBucket(readFrom) {
  */
 export const FROZEN_NOW = Date.UTC(2026, 7, 27, 1, 0, 0);
 
+/** Installs caches/fetch globals. Call per test to get a clean cache. */
 export function installGlobals(fetchImpl, nowMs = FROZEN_NOW) {
   const cache = makeCache();
   globalThis.caches = { default: cache, open: async () => cache };

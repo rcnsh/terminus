@@ -20,7 +20,7 @@
  *
  * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
  * light and dark screenshots of the same moment. POST /__stub/skip?min=N
- * moves it ahead, to walk through a trip (phase 8: detection on the emulator).
+ * moves it ahead, to walk through a trip (ride detection on the emulator).
  * STUB_NOW=<ISO time> starts the clock there, and POST /__stub/at?t=<ISO time>
  * moves it there (it runs on from it): STUB_NOW=2026-10-07T13:30:00Z is a
  * Wednesday 21:30 in Singapore, when R1 and R2 have stopped.
@@ -142,8 +142,9 @@ async function feed(input, init = {}) {
     });
     return Response.json(shuttlePayload(shuttles));
   }
-  // Fake NUSMods: any module has a Monday lab and an online tutorial;
-  // XX9999 is not offered, DOWN1000 times out as NUSMods being down.
+  // Fake NUSMods: any module has a Monday lab, a Tuesday online tutorial and
+  // a Wednesday off-campus lecture; XX9999 is not offered, DOWN1000 answers
+  // 502 as NUSMods being down.
   const mod = /api\.nusmods\.com\/v2\/[^/]+\/modules\/([^.]+)\.json/.exec(url);
   if (mod) {
     if (mod[1] === 'XX9999') return new Response('not found', { status: 404 });
@@ -205,7 +206,7 @@ const WEB = new URL('../../web/public/', import.meta.url).pathname;
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml', '.json': 'application/json' };
 const ASSETS = {
   async fetch(req) {
-    let p = decodeURIComponent(new URL(req.url).pathname);
+    const p = decodeURIComponent(new URL(req.url).pathname);
     let file = path.join(WEB, p);
     if (!file.startsWith(WEB)) return new Response('not found', { status: 404 });
     try {
@@ -234,7 +235,7 @@ const DOWNLOADS = makeBucket(async (key) => {
 
 // Locked like production: the bus answers need a key or a signed-in account.
 // The /admin dashboard opens with the token "dev" here.
-// Push (phase 3): the real Firebase project, when its service account is in
+// Push: the real Firebase project, when its service account is in
 // .private/ (gitignored). Pushes then reach a real device or emulator.
 const FCM = await readFile(new URL('../../../.private/fcm-service-account.json', import.meta.url), 'utf8').catch(() => undefined);
 let env;
@@ -296,7 +297,7 @@ async function serve(req, res) {
     return;
   }
   if (req.method === 'GET' && req.url === '/__stub/rides') {
-    // Measured ride times (phase 8.2), as detection recorded them.
+    // Measured ride times, as detection recorded them.
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(db._db.prepare('SELECT * FROM ride_times').all(), null, 1));
     return;

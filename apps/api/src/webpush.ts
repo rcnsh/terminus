@@ -1,5 +1,5 @@
 /**
- * Web Push (phase 5): the same nudge as the Android push, to the installed
+ * Web Push: the same nudge as the Android push, to the installed
  * web app, including on iPhone (iOS 16.4 and later, from the Home Screen).
  *
  * A subscription is kept on its session like an FCM token, as `web:` and the

@@ -295,7 +295,6 @@ export async function removeAnonymous(db: D1Database, anonId: string, intoUserId
   ]);
 }
 
-
 /** A sign-in code waiting in KV: hashes of the code and of its link's token,
  *  and when it expires. Wrong guesses are counted on the link's D1 row. */
 interface PendingCode {

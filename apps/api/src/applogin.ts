@@ -24,9 +24,9 @@
 import type { Env } from './types.ts';
 import { mailName } from './site.ts';
 import { type Client, type User, ACCOUNT_TTL, ensureUser, hasSetup, hashToken, inboxKey, takeMailBudget, takeGlobalMail, loadProfileJson, newPairCode, newToken, openSession, removeAnonymous, saveProfileJson } from './accounts.ts';
+import { m } from './i18n.ts';
 
 export { hasSetup } from './accounts.ts';
-import { m } from './i18n.ts';
 
 export const LOGIN_TTL = {
   requestMs: 15 * 60_000,
@@ -316,7 +316,7 @@ export async function pollAppLogin(db: D1Database, id: string, poll: string, cli
 }
 
 /**
- * After an 'choose' outcome: keep the account's setup, or replace it with
+ * After a 'choose' outcome: keep the account's setup, or replace it with
  * the device's. The caller proves it holds both tokens: the new one as its
  * session, the old anonymous one in the body. The anonymous account goes.
  */
