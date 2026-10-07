@@ -203,7 +203,9 @@ a.settings-row { text-decoration: none; }
   .settings-row[aria-current] .chev { color: var(--accent); }
 }
 
-.card h2 { font-size: 1.15rem; margin-bottom: 4px; }
+/* A card's own heading; not the Now card's headline (when to go, Done for
+   today), which is a heading too but sized by the card's style. */
+.card h2:where(:not(.go, .done-label)) { font-size: 1.15rem; margin-bottom: 4px; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.tight input { width: 7.5rem; }
 .row.tight span { color: var(--muted); font-size: 0.9rem; }

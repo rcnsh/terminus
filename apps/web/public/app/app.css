@@ -330,8 +330,10 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 }
 .map-status[hidden] { display: none; }
 /* The stops as a list (map.js StopList): seen only while it has the focus. */
-.map-stops { width: auto; max-width: 100%; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
-.map-stops:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+.map-stops { display: flex; gap: 6px; max-width: 100%; }
+.map-stops select { width: auto; min-width: 0; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
+.map-stops .btn { flex: none; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
+.map-stops:not(:focus-within) { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
 
 /* A stop's or a bus's details, over the bottom of the map. */
 .map-sheet {
