@@ -1379,6 +1379,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': { description: 'The day file, gzipped JSON.', content: { 'application/gzip': {} } },
             '404': errorResponse('No operator token, or no recording for that day.'),
+            '503': errorResponse('The recorder holding the day did not answer within 10 s. Wait for `Retry-After`.'),
           },
         },
       },
