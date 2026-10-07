@@ -52,7 +52,6 @@
     <string name="a11y_starts">%1$s, starts %2$s</string>
     <string name="a11y_to">To %1$s</string>
     <string name="account_page">Account page</string>
-    <string name="account_page_hint">API keys, signing out everywhere and deleting your account are on the account page.</string>
     <string name="add">Add</string>
     <string name="add_by_hand">Add a class or commitment by hand</string>
     <string name="add_device">Add a device</string>
@@ -161,12 +160,10 @@
     <string name="is_this_wrong">Is this wrong?</string>
     <string name="language">Language</string>
     <string name="time_format">Time format</string>
-    <string name="time_format_hint">For every time terminus shows, here, on your Mac and on the web.</string>
     <string name="show_times_as">Show times as</string>
     <string name="clock_12">12-hour</string>
     <string name="clock_12_eg">6:36 PM</string>
     <string name="clock_24">24-hour</string>
-    <string name="with_example">%1$s (%2$s)</string>
     <string name="language_hint">Also used on your Mac, on the web and in emails. Place and bus names stay in English, as on the signs.</string>
     <string name="all_off">All off</string>
     <string name="devices_need_email">Add an email to use other devices</string>
@@ -183,7 +180,6 @@
     <string name="leaves_in_s">Leaves in %1$d s</string>
     <string name="left_ago">Left %1$d min ago · updating</string>
     <string name="live_notification">Live notification during trips</string>
-    <string name="live_notification_hint">During each trip, from when it\'s time to leave until you arrive, shows the next bus and a countdown in your notifications and on the widget. It checks for new times every 30 seconds, which uses more battery.</string>
     <string name="loading">Loading…</string>
     <string name="location">Location</string>
     <string name="location_ask">Allow location so directions start from your nearest stop. Without it, terminus assumes you\'re at your last class or at home.</string>
@@ -225,7 +221,6 @@
     <string name="notifications_off">Notifications are off for terminus.</string>
     <string name="notifications_text">A heads-up 5 minutes before you need to leave for class, so you don\'t have to keep checking.</string>
     <string name="notify_leave">Notify me when to leave for class</string>
-    <string name="notify_leave_hint">A reminder 5 minutes before you need to leave, then updates on your ride or the next way there.</string>
     <string name="now">now</string>
     <string name="number_to_choose">The number to choose: %1$s</string>
     <string name="nusmods_hint">In NUSMods: Timetable, then Share/Sync. Tap Share and choose terminus, or copy the link and paste it here.</string>
@@ -318,7 +313,6 @@
     <string name="sign_in">Sign in</string>
     <string name="sign_in_why">Use the email you signed up with. We\'ll email you a code to type here.</string>
     <string name="sign_out">Sign out</string>
-    <string name="sign_out_phone">Sign out of this phone</string>
     <string name="sign_out_text">The app and widget will stop showing your timetable. Your account and settings are kept; sign in again with %1$s.</string>
     <string name="sign_out_title">Sign out of this phone?</string>
     <string name="signed_in_as">Signed in as %1$s</string>
@@ -344,7 +338,6 @@
     <string name="theme_dark">Dark</string>
     <string name="theme_hint">Only on this phone.</string>
     <string name="theme_light">Light</string>
-    <string name="this_phone">" (this phone)"</string>
     <string name="thursday">Thursday</string>
     <string name="thursday_short">Thu</string>
     <string name="time_am">%1$s am</string>
@@ -491,4 +484,23 @@
     <string name="going_anyway">Going somewhere anyway?</string>
     <string name="plan_trip">Plan a trip</string>
     <string name="feedback_short">Tell us what\'s wrong, or what you\'d like</string>
+    <!-- Settings' pages as one family (SettingsParts.kt) -->
+    <string name="heading_from_nusmods">From NUSMods</string>
+    <string name="heading_your_favourites">Your favourites</string>
+    <string name="heading_before_class">Before class</string>
+    <string name="heading_during_trip">During a trip</string>
+    <string name="notify_leave_short">A reminder 5 minutes before you need to leave</string>
+    <string name="notify_leave_more">Then updates on your ride or the next way there.</string>
+    <string name="live_notification_short">The next bus and a countdown, until you arrive</string>
+    <string name="detect_short">Keeps your plan in sync across your devices</string>
+    <string name="during_trip_hint">The live notification checks for new times every 30 seconds, which uses more battery. Noticing when you board uses your location during a trip, from when you open terminus or tap its notification or widget. Only the result is stored, never your location.</string>
+    <string name="heading_your_devices">Your devices</string>
+    <string name="this_phone_tag">This phone</string>
+    <string name="auto">Auto</string>
+    <string name="time_format_hint_auto">For every time terminus shows, here, on your Mac and on the web. Auto follows this phone.</string>
+    <string name="heading_signed_in">Signed in</string>
+    <string name="heading_your_data">Your data</string>
+    <string name="account_page_sub">API keys, and signing out everywhere</string>
+    <string name="heading_more">More</string>
+    <string name="get_apps">Get the apps</string>
 </resources>

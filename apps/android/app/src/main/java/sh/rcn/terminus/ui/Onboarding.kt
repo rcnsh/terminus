@@ -441,20 +441,33 @@ internal fun Unplaced(state: AccountState, account: AccountViewModel) {
     }
 }
 
-/** Import from NUSMods: the link, Import, and what came of it. Shared by setup and Settings. */
+/**
+ * Import from NUSMods: the link, Import, and what came of it. Shared by setup
+ * and Settings; [inSettings], Import is the ink pill beside the link, and the
+ * page says how to get one under its group.
+ */
 @Composable
-internal fun TimetableImport(state: AccountState, account: AccountViewModel, link: String, onLink: (String) -> Unit) {
-    OutlinedTextField(
-        value = link,
-        onValueChange = onLink,
-        label = { Text(stringResource(R.string.nusmods_link)) },
-        placeholder = { Text("https://nusmods.com/timetable/sem-1/share?…") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Hint(stringResource(R.string.nusmods_hint), Modifier.padding(top = 4.dp))
-    Button(onClick = { account.import(link) }, enabled = link.isNotBlank() && !state.importing, modifier = Modifier.padding(top = 8.dp)) {
-        Text(if (state.importing) stringResource(R.string.importing) else stringResource(R.string.import_action))
+internal fun TimetableImport(state: AccountState, account: AccountViewModel, link: String, inSettings: Boolean = false, onLink: (String) -> Unit) {
+    val field = @Composable { modifier: Modifier ->
+        OutlinedTextField(
+            value = link,
+            onValueChange = onLink,
+            label = { Text(stringResource(R.string.nusmods_link)) },
+            placeholder = { Text("https://nusmods.com/timetable/sem-1/share?…") },
+            singleLine = true,
+            modifier = modifier,
+        )
+    }
+    val label = if (state.importing) stringResource(R.string.importing) else stringResource(R.string.import_action)
+    if (inSettings) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            field(Modifier.weight(1f))
+            InkButton(label, { account.import(link) }, Modifier.padding(start = 8.dp, top = 6.dp), enabled = link.isNotBlank() && !state.importing)
+        }
+    } else {
+        field(Modifier.fillMaxWidth())
+        Hint(stringResource(R.string.nusmods_hint), Modifier.padding(top = 4.dp))
+        Button(onClick = { account.import(link) }, enabled = link.isNotBlank() && !state.importing, modifier = Modifier.padding(top = 8.dp)) { Text(label) }
     }
     val r = state.imported
     if (r != null) {

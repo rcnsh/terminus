@@ -119,14 +119,43 @@ function Field({ id, label, sub, children }) {
   `;
 }
 
-/** A group's heading and its rows, with at most one line of explanation under them. */
-function Group({ title, hint, children }) {
+/**
+ * A group's heading and its rows, with at most one line of explanation under
+ * them: every page of Settings is made of these, as on Android. `id` names the
+ * heading, for a control in the group to be labelled by it.
+ */
+function Group({ title, hint, id, children }) {
   return html`
     <section class="trips-group">
-      <h3 class="eyebrow">${title}</h3>
+      <h3 class="eyebrow" id=${id}>${title}</h3>
       <div class="card settings-list">${children}</div>
       ${hint && html`<p class="hint group-hint">${hint}</p>`}
     </section>
+  `;
+}
+
+/** Two or three choices as pills on one track (radios underneath); `full` spreads them across the row. */
+export function Pills({ name, value, options, onChange, labelledBy, full = false }) {
+  return html`
+    <div class=${full ? 'segmented full' : 'segmented'} role="radiogroup" aria-labelledby=${labelledBy}>
+      ${options.map(
+        ([v, label]) => html`<label key=${v}>
+          <input type="radio" name=${name} value=${v} checked=${value === v} onChange=${() => onChange(v)} />
+          <span>${label}</span>
+        </label>`,
+      )}
+    </div>
+  `;
+}
+
+/** − value +, for a number in small steps between `min` and `max`. */
+function Stepper({ label, value, text, min, max, step, less, more, onChange }) {
+  return html`
+    <span class="stepper" role="group" aria-label=${label}>
+      <button type="button" aria-label=${less} disabled=${value <= min} onClick=${() => onChange(value - step)}>−</button>
+      <output aria-live="polite">${text}</output>
+      <button type="button" aria-label=${more} disabled=${value >= max} onClick=${() => onChange(value + step)}>+</button>
+    </span>
   `;
 }
 
@@ -178,15 +207,6 @@ export function Trips() {
     );
   };
 
-  const number = (field, ok, bad, fallback) => (e) => {
-    const v = Number(e.currentTarget.value);
-    if (ok(v)) edit((x) => (x[field] = v));
-    else {
-      if (bad) toast(bad);
-      e.currentTarget.value = String(p[field] ?? fallback);
-    }
-  };
-
   const dayTime = (field) => (e) => {
     const v = toMin(e.currentTarget.value);
     if (v == null) return;
@@ -200,13 +220,16 @@ export function Trips() {
   };
 
   const pace = PACES().find((x) => x.value === (p.walkPace ?? 'normal')) ?? PACES()[1];
+  const walk = p.homeWalkMin ?? 5;
+  const gap = p.gapHours ?? 2;
 
   return html`
     <div class="trips">
       <${Group} title=${t('Where you live')} hint=${t('Only your stops are saved, never where you live.')}>
-        <${Field} id="residence" label=${t('Residence')}>
+        <${Field} id="residence" label=${t('Residence')} sub=${picking ? '' : t('Your stops: {0}.', now.map(stopName).join(', '))}>
           <select
             id="residence"
+            class="plain"
             value=${picking ? '' : residence.code}
             onChange=${(e) => {
               const r = residences.find((x) => x.code === e.currentTarget.value);
@@ -232,13 +255,21 @@ export function Trips() {
                 ${msg && html`<span class="hint" role="status">${msg}</span>`}
               </div>
             `
-          : html`<div class="field field-note"><span class="hint">${t('Your stops: {0}.', now.map(stopName).join(', '))}</span></div>`}
-        <${Field} id="home-walk" label=${t('Walk to your stop')}>
-          <span class="unit">
-            <input id="home-walk" type="number" inputmode="numeric" min="0" max="30" step="1" value=${p.homeWalkMin ?? 5} onChange=${number('homeWalkMin', (v) => Number.isInteger(v) && v >= 0 && v <= 30, t('Between 0 and 30 minutes'), 5)} />
-            ${t('min')}
-          </span>
-        <//>
+          : null}
+        <div class="field">
+          <span class="field-label">${t('Walk to your stop')}</span>
+          <${Stepper}
+            label=${t('Walk to your stop')}
+            value=${walk}
+            text=${t('{0} min', walk)}
+            min=${0}
+            max=${30}
+            step=${1}
+            less=${t('One minute less')}
+            more=${t('One minute more')}
+            onChange=${(v) => edit((x) => (x.homeWalkMin = v))}
+          />
+        </div>
       <//>
 
       <${Group} title=${t('Your day')} hint=${t('Outside these hours, you see your next class instead of a bus.')}>
@@ -249,27 +280,26 @@ export function Trips() {
             <input id="day-end" type="time" aria-label=${t('Day ends')} value=${hhmm(p.dayEndMin ?? 1080)} onChange=${dayTime('dayEndMin')} />
           </span>
         <//>
-        <${Field} id="gap" label=${t('Go home in gaps longer than')}>
-          <span class="unit">
-            <input id="gap" type="number" inputmode="decimal" min="0.5" max="12" step="0.5" value=${p.gapHours} onChange=${number('gapHours', (v) => v >= 0.5 && v <= 12, null, 2)} />
-            ${t('hours')}
-          </span>
-        <//>
+        <div class="field">
+          <span class="field-label">${t('Go home in gaps longer than')}</span>
+          <${Stepper}
+            label=${t('Go home in gaps longer than')}
+            value=${gap}
+            text=${gap === 1 ? t('1 hour') : t('{0} hours', gap)}
+            min=${0.5}
+            max=${12}
+            step=${0.5}
+            less=${t('Half an hour shorter')}
+            more=${t('Half an hour longer')}
+            onChange=${(v) => edit((x) => (x.gapHours = v))}
+          />
+        </div>
       <//>
 
       <${Group} title=${t('Walking')} hint=${t('Walks follow the paths on campus.')}>
-        <div class="field">
+        <div class="field stack">
           <span class="field-label" id="pace-label">${t('Walking pace')}<span class="field-sub">${pace.hint}</span></span>
-          <div class="field-control">
-            <div class="segmented" role="radiogroup" aria-labelledby="pace-label">
-              ${PACES().map(
-                (x) => html`<label key=${x.value}>
-                  <input type="radio" name="pace" value=${x.value} checked=${pace.value === x.value} onChange=${() => edit((y) => (y.walkPace = x.value))} />
-                  <span>${x.label}</span>
-                </label>`,
-              )}
-            </div>
-          </div>
+          <${Pills} name="pace" value=${pace.value} options=${PACES().map((x) => [x.value, x.label])} onChange=${(v) => edit((y) => (y.walkPace = v))} labelledBy="pace-label" full />
         </div>
         <${Field} id="full-bus" label=${t('Allow for busy buses')} sub=${t('Aim one bus earlier when yours is often full.')}>
           <input id="full-bus" class="switch" type="checkbox" role="switch" checked=${p.fullBusMargin !== false} onChange=${(e) => edit((x) => (x.fullBusMargin = e.currentTarget.checked))} />
@@ -361,13 +391,6 @@ export function Timetable({ me }) {
   const [share, setShare] = useState(p.share ?? '');
   const [msg, setMsg] = useState('');
   const [unresolved, setUnresolved] = useState([]);
-  const classes = p.trips.length + p.manual.length;
-  // Needed once a semester: folded away while there are classes, unless it's needed now.
-  const wanted = classes === 0 || reimport || Boolean(share && msg);
-  const [open, setOpen] = useState(wanted);
-  useEffect(() => {
-    if (wanted) setOpen(true);
-  }, [wanted]);
   const shareBox = useRef(null);
 
   // A NUSMods link shared to the app: in the box, for the person to import.
@@ -376,7 +399,6 @@ export function Timetable({ me }) {
   useEffect(() => {
     if (!offer) return;
     setShare(offer);
-    setOpen(true);
     setMsg(t('Press Import to replace your timetable with this one.'));
     importOffer.set(null);
     requestAnimationFrame(() => shareBox.current?.scrollIntoView({ block: 'center' }));
@@ -413,37 +435,38 @@ export function Timetable({ me }) {
   // A favourite at its usual time each week: listed with the classes that day.
   const usual = (p.usual ?? []).filter((u) => p.places.some((x) => x.key === u.place)).map((u) => ({ u, key: `usual-${u.place}-${u.day}-${u.atMin}` }));
 
+  const count = all.length ? `${all.length === 1 ? t('1 class') : t('{0} classes', all.length)}${term && p.trips.length ? ` · ${term}` : ''}` : t('No classes yet');
+
   return html`
-    ${reimport &&
-    html`<div class="banner">
-      <strong>${t('Re-import your timetable.')}</strong>${' '}
-      <span>${t("This link is for {0}, which has ended. Copy this semester's link from NUSMods and import it below.", me.term)}</span>
-    </div>`}
-    <div class="card">
-      <p class="hint">${all.length ? `${all.length === 1 ? t('1 class') : t('{0} classes', all.length)}${term && p.trips.length ? ` · ${term}` : ''}` : ''}</p>
-      <p class="hint" role="status">${msg}</p>
-      <${Unresolved} list=${unresolved} onDone=${(u) => setUnresolved((l) => l.filter((x) => x !== u))} />
-      <div class="classes">
-        ${!all.length && !usual.length && html`<p class="hint">${t('No classes yet. Import from NUSMods or add them by hand.')}</p>`}
-        ${DAY_ORDER.map((day) => {
-          const rows = [...all.filter((r) => r.c.day === day), ...usual.filter((r) => r.u.day === day)].sort((a, b) => (a.c?.arriveByMin ?? a.u.atMin) - (b.c?.arriveByMin ?? b.u.atMin));
-          if (!rows.length) return null;
-          return html`<div class="day" key=${`d${day}`}>${DAYS[day]}</div>${rows.map((r) => (r.u ? html`<${UsualRow} key=${r.key} u=${r.u} />` : html`<${ClassRow} key=${r.key} c=${r.c} list=${r.list} />`))}`;
-        })}
-      </div>
-      <${AddClass} />
+    <div class="trips">
+      ${reimport &&
+      html`<div class="banner">
+        <strong>${t('Re-import your timetable.')}</strong>${' '}
+        <span>${t("This link is for {0}, which has ended. Copy this semester's link from NUSMods and import it below.", me.term)}</span>
+      </div>`}
+      <${Group} title=${t('From NUSMods')} hint=${t('In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester.')}>
+        <form class="field stack" onSubmit=${runImport}>
+          <label for="share">${t('NUSMods share link')}</label>
+          <div class="row">
+            <input id="share" ref=${shareBox} type="url" placeholder="https://nusmods.com/timetable/sem-1/share?…" value=${share} onInput=${(e) => setShare(e.currentTarget.value)} />
+            <button type="submit" class="btn small">${t('Import')}</button>
+          </div>
+          ${msg && html`<p class="hint" role="status">${msg}</p>`}
+        </form>
+      <//>
+      <${Group} title=${count} hint=${all.length || usual.length ? '' : t('No classes yet. Import from NUSMods or add them by hand.')}>
+        ${unresolved.length > 0 && html`<div class="group-body"><${Unresolved} list=${unresolved} onDone=${(u) => setUnresolved((l) => l.filter((x) => x !== u))} /></div>`}
+        ${(all.length > 0 || usual.length > 0) &&
+        html`<div class="classes group-body">
+          ${DAY_ORDER.map((day) => {
+            const rows = [...all.filter((r) => r.c.day === day), ...usual.filter((r) => r.u.day === day)].sort((a, b) => (a.c?.arriveByMin ?? a.u.atMin) - (b.c?.arriveByMin ?? b.u.atMin));
+            if (!rows.length) return null;
+            return html`<div class="day" key=${`d${day}`}>${DAYS[day]}</div>${rows.map((r) => (r.u ? html`<${UsualRow} key=${r.key} u=${r.u} />` : html`<${ClassRow} key=${r.key} c=${r.c} list=${r.list} />`))}`;
+          })}
+        </div>`}
+        <${AddClass} />
+      <//>
     </div>
-    <details class="card import-box" open=${open} onToggle=${(e) => setOpen(e.currentTarget.open)}>
-      <summary>${t('Import from NUSMods')}</summary>
-      <form onSubmit=${runImport}>
-        <label for="share">${t('NUSMods share link')}</label>
-        <div class="row">
-          <input id="share" ref=${shareBox} type="url" placeholder="https://nusmods.com/timetable/sem-1/share?…" value=${share} onInput=${(e) => setShare(e.currentTarget.value)} />
-          <button type="submit" class="btn">${t('Import')}</button>
-        </div>
-        <p class="hint">${t('In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester.')}</p>
-      </form>
-    </details>
   `;
 }
 
@@ -550,8 +573,9 @@ function mySuggestions() {
 
 const destinations = () => campus.get()?.destinations ?? [];
 
-/** "Add a class or commitment by hand". */
+/** "+ Add a class or commitment by hand": the last row of the classes, opening the form under it. */
 function AddClass() {
+  const [open, setOpen] = useState(false);
   const where = useRef(null);
   const picked = useRef(null);
   const [day, setDay] = useState('1');
@@ -576,8 +600,9 @@ function AddClass() {
     where.current.clear();
   };
   return html`
-    <details class="add">
-      <summary>${t('Add a class or commitment by hand')}</summary>
+    <button type="button" class="add-row" aria-expanded=${open} onClick=${() => setOpen(!open)}>${t('Add a class or commitment by hand')}</button>
+    ${open &&
+    html`<div class="group-body add-form">
       <form class="grid" onSubmit=${submit}>
         <label>${t('Day')}
           <select name="day" required value=${day} onChange=${(e) => setDay(e.currentTarget.value)}>
@@ -605,7 +630,7 @@ function AddClass() {
         </label>
         <button type="submit" class="btn wide">${t('Add')}</button>
       </form>
-    </details>
+    </div>`}
   `;
 }
 
@@ -643,39 +668,38 @@ export function Favourites() {
   const p = useStore(profile);
   const search = useRef(null);
   return html`
-    <div class="card">
-      <p class="hint">${t('Available in one tap from the app, the widget and the menu bar. To go somewhere every week, add it to your timetable.')}</p>
-      <ul class="list">
-        ${p.places.map((place) => html`<${Place} key=${place.key} place=${place} />`)}
-      </ul>
-      <form
-        id="place-form"
-        class="row"
-        onSubmit=${(e) => {
-          // Enter on a typed stop code or name adds it; picking from the list does too.
-          e.preventDefault();
-          const to = resolveWhere(null, search.current.input.value);
-          if (!to) return refuse(search.current.input, t('Pick a stop, building or room from the list'));
-          addFavourite(to, stopName(to));
-          search.current.clear();
-        }}
-      >
-        <${SearchBox}
-          name="where"
-          required
-          placeholder=${t('Add a stop, building or room')}
-          aria-label=${t('Add a favourite')}
-          ctl=${search}
-          source=${destinations}
-          pinned=${timetableStops}
-          suggestions=${timetableStops}
-          stopName=${stopName}
-          onPick=${(d) => {
-            addFavourite(pickedStop(d), d.kind === 'building' || d.kind === 'room' ? d.code : d.label);
+    <div class="trips">
+      <${Group} title=${t('Your favourites')} hint=${t('Available in one tap from the app, the widget and the menu bar. To go somewhere every week, add it to your timetable.')}>
+        ${p.places.length > 0 && html`<ul class="list group-body">${p.places.map((place) => html`<${Place} key=${place.key} place=${place} />`)}</ul>`}
+        <form
+          id="place-form"
+          class="field"
+          onSubmit=${(e) => {
+            // Enter on a typed stop code or name adds it; picking from the list does too.
+            e.preventDefault();
+            const to = resolveWhere(null, search.current.input.value);
+            if (!to) return refuse(search.current.input, t('Pick a stop, building or room from the list'));
+            addFavourite(to, stopName(to));
             search.current.clear();
           }}
-        />
-      </form>
+        >
+          <${SearchBox}
+            name="where"
+            required
+            placeholder=${t('Add a stop, building or room')}
+            aria-label=${t('Add a favourite')}
+            ctl=${search}
+            source=${destinations}
+            pinned=${timetableStops}
+            suggestions=${timetableStops}
+            stopName=${stopName}
+            onPick=${(d) => {
+              addFavourite(pickedStop(d), d.kind === 'building' || d.kind === 'room' ? d.code : d.label);
+              search.current.clear();
+            }}
+          />
+        </form>
+      <//>
     </div>
   `;
 }
@@ -734,29 +758,33 @@ export function Devices({ me }) {
     load().catch(() => {});
   }, [version]);
   const anonymous = me.anonymous === true;
+  if (anonymous) return html`<div class="card"><p class="hint">${t('Add an email to use terminus on your other devices too.')}</p></div>`;
   return html`
-    <div class="card">
-      ${anonymous
-        ? html`<p class="hint">${t('Add an email to use terminus on your other devices too.')}</p>`
-        : html`<${Rich} as="p" class="hint" text=${t('Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.')} />`}
-      ${!anonymous && html`<button type="button" class="btn wide" onClick=${() => setPairing((n) => (n ?? 0) + 1)}>${t('Pair a device')}</button>`}
-      ${pairing && html`<${Pairing} key=${pairing} count=${devices?.length ?? 0} reload=${load} />`}
-      <ul class="list">
-        ${(devices ?? []).map(
-          (d) => html`<li key=${d.id}>
-            <span><strong>${d.name ?? t('Device')}</strong><div class="meta">${t('Added {0} · used {1}', shortDate(d.created), shortDate(d.lastSeen))}</div></span>
-            <button
-              type="button"
-              class="remove"
-              aria-label=${t('Remove {0}', d.name ?? t('Device'))}
-              onClick=${async () => {
-                await api(`/me/devices/${d.id}`, { method: 'DELETE' });
-                load();
-              }}
-            >${t('Remove')}</button>
-          </li>`,
-        )}
-      </ul>
+    <div class="trips">
+      ${devices?.length > 0 &&
+      html`<${Group} title=${t('Your devices')}>
+        <ul class="list group-body">
+          ${devices.map(
+            (d) => html`<li key=${d.id}>
+              <span><strong>${d.name ?? t('Device')}</strong><div class="meta">${t('Added {0} · used {1}', shortDate(d.created), shortDate(d.lastSeen))}</div></span>
+              <button
+                type="button"
+                class="remove"
+                aria-label=${t('Remove {0}', d.name ?? t('Device'))}
+                onClick=${async () => {
+                  await api(`/me/devices/${d.id}`, { method: 'DELETE' });
+                  load();
+                }}
+              >${t('Remove')}</button>
+            </li>`,
+          )}
+        </ul>
+      <//>`}
+      <section class="trips-group">
+        <button type="button" class="btn wide" onClick=${() => setPairing((n) => (n ?? 0) + 1)}>${t('Add a device')}</button>
+        <${Rich} as="p" class="hint group-hint" text=${t('Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.')} />
+        ${pairing && html`<div class="card"><${Pairing} key=${pairing} count=${devices?.length ?? 0} reload=${load} /></div>`}
+      </section>
     </div>
   `;
 }
@@ -836,35 +864,40 @@ export const CLOCKS = () => [
   { value: '24', label: t('24-hour'), eg: '18:36' },
 ];
 
+/** Each as a row of pills: Auto follows this browser. The languages are named in themselves. */
 export function Language() {
   const p = useStore(profile);
   return html`
-    <div class="card">
-      <label for="lang">${t('Language')}</label>
-      <select
-        id="lang"
-        value=${window.i18n?.pref() ?? 'auto'}
-        onChange=${async (e) => {
-          // This browser and the account, so emails and the other devices follow.
-          const v = e.currentTarget.value;
-          window.i18n?.noteAccount(v);
-          await saveNow((x) => (x.lang = v)).catch(() => {});
-          window.i18n?.setLang(v);
-        }}
-      >
-        <option value="auto">${t('Follow this browser')}</option>
-        <option value="en">English</option>
-        <option value="zh">中文</option>
-      </select>
-      <p class="hint">${t('Also used for emails and on your other devices. Place and bus names stay in English, as on the signs.')}</p>
-    </div>
-    <div class="card">
-      <label for="clock">${t('Time format')}</label>
-      <select id="clock" value=${p?.clock ?? 'auto'} onChange=${(e) => saveNow((x) => (x.clock = e.currentTarget.value)).catch((err) => toast(t('Not saved. {0}', err.message)))}>
-        <option value="auto">${t('Follow this browser')}</option>
-        ${CLOCKS().map((c) => html`<option value=${c.value}>${t('{0} ({1})', c.label, c.eg)}</option>`)}
-      </select>
-      <p class="hint">${t('For every time terminus shows, here and on your other devices.')}</p>
+    <div class="trips">
+      <${Group} title=${t('Language')} id="lang-label" hint=${t('Also used for emails and on your other devices. Place and bus names stay in English, as on the signs.')}>
+        <div class="field">
+          <${Pills}
+            name="lang"
+            value=${window.i18n?.pref() ?? 'auto'}
+            options=${[['auto', t('Auto')], ['en', 'English'], ['zh', '中文']]}
+            labelledBy="lang-label"
+            full
+            onChange=${async (v) => {
+              // This browser and the account, so emails and the other devices follow.
+              window.i18n?.noteAccount(v);
+              await saveNow((x) => (x.lang = v)).catch(() => {});
+              window.i18n?.setLang(v);
+            }}
+          />
+        </div>
+      <//>
+      <${Group} title=${t('Time format')} id="clock-label" hint=${t('For every time terminus shows, here and on your other devices. Auto follows this browser.')}>
+        <div class="field">
+          <${Pills}
+            name="clock"
+            value=${p?.clock ?? 'auto'}
+            options=${[['auto', t('Auto')], ...CLOCKS().map((c) => [c.value, c.label])]}
+            labelledBy="clock-label"
+            full
+            onChange=${(v) => saveNow((x) => (x.clock = v)).catch((err) => toast(t('Not saved. {0}', err.message)))}
+          />
+        </div>
+      <//>
     </div>
   `;
 }
@@ -873,27 +906,20 @@ export function Language() {
 export const theme = store(window.theme?.pref() ?? 'auto');
 
 /** Auto, Light or Dark, on its row in the list. */
-export function ThemeSwitch({ labelledBy }) {
+export function ThemeSwitch({ labelledBy, full = false }) {
   const now = useStore(theme);
-  const choice = (value, label) => html`
-    <label>
-      <input
-        type="radio"
-        name="theme"
-        value=${value}
-        checked=${now === value}
-        onChange=${() => {
-          window.theme?.set(value);
-          theme.set(value);
-        }}
-      />
-      <span>${label}</span>
-    </label>
-  `;
   return html`
-    <div class="segmented" role="radiogroup" aria-labelledby=${labelledBy}>
-      ${choice('auto', t('Auto'))}${choice('light', t('Light'))}${choice('dark', t('Dark'))}
-    </div>
+    <${Pills}
+      name="theme"
+      value=${now}
+      options=${[['auto', t('Auto')], ['light', t('Light')], ['dark', t('Dark')]]}
+      labelledBy=${labelledBy}
+      full=${full}
+      onChange=${(v) => {
+        window.theme?.set(v);
+        theme.set(v);
+      }}
+    />
   `;
 }
 
@@ -913,24 +939,25 @@ export function Appearance() {
   }, []);
   const sample = useMemo(() => sampleAnswer(minute), [minute, p?.clock]);
   return html`
-    <div class="card">
-      <span class="label" id="theme-label">${t('Theme')}</span>
-      <${ThemeSwitch} labelledBy="theme-label" />
-    </div>
-    <h2 class="eyebrow settings-group" id="style-label">${t('Card style')}</h2>
-    <p class="hint">${t('How the card shows a trip by bus. Only in this browser.')}</p>
-    <div class="style-picker" role="radiogroup" aria-labelledby="style-label">
-      ${STYLES.map(
-        (s) => html`
-          <label class=${chosen === s ? 'card style-choice on' : 'card style-choice'} key=${s}>
-            <span class="style-head">
-              <input type="radio" name="card-style" value=${s} checked=${chosen === s} onChange=${() => setCardStyle(s)} />
-              <span><strong>${styleName(s)}</strong><span class="hint">${styleHint(s)}</span></span>
-            </span>
-            <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${s} /></div>
-          </label>
-        `,
-      )}
+    <div class="trips">
+      <${Group} title=${t('Theme')} id="theme-label" hint=${t('Only in this browser.')}>
+        <div class="field"><${ThemeSwitch} labelledBy="theme-label" full /></div>
+      <//>
+      <${Group} title=${t('Card style')} id="style-label" hint=${t('How the card shows a trip by bus. Only in this browser.')}>
+        <div class="style-picker" role="radiogroup" aria-labelledby="style-label">
+          ${STYLES.map(
+            (s) => html`
+              <label class=${chosen === s ? 'style-choice on' : 'style-choice'} key=${s}>
+                <span class="style-head">
+                  <input type="radio" name="card-style" value=${s} checked=${chosen === s} onChange=${() => setCardStyle(s)} />
+                  <span><strong>${styleName(s)}</strong><span class="hint">${styleHint(s)}</span></span>
+                </span>
+                <div class="widget" aria-hidden="true"><${Journey} a=${sample} style=${s} /></div>
+              </label>
+            `,
+          )}
+        </div>
+      <//>
     </div>
   `;
 }
@@ -995,11 +1022,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
       setMsg(err.message);
     }
   };
-  const email = html`<span class="field-email">${me.email ? breakAfterAt(me.email) : t('No email')}</span>`;
-  // No email yet: adding one is the first thing here, not a small button beside "No email".
-  const first = me.anonymous === true ? null : html`<button type="button" class="btn small ghost" onClick=${onSignOut}>${t('Sign out')}</button>`;
-  const who = html`<div class=${inApp ? 'account-who' : 'account-who narrow-only'}>${email}${first}</div>`;
-  const status = msg && html`<p class="hint" role="status">${msg}</p>`;
+  const chev = html`<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>`;
   return html`
     <div class="trips">
       ${me.anonymous === true &&
@@ -1008,18 +1031,25 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
         <p class="hint">${t("Your setup stays in this browser. Add an email any time to use it on your other devices, or to keep it if this browser's data is cleared.")}</p>
         <button type="button" class="btn accent wide" onClick=${onAddEmail}>${t('Add an email')}</button>
       </div>`}
-      <div class="card account-card">
-        ${me.anonymous !== true && who}
-        <div class="account-actions">
-          <a class="btn ghost small" href="/me/export" download>${t('Download my data')}</a>
-          <button type="button" class="btn ghost small" onClick=${everywhere}>${t('Sign out everywhere')}</button>
+      ${me.anonymous !== true &&
+      html`<div class=${inApp ? '' : 'narrow-only'}><${Group} title=${t('Signed in')}>
+        <div class="field account-who">
+          <span class="avatar" aria-hidden="true">${(me.email ?? '?').slice(0, 1).toUpperCase()}</span>
+          <span class="field-email">${me.email ? breakAfterAt(me.email) : t('No email')}</span>
+          <button type="button" class="btn small ghost" onClick=${onSignOut}>${t('Sign out')}</button>
         </div>
-      </div>
+      <//></div>`}
+      <${Group} title=${t('Your data')}>
+        <a class="settings-row" href="/me/export" download><span class="row-text"><span class="row-title">${t('Download my data')}</span></span>${chev}</a>
+        <button type="button" class="settings-row" onClick=${everywhere}><span class="row-text"><span class="row-title">${t('Sign out everywhere')}</span></span>${chev}</button>
+      <//>
       <${Keys} />
-      <div class="card account-card account-danger">
-        <button type="button" class="btn danger small" onClick=${remove}>${t('Delete account')}</button>
-        ${status}
-      </div>
+      <section class="trips-group">
+        <div class="card settings-list">
+          <button type="button" class="settings-row danger-row" onClick=${remove}><span class="row-text"><span class="row-title">${t('Delete account')}</span></span>${chev}</button>
+        </div>
+        ${msg && html`<p class="hint group-hint" role="status">${msg}</p>`}
+      </section>
     </div>
   `;
 }
@@ -1039,9 +1069,9 @@ function Keys() {
   return html`
     <section class="trips-group">
       <h3 class="eyebrow">${t('API keys')}</h3>
-      <div class="card">
-      <${Rich} as="p" class="hint" text=${t('For your own scripts and projects. See the <a href="/docs">API docs</a>; send the key in the <code>x-api-key</code> header.')} />
-      <ul class="list">
+      <div class="card settings-list">
+      ${keys.length > 0 &&
+      html`<ul class="list group-body">
         ${keys.map(
           (k) => html`<li key=${k.id}>
             <span><strong>${k.name}</strong><div class="meta">${`…${k.hint} · ${t('made {0}', shortDate(k.created))} · ${k.lastUsed ? t('used {0}', shortDate(k.lastUsed)) : t('never used')}`}</div></span>
@@ -1058,9 +1088,9 @@ function Keys() {
             >${t('Revoke')}</button>
           </li>`,
         )}
-      </ul>
+      </ul>`}
       <form
-        class="row"
+        class="field row"
         onSubmit=${async (e) => {
           e.preventDefault();
           setMsg('');
@@ -1075,10 +1105,10 @@ function Keys() {
         }}
       >
         <input name="name" maxlength="40" required placeholder=${t("What it's for, e.g. My script")} aria-label=${t('Key name')} value=${name} onInput=${(e) => setName(e.currentTarget.value)} />
-        <button type="submit" class="btn">${t('Create')}</button>
+        <button type="submit" class="btn small">${t('Create')}</button>
       </form>
       ${made &&
-      html`<div class="new-key">
+      html`<div class="new-key group-body">
         <p class="warn-text">${t("Copy this key now. It won't be shown again.")}</p>
         <div class="row">
           <code>${made}</code>
@@ -1097,8 +1127,9 @@ function Keys() {
         </div>
         <p class="hint">${t('Try it:')} <code>${`curl -H "x-api-key: ${made}" "${location.origin}/arrivals?stop=COM3"`}</code></p>
       </div>`}
-      <p class="hint" role="status">${msg}</p>
+      ${msg && html`<p class="hint group-body" role="status">${msg}</p>`}
       </div>
+      <${Rich} as="p" class="hint group-hint" text=${t('For your own scripts and projects. See the <a href="/docs">API docs</a>; send the key in the <code>x-api-key</code> header.')} />
     </section>
   `;
 }
@@ -1113,33 +1144,34 @@ const ABOUT_LINKS = () => [
   { title: t('Privacy'), href: '/privacy' },
   { title: t('API docs'), href: '/docs' },
   { title: t('Source code'), href: 'https://github.com/rcnsh/terminus' },
+  { title: t('Map data'), href: 'https://www.openstreetmap.org/copyright', where: 'openstreetmap.org' },
+  { title: t('NUS Acceptable Use Policy'), href: 'https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf', where: 'nus.edu.sg' },
 ];
 
+/** The app's mark and name, what it does and where its data comes from, then its links, as on Android. */
 export function About() {
   return html`
-    <div class="card about-text">
-      <p>${t('terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable.')}</p>
-      <${Rich}
-        as="p"
-        class="hint"
-        text=${t('terminus is an independent student project, not affiliated with NUS. Bus times come from NUS\'s shuttle feed. Walking routes use map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.')}
-      />
-      <${Rich}
-        as="p"
-        class="hint"
-        text=${t('Use terminus in line with the <a href="https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf">NUS Acceptable Use Policy for IT Resources</a>.')}
-      />
+    <div class="trips">
+      <div class="about-text">
+        <div class="about-head"><img src="/assets/mark.svg" alt="" /><strong>terminus</strong></div>
+        <p>${t('terminus tells you which NUS shuttle bus to catch, from which stop, and when to leave, from your NUSMods timetable.')}</p>
+        <p class="hint">${t("terminus is an independent student project, not affiliated with NUS. Bus times come from NUS's shuttle feed. Walking routes and the map use data from OpenStreetMap contributors.")}</p>
+      </div>
+      <section class="trips-group">
+        <h3 class="eyebrow" id="about-links">${t('More')}</h3>
+        <nav class="settings-list card about-links" aria-labelledby="about-links">
+          ${ABOUT_LINKS().map(({ title, href, where }) => {
+            const away = href.startsWith('https:');
+            const shown = where ?? (away ? href.replace('https://', '') : location.host + href.replace(/\/$/, ''));
+            return html`<a class="settings-row" href=${href} key=${href} rel=${away ? 'noopener' : undefined}>
+              <span class="row-text"><span class="row-title">${title}</span><span class="row-sum">${shown}</span></span>
+              <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d=${away ? 'M7 17 17 7M8 7h9v9' : 'm9 6 6 6-6 6'} /></svg>
+            </a>`;
+          })}
+        </nav>
+        <p class="hint group-hint">${t('Use terminus in line with the NUS Acceptable Use Policy for IT Resources.')}</p>
+      </section>
     </div>
-    <nav class="settings-list card about-links" aria-label=${t('Links')}>
-      ${ABOUT_LINKS().map(({ title, href }) => {
-        const away = href.startsWith('https:');
-        const where = away ? href.replace('https://', '') : location.host + href.replace(/\/$/, '');
-        return html`<a class="settings-row" href=${href} key=${href} rel=${away ? 'noopener' : undefined}>
-          <span class="row-text"><span class="row-title">${title}</span><span class="row-sum">${where}</span></span>
-          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d=${away ? 'M7 17 17 7M8 7h9v9' : 'm9 6 6 6-6 6'} /></svg>
-        </a>`;
-      })}
-    </nav>
   `;
 }
 
@@ -1163,24 +1195,29 @@ export function Feedback({ me }) {
     }
   };
   return html`
-    <form class="card feedback" onSubmit=${send}>
-      <label for="feedback-note">${t('Ideas, problems, anything')}</label>
-      <textarea
-        id="feedback-note"
-        rows="5"
-        maxlength="1000"
-        placeholder=${t('A place you want to go, something that confused you…')}
-        value=${note}
-        onInput=${(e) => setNote(e.currentTarget.value)}
-      ></textarea>
-      <p class="hint">
-        ${me.anonymous
-          ? t('This sends your note. Add an email if you want a reply.')
-          : t('This sends your note, with your email address so you can get a reply.')}
-      </p>
-      <p class="hint">${t('Was an answer wrong? Press “Is this wrong?” under it instead, so we see what you saw.')}</p>
-      <div class="actions"><button type="submit" class="btn small accent" disabled=${sending}>${t('Send')}</button></div>
-      <p class="hint" role="status">${msg}</p>
+    <form class="trips feedback" onSubmit=${send}>
+      <${Group}
+        title=${t('Ideas, problems, anything')}
+        id="feedback-label"
+        hint=${me.anonymous ? t('This sends your note. Add an email if you want a reply.') : t('This sends your note, with your email address so you can get a reply.')}
+      >
+        <div class="field">
+          <textarea
+            id="feedback-note"
+            rows="5"
+            maxlength="1000"
+            aria-labelledby="feedback-label"
+            placeholder=${t('A place you want to go, something that confused you…')}
+            value=${note}
+            onInput=${(e) => setNote(e.currentTarget.value)}
+          ></textarea>
+        </div>
+      <//>
+      <div class="send-row">
+        ${msg && html`<p class="hint" role="status">${msg}</p>`}
+        <button type="submit" class="btn small" disabled=${sending || !note.trim()}>${t('Send')}</button>
+      </div>
+      <p class="hint group-hint">${t('Was an answer wrong? Press “Is this wrong?” under it instead, so we see what you saw.')}</p>
     </form>
   `;
 }

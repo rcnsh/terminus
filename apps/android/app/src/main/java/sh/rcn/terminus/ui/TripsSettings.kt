@@ -1,22 +1,16 @@
 package sh.rcn.terminus.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Campus
@@ -50,7 +45,7 @@ import sh.rcn.terminus.R
  */
 @Composable
 internal fun TripsSettings(profile: ProfileDoc, state: AccountState, account: AccountViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.padding(top = 4.dp)) {
+    Groups {
         state.campus?.let { HomeGroup(profile, it, account) }
         DayGroup(profile, account)
         WalkingGroup(profile, account)
@@ -59,47 +54,24 @@ internal fun TripsSettings(profile: ProfileDoc, state: AccountState, account: Ac
     }
 }
 
-/** A group's heading, its rows in one card, and at most one line under them. */
-@Composable
-internal fun TripsGroup(title: String, hint: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    Column {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Column(content = content) }
-        hint?.let { Hint(it, Modifier.padding(start = 4.dp, top = 6.dp)) }
-    }
-}
-
-/** One setting: its name (and a line under it), then its control. */
-@Composable
-private fun FieldRow(label: String, modifier: Modifier = Modifier, sub: String? = null, control: @Composable () -> Unit) {
-    Row(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            sub?.let { Hint(it) }
-        }
-        Spacer12()
-        control()
-    }
-}
-
-@Composable
-private fun Spacer12() = androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
-
-@Composable
-private fun RowDivider() = HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-/** − value +, for small whole steps. */
+/** − value +, for small steps: round buttons either side, as on the web. */
 @Composable
 private fun Stepper(text: String, less: String, more: String, canLess: Boolean, canMore: Boolean, onLess: () -> Unit, onMore: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onLess, enabled = canLess, modifier = Modifier.semantics { contentDescription = less }) { Text("−", style = MaterialTheme.typography.titleMedium) }
-        Text(text, style = MaterialTheme.typography.bodyLarge)
-        IconButton(onClick = onMore, enabled = canMore, modifier = Modifier.semantics { contentDescription = more }) { Text("+", style = MaterialTheme.typography.titleMedium) }
+        StepButton("−", less, canLess, onLess)
+        Text(text, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center, modifier = Modifier.widthIn(min = 64.dp))
+        StepButton("+", more, canMore, onMore)
     }
+}
+
+@Composable
+private fun StepButton(sign: String, says: String, enabled: Boolean, onClick: () -> Unit) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(36.dp).semantics { contentDescription = says },
+        colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
+    ) { Text(sign, style = MaterialTheme.typography.titleMedium) }
 }
 
 @Composable
@@ -113,37 +85,36 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
     var locating by remember { mutableStateOf<String?>(null) }
     val picking = offCampus || residence == null
 
-    TripsGroup(stringResource(R.string.where_you_live), stringResource(R.string.only_stops_saved)) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Choice(
-                label = stringResource(R.string.residence),
-                options = campus.residences.map { it.code to it.name },
-                selected = if (picking) null else residence?.code,
-                blank = stringResource(R.string.off_campus_short),
-                headings = residenceHeadings(campus.residences),
-                onSelect = { code ->
-                    val r = campus.residences.firstOrNull { it.code == code }
-                    if (r == null) {
-                        offCampus = true
-                    } else {
-                        account.edit {
-                            it.setHomeStops(r.stops)
-                            it.homeWalkMin = maxOf(1, Math.round(r.walkM / 1.3 / 60).toInt())
-                        }
+    Group(stringResource(R.string.where_you_live), stringResource(R.string.only_stops_saved)) {
+        ValueRow(
+            label = stringResource(R.string.residence),
+            options = campus.residences.map { it.code to it.name },
+            selected = if (picking) null else residence.code,
+            sub = if (picking) null else stringResource(R.string.your_stops, residence.stops.joinToString(", ") { campus.stopName(it) }),
+            blank = stringResource(R.string.off_campus_short),
+            headings = residenceHeadings(campus.residences),
+            onSelect = { code ->
+                val r = campus.residences.firstOrNull { it.code == code }
+                if (r == null) {
+                    offCampus = true
+                } else {
+                    account.edit {
+                        it.setHomeStops(r.stops)
+                        it.homeWalkMin = maxOf(1, Math.round(r.walkM / 1.3 / 60).toInt())
                     }
-                },
+                }
+            },
+        )
+        if (picking) {
+            RowDivider()
+            ValueRow(
+                label = stringResource(R.string.your_stop),
+                options = campus.stops.map { it.code to it.name },
+                selected = stops.firstOrNull(),
+                blank = stringResource(R.string.choose_stop),
+                onSelect = { code -> account.edit { it.setHomeStops(listOfNotNull(code) + stops.drop(1).filter { s -> s != code }) } },
             )
-            if (!picking && residence != null) {
-                Hint(stringResource(R.string.your_stops, residence.stops.joinToString(", ") { campus.stopName(it) }), Modifier.padding(top = 6.dp))
-            } else {
-                Choice(
-                    label = stringResource(R.string.your_stop),
-                    options = campus.stops.map { it.code to it.name },
-                    selected = stops.firstOrNull(),
-                    blank = stringResource(R.string.choose_stop),
-                    onSelect = { code -> account.edit { it.setHomeStops(listOfNotNull(code) + stops.drop(1).filter { s -> s != code }) } },
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                )
+            Column(Modifier.padding(horizontal = 4.dp)) {
                 if (Locator.hasForeground(ctx)) {
                     TextButton(onClick = {
                         locating = L.s(R.string.finding_stop)
@@ -159,7 +130,7 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
                         }
                     }) { Text(stringResource(R.string.pick_nearest)) }
                 }
-                locating?.let { Hint(it) }
+                locating?.let { Hint(it, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) }
             }
         }
         RowDivider()
@@ -177,7 +148,7 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
 
 @Composable
 private fun DayGroup(profile: ProfileDoc, account: AccountViewModel) {
-    TripsGroup(stringResource(R.string.heading_your_day), stringResource(R.string.day_hint_short)) {
+    Group(stringResource(R.string.heading_your_day), stringResource(R.string.day_hint_short)) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(stringResource(R.string.show_buses_between), style = MaterialTheme.typography.bodyLarge)
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -209,19 +180,11 @@ private val PACES = listOf(
 @Composable
 private fun WalkingGroup(profile: ProfileDoc, account: AccountViewModel) {
     val pace = PACES.firstOrNull { it.first == profile.walkPace } ?: PACES[1]
-    TripsGroup(stringResource(R.string.heading_walking), stringResource(R.string.walks_follow_paths)) {
+    Group(stringResource(R.string.heading_walking), stringResource(R.string.walks_follow_paths)) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(stringResource(R.string.walking_pace), style = MaterialTheme.typography.bodyLarge)
             Hint(stringResource(pace.third))
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                PACES.forEachIndexed { i, (value, title, _) ->
-                    SegmentedButton(
-                        selected = pace.first == value,
-                        onClick = { account.edit { it.walkPace = value } },
-                        shape = SegmentedButtonDefaults.itemShape(i, PACES.size),
-                    ) { Text(stringResource(title)) }
-                }
-            }
+            Pills(PACES.map { (value, title, _) -> value to stringResource(title) }, pace.first, { value -> account.edit { it.walkPace = value } }, Modifier.padding(top = 10.dp))
         }
         RowDivider()
         FieldRow(

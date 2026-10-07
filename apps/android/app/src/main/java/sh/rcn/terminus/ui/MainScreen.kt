@@ -283,7 +283,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
 
 /** Asks for notification permission on the way to "on", and says so when it's refused. */
 @Composable
-internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit) {
+internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit, inCard: Boolean = false) {
     val ctx = LocalContext.current
     var refused by rememberSaveable { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -305,7 +305,7 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
                     }
                 },
             )
-            .padding(vertical = 8.dp),
+            .padding(horizontal = if (inCard) 16.dp else 0.dp, vertical = if (inCard) 10.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -320,8 +320,8 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
         Switch(checked = on, onCheckedChange = null)
     }
     if (refused && !on) {
-        Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings)) }
+        Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = if (inCard) 16.dp else 0.dp))
+        TextButton(onClick = openSettings, modifier = Modifier.padding(horizontal = if (inCard) 4.dp else 0.dp)) { Text(stringResource(R.string.open_settings)) }
     }
 }
 
@@ -330,7 +330,7 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
  * location. Needs notifications and precise location, asked for on the way to on.
  */
 @Composable
-internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit) {
+internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit, hint: String? = null, inCard: Boolean = false) {
     val ctx = LocalContext.current
     var refused by rememberSaveable { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
@@ -358,13 +358,13 @@ internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings
                     }
                 },
             )
-            .padding(vertical = 8.dp),
+            .padding(horizontal = if (inCard) 16.dp else 0.dp, vertical = if (inCard) 10.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(stringResource(R.string.detect))
             Text(
-                stringResource(R.string.detect_hint),
+                hint ?: stringResource(R.string.detect_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -373,8 +373,8 @@ internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings
         Switch(checked = on, onCheckedChange = null)
     }
     if (refused && !on) {
-        Text(stringResource(R.string.detect_needs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = openSettings) { Text(stringResource(R.string.open_settings)) }
+        Text(stringResource(R.string.detect_needs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = if (inCard) 16.dp else 0.dp))
+        TextButton(onClick = openSettings, modifier = Modifier.padding(horizontal = if (inCard) 4.dp else 0.dp)) { Text(stringResource(R.string.open_settings)) }
     }
 }
 

@@ -460,49 +460,50 @@ private fun SettingsPageContent(
             if (profile == null) return
             TripsSettings(profile, state, account)
         }
-        SettingsPage.Timetable -> {
-            if (profile == null) return
+        SettingsPage.Timetable -> Groups {
+            if (profile == null) return@Groups
             var link by rememberSaveable(state.sharedLink) { mutableStateOf(state.sharedLink ?: profile.share.orEmpty()) }
             // The semester the link is for has ended: say so above everything else.
             if (state.needsReimport) {
-                Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Text(stringResource(R.string.reimport_title), style = MaterialTheme.typography.titleSmall)
                         Text(stringResource(R.string.reimport_text, state.term.orEmpty()), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
-            TimetableImport(state, account, link) { link = it }
+            Group(stringResource(R.string.heading_from_nusmods), stringResource(R.string.nusmods_hint)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) { TimetableImport(state, account, link, inSettings = true) { link = it } }
+            }
             Classes(profile, state.campus, account)
         }
-        SettingsPage.Favourites -> if (profile != null) Favourites(profile, state.campus, account)
-        SettingsPage.Notifications -> NotificationSettings(main)
-        SettingsPage.Devices -> {
+        SettingsPage.Favourites -> if (profile != null) Groups { Favourites(profile, state.campus, account) }
+        SettingsPage.Notifications -> Groups { NotificationSettings(main) }
+        SettingsPage.Devices -> Groups {
             if (state.email == null) {
                 Hint(stringResource(R.string.not_signed_in_hint))
-                Button(onClick = onAddEmail, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.add_email)) }
+                InkButton(stringResource(R.string.add_email), onAddEmail)
             } else {
                 Devices(state, account, onSignedOut)
             }
         }
-        SettingsPage.Language -> {
+        SettingsPage.Language -> Groups {
             LanguagePicker(account)
-            Spacer(Modifier.height(20.dp))
-            ClockPicker(state.profile, account, stringResource(R.string.time_format), auto = true)
-            Hint(stringResource(R.string.time_format_hint), Modifier.padding(top = 4.dp))
+            Group(stringResource(R.string.time_format), stringResource(R.string.time_format_hint_auto)) {
+                ClockPills(state.profile, account)
+            }
         }
-        SettingsPage.Appearance -> {
+        SettingsPage.Appearance -> Groups {
             ThemePicker()
-            Spacer(Modifier.height(24.dp))
             CardStylePicker()
         }
-        SettingsPage.Account -> AccountSection(state, account, main, onAddEmail, onSignedOut)
-        SettingsPage.About -> AboutPage()
-        SettingsPage.Feedback -> FeedbackPage(state, account)
+        SettingsPage.Account -> Groups { AccountSection(state, account, main, onAddEmail, onSignedOut) }
+        SettingsPage.About -> Groups { AboutPage() }
+        SettingsPage.Feedback -> Groups { FeedbackPage(state, account) }
     }
 }
 
-/** What terminus is, that it isn't NUS's, where its data comes from, and links, as rows like the Settings list. */
+/** The app's mark, name and version; what it is, that it isn't NUS's, and where its data comes from; then its links. */
 @Composable
 private fun AboutPage() {
     val ctx = LocalContext.current
@@ -510,6 +511,7 @@ private fun AboutPage() {
     val host = BuildConfig.SITE.removePrefix("https://").removePrefix("http://")
     // Each link's name, where it goes, and that place as shown under the name.
     val links = listOf(
+        Triple(R.string.get_apps, BuildConfig.SITE, host),
         Triple(R.string.status, "${BuildConfig.SITE}/status", "$host/status"),
         Triple(R.string.privacy, "${BuildConfig.SITE}/privacy", "$host/privacy"),
         Triple(R.string.api_docs, "${BuildConfig.SITE}/docs", "$host/docs"),
@@ -517,30 +519,22 @@ private fun AboutPage() {
         Triple(R.string.map_data, "https://www.openstreetmap.org/copyright", "openstreetmap.org"),
         Triple(R.string.aup, "https://nus.edu.sg/registrar/docs/info/registration-guides/aup-form.pdf", "nus.edu.sg"),
     )
-    Text(stringResource(R.string.about_what))
-    Hint(stringResource(R.string.about_independent), Modifier.padding(top = 12.dp))
-    Hint(stringResource(R.string.about_aup), Modifier.padding(top = 12.dp))
-    Hint(stringResource(R.string.about_version, BuildConfig.VERSION_NAME), Modifier.padding(top = 12.dp))
-    androidx.compose.material3.OutlinedCard(Modifier.fillMaxWidth().padding(top = 20.dp)) {
-        links.forEachIndexed { i, (title, url, where) ->
-            if (i > 0) androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                Modifier.fillMaxWidth().clickable(role = Role.Button) { open(url) }.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(title), style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        where,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                // Every one opens in the browser, out of the app.
-                Icon(painterResource(R.drawable.ic_open), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+    Column(Modifier.padding(horizontal = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BrandMark(Modifier.size(44.dp))
+            Column(Modifier.padding(start = 12.dp)) {
+                Text("terminus", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Hint(stringResource(R.string.about_version, BuildConfig.VERSION_NAME))
             }
+        }
+        Text(stringResource(R.string.about_what), modifier = Modifier.padding(top = 14.dp))
+        Hint(stringResource(R.string.about_independent), Modifier.padding(top = 10.dp))
+    }
+    // Every one opens in the browser, out of the app.
+    Group(stringResource(R.string.heading_more), stringResource(R.string.about_aup)) {
+        links.forEachIndexed { i, (title, url, where) ->
+            if (i > 0) RowDivider()
+            LinkRow(stringResource(title), { open(url) }, sub = where, away = true)
         }
     }
 }
@@ -549,26 +543,28 @@ private fun AboutPage() {
 @Composable
 private fun FeedbackPage(state: AccountState, account: AccountViewModel) {
     var note by rememberSaveable { mutableStateOf("") }
-    OutlinedTextField(
-        value = note,
-        onValueChange = { note = it.take(1000) },
-        label = { Text(stringResource(R.string.feedback_label)) },
-        placeholder = { Text(stringResource(R.string.feedback_placeholder)) },
-        minLines = 5,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Hint(stringResource(if (state.email == null) R.string.feedback_no_email else R.string.feedback_with_email), Modifier.padding(top = 8.dp))
-    Hint(stringResource(R.string.feedback_wrong_answer), Modifier.padding(top = 4.dp))
-    Button(
-        onClick = { account.sendFeedback(note) { note = "" } },
-        enabled = note.isNotBlank() && !state.busy,
-        modifier = Modifier.padding(top = 12.dp),
-    ) { Text(stringResource(R.string.send)) }
+    Column {
+        Group(stringResource(R.string.feedback_label), stringResource(if (state.email == null) R.string.feedback_no_email else R.string.feedback_with_email)) {
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it.take(1000) },
+                placeholder = { Text(stringResource(R.string.feedback_placeholder)) },
+                minLines = 5,
+                modifier = Modifier.fillMaxWidth().padding(12.dp).semantics { contentDescription = L.s(R.string.feedback_label) },
+            )
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
+            InkButton(stringResource(R.string.send), { account.sendFeedback(note) { note = "" } }, enabled = note.isNotBlank() && !state.busy)
+        }
+        Hint(stringResource(R.string.feedback_wrong_answer), Modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp))
+    }
 }
 
 /**
  * Leave alerts, the live notification and noticing when you board: on this
- * phone only. Exact alarms are asked for when either notification is on.
+ * phone only, in two groups (before class, during a trip), each row with a
+ * short line and the details under the group. Exact alarms are asked for
+ * when either notification is on.
  */
 @Composable
 private fun NotificationSettings(main: MainViewModel) {
@@ -581,20 +577,27 @@ private fun NotificationSettings(main: MainViewModel) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { exact = LeaveAlerts.canBeExact(ctx) }
     }
     val openSettings = { ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))) }
-    NotifyToggle(
-        stringResource(R.string.notify_leave),
-        stringResource(R.string.notify_leave_hint),
-        ui.leaveAlerts, main::setLeaveAlerts, openSettings,
-    )
-    NotifyToggle(
-        stringResource(R.string.live_notification),
-        stringResource(R.string.live_notification_hint),
-        ui.liveUpdates, main::setLiveUpdates, openSettings,
-    )
-    DetectToggle(ui.detectTrips, main::setDetectTrips, openSettings)
+    Group(stringResource(R.string.heading_before_class), stringResource(R.string.notify_leave_more)) {
+        NotifyToggle(
+            stringResource(R.string.notify_leave),
+            stringResource(R.string.notify_leave_short),
+            ui.leaveAlerts, main::setLeaveAlerts, openSettings, inCard = true,
+        )
+    }
+    Group(stringResource(R.string.heading_during_trip), stringResource(R.string.during_trip_hint)) {
+        NotifyToggle(
+            stringResource(R.string.live_notification),
+            stringResource(R.string.live_notification_short),
+            ui.liveUpdates, main::setLiveUpdates, openSettings, inCard = true,
+        )
+        RowDivider()
+        DetectToggle(ui.detectTrips, main::setDetectTrips, openSettings, hint = stringResource(R.string.detect_short), inCard = true)
+    }
     if ((ui.leaveAlerts || ui.liveUpdates) && !exact) {
-        Hint(stringResource(R.string.exact_off))
-        TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) { Text(stringResource(R.string.allow_exact)) }
+        Column {
+            Hint(stringResource(R.string.exact_off), Modifier.padding(horizontal = 4.dp))
+            TextButton(onClick = { runCatching { ctx.startActivity(LeaveAlerts.exactAlarmSettings(ctx)) } }) { Text(stringResource(R.string.allow_exact)) }
+        }
     }
 }
 
@@ -602,7 +605,7 @@ private fun NotificationSettings(main: MainViewModel) {
 @Composable
 internal fun TripChoices(state: AccountState, account: AccountViewModel) {
     if (state.choices.isEmpty()) return
-    TripsGroup(stringResource(R.string.your_classes)) {
+    Group(stringResource(R.string.your_classes)) {
         state.choices.forEachIndexed { i, c ->
             if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -610,7 +613,7 @@ internal fun TripChoices(state: AccountState, account: AccountViewModel) {
                     Text(c.label ?: stringResource(R.string.class_gone))
                     Hint(if (c.pref == "earlier") stringResource(R.string.one_bus_earlier) else stringResource(R.string.no_reminders))
                 }
-                TextButton(onClick = { account.undoChoice(c) }) { Text(stringResource(R.string.undo)) }
+                RemoveButton({ account.undoChoice(c) }, stringResource(R.string.undo))
             }
         }
     }
@@ -621,7 +624,7 @@ internal fun TripChoices(state: AccountState, account: AccountViewModel) {
 internal fun TripHistory(state: AccountState, account: AccountViewModel) {
     if (state.history == 0) return
     var confirm by remember { mutableStateOf(false) }
-    TripsGroup(stringResource(R.string.trip_history), stringResource(R.string.history_kept)) {
+    Group(stringResource(R.string.trip_history), stringResource(R.string.history_kept)) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (state.history == 1) stringResource(R.string.trips_recorded_one) else stringResource(R.string.trips_recorded_n, state.history), modifier = Modifier.weight(1f))
             TextButton(onClick = { confirm = true }) { Text(stringResource(R.string.clear_history)) }
@@ -638,25 +641,50 @@ internal fun TripHistory(state: AccountState, account: AccountViewModel) {
     }
 }
 
+/**
+ * Who you're signed in as, with Sign out; your data; the account page for
+ * API keys and signing out everywhere (the web's alone); then Delete account
+ * on its own at the foot, the only red on any page.
+ */
 @Composable
 private fun AccountSection(state: AccountState, account: AccountViewModel, main: MainViewModel, onAddEmail: () -> Unit, onSignedOut: () -> Unit) {
     val ctx = LocalContext.current
+    val c = MaterialTheme.colorScheme
     var confirm by remember { mutableStateOf<String?>(null) }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(account::exportTo) }
-    if (state.email == null) {
-        Text(stringResource(R.string.not_signed_in))
-        Hint(stringResource(R.string.not_signed_in_hint))
-        Button(onClick = onAddEmail, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.add_email)) }
-        TextButton(onClick = { export.launch("terminus-export.json") }) { Text(stringResource(R.string.download_data)) }
-        TextButton(onClick = { confirm = "delete" }) { Text(stringResource(R.string.delete_account)) }
-    } else {
-        Text(stringResource(R.string.signed_in_as, state.email))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-            TextButton(onClick = { confirm = "signout" }) { Text(stringResource(R.string.sign_out_phone)) }
-            TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }) { Text(stringResource(R.string.account_page)) }
+    val email = state.email
+    if (email == null) {
+        Group(stringResource(R.string.not_signed_in), stringResource(R.string.not_signed_in_hint)) {
+            InkButton(stringResource(R.string.add_email), onAddEmail, Modifier.fillMaxWidth().padding(16.dp))
         }
-        TextButton(onClick = { export.launch("terminus-export.json") }) { Text(stringResource(R.string.download_data)) }
-        Hint(stringResource(R.string.account_page_hint))
+    } else {
+        Group(stringResource(R.string.heading_signed_in)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(40.dp).background(c.primary, CircleShape), contentAlignment = Alignment.Center) {
+                    Text(email.take(1).uppercase(), color = c.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                }
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(email, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    state.devices?.let { Hint(if (it.size == 1) stringResource(R.string.one_device) else stringResource(R.string.n_devices, it.size)) }
+                }
+                OutlinedButton(onClick = { confirm = "signout" }) { Text(stringResource(R.string.sign_out)) }
+            }
+        }
+    }
+    Group(stringResource(R.string.heading_your_data)) {
+        LinkRow(stringResource(R.string.download_data), { export.launch("terminus-export.json") })
+        if (email != null) {
+            RowDivider()
+            LinkRow(stringResource(R.string.account_page), { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }, sub = stringResource(R.string.account_page_sub), away = true)
+        }
+    }
+    // An account with an email is deleted from the account page, signed in on the web (the server insists).
+    Group(null) {
+        if (email == null) {
+            LinkRow(stringResource(R.string.delete_account), { confirm = "delete" }, color = c.error)
+        } else {
+            LinkRow(stringResource(R.string.delete_account), { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri())) }, away = true, color = c.error)
+        }
     }
     when (confirm) {
         "delete" -> AlertDialog(
@@ -669,36 +697,43 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
         "signout" -> AlertDialog(
             onDismissRequest = { confirm = null },
             title = { Text(stringResource(R.string.sign_out_title)) },
-            text = { Text(stringResource(R.string.sign_out_text, state.email.orEmpty())) },
+            text = { Text(stringResource(R.string.sign_out_text, email.orEmpty())) },
             confirmButton = { TextButton(onClick = { confirm = null; main.unpair(); account.reset(); onSignedOut() }) { Text(stringResource(R.string.sign_out)) } },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
 
+/** Your devices, each removable (this phone signs out), then Add a device. */
 @Composable
 private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut: () -> Unit) {
-    val ctx = LocalContext.current
     var removing by remember { mutableStateOf<Device?>(null) }
     val devices = state.devices
     if (devices == null) {
         CircularProgressIndicator(Modifier.size(20.dp))
-    } else {
-        for (d in devices) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(d.name + if (d.current) stringResource(R.string.this_phone) else "")
-                    val now = System.currentTimeMillis()
-                    val used = if (now - d.lastSeenMs < 60_000) stringResource(R.string.just_now) else android.text.format.DateUtils.getRelativeTimeSpanString(d.lastSeenMs, now, android.text.format.DateUtils.MINUTE_IN_MILLIS)
-                    Hint(listOfNotNull(platformName(d.platform), stringResource(R.string.used_when, used)).joinToString(" · "))
+    } else if (devices.isNotEmpty()) {
+        Group(stringResource(R.string.heading_your_devices)) {
+            devices.forEachIndexed { i, d ->
+                if (i > 0) RowDivider()
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(d.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (d.current) Tag(stringResource(R.string.this_phone_tag))
+                        }
+                        val now = System.currentTimeMillis()
+                        val used = if (now - d.lastSeenMs < 60_000) stringResource(R.string.just_now) else android.text.format.DateUtils.getRelativeTimeSpanString(d.lastSeenMs, now, android.text.format.DateUtils.MINUTE_IN_MILLIS)
+                        Hint(listOfNotNull(platformName(d.platform), stringResource(R.string.used_when, used)).joinToString(" · "))
+                    }
+                    RemoveButton({ removing = d })
                 }
-                TextButton(onClick = { removing = d }) { Text(stringResource(R.string.remove)) }
             }
-            HorizontalDivider()
         }
     }
-    OutlinedButton(onClick = account::newPairCode, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.add_device)) }
-    Hint(stringResource(R.string.add_device_hint))
+    Column {
+        InkButton(stringResource(R.string.add_device), account::newPairCode, Modifier.fillMaxWidth())
+        Hint(stringResource(R.string.add_device_hint), Modifier.padding(start = 4.dp, end = 4.dp, top = 6.dp))
+    }
 
     removing?.let { d ->
         AlertDialog(
@@ -710,6 +745,18 @@ private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut:
         )
     }
     state.pairCode?.let { code -> PairCodeDialog(code, account::closePairCode) }
+}
+
+/** A small grey label beside a name: "This phone". */
+@Composable
+private fun Tag(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 8.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 private fun platformName(p: String?) = when (p) {
@@ -759,7 +806,11 @@ private fun qrBitmap(text: String, size: Int): Bitmap {
     return bmp
 }
 
-/** Every class, imported or added by hand, by day and time, each with Remove; then adding one by hand. */
+/**
+ * Every class, imported or added by hand, by day and time, each with Remove,
+ * in one card ending in "+ Add a class or commitment by hand"; then any
+ * favourites at their usual time each week.
+ */
 @Composable
 private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
     val ctx = LocalContext.current
@@ -769,166 +820,187 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
     // Monday first, as the week reads; the index is the class's place in its own list.
     val order = WEEKDAYS.map { it.first }
     var changing by rememberSaveable { mutableStateOf<String?>(null) }
+    var open by rememberSaveable { mutableStateOf(false) }
     val all = (profile.trips.mapIndexed { i, t -> Triple(true, i, t) } + profile.manual.mapIndexed { i, t -> Triple(false, i, t) })
         .sortedWith(compareBy({ order.indexOf(it.third.day) }, { it.third.arriveByMin }))
-    if (all.isNotEmpty()) {
-        Text(if (all.size == 1) stringResource(R.string.one_class) else stringResource(R.string.n_classes, all.size), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+    val count = when (all.size) {
+        0 -> stringResource(R.string.no_classes_yet)
+        1 -> stringResource(R.string.one_class)
+        else -> stringResource(R.string.n_classes, all.size)
+    }
+    Group(count) {
         for ((imported, i, t) in all) {
-            // Tapped, a class opens to change its stop, as on the account page.
+            // Tapped, a class opens to change its stop, as on the web.
             val key = "${if (imported) "t" else "m"}$i"
-            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { changing = if (changing == key) null else key }, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { changing = if (changing == key) null else key }.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Column(Modifier.weight(1f)) {
-                    Text("${dayShort(t.day)} ${time(t.arriveByMin)} · ${t.label}")
+                    Text("${dayShort(t.day)} ${time(t.arriveByMin)} · ${t.label}", style = MaterialTheme.typography.bodyLarge)
                     val about = listOfNotNull(campus?.let { L.s(R.string.stop_suffix, it.stopName(t.to)) }, if (imported) null else stringResource(R.string.added_by_hand))
                     if (about.isNotEmpty()) Hint(about.joinToString(" · "))
                 }
-                TextButton(onClick = { account.edit { it.removeClass(imported, i) } }) { Text(stringResource(R.string.remove)) }
+                RemoveButton({ account.edit { it.removeClass(imported, i) } })
             }
             if (changing == key) {
-                WherePicker(stringResource(R.string.change_stop, t.label), destinations, null) { d ->
-                    if (d != null) {
-                        account.edit { it.setClassStop(imported, i, if (d.kind == "landmark") d.code else d.stopCode) }
-                        changing = null
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+                    WherePicker(stringResource(R.string.change_stop, t.label), destinations, null) { d ->
+                        if (d != null) {
+                            account.edit { it.setClassStop(imported, i, if (d.kind == "landmark") d.code else d.stopCode) }
+                            changing = null
+                        }
                     }
                 }
             }
+            RowDivider()
+        }
+        AddRow(stringResource(R.string.add_by_hand)) {
+            open = !open
+            if (open) account.loadCampus()
+        }
+        if (open) {
+            RowDivider()
+            AddClass(destinations, account) { open = false }
         }
     }
     // A favourite at its usual time each week: removable here with the classes.
     val usual = profile.usual.mapNotNull { u -> profile.places.firstOrNull { it.key == u.place }?.let { u to it } }
         .sortedWith(compareBy({ order.indexOf(it.first.day) }, { it.first.atMin }))
     if (usual.isNotEmpty()) {
-        Text(stringResource(R.string.every_week), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
-        for ((u, place) in usual) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("${dayShort(u.day)} ${time(u.atMin)} · ${place.label}")
-                    if (campus != null) Hint(stringResource(R.string.stop_suffix, campus.stopName(place.to)))
+        Group(stringResource(R.string.every_week)) {
+            usual.forEachIndexed { n, (u, place) ->
+                if (n > 0) RowDivider()
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${dayShort(u.day)} ${time(u.atMin)} · ${place.label}", style = MaterialTheme.typography.bodyLarge)
+                        if (campus != null) Hint(stringResource(R.string.stop_suffix, campus.stopName(place.to)))
+                    }
+                    RemoveButton({ account.edit { it.removeUsual(u) } })
                 }
-                TextButton(onClick = { account.edit { it.removeUsual(u) } }) { Text(stringResource(R.string.remove)) }
             }
         }
     }
-    var open by rememberSaveable { mutableStateOf(false) }
-    if (!open) {
-        TextButton(onClick = { open = true; account.loadCampus() }) { Text(stringResource(R.string.add_by_hand)) }
-        return
-    }
+}
+
+/** A class or commitment by hand: its day, times, name and where, under the classes. */
+@Composable
+private fun AddClass(destinations: List<Destination>, account: AccountViewModel, onDone: () -> Unit) {
     var day by rememberSaveable { mutableIntStateOf(1) }
     var start by rememberSaveable { mutableStateOf<Int?>(null) }
     var end by rememberSaveable { mutableStateOf<Int?>(null) }
     var label by rememberSaveable { mutableStateOf("") }
     var where by remember { mutableStateOf<Destination?>(null) }
-    Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice(stringResource(R.string.day), WEEKDAYS, day, { day = it ?: 1 })
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TimeButton(stringResource(R.string.starts), start, { start = it }, Modifier.weight(1f))
-                TimeButton(stringResource(R.string.ends), end, { end = it }, Modifier.weight(1f))
-            }
-            OutlinedTextField(label, { if (it.length <= 60) label = it }, label = { Text(stringResource(R.string.name_eg_gym)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            WherePicker(stringResource(R.string.where), destinations, where) { where = it }
-            Row {
-                TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) }
-                Spacer(Modifier.weight(1f))
-                Button(
-                    onClick = {
-                        val s = start ?: return@Button
-                        val w = where ?: return@Button
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Choice(stringResource(R.string.day), WEEKDAYS, day, { day = it ?: 1 })
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TimeButton(stringResource(R.string.starts), start, { start = it }, Modifier.weight(1f))
+            TimeButton(stringResource(R.string.ends), end, { end = it }, Modifier.weight(1f))
+        }
+        OutlinedTextField(label, { if (it.length <= 60) label = it }, label = { Text(stringResource(R.string.name_eg_gym)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        WherePicker(stringResource(R.string.where), destinations, where) { where = it }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onDone) { Text(stringResource(R.string.cancel)) }
+            Spacer(Modifier.weight(1f))
+            InkButton(
+                stringResource(R.string.add),
+                {
+                    val s = start
+                    val w = where
+                    if (s != null && w != null) {
                         account.edit { it.addManual(Trip(day, s, end?.takeIf { e -> e > s }, w.stopCode, label.trim(), "")) }
-                        open = false
-                        start = null; end = null; label = ""; where = null
-                    },
-                    enabled = start != null && where != null && label.isNotBlank(),
-                ) { Text(stringResource(R.string.add)) }
-            }
+                        onDone()
+                    }
+                },
+                enabled = start != null && where != null && label.isNotBlank(),
+            )
         }
     }
 }
 
+/** Your favourites in one card, each with Remove, ending in the search to add one. */
 @Composable
 private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountViewModel) {
-    Hint(stringResource(R.string.favourites_hint))
     // A stop's name, or a food court's (favourites and classes can go to one).
     val stopName = { code: String ->
         campus?.stops?.firstOrNull { it.code == code }?.name ?: campus?.destinations?.firstOrNull { it.code == code && it.kind == "landmark" }?.label ?: code
     }
     var note by remember { mutableStateOf<String?>(null) }
-    for (p in profile.places) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(p.label)
-                // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
-                if (campus != null && p.label != stopName(p.to)) Hint(stringResource(R.string.stop_suffix, stopName(p.to)))
+    Group(stringResource(R.string.heading_your_favourites), note ?: stringResource(R.string.favourites_hint)) {
+        for (p in profile.places) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(p.label, style = MaterialTheme.typography.bodyLarge)
+                    // Where it goes, when the name doesn't already say (a building's stop, or a name from before favourites).
+                    if (campus != null && p.label != stopName(p.to)) Hint(stringResource(R.string.stop_suffix, stopName(p.to)))
+                }
+                RemoveButton({ account.edit { it.removePlace(p.key) } })
             }
-            TextButton(onClick = { account.edit { it.removePlace(p.key) } }) { Text(stringResource(R.string.remove)) }
+            RowDivider()
+        }
+        if (profile.places.size < 12) {
+            // The stops your classes go to come first, each saying which classes use it.
+            val favourite = profile.places.map { it.to }.toSet()
+            val timetable = (profile.trips + profile.manual).groupBy { it.to }
+                .filterKeys { it !in favourite }
+                .map { (to, classes) -> Destination(to, stopName(to), to, "timetable", detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(", ")) }
+                .sortedBy { it.label }
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable) { d ->
+                    if (d == null) return@WherePicker
+                    // No name to type: it's called what was picked, short, as it reads on a button.
+                    val to = if (d.kind == "landmark") d.code else d.stopCode
+                    val same = profile.places.firstOrNull { it.to == to }
+                    if (same != null) {
+                        note = L.s(R.string.already_favourite, same.label)
+                    } else {
+                        note = null
+                        account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) }
+                    }
+                }
+            }
         }
     }
-    if (profile.places.size >= 12) return
-    // The stops your classes go to come first, each saying which classes use it.
-    val favourite = profile.places.map { it.to }.toSet()
-    val timetable = (profile.trips + profile.manual).groupBy { it.to }
-        .filterKeys { it !in favourite }
-        .map { (to, classes) -> Destination(to, stopName(to), to, "timetable", detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(", ")) }
-        .sortedBy { it.label }
-    Spacer(Modifier.height(8.dp))
-    WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable) { d ->
-        if (d == null) return@WherePicker
-        // No name to type: it's called what was picked, short, as it reads on a button.
-        val to = if (d.kind == "landmark") d.code else d.stopCode
-        val same = profile.places.firstOrNull { it.to == to }
-        if (same != null) {
-            note = L.s(R.string.already_favourite, same.label)
-        } else {
-            note = null
-            account.edit { it.addPlace(if (d.kind == "building" || d.kind == "room") d.code else d.label, to) }
-        }
-    }
-    note?.let { Hint(it) }
     LaunchedEffect(Unit) { account.loadCampus() }
 }
 
-/** Light, dark or the phone's own setting, on this phone only. */
+/** Auto, light or dark, on this phone only. */
 @Composable
 private fun ThemePicker() {
     val ctx = LocalContext.current
-    Choice(
-        stringResource(R.string.theme),
-        listOf(Theme.AUTO, Theme.LIGHT, Theme.DARK).map { it to stringResource(themeName(it)) },
-        Theme.pref(ctx),
-        { it?.let { pref -> Theme.set(ctx, pref) } },
-    )
-    Hint(stringResource(R.string.theme_hint), Modifier.padding(top = 4.dp))
+    // Read again when it changes, so the pill moves before the theme does.
+    var pref by remember { mutableStateOf(Theme.pref(ctx)) }
+    Group(stringResource(R.string.theme), stringResource(R.string.theme_hint)) {
+        Pills(
+            listOf(Theme.AUTO to stringResource(R.string.auto), Theme.LIGHT to stringResource(R.string.theme_light), Theme.DARK to stringResource(R.string.theme_dark)),
+            pref,
+            { Theme.set(ctx, it); pref = it },
+            Modifier.padding(16.dp),
+        )
+    }
 }
 
-/**
- * 12- or 24-hour times for the account, each with an example time. In
- * Settings, `auto` (the phone's own) is a choice too; in setup the phone's
- * style is shown picked until another is.
- */
+/** Auto (the phone's own), 12- or 24-hour, for the account. */
 @Composable
-internal fun ClockPicker(profile: ProfileDoc?, account: AccountViewModel, label: String, auto: Boolean) {
-    val ctx = LocalContext.current
-    val pref = profile?.clock ?: Clock.AUTO
-    val options = listOfNotNull(
-        if (auto) Clock.AUTO to stringResource(R.string.follow_device) else null,
-        Clock.H12 to stringResource(R.string.with_example, stringResource(R.string.clock_12), stringResource(R.string.clock_12_eg)),
-        Clock.H24 to stringResource(R.string.with_example, stringResource(R.string.clock_24), "18:36"),
+private fun ClockPills(profile: ProfileDoc?, account: AccountViewModel) {
+    Pills(
+        listOf(Clock.AUTO to stringResource(R.string.auto), Clock.H12 to stringResource(R.string.clock_12), Clock.H24 to stringResource(R.string.clock_24)),
+        profile?.clock ?: Clock.AUTO,
+        account::setClock,
+        Modifier.padding(16.dp),
     )
-    val shown = if (auto || pref != Clock.AUTO) pref else if (hour12(ctx)) Clock.H12 else Clock.H24
-    Choice(label, options, shown, { it?.let(account::setClock) })
 }
 
-/** Follow the phone, English or 中文 (phase 10). The languages are named in themselves. */
+/** Auto (the phone's), English or 中文 (phase 10). The languages are named in themselves. */
 @Composable
-internal fun LanguagePicker(account: AccountViewModel) {
+private fun LanguagePicker(account: AccountViewModel) {
     val ctx = LocalContext.current
-    Choice(
-        stringResource(R.string.language),
-        listOf(Lang.AUTO to stringResource(R.string.follow_device), Lang.EN to "English", Lang.ZH to "中文"),
-        Lang.pref(ctx),
-        { it?.let(account::setLang) },
-    )
-    Hint(stringResource(R.string.language_hint), Modifier.padding(top = 4.dp))
+    Group(stringResource(R.string.language), stringResource(R.string.language_hint)) {
+        Pills(
+            listOf(Lang.AUTO to stringResource(R.string.auto), Lang.EN to "English", Lang.ZH to "中文"),
+            Lang.pref(ctx),
+            account::setLang,
+            Modifier.padding(16.dp),
+        )
+    }
 }
-

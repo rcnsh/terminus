@@ -81,8 +81,6 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .install-steps { margin: 0 0 8px; padding-left: 1.2em; display: grid; gap: 6px; }
 .ios-share { display: inline-flex; vertical-align: -3px; color: var(--accent); }
 
-.notify { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
-.notify p { margin: 4px 0 0; }
 
 .today .label {
   font-size: 0.75rem;

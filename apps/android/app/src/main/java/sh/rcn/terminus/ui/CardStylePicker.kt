@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.RadioButton
@@ -42,27 +43,34 @@ internal fun CardStylePicker() {
     val scope = rememberCoroutineScope()
     val chosen = CardStyle.pref(ctx)
     val sample = sampleAnswer()
-    Text(stringResource(R.string.card_style), style = MaterialTheme.typography.titleMedium)
-    Text(stringResource(R.string.card_style_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        for (style in CardStyle.ALL) {
-            val on = style == chosen
-            OutlinedCard(
-                Modifier.fillMaxWidth().selectable(on, role = Role.RadioButton) {
-                    CardStyle.set(ctx, style)
-                    scope.launch { redrawWidgets(ctx) }
-                },
-                border = BorderStroke(if (on) 2.dp else 1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, top = 4.dp, end = 16.dp)) {
-                    RadioButton(selected = on, onClick = null, modifier = Modifier.padding(12.dp))
-                    Column {
-                        Text(stringResource(CardStyle.name(style)), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text(stringResource(hint(style)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    // One card of choices, each with its trip drawn in a box of its own, edged in the accent when chosen.
+    Group(stringResource(R.string.card_style), stringResource(R.string.card_style_hint)) {
+        Column(Modifier.selectableGroup()) {
+            CardStyle.ALL.forEachIndexed { i, style ->
+                val on = style == chosen
+                if (i > 0) RowDivider()
+                Column(
+                    Modifier.fillMaxWidth().selectable(on, role = Role.RadioButton) {
+                        CardStyle.set(ctx, style)
+                        scope.launch { redrawWidgets(ctx) }
+                    }.padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = on, onClick = null, modifier = Modifier.padding(12.dp))
+                        Column {
+                            Text(stringResource(CardStyle.name(style)), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(hint(style)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                }
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    JourneyCard(sample, sample.card!!.journey!!, style)
+                    OutlinedCard(
+                        Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp),
+                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.background),
+                        border = BorderStroke(if (on) 2.dp else 1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            JourneyCard(sample, sample.card!!.journey!!, style)
+                        }
+                    }
                 }
             }
         }
