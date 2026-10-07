@@ -193,6 +193,7 @@
     <string name="module_at_venue">%1$s（在 %2$s）</string>
     <string name="monday">星期一</string>
     <string name="monday_short">周一</string>
+    <string name="more_options">更多选项</string>
     <string name="n_classes">%1$d 节课</string>
     <string name="n_devices">%1$d 台设备</string>
     <string name="n_hours">%1$s 小时</string>
@@ -321,6 +322,8 @@
     <string name="signed_out_removed">这部手机已从你的账户退出登录。请用你的邮箱重新登录。</string>
     <string name="signin_cancelled">登录已在邮件中取消。如果是你取消的，请重新发送。</string>
     <string name="skip_setup">跳过设置</string>
+    <string name="skips_class">这节课不去</string>
+    <string name="skips_day">今天剩下的行程都不去</string>
     <string name="something_wrong">出了点问题</string>
     <string name="starting">正在开始…</string>
     <string name="starts">开始</string>
