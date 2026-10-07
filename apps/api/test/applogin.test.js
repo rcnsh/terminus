@@ -448,3 +448,69 @@ test('app sign-in: requests for one address all at once send one email', async (
   assert.equal(res.filter((r) => r.status === 201).length, 1);
   assert.equal(email.sent.length, 1);
 });
+
+/** Runs `before` just ahead of the next D1 batch, then lets batches through as usual. */
+function beforeNextBatch(db, before) {
+  const batch = db.batch.bind(db);
+  db.batch = async (stmts) => {
+    db.batch = batch;
+    await before();
+    return batch(stmts);
+  };
+}
+
+test('app sign-in: a web sign-in taking the email mid-poll spends nothing; the next poll finishes it', async () => {
+  const { env, email, db } = setup();
+  const old = await anon(env);
+  const s = await (await call(env, '/auth/app/start', { method: 'POST', token: old, body: { email: ME, name: 'Pixel 8' } })).json();
+  await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(s.match) } });
+  // Between the poll's reads and its writes, the email gets an account of its own.
+  beforeNextBatch(db, () => db.exec(`INSERT INTO users (id, email, created, last_seen) VALUES ('web-user', '${ME}', 1, 1)`));
+  const first = await (await call(env, '/auth/app/poll', { method: 'POST', body: s })).json();
+  assert.deepEqual(first, { status: 'pending' });
+  assert.equal((await call(env, '/me', { token: old })).status, 200, 'the anonymous token still works');
+  const second = await (await call(env, '/auth/app/poll', { method: 'POST', body: s })).json();
+  assert.equal(second.status, 'approved');
+  assert.equal(second.outcome, 'signed-in');
+  // The device joined the account the web made; the empty anonymous one went.
+  assert.equal(db._db.prepare("SELECT user_id FROM sessions WHERE kind = 'device'").get().user_id, 'web-user');
+  assert.equal(db._db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
+  assert.deepEqual(await (await call(env, '/auth/app/poll', { method: 'POST', body: s })).json(), { status: 'expired' });
+});
+
+test('app sign-in: two polls at once hand out one token', async () => {
+  const { env, email, db } = setup();
+  const s = await (await call(env, '/auth/app/start', { method: 'POST', body: { email: ME, name: 'Pixel' } })).json();
+  await call(env, '/auth/approve', { method: 'POST', form: { r: lastLink(email), n: String(s.match) } });
+  const polls = await Promise.all([1, 2, 3].map(async () => (await call(env, '/auth/app/poll', { method: 'POST', body: s })).json()));
+  assert.equal(polls.filter((p) => p.status === 'approved').length, 1);
+  assert.equal(db._db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE kind = 'device'").get().n, 1);
+});
+
+test('a web sign-in or pairing that fails part way can be tried again with the same link or code', async () => {
+  const { env, email, db } = setup();
+  const log = console.error;
+  console.error = () => {};
+  try {
+    await call(env, '/auth/login', { method: 'POST', body: { email: ME } });
+    const t = /\/auth\/verify\?t=([A-Za-z0-9_-]+)/.exec(email.sent.at(-1).text)[1];
+    beforeNextBatch(db, () => {
+      throw new Error('D1 hiccup');
+    });
+    assert.equal((await call(env, '/auth/verify', { method: 'POST', form: { t } })).status, 500);
+    const ok = await call(env, '/auth/verify', { method: 'POST', form: { t } });
+    assert.match(ok.headers.get('set-cookie') ?? '', /__Host-tm_s=[^;]+;/);
+    const cookie = ok.headers.get('set-cookie').split(';')[0];
+
+    const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
+    beforeNextBatch(db, () => {
+      throw new Error('D1 hiccup');
+    });
+    assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'Mac' } })).status, 500);
+    const paired = await call(env, '/pair', { method: 'POST', body: { code, name: 'Mac' } });
+    assert.equal(paired.status, 200);
+    assert.equal((await call(env, '/pair', { method: 'POST', body: { code, name: 'Mac' } })).status, 400, 'still only once');
+  } finally {
+    console.error = log;
+  }
+});

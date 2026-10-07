@@ -532,6 +532,12 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
 - The link's page names the account by its whole address: a masked one
   (`f•••@u.nus.edu`) can't be told from a forwarded link to someone else's
   account at the same domain, which would sign the visitor in to it.
+- A sign-in (link, code, pairing code or app request) is spent in the same
+  D1 batch as the account changes and the new session, each statement
+  guarded by "not spent yet" (`Live` in accounts.ts). A failure part way
+  changes nothing, so the same link or code works again, and of two racing
+  attempts only one gets a session. An app poll that fails this way answers
+  `pending`, and the next poll finishes it.
 - Signing out everywhere also deletes the account's pairing codes, unspent
   sign-in links and app sign-ins not yet collected, so nothing made just
   before it can still become a new session.
