@@ -37,6 +37,13 @@ final class MapModel {
     var downloadFailed = false
     /// Bumped by "Back to campus"; the map watches it.
     var recentre = 0
+    /// Zoom steps asked for by the buttons (and ⌘+, ⌘−), in total: the map
+    /// zooms by the difference since it last looked.
+    var zoomSteps = 0
+    /// A stop chosen from the list, which the map moves to; `focusCount` is
+    /// bumped each time, so choosing it again moves there again.
+    var focus: Spot?
+    var focusCount = 0
 
     var openStop: String? { if case .stop(let c) = sheet { c } else { nil } }
     var openBus: LiveBus? { if case .bus(let id) = sheet { buses.first { $0.id == id } } else { nil } }
@@ -109,6 +116,13 @@ final class MapModel {
 
     func open(bus id: String) { sheet = .bus(id) }
 
+    /// A stop from the list (no mouse needed): its card, and the map moved onto it.
+    func pick(stop: MapStop) {
+        open(stop: stop.code)
+        focus = Spot(lat: stop.lat, lon: stop.lon)
+        focusCount += 1
+    }
+
     func refreshBoard() async {
         guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
         let b = (try? await MapFiles.get("/arrivals?stop=\(q)", token: TokenStore.read())).flatMap(StopBoard.parse)
@@ -148,7 +162,7 @@ struct MapWindow: View {
             } else if let campus = map.campus, let style = map.style {
                 CampusMapView(
                     map: map, campus: campus, style: style, dark: scheme == .dark, still: reduceMotion,
-                    drawn: .init(selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet, me: map.me, recentre: map.recentre)
+                    drawn: .init(selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet, me: map.me, recentre: map.recentre, zoomSteps: map.zoomSteps, focusCount: map.focusCount)
                 )
             } else if map.failed {
                 Text(L("The map needs a connection the first time."))
@@ -160,7 +174,12 @@ struct MapWindow: View {
             if let campus = map.campus {
                 VStack(alignment: .leading, spacing: 8) {
                     Pills(campus: campus, selected: map.selected) { map.choose($0) }
-                    if let status = map.busStatus { StatusChip(text: status.text(map.selected ?? "")) }
+                    if let status = map.busStatus {
+                        // Said for a new service, or when its buses go to or from none;
+                        // not at every bus that joins or leaves.
+                        StatusChip(text: status.text(map.selected ?? ""))
+                            .announced(status.text(map.selected ?? ""), when: [map.selected ?? "", status.heard])
+                    }
                     if map.downloading {
                         StatusChip(text: L("Downloading the street map (about 4 MB)…"), busy: true)
                     } else if map.downloadFailed {
@@ -184,18 +203,10 @@ struct MapWindow: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if map.campus != nil {
-                // Lost after zooming or dragging: one click back to the whole campus.
-                Button { map.recentre += 1 } label: {
-                    Image(systemName: "scope").font(.system(size: 14, weight: .medium)).frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .background(.regularMaterial, in: Circle())
-                .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
-                .help(L("Back to campus"))
-                .accessibilityLabel(L("Back to campus"))
-                .padding(.trailing, 14)
-                .padding(.bottom, 36)
+            if let campus = map.campus {
+                MapControls(map: map, campus: campus)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 36)
             }
         }
         .frame(minWidth: 560, minHeight: 440)
@@ -234,6 +245,13 @@ struct MapWindow: View {
 }
 
 extension MapModel.BusStatus {
+    /// What VoiceOver hears again when it changes: any number of buses
+    /// running is the same, so a count going up or down is not said.
+    var heard: String {
+        if case .running = self { return "running" }
+        return "\(self)"
+    }
+
     func text(_ svc: String) -> String {
         switch self {
         case .finding: L("Finding %@ buses…", svc)
@@ -279,6 +297,72 @@ private struct Pills: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 2)
         }
+    }
+}
+
+/// The map's buttons, in its corner: every stop (and the chosen service's
+/// buses) in a list, so a card opens without a mouse; zoom in and out
+/// (⌘+, ⌘−), which the map's own controls hid; and back to campus.
+private struct MapControls: View {
+    let map: MapModel
+    let campus: CampusMap
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Menu {
+                ForEach(campus.stops.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }, id: \.code) { stop in
+                    Button(stop.name) { map.pick(stop: stop) }
+                }
+            } label: {
+                Image(systemName: "list.bullet")
+            }
+            .control(L("Find a stop"))
+            if let svc = map.selected, !map.buses.isEmpty {
+                Menu {
+                    ForEach(map.buses, id: \.id) { bus in
+                        let place = bus.at.map { L("At %@", $0) } ?? bus.nextStop.map { L("Next stop: %@", $0) }
+                        Button([bus.plate ?? L("%@ bus", svc), place].compactMap { $0 }.joined(separator: " · ")) { map.open(bus: bus.id) }
+                    }
+                } label: {
+                    Image(systemName: "bus")
+                }
+                .control(L("Find a %@ bus", svc))
+            }
+            Button { map.zoomSteps += 1 } label: { Image(systemName: "plus") }
+                .keyboardShortcut("+")
+                .control(L("Zoom in"))
+                // ⌘= too: on most keyboards "+" is a shifted "=".
+                .background {
+                    Button("") { map.zoomSteps += 1 }
+                        .keyboardShortcut("=")
+                        .opacity(0)
+                        .focusable(false)
+                        .accessibilityHidden(true)
+                }
+            Button { map.zoomSteps -= 1 } label: { Image(systemName: "minus") }
+                .keyboardShortcut("-")
+                .control(L("Zoom out"))
+            // Lost after zooming or dragging: one click back to the whole campus.
+            Button { map.recentre += 1 } label: { Image(systemName: "scope") }
+                .control(L("Back to campus"))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private extension View {
+    /// A round button over the map, named for VoiceOver and on hover.
+    func control(_ name: String) -> some View {
+        self
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .font(.system(size: 14, weight: .medium))
+            .frame(width: 30, height: 30)
+            .contentShape(Circle())
+            .background(.regularMaterial, in: Circle())
+            .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
+            .help(name)
+            .accessibilityLabel(name)
     }
 }
 
@@ -328,7 +412,7 @@ private struct MapCard<Content: View>: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(title).font(.system(size: 15, weight: .semibold))
+                        Text(title).font(.system(size: 15, weight: .semibold)).accessibilityAddTraits(.isHeader)
                         // A bus's number plate by its name, like the plate on the bus.
                         if let badge {
                             Text(badge)
@@ -352,6 +436,8 @@ private struct MapCard<Content: View>: View {
         .padding(14)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+        // It opens away from where the click (or the list) was: say which.
+        .announced(title)
     }
 }
 
@@ -394,6 +480,7 @@ private struct Line: View {
             Spacer()
             Text(value).font(.system(size: 12, weight: .semibold))
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -420,6 +507,9 @@ private struct StopCard: View {
                                     Spacer()
                                     Text(eta(r)).font(.system(size: 12, weight: .semibold)).monospacedDigit()
                                 }
+                                // "D2: about 6 min", one element a row.
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(spokenTimes(L("%@: %@", r.svc, eta(r))))
                             }
                         }
                     }
@@ -514,6 +604,8 @@ private struct CampusMapView: NSViewRepresentable {
         let sheet: MapModel.Sheet?
         let me: MapModel.Spot?
         let recentre: Int
+        let zoomSteps: Int
+        let focusCount: Int
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(map: map, campus: campus) }
@@ -566,6 +658,8 @@ private struct CampusMapView: NSViewRepresentable {
         private var timer: Timer?
         private var applied: (selected: String?, dark: Bool, stretch: Bool, bus: String?, stale: Bool)?
         private var recentred = 0
+        private var zoomedSteps = 0
+        private var focused = 0
         private var framedLine: String?
         private var framedMe = false
         private var framed = false
@@ -789,13 +883,25 @@ private struct CampusMapView: NSViewRepresentable {
             // Back to campus, from the button.
             if map.recentre != recentred {
                 recentred = map.recentre
-                view.setVisibleCoordinateBounds(bounds(campus.coreBounds), edgePadding: pad, animated: true, completionHandler: nil)
+                view.setVisibleCoordinateBounds(bounds(campus.coreBounds), edgePadding: pad, animated: !still, completionHandler: nil)
+            }
+            // The zoom buttons: by the steps asked for since last time, within the map's limits.
+            if map.zoomSteps != zoomedSteps {
+                let to = view.zoomLevel + Double(map.zoomSteps - zoomedSteps)
+                zoomedSteps = map.zoomSteps
+                view.setZoomLevel(min(max(to, view.minimumZoomLevel), view.maximumZoomLevel), animated: !still)
+            }
+            // A stop chosen from the list: onto it, with a street or two round it.
+            if map.focusCount != focused, let f = map.focus {
+                focused = map.focusCount
+                let d = 0.0015
+                view.setVisibleCoordinateBounds(bounds([f.lon - d, f.lat - d, f.lon + d, f.lat + d]), edgePadding: pad, animated: !still, completionHandler: nil)
             }
             // A pill: its whole line in view, when it's chosen.
             if map.selected != framedLine {
                 framedLine = map.selected
                 if let r = map.selected.flatMap({ campus.routes[$0] }) {
-                    view.setVisibleCoordinateBounds(bounds(r.bounds), edgePadding: pad, animated: true, completionHandler: nil)
+                    view.setVisibleCoordinateBounds(bounds(r.bounds), edgePadding: pad, animated: !still, completionHandler: nil)
                 }
             }
             // First view: your nearest stop when you're on campus, otherwise the whole campus.

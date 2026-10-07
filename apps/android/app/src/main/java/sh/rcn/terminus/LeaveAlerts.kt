@@ -173,6 +173,8 @@ object LeaveAlerts {
             .setSmallIcon(Icon.createWithResource(ctx, R.drawable.ic_bus))
             .setContentTitle(title)
             .setContentText(body)
+            // The whole line when it's opened, not cut at the screen's edge (a ride sets its own style below).
+            .setStyle(android.app.Notification.BigTextStyle().bigText(body))
             .setSubText(where)
             .setContentIntent(open)
             .setAutoCancel(true)

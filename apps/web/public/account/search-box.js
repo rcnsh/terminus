@@ -4,10 +4,13 @@
 // actually takes you. Used in Settings (a class's place, a favourite) and on
 // the web app's Now (Go somewhere else).
 
-import { html, useId, useLayoutEffect, useRef, useState } from '../assets/ui.js';
+import { html, useEffect, useId, useLayoutEffect, useRef, useState } from '../assets/ui.js';
 import { t } from './dom.js';
 import { walkSpeed } from './profile.js';
 import { groupOf, metaOf, pickedText, results } from './search.js';
+
+/** The number of results is said this long after the last key typed. */
+const COUNT_AFTER_MS = 500;
 
 /**
  * `source()` gives the destinations, `suggestions()` what to offer before
@@ -93,14 +96,11 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
     onKeyDown?.(e);
   };
 
-  let group = null;
-  const rows = [];
+  // Results in groups (stops, buildings, …), each a group in the list with its name.
+  const groups = [];
   items.forEach((d, i) => {
-    if (d.kind !== group) {
-      group = d.kind;
-      rows.push(html`<li class="search-group" role="presentation" key=${`g-${group}`}>${groupOf(d)}</li>`);
-    }
-    rows.push(html`
+    if (groups.at(-1)?.kind !== d.kind) groups.push({ kind: d.kind, name: groupOf(d), rows: [] });
+    groups.at(-1).rows.push(html`
       <li
         id=${`${listId}-${i}`}
         key=${`${d.kind}-${d.code}`}
@@ -118,6 +118,18 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
       </li>
     `);
   });
+  // How many there are, said once typing settles on it (the list itself isn't
+  // read out): half a second after the last key, not at every letter.
+  const count = !shown || !text.trim() ? '' : items.length === 0 ? empty : items.length === 1 ? t('1 result') : t('{0} results', items.length);
+  const [said, setSaid] = useState('');
+  useEffect(() => {
+    if (!count) {
+      setSaid('');
+      return;
+    }
+    const id = setTimeout(() => setSaid(count), COUNT_AFTER_MS);
+    return () => clearTimeout(id);
+  }, [count, text]);
 
   return html`
     <div class="search" ref=${wrap}>
@@ -137,8 +149,16 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
         onKeyDown=${keys}
       />
       <ul id=${listId} ref=${list} class=${flip ? 'search-list flip' : 'search-list'} role="listbox" hidden=${!shown}>
-        ${rows.length ? rows : html`<li class="search-empty">${empty}</li>`}
+        ${groups.length
+          ? groups.map(
+              (g) => html`<li role="group" aria-label=${g.name} key=${`g-${g.kind}`}>
+                <div class="search-group" aria-hidden="true">${g.name}</div>
+                <ul class="search-sub" role="none">${g.rows}</ul>
+              </li>`,
+            )
+          : html`<li class="search-empty" role="none">${empty}</li>`}
       </ul>
+      <p class="sr-only" role="status">${said}</p>
     </div>
   `;
 }

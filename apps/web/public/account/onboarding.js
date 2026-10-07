@@ -66,7 +66,7 @@ export function Onboarding({ onDone }) {
   const Step = STEPS[n];
   const cls = out ? `ob-card ob-out-${out}` : `ob-card ob-in-${dir > 0 ? 'fwd' : 'back'}`;
   return html`
-    <section class=${leaving ? 'onboard leaving' : 'onboard'} aria-live="polite">
+    <section class=${leaving ? 'onboard leaving' : 'onboard'}>
       <div class="ob-top">
         <span class="ob-count">${n ? t('Step {0} of {1}', n, STEPS.length - 1) : t('Welcome')}</span>
         <button type="button" class="link-btn" onClick=${finish}>${t('Skip setup')}</button>
@@ -122,7 +122,7 @@ function Actions({ nav, next = t('Continue'), skip, onNext }) {
             await nav.next(onNext);
           } catch (err) {
             setBusy(false);
-            toast(err.message);
+            toast(err.message, { error: true });
           }
         }}
       >${next}</button>
@@ -240,24 +240,28 @@ function Home({ nav }) {
   const others = residences.filter((r) => !r.common);
   const tiles = others.slice(0, SHOWN);
   if (picked && !picked.common && !tiles.includes(picked)) tiles.push(picked);
-  const tile = (r) => html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`;
+  // One tile is in the Tab order, the chosen one (or the first): the arrow keys move between them, as in a radio group.
+  const chosen = mode === 'hall' && picked ? picked.code : mode;
+  const first = common[0]?.code ?? tiles[0]?.code ?? 'more';
+  const tabStop = (key) => (key === (chosen ?? first) ? 0 : -1);
+  const tile = (r) => html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} tab=${tabStop(r.code)} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`;
   const yours = mode === 'hall' && picked ? picked.stops : stop ? [stop] : [];
   return html`
     <${Heading} text=${t('Where your day starts')} sub=${t('Where you catch the bus in the morning and head back to at night. Only the stops are saved.')} />
-    <div role="radiogroup" aria-label=${t('Where you live')}>
+    <div role="radiogroup" aria-label=${t('Where you live')} onKeyDown=${arrowKeys}>
       ${common.length > 0 &&
       html`<p class="eyebrow ob-label">${t('Most common')}</p>
         <div class="ob-tiles ob-common">${common.map(tile)}</div>
         <p class="eyebrow ob-label">${t('Elsewhere')}</p>`}
       <div class=${common.length ? 'ob-tiles ob-rest' : 'ob-tiles'}>
         ${tiles.map(tile)}
-        <${Tile} on=${mode === 'more'} onClick=${() => setMode('more')}><strong>${t('All {0} halls and colleges', residences.length)}</strong><//>
-        <${Tile} on=${mode === 'off'} onClick=${() => pick(null)}><strong>${t('Off campus')}</strong><span class="hint">${t('Choose your stop')}</span><//>
+        <${Tile} on=${mode === 'more'} tab=${tabStop('more')} onClick=${() => setMode('more')}><strong>${t('All {0} halls and colleges', residences.length)}</strong><//>
+        <${Tile} on=${mode === 'off'} tab=${tabStop('off')} onClick=${() => pick(null)}><strong>${t('Off campus')}</strong><span class="hint">${t('Choose your stop')}</span><//>
       </div>
     </div>
     ${mode === 'more' &&
     html`<label for="ob-residence">${t('Where do you live?')}</label>
-      <select id="ob-residence" aria-label=${t('Where you live')} value=${picked?.code ?? ''} onChange=${(e) => pick(residences.find((x) => x.code === e.currentTarget.value) ?? null)}>
+      <select id="ob-residence" value=${picked?.code ?? ''} onChange=${(e) => pick(residences.find((x) => x.code === e.currentTarget.value) ?? null)}>
         <option value="">${t('Choose')}</option>
         <${ResidenceOptions} residences=${residences} />
       </select>`}
@@ -271,8 +275,8 @@ function Home({ nav }) {
       <div class="ob-signs">${yours.map((code) => html`<${StopSign} code=${code} key=${code} />`)}</div>`}
     <label for="ob-walk">${t('Walk from home to that stop')}</label>
     <div class="row tight">
-      <input id="ob-walk" type="number" min=${range.min} max=${range.max} step="1" aria-label=${t('Minutes from home to your stop')} value=${walk} onInput=${(e) => setWalk(e.currentTarget.value)} />
-      <span>${t('minutes')}</span>
+      <input id="ob-walk" type="number" min=${range.min} max=${range.max} step="1" aria-describedby="ob-walk-unit" value=${walk} onInput=${(e) => setWalk(e.currentTarget.value)} />
+      <span id="ob-walk-unit">${t('minutes')}</span>
     </div>
     <p class="hint">${t('Used when the app does not have your location.')}</p>
     <${Actions}
@@ -289,10 +293,23 @@ function Home({ nav }) {
   `;
 }
 
-/** One choice of several, as a tile: outlined, or filled with the accent's soft colour and ticked when chosen. */
-const Tile = ({ on, onClick, children }) => html`
-  <button type="button" role="radio" aria-checked=${String(on)} class=${on ? 'ob-tile on' : 'ob-tile'} onClick=${onClick}>${children}</button>
+/** One choice of several, as a tile: outlined, or filled with the accent's soft colour and ticked when chosen. `tab`: its tabindex. */
+const Tile = ({ on, tab = -1, onClick, children }) => html`
+  <button type="button" role="radio" aria-checked=${String(on)} tabindex=${tab} class=${on ? 'ob-tile on' : 'ob-tile'} onClick=${onClick}>${children}</button>
 `;
+
+/** The arrow keys in a group of radio tiles: the next or previous one is chosen and focused, round from the end. */
+function arrowKeys(e) {
+  const k = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+  if (!k) return;
+  const radios = [...e.currentTarget.querySelectorAll('[role="radio"]')];
+  const i = radios.indexOf(document.activeElement);
+  if (i < 0) return;
+  e.preventDefault();
+  const next = radios[(i + k + radios.length) % radios.length];
+  next.click();
+  next.focus();
+}
 
 /** A stop as its sign: the name on the plate, the services that call there under it, in their colours. */
 function StopSign({ code }) {
@@ -329,9 +346,9 @@ function Travel({ nav }) {
       </label>
       ${full &&
       html`<div class="ob-busy-eg">
-        <span class="ob-bus on"><span class="svc-tag" style="--svc:#34a853;--svc-ink:#fff">R2</span>${clock('2026-01-05T09:38:00+08:00')}</span>
+        <span class="ob-bus on"><span class="svc-tag" style=${R2_TAG}>R2</span>${clock('2026-01-05T09:38:00+08:00')}</span>
         <span class="hint">${t('instead of')}</span>
-        <span class="ob-bus off"><span class="svc-tag" style="--svc:#34a853;--svc-ink:#fff">R2</span><s>${`${clock('2026-01-05T09:46:00+08:00')} · ${t('busy')}`}</s></span>
+        <span class="ob-bus off"><span class="svc-tag" style=${R2_TAG}>R2</span><s>${`${clock('2026-01-05T09:46:00+08:00')} · ${t('busy')}`}</s></span>
       </div>`}
     </div>
     <${Actions}
@@ -344,6 +361,9 @@ function Travel({ nav }) {
     />
   `;
 }
+
+/** The R2's tag in the example, its words in the ink that reads on its green. */
+const R2_TAG = `--svc:#34a853;--svc-ink:${inkOn('#34a853')}`;
 
 /** Where you are on the track: on its lane line, round the far bend. */
 const RUNNER = [325 + 67.5 * Math.cos((-50 * Math.PI) / 180), 75 + 67.5 * Math.sin((-50 * Math.PI) / 180)];

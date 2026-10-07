@@ -12,9 +12,9 @@
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
-import { Fill, Icon, MARK, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
+import { Fill, Icon, MARK, Rich, announce, focusSoon, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { ADDED_PLACES_KEY, api, clock, forgetAccountHere, hour12, inkOn, send, serverNow, t } from '/account/dom.js';
-import { Card, InSky, Message, Report, isStale, signal } from '/account/preview.js';
+import { Card, InSky, Message, Report, Say, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
 import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
@@ -109,11 +109,15 @@ function addPlace(to, label) {
   if (list.some((x) => x.to === to) || favouriteNamed(label)) return;
   keepAdded([{ to, label }, ...list].slice(0, ADDED_MAX));
 }
+/** The chip that's on: where focus goes when the control that had it goes. */
+const focusChosen = () => focusSoon(() => document.querySelector('.app-chips button[aria-pressed="true"]'));
+
 /** The X on an added place's tab: gone, and back to Next if it was showing. */
 function removeAdded(x) {
   keepAdded(added.get().filter((y) => y.to !== x.to));
   const now = target.get();
   if (now.kind === 'stop' && now.to === x.to) choose({ kind: 'plan' });
+  focusChosen();
 }
 
 /* ---------- fetching ---------- */
@@ -352,6 +356,8 @@ function choose(to) {
 /** A search result: its card, under a chip of its own, as a stop picked on the map. */
 function goSomewhere(d) {
   searching.set(false);
+  // The search closes under the keyboard: its new chip takes the focus.
+  focusChosen();
   // A stop or a place is called by its name; a building or room by its code, as on its door.
   const label = d.kind === 'stop' || d.kind === 'landmark' ? d.label : d.code;
   const fav = favouriteNamed(label);
@@ -394,17 +400,27 @@ function answered(a) {
 
 /**
  * Taking an entry off today (× on the row): a timetabled class, one you
- * added, or the trip home. Gone at once, with Undo for a few seconds.
+ * added, or the trip home. Gone at once, with Undo for UNDO_MS, or until
+ * the next one goes; the time waits while the row is pointed at or focused.
  */
+const UNDO_MS = 20_000;
 let undoTimer = null;
 function showUndo(value) {
   undo.set(value);
-  clearTimeout(undoTimer);
-  undoTimer = setTimeout(() => undo.set(null), 6_000);
+  holdUndo(false);
+  announce(value.text, { again: true });
 }
+/** `held`: the row is pointed at or focused, so its Undo stays; let go, its time starts again. */
+function holdUndo(held) {
+  clearTimeout(undoTimer);
+  if (!held && undo.get()) undoTimer = setTimeout(() => undo.set(null), UNDO_MS);
+}
+/** Focus on the removed row's Undo (or the row, when it can't be undone). */
+const focusUndo = (key) => focusSoon(() => document.querySelector(`.today-item.removed[data-key="${CSS.escape(key)}"] .undo-today`) ?? document.querySelector(`.today-item.removed[data-key="${CSS.escape(key)}"]`));
 
 async function removeFromToday(it, at, before) {
   removed.set((m) => new Map(m).set(it.key, generation + 1));
+  focusUndo(it.key);
   const name = it.kind === 'home' ? t('The trip home') : it.label.split(' @ ')[0];
   showUndo({
     it,
@@ -418,6 +434,8 @@ async function removeFromToday(it, at, before) {
         next.delete(it.key);
         return next;
       });
+      // Back in the list: focus on its × again, else on Today's heading.
+      focusSoon(() => document.querySelector(`.remove-today[data-key="${CSS.escape(it.key)}"]`) ?? document.getElementById('today-title'));
       try {
         card.set({ a: await signal({ kind: 'reset', trip: it.key }) });
       } finally {
@@ -429,7 +447,9 @@ async function removeFromToday(it, at, before) {
     card.set({ a: await signal({ kind: 'skipped', trip: it.key }) });
   } catch {
     // Said where it was done, just above the entry (back in the list), which the refresh below leaves alone.
+    const lost = document.activeElement?.closest?.('.today-item.removed');
     showUndo({ it, at, before: it.key, text: t("Couldn't remove that. Check your connection.") });
+    if (lost) focusUndo(it.key);
     removed.set((m) => {
       const next = new Map(m);
       next.delete(it.key);
@@ -489,6 +509,8 @@ async function showTab() {
   }
   for (const n of TABS) views[n].hidden = n !== next;
   tab.set(next);
+  // The window's title says the tab, as the bar along the bottom does.
+  document.title = t('{0} · terminus', TABBAR.find((x) => x.id === next).label());
   document.body.classList.toggle('on-map', next === 'map');
   document.body.classList.toggle('on-settings', next === 'settings');
   document.body.classList.toggle('on-buses', next === 'buses');
@@ -681,7 +703,7 @@ function InstallHint() {
           <${Fill}
             text=${t('Tap {0} at the bottom of Safari.', MARK)}
             parts=${[
-              html`<span class="ios-share" aria-label=${t('the Share button')}><${Icon} paths=${share} size="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></span>`,
+              html`<span class="ios-share" role="img" aria-label=${t('the Share button')}><${Icon} paths=${share} size="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></span>`,
             ]}
           />
         </li>
@@ -717,7 +739,7 @@ function Chips() {
     <button type="button" aria-pressed=${String(same(value, to))} onClick=${() => choose(value)}>${label}</button>
   `;
   return html`
-    <nav class="app-chips" aria-label=${t('Where to')}>
+    <div class="app-chips" role="group" aria-label=${t('Where to')}>
       ${chip(t('Next'), { kind: 'plan' })}
       ${chip(t('Nearby'), { kind: 'nearby' })}
       ${list.map((p) => chip(p.label, { kind: 'place', key: p.key }))}
@@ -733,7 +755,7 @@ function Chips() {
       <button type="button" class="chip-search" aria-label=${t('Go somewhere else')} aria-expanded=${String(open)} onClick=${() => searching.set(!open)}>
         <${Icon} paths=${SEARCH} />
       </button>
-    </nav>
+    </div>
   `;
 }
 
@@ -783,9 +805,10 @@ const itemTitle = (it) => it.title ?? (it.kind === 'home' ? (it.fromName ? t('Ho
 function OfflineCard({ item, step }) {
   if (step === 'home') {
     return html`
-      <div class="widget offline-plan" aria-live="polite">
+      <div class="widget offline-plan">
         <div class="where">${clock(item.startsAt)}</div>
-        <div class="big">${itemTitle(item)}</div>
+        <h2 class="big">${itemTitle(item)}</h2>
+        <${Say} text=${`${clock(item.startsAt)} ${itemTitle(item)}`} />
       </div>
     `;
   }
@@ -793,11 +816,14 @@ function OfflineCard({ item, step }) {
   const how = l ? (l.svc ? t('{0} from {1}', l.svc, l.stop ?? item.fromName) : t('walk')) : null;
   // Planned a while ago, so an estimate: the server's line already says "~".
   const line = step === 'leaveBy' && item.line ? item.line : null;
+  const where = `${itemTitle(item)} · ${t('starts {0}', clock(item.startsAt))}`;
+  const big = line ?? (step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now'));
   return html`
-    <div class="widget offline-plan" aria-live="polite">
-      <div class="where">${`${itemTitle(item)} · ${t('starts {0}', clock(item.startsAt))}`}</div>
-      <div class="big">${line ?? (step === 'leaveBy' ? t('Leave by {0}', t('~{0}', clock(l.at))) : t('Leave now'))}</div>
+    <div class="widget offline-plan">
+      <div class="where">${where}</div>
+      <h2 class="big">${big}</h2>
       ${!line && how && html`<div class="detail">${how.charAt(0).toUpperCase() + how.slice(1)}</div>`}
+      <${Say} text=${`${where}. ${big}`} />
     </div>
   `;
 }
@@ -830,8 +856,12 @@ const etaText = (b) => (b.etaS == null ? '–' : (b.eta ?? (b.etaS < 60 ? t('Arr
  * on the map.
  */
 function NearbyCard({ stops }) {
+  // Heard once for these stops, not again on every refresh: their names.
+  const names = stops.map((s) => s.stop.name).join(', ');
   return html`
-    <div class="widget nearby" aria-live="polite">
+    <div class="widget nearby">
+      <h2 class="sr-only">${t('Buses near you')}</h2>
+      <${Say} text=${t('Buses near you: {0}', names)} />
       ${stops.map(
         (s, i) => html`
           <section class=${i === 0 ? 'stop-sign nearest' : 'stop-sign'} key=${s.stop.code}>
@@ -888,7 +918,7 @@ function CardArea() {
       ? html`<${InSky} sky><${OfflineCard} ...${c.offline} /><//>`
       : c.nearby
         ? html`<div class="sky-head nearby-sky"><${Celestial} /></div><${Horizon} /><${NearbyCard} stops=${c.nearby} />`
-        : html`<${InSky} sky><${Message} text=${c.text} /><//>`;
+        : html`<${InSky} sky><${Message} text=${c.text} quiet=${c.loading === true} /><//>`;
   return html`
     <section class=${c.loading ? 'card app-card loading' : 'card app-card'}>
       ${body}
@@ -943,6 +973,7 @@ function GoLater() {
   if (!open) {
     return html`<button
       type="button"
+      id="go-later"
       class="btn small ghost go-later"
       onClick=${() => {
         // Too late for anything today: tomorrow morning instead.
@@ -985,6 +1016,8 @@ function GoLater() {
       target.set({ kind: 'plan' });
       card.set({ a });
       refresh();
+      // The form goes with its place's chip: focus on Next, the card it's planned on.
+      focusChosen();
       // Today's trip is on the card now; a later day's isn't yet, so say where it went.
       const time = clock(`${date}T${hhmmOf(at)}:00+08:00`);
       if (day === 1) toast(t('Planned for tomorrow at {0}', time));
@@ -1031,7 +1064,14 @@ function GoLater() {
       </div>
       ${msg && html`<p class="go-later-error" role="alert" key=${tries}><${Icon} paths=${ALERT} /><span>${msg}</span></p>`}
       <div class="sheet-actions">
-        <button type="button" class="btn small ghost" onClick=${() => setOpen(false)}>${t('Cancel')}</button>
+        <button
+          type="button"
+          class="btn small ghost"
+          onClick=${() => {
+            setOpen(false);
+            focusSoon(() => document.getElementById('go-later'));
+          }}
+        >${t('Cancel')}</button>
         <button type="submit" class="btn small accent" disabled=${sending}>${t('Plan it')}</button>
       </div>
     </form>
@@ -1054,13 +1094,22 @@ function Today() {
   }
   if (!rows.length) return null;
   return html`
-    <section class="today">
-      <h2 class="label">${t('Today')}</h2>
+    <section class="today" aria-labelledby="today-title">
+      <h2 class="label" id="today-title" tabindex="-1">${t('Today')}</h2>
       <ol class="today-list">
         ${rows.map(({ it, note }) => {
           if (note) {
             return html`
-              <li class="today-item removed" key=${`removed:${note.it.key}`} role="status">
+              <li
+                class="today-item removed"
+                key=${`removed:${note.it.key}`}
+                data-key=${note.it.key}
+                tabindex="-1"
+                onMouseEnter=${() => holdUndo(true)}
+                onMouseLeave=${() => holdUndo(false)}
+                onFocusIn=${() => holdUndo(true)}
+                onFocusOut=${() => holdUndo(false)}
+              >
                 <span class="at">${clock(note.it.startsAt)}</span>
                 <span class="what"><span class="title">${note.text}</span></span>
                 ${note.undo && html`<button type="button" class="linkish undo-today" onClick=${note.undo}>${t('Undo')}</button>`}
@@ -1081,7 +1130,7 @@ function Today() {
             <li class=${`today-item ${it.status}`} key=${it.key}>
               <span class="at">${clock(it.startsAt)}</span>
               <span class="what"><span class="title">${title}</span>${sub && html`<span class="sub">${sub}</span>`}</span>
-              ${it.removable && html`<button type="button" class="remove-today" aria-label=${t('Remove {0} from today', title)} onClick=${() => removeFromToday(it, items.indexOf(it), items[items.indexOf(it) + 1]?.key ?? null)}>×</button>`}
+              ${it.removable && html`<button type="button" class="remove-today" data-key=${it.key} aria-label=${t('Remove {0} from today', title)} onClick=${() => removeFromToday(it, items.indexOf(it), items[items.indexOf(it) + 1]?.key ?? null)}>×</button>`}
             </li>
           `;
         })}
@@ -1090,12 +1139,13 @@ function Today() {
   `;
 }
 
+/** Offline, or the card couldn't update: a status line always on the page, so it's heard when it says so. */
 function Banner() {
   const text = useStore(banner);
   useEffect(() => {
     document.body.classList.toggle('is-offline', text !== null);
   }, [text]);
-  return html`<section class="offline" hidden=${text === null}>${text}</section>`;
+  return html`<div class="banner-slot" role="status">${text !== null && html`<p class="offline">${text}</p>`}</div>`;
 }
 
 function BusesArea() {
@@ -1141,7 +1191,7 @@ const TABBAR = [
 function TabBar() {
   const now = useStore(tab) ?? tabInAddress();
   return html`
-    <nav class="tabbar" aria-label="terminus">
+    <nav class="tabbar" aria-label=${t('Tabs')}>
       ${TABBAR.map(
         (x) => html`
           <a
@@ -1167,6 +1217,7 @@ function App() {
   const keep = (name) => (node) => node && (views[name] = node);
   return html`
     <main class="wrap app-main" id="tab-now" hidden=${first !== 'now'} ref=${keep('now')}>
+      <h1 class="sr-only">${t('Now')}</h1>
       <${InstallHint} />
       <${Banner} />
       <${Chips} />
@@ -1175,9 +1226,9 @@ function App() {
       <${GoLater} />
       <${Today} />
     </main>
-    <section id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><${BusesArea} /></section>
-    <section id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><${MapArea} /></section>
-    <section id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></section>
+    <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Buses')}</h1><${BusesArea} /></main>
+    <main id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><h1 class="sr-only">${t('Map')}</h1><${MapArea} /></main>
+    <main id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></main>
     <${TabBar} />
     <${Toast} />
   `;

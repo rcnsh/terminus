@@ -80,6 +80,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -927,8 +928,13 @@ private fun Classes(profile: ProfileDoc, campus: Campus?, account: AccountViewMo
         for ((imported, i, t) in all) {
             // Tapped, a class opens to change its stop, as on the web.
             val key = "${if (imported) "t" else "m"}$i"
+            val expanded = changing == key
+            val state = stringResource(if (expanded) R.string.a11y_expanded else R.string.a11y_collapsed)
             Row(
-                Modifier.fillMaxWidth().clickable(role = Role.Button) { changing = if (changing == key) null else key }.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                Modifier.fillMaxWidth()
+                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_change_stop, t.label)) { changing = if (expanded) null else key }
+                    .semantics { stateDescription = state }
+                    .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {

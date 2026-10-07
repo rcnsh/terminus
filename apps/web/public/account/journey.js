@@ -87,8 +87,28 @@ function LeaveHead({ a, j, now, late }) {
   const text = leaveIn(a, j, now);
   const time = leaveTime(a, j, now);
   const at = time ? text.indexOf(time) : -1;
-  if (late || at < 0) return html`<div class=${`lead${late || (time ? '' : ' go')}`}>${text}</div>`;
-  return html`<div class="lead">${text.slice(0, at)}<span class="go">${time}</span>${text.slice(at + time.length)}</div>`;
+  if (late || at < 0) return html`<h2 class=${`lead${late || (time ? '' : ' go')}`}>${text}</h2>`;
+  return html`<h2 class="lead">${text.slice(0, at)}<span class="go">${time}</span>${text.slice(at + time.length)}</h2>`;
+}
+
+/**
+ * The trip in one short line for a screen reader (preview.js says it when it
+ * changes): where to, when to leave in whole minutes in the last ten (before
+ * that, by when), then "Leave now"; the bus, its stop and time; and the
+ * arrival when it's late. Seconds never change it, so it isn't read out
+ * every second as the countdown ticks.
+ */
+export function spokenJourney(a, now) {
+  const j = a.card.journey;
+  const left = secondsToLeave(a, j, now);
+  const head =
+    a.card.phase === 'waiting' || left === null
+      ? leaveIn(a, j, now)
+      : left < 600
+        ? t('Leave in {0} min', Math.max(1, Math.round(left / 60)))
+        : (a.card.leaveBy ?? t('Leave in {0} min', Math.round(left / 300) * 5));
+  const bus = j.bus ? `${named(j.bus)} ${t('from {0}', j.bus.stop)} ${j.bus.board}` : walkText(j);
+  return [to(a, j), head, bus, a.card.late ? arrive(j) : null].filter(Boolean).join('. ');
 }
 
 /** The server's line `key` when it sent the journey's lines, else `old()`. */
@@ -293,7 +313,7 @@ function Ticket({ a, j, now, late, top }) {
         </div>`}
     <div class=${`ticket-go${late}`}>
       <div>
-        <div class="go">${leaveIn(a, j, now)}</div>
+        <h2 class="go">${leaveIn(a, j, now)}</h2>
         ${by(a, j, now) && html`<div class="by">${by(a, j, now)}</div>`}
       </div>
       ${arrive(j) &&

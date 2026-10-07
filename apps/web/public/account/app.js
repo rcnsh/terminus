@@ -169,11 +169,22 @@ function SignIn({ adding }) {
           </p>
           <form onSubmit=${send}>
             <label for="login-email">${t('Email')}</label>
-            <input id="login-email" ref=${emailBox} type="email" autocomplete="email" placeholder="you@u.nus.edu" required value=${email} onInput=${(e) => setEmail(e.currentTarget.value)} />
+            <input
+              id="login-email"
+              ref=${emailBox}
+              type="email"
+              autocomplete="email"
+              placeholder="you@u.nus.edu"
+              required
+              aria-invalid=${error ? 'true' : undefined}
+              aria-describedby="login-error"
+              value=${email}
+              onInput=${(e) => setEmail(e.currentTarget.value)}
+            />
             <div class="turnstile" ref=${box}></div>
             <button type="submit" class="btn accent wide" disabled=${busy}>${busy ? t('Sending…') : sendLabel}</button>
           </form>
-          <p class="form-error" role="alert">${error}</p>
+          <p class="form-error" id="login-error" role="alert">${error}</p>
           ${!adding &&
           html`<div>
             <p class="signin-or"><span>${t('or')}</span></p>
@@ -197,7 +208,7 @@ function SignIn({ adding }) {
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
           </div>
           <h1>${t('Check your inbox')}</h1>
-          <p class="hint"><${Fill} text=${t('We sent a code to {0}. Type it here, or open the link in the same email on this device. Both work once, for 15 minutes.', MARK)} parts=${[html`<strong>${email}</strong>`]} /></p>
+          <p class="hint" id="sent-hint"><${Fill} text=${t('We sent a code to {0}. Type it here, or open the link in the same email on this device. Both work once, for 15 minutes.', MARK)} parts=${[html`<strong>${email}</strong>`]} /></p>
           <form
             onSubmit=${(e) => {
               e.preventDefault();
@@ -215,6 +226,8 @@ function SignIn({ adding }) {
               maxlength="7"
               placeholder="K7QX4M"
               required
+              aria-invalid=${codeError ? 'true' : undefined}
+              aria-describedby="code-error sent-hint code-auto"
               value=${code}
               onInput=${(e) => {
                 const v = e.currentTarget.value;
@@ -223,9 +236,10 @@ function SignIn({ adding }) {
                 if (v.replace(/[^a-z0-9]/gi, '').length === 6 && !busy) verify(v);
               }}
             />
+            <p class="hint small" id="code-auto">${t('It signs you in as soon as the sixth character is typed.')}</p>
             <button type="submit" class="btn accent wide" disabled=${busy}>${t('Sign in')}</button>
           </form>
-          <p class="form-error" role="alert">${codeError}</p>
+          <p class="form-error" id="code-error" role="alert">${codeError}</p>
           <p class="hint small">
             <${Fill}
               text=${t('No email after a minute? Check spam, or {0}.', MARK)}
@@ -287,7 +301,7 @@ function Preview({ me }) {
         ? html`<${Card} a=${a} onAnswer=${setA} onChoice=${load} chips />`
         : failed
           ? html`<${Message} text=${t('Preview unavailable right now.')}><button type="button" class="link-btn" onClick=${load}>${t('Try again')}</button><//>`
-          : html`<${Message} text="…" />`}
+          : html`<${Message} text="…" quiet />`}
       <${Report} answer=${a} anonymous=${me.anonymous === true} onAddEmail=${startAdding} />
     </section>
   `;

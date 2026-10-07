@@ -38,12 +38,12 @@
 .row-sum { color: var(--muted); font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-sum:empty::before { content: "\00a0"; }
 .settings-row .chev, .page-back svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.settings-row .chev { color: var(--faint); }
+.settings-row .chev { color: var(--muted); }
 .settings-groups { display: grid; gap: 12px; }
 /* Your account at the top, as a tile of its own. */
 .settings-row.set-account { padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 .set-account .avatar { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--accent); color: var(--bg); font: 800 1.1rem var(--display); }
-.set-account .row-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-account .row-title { font-weight: 700; overflow-wrap: anywhere; }
 /* Your day as a route down the card: home stop, classes, hours, pace, each a
    row opening its page. The line runs dot to dot, through every row's dot. */
 .set-day { padding: 14px 0 2px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
@@ -61,7 +61,7 @@
 .day-stop .row-text { align-self: stretch; align-content: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .day-stop:last-child .row-text { border-bottom: 0; }
 .day-stop .row-sum { font-size: 0.8rem; }
-.day-stop strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.93rem; }
+.day-stop strong { overflow-wrap: anywhere; font-size: 0.93rem; }
 .day-stop strong.todo { color: var(--accent); }
 /* The rest as tiles, two to a row. */
 .set-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -87,7 +87,7 @@ a.settings-row { text-decoration: none; }
 .segmented.full label { flex: 1; min-width: 0; }
 .segmented.full span { text-align: center; padding: 8px 10px; }
 .segmented span { display: block; padding: 6px 12px; border-radius: 999px; font-size: 0.875rem; color: var(--muted); cursor: pointer; }
-.segmented input:checked + span { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.segmented input:checked + span { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line-strong), 0 1px 2px rgb(0 0 0 / 0.12); }
 .segmented input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* In the dark the chosen pill is a step lighter than the track: the card's own colour barely shows on it. */
 :root[data-theme="dark"] .segmented input:checked + span { background: color-mix(in srgb, var(--ink) 14%, var(--surface)); }
@@ -119,7 +119,7 @@ a.settings-row { text-decoration: none; }
 /* A choice from a long list as its value and a chevron, as a row in the list does. */
 .field-control select.plain {
   appearance: none; field-sizing: content; width: auto; min-width: 0; padding: 6px 24px 6px 6px; border: 0; border-radius: 8px; text-align: right; text-align-last: right; color: var(--muted); cursor: pointer;
-  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E") right 2px center / 18px no-repeat;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a847e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E") right 2px center / 18px no-repeat;
 }
 .field-control select.plain:hover { background-color: var(--surface-2); }
 /* The value stays beside the name, however narrow: it's short, and the name wraps first. */
@@ -148,6 +148,7 @@ a.settings-row { text-decoration: none; }
 /* Delete account: the only red on any page, alone in its card at the foot. */
 .settings-row.danger-row .row-title { color: var(--bad); }
 .unit { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+.unit .unit-and { display: inline; margin: 0; font-size: inherit; color: inherit; }
 .unit input[type="time"] { width: auto; padding: 6px 10px; border: 0; background: var(--surface-2); }
 .trips .list { margin: 0; padding: 0 16px; }
 /* A checkbox drawn as an on/off switch. */
@@ -155,6 +156,24 @@ a.settings-row { text-decoration: none; }
 .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 0.15s; }
 .switch:checked { background: var(--accent); }
 .switch:checked::after { transform: translateX(18px); }
+/* On the dark theme's bright orange, a dark knob: white was 2.3:1. */
+:root[data-theme="dark"] .switch:checked::after { background: #1c1917; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .switch:checked::after { background: #1c1917; }
+}
+/* Forced colours (Windows' contrast themes): the system's own colours for
+   what is on (a switch, the chosen pill or style, a ride on the line). */
+@media (forced-colors: active) {
+  .switch { forced-color-adjust: none; border: 1px solid ButtonText; background: Canvas; }
+  .switch::after { background: ButtonText; box-shadow: none; }
+  .switch:checked { background: Highlight; border-color: Highlight; }
+  .switch:checked::after { background: HighlightText; }
+  .segmented input:checked + span { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .style-choice.on .widget { border-color: Highlight; }
+  .journey .line .ride .rail::after, .route-line .bar { forced-color-adjust: none; background: CanvasText; }
+  .ob-tile.on, .ob-pace.on { border-color: Highlight; }
+  .day-stop[aria-current] .day-dot::after { forced-color-adjust: none; background: Highlight; }
+}
 @media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
 
 .settings-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin: 4px 16px 0; font-size: 0.875rem; }
@@ -184,7 +203,9 @@ a.settings-row { text-decoration: none; }
   .settings-row[aria-current] .chev { color: var(--accent); }
 }
 
-.card h2 { font-size: 1.15rem; margin-bottom: 4px; }
+/* A card's own heading; not the Now card's headline (when to go, Done for
+   today), which is a heading too but sized by the card's style. */
+.card h2:where(:not(.go, .done-label)) { font-size: 1.15rem; margin-bottom: 4px; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.tight input { width: 7.5rem; }
 .row.tight span { color: var(--muted); font-size: 0.9rem; }
@@ -223,7 +244,7 @@ a.settings-row { text-decoration: none; }
 .bus-badge { display: inline-block; padding: 1px 7px; border-radius: 6px; font-weight: 800; font-size: 0.8rem; line-height: 1.4; }
 .bus-badge.big { display: grid; place-items: center; width: 64px; height: 64px; padding: 0; border-radius: 16px; font-size: 1.6rem; flex: none; }
 /* A public bus: the fare sign after its number, a touch lighter than the number. */
-.bus-badge .fare { margin-left: 0.3em; font-weight: 600; opacity: 0.8; }
+.bus-badge .fare { margin-left: 0.3em; font-weight: 600; }
 .bus-badge.big .fare { font-size: 0.6em; vertical-align: 0.35em; }
 /* On foot: someone walking where the bus's badge would be. */
 .bus-badge.big.walk { color: var(--ink); background: var(--surface-2); }
@@ -234,7 +255,7 @@ a.settings-row { text-decoration: none; }
 .route-line.walk-on .point { width: auto; min-width: 44px; max-width: 72px; }
 .route-line .dot { width: 14px; height: 14px; margin: 2px 0; border-radius: 50%; background: var(--ink); }
 .route-line .you .dot { background: var(--accent); }
-.route-line .name { margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 0.9rem; }
+.route-line .name { margin-top: 4px; max-width: 100%; overflow-wrap: anywhere; line-height: 1.25; font-weight: 600; font-size: 0.9rem; }
 .route-line .time, .route-line .takes { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .route-line .stretch { flex: 1; display: grid; justify-items: center; min-width: 0; }
 .route-line .stretch.ride { flex: 1.4; }
@@ -267,7 +288,8 @@ a.settings-row { text-decoration: none; }
 .journey .line .pt.end { min-height: 0; }
 .journey .line .time { padding-top: 1px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .journey .line .what { display: grid; align-content: start; gap: 2px; padding-bottom: 14px; min-width: 0; }
-.journey .line .what strong { font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A long stop's name wraps rather than being cut off: it's where to catch the bus. */
+.journey .line .what strong { font-size: 1.05rem; overflow-wrap: anywhere; }
 .journey .line .what small { color: var(--muted); font-size: 0.85rem; }
 .journey .line .end .what { padding-bottom: 0; }
 .journey .line .late .time, .journey .line .late .what small { color: var(--bad-ink); }
@@ -280,7 +302,7 @@ a.settings-row { text-decoration: none; }
 .journey .line .walk .rail::after, .journey .line .ride .rail::after { content: ''; position: absolute; top: 20px; bottom: -4px; left: 8px; width: 6px; border-radius: 3px; }
 .journey .line .walk .rail::after { left: 9px; width: 4px; background: radial-gradient(circle, var(--muted) 1.8px, transparent 2.2px) 50% 0 / 4px 9px repeat-y; }
 .journey .line .ride .rail::after { background: var(--ride, var(--ink)); }
-.journey .line .bus-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.journey .line .bus-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .journey .line .bus-line small { white-space: nowrap; }
 .journey .backup-box { margin-top: 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 0.9rem; color: var(--muted); }
 .journey .tag.live .dot { width: 7px; height: 7px; }
@@ -301,7 +323,7 @@ a.settings-row { text-decoration: none; }
 .cls summary::after { content: ""; width: 7px; height: 7px; border: solid var(--faint); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); align-self: center; transition: transform 0.15s; }
 .cls[open] summary::after { transform: rotate(-135deg); }
 .cls .what { display: grid; min-width: 0; }
-.cls .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cls .name { overflow-wrap: anywhere; }
 .cls .where { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .cls-edit { display: flex; gap: 10px; align-items: center; padding: 0 0 10px; }
 .cls-edit select { flex: 1; min-width: 0; padding: 6px 8px; font-size: 0.88rem; }
@@ -328,12 +350,16 @@ a.settings-row { text-decoration: none; }
 .qr { display: grid; place-items: center; }
 .qr svg { width: 180px; height: 180px; border-radius: 12px; background: #fff; padding: 8px; }
 .code-input { font: 700 1.3rem/1.2 ui-monospace, "SF Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; text-align: center; }
-.code-input::placeholder { color: var(--muted); opacity: 0.45; }
+.code-input::placeholder { color: var(--muted); opacity: 1; }
 .code { font: 700 1.7rem/1 ui-monospace, "SF Mono", monospace; letter-spacing: 0.16em; margin: 14px 0 4px; }
 
-/* Bottom right, clear of the buttons in the content column. */
-.toast { position: fixed; bottom: 18px; right: 18px; margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+/* Bottom right, clear of the buttons in the content column. A problem
+   stays, with × to close it, so it can be clicked. */
+.toast { position: fixed; z-index: 25; bottom: 18px; right: 18px; max-width: calc(100vw - 36px); display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 14px; border-radius: 18px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .toast.show { opacity: 1; }
+.toast.error.show { pointer-events: auto; }
+.toast-close { flex: none; margin: -6px -8px -6px 0; padding: 4px 10px; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.toast-close:focus-visible { outline-color: var(--bg); outline-offset: -2px; }
 
 /* ---------- Onboarding ----------
    Motion is short and quiet: steps slide 16px and fade, the progress bar
@@ -410,6 +436,7 @@ a.settings-row { text-decoration: none; }
 }
 @keyframes search-in { from { opacity: 0; transform: translateY(-4px); } }
 .search-list.flip { left: auto; right: 0; }
+.search-sub { margin: 0; padding: 0; list-style: none; }
 .search-group { padding: 8px 10px 4px; font: 600 0.7rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .search-list [role=option] { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
 .search-list [role=option].active, .search-list [role=option]:hover { background: var(--surface-2); }
@@ -477,16 +504,17 @@ a.settings-row { text-decoration: none; }
    the counter and Send. */
 .compose { padding: 0; overflow: hidden; }
 .compose-from { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 16px; border-bottom: 1px solid var(--line); }
-.compose-key { flex: none; min-width: 2.6rem; color: var(--faint); font-size: 0.9rem; }
+.compose-key { flex: none; min-width: 2.6rem; color: var(--muted); font-size: 0.9rem; }
 .compose-who { min-width: 0; overflow-wrap: anywhere; }
 .compose textarea {
   display: block; width: 100%; min-height: 9.5em; max-height: 16em; padding: 14px 16px; resize: vertical;
   border: 0; border-radius: 0; background: none; color: var(--ink); font: inherit; line-height: 1.5;
 }
 .compose textarea:focus { outline: none; }
-.compose:focus-within:has(textarea:focus) { border-color: var(--line-strong); }
+/* The note is the card's body, so the card shows where the focus is. */
+.compose:focus-within:has(textarea:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .compose-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 16px; border-top: 1px solid var(--line); }
-.compose-count { color: var(--faint); font-size: 0.8rem; font-variant-numeric: tabular-nums; transition: color 0.2s; }
+.compose-count { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; transition: color 0.2s; }
 .compose-count.near { color: var(--warn); }
 .compose-msg { margin: 10px 4px 0; }
 .compose-wrong { display: flex; gap: 12px; align-items: flex-start; margin-top: 20px; padding: 14px 16px; }
@@ -530,15 +558,15 @@ a.settings-row { text-decoration: none; }
 .stop-sign .plate-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .stop-sign .plate-walk { flex: none; padding-right: 6px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
 .sign-services { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 14px; }
-.sign-services .svc-tag, .ob-bus .svc-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 2.4em; padding: 2px 7px; border-radius: 6px; background: var(--svc); color: var(--svc-ink, #fff); font-weight: 700; font-size: 0.8rem; }
+.sign-services .svc-tag, .ob-bus .svc-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 2.4em; padding: 2px 7px; border-radius: 6px; background: var(--svc); color: var(--svc-ink, var(--bg)); font-weight: 700; font-size: 0.8rem; }
 
 /* Setup's progress, as a route: a stop per step, the line filled up to this one. */
 .ob-line { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 4px 0 18px; padding: 0; list-style: none; }
 .ob-line::before, .ob-line::after { content: ''; position: absolute; top: 7px; left: 12.5%; height: 4px; border-radius: 2px; }
-.ob-line::before { right: 12.5%; background: var(--line); }
+.ob-line::before { right: 12.5%; background: var(--line-strong); }
 .ob-line::after { width: calc(75% * var(--done)); background: var(--accent); transition: width 0.32s var(--ob-ease); }
 .ob-line li { position: relative; z-index: 1; display: grid; justify-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--muted); }
-.ob-stop { width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--line); background: var(--bg); }
+.ob-stop { width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--line-strong); background: var(--bg); }
 .ob-line .passed .ob-stop { border-color: var(--accent); background: var(--accent); }
 .ob-line .here .ob-stop { border-color: var(--accent); }
 .ob-line .here, .ob-line .passed { color: var(--ink); }

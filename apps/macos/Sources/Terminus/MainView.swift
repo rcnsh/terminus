@@ -78,7 +78,8 @@ struct Main: View {
             if model.reporting {
                 ReportForm(model: model)
             } else if model.showReported {
-                Text("✓ " + L("Reported, thanks")).font(.caption).foregroundStyle(.green).padding(.horizontal, 4)
+                Text("✓ " + L("Reported, thanks")).font(.caption).foregroundStyle(Color.good).padding(.horizontal, 4)
+                    .announced(L("Reported, thanks"))
             } else if !model.showNearby, answer?.card != nil {
                 // One quiet line, as on the web and Android; it's in the gear menu too.
                 Button(L("Is this wrong?")) { model.startReport() }
@@ -151,7 +152,7 @@ struct GoLater: View {
                     DatePicker(L("Go later today at…"), selection: $at, displayedComponents: .hourAndMinute)
                         .environment(\.timeZone, .campus)
                     Spacer()
-                    Button(L("Cancel")) { open = false }.controlSize(.small)
+                    Button(L("Cancel")) { open = false }.controlSize(.small).keyboardShortcut(.cancelAction)
                     Button(L("Plan it")) {
                         let c = Self.calendar.dateComponents([.hour, .minute], from: at)
                         sending = true
@@ -165,7 +166,7 @@ struct GoLater: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(sending)
                 }
-                if let message { Text(message).font(.caption).foregroundStyle(.red) }
+                if let message { Text(message).font(.caption).foregroundStyle(Color.bad).announced(message) }
             }
             .card(padding: 10)
             .onChange(of: model.target) { open = false }
@@ -190,7 +191,7 @@ struct ReportForm: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
-                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small)
+                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small).keyboardShortcut(.cancelAction)
                 Button(L("Add an email…")) {
                     model.cancelReport()
                     model.settingsPane = .account
@@ -214,10 +215,10 @@ struct ReportForm: View {
                 .onSubmit { model.sendReport() }
             Text(L("Sends the answer above and your note, with your email so you can get a reply."))
                 .font(.caption).foregroundStyle(.secondary)
-            if let r = model.reportResult { Text(r).font(.caption).foregroundStyle(.red) }
+            if let r = model.reportResult { Text(r).font(.caption).foregroundStyle(Color.bad).announced(r) }
             HStack {
                 Spacer()
-                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small)
+                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small).keyboardShortcut(.cancelAction)
                 Button(L("Send")) { model.sendReport() }
                     .controlSize(.small)
                     .keyboardShortcut(.defaultAction)

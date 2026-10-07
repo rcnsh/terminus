@@ -135,7 +135,7 @@ struct SettingsPaneView: View {
         VStack(alignment: .leading, spacing: 10) {
             // Devices shows its own, beside the list.
             if let message = setup.message, pane != .devices {
-                Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                Text(message).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(message)
             }
             switch pane {
             case .trips:
@@ -253,7 +253,7 @@ struct SettingsPaneView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Button(L("Delete account…"), role: .destructive) { openAccountPage() }
                     .buttonStyle(.link)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.bad)
                 Hint(L("Opens the account page, where you confirm it."))
             }
             .padding(.top, 6)
@@ -309,7 +309,7 @@ private struct TripsGroup<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.headline)
+            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) { content }
                     .padding(6)

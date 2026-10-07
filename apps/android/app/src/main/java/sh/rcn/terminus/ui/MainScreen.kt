@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -63,6 +66,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -250,7 +255,9 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                 CircularProgressIndicator(Modifier.size(12.dp).semantics { contentDescription = refreshing }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
             }
-            Text(footer, style = small, color = muted, modifier = Modifier.weight(1f, fill = false))
+            // A failed refresh is said as it happens; "Updated 9:41" alone isn't.
+            val failed = state.error != null
+            Text(footer, style = small, color = muted, modifier = Modifier.weight(1f, fill = false).semantics { if (failed) liveRegion = LiveRegionMode.Polite })
             if (!state.showNearby && state.answer != null) {
                 if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
                 if (state.reportShown) {
@@ -270,8 +277,10 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                                 opened = true
                                 vm.clearReportResult()
                             }
-                            // A taller target than the words, for a thumb.
-                            .padding(vertical = 10.dp),
+                            // A target 48 dp tall, though the words are small, for a thumb.
+                            .heightIn(min = 48.dp)
+                            .wrapContentHeight()
+                            .padding(horizontal = 4.dp),
                     )
                     if (opened && !signedIn) {
                         // The server takes reports only from an account with an email.
@@ -297,7 +306,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         }
         // Only a failure: a report that went shows in the line above.
         state.reportResult?.let {
-            Text(it, style = small, color = MaterialTheme.colorScheme.error)
+            Text(it, style = small, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
 
         Spacer(Modifier.height(24.dp))
@@ -397,6 +406,7 @@ private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: 
                 OutlinedTextField(
                     value = note,
                     onValueChange = { if (it.length <= 1000) note = it },
+                    label = { Text(stringResource(R.string.report_note)) },
                     placeholder = { Text(stringResource(R.string.report_placeholder)) },
                     minLines = 2,
                     maxLines = 5,
@@ -453,7 +463,8 @@ private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onR
             Icon(
                 painterResource(R.drawable.ic_close),
                 contentDescription = remove,
-                modifier = Modifier.size(18.dp).clickable(onClickLabel = remove, role = Role.Button, onClick = onRemove),
+                // A bigger target than the 18 dp X, as tall as the chip.
+                modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClickLabel = remove, role = Role.Button, onClick = onRemove).padding(7.dp),
             )
         },
         modifier = Modifier

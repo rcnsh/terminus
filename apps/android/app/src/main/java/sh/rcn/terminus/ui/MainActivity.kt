@@ -387,6 +387,14 @@ private fun Tabs(
                                 full = { acct.profile.let { p -> (p?.places?.size ?: 0) >= (p?.limits ?: sh.rcn.terminus.Limits.DEFAULT).places } },
                                 save = { code, name -> account.edit { it.addPlace(name, code) } },
                             ),
+                            onShowList = { svc, stop ->
+                                buses.home()
+                                when {
+                                    stop != null -> buses.open(BusRoute.Stop(stop))
+                                    svc != null -> buses.open(BusRoute.Line(svc, null))
+                                }
+                                onTab(Tab.Buses)
+                            },
                         )
                     }
                     Tab.Buses -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
