@@ -262,16 +262,17 @@ test("another device fetching the card doesn't stop the phone being told", async
 });
 
 const FCM_SEND = 'https://fcm.googleapis.com/v1/projects/';
-/** What FCM says to a message it can't take, by what's wrong with it. */
+/** What FCM says to a message it can't take, by the field that's wrong (none: as FCM words a token that isn't valid). */
 const fcmRefusal = (field) =>
   Response.json(
     {
       error: {
         code: 400,
         status: 'INVALID_ARGUMENT',
+        message: field ? 'Request contains an invalid argument.' : 'The registration token is not a valid FCM registration token',
         details: [
           { '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError', errorCode: 'INVALID_ARGUMENT' },
-          { '@type': 'type.googleapis.com/google.rpc.BadRequest', fieldViolations: [{ field, description: 'Invalid value' }] },
+          ...(field ? [{ '@type': 'type.googleapis.com/google.rpc.BadRequest', fieldViolations: [{ field, description: 'Invalid value' }] }] : []),
         ],
       },
     },
@@ -314,6 +315,20 @@ test('a message FCM refuses keeps the token; a token FCM says is bad is dropped'
   refuse = 'message.token';
   clock(alarm());
   await TRIPS.fireAlarms();
+  assert.deepEqual(pushTokens(), []);
+});
+
+test('a token FCM says is not valid, without naming the field, is dropped', async () => {
+  let refuse = false;
+  const wrap = (f) => async (url, init) => (refuse && String(url).startsWith(FCM_SEND) ? fcmRefusal(null) : f(url, init));
+  const { call, phone, next, pushTokens, TRIPS, clock, alarm } = await setup({ wrap });
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  refuse = true;
+  for (let i = 0; i < 5 && pushTokens().length; i++) {
+    clock(alarm());
+    await TRIPS.fireAlarms();
+  }
   assert.deepEqual(pushTokens(), []);
 });
 
@@ -407,6 +422,32 @@ test('an alarm run again after the object restarted mid-wake still wakes', async
     await TRIPS.fireAlarms();
   }
   assert.equal(fcm.sent[0]?.data.phase, 'due');
+  assert.equal(stored(TRIPS).get('waking'), undefined);
+});
+
+test('an alarm run again after it failed past the push does not push the same thing twice', async () => {
+  const { call, phone, next, fcm, TRIPS, clock, alarm } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  await next(phone);
+  const { storage } = [...TRIPS.instances.values()][0];
+  const del = storage.delete.bind(storage);
+  // The alarm's last step fails once the push is out, as a storage error would.
+  storage.delete = async (k) => {
+    if (k === 'waking' && fcm.sent.length && !storage.failed) {
+      storage.failed = true;
+      throw new Error('storage reset');
+    }
+    return del(k);
+  };
+  for (let i = 0; i < 5 && !storage.failed; i++) {
+    const at = alarm();
+    clock(at);
+    await TRIPS.fireAlarms().catch(() => {});
+  }
+  assert.equal(fcm.sent.length, 1);
+  // The platform runs the alarm again within seconds.
+  await [...TRIPS.instances.values()][0].alarm();
+  assert.equal(fcm.sent.length, 1, 'not pushed again');
   assert.equal(stored(TRIPS).get('waking'), undefined);
 });
 
