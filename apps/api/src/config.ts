@@ -20,7 +20,7 @@ export const TTL = {
    *  outage must not turn every request into another call to NUS. */
   failMemoS: 20,
   /** After the feed refuses our version or keys (10009, 10000), or its host
-   *  answers 429 or 5xx, stop calling it for this long. */
+   *  answers 429 or 5xx or not at all (a timeout), stop calling it for this long. */
   breakerS: 60,
   /** After a refused call, a fresh token is minted at most once per this in
    *  a data centre: the calls in between retry with it, or not at all. */

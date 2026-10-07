@@ -841,8 +841,12 @@ zone's and both sites share one: the beta's breaker never quiets the
 stable site.
 
 **Under failure, less load, not more.** A NUS host answering 429 or 5xx,
-or a refused version or key (10009, 10000), opens the feed's breaker for
-`breakerS`, every stop and service with it. A failed token mint is memoised
+not answering at all (a timeout, a failed connection, the body included:
+`timedFetch` reads it under the same timeout), or a refused version or key
+(10009, 10000), opens the feed's breaker for `breakerS`, every stop and
+service with it. A host that hangs is treated as down at once: left to each
+key's `failMemoS`, every stop and service would hold a connection for the
+whole timeout, again and again. A failed token mint is memoised
 for `failMemoS`, so the next stops wait rather than each mint. Any other
 refusal gets one retry: with another isolate's newer token if there is one
 (memo, then KV), else a fresh mint, but at most one per `remintGapS` in a

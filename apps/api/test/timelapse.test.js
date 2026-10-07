@@ -214,7 +214,9 @@ test('with the breaker open, a poll is skipped, not retried harder', async () =>
 
 test('a failed poll records nothing, but a request that reached NUS still counts as one', async () => {
   const h = harness();
-  globalThis.fetch = makeFetch({ fail: true });
+  // A reply it can't read: this service's failure alone. (No answer at all
+  // would open the breaker for every service, a test of its own.)
+  globalThis.fetch = makeFetch({ raw: { code: '00000', msg: '', data: { somethingNew: 1 } } });
   await start(h);
   await h.ns.fireDue(FROZEN_NOW);
   // It asked, and the request failed: an `error`, counted with the requests.
@@ -310,7 +312,8 @@ test('a partial outage is not an idle day: one service failing while the rest ha
   // D2, the only service with buses out, fails from now on; the rest answer empty.
   const real = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
-    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') throw new TypeError('upstream unreachable');
+    // A reply it can't read, so only D2 fails (no answer at all would open the breaker).
+    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') return Response.json({ code: '00000', msg: '', data: { somethingNew: 1 } });
     return real(input, init);
   };
   await runUntil(h, FROZEN_NOW + 12 * 30_000);
@@ -428,7 +431,8 @@ test('only empty rounds in a row stop it: one that could not confirm starts the 
   await runUntil(h, FROZEN_NOW + TIMELAPSE.idleRounds * 30_000 - 1);
   const real = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
-    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') throw new TypeError('upstream unreachable');
+    // A reply it can't read, so only D2 fails (no answer at all would open the breaker).
+    if (String(input).endsWith('/active-bus') && JSON.parse(init.body ?? '{}').route_code === 'D2') return Response.json({ code: '00000', msg: '', data: { somethingNew: 1 } });
     return real(input, init);
   };
   try {

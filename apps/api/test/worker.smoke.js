@@ -722,6 +722,26 @@ test('a NUS host answering 429 or 5xx is not retried, and quiets every stop', as
   }
 });
 
+test('a NUS host that never answers, or cannot be reached, quiets every stop', async () => {
+  // Short timeouts, so the test doesn't wait out the real 5 s.
+  const { TTL } = await import('../src/config.ts');
+  const saved = TTL.upstreamTimeoutMs;
+  TTL.upstreamTimeoutMs = 50;
+  try {
+    for (const opts of [{ hang: true }, { fail: true }]) {
+      const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 }, ...opts });
+      const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+      for (const stop of ['COM3', 'UTOWN']) {
+        const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+        assert.equal((await res.json()).available, false);
+      }
+      assert.equal(fetchImpl.counts.shuttle, 1, `${Object.keys(opts)[0]}: the breaker kept every stop off the feed`);
+    }
+  } finally {
+    TTL.upstreamTimeoutMs = saved;
+  }
+});
+
 test('a failed token mint is not tried again by every stop that wants one', async () => {
   // 400: the NUS load balancer's intermittent "Contradictory scheme headers".
   for (const mintStatus of [400, 503]) {

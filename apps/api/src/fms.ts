@@ -10,7 +10,7 @@
 
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { MAX_ETA_S, TTL } from './config.ts';
-import { timedFetch } from './http.ts';
+import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
 import { UpstreamHttpError, UpstreamRejected, getSession, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
 import type { Session } from './auth.ts';
@@ -547,11 +547,15 @@ export async function getArrivals(
 
 /**
  * Whether a failure says NUS will refuse every call for a while, whichever
- * stop it's for: a refused version or key, or the host itself answering
- * 429 (slow down) or 5xx (down), the mint's host included.
+ * stop it's for: a refused version or key, the host itself answering 429
+ * (slow down) or 5xx (down), or no answer at all (a timeout, a failed
+ * connection), the mint's host included. A host that hangs is down too, and
+ * costs more: left to each key's failMemoS, every stop and service would
+ * hold a connection open for the whole timeout, again and again.
  */
 export function tripsBreaker(err: unknown): boolean {
   if (err instanceof UpstreamRejected) return NO_REMINT_CODES.has(err.code);
+  if (err instanceof UpstreamUnreachable) return true;
   return err instanceof UpstreamHttpError && (err.status === 429 || err.status >= 500);
 }
 
