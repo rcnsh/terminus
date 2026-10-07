@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
@@ -387,8 +388,51 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
     }
     ridge(::nearY, page)
     drawLine(p.road, at(0f, 70f), at(w, 70f), 1.5f * d, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6 * d, 6 * d)))
-    fun tyres(x: Float) {
-        for (wx in floatArrayOf(8f, 30f)) {
+    // A single-decker from the side, heading right: 38 by 12 from (x, 57), standing on the road. The air-con
+    // on its roof, a row of windows, the driver's, the door ahead of the front wheel, the windscreen raking back
+    // to the headlight, a tail light, and the wheels in their arches. With no [band] it's an outline in [paint]
+    // (a timetable guess, so it never passes for live). Window [dim] (0 to 3) has its light off. As the web's busParts.
+    fun bus(x: Float, paint: Color, band: Color?, dim: Int = -1) {
+        val solid = band != null
+        fun part(bx: Float, by: Float, bw: Float, bh: Float, color: Color, r: Float, line: Float) =
+            if (solid) box(x + bx, 57 + by, bw, bh, color, r)
+            else drawRoundRect(paint, at(x + bx, 57 + by), Size(bw * d, bh * d), CornerRadius(r * d), style = Stroke(line * d))
+        fun pt(px: Float, py: Float) = at(x + px, 57 + py)
+        val body = Path().apply {
+            fun to(px: Float, py: Float) = pt(px, py).let { lineTo(it.x, it.y) }
+            fun curve(cx: Float, cy: Float, px: Float, py: Float) = pt(cx, cy).let { c -> pt(px, py).let { quadraticTo(c.x, c.y, it.x, it.y) } }
+            pt(1.5f, 0f).let { moveTo(it.x, it.y) }
+            to(33f, 0f); curve(36f, 0f, 36.9f, 2.6f); to(38f, 8.5f); to(38f, 10.5f); curve(38f, 12f, 36.5f, 12f)
+            to(1.5f, 12f); curve(0f, 12f, 0f, 10.5f); to(0f, 1.5f); curve(0f, 0f, 1.5f, 0f)
+            close()
+        }
+        val screen = Path().apply {
+            pt(35.6f, 2.5f).let { moveTo(it.x, it.y) }
+            pt(36.2f, 2.5f).let { c -> pt(36.4f, 3.2f).let { quadraticTo(c.x, c.y, it.x, it.y) } }
+            pt(37.1f, 7.2f).let { lineTo(it.x, it.y) }
+            pt(35.6f, 7.2f).let { lineTo(it.x, it.y) }
+            close()
+        }
+        part(5f, -1.6f, 14f, 1.9f, paint, 0.8f, 0.8f)
+        if (band != null) {
+            drawPath(body, paint)
+            box(x, 66.5f, 38f, 2f, band)
+        } else {
+            drawPath(body, paint, style = Stroke(1.2f * d, join = StrokeJoin.Round))
+        }
+        val glass = p.window
+        for ((i, wx) in floatArrayOf(2.5f, 8.5f, 14.5f, 20.5f).withIndex()) part(wx, 2.5f, 5f, 4f, if (i == dim) glass.copy(alpha = 0.6f) else glass, 0.8f, 0.6f)
+        part(26.5f, 2.5f, 4.5f, 4f, glass, 0.8f, 0.6f)
+        part(32f, 2.5f, 2.8f, 8.2f, glass, 0.6f, 0.6f)
+        if (solid) drawPath(screen, glass) else drawPath(screen, paint, style = Stroke(0.6f * d))
+        if (solid) {
+            box(x + 36.6f, 65.3f, 1.4f, 1.3f, Color(0xFFFEF3C7), 0.5f)
+            box(x, 64.4f, 0.9f, 1.8f, Color(0xFFEF4444), 0.4f)
+        }
+        for (wx in floatArrayOf(7.5f, 26f)) {
+            val arch = at(x + wx - 3.2f, 65.8f)
+            if (solid) drawArc(Color.Black.copy(alpha = 0.35f), 180f, 180f, true, arch, Size(6.4f * d, 6.4f * d))
+            else drawArc(paint, 180f, 180f, false, arch, Size(6.4f * d, 6.4f * d), style = Stroke(1.2f * d))
             drawCircle(Color(0xFF151311), 2.2f * d, at(x + wx, 69f))
             drawCircle(Color(0xFF8A847D), 0.8f * d, at(x + wx, 69f))
         }
@@ -405,27 +449,15 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
         // Your bus pulls up just short of the sign.
         val colour = Color(bus.color)
         val x = (sx - 44 - bus.far.coerceIn(0f, 1f) * (sx - 56)).roundToInt().toFloat()
-        if (bus.live) {
-            box(x, 57f, 38f, 12f, colour, 3f)
-            box(x, 66.5f, 38f, 2.5f, Color.White.copy(alpha = 0.85f), 1f)
-            for (wx in floatArrayOf(3f, 10f, 17f, 24f)) box(x + wx, 59.5f, 5f, 4f, p.window, 1f)
-            box(x + 32, 59.5f, 4f, 6f, p.window, 1f)
-        } else {
-            drawRoundRect(colour, at(x + 0.75f, 57.75f), Size(36.5f * d, 10.5f * d), CornerRadius(3 * d), style = Stroke(1.5f * d))
-        }
-        tyres(x)
+        bus(x, colour, if (bus.live) Color.White.copy(alpha = 0.85f) else null)
     } else if (road.shuttle) {
         // A shuttle going by, heading right, its headlights on after dark: A1's red along the bottom.
         val x = across(0.58f) - 19f
         if (lights) {
-            val beam = listOf(at(x + 38, 63f), at(x + 60, 60f), at(x + 60, 68f))
+            val beam = listOf(at(x + 38, 66f), at(x + 60, 63f), at(x + 60, 70f))
             drawPath(Path().apply { moveTo(beam[0].x, beam[0].y); beam.drop(1).forEach { lineTo(it.x, it.y) }; close() }, MOON.copy(alpha = 0.12f))
         }
-        box(x, 57f, 38f, 12f, Color(0xFF24211E), 3f)
-        box(x, 66.5f, 38f, 2.5f, Color(0xFFE53935), 1f)
-        for (wx in floatArrayOf(3f, 10f, 17f, 24f)) box(x + wx, 59.5f, 5f, 4f, if (wx == 24f) p.window.copy(alpha = 0.6f) else p.window, 1f)
-        box(x + 32, 59.5f, 4f, 6f, p.window, 1f)
-        tyres(x)
+        bus(x, Color(0xFF24211E), Color(0xFFE53935), dim = 3)
     }
 }
 

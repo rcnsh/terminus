@@ -71,6 +71,29 @@ const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5
  */
 const grounds = { now: store([]) };
 
+/**
+ * A single-decker from the side, heading right: 38 by 12, standing on the
+ * road 1 below. The air-con on its roof, a row of windows, the driver's,
+ * the door ahead of the front wheel, the windscreen raking back to the
+ * headlight, a tail light, and the wheels in their arches. `fill` and `band`
+ * are the classes of its paint and of the stripe along the bottom; window
+ * `dim` (0 to 3) has its light off.
+ */
+const BUS_BODY = 'M1.5 0H33Q36 0 36.9 2.6L38 8.5V10.5Q38 12 36.5 12H1.5Q0 12 0 10.5V1.5Q0 0 1.5 0Z';
+const arch = (x) => `M${x - 3.2} 12A3.2 3.2 0 0 1 ${x + 3.2} 12Z`;
+const busParts = (fill, band, dim = -1) => html`
+  <rect class=${`${fill} roof`} x="5" y="-1.6" width="14" height="1.9" rx="0.8" />
+  <path class=${fill} d=${BUS_BODY} />
+  <rect class=${band} y="9.5" width="38" height="2" />
+  ${[2.5, 8.5, 14.5, 20.5].map((x, i) => html`<rect class=${i === dim ? 'win dim' : 'win'} x=${x} y="2.5" width="5" height="4" rx="0.8" />`)}
+  <rect class="win" x="26.5" y="2.5" width="4.5" height="4" rx="0.8" />
+  <rect class="win" x="32" y="2.5" width="2.8" height="8.2" rx="0.6" />
+  <path class="win" d="M35.6 2.5Q36.2 2.5 36.4 3.2L37.1 7.2H35.6Z" />
+  <rect class="lamp" x="36.6" y="8.3" width="1.4" height="1.3" rx="0.5" />
+  <rect class="tail" y="7.4" width="0.9" height="1.8" rx="0.4" />
+  ${[7.5, 26].map((x) => html`<path class="arch" d=${arch(x)} /><circle class="tyre" cx=${x} cy="12" r="2.2" /><circle class="hub" cx=${x} cy="12" r="0.8" />`)}
+`;
+
 /** How much bigger than its numbers the horizon with the road is drawn: the bus and your stop are the picture. */
 const ROAD_SCALE = 1.25;
 
@@ -171,22 +194,14 @@ export function Horizon({ stop = false, bus = null, shuttle = true, on = 'now', 
         ${!low &&
         bus &&
         html`<g class=${bus.live ? 'coming' : 'coming guess'} transform=${`translate(${bx} 57)`} style=${{ '--svc': bus.color }}>
-            <rect class="body" x="0.75" y="0.75" width="36.5" height="10.5" rx="3" />
-            <rect class="band" y="9.5" width="38" height="2.5" rx="1" />
-            ${[3, 10, 17, 24].map((x) => html`<rect class="win" x=${x} y="2.5" width="5" height="4" rx="1" />`)}
-            <rect class="win" x="32" y="2.5" width="4" height="6" rx="1" />
-            ${[8, 30].map((x) => html`<circle class="tyre" cx=${x} cy="12" r="2.2" /><circle class="hub" cx=${x} cy="12" r="0.8" />`)}
+            ${busParts('body', 'band')}
           </g>`}
         ${!low &&
         !bus &&
         shuttle &&
         html`<g transform=${`translate(${passing} 57)`}>
-          <path class="beam" d="M38 6L60 3L60 11Z" />
-          <rect class="bus" width="38" height="12" rx="3" />
-          <rect class="stripe" y="9.5" width="38" height="2.5" rx="1" />
-          ${[3, 10, 17, 24].map((x) => html`<rect class=${x === 24 ? 'win dim' : 'win'} x=${x} y="2.5" width="5" height="4" rx="1" />`)}
-          <rect class="win" x="32" y="2.5" width="4" height="6" rx="1" />
-          ${[8, 30].map((x) => html`<circle class="tyre" cx=${x} cy="12" r="2.2" /><circle class="hub" cx=${x} cy="12" r="0.8" />`)}
+          <path class="beam" d="M38 9L60 6L60 13Z" />
+          ${busParts('bus', 'stripe', 3)}
         </g>`}
       </svg>`}
     </div>
