@@ -117,6 +117,9 @@ test('the kill switch: off unless turned on, and KV turns it off without a deplo
   assert.equal(await timelapseEnabled(env({ TIMELAPSE_ENABLED: 'on' }, kv)), false, 'KV wins over the var');
   await kv.put('config:timelapse', 'on');
   assert.equal(await timelapseEnabled(env({ TIMELAPSE_ENABLED: 'off' }, kv)), true);
+  // KV not answering may be hiding an "off": the var doesn't get to override it.
+  const down = { ...makeKV(), get: async () => Promise.reject(new Error('KV unavailable')) };
+  assert.equal(await timelapseEnabled(env({ TIMELAPSE_ENABLED: 'on' }, down)), false);
 });
 
 test('the cron starts the day only inside the window with the switch on', async () => {
