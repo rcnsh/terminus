@@ -63,14 +63,14 @@ data class MapUi(
     val downloadFailed: Boolean = false,
 )
 
+/** Buses from a poll this old, with none since, are drawn faded: three missed 5 s polls. */
+private const val BUSES_OLD_MS = 15_000L
+
 /**
  * The Map tab. The screen drives the polling (only while it's on screen):
  * [refreshBuses] every 5 s while a pill is on, [refreshBoard] every 15 s
  * while a stop's sheet is open, [locate] now and then.
  */
-/** Buses from a poll this old, with none since, are drawn faded: three missed 5 s polls. */
-private const val BUSES_OLD_MS = 15_000L
-
 class MapViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(MapUi())
