@@ -15,7 +15,7 @@ import { Icon, Rich, html, render, store, useEffect, useRef, useState, useStore 
 import { api, clock, hour12, inkOn, send, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, phaseAt, useNowSky } from '/account/sky.js';
-import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, walkSpeed } from '/account/profile.js';
+import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, toast, walkSpeed } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
 
@@ -792,23 +792,41 @@ function CardArea() {
   `;
 }
 
-/** Half an hour from now on campus, on a five-minute mark: where "Go later" starts. */
+/** The last time "Go later" offers in a day. */
+const LAST_MARK = 23 * 60 + 55;
+/** Half an hour from now on campus, on a five-minute mark: where "Go later" starts. Null once that's past LAST_MARK. */
 function soonOnCampus() {
   const sgt = new Date(Date.now() + 8 * 3600_000);
   const min = Math.ceil((sgt.getUTCHours() * 60 + sgt.getUTCMinutes() + 30) / 5) * 5;
-  return Math.min(min, 23 * 60 + 55);
+  return min <= LAST_MARK ? min : null;
 }
 const hhmmOf = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+/** The date on campus `days` from today (YYYY-MM-DD), and its weekday (0 is Sunday). */
+function campusDay(days) {
+  const d = new Date(Date.now() + 8 * 3600_000 + days * 86_400_000);
+  return { date: d.toISOString().slice(0, 10), weekday: d.getUTCDay() };
+}
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => t(d));
+const WEEKDAYS_LONG = () => [t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), t('Thursday'), t('Friday'), t('Saturday')];
+const ALERT = '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>';
 
 /**
- * Somewhere other than the plan: going there later today, planned like a
- * class (POST /me/once), as on the phone. The plan comes back and shows.
+ * Somewhere other than the plan: going there later, today or on one of the
+ * next two days, planned like a class (POST /me/once). Settings' own rows:
+ * the day as pills, the time as a stepper in five minutes whose middle is
+ * the browser's own time picker. A time already past is the server's to
+ * refuse, and its message shows above the buttons.
  */
 function GoLater() {
   const to = useStore(target);
+  const list = useStore(places);
   const [open, setOpen] = useState(false);
-  const [at, setAt] = useState('');
+  const [day, setDay] = useState(0);
+  const [at, setAt] = useState(0);
   const [msg, setMsg] = useState('');
+  // Counts refusals, so the same message shakes again on another try.
+  const [tries, setTries] = useState(0);
+  const [sending, setSending] = useState(false);
   useEffect(() => {
     setOpen(false);
     setMsg('');
@@ -819,34 +837,95 @@ function GoLater() {
       type="button"
       class="btn small ghost go-later"
       onClick=${() => {
-        setAt(hhmmOf(soonOnCampus()));
+        // Too late for anything today: tomorrow morning instead.
+        const soon = soonOnCampus();
+        setDay(soon === null ? 1 : 0);
+        setAt(soon ?? 9 * 60);
+        setMsg('');
         setOpen(true);
       }}
-    >${t('Go later today at…')}</button>`;
+    >${t('Go later at…')}</button>`;
   }
+  const label = to.kind === 'place' ? (list.find((p) => p.key === to.key)?.label ?? '') : to.label;
+  const days = [0, 1, 2].map((i) => ({ i, ...campusDay(i) }));
+  const dayLabel = (d) => (d.i === 0 ? t('Today') : d.i === 1 ? t('Tomorrow') : WEEKDAYS[d.weekday]);
+  const pick = (min) => {
+    setMsg('');
+    setAt(Math.min(LAST_MARK, Math.max(0, min)));
+  };
+  // A time off the five-minute marks (from the picker) steps to the next mark.
+  const earlier = () => pick(Math.ceil(at / 5) * 5 - 5);
+  const later = () => pick(Math.floor(at / 5) * 5 + 5);
+  const typed = (e) => {
+    const [h, m] = e.currentTarget.value.split(':').map(Number);
+    if (Number.isInteger(h) && Number.isInteger(m)) pick(h * 60 + m);
+  };
+  const showPicker = (e) => {
+    try {
+      e.currentTarget.showPicker?.();
+    } catch {
+      // Not every browser opens it on demand; typing in the field still works.
+    }
+  };
   const submit = async (e) => {
     e.preventDefault();
-    const [h, m] = at.split(':').map(Number);
-    if (!Number.isInteger(h) || !Number.isInteger(m)) return;
-    const body = to.kind === 'place' ? { place: to.key, atMin: h * 60 + m } : { to: to.to, label: to.label, atMin: h * 60 + m };
+    const { date } = days[day];
+    const where = to.kind === 'place' ? { place: to.key } : { to: to.to, label: to.label };
+    setSending(true);
     try {
-      const a = await api(`/me/once${query()}`, { method: 'POST', body });
+      const a = await api(`/me/once${query()}`, { method: 'POST', body: { ...where, atMin: at, date } });
       target.set({ kind: 'plan' });
       card.set({ a });
       refresh();
+      // Today's trip is on the card now; a later day's isn't yet, so say where it went.
+      const time = clock(`${date}T${hhmmOf(at)}:00+08:00`);
+      if (day === 1) toast(t('Planned for tomorrow at {0}', time));
+      else if (day > 1) toast(t('Planned for {0} at {1}', WEEKDAYS_LONG()[days[day].weekday], time));
     } catch (err) {
-      setMsg(err.message || t("Couldn't add it. Check your connection."));
+      // The server's own words when it answered; the browser's ("Failed to fetch") aren't for people.
+      setMsg((err.status && err.message) || t("Couldn't add it. Check your connection."));
+      setTries((n) => n + 1);
+    } finally {
+      setSending(false);
     }
   };
   return html`
-    <form class="card go-later-form" onSubmit=${submit}>
-      <label for="go-later-at">${t('Go later today at…')}</label>
-      <div class="row">
-        <input id="go-later-at" type="time" required value=${at} onInput=${(e) => setAt(e.currentTarget.value)} />
-        <button type="submit" class="btn small accent">${t('Plan it')}</button>
-        <button type="button" class="btn small ghost" onClick=${() => setOpen(false)}>${t('Cancel')}</button>
+    <form class="trips-group go-later-form" onSubmit=${submit}>
+      <h3 class="eyebrow">${label ? t('Go later to {0}', label) : t('Go later at…')}</h3>
+      <div class="card settings-list">
+        <div class="settings-row inline">
+          <span class="row-text"><span class="row-title" id="go-later-day">${t('Day')}</span></span>
+          <div class="segmented" role="radiogroup" aria-labelledby="go-later-day">
+            ${days.map(
+              (d) => html`<label key=${d.i}>
+                <input
+                  type="radio"
+                  name="go-later-day"
+                  checked=${day === d.i}
+                  onChange=${() => {
+                    setMsg('');
+                    setDay(d.i);
+                  }}
+                />
+                <span>${dayLabel(d)}</span>
+              </label>`,
+            )}
+          </div>
+        </div>
+        <div class="settings-row inline">
+          <span class="row-text"><label class="row-title" for="go-later-at">${t('Be there by')}</label></span>
+          <span class="stepper" role="group" aria-label=${t('Be there by')}>
+            <button type="button" aria-label=${t('5 min earlier')} disabled=${at <= 0} onClick=${earlier}>−</button>
+            <input id="go-later-at" class="stepper-time" type="time" step="300" required value=${hhmmOf(at)} onClick=${showPicker} onInput=${typed} />
+            <button type="button" aria-label=${t('5 min later')} disabled=${at >= LAST_MARK} onClick=${later}>+</button>
+          </span>
+        </div>
       </div>
-      <p class="hint" role="status">${msg}</p>
+      ${msg && html`<p class="go-later-error" role="alert" key=${tries}><${Icon} paths=${ALERT} /><span>${msg}</span></p>`}
+      <div class="sheet-actions">
+        <button type="button" class="btn small ghost" onClick=${() => setOpen(false)}>${t('Cancel')}</button>
+        <button type="submit" class="btn small accent" disabled=${sending}>${t('Plan it')}</button>
+      </div>
     </form>
   `;
 }
