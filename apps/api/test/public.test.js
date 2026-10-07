@@ -277,6 +277,9 @@ test('an account with publicBuses on gets public buses on /me/next and /me/nearb
   assert.equal(on.card.journey.bus.paid, true);
   assert.equal(on.card.journey.backup.svc, 'A1');
   assert.equal(on.card.journey.backup.paid, undefined);
+  // The card's words name it with its fare too, for the clients that show only them (the Mac, notifications).
+  assert.equal(on.leave.paid, true);
+  assert.match(on.card.leaveVia, /\b95 \(\$\) at /);
   const nearby = await get(`/me/nearby?lat=${AT_CLB.lat}&lon=${AT_CLB.lon}`);
   const clb = nearby.stops.find((s) => s.stop.code === 'CLB');
   const row = clb.board.find((r) => r.svc === '95');

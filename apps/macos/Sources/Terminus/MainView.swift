@@ -90,13 +90,20 @@ struct Main: View {
 
             // Today, on the plan's tab: the rest of the day under the next trip.
             if !model.showNearby, model.target == .plan, let day = model.day, !day.items.isEmpty || model.removed != nil {
-                TodayList(day: day, removed: model.removed, removedAt: model.removedAt, removedBefore: model.removedBefore, onRemove: model.removeFromToday, onUndo: model.undoRemove).padding(.horizontal, 4)
+                TodayList(day: day, removed: model.removed, removedAt: model.removedAt, removedBefore: model.removedBefore, failed: model.removeFailed, onRemove: model.removeFromToday, onUndo: model.undoRemove).padding(.horizontal, 4)
             }
 
             if model.reporting {
                 ReportForm(model: model)
             } else if model.showReported {
                 Text("✓ " + L("Reported, thanks")).font(.caption).foregroundStyle(.green).padding(.horizontal, 4)
+            } else if !model.showNearby, answer?.card != nil {
+                // One quiet line, as on the web and Android; it's in the gear menu too.
+                Button(L("Is this wrong?")) { model.startReport() }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
             }
 
             Search(model: model, query: $query)

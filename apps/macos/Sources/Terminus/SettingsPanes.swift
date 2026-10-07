@@ -375,6 +375,19 @@ struct FeedbackPane: View {
     @State private var sending = false
 
     private static let limit = 1000
+    /// The note's length as the server counts it (JavaScript's, in UTF-16
+    /// units), so an emoji counts as two here too and the counter never says
+    /// a note fits that the server would refuse.
+    static func length(_ s: String) -> Int { s.utf16.count }
+    /// At most `limit` of those, never cutting a character in half.
+    static func clipped(_ s: String) -> String {
+        var out = ""
+        for c in s {
+            if out.utf16.count + c.utf16.count > limit { break }
+            out.append(c)
+        }
+        return out
+    }
 
     private var reply: String { replyTo.trimmingCharacters(in: .whitespaces) }
     /// Typed, but not local@domain.tld.
@@ -482,14 +495,15 @@ struct FeedbackPane: View {
             .frame(height: 140)
             .padding(.horizontal, 7)
             .padding(.vertical, 8)
-            .onChange(of: note) { _, v in if v.count > Self.limit { note = String(v.prefix(Self.limit)) } }
+            .onChange(of: note) { _, v in if Self.length(v) > Self.limit { note = Self.clipped(v) } }
     }
 
     private var footer: some View {
         HStack {
-            Text(verbatim: "\(note.count) / \(Self.limit)")
+            Text(verbatim: "\(Self.length(note)) / \(Self.limit)")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(note.count >= 900 ? Color.orange : Color.secondary)
+                .foregroundStyle(Self.length(note) >= 900 ? Color.orange : Color.secondary)
+                .accessibilityLabel(L("%@ of %@ characters", "\(Self.length(note))", "\(Self.limit)"))
             Spacer()
             Button(L("Send")) {
                 sending = true
@@ -528,17 +542,15 @@ struct AddEmail: View {
                     Button(L("Keep this Mac's")) { app.keepSetup(mac: true) }
                 }
             } else if let w = app.signInWaiting {
-                Text(L("We sent a code to %@. Type it here:", w.email))
-                TextField("ABC 123", text: $code)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(maxWidth: 160)
-                    .onChange(of: code) { _, v in
-                        let clean = String(v.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
-                        if clean != v { code = clean } else if clean.count == 6 { app.enterCode(clean) }
-                    }
+                Text(L("Sent to %@. Not there after a minute? Check your spam folder. The code works for 15 minutes.", w.email))
+                    .fixedSize(horizontal: false, vertical: true)
+                CodeField(code: $code, label: L("Code from the email"), onEdit: { app.signInError = nil }) { app.enterCode($0) }
+                    .padding(.vertical, 4)
                 Hint(L("Or open the link in the email and choose %@.", "\(w.match)"))
-                Button(L("Cancel")) { app.cancelSignIn() }
+                Button(L("Use a different email")) {
+                    code = ""
+                    app.cancelSignIn()
+                }
             } else {
                 Text(L("Add an email to use terminus on your other devices too, and to keep your setup if this Mac is lost."))
                     .fixedSize(horizontal: false, vertical: true)
