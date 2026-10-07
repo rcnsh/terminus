@@ -11,6 +11,7 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
 import { armTrips, remindTerm } from '../src/monitor.ts';
+import { endOfDayMs, sgtDate } from '../src/trip.ts';
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
@@ -258,4 +259,48 @@ test("another device fetching the card doesn't stop the phone being told", async
     await TRIPS.fireAlarms();
   }
   assert.equal(fcm.sent[0]?.data.phase, 'due', 'the phone still hears it');
+});
+
+/** Records the changes each request sends to the Trip objects. */
+function sentToTrips(TRIPS) {
+  const sent = [];
+  const get = TRIPS.get.bind(TRIPS);
+  TRIPS.get = (id, opts) => {
+    const stub = get(id, opts);
+    return { ...stub, fetch: (url, init) => (init?.method === 'POST' && sent.push(JSON.parse(init.body)), stub.fetch(url, init)) };
+  };
+  return sent;
+}
+
+test('refreshing while the leave-by moves by seconds asks the Trip object to watch once, and the push still comes', async () => {
+  const { call, phone, next, fcm, TRIPS, clock, wakeUntil } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const sent = sentToTrips(TRIPS);
+  const marks = new Set();
+  for (let i = 0; i < 12; i++) {
+    const a = await next(phone);
+    marks.add(Date.parse(a.leave.at));
+    clock(Date.now() + 20_000);
+  }
+  assert.ok(marks.size > 1, 'the leave-by moved between refreshes');
+  assert.equal(sent.filter((u) => u.watch).length, 1, 'one watch, not one per refresh');
+  await wakeUntil(() => fcm.sent.length > 0);
+  assert.equal(fcm.sent[0].data.phase, 'due');
+});
+
+test('a Trip object that stopped waking is asked again by the next request', async () => {
+  const { call, phone, next, TRIPS, clock, alarm } = await setup();
+  // Nobody to tell yet: the object wakes once and stops.
+  await next(phone);
+  clock(alarm());
+  await TRIPS.fireAlarms();
+  const user = [...TRIPS.instances.keys()][0];
+  const day = await (await TRIPS.get(user).fetch(`https://trip/day?date=${sgtDate(Date.now())}`)).json();
+  assert.equal(day?.watch, undefined, 'no wake pending, and the day says so');
+  // A phone registers; its next refresh has the object watch again.
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const sent = sentToTrips(TRIPS);
+  await next(phone);
+  assert.equal(sent.filter((u) => u.watch).length, 1);
+  assert.ok(alarm() < endOfDayMs(Date.now()), 'waking before midnight');
 });
