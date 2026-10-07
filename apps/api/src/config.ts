@@ -125,9 +125,11 @@ export const MIN_POLL_MS = 15_000;
 /** Hard cap from the API contract. `format.ts` targets much shorter. */
 export const LABEL_MAX = 40;
 
-/** SGT is UTC+8, no DST. */
+/** SGT is UTC+8, no DST: add this to an instant to read SGT off its UTC fields. */
+export const SGT_MS = 8 * 3_600_000;
+
 export function sgt(nowMs: number): { day: number; hour: number; minutes: number } {
-  const d = new Date(nowMs + 8 * 3600_000);
+  const d = new Date(nowMs + SGT_MS);
   return {
     day: d.getUTCDay(),
     hour: d.getUTCHours(),

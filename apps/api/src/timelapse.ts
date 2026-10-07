@@ -23,12 +23,12 @@
  */
 
 import type { Env } from './types.ts';
-import { MIN_POLL_MS, TIMELAPSE } from './config.ts';
+import { MIN_POLL_MS, SGT_MS, TIMELAPSE } from './config.ts';
 import { canReadTimelapse } from './admin.ts';
 import { json } from './http.ts';
 import { buildCampusMap } from './campus.ts';
 import { GRAPH } from './graph.ts';
-import { sgtDate } from './calendar.ts';
+import { sgtDate, sgtMidnight as midnightOf } from './calendar.ts';
 
 /* ------------------------------------------------------------------ */
 /* When it records                                                     */
@@ -50,11 +50,6 @@ const minutesOf = (hhmm: string) => {
 };
 
 const DAY_MS = 86_400_000;
-const SGT_MS = 8 * 3_600_000;
-
-
-/** Midnight at the start of Singapore date [date], epoch ms. */
-const midnightOf = (date: string) => Date.parse(`${date}T00:00:00Z`) - SGT_MS;
 
 /** When day [date]'s window opens and closes, epoch ms. One that crosses
  *  midnight (06:30 to 00:30) closes the next morning. */
