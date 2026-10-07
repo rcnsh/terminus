@@ -492,7 +492,7 @@ struct SetupView: View {
                 if setup.profile == nil {
                     VStack(spacing: 12) {
                         if let m = setup.message {
-                            Text(m).foregroundStyle(.red)
+                            Text(m).foregroundStyle(Color.bad).announced(m)
                             Button(L("Try again")) { Task { await setup.load() } }
                         } else {
                             ProgressView()
@@ -508,7 +508,7 @@ struct SetupView: View {
                             case 2: PaceStep(setup: setup)
                             default: PermissionsStep(app: app)
                             }
-                            if let m = setup.message { Text(m).font(.callout).foregroundStyle(.red) }
+                            if let m = setup.message { Text(m).font(.callout).foregroundStyle(Color.bad).announced(m) }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
@@ -746,7 +746,7 @@ struct DevicesView: View {
             } else {
                 deviceList.transition(.opacity)
             }
-            if let m = setup.message { Text(m).font(.callout).foregroundStyle(.red) }
+            if let m = setup.message { Text(m).font(.callout).foregroundStyle(Color.bad).announced(m) }
         }
         .animation(.easeInOut(duration: 0.15), value: setup.pairCode)
         .padding(20)

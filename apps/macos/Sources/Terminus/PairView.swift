@@ -53,7 +53,7 @@ struct Pair: View {
             .controlSize(.large)
             .disabled(!emailOK || model.signingIn)
             if let e = model.signInError {
-                Text(e).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                Text(e).font(.callout).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(e)
             }
             Button(L("Pair with a code instead")) { useCode = true }
                 .buttonStyle(.link)
@@ -94,7 +94,7 @@ struct Pair: View {
             .controlSize(.large)
             .disabled(emailCode.count != CodeField.length || model.signingIn)
             if let e = model.signInError {
-                Text(e).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                Text(e).font(.callout).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(e)
             }
             Divider().padding(.vertical, 2)
             // The email's link, on a phone or anywhere else: choose this number there.
@@ -144,7 +144,7 @@ struct Pair: View {
             .controlSize(.large)
             .disabled(code.count != CodeField.length || model.pairing)
             if let e = model.pairError {
-                Text(e).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                Text(e).font(.callout).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(e)
             }
             Button(L("Sign in with email instead")) { useCode = false }
                 .buttonStyle(.link)

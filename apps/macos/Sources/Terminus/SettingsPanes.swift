@@ -426,8 +426,8 @@ struct FeedbackPane: View {
                     footer
                 }
                 .card(padding: 0)
-                if sent { Text(L("Thanks. Your feedback was sent.")).foregroundStyle(.secondary).padding(.horizontal, 4) }
-                if let result { Text(result).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4) }
+                if sent { Text(L("Thanks. Your feedback was sent.")).foregroundStyle(.secondary).padding(.horizontal, 4).announced(L("Thanks. Your feedback was sent.")) }
+                if let result { Text(result).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4).announced(result) }
             }
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.bubble")
@@ -482,7 +482,7 @@ struct FeedbackPane: View {
         HStack {
             Text(verbatim: "\(Self.length(note)) / \(Self.limit)")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(Self.length(note) >= 900 ? Color.orange : Color.secondary)
+                .foregroundStyle(Self.length(note) >= 900 ? Color.warn : Color.secondary)
                 .accessibilityLabel(L("%@ of %@ characters", "\(Self.length(note))", "\(Self.limit)"))
             Spacer()
             Button(L("Send")) {
@@ -538,7 +538,7 @@ struct AddEmail: View {
                         .disabled(!emailOK || app.signingIn)
                 }
             }
-            if let e = app.signInError { Text(e).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
+            if let e = app.signInError { Text(e).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(e) }
         }
     }
 }
