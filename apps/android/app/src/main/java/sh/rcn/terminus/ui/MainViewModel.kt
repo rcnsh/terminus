@@ -72,7 +72,7 @@ data class UiState(
     val removeError: String? = null,
     /** "Swipe to remove" beside Today's heading, until a row has been swiped. */
     val swipeHint: Boolean = false,
-    /** The first removable row nudges aside once, the first few times Today is shown. */
+    /** The first removable row nudges aside once, the first time Today is shown. */
     val swipePeek: Boolean = false,
     /** A card button's signal on its way. */
     val signalling: Boolean = false,
@@ -544,5 +544,5 @@ internal fun installedFromPlay(ctx: android.content.Context): Boolean =
 /** Today is fetched again with the answer once it's this old. */
 private const val DAY_MAX_AGE_MS = 120_000L
 
-/** How many times, at most, a Today row nudges aside to show it can be swiped. */
-private const val SWIPE_PEEKS = 3
+/** How many times, at most, a Today row nudges aside to show it can be swiped: once is enough with the label beside the heading. */
+private const val SWIPE_PEEKS = 1
