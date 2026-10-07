@@ -129,8 +129,10 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
         content.title = title
         content.subtitle = where_(plan)
         content.body = plan.card?.catch ?? plan.detail
-        // The words as the server gave them, for `unconfirmed(since:)` to add to.
-        content.userInfo = ["body": content.body]
+        // The words as the server gave them, for `unconfirmed(since:)` to add
+        // to, and when it's due on the server's clock: a time-interval
+        // trigger's `nextTriggerDate()` counts its whole wait again from now.
+        content.userInfo = ["body": content.body, "at": at.timeIntervalSince1970]
         content.sound = .default
         content.threadIdentifier = "trip"
         // Already due (a refresh after the moment, or a late wake): now, not never.
@@ -159,13 +161,16 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
             for r in pending where r.identifier == Self.soonID || r.identifier == Self.nowID {
                 // A newer answer or a clear got there first.
                 guard enabled, gen == generation else { return }
-                guard let at = (r.trigger as? UNTimeIntervalNotificationTrigger)?.nextTriggerDate(),
+                guard let at = r.content.userInfo["at"] as? Double,
                       let content = r.content.mutableCopy() as? UNMutableNotificationContent else { continue }
                 // Its trigger counts from when it's added: the time left, not the whole wait again.
-                let wait = at.timeIntervalSinceNow
+                let wait = at - ServerClock.now.timeIntervalSince1970
                 guard wait > 1 else { continue }
                 let body = content.userInfo["body"] as? String ?? content.body
-                content.body = body.isEmpty ? note : "\(body)\n\(note)"
+                let worded = body.isEmpty ? note : "\(body)\n\(note)"
+                // Already says so: each failed refresh needn't add it again.
+                guard content.body != worded else { continue }
+                content.body = worded
                 // Added straight after the check, with no wait between them.
                 add(r.identifier, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: wait, repeats: false))
             }
