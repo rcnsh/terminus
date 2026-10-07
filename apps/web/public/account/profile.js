@@ -21,11 +21,14 @@ export const lists = store(0);
 /** The short message at the bottom of the screen ("Saved"), or null. */
 export const toastText = store(null);
 
+/** How long a toast stays up. */
+export const TOAST_MS = 1800;
+
 let toastTimer = null;
 export function toast(text) {
   toastText.set(text);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastText.set(null), 1800);
+  toastTimer = setTimeout(() => toastText.set(null), TOAST_MS);
 }
 
 /** Where toast() shows: once per page. */
