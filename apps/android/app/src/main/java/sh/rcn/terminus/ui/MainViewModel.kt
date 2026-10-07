@@ -60,9 +60,10 @@ data class UiState(
     /** The live notification during your day. */
     val liveUpdates: Boolean = false,
     val detectTrips: Boolean = false,
-    /** An "Is this wrong?" report on its way, and how it went. */
+    /** An "Is this wrong?" report on its way, why it failed, and where it was sent for. */
     val reportSending: Boolean = false,
     val reportResult: String? = null,
+    val reportedFor: Target? = null,
     /** Today's timeline (/me/day), for under the planned answer. */
     val day: DayPlan? = null,
     /** Just swiped off Today, offered back with Undo in a bar at the foot of the screen. */
@@ -237,15 +238,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * "Is this wrong?": sends `answer` (the raw answer that was on screen when
-     * the dialog opened; the 30 s refresh may have replaced it since) and the note.
+     * the dialog opened; the 30 s refresh may have replaced it since) and the
+     * note. Once sent, `target` is marked reported; a failure is said instead.
      */
-    fun report(note: String, answer: String?, appVersion: String) {
+    fun report(note: String, answer: String?, target: Target, appVersion: String) {
         val token = store.token ?: return
         _state.update { it.copy(reportSending = true, reportResult = null) }
         viewModelScope.launch {
-            val result = try {
+            val failure = try {
                 Api(token).report(note.trim(), answer?.let { org.json.JSONObject(it) }, appVersion)
-                L.s(R.string.report_thanks)
+                null
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
@@ -253,7 +255,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 L.s(R.string.report_failed)
             }
-            _state.update { it.copy(reportSending = false, reportResult = result) }
+            _state.update { it.copy(reportSending = false, reportResult = failure, reportedFor = if (failure == null) target else it.reportedFor) }
         }
     }
 

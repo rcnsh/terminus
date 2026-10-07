@@ -95,8 +95,8 @@ struct Main: View {
 
             if model.reporting {
                 ReportForm(model: model)
-            } else if let result = model.reportResult {
-                Text(result).font(.callout).foregroundStyle(.secondary)
+            } else if model.reportSent {
+                Text("✓ " + L("Reported, thanks")).font(.caption).foregroundStyle(.green).padding(.horizontal, 4)
             }
 
             Search(model: model, query: $query)

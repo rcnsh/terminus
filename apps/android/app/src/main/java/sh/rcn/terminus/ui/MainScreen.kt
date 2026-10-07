@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -247,32 +248,54 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
             state.fetchedAt?.let { stringResource(R.string.updated_at, clock(ctx, it)) },
         ).joinToString(" · ")
         val refreshing = stringResource(R.string.refreshing)
-        // "Is this wrong?" on the left, "Updated 9:41" on the right, as the web shows them.
+        // One quiet line, as the web shows it: "Updated 9:41 · Is this wrong?",
+        // and "✓ Reported, thanks" in the link's place once it's sent.
+        val small = MaterialTheme.typography.bodySmall
+        val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Row(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (!state.showNearby && state.answer != null) {
-                var reporting by remember { mutableStateOf<String?>(null) }
-                var opened by remember { mutableStateOf(false) }
-                TextButton(onClick = { reporting = state.rawAnswers[state.target]; opened = true; vm.clearReportResult() }) { Text(stringResource(R.string.is_this_wrong)) }
-                if (opened) {
-                    ReportDialog(
-                        sending = state.reportSending,
-                        onSend = { note ->
-                            vm.report(note, reporting, BuildConfig.VERSION_NAME)
-                            opened = false
-                        },
-                        onDismiss = { opened = false },
-                    )
-                }
-            }
-            Spacer(Modifier.weight(1f))
             if (state.loading) {
                 CircularProgressIndicator(Modifier.size(12.dp).semantics { contentDescription = refreshing }, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
             }
-            Text(footer, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f, fill = false))
+            Text(footer, style = small, color = muted, modifier = Modifier.weight(1f, fill = false))
+            if (!state.showNearby && state.answer != null) {
+                if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
+                if (state.reportedFor == state.target) {
+                    Text("✓ " + stringResource(R.string.reported_thanks), style = small, color = goodColor())
+                } else {
+                    var reporting by remember { mutableStateOf<String?>(null) }
+                    var reportingFor by remember { mutableStateOf<Target>(Target.Plan) }
+                    var opened by remember { mutableStateOf(false) }
+                    Text(
+                        stringResource(R.string.is_this_wrong),
+                        style = small.copy(textDecoration = TextDecoration.Underline),
+                        color = muted,
+                        modifier = Modifier
+                            .clickable(role = Role.Button) {
+                                reporting = state.rawAnswers[state.target]
+                                reportingFor = state.target
+                                opened = true
+                                vm.clearReportResult()
+                            }
+                            // A taller target than the words, for a thumb.
+                            .padding(vertical = 10.dp),
+                    )
+                    if (opened) {
+                        ReportDialog(
+                            sending = state.reportSending,
+                            onSend = { note ->
+                                vm.report(note, reporting, reportingFor, BuildConfig.VERSION_NAME)
+                                opened = false
+                            },
+                            onDismiss = { opened = false },
+                        )
+                    }
+                }
+            }
         }
+        // Only a failure: a report that went shows in the line above.
         state.reportResult?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(it, style = small, color = MaterialTheme.colorScheme.error)
         }
 
         Spacer(Modifier.height(24.dp))

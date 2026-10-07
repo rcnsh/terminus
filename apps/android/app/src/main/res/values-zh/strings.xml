@@ -287,7 +287,7 @@
     <string name="report_failed">发送失败。请检查网络后再试。</string>
     <string name="report_hint">会发送这个答案和你的说明，以及你的邮箱地址（如果添加了），方便回复你。</string>
     <string name="report_placeholder">D2 一直没来、步行比说的久…</string>
-    <string name="report_thanks">感谢你的反馈，这能帮助我们改进 terminus。</string>
+    <string name="reported_thanks">已反馈，谢谢</string>
     <string name="report_title">哪里不对？</string>
     <string name="request_expired">请求已过期。请重新发送。</string>
     <string name="residence_stops">%1$s 的车站：%2$s。你已经在宿舍时，terminus 不会再引导你回家。</string>

@@ -422,7 +422,10 @@ a.settings-row { text-decoration: none; }
 .new-key .hint code { display: block; margin-top: 4px; }
 
 /* "Is this wrong?" under the preview. */
-.report-open { margin-top: 6px; font-size: 0.875rem; }
+.report-open, .report-done { font-size: 0.8rem; }
+/* Under the answer, not part of it: no louder than the time beside it. */
+.report-open { padding: 8px 0; color: var(--muted); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
+.report-done { color: var(--good); }
 .report { margin-top: 10px; display: grid; gap: 8px; }
 .report label { font-weight: 600; font-size: 0.9rem; }
 .report textarea, .feedback textarea { width: 100%; resize: vertical; font: inherit; }
