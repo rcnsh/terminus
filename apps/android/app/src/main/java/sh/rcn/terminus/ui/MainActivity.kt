@@ -58,6 +58,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableSharedFlow
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.DayItem
 import sh.rcn.terminus.L
@@ -331,6 +332,8 @@ private fun Tabs(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbars = remember { SnackbarHostState() }
+    // Settings tapped while already on it: back to its list of all settings.
+    val settingsAgain = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     RemovedBar(state.removed, state.removeError, snackbars, vm)
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) { NoticeBar(it) } },
@@ -345,6 +348,7 @@ private fun Tabs(
                         selected = tab == t,
                         onClick = {
                             if (t == Tab.Now && tab != Tab.Now) vm.load(restart = true)
+                            if (t == Tab.Settings && tab == Tab.Settings) settingsAgain.tryEmit(Unit)
                             onTab(t)
                         },
                         icon = { Icon(painterResource(icon), contentDescription = null) },
@@ -357,11 +361,10 @@ private fun Tabs(
         // Back from Map or Settings goes to Now, as from any other tab bar.
         BackHandler(enabled = tab != Tab.Now) { onTab(Tab.Now); vm.load(restart = true) }
         // Switching tabs fades through (out, then in with a slight zoom), and
-        // Now and Map keep their saved state while they're away: where Now
-        // was scrolled to, where the map was looking. Settings starts again
-        // from its list, not the page it was left on.
+        // each tab keeps its saved state while it's away: where Now and
+        // Settings were scrolled to, which page of Settings was open, where
+        // the map was looking.
         val saved = rememberSaveableStateHolder()
-        LaunchedEffect(tab) { if (tab != Tab.Settings) saved.removeState(Tab.Settings.name) }
         AnimatedContent(targetState = tab, transitionSpec = { fadeThrough() }, label = "tab") { t ->
             saved.SaveableStateProvider(t.name) {
                 when (t) {
@@ -385,6 +388,7 @@ private fun Tabs(
                     Tab.Settings -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
                         SettingsScreen(
                             acct, account, vm, inner,
+                            toList = settingsAgain,
                             onAddEmail = onAddEmail,
                             onSignedOut = onSignedOut,
                             onClose = { onTab(Tab.Now); vm.load(restart = true) },
