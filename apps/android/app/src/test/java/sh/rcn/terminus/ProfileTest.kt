@@ -74,9 +74,9 @@ class ProfileTest {
     @Test
     fun `times read in either style`() {
         assertEquals("09:05", hhmm(545))
-        assertEquals("9:05 am", hhmm12(545))
-        assertEquals("12 pm", hhmm12(720))
-        assertEquals("12:30 am", hhmm12(30))
+        assertEquals("9:05 AM", hhmm12(545))
+        assertEquals("12 PM", hhmm12(720))
+        assertEquals("12:30 AM", hhmm12(30))
     }
 
     @Test

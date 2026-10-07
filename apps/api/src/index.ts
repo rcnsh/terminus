@@ -483,6 +483,6 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // dashboard. The path only: the query can hold coordinates.
     console.error('unhandled', req.method, url.pathname, err instanceof Error ? (err.stack ?? err.message) : String(err));
     logError(env, url.pathname);
-    return json({ error: 'internal' }, 500);
+    return json({ error: 'something went wrong on our side' }, 500);
   }
 }

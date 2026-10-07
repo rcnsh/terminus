@@ -2,8 +2,8 @@
 // out and moves between them). Each saves as it changes, through the shared
 // profile (profile.js).
 
-import { Rich, html, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clock, clockOpts, locale, spaced, t } from './dom.js';
+import { Fill, MARK, Rich, html, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
+import { api, clock, clockOpts, locale, locationError, spaced, t } from './dom.js';
 import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
   campus,
@@ -205,7 +205,7 @@ export function Trips() {
         pickStop(near.s.code);
         setMsg(t('Picked {0}. Change it if you use a different stop.', stopName(near.s.code)));
       },
-      (err) => setMsg(t("Couldn't get your location ({0}). Pick your stop instead.", err.message)),
+      (err) => setMsg(locationError(err)),
       { enableHighAccuracy: true, timeout: 10_000 },
     );
   };
@@ -278,9 +278,13 @@ export function Trips() {
       <${Group} title=${t('Your day')} hint=${t('Outside these hours, you see your next class instead of a bus.')}>
         <${Field} id="day-start" label=${t('Show buses between')}>
           <span class="unit">
-            <input id="day-start" type="time" aria-label=${t('Day starts')} value=${hhmm(p.dayStartMin ?? 360)} onChange=${dayTime('dayStartMin')} />
-            ${t('and')}
-            <input id="day-end" type="time" aria-label=${t('Day ends')} value=${hhmm(p.dayEndMin ?? 1080)} onChange=${dayTime('dayEndMin')} />
+            <${Fill}
+              text=${t('{0} and {1}', MARK, MARK)}
+              parts=${[
+                html`<input id="day-start" type="time" aria-label=${t('Day starts')} value=${hhmm(p.dayStartMin ?? 360)} onChange=${dayTime('dayStartMin')} />`,
+                html`<input id="day-end" type="time" aria-label=${t('Day ends')} value=${hhmm(p.dayEndMin ?? 1080)} onChange=${dayTime('dayEndMin')} />`,
+              ]}
+            />
           </span>
         <//>
         <div class="field">
@@ -547,7 +551,7 @@ function Unresolved({ list, onDone }) {
             <button type="button" class="link-btn" onClick=${() => onDone(u)}>${t('Skip')}</button>
             <${StopSelect}
               value=""
-              blank=${t('Choose stop')}
+              blank=${t('Choose a stop')}
               aria-label=${t('Stop for {0}', u.module)}
               onChange=${(v) => {
                 if (!v) return;
@@ -897,7 +901,7 @@ export function Language() {
             options=${[['auto', t('Auto')], ...CLOCKS().map((c) => [c.value, c.label])]}
             labelledBy="clock-label"
             full
-            onChange=${(v) => saveNow((x) => (x.clock = v)).catch((err) => toast(t('Not saved. {0}', err.message)))}
+            onChange=${(v) => saveNow((x) => (x.clock = v)).catch((err) => toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.')))}
           />
         </div>
       <//>

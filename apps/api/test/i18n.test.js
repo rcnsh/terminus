@@ -91,8 +91,46 @@ test('every error string in the API has a Chinese translation', () => {
       }
       if (!(text in ERRORS_ZH)) missing.push(`${f}: ${text}`);
     }
+    // An error worded by an expression, like a ternary: each string in it.
+    for (const [, expr] of src.matchAll(/error: (?!['"`])([^\n]*)/g)) {
+      for (const text of literalsIn(expr)) {
+        if (!(text in ERRORS_ZH)) missing.push(`${f}: ${text}`);
+      }
+    }
   }
   assert.deepEqual(missing, []);
+});
+
+/**
+ * The strings an expression can give, up to the comma or bracket that ends
+ * it: the branches of a ternary or `??` (a literal after `?`, `:` or `??`),
+ * not the values it compares.
+ */
+function literalsIn(expr) {
+  const out = [];
+  let depth = 0;
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i];
+    if (c === "'" || c === '"') {
+      let j = i + 1;
+      while (j < expr.length && expr[j] !== c) j += expr[j] === '\\' ? 2 : 1;
+      if (depth === 0 && /(\?|:)\s*$/.test(expr.slice(0, i))) out.push(expr.slice(i + 1, j));
+      i = j;
+    } else if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) {
+      if (depth === 0) break;
+      depth--;
+    } else if (c === ',' && depth === 0) break;
+  }
+  return out;
+}
+
+test('Chinese spacing: Latin text keeps its space, two Chinese words touch', () => {
+  const zh = msgsFor('zh');
+  assert.equal(zh.startsAt('CS2030 @ COM1', '09:41'), 'CS2030 @ COM1 09:41 开始', 'two values side by side stay apart');
+  assert.equal(zh.offAt('Kent Ridge Ter (Clementi Rd)'), '在 Kent Ridge Ter (Clementi Rd) 下车', 'a bracket counts as Latin');
+  assert.match(zh.codeTypeApp('<strong>Pixel 8</strong>'), /^请在 <strong>Pixel 8<\/strong> 上的/, 'so does a tag');
+  assert.equal(zh.catchBus('约 09:42', 'R2', 'PGP', null), '在 PGP 搭约 09:42 的 R2');
 });
 
 test('json() says the error in the request language', async () => {

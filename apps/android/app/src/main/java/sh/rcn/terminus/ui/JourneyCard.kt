@@ -459,6 +459,7 @@ internal fun badgeText(svc: String, paid: Boolean): String = if (paid) "$svc \$"
 @Composable
 internal fun BusBadge(svc: String, color: Long, size: TextUnit, pad: Dp = 6.dp, paid: Boolean = false) {
     val fare = stringResource(R.string.public_bus_fare)
+    val sep = stringResource(R.string.clause_sep)
     Text(
         badgeText(svc, paid),
         color = Color.White,
@@ -468,6 +469,6 @@ internal fun BusBadge(svc: String, color: Long, size: TextUnit, pad: Dp = 6.dp, 
         modifier = Modifier
             .background(Color(color), RoundedCornerShape(6.dp))
             .padding(horizontal = pad, vertical = 1.dp)
-            .semantics { contentDescription = if (paid) "$svc, $fare" else svc },
+            .semantics { contentDescription = if (paid) "$svc$sep$fare" else svc },
     )
 }

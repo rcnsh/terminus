@@ -85,7 +85,7 @@ const jsonBody = (schema: Record<string, unknown>, example?: Record<string, unkn
 
 const answerExample = {
   label: 'D2 · 4 min',
-  detail: 'KR MRT · cross the road · UTown ~12 min · crowding: low · or A2 9 min',
+  detail: 'KR MRT · cross the road · UTown in ~12 min · crowding: low · or A2 in 9 min',
   alt: 'A2 · 9 min · KR MRT',
   stop: { code: 'KR-MRT', name: 'KR MRT', confidence: 0.97 },
   quality: 'live',
@@ -787,7 +787,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       kind: { type: 'string', enum: ['class', 'home'] },
                       key: { type: 'string', example: '4:600:UTOWN', description: 'The trip’s key, for POST /me/signal.' },
                       label: { type: 'string' },
-                      title: { type: 'string', example: 'Home, from UTown', description: 'The row’s first line: the class, or "Home, from X" (Chinese "回家，从 X 出发").' },
+                      title: { type: 'string', example: 'Home, from UTown', description: 'The row’s first line: the class, "Home, from X" (Chinese "回家，从 X 出发"), or "Home after your last class" when that class has no place.' },
                       line: {
                         type: ['string', 'null'],
                         example: 'Leave by ~09:38 · D2 from PGP',

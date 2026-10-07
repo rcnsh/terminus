@@ -761,7 +761,7 @@ test('an unexpected error is logged and answered with a bare 500', async () => {
   const r = await call(env, '/me?lat=1.29&lon=103.77', { cookie: '__Host-tm_s=whatever' });
   console.error = orig;
   assert.equal(r.status, 500);
-  assert.deepEqual(await r.json(), { error: 'internal' });
+  assert.deepEqual(await r.json(), { error: 'something went wrong on our side' });
   assert.ok(errors.some((e) => e.includes('/me') && !e.includes('103.77')));
 });
 

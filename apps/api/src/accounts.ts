@@ -373,7 +373,7 @@ export async function openSession(
     .prepare(
       'INSERT INTO sessions (token_hash, user_id, kind, name, created, last_seen, expires, platform, client) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(await hashToken(token), userId, kind, name, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null, client.platform, client.client)
+    .bind(await hashToken(token), userId, kind, name || null, nowMs, nowMs, kind === 'web' ? nowMs + ACCOUNT_TTL.webSessionMs : null, client.platform, client.client)
     .run();
   return token;
 }

@@ -249,14 +249,14 @@ class BusesTest {
         val now = at("2026-10-07T13:30:00Z")
         assertNull(Stopped.of(true, null, null, now))
         // Thursday 07:40 in Singapore: tomorrow, though it's the same UTC day.
-        assertEquals("Stopped for today" to "Back tomorrow at 7:40 am", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(true))
+        assertEquals("Stopped for today" to "Back tomorrow at 7:40 AM", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(true))
         assertEquals("Stopped for today" to "Back tomorrow at 07:40", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(false))
         // Saturday morning, back Monday.
         val sat = at("2026-10-10T02:00:00Z")
-        assertEquals("No service today" to "Back Monday at 7:40 am", Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), sat)!!.lines(true))
+        assertEquals("No service today" to "Back Monday at 7:40 AM", Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), sat)!!.lines(true))
         // 06:00 on a weekday: later today, so it starts, never "Back today".
         val early = at("2026-10-07T22:00:00Z")
-        assertEquals("Not running yet" to "Starts at 7:04 am", Stopped.of(false, "notYet", at("2026-10-07T23:04:00Z"), early)!!.lines(true))
+        assertEquals("Not running yet" to "Starts at 7:04 AM", Stopped.of(false, "notYet", at("2026-10-07T23:04:00Z"), early)!!.lines(true))
         assertEquals("No time found: the first line only", "Stopped for today" to null, Stopped.of(false, "ended", null, now)!!.lines(true))
     }
 

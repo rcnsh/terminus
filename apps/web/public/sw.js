@@ -302,7 +302,15 @@ async function notifyFromCard(urgent, fetched) {
   }
   // A push must always show something (iOS insists), even when the card can't be fetched.
   if (!a?.card) {
-    const zh = /^zh/i.test(self.navigator.language ?? '');
+    // The site's language choice (assets/i18n.js keeps it as a cookie too); a
+    // worker can't read localStorage, and cookieStore isn't in every browser.
+    let chosen = null;
+    try {
+      chosen = (await self.cookieStore?.get('terminus-lang'))?.value ?? null;
+    } catch {
+      chosen = null;
+    }
+    const zh = chosen === 'zh' || (chosen !== 'en' && /^zh/i.test(self.navigator.language ?? ''));
     const body = zh ? '你的行程有变化。打开 terminus 查看。' : 'Your trip has changed. Open terminus to see it.';
     return self.registration.showNotification('terminus', { body, tag: 'trip', icon: '/assets/icons/icon-192.png' });
   }

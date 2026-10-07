@@ -122,6 +122,7 @@ export async function startAppLogin(env: Env, db: D1Database, input: StartInput,
 async function sendApproval(env: Env, email: string, device: string, code: string, link: string, origin: string): Promise<void> {
   const site = new URL(origin).host;
   const t = m();
+  device ||= t.aDevice;
   const why = t.codeWhyApp(site, device);
   await env.EMAIL!.send({
     from: { email: env.EMAIL_FROM!, name: mailName(env) },
