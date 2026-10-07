@@ -1,5 +1,9 @@
 package sh.rcn.terminus.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import sh.rcn.terminus.R
 
 /*
@@ -230,3 +235,10 @@ internal fun <T> ValueRow(
         }
     }
 }
+
+/** Opens [url] in the browser, out of the app. */
+internal fun Context.openWeb(url: String) = startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+
+/** The system's page for this app, where a permission refused twice can still be allowed. */
+internal fun Context.openAppSettings() =
+    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))

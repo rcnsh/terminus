@@ -27,15 +27,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.Destination
+import sh.rcn.terminus.R
 import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
 import sh.rcn.terminus.rankDestinations
-import androidx.compose.ui.res.stringResource
-import sh.rcn.terminus.R
 
 /** One choice from a list, as a dropdown field. `null` is the blank option; [headings] go before the option at their index. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,7 +148,7 @@ internal fun TimeButton(label: String, minutes: Int?, onPick: (Int) -> Unit, mod
     val h12 = hour12(LocalContext.current)
     var open by rememberSaveable { mutableStateOf(false) }
     OutlinedButton(onClick = { open = true }, modifier = modifier) {
-        Text(if (minutes == null) label else "$label ${if (h12) hhmm12(minutes) else hhmm(minutes)}")
+        Text(if (minutes == null) label else "$label ${minuteClock(minutes, h12)}")
     }
     if (open) {
         val m = remember { minutes ?: initial() }
@@ -175,6 +175,9 @@ internal fun TimeButton(label: String, minutes: Int?, onPick: (Int) -> Unit, mod
         )
     }
 }
+
+/** [min] minutes past midnight, "09:38" or, with [h12], "9:38 AM". */
+internal fun minuteClock(min: Int, h12: Boolean): String = if (h12) hhmm12(min) else hhmm(min)
 
 /** A setting's explanation, under it. */
 @Composable

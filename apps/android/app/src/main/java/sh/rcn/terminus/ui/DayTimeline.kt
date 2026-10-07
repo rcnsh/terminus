@@ -1,37 +1,51 @@
 package sh.rcn.terminus.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.flow.first
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import sh.rcn.terminus.DayItem
 import sh.rcn.terminus.DayPlan
-import sh.rcn.terminus.widget.clock
-import androidx.compose.ui.res.stringResource
-import sh.rcn.terminus.R
 import sh.rcn.terminus.L
-import androidx.compose.foundation.layout.widthIn
+import sh.rcn.terminus.R
+import sh.rcn.terminus.widget.clock
 
 /**
  * Today at a glance, from /me/day: each class with its leave-by, and the
@@ -62,8 +76,8 @@ internal fun DayTimeline(
         }
         for (item in day.items) {
             // Keyed, so a swiped row's state doesn't pass to the one moving up.
-            androidx.compose.runtime.key(item.key) {
-                if (item.removable) Swipeable(item, peek && item.key == firstRemovable, onRemove, onPeeked) { Row(item, fmt) } else Row(item, fmt)
+            key(item.key) {
+                if (item.removable) Swipeable(item, peek && item.key == firstRemovable, onRemove, onPeeked) { DayRow(item, fmt) } else DayRow(item, fmt)
             }
         }
     }
@@ -75,25 +89,25 @@ internal fun DayItem.shortName(): String = if (kind == "home") L.s(R.string.trip
 /** Swipe either way to take it off today. With `peek`, it slides aside once by itself and back, showing what's under it. */
 @Composable
 private fun Swipeable(item: DayItem, peek: Boolean, onRemove: (DayItem) -> Unit, onPeeked: () -> Unit, content: @Composable () -> Unit) {
-    val state = androidx.compose.material3.rememberSwipeToDismissBoxState()
+    val state = rememberSwipeToDismissBoxState()
     val remove = stringResource(R.string.remove_from_today)
-    val nudge = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    val nudge = remember { Animatable(0f) }
     // Just the edge of what's under it: enough to say "this moves", not a swipe of its own.
-    val nudgePx = with(androidx.compose.ui.platform.LocalDensity.current) { 44.dp.toPx() }
-    androidx.compose.runtime.LaunchedEffect(state.currentValue) {
-        if (state.currentValue != androidx.compose.material3.SwipeToDismissBoxValue.Settled) onRemove(item)
+    val nudgePx = with(LocalDensity.current) { 44.dp.toPx() }
+    LaunchedEffect(state.currentValue) {
+        if (state.currentValue != SwipeToDismissBoxValue.Settled) onRemove(item)
     }
     // Wholly on screen: Today is often below the fold, and a nudge nobody sees teaches nothing.
-    var shown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(peek) {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(peek) {
         if (!peek) return@LaunchedEffect
-        androidx.compose.runtime.snapshotFlow { shown }.first { it }
+        snapshotFlow { shown }.first { it }
         // Once it has been on screen a moment, so it's seen.
-        kotlinx.coroutines.delay(600)
+        delay(600)
         // Eased both ways, with no bounce back: a gentle hint, not a jolt.
-        val ease = androidx.compose.animation.core.tween<Float>(320, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        val ease = tween<Float>(320, easing = FastOutSlowInEasing)
         nudge.animateTo(-nudgePx, ease)
-        kotlinx.coroutines.delay(450)
+        delay(450)
         nudge.animateTo(0f, ease)
         onPeeked()
     }
@@ -104,15 +118,15 @@ private fun Swipeable(item: DayItem, peek: Boolean, onRemove: (DayItem) -> Unit,
     ) {
         // Under the row while it nudges aside: the same red a swipe shows, without the word, which the nudge would cut in half.
         if (nudge.value != 0f) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp)))
-        androidx.compose.material3.SwipeToDismissBox(
+        SwipeToDismissBox(
             state = state,
             backgroundContent = {
                 // Only while swiping: otherwise it's hidden under the row, and screen readers would read it.
-                if (state.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.Settled) return@SwipeToDismissBox
-                RemoveBehind(remove, toEnd = state.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd, Modifier.fillMaxSize())
+                if (state.dismissDirection == SwipeToDismissBoxValue.Settled) return@SwipeToDismissBox
+                RemoveBehind(remove, toEnd = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd, Modifier.fillMaxSize())
             },
             modifier = Modifier.semantics {
-                customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction(remove) { onRemove(item); true })
+                customActions = listOf(CustomAccessibilityAction(remove) { onRemove(item); true })
             },
         ) {
             Box(Modifier.graphicsLayer { translationX = nudge.value }.background(MaterialTheme.colorScheme.background)) { content() }
@@ -130,8 +144,9 @@ private fun RemoveBehind(text: String, toEnd: Boolean, modifier: Modifier) {
     }
 }
 
+/** One entry of the day: its time, what it is, and how you get there (or that it's off). */
 @Composable
-private fun Row(item: DayItem, fmt: (Long) -> String) {
+private fun DayRow(item: DayItem, fmt: (Long) -> String) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val past = item.status == "done" || item.status == "skipped"
     val current = item.status == "next" || item.status == "now"

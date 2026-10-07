@@ -1,6 +1,7 @@
 package sh.rcn.terminus.ui
 
 import android.Manifest
+import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -77,8 +78,6 @@ import sh.rcn.terminus.Residence
 import sh.rcn.terminus.Stop
 import sh.rcn.terminus.Trip
 import sh.rcn.terminus.dayShort
-import sh.rcn.terminus.hhmm
-import sh.rcn.terminus.hhmm12
 import sh.rcn.terminus.hour12
 
 private const val STEPS = 4
@@ -302,16 +301,7 @@ internal fun HomePicker(profile: ProfileDoc, campus: Campus, account: AccountVie
         if (Locator.hasForeground(ctx)) {
             TextButton(onClick = {
                 locating = L.s(R.string.finding_stop)
-                scope.launch {
-                    val loc = Locator.lastKnown(ctx, maxAgeMs = 120_000) ?: Locator.current(ctx)
-                    val near = loc?.let { l -> nearestStop(campus.stops, l.latitude, l.longitude) }
-                    if (near == null) {
-                        locating = L.s(R.string.no_location)
-                    } else {
-                        account.edit { it.setHomeStops(listOf(near.code) + stops.filter { s -> s != near.code }) }
-                        locating = L.s(R.string.picked_stop, near.name)
-                    }
-                }
+                scope.launch { locating = pickNearestHome(ctx, campus, stops, account) }
             }) { Text(stringResource(R.string.pick_nearest)) }
         }
         locating?.let { Hint(it) }
@@ -338,6 +328,17 @@ internal fun nearestStop(stops: List<Stop>, lat: Double, lon: Double): Stop? = s
     val dLat = it.lat - lat
     val dLon = (it.lon - lon) * Math.cos(Math.toRadians(lat))
     dLat * dLat + dLon * dLon
+}
+
+/**
+ * "Pick the stop nearest me": the stop nearest the phone made the first of
+ * your home stops (the rest kept after it), and what to say about it.
+ */
+internal suspend fun pickNearestHome(ctx: Context, campus: Campus, stops: List<String>, account: AccountViewModel): String {
+    val loc = Locator.lastKnown(ctx, maxAgeMs = 120_000) ?: Locator.current(ctx)
+    val near = loc?.let { l -> nearestStop(campus.stops, l.latitude, l.longitude) } ?: return L.s(R.string.no_location)
+    account.edit { it.setHomeStops(listOf(near.code) + stops.filter { s -> s != near.code }) }
+    return L.s(R.string.picked_stop, near.name)
 }
 
 @Composable
@@ -387,7 +388,7 @@ private fun Week(classes: List<Trip>, campus: Campus?) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (t in list) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (h12) hhmm12(t.arriveByMin) else hhmm(t.arriveByMin), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.width(64.dp))
+                            Text(minuteClock(t.arriveByMin, h12), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.width(64.dp))
                             Column(Modifier.weight(1f).padding(end = 8.dp)) {
                                 Text(t.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 // The room, unless the name already says it ("MA1521 @ LT27").
@@ -431,7 +432,7 @@ internal fun Unplaced(state: AccountState, account: AccountViewModel) {
         Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val off = if (u.offCampus) stringResource(R.string.off_campus_paren) else ""
-                Text("${dayShort(u.day)} ${if (h12) hhmm12(u.arriveByMin) else hhmm(u.arriveByMin)} · ${u.module} @ ${u.venue}$off", Modifier.weight(1f))
+                Text("${dayShort(u.day)} ${minuteClock(u.arriveByMin, h12)} · ${u.module} @ ${u.venue}$off", Modifier.weight(1f))
                 TextButton(onClick = { account.skip(u) }) { Text(stringResource(R.string.skip)) }
             }
             WherePicker(stringResource(R.string.choose_stop), state.campus?.destinations.orEmpty(), null) { d ->
@@ -555,7 +556,7 @@ private val TRACK = Color(0xFFB4533A)
 private fun BusyBuses(profile: ProfileDoc, account: AccountViewModel) {
     val c = MaterialTheme.colorScheme
     val h12 = hour12(LocalContext.current)
-    val at = { min: Int -> if (h12) hhmm12(min) else hhmm(min) }
+    val at = { min: Int -> minuteClock(min, h12) }
     val shape = RoundedCornerShape(18.dp)
     Column(Modifier.padding(top = 14.dp).fillMaxWidth().clip(shape).border(1.dp, c.outlineVariant, shape).padding(horizontal = 14.dp, vertical = 6.dp)) {
         SwitchRow(stringResource(R.string.packed), stringResource(R.string.packed_hint), profile.fullBusMargin) { on -> account.edit { it.fullBusMargin = on } }
@@ -695,7 +696,7 @@ private fun AlertPreview() {
             Text("${stringResource(R.string.app_name)} · ${stringResource(R.string.journey_now)}", style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant)
         }
         Text(stringResource(R.string.alert_preview_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-        Text(stringResource(R.string.alert_preview_text, if (h12) hhmm12(9 * 60 + 42) else hhmm(9 * 60 + 42)), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
+        Text(stringResource(R.string.alert_preview_text, minuteClock(9 * 60 + 42, h12)), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
     }
 }
 

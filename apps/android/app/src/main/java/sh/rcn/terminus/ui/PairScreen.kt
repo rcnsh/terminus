@@ -1,6 +1,5 @@
 package sh.rcn.terminus.ui
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -52,7 +51,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.R
 
@@ -108,7 +106,7 @@ internal fun PairScreen(state: UiState, onPair: (String) -> Unit, onBack: () -> 
             Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 WhereCard(R.drawable.ic_shortcut, stringResource(R.string.pair_on_phone), stringResource(R.string.pair_on_phone_how), Modifier.weight(1f))
                 WhereCard(R.drawable.ic_open, stringResource(R.string.pair_on_web), stringResource(R.string.pair_on_web_how, SITE_HOST), Modifier.weight(1f)) {
-                    ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/account".toUri()))
+                    ctx.openWeb("${BuildConfig.SITE}/account")
                 }
             }
             Hint(stringResource(R.string.pair_scan), Modifier.padding(top = 14.dp))

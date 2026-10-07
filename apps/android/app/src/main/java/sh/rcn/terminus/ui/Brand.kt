@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
@@ -16,6 +19,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -23,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import sh.rcn.terminus.BuildConfig
+import sh.rcn.terminus.R
 
 /**
  * The site's tokens (apps/web/public/assets/site.css), so the app, the widget
@@ -111,6 +117,20 @@ fun TabHeader(content: @Composable RowScope.() -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically, content = content)
 }
 
+/**
+ * A page's [TabHeader]: a back arrow, sitting in the margin so the title
+ * lines up with the list's, then the title.
+ */
+@Composable
+internal fun BackHeader(title: String, onBack: () -> Unit) {
+    TabHeader {
+        IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
+            Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
+        }
+        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.offset(x = (-12).dp))
+    }
+}
+
 /** "On time": green, not the brand orange, which reads as a warning. */
-val GoodLight = androidx.compose.ui.graphics.Color(0xFF166534)
-val GoodDark = androidx.compose.ui.graphics.Color(0xFF4ADE80)
+val GoodLight = Color(0xFF166534)
+val GoodDark = Color(0xFF4ADE80)

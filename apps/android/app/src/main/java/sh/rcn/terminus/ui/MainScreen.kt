@@ -1,9 +1,6 @@
 package sh.rcn.terminus.ui
 
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ScrollState
@@ -11,12 +8,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -34,18 +29,22 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -58,17 +57,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -113,7 +114,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         blocked = !hasLocation && activity?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
         vm.load()
     }
-    val openSettings = { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))) }
+    val openSettings = { ctx.openAppSettings() }
 
     // Keep the answer fresh while the app is on screen; the API's own cache
     // is 15 s, so polling faster than that would show nothing new.
@@ -156,7 +157,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
                     // The APK built for this phone's CPU (the site falls back to arm64).
-                    TextButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "${BuildConfig.SITE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}".toUri())) }) { Text(stringResource(R.string.update)) }
+                    TextButton(onClick = { ctx.openWeb("${BuildConfig.SITE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}") }) { Text(stringResource(R.string.update)) }
                 }
             }
         }
@@ -315,39 +316,15 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
         refused = !granted
         if (granted) onChange(true)
     }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = on,
-                role = Role.Switch,
-                onValueChange = { want ->
-                    when {
-                        !want -> onChange(false)
-                        LeaveAlerts.canNotify(ctx) -> onChange(true)
-                        // Only reached on Android 13+, where the permission exists.
-                        else -> @Suppress("InlinedApi") ask.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                },
-            )
-            .padding(horizontal = if (inCard) 16.dp else 0.dp, vertical = if (inCard) 10.dp else 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title)
-            Text(
-                hint,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    ToggleLine(title, hint, on, inCard) { want ->
+        when {
+            !want -> onChange(false)
+            LeaveAlerts.canNotify(ctx) -> onChange(true)
+            // Only reached on Android 13+, where the permission exists.
+            else -> @Suppress("InlinedApi") ask.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        Spacer(Modifier.width(12.dp))
-        Switch(checked = on, onCheckedChange = null)
     }
-    if (refused && !on) {
-        Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = if (inCard) 16.dp else 0.dp))
-        TextButton(onClick = openSettings, modifier = Modifier.padding(horizontal = if (inCard) 4.dp else 0.dp)) { Text(stringResource(R.string.open_settings)) }
-    }
+    if (refused && !on) Refused(stringResource(R.string.notifications_off), openSettings, inCard)
 }
 
 /**
@@ -363,33 +340,36 @@ internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings
         refused = !ok
         if (ok) onChange(true)
     }
+    ToggleLine(stringResource(R.string.detect), hint ?: stringResource(R.string.detect_hint), on, inCard) { want ->
+        when {
+            !want -> onChange(false)
+            Locator.hasPrecise(ctx) && LeaveAlerts.canNotify(ctx) -> onChange(true)
+            else -> ask.launch(
+                listOfNotNull(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    if (android.os.Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null,
+                ).toTypedArray(),
+            )
+        }
+    }
+    if (refused && !on) Refused(stringResource(R.string.detect_needs), openSettings, inCard)
+}
+
+/** A setting's switch: its name and a line under it, the whole row the target. [inCard]: padded as a row of a group. */
+@Composable
+private fun ToggleLine(title: String, hint: String, on: Boolean, inCard: Boolean, onValueChange: (Boolean) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .toggleable(
-                value = on,
-                role = Role.Switch,
-                onValueChange = { want ->
-                    when {
-                        !want -> onChange(false)
-                        Locator.hasPrecise(ctx) && LeaveAlerts.canNotify(ctx) -> onChange(true)
-                        else -> ask.launch(
-                            listOfNotNull(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                                if (android.os.Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null,
-                            ).toTypedArray(),
-                        )
-                    }
-                },
-            )
+            .toggleable(value = on, role = Role.Switch, onValueChange = onValueChange)
             .padding(horizontal = if (inCard) 16.dp else 0.dp, vertical = if (inCard) 10.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.detect))
+            Text(title)
             Text(
-                hint ?: stringResource(R.string.detect_hint),
+                hint,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -397,10 +377,13 @@ internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings
         Spacer(Modifier.width(12.dp))
         Switch(checked = on, onCheckedChange = null)
     }
-    if (refused && !on) {
-        Text(stringResource(R.string.detect_needs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = if (inCard) 16.dp else 0.dp))
-        TextButton(onClick = openSettings, modifier = Modifier.padding(horizontal = if (inCard) 4.dp else 0.dp)) { Text(stringResource(R.string.open_settings)) }
-    }
+}
+
+/** Why a switch stayed off (a permission refused), and the app's settings page to allow it there. */
+@Composable
+private fun Refused(text: String, openSettings: () -> Unit, inCard: Boolean) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = if (inCard) 16.dp else 0.dp))
+    TextButton(onClick = openSettings, modifier = Modifier.padding(horizontal = if (inCard) 4.dp else 0.dp)) { Text(stringResource(R.string.open_settings)) }
 }
 
 /** "Is this wrong?": a note, sent with the answer that was on screen. Send waits for the note: the server needs one. */
@@ -448,7 +431,7 @@ private fun AddEmailToReportDialog(onAddEmail: () -> Unit, onDismiss: () -> Unit
 /** The chip showing, filled in the ink (the web's too), so it stands out from the rest over any sky. */
 @Composable
 private fun chosenChip() = MaterialTheme.colorScheme.let {
-    androidx.compose.material3.FilterChipDefaults.filterChipColors(selectedContainerColor = it.onSurface, selectedLabelColor = it.background)
+    FilterChipDefaults.filterChipColors(selectedContainerColor = it.onSurface, selectedLabelColor = it.background)
 }
 
 /**
@@ -457,26 +440,26 @@ private fun chosenChip() = MaterialTheme.colorScheme.let {
  */
 @Composable
 private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onRemove: () -> Unit) {
-    val reveal = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    val reveal = remember { BringIntoViewRequester() }
     LaunchedEffect(selected) { if (selected) reveal.bringIntoView() }
     val remove = stringResource(R.string.remove_tab, label)
-    androidx.compose.material3.InputChip(
+    InputChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label) },
         colors = MaterialTheme.colorScheme.let {
-            androidx.compose.material3.InputChipDefaults.inputChipColors(selectedContainerColor = it.onSurface, selectedLabelColor = it.background, selectedTrailingIconColor = it.background)
+            InputChipDefaults.inputChipColors(selectedContainerColor = it.onSurface, selectedLabelColor = it.background, selectedTrailingIconColor = it.background)
         },
         trailingIcon = {
-            androidx.compose.material3.Icon(
-                androidx.compose.ui.res.painterResource(R.drawable.ic_close),
+            Icon(
+                painterResource(R.drawable.ic_close),
                 contentDescription = remove,
-                modifier = Modifier.size(18.dp).clickable(onClickLabel = remove, role = androidx.compose.ui.semantics.Role.Button, onClick = onRemove),
+                modifier = Modifier.size(18.dp).clickable(onClickLabel = remove, role = Role.Button, onClick = onRemove),
             )
         },
         modifier = Modifier
             .bringIntoViewRequester(reveal)
-            .semantics { customActions = listOf(androidx.compose.ui.semantics.CustomAccessibilityAction(remove) { onRemove(); true }) },
+            .semantics { customActions = listOf(CustomAccessibilityAction(remove) { onRemove(); true }) },
     )
 }
 
