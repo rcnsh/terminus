@@ -867,6 +867,34 @@ test("an earlier day stays in the list while its write to R2 is being retried", 
   assert.deepEqual(days.map((d) => [d.date, d.closed, d.samples]), [[DATE, false, RUNNING.length]]);
 });
 
+test('a recorder that never answers holds up neither the cron nor the routes for long', async (t) => {
+  const h = harness();
+  const stuck = { idFromName: (name) => name, get: () => ({ fetch: () => new Promise(() => {}) }) };
+  const env = { ...h.env, TIMELAPSE: stuck };
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const settled = async (p) => {
+    let result = null;
+    p.then((value) => (result = { value }), (error) => (result = { error }));
+    // Let it reach the recorder, then let ten seconds pass.
+    for (let i = 0; i < 50 && !result; i++) {
+      await new Promise(setImmediate);
+      t.mock.timers.tick(1_000);
+    }
+    assert.ok(result, 'answered within the wait');
+    if (result.error) throw result.error;
+    return result.value;
+  };
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+  const get = (path) => worker.fetch(new Request(`https://bus.example.test${path}`, { headers: { 'x-health-token': 'op' } }), env, ctx);
+  const day = await settled(get(`/timelapse/days/${DATE}`));
+  assert.equal(day.status, 503);
+  assert.equal(day.headers.get('retry-after'), '60');
+  const list = await settled(get('/timelapse/days'));
+  assert.equal(list.status, 200);
+  assert.deepEqual((await list.json()).days, []);
+  await assert.rejects(settled(ensureRecorder(env, FROZEN_NOW)), /did not answer/);
+});
+
 test('TIMELAPSE_TOKEN opens the timelapse routes and nothing else', async () => {
   const h = harness();
   const env = { ...h.env, TIMELAPSE_TOKEN: 'render-only' };

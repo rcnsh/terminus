@@ -239,6 +239,19 @@ export const HELD_DAYS = 7;
 /** The cron runs every 15 minutes. */
 const CRON_MS = 15 * 60_000;
 
+/** How long the Worker waits for a recorder to answer: one that's stuck
+ *  mustn't hold up the cron's other steps or an operator's request. */
+const RECORDER_WAIT_MS = 10_000;
+
+/** [path] from a recorder, or a rejection after RECORDER_WAIT_MS. */
+function askRecorder(stub: DurableObjectStub, path: string, init?: RequestInit): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('the timelapse recorder did not answer')), RECORDER_WAIT_MS);
+  });
+  return Promise.race([stub.fetch(`https://timelapse.internal${path}`, init), late]).finally(() => clearTimeout(timer));
+}
+
 /** The recorder for day [date]. In Asia, near the feed and most of its users,
  *  so the edge cache it reads is likely the one the map fills. */
 export function recorderFor(env: Env, date: string): DurableObjectStub | null {
@@ -260,7 +273,7 @@ export function recorderFor(env: Env, date: string): DurableObjectStub | null {
 export async function ensureRecorder(env: Env, nowMs: number): Promise<void> {
   if (!env.TIMELAPSE || !inWindow(nowMs)) return;
   const date = serviceDate(nowMs);
-  const start = (d: string) => recorderFor(env, d)!.fetch(`https://timelapse.internal/start?date=${d}`, { method: 'POST' });
+  const start = (d: string) => askRecorder(recorderFor(env, d)!, `/start?date=${d}`, { method: 'POST' });
   if (nowMs - windowOf(date).open < CRON_MS) {
     await Promise.allSettled(Array.from({ length: HELD_DAYS }, (_, i) => start(serviceDate(nowMs - (i + 1) * DAY_MS))));
   }
@@ -329,7 +342,12 @@ export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: n
   }
   // Not closed yet: the recorder's day so far.
   const open = recorderFor(env, date);
-  const res = open ? await open.fetch(`https://timelapse.internal/day?date=${date}`) : null;
+  let res: Response | null = null;
+  try {
+    res = open ? await askRecorder(open, `/day?date=${date}`) : null;
+  } catch {
+    return json({ error: 'terminus is busy, try again in a minute' }, 503, { 'retry-after': '60' });
+  }
   if (!res || !res.ok) return json({ error: 'no timelapse for that day' }, 404);
   return new Response(res.body, { headers: { 'content-type': 'application/gzip', 'cache-control': 'no-store' } });
 }
@@ -338,7 +356,7 @@ async function recorderStatus(env: Env, date: string): Promise<RecorderStatus | 
   const stub = recorderFor(env, date);
   if (!stub) return null;
   try {
-    const res = await stub.fetch(`https://timelapse.internal/status?date=${date}`);
+    const res = await askRecorder(stub, `/status?date=${date}`);
     return res.ok ? ((await res.json()) as RecorderStatus) : null;
   } catch {
     return null;
