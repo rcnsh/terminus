@@ -100,11 +100,7 @@ enum Snapshots {
                     .environment(\.fixedNow, Date())
                     .background(bg)
                     .environment(\.colorScheme, scheme)
-                let r = ImageRenderer(content: view)
-                r.scale = 2
-                guard let img = r.nsImage, let tiff = img.tiffRepresentation,
-                      let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
-                try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
+                write(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
             }
         }
     }
@@ -132,11 +128,7 @@ enum Snapshots {
         }
         for (name, view) in views {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
-                let r = ImageRenderer(content: view.background(bg).environment(\.colorScheme, scheme))
-                r.scale = 2
-                guard let img = r.nsImage, let tiff = img.tiffRepresentation,
-                      let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
-                try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
+                write(view.background(bg).environment(\.colorScheme, scheme), scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
             }
         }
     }
@@ -169,12 +161,17 @@ enum Snapshots {
                 .environment(\.fixedNow, now)
                 .background(bg)
                 .environment(\.colorScheme, scheme)
-            let r = ImageRenderer(content: view)
-            r.scale = 3
-            guard let img = r.nsImage, let tiff = img.tiffRepresentation,
-                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
-            try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("showcase-\(scheme == .dark ? "dark" : "light").png"))
+            write(view, scale: 3, to: dir, as: "showcase-\(scheme == .dark ? "dark" : "light")")
         }
+    }
+
+    /// `view` as `dir/name.png`; nothing if it can't be drawn.
+    private static func write(_ view: some View, scale: CGFloat, to dir: String, as name: String) {
+        let r = ImageRenderer(content: view)
+        r.scale = scale
+        guard let img = r.nsImage, let tiff = img.tiffRepresentation,
+              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
     }
 }
 #endif
