@@ -112,13 +112,17 @@ const ROAD_SCALE = 1.25;
  * for Now's sky to reach down to it, or null for one in a sky of its own.
  * `low`: just the hills, the trees and the city, with no road and drawn at
  * its own size (the band at the top of Settings' pages); otherwise it's
- * drawn ROAD_SCALE times bigger. `drive`: the shuttle drives across the
- * road and round again (the website's landing page, sky.css), where it
+ * drawn ROAD_SCALE times bigger. `drive`: the services' colours, for a
+ * shuttle that drives across the road and round again in one picked at
+ * random each time (the website's landing page, sky.css), where it
  * otherwise stands; it stands still for anyone who asks for less motion.
  */
-export function Horizon({ stop = false, bus = null, shuttle = true, drive = false, on = 'now', low = false }) {
+export function Horizon({ stop = false, bus = null, shuttle = true, drive = null, on = 'now', low = false }) {
   const box = useRef(null);
   const [w, setW] = useState(0);
+  // Which of `drive`'s colours is going by: never the same one twice running.
+  const [svc, setSvc] = useState(() => Math.floor(Math.random() * (drive?.length || 1)));
+  const nextSvc = () => setSvc((i) => (i + 1 + Math.floor(Math.random() * (drive.length - 1))) % drive.length);
   useLayoutEffect(() => {
     const el = box.current;
     const ground = on && grounds[on];
@@ -201,12 +205,21 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = fals
         ${!low &&
         !bus &&
         shuttle &&
-        html`<g transform=${`translate(${drive ? 0 : passing} 57)`}>
-          <g class=${drive ? 'driving' : null} style=${drive ? { '--rest': `${passing}px`, '--to': `${vw + 20}px`, animationDuration: `${Math.round(vw / 45)}s` } : undefined}>
-            <path class="beam" d="M38 9L60 6L60 13Z" />
-            ${busParts('bus', 'stripe', 3)}
-          </g>
-        </g>`}
+        (drive?.length
+          ? html`<g transform="translate(0 57)">
+              <g
+                class="driving"
+                style=${{ '--svc': drive[svc % drive.length], '--rest': `${passing}px`, '--to': `${vw + 20}px`, animationDuration: `${Math.round(vw / 45)}s` }}
+                onAnimationIteration=${nextSvc}
+              >
+                <path class="beam" d="M38 9L60 6L60 13Z" />
+                ${busParts('body', 'band', 3)}
+              </g>
+            </g>`
+          : html`<g transform=${`translate(${passing} 57)`}>
+              <path class="beam" d="M38 9L60 6L60 13Z" />
+              ${busParts('bus', 'stripe', 3)}
+            </g>`)}
       </svg>`}
     </div>
   `;

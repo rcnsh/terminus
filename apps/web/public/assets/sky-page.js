@@ -7,14 +7,19 @@
 // data-horizon takes data-low (just the hills), data-stop (your stop's
 // sign), data-bus="#34a853 0.4 live" (a bus coming up to it: its colour, how
 // far, and live or a timetable guess), data-shuttle="no" (an empty road) and
-// data-drive (the shuttle drives across, over and over).
+// data-drive (shuttles drive across, over and over, each a service at random).
 // A page's script can draw one itself with drawHorizon().
 import { html, render } from './ui.js';
 import { Horizon, NightSky } from '/account/sky.js';
+import { LIVERY } from '/account/livery.js';
 
-/** Draws the horizon into `el`. `bus`: { color, far (0 at the stop to 1), live }. */
+/**
+ * Draws the horizon into `el`. `bus`: { color, far (0 at the stop to 1), live };
+ * `drive`: shuttles of every service drive by instead.
+ */
 export function drawHorizon(el, { low = false, stop = false, bus = null, shuttle = true, drive = false } = {}) {
-  render(html`<${Horizon} on=${null} low=${low} stop=${stop} bus=${bus} shuttle=${shuttle} drive=${drive} />`, el);
+  const colours = drive ? LIVERY.map(([, color]) => color) : null;
+  render(html`<${Horizon} on=${null} low=${low} stop=${stop} bus=${bus} shuttle=${shuttle} drive=${colours} />`, el);
 }
 
 /** A horizon's settings from its markup (see above). */

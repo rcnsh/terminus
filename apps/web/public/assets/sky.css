@@ -107,7 +107,7 @@
 .sky-panel .horizon .lamp { fill: #fef3c7; }
 .sky-panel .horizon .tail { fill: #ef4444; }
 /* A shuttle driving across (Horizon `drive`): in from the left, out on the
-   right, and round again. For anyone who asks for less motion it stands
+   right, and round again as another service. For anyone who asks for less motion it stands
    where a passing one would (site.css stops every animation). */
 @keyframes horizon-drive { from { transform: translateX(-60px); } to { transform: translateX(var(--to)); } }
 .sky-panel .horizon .driving { animation: horizon-drive 24s linear infinite; }
@@ -115,8 +115,8 @@
 .sky-panel .horizon .sign line { stroke: var(--h-post); stroke-width: 1.6; }
 .sky-panel .horizon .sign rect { fill: var(--h-post); }
 .sky-panel .horizon .sign .mark { fill: var(--h-post-ink); }
-.sky-panel .horizon .coming .body { fill: var(--svc); }
-.sky-panel .horizon .coming .band { fill: #fff; opacity: 0.85; }
+.sky-panel .horizon :is(.coming, .driving) .body { fill: var(--svc); }
+.sky-panel .horizon :is(.coming, .driving) .band { fill: #fff; opacity: 0.85; }
 /* A timetable guess is the same bus in outline, so it never passes for live. */
 .sky-panel .horizon .coming.guess :is(.body, .arch) { fill: none; stroke: var(--svc); stroke-width: 1.2; stroke-linejoin: round; }
 .sky-panel .horizon .coming.guess .roof { stroke-width: 0.8; }
