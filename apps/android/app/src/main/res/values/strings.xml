@@ -51,6 +51,8 @@
     <string name="a11y_on_the_to">On the %1$s, to %2$s</string>
     <string name="a11y_starts">%1$s, starts %2$s</string>
     <string name="a11y_to">To %1$s</string>
+    <string name="a11y_map">Campus map. For stops and buses as a list, use the Buses tab.</string>
+    <string name="a11y_show_list">Show as list</string>
     <string name="a11y_about">"about "</string>
     <string name="a11y_bus">Bus %1$s</string>
     <string name="a11y_bus_paid">Public bus %1$s, fare applies</string>
