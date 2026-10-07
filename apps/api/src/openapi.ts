@@ -1408,7 +1408,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '206': { description: 'The range asked for.', content: { 'application/vnd.pmtiles': {} } },
             '304': { description: 'Your copy is current (`If-None-Match`).' },
             '404': errorResponse('No street map uploaded yet.'),
+            '416': { description: 'The range starts past the end of the file.' },
             '429': errorResponse('Too many reads of parts not yet cached, from one IP. Wait for `Retry-After`.'),
+            '503': errorResponse('The file could not be read just now (parts already cached are still served). Wait for `Retry-After`.'),
           },
         },
       },
@@ -1423,7 +1425,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             { name: 'fontstack', in: 'path', required: true, schema: { type: 'string', enum: ['Noto Sans Regular', 'Noto Sans Medium', 'Noto Sans Italic'] } },
             { name: 'range', in: 'path', required: true, schema: { type: 'string' }, example: '0-255' },
           ],
-          responses: { '200': { description: 'The glyphs.', content: { 'application/x-protobuf': {} } }, '404': errorResponse('No such font or range.') },
+          responses: { '200': { description: 'The glyphs.', content: { 'application/x-protobuf': {} } }, '404': errorResponse('No such font or range.'), '503': errorResponse('Could not be read just now. Wait for `Retry-After`.') },
         },
       },
       '/map/sprites/v4/{sprite}': {
@@ -1434,7 +1436,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           operationId: 'mapSprite',
           security: [],
           parameters: [{ name: 'sprite', in: 'path', required: true, schema: { type: 'string', enum: ['light.json', 'light.png', 'light@2x.json', 'light@2x.png', 'dark.json', 'dark.png', 'dark@2x.json', 'dark@2x.png'] } }],
-          responses: { '200': { description: 'The sheet or its index.', content: { 'image/png': {}, 'application/json': {} } }, '404': errorResponse('Not uploaded.') },
+          responses: { '200': { description: 'The sheet or its index.', content: { 'image/png': {}, 'application/json': {} } }, '404': errorResponse('Not uploaded.'), '503': errorResponse('Could not be read just now. Wait for `Retry-After`.') },
         },
       },
       '/download/latest.json': {

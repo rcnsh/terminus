@@ -118,6 +118,8 @@ export function glyphRange(range: string): boolean {
 }
 
 const slowDown = () => json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+/** R2 didn't answer: the map should ask again soon, not take the file for broken (a PMTiles reader gives up on a 416). */
+const unavailable = () => json({ error: 'terminus is busy, try again in a minute' }, 503, { 'retry-after': '60' });
 
 /** How long an isolate trusts what it last learnt of a file (its ETag and size). */
 const HEAD_TTL_MS = 5 * 60_000;
@@ -131,10 +133,21 @@ const known = (key: string, nowMs: number) => {
   return head && nowMs - head.atMs < HEAD_TTL_MS ? head : undefined;
 };
 
+/**
+ * The file's ETag and size; null when there's no such file. When R2 fails,
+ * the last thing this isolate learnt still names the pieces in the edge
+ * cache, so it stands in (and R2 is asked again next time); with nothing
+ * learnt, 'unavailable'.
+ */
 async function headOf(bucket: R2Bucket, key: string, nowMs: number) {
   const fresh = known(key, nowMs);
   if (fresh) return fresh;
-  const obj = await bucket.head(key);
+  let obj: R2Object | null;
+  try {
+    obj = await bucket.head(key);
+  } catch {
+    return heads.get(key) ?? 'unavailable';
+  }
   if (!obj) {
     heads.delete(key);
     return null;
@@ -187,6 +200,7 @@ async function edgePart(
   const nowMs = Date.now();
   if (!known(key, nowMs) && !(await mayRead())) return slowDown();
   const head = await headOf(bucket, key, nowMs);
+  if (head === 'unavailable') return unavailable();
   if (!head) return json({ error: 'not found' }, 404);
   const headers = partHeaders(type, maxAgeS, head.httpEtag);
   // The client's copy is current: nothing to read.
@@ -206,7 +220,13 @@ async function edgePart(
   if (hit) body = await hit.arrayBuffer();
   else {
     if (!(await mayRead())) return slowDown();
-    const obj = await bucket.get(key, { range: { offset, length }, onlyIf: { etagMatches: head.etag } }).catch(() => null);
+    let obj: R2Object | R2ObjectBody | null;
+    try {
+      obj = await bucket.get(key, { range: { offset, length }, onlyIf: { etagMatches: head.etag } });
+    } catch {
+      // R2 failed, which says nothing about the file: keep what we know of it.
+      return unavailable();
+    }
     // Replaced since we last looked (or gone): forget it and let R2 answer.
     if (!obj || !('body' in obj)) {
       heads.delete(key);
@@ -247,9 +267,11 @@ async function servePart(req: Request, bucket: R2Bucket, key: string, type: stri
   let obj: R2Object | R2ObjectBody | null;
   try {
     obj = await bucket.get(key, { range: req.headers, onlyIf: req.headers });
-  } catch {
-    // A range R2 can't satisfy (past the end).
-    return new Response(null, { status: 416 });
+  } catch (e) {
+    // A range R2 can't satisfy (past the end) is the client's mistake;
+    // anything else is R2 failing, and the file is fine.
+    if (ranged && /range|satisf/i.test(String((e as Error)?.message ?? e))) return new Response(null, { status: 416 });
+    return unavailable();
   }
   if (!obj) return json({ error: 'not found' }, 404);
   const headers = partHeaders(type, maxAgeS, obj.httpEtag);
