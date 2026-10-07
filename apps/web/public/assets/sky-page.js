@@ -6,14 +6,15 @@
 //     <div data-horizon></div>           the hills, the road and a shuttle
 // data-horizon takes data-low (just the hills), data-stop (your stop's
 // sign), data-bus="#34a853 0.4 live" (a bus coming up to it: its colour, how
-// far, and live or a timetable guess) and data-shuttle="no" (an empty road).
+// far, and live or a timetable guess), data-shuttle="no" (an empty road) and
+// data-drive (the shuttle drives across, over and over).
 // A page's script can draw one itself with drawHorizon().
 import { html, render } from './ui.js';
 import { Horizon, NightSky } from '/account/sky.js';
 
 /** Draws the horizon into `el`. `bus`: { color, far (0 at the stop to 1), live }. */
-export function drawHorizon(el, { low = false, stop = false, bus = null, shuttle = true } = {}) {
-  render(html`<${Horizon} on=${null} low=${low} stop=${stop} bus=${bus} shuttle=${shuttle} />`, el);
+export function drawHorizon(el, { low = false, stop = false, bus = null, shuttle = true, drive = false } = {}) {
+  render(html`<${Horizon} on=${null} low=${low} stop=${stop} bus=${bus} shuttle=${shuttle} drive=${drive} />`, el);
 }
 
 /** A horizon's settings from its markup (see above). */
@@ -24,6 +25,7 @@ function fromMarkup(el) {
     stop: 'stop' in el.dataset,
     bus: color ? { color, far: Number(far ?? 0.5), live: live === 'live' } : null,
     shuttle: el.dataset.shuttle !== 'no',
+    drive: 'drive' in el.dataset,
   };
 }
 
