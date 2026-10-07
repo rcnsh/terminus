@@ -398,10 +398,10 @@ account into another one.
   again, nudges the user's devices (`sessions.push_token`) if the phase
   changed, and schedules the next wake; with no device taking
   push it stops. The day's `watch` is the wake pending, absent once it
-  stops, and a card asks again only when none is pending or its own would
-  be more than 30 s sooner (`needsWatch`): the leave-by moves by seconds
-  with each refresh, and a later one needs nothing, since the object plans
-  its next wake afresh each time it wakes. A nudge is a data message, `{kind: 'card', phase}`, high
+  stops, and a card asks again only when none is pending or its own is
+  sooner, by any amount (`needsWatch`), so a push is never late: the
+  leave-by moves by seconds with each refresh, and a later one needs
+  nothing, since the object plans its next wake afresh each time it wakes. A nudge is a data message, `{kind: 'card', phase}`, high
   priority for due and missed; the app fetches /me/next
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).
