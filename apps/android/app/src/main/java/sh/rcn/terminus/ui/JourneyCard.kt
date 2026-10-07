@@ -367,7 +367,7 @@ private fun roadFor(journey: Journey, now: Long): Road {
 /**
  * The horizon's road in words, on the ground just under it at the page's
  * size: your bus and when it reaches your stop ("about" for a timetable
- * guess). Only on Now, where the horizon is. As the web's (journey.js
+ * guess), the stop's name in bold. Only on Now, where the horizon is. As the web's (journey.js
  * RoadLine).
  */
 @Composable
@@ -393,7 +393,11 @@ private fun RoadLine(journey: Journey, now: Long) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BusBadge(bus.svc, bus.color, 14.sp, paid = bus.paid)
-        Text(text)
+        Text(buildAnnotatedString {
+            append(text)
+            val at = text.indexOf(bus.stop)
+            if (at >= 0) addStyle(SpanStyle(fontWeight = FontWeight.Bold), at, at + bus.stop.length)
+        })
     }
 }
 
