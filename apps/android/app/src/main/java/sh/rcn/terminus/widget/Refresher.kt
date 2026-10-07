@@ -167,14 +167,16 @@ object Refresher {
      * leave alerts would otherwise go quiet until then. Offline, the alarm
      * only redraws until a network is back (RefreshReceiver). This alarm
      * replaces the one [scheduleNext] set, so it comes no later than the
-     * last answer's own next moment (its card changing or going stale).
+     * moment that one was for (the card changing, "Leave now", the next
+     * stop on the ride, or going stale).
      */
     private fun retryLater(ctx: Context, store: Store) {
         if (!active(ctx)) return
         val failures = store.refreshFailures
         store.refreshFailures = failures + 1
         val now = ServerClock.now()
-        val at = listOfNotNull(now + retryDelay(failures), store.lastAnswer()?.first?.let { pendingAt(it, now) }?.coerceAtLeast(now + MIN_GAP_MS)).min()
+        val pending = store.lastAnswer()?.let { (answer, fetchedAt) -> nextRefreshAt(answer, ServerClock.fromDevice(fetchedAt), now, widget = widgetCount(ctx) > 0) }
+        val at = listOfNotNull(now + retryDelay(failures), pending).min()
         ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(ServerClock.toDevice(at), alarmIntent(ctx))
     }
 
@@ -212,11 +214,12 @@ object Refresher {
     fun armOfflineRedraw(ctx: Context, store: Store) {
         if (widgetCount(ctx) == 0) return
         val now = ServerClock.now()
-        // The last answer's staleAt too, day plan or not: the alarm that set
-        // off this redraw may have come before it, and nothing else is
-        // armed for it while refreshes wait for a network.
-        val stale = store.lastAnswer()?.first?.card?.staleAtMs?.takeIf { it > now }
-        val at = listOfNotNull(OfflineDay.nextChangeAt(store.lastDay()?.first, now), stale).minOrNull() ?: return
+        // The last answer's own moments too, day plan or not ("Leave now",
+        // the next stop on the ride, going stale): the alarm that set off
+        // this redraw may have come before them, and nothing else is armed
+        // for them while refreshes wait for a network.
+        val own = store.lastAnswer()?.first?.let { redrawAt(it, now) }
+        val at = listOfNotNull(OfflineDay.nextChangeAt(store.lastDay()?.first, now), own).minOrNull() ?: return
         ctx.getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ServerClock.toDevice(at) + 1_000, redrawIntent(ctx))
     }
 
@@ -253,9 +256,17 @@ object Refresher {
         return listOfNotNull(server, local).minOrNull() ?: (fetchedAt + FALLBACK_MS).coerceAtLeast(now + MIN_LOCAL_GAP_MS)
     }
 
-    /** The [answer]'s next moment of its own after [now] (server clock): its refresh, its card changing or going stale. */
-    internal fun pendingAt(answer: NextAnswer, now: Long): Long? =
-        listOfNotNull(answer.refreshAtMs, answer.card?.nextChangeAtMs, answer.card?.staleAtMs).filter { it > now }.minOrNull()
+    /**
+     * When a widget showing [answer] next looks different with no new
+     * answer (server clock): its card changing or going stale, "Leave by"
+     * turning into "Leave now", or the next stop on the ride.
+     */
+    internal fun redrawAt(answer: NextAnswer, now: Long): Long? {
+        val card = answer.card
+        val ride = card?.ride?.takeIf { card.phase == "riding" }?.let { RideStyle.nextRedrawAt(it, now) }
+        val leave = answer.leaveAtMs?.takeIf { answer.mode != "rest" }
+        return listOfNotNull(card?.nextChangeAtMs, card?.staleAtMs, leave, ride).filter { it > now }.minOrNull()
+    }
 
     /** Arm the next refresh, and the leave alert. Only while something needs them. [fetchedAt] is on the phone's clock. */
     fun scheduleNext(ctx: Context, answer: NextAnswer, fetchedAt: Long) {
