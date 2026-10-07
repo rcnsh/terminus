@@ -17,7 +17,7 @@ import type { Suggestion } from './outcomes.ts';
 import { GRAPH } from './graph.ts';
 import { indexGraph } from './resolve.ts';
 import { targetStops } from './landmarks.ts';
-import { mins, shortStop } from './format.ts';
+import { mins, named, shortStop } from './format.ts';
 import { routeColor } from './campus.ts';
 import { WALK } from './config.ts';
 import { m } from './i18n.ts';
@@ -369,7 +369,8 @@ function v1(a: MeAnswer, h12: boolean): V1 {
     crowd: crowd ? CROWD[crowd]() : null,
     quality: QUALITY[a.quality]?.() ?? null,
     leaveBy: l ? m().leaveBy(est(l.at)) : null,
-    leaveVia: l?.svc && l.stop ? m().leaveVia(l.board ? est(l.board) : null, l.svc, l.stop, l.off ?? null) : null,
+    // "95 ($)": the fare shows in the words, for the clients that show only them (the Mac, notifications).
+    leaveVia: l?.svc && l.stop ? m().leaveVia(l.board ? est(l.board) : null, named({ svc: l.svc, paid: l.paid }), l.stop, l.off ?? null) : null,
     catch: null,
     arrive: null,
     catchLine: null,
@@ -382,7 +383,7 @@ function v1(a: MeAnswer, h12: boolean): V1 {
 
   const classAt = Date.parse(a.timing.classAt);
   // The bus stops across the road from the class's stop: say where to get off.
-  card.catch = l.svc ? m().catchBus(l.board ? est(l.board) : null, l.svc, l.stop ?? '', l.off ?? null) : m().walkThere;
+  card.catch = l.svc ? m().catchBus(l.board ? est(l.board) : null, named({ svc: l.svc, paid: l.paid }), l.stop ?? '', l.off ?? null) : m().walkThere;
   if (l.arrive) {
     const arrive = Date.parse(l.arrive);
     const slack = slackText((classAt - arrive) / 1000);
@@ -396,7 +397,7 @@ function v1(a: MeAnswer, h12: boolean): V1 {
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const same = timed && l.board && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt!)) < 60_000;
   if (timed && !same) {
-    card.goNow = m().goNow(svc, approx(a.quality === 'scheduled', at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
+    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(a.quality === 'scheduled', at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
   }
   card.note = l.note ?? null;
   card.estimate = l.estimated ? m().estimateNote : null;
