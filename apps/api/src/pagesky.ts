@@ -67,8 +67,11 @@ const dip = (lo: number, hi: number) => {
 };
 
 /** The band's width in its own units; a narrower card shows its middle. A
- * wide bar (the API docs') asks for more, so it shows more hills, not
- * bigger ones. */
+ * wider one (the API docs' bar) goes on along unbroken hills, BAND_W at a
+ * time, so it shows more of them, not bigger ones: the first stretch as a
+ * card has it, then trees on every one, the tall building on every other
+ * with the flag, and the city on every third, so it doesn't read as a
+ * pattern. */
 const BAND_W = 400;
 
 /**
@@ -77,24 +80,45 @@ const BAND_W = 400;
  * card's colour. Lit windows after dark. Colours come from the band's CSS.
  */
 export function horizonSvg(lights: boolean, W = BAND_W): string {
-  const at = (f: number) => Math.round(W * f);
-  const [b1, b2, flag] = [at(0.18), at(0.62), at(0.76)];
-  const mbs = dip(Math.max(at(0.8) - 40, flag + 30), Math.min(at(0.8) + 40, W - 29));
-  const city = r1(farY(mbs) + 3);
-  const pole = r1(nearY(flag));
-  const tree = (c: number) => {
-    const g = r1(nearY(c));
-    return `<path d="M${c - 1.5} ${g + 2}V${g - 7}L${c - 7} ${g - 13}H${c - 4.5}L${c} ${g - 9}L${c + 4.5} ${g - 13}H${c + 7}L${c + 1.5} ${g - 7}V${g + 2}Z"/><ellipse cx="${c}" cy="${r1(g - 18)}" rx="21" ry="5.5"/><ellipse cx="${c - 8}" cy="${r1(g - 21.5)}" rx="11" ry="4.5"/><ellipse cx="${c + 8}" cy="${r1(g - 22)}" rx="12" ry="4.5"/>`;
-  };
-  const stars = [0, 1, 2, 3, 4]
-    .map((i) => `<circle cx="${r1(flag + 5.2 + 0.85 * Math.sin((i * 2 * Math.PI) / 5))}" cy="${r1(pole - 22 - 0.85 * Math.cos((i * 2 * Math.PI) / 5))}" r=".35"/>`)
-    .join('');
+  const city: string[] = [];
+  const far: string[] = [];
+  const lit: string[] = [];
+  const trees: string[] = [];
+  const flags: string[] = [];
+  for (let n = 0, o = 0; o < W; n++, o += BAND_W) {
+    const at = (f: number) => o + Math.round(BAND_W * f);
+    const end = Math.min(o + BAND_W, W);
+    const [b1, b2, flag] = [at(0.18), at(0.62), at(0.76)];
+    const mbs = dip(Math.max(at(0.8) - 40, flag + 30), Math.min(at(0.8) + 40, end - 29));
+    const top = r1(farY(mbs) + 3);
+    const pole = r1(nearY(flag));
+    const tree = (c: number) => {
+      const g = r1(nearY(c));
+      return `<path d="M${c - 1.5} ${g + 2}V${g - 7}L${c - 7} ${g - 13}H${c - 4.5}L${c} ${g - 9}L${c + 4.5} ${g - 13}H${c + 7}L${c + 1.5} ${g - 7}V${g + 2}Z"/><ellipse cx="${c}" cy="${r1(g - 18)}" rx="21" ry="5.5"/><ellipse cx="${c - 8}" cy="${r1(g - 21.5)}" rx="11" ry="4.5"/><ellipse cx="${c + 8}" cy="${r1(g - 22)}" rx="12" ry="4.5"/>`;
+    };
+    const stars = [0, 1, 2, 3, 4]
+      .map((i) => `<circle cx="${r1(flag + 5.2 + 0.85 * Math.sin((i * 2 * Math.PI) / 5))}" cy="${r1(pole - 22 - 0.85 * Math.cos((i * 2 * Math.PI) / 5))}" r=".35"/>`)
+      .join('');
+    if (n % 3 === 0)
+      city.push(...[-13, -2, 9].map((x) => `<path d="M${mbs + x} ${top}L${mbs + x + 1} ${r1(top - 26)}H${mbs + x + 5}L${mbs + x + 6} ${top}Z"/>`), `<path d="M${mbs - 15} ${r1(top - 28)}L${mbs + 25} ${r1(top - 29.2)}L${mbs + 23} ${r1(top - 26)}H${mbs - 14}Z"/>`);
+    const tall = n % 2 === 0;
+    far.push(`<rect x="${b1 - 8}" y="${r1(farY(b1) - 14)}" width="16" height="20"/>`);
+    lit.push(`<rect x="${b1 - 3}" y="${r1(farY(b1) - 9)}" width="3" height="3" opacity=".6"/>`);
+    // The first tree only on the first stretch: elsewhere it would stand
+    // beside the last one of the stretch before.
+    trees.push((n === 0 ? [0.06, 0.45, 0.9] : [0.45, 0.9]).map((f) => tree(at(f))).join(''));
+    if (!tall) continue;
+    far.push(`<rect x="${b2 - 13}" y="${r1(farY(b2) - 22)}" width="26" height="28"/>`);
+    lit.push(`<rect x="${b2 - 5}" y="${r1(farY(b2) - 16)}" width="3" height="3"/>`);
+    trees.push(`<path d="M${flag - 0.6} ${pole + 2}V${pole - 24}H${flag + 0.6}V${pole + 2}Z"/>`);
+    flags.push(`<rect x="${flag + 0.6}" y="${pole - 24}" width="12" height="4" fill="#ef3340"/><rect x="${flag + 0.6}" y="${pole - 20}" width="12" height="4" fill="#f2efeb"/><circle cx="${flag + 3.2}" cy="${pole - 22}" r="1.5" fill="#f2efeb"/><circle cx="${flag + 3.8}" cy="${pole - 22}" r="1.3" fill="#ef3340"/><g fill="#f2efeb">${stars}</g>`);
+  }
   return `<svg class="hz" viewBox="0 6 ${W} 52" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-<g class="city">${[-13, -2, 9].map((x) => `<path d="M${mbs + x} ${city}L${mbs + x + 1} ${r1(city - 26)}H${mbs + x + 5}L${mbs + x + 6} ${city}Z"/>`).join('')}<path d="M${mbs - 15} ${r1(city - 28)}L${mbs + 25} ${r1(city - 29.2)}L${mbs + 23} ${r1(city - 26)}H${mbs - 14}Z"/></g>
-<g class="far"><path d="${ridge(W, farY)}"/><rect x="${b1 - 8}" y="${r1(farY(b1) - 14)}" width="16" height="20"/><rect x="${b2 - 13}" y="${r1(farY(b2) - 22)}" width="26" height="28"/></g>
-${lights ? `<g class="lit"><rect x="${b2 - 5}" y="${r1(farY(b2) - 16)}" width="3" height="3"/><rect x="${b1 - 3}" y="${r1(farY(b1) - 9)}" width="3" height="3" opacity=".6"/></g>` : ''}
-<g class="tree">${[0.06, 0.45, 0.9].map((f) => tree(at(f))).join('')}<path d="M${flag - 0.6} ${pole + 2}V${pole - 24}H${flag + 0.6}V${pole + 2}Z"/></g>
-<rect x="${flag + 0.6}" y="${pole - 24}" width="12" height="4" fill="#ef3340"/><rect x="${flag + 0.6}" y="${pole - 20}" width="12" height="4" fill="#f2efeb"/><circle cx="${flag + 3.2}" cy="${pole - 22}" r="1.5" fill="#f2efeb"/><circle cx="${flag + 3.8}" cy="${pole - 22}" r="1.3" fill="#ef3340"/><g fill="#f2efeb">${stars}</g>
+<g class="city">${city.join('')}</g>
+<g class="far"><path d="${ridge(W, farY)}"/>${far.join('')}</g>
+${lights ? `<g class="lit">${lit.join('')}</g>` : ''}
+<g class="tree">${trees.join('')}</g>
+${flags.join('')}
 <path class="near" d="${ridge(W, nearY)}"/></svg>`;
 }
 
