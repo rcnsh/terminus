@@ -323,7 +323,7 @@ function StoppedRow({ r, stop }) {
   return html`
     <button type="button" class="bt-row stopped" onClick=${() => go(lineHash(r.svc, stop))}>
       <${Chip} svc=${r.svc} color=${r.color} cls="bt-chip muted" />
-      <span class="bt-dir">${r.towards?.length ? html`<${Towards} to=${r.towards} />` : ''}</span>
+      <span class="bt-dir">${r.towards?.length ? html`<${Towards} r=${r} />` : ''}</span>
       <span class="bt-big none">${first}</span>
       <span class="bt-meta">${second}</span>
     </button>
