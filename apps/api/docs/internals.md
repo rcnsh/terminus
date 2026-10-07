@@ -1065,7 +1065,11 @@ likeliest strings with NUS (a token and one bus call each, three at most),
 writes the one NUS accepts to `config:appVersion`, and emails to say so. Each
 candidate is tried once, and the pages are read at most hourly while NUS keeps
 refusing. If nothing works, the usual "feed is down" email follows, saying what
-it tried, with the command above and NUS's full response. To see what it would
+it tried, with the command above and NUS's full response. After a switch, the
+isolates still sending the old version (for up to `versionMemoMs`) are refused
+too; a refusal of a version `config:appVersion` no longer holds opens neither
+the breaker nor the mint memo, so it doesn't stop the isolates already
+sending the new one, and that isolate forgets its old version. To see what it would
 find today, without calling NUS: `GET /health?versions=1` with the
 `x-health-token` header.
 

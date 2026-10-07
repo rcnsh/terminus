@@ -74,9 +74,35 @@ export async function appVersion(env: Env, nowMs: number = Date.now()): Promise<
   if (memo && nowMs - memo.atMs < TTL.versionMemoMs) return memo.value;
   const stored = (await env.KV.get(KV_APP_VERSION).catch(() => null))?.trim();
   if (stored && !VERSION_FORMAT.test(stored)) console.error(`ignoring ${KV_APP_VERSION}: not univus_android_<versionName>_<versionCode>`);
-  const value = stored && VERSION_FORMAT.test(stored) ? stored : (env.NEXTBUS_APP_VERSION ?? '');
+  const value = chosenVersion(env, stored);
   versionMemos.set(env.KV, { value, atMs: nowMs });
   return value;
+}
+
+/** The version string to send, given what `config:appVersion` holds. */
+function chosenVersion(env: Env, stored: string | null | undefined): string {
+  return stored && VERSION_FORMAT.test(stored) ? stored : (env.NEXTBUS_APP_VERSION ?? '');
+}
+
+/**
+ * Marks a refused version (10009) as `outdated` when it is no longer the
+ * version to send, read past this isolate's memo, and forgets the memo.
+ * After an automatic switch the other isolates go on sending the old one
+ * for up to versionMemoMs; their refusals say nothing about the new one,
+ * and must not open the breaker on the isolates already sending it. A
+ * failed read leaves the refusal as it is: backing off is the safe side.
+ */
+export async function markIfOutdated(env: Env, err: unknown): Promise<void> {
+  if (!(err instanceof UpstreamRejected) || err.code !== '10009' || err.version === undefined || err.outdated) return;
+  let stored: string | null;
+  try {
+    stored = await env.KV.get(KV_APP_VERSION);
+  } catch {
+    return;
+  }
+  if (chosenVersion(env, stored?.trim()) === err.version) return;
+  err.outdated = true;
+  forgetAppVersion(env);
 }
 
 export function authConfigured(env: Env): boolean {
@@ -223,7 +249,10 @@ export async function getSession(
     inflight = (async () => {
       if (await flagged(mintFailedKey())) throw new Error('token mint failed a moment ago');
       return mint(env, nowMs, version).catch(async (err) => {
-        await flag(mintFailedKey(), String((err as Error)?.message ?? err), TTL.failMemoS);
+        // A version refused after the switch away from it is this isolate's
+        // alone: the others, minting with the new one, needn't wait.
+        await markIfOutdated(env, err);
+        if (!(err instanceof UpstreamRejected && err.outdated)) await flag(mintFailedKey(), String((err as Error)?.message ?? err), TTL.failMemoS);
         throw err;
       });
     })().finally(() => {
@@ -285,7 +314,9 @@ async function mint(env: Env, nowMs: number, version: string): Promise<Session> 
   if (!extracted) {
     // "Invalid API KEY" arrives as HTTP 200 with code 10000, so the status
     // line alone will happily tell you everything is fine.
-    throw new UpstreamRejected(String(body?.code ?? '?'), `auth rejected: code=${body?.code ?? '?'} msg=${body?.msg ?? ''}`, text);
+    const err = new UpstreamRejected(String(body?.code ?? '?'), `auth rejected: code=${body?.code ?? '?'} msg=${body?.msg ?? ''}`, text);
+    err.version = version;
+    throw err;
   }
   const session: Session = { ...extracted, version };
 
@@ -319,6 +350,10 @@ export async function proxyEnvelope(env: Env, session: Session): Promise<Record<
 export class UpstreamRejected extends Error {
   readonly code: string;
   readonly detail: string;
+  /** The version string the refused request carried, when known. */
+  version?: string;
+  /** That version is no longer the one to send (markIfOutdated). */
+  outdated = false;
   constructor(code: string, message: string, detail = '') {
     super(message);
     this.code = code;

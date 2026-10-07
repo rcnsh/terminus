@@ -12,7 +12,7 @@ import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { MAX_ETA_S, TTL } from './config.ts';
 import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
-import { UpstreamHttpError, UpstreamRejected, getSession, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
+import { UpstreamHttpError, UpstreamRejected, getSession, markIfOutdated, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
 import type { Session } from './auth.ts';
 import graphJson from '../data/stops.json' with { type: 'json' };
 
@@ -470,7 +470,10 @@ async function acceptedCall(env: Env, endpoint: string, params: Record<string, s
   }
   if (!proxyOk(body)) {
     const b = body as ProxyBody | null;
-    throw new UpstreamRejected(String(b?.code ?? '?'), `${endpoint} rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
+    const err = new UpstreamRejected(String(b?.code ?? '?'), `${endpoint} rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
+    err.version = (renewed ?? session).version;
+    await markIfOutdated(env, err);
+    throw err;
   }
   return { body, sentAtMs };
 }
@@ -563,7 +566,8 @@ export async function getArrivals(
  * hold a connection open for the whole timeout, again and again.
  */
 export function tripsBreaker(err: unknown): boolean {
-  if (err instanceof UpstreamRejected) return NO_REMINT_CODES.has(err.code);
+  // A version refused after the switch away from it says nothing of the new one.
+  if (err instanceof UpstreamRejected) return NO_REMINT_CODES.has(err.code) && !err.outdated;
   if (err instanceof UpstreamUnreachable) return true;
   return err instanceof UpstreamHttpError && (err.status === 429 || err.status >= 500);
 }
