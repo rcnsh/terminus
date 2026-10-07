@@ -814,8 +814,20 @@ Holland Village between Opp Kent Ridge MRT and Kent Ridge MRT). And a fare
 counts: a public bus is the headline only when it beats the free bus by
 `PUBLIC.fareWorthS`, and otherwise is the alternative; its leg carries
 `paid: true`, the detail says "public bus", and the clients draw a `$` on
-its badge. A time LTA marks unmonitored (from the operator's timetable) is
-`scheduled`, never `live`.
+its badge. Only a time LTA marks `Monitored: 1` is `live`; any other value
+(0, `false`, missing, renamed) is the operator's timetable, `scheduled`, so
+a change in how the field is written can't pass a timetabled time off as
+live. The leave-by keeps a timetabled time estimated too. A day both of
+whose LTA times are "-" is `null` in `serviceHours`, "not running today":
+95B, 96A and the other weekday-only services aren't guessed at weekends.
+
+`normalizePublic()` reads only zoned times (DataMall sends `+08:00`; one
+without a zone would be read as UTC on a Worker, 8 h out) within a week.
+`publicProblem()` checks the reply by value: each service needs its
+`NextBus`, each slot an `EstimatedArrival` that is a zoned time or the
+empty slot's `""`, and where both directions of a service call (Kent Ridge
+Terminal), each bus its `DestinationCode`. A service the graph doesn't know
+or a bus already gone is not a problem.
 
 A shelter both feeds answer for is asked of both (`collectArrivals`), and
 `StopArrivals.feeds` keeps each feed's own state, so the shuttle feed being
@@ -859,8 +871,10 @@ carry a bare code. This is a second direction problem underneath the
 the same physical stop, so choosing the right stop does not save you. Nothing
 orders the two: when no bus is waiting to depart, the terminating arrival is
 the sooner of the two, so taking the earliest ETA hands you a bus that ends
-its run as you board. `resolveBerths()` takes `-S` whenever the stop offers
-it. Where several berths exist and no suffix separates them, the answer caps
+its run as you board. `normalize()` reads the `-E` suffix and marks such
+a row `ends: true`, and `resolveBerths()` drops those rows, so nothing past
+the normaliser knows how the feed spells it; `berth` itself is opaque, only
+compared. Where several berths exist and no suffix separates them, the answer caps
 `confidence` at 0.5 and says "direction unconfirmed" rather than guessing.
 
 Also: `arrivalTime_ts` looks like an absolute arrival time and would be better
@@ -869,15 +883,32 @@ minutes in the past alongside a positive `arrivalTime`. It is not used.
 
 `normalize()` and `normalizeBuses()` treat anything they can't read as
 missing, never as zero: an `arrivalTime` that is negative or looks like a
-clock time ("-3", "12:30") is no time, and a live bus with a blank or null
-latitude, longitude or direction has no position or heading, rather than
-sitting at latitude 0 or heading north.
+clock time ("-3", "12:30") is no time; `eta_s` is a number or a string of
+digits, so a blank, `false` or `[]` there is no time rather than "arriving
+now"; a time more than a week away (`MAX_ETA_S`: an epoch, a changed unit)
+is no time; and a live bus with a blank or null latitude, longitude or
+direction has no position or heading, rather than sitting at latitude 0 or
+heading north. Service names are read as the graph spells them ("d2" and
+"D 2" are D2), since everything downstream compares them exactly.
+
+The list itself is found under the names the feed has used (`shuttles`,
+`activebus`, ...), or failing those, any array of rows. Only rows: the
+shuttle reply carries `hints`, a list of strings, beside its `shuttles`,
+and with `shuttles` gone that would otherwise be read as an empty board.
 
 A reply the feed calls OK but that can't be read is a failure, never an
 empty board. With no list at all (`hasList`), or a list whose rows lost
-what `normalize()` reads (`arrivalsProblem`: no row names a service, none
-names a service we know, or none has an arrival time; `busesProblem`: no
-row has a plate or a position), the fetch throws. Read as it was, every
+what `normalize()` reads, the fetch throws. That is checked by value, row
+by row (`arrivalsProblem`): no row names a service, or none names a service
+we know; or a row's first time is missing (renamed, null) or isn't one it
+can read (a clock time, a word, more than a week away). The feed's own "no
+bus" ("-", or an empty `_etas`) passes. One service is enough: with the
+rest of the board fine, a service that silently lost its times would hand
+the headline to another, labelled live, while the bus that's really next
+is missing. `busesProblem` throws when no row has a plate or a position,
+or when there are rows and not one bus can be read from them (positions
+null, swapped or in another format; plates blank), unless they're all at
+0, 0, the feed's "no fix yet". Read as it was, every
 service would have "no bus", every card a headway guess, the map "No D2
 buses running", and the monitor's probe a healthy feed. Thrown, it is the
 feed being down: the last answer while it's under five minutes old, then
@@ -1063,6 +1094,8 @@ them. Among those places, a stretch running the way it's heading comes
 first, then the least distance driven. A position a little behind the
 track leaves the bus where it was, so `along` never goes back.
 
+A track lasts ten minutes from the last time the feed reported the bus,
+moved or not: a bus standing still at a terminus for longer keeps its side.
 A bus with no track (just appeared, or nobody watched the service for ten
 minutes) is placed by its heading when moving; standing, by the stop it's
 at, if it's clearly nearer one stop than its twin across the road; otherwise
@@ -1125,8 +1158,10 @@ LTA every 15 minutes, past the cache) and each push user's Trip object
   with fewer services has shorter slots). After `idleRounds` rounds
   in a row (3 minutes) in which every running service answered and no bus was out
   anywhere, it stops: for the
-  day if it has seen buses (service is over), else for `idleSleepMs`
-  (15 minutes; before the first bus of the morning). A round in which any
+  day if it has seen buses and no service is still inside its hours
+  (service is over), else for `idleSleepMs` (15 minutes): before the first
+  bus of the morning, or a gap while services are still running, after
+  which it asks again. Ending the day on a gap would lose the rest of it. A round in which any
   service failed (an outage, the breaker, one service refused) doesn't count
   towards that, and starts the count again.
 - **Back-off.** A round in which no service it asked answered is a failing
@@ -1271,7 +1306,9 @@ migrations/       D1 schema
 It is undocumented and has changed before, so it is tolerant and everything
 downstream assumes a clean `Arrival[]`. When the feed shifts, exactly one
 function needs editing, and `arrivalsProblem()` makes sure the shift is
-noticed (an alert) rather than read as an empty board.
+noticed (an alert) rather than read as an empty board. The same goes for
+`normalizeBuses()` with `busesProblem()`, and `normalizePublic()` in
+`lta.ts` with `publicProblem()`.
 
 ## Prior art
 

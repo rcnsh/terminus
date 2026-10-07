@@ -76,6 +76,34 @@ test('on a road its route uses both ways, a bus keeps to its own side', () => {
   assert.ok(follow(shape, fix, track(0, 0), 1_000).place.along > 500);
 });
 
+test('a bus reported standing still for longer than a track lasts keeps its side', async () => {
+  const road = twoWay();
+  const { shape } = road;
+  // Eastbound at 280 m, its fix 5 m north: nearer the westbound side.
+  const fix = at(road, 280, 5);
+  let r = follow(shape, fix, track(270, 0), 10_000);
+  // The feed repeats the very same position every 15 s for 20 minutes, past
+  // TRACK_MS (10 min) since it last moved.
+  for (let now = 25_000; now <= 1_210_000; now += 15_000) {
+    r = follow(shape, fix, r.track, now);
+    assert.ok(Math.abs(r.place.along - 280) < 2, `at ${now / 1000} s: ${r.place.along}`);
+  }
+  // The same through placeBuses, which drops tracks it thinks are old.
+  const graph = { stops: [], routes: { X: shape.stops } };
+  const raw = [{ plate: 'S1', lat: fix.lat, lon: fix.lon, heading: 90, speed: 20, crowd: null }];
+  let placed = await placeBuses(graph, 'X', raw, 0, {}, shape);
+  const along = placed.buses[0].along;
+  assert.ok(along < 500, 'driving east: the eastbound side');
+  const standing = [{ ...raw[0], heading: null, speed: 0 }];
+  for (let now = 15_000; now <= 1_215_000; now += 15_000) {
+    placed = await placeBuses(graph, 'X', standing, now, placed.tracks, shape);
+    assert.equal(placed.buses[0].along, along, `at ${now / 1000} s`);
+  }
+  // Not reported at all for longer than that: the track goes.
+  const gone = await placeBuses(graph, 'X', [], 1_215_000 + 600_000, placed.tracks, shape);
+  assert.deepEqual(gone.tracks, {});
+});
+
 test('a bus is never put back along its line', () => {
   const road = twoWay();
   const moved = follow(road.shape, at(road, 280, 0), track(300, 0), 5_000);

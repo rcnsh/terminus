@@ -7,8 +7,10 @@
  * its buses once, spread evenly across TIMELAPSE.pollMs: with eight
  * services and 30 s, one service every 3.75 s, never all at once. A round
  * with no bus anywhere counts towards idleness; after idleRounds of them it
- * stops for the day if it has seen buses (service is over), or rests for
- * idleSleepMs if it hasn't yet (before the first bus of the morning).
+ * stops for the day if it has seen buses and no service is still inside its
+ * hours (service is over), or rests for idleSleepMs otherwise: before the
+ * first bus of the morning, or a gap in the middle of the day (the feed
+ * listing no buses for a few minutes), after which it asks again.
  *
  * When the window closes it writes the day to R2 and deletes everything,
  * its alarm included, so a finished day costs nothing.
@@ -217,8 +219,11 @@ export class TimelapseRecorder {
 
   /**
    * After [round]: whether it now stops (and has set its alarm for when it
-   * wakes). Idle long enough, it's done for the day once it has seen buses,
-   * or rests and tries again later if it hasn't. Only a round in which every
+   * wakes). Idle long enough, it's done for the day once it has seen buses
+   * and none of the services is still inside its hours; otherwise it rests
+   * and tries again later. With a service still running, no bus for a few
+   * minutes is a gap, not the end of the day: ending there would lose the
+   * rest of it, since nothing starts a done day again. Only a round in which every
    * running service answered counts as idle: with any of them failing (the
    * feed down, the breaker open, one service's calls refused), its buses
    * could be out there, and an outage mustn't end the day. Such a round
@@ -232,10 +237,12 @@ export class TimelapseRecorder {
     if (meta.idle < TIMELAPSE.idleRounds) return false;
     meta.idle = 0;
     meta.round = null;
-    meta.state = meta.seen ? 'done' : 'resting';
+    const running = Object.keys(GRAPH.routes ?? {}).some((svc) => inService(GRAPH, svc, now));
+    const done = meta.seen && !running;
+    meta.state = done ? 'done' : 'resting';
     this.write('meta', meta);
     const { close } = windowOf(meta.date);
-    await this.storage.setAlarm(meta.seen ? close : Math.min(close, now + TIMELAPSE.idleSleepMs));
+    await this.storage.setAlarm(done ? close : Math.min(close, now + TIMELAPSE.idleSleepMs));
     return true;
   }
 

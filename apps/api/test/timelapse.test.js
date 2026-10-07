@@ -378,15 +378,44 @@ test('no buses for idleRounds rounds: before any bus it rests, after service it 
   assert.equal((await status(quiet)).state, 'resting');
   assert.equal(quiet.ns.alarms.get(DATE), FROZEN_NOW + TIMELAPSE.idleRounds * 30_000 + TIMELAPSE.idleSleepMs);
 
-  // Buses, then none (service is over): done until the close.
+  // K, the last service of a Thursday, until it closes at 23:00; then no
+  // service is in its hours, and the day is over: done until the close.
+  const late = sgt(DATE, '22:58');
+  const buses = { K: [busOn('K', 400)] };
+  const h = harness({ buses });
+  Date.now = () => late;
+  await start(h);
+  await runUntil(h, late + 60_000);
+  assert.ok(h.busCalls().length > 0, 'K was asked while it ran');
+  delete buses.K;
+  // Empty while K is still in its hours: a gap, so it rests; when it wakes,
+  // no service is running, and after idleRounds more it's over.
+  await runUntil(h, sgt(DATE, '23:00') + TIMELAPSE.idleRounds * 30_000);
+  assert.equal((await status(h)).state, 'resting');
+  await runUntil(h, sgt(DATE, '23:00') + TIMELAPSE.idleSleepMs + (2 * TIMELAPSE.idleRounds + 1) * 30_000);
+  assert.equal((await status(h)).state, 'done');
+  assert.equal(h.ns.alarms.get(DATE), windowOf(DATE).close);
+});
+
+test('no buses for a few minutes while services are in their hours is a gap: it rests and asks again', async () => {
   const buses = { D2: [busOn('D2', 400)] };
   const h = harness({ buses });
   await start(h);
   await runUntil(h, FROZEN_NOW + 30_000 - 1);
   delete buses.D2;
   await runUntil(h, FROZEN_NOW + (TIMELAPSE.idleRounds + 1) * 30_000);
-  assert.equal((await status(h)).state, 'done');
-  assert.equal(h.ns.alarms.get(DATE), windowOf(DATE).close);
+  assert.equal((await status(h)).state, 'resting', 'not done: D2 is still inside its hours');
+  const wake = h.ns.alarms.get(DATE);
+  assert.ok(wake > FROZEN_NOW + TIMELAPSE.idleRounds * 30_000 && wake <= FROZEN_NOW + (TIMELAPSE.idleRounds + 1) * 30_000 + TIMELAPSE.idleSleepMs, 'asleep for idleSleepMs');
+  const asked = h.busCalls().length;
+  await runUntil(h, wake - 1);
+  assert.equal(h.busCalls().length, asked, 'nothing asked while it rests');
+
+  // The buses are back: it records again.
+  buses.D2 = [busOn('D2', 900)];
+  await runUntil(h, wake + 30_000);
+  assert.equal((await status(h)).state, 'polling');
+  assert.ok(h.busCalls().length > asked);
 });
 
 test('only empty rounds in a row stop it: one that could not confirm starts the count again', async () => {
@@ -410,7 +439,8 @@ test('only empty rounds in a row stop it: one that could not confirm starts the 
   await runUntil(h, FROZEN_NOW + (TIMELAPSE.idleRounds + 3) * 30_000 - 1);
   assert.equal((await status(h)).state, 'polling', 'two empty rounds since the outage, not six');
   await runUntil(h, FROZEN_NOW + (2 * TIMELAPSE.idleRounds + 1) * 30_000);
-  assert.equal((await status(h)).state, 'done');
+  // Stopped (resting, since services are still in their hours: see above).
+  assert.equal((await status(h)).state, 'resting');
 });
 
 test('an outage is not an idle day: rounds where nothing answered do not stop it', async () => {

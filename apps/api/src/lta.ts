@@ -16,7 +16,7 @@
  */
 
 import type { Arrival, Crowd, Env, Graph, StopArrivals } from './types.ts';
-import { TTL } from './config.ts';
+import { MAX_ETA_S, TTL } from './config.ts';
 import { timedFetch } from './http.ts';
 import { cacheBase, cachedFetch } from './edgecache.ts';
 import { indexGraph } from './resolve.ts';
@@ -49,12 +49,46 @@ export function parseLoad(v: unknown): Crowd | null {
  * both do, the bus's destination (the whole route's last stop) tells.
  */
 export function routeFor(graph: Graph, stopCode: string, serviceNo: string, destinationCode: string | null): string | null {
-  const idx = indexGraph(graph);
-  const here = Object.entries(graph.public ?? {}).filter(([key, p]) => p.svc === serviceNo && idx.routes.get(key)?.pos.has(stopCode));
+  const here = routesHere(graph, stopCode, serviceNo);
   if (here.length === 1) return here[0][0];
   const byDest = here.find(([, p]) => destinationCode !== null && p.dest === destinationCode);
   return byDest ? byDest[0] : null;
 }
+
+/** The graph's routes of `serviceNo` that call at `stopCode`. */
+function routesHere(graph: Graph, stopCode: string, serviceNo: string) {
+  const idx = indexGraph(graph);
+  return Object.entries(graph.public ?? {}).filter(([key, p]) => p.svc === serviceNo && idx.routes.get(key)?.pos.has(stopCode));
+}
+
+const SLOTS = ['NextBus', 'NextBus2', 'NextBus3'];
+
+/** A time with its zone, as DataMall sends it (+08:00). Without one,
+ *  Date.parse reads it in the runtime's own zone, UTC on Workers: 8 h out. */
+const ZONED = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+
+/**
+ * One NextBus slot, by value: when the bus comes (epoch ms), `empty` for
+ * the feed's empty slot (every field "", as at night), or `unreadable`:
+ * not an object, no EstimatedArrival, or one that isn't a zoned time
+ * within MAX_ETA_S.
+ */
+function readSlot(bus: unknown, nowMs: number): number | 'empty' | 'unreadable' {
+  if (!bus || typeof bus !== 'object' || Array.isArray(bus)) return 'unreadable';
+  const v = (bus as Record<string, unknown>).EstimatedArrival;
+  if (v === '') return 'empty';
+  if (typeof v !== 'string' || !ZONED.test(v.trim())) return 'unreadable';
+  const at = Date.parse(v.trim());
+  return Number.isFinite(at) && at - nowMs <= MAX_ETA_S * 1000 ? at : 'unreadable';
+}
+
+/**
+ * Whether DataMall says the time is from a bus on the road: Monitored 1.
+ * Anything else (0, false, missing, a word) is the timetable, so a change
+ * in how the field is written can only make a time less sure, never pass
+ * a timetabled one off as live.
+ */
+const monitored = (v: unknown) => v === 1 || v === true || (typeof v === 'string' && v.trim() === '1');
 
 /**
  * DataMall's BusArrival reply -> clean Arrival[] for the graph's stop `stopCode`.
@@ -75,25 +109,22 @@ export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, no
     const row = s as Record<string, unknown>;
     const serviceNo = String(row.ServiceNo ?? '').trim();
     if (!serviceNo) continue;
-    for (const slot of ['NextBus', 'NextBus2', 'NextBus3']) {
-      const bus = row[slot];
-      if (!bus || typeof bus !== 'object') continue;
-      const b = bus as Record<string, unknown>;
-      const at = typeof b.EstimatedArrival === 'string' && b.EstimatedArrival ? Date.parse(b.EstimatedArrival) : NaN;
-      if (!Number.isFinite(at)) continue;
+    for (const slot of SLOTS) {
+      const at = readSlot(row[slot], nowMs);
+      if (typeof at !== 'number') continue;
+      const b = row[slot] as Record<string, unknown>;
       const svc = routeFor(graph, stopCode, serviceNo, b.DestinationCode == null ? null : String(b.DestinationCode));
       if (!svc) continue;
       // Seconds from now. A bus a minute gone is gone; one just due is "now".
       const etaS = Math.round((at - nowMs) / 1000);
       if (etaS < -60) continue;
-      const monitored = String(b.Monitored ?? '1') !== '0';
       out.push({
         svc,
         etaS: Math.max(1, etaS),
         crowd: parseLoad(b.Load),
         plate: null,
         berth: null,
-        ...(monitored ? {} : { scheduled: true }),
+        ...(monitored(b.Monitored) ? {} : { scheduled: true }),
       });
     }
   }
@@ -101,18 +132,36 @@ export function normalizePublic(raw: unknown, stopCode: string, graph: Graph, no
 }
 
 /**
- * Why a reply with services can't be read, or null. A reply with services
- * and not one usable bus means the shape moved under us: read as "no bus"
- * it would turn every public answer into a headway guess with nobody told.
+ * Why a reply can't be read, or null, by the values normalizePublic() reads.
+ * Read as it is, a reply whose fields moved says "no bus" for a service, or
+ * every one: each public answer turns into a headway guess with nobody told.
+ * So every service needs its NextBus, and every slot an EstimatedArrival
+ * that is a time or the empty slot's "". Where both directions of a
+ * service call, each bus needs its destination to say which it is running.
+ *
+ * Not problems: a service the graph doesn't know (it only knows the
+ * campus's, and adds new ones weekly), a bus already gone, a destination
+ * the graph doesn't end a route at (a short trip).
  */
-export function publicProblem(raw: unknown, arrivals: Arrival[]): string | null {
+export function publicProblem(raw: unknown, stopCode: string, graph: Graph, nowMs: number): string | null {
   const services = (raw as { Services?: unknown })?.Services;
   if (!Array.isArray(services)) return 'no Services list';
-  if (!services.length || arrivals.length) return null;
-  const buses = services.flatMap((s) => (s && typeof s === 'object' ? [(s as Record<string, unknown>).NextBus] : [])).filter((b) => b && typeof b === 'object') as Record<string, unknown>[];
-  if (!buses.length) return null; // services listed with no bus on each: a real "no bus"
-  if (!buses.some((b) => typeof b.EstimatedArrival === 'string' && b.EstimatedArrival)) return null; // every slot empty
-  return 'no bus could be placed on a route';
+  for (const s of services) {
+    if (!s || typeof s !== 'object') return 'a service it cannot read';
+    const row = s as Record<string, unknown>;
+    const serviceNo = String(row.ServiceNo ?? '').trim();
+    if (!serviceNo) return 'a service with no ServiceNo';
+    if (!('NextBus' in row)) return `no NextBus for ${serviceNo}`;
+    for (const slot of SLOTS) {
+      if (!(slot in row)) continue;
+      const at = readSlot(row[slot], nowMs);
+      if (at === 'unreadable') return `an arrival time it cannot read (${serviceNo})`;
+      if (at === 'empty') continue;
+      const dest = (row[slot] as Record<string, unknown>).DestinationCode;
+      if ((dest == null || dest === '') && routesHere(graph, stopCode, serviceNo).length > 1) return `a bus with no destination (${serviceNo})`;
+    }
+  }
+  return null;
 }
 
 /** One stop's public buses, straight from DataMall. `code` is the graph's stop; `ltaCode` LTA's for it. */
@@ -125,7 +174,7 @@ export async function fetchPublicArrivals(env: Env, graph: Graph, code: string, 
   if (!res.ok) throw new Error(`DataMall answered HTTP ${res.status}`);
   const body: unknown = await res.json();
   const arrivals = normalizePublic(body, code, graph, nowMs);
-  const problem = publicProblem(body, arrivals);
+  const problem = publicProblem(body, code, graph, nowMs);
   if (problem) throw new Error(`DataMall answered in an unknown shape (${problem})`);
   return { code, arrivals, fetchedAt: nowMs, stale: false, available: true };
 }

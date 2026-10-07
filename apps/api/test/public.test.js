@@ -10,7 +10,7 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { GRAPH, GRAPH_PUBLIC } from '../src/graph.ts';
 import { isPublic, publicCodeOf, rideMetres, shuttleCalls, svcName } from '../src/public.ts';
-import { boardAt, candidateStops, feedFor, indexGraph, scoreOptions } from '../src/resolve.ts';
+import { boardAt, candidateStops, feedFor, inService, indexGraph, scoreOptions } from '../src/resolve.ts';
 import { collectArrivals, mergeFeeds } from '../src/answer.ts';
 import { planOfLeave } from '../src/plan.ts';
 import { leaveOf } from '../src/trip.ts';
@@ -117,6 +117,19 @@ test('a public bus is the headline only when it clearly beats the free bus; othe
   opts = scoreOptions(GRAPH_PUBLIC, cands, clear, FROZEN_NOW);
   assert.equal(opts[0].svc, '95');
   assert.equal(opts[0].quality, 'live');
+});
+
+test('a weekday-only public service is not running at weekends, so no time is guessed for it', () => {
+  const sunday = Date.parse('2026-10-11T18:00:00+08:00');
+  const wednesday = Date.parse('2026-10-07T18:00:00+08:00');
+  for (const svc of ['95B', '96A', '96B', '33A', '188e']) {
+    assert.equal(GRAPH_PUBLIC.serviceHours[svc].sunday, null, svc);
+    assert.equal(inService(GRAPH_PUBLIC, svc, sunday), false, `${svc} on a Sunday`);
+  }
+  assert.equal(inService(GRAPH_PUBLIC, '95B', wednesday), true, 'and it runs on a weekday evening');
+  // At IT on a Sunday with the feed saying nothing, no 95B is offered.
+  const board = boardAt(GRAPH_PUBLIC, idx, 'IT', arrivals('IT', []), sunday);
+  for (const svc of ['95B', '96A', '96B']) assert.ok(!board.some((r) => r.svc === svc && r.quality === 'scheduled'), svc);
 });
 
 test('a timetabled public bus ranks as an estimate, below any live bus', () => {
