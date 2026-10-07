@@ -225,9 +225,14 @@ let planAt = 0;
 /** Refreshes on their way: a timed one waits for them rather than piling another on a slow connection. */
 let pending = 0;
 
-/** The card and Today. [timed]: by the clock, not something the user did, so Today is asked for at most every DAY_MS. */
-async function refresh({ timed = false } = {}) {
-  if (timed && pending) return;
+/**
+ * The card and Today. [timed]: by the clock, not something the user did, so
+ * Today is asked for at most every DAY_MS. [back]: the page shown again,
+ * which asks even with a call on its way: that call may have hung while the
+ * phone slept, and the newer answer wins anyway.
+ */
+async function refresh({ timed = false, back = false } = {}) {
+  if (timed && pending && !back) return;
   pending++;
   try {
     return await refreshNow(timed);
@@ -1176,7 +1181,7 @@ async function start() {
   showTab();
   await first;
   setInterval(() => nowShown() && refresh({ timed: true }), REFRESH_MS);
-  document.addEventListener('visibilitychange', () => nowShown() && refresh({ timed: true }));
+  document.addEventListener('visibilitychange', () => nowShown() && refresh({ timed: true, back: true }));
   // Back online: every open page at once, so only the ones on screen.
   window.addEventListener('online', () => nowShown() && refresh());
 }

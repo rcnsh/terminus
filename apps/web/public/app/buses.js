@@ -93,12 +93,17 @@ function keep(code, entry) {
 async function loadBoard(code) {
   // The public buses there too, when the account has them on.
   const pub = profile.get()?.publicBuses ? '&public=1' : '';
+  // A call that hung (the phone asleep) can end after a newer one: it
+  // mustn't put back older times, or an error over fresh ones.
+  const asked = Date.now();
+  const newer = () => boards.get().get(code)?.at > asked;
   try {
     // stopped=1: the services not running now are listed too, greyed.
     const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub}&stopped=1`);
+    if (newer()) return;
     keep(code, { stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null }, board: data.board, available: data.available !== false, at: Date.now(), asOf: asOfMs(data) });
   } catch (err) {
-    if (err.message === 'signed out') return;
+    if (err.message === 'signed out' || newer()) return;
     const was = boards.get().get(code);
     keep(code, { ...was, error: navigator.onLine ? t('No times right now') : t('Live times need a connection.') });
   }
@@ -159,12 +164,17 @@ const homePages = () => pagesOf(nearest.get(), pins());
 /** A timed refresh still on its way: the next one waits for it, rather than piling up on a slow connection. */
 let pending = null;
 
-/** The board on screen, fetched again: the page shown, the stop's own page, or the line. */
-function refresh() {
-  if (pending) return;
-  pending = refreshNow()?.finally(() => {
-    pending = null;
+/**
+ * The board on screen, fetched again: the page shown, the stop's own page, or
+ * the line. [back]: the tab shown again, which asks even with a call on its
+ * way, as that call may have hung while the phone slept.
+ */
+function refresh({ back = false } = {}) {
+  if (pending && !back) return;
+  const mine = refreshNow()?.finally(() => {
+    if (pending === mine) pending = null;
   });
+  pending = mine;
 }
 function refreshNow() {
   const r = route.get();
@@ -731,7 +741,7 @@ export function BusesTab({ visible, here }) {
     const back = () => {
       if (document.visibilityState !== 'visible') return;
       tick.set(serverNow());
-      refresh();
+      refresh({ back: true });
     };
     document.addEventListener('visibilitychange', back);
     return () => {
