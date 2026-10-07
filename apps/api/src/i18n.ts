@@ -348,12 +348,14 @@ const en = {
 export type Msgs = typeof en;
 
 const HAN = /[\u3400-\u9fff]/;
-const LATIN = /[A-Za-z0-9]/;
+// Anything printable in ASCII: letters, digits, and the brackets, quotes and
+// tags a value can start or end with ("(PGP)", "<strong>Pixel 8</strong>").
+const LATIN = /[!-~]/;
 
 /**
  * Chinese text with values in it, spaced by the glossary's rule: a space
- * where Chinese meets a Latin letter or digit, none between two Chinese
- * words. Write the literal parts with no spaces round a value:
+ * where Chinese meets Latin text (letters, digits, ASCII punctuation), none
+ * between two Chinese words. Two values side by side need a literal space. Write the literal parts with no spaces round a value:
  * zs`在${stop}搭${t}的${svc}` gives "在 PGP 搭约 9:41 的 D2".
  */
 function zs(parts: TemplateStringsArray, ...values: unknown[]): string {
@@ -551,7 +553,7 @@ const zh: Msgs = {
   arriveAt: (t) => zs`${t}到达`,
   inClass: (label) => zs`正在上${label}`,
   atPlace: (label) => zs`在${label}`,
-  startsAt: (label, t) => zs`${label}${t}开始`,
+  startsAt: (label, t) => zs`${label} ${t}开始`,
   till: (t) => zs`到${t}`,
   noStartPoint: '没有出发点',
   noStartPointHint: '打开定位，或选一个出发的车站',

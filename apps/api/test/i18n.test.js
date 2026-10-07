@@ -125,6 +125,14 @@ function literalsIn(expr) {
   return out;
 }
 
+test('Chinese spacing: Latin text keeps its space, two Chinese words touch', () => {
+  const zh = msgsFor('zh');
+  assert.equal(zh.startsAt('CS2030 @ COM1', '09:41'), 'CS2030 @ COM1 09:41 开始', 'two values side by side stay apart');
+  assert.equal(zh.offAt('Kent Ridge Ter (Clementi Rd)'), '在 Kent Ridge Ter (Clementi Rd) 下车', 'a bracket counts as Latin');
+  assert.match(zh.codeTypeApp('<strong>Pixel 8</strong>'), /^请在 <strong>Pixel 8<\/strong> 上的/, 'so does a tag');
+  assert.equal(zh.catchBus('约 09:42', 'R2', 'PGP', null), '在 PGP 搭约 09:42 的 R2');
+});
+
 test('json() says the error in the request language', async () => {
   const body = await withLang('zh', () => json({ error: 'sign in first' }, 401)).json();
   assert.equal(body.error, '请先登录');
