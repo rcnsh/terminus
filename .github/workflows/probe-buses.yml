@@ -12,8 +12,8 @@ on:
         description: "Services, space-separated"
         default: "A1 A2 D1 D2"
       every:
-        description: "Seconds between polls of each service"
-        default: "1"
+        description: "Seconds between polls of each service (at least 5)"
+        default: "5"
       trace:
         description: "Also print every reading (no plates) to the log, for replaying"
         type: boolean

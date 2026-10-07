@@ -20,6 +20,7 @@
 
 import type { Env } from './types.ts';
 import { TIMELAPSE } from './config.ts';
+import { scopeCache } from './edgecache.ts';
 import { GRAPH } from './graph.ts';
 import { breakerOpen, getBuses } from './fms.ts';
 import { trackedPlacement } from './buses.ts';
@@ -53,11 +54,21 @@ interface Meta {
    *  within pollMs, across rounds too (a round with fewer services in it has
    *  shorter slots). */
   asked?: Record<string, number>;
+  /** Rounds in a row in which no service answered: the feed failing. */
+  failing?: number;
   /** Each route line's fingerprint when the day began (lineKeys): a deploy
    *  that changes a line mid-day would measure `along` on a line the day
    *  doesn't have. */
   lines?: Record<string, string>;
 }
+
+/**
+ * How many pollMs to wait for the next round after [failing] failed rounds
+ * in a row: 1, 2, 4, then 8 (four minutes). The failure memo (failMemoS) is
+ * shorter than a round, so it never quiets the recorder; without this, a
+ * feed down all day would be asked at the full rate all day.
+ */
+export const backoffOf = (failing: number): number => 2 ** Math.min(Math.max(0, failing), 3);
 
 /** After the day failed to reach R2, try again this much later. */
 const RETRY_MS = 10 * 60_000;
@@ -71,6 +82,7 @@ export class TimelapseRecorder {
     this.state = state;
     this.storage = state.storage;
     this.env = env;
+    scopeCache(env);
   }
 
   /** The tables, again after deleteAll() at the end of a day. */
@@ -176,6 +188,9 @@ export class TimelapseRecorder {
         round.closed = (round.closed ?? 0) + 1;
       } else {
         (meta.asked ??= {})[svc] = now;
+        // Kept before asking: an alarm that throws after the request is run
+        // again by the platform within seconds, and must find it asked.
+        this.write('meta', meta);
         const buses = await this.poll(meta, svc, now);
         if (buses !== null) {
           round.buses += buses;
@@ -184,13 +199,19 @@ export class TimelapseRecorder {
       }
       round.i++;
     }
+    if (round.i >= round.list.length) {
+      // A round in which no service it asked answered: the feed is failing.
+      const asked = round.list.length - (round.closed ?? 0);
+      meta.failing = asked > 0 && round.answered === 0 ? (meta.failing ?? 0) + 1 : 0;
+    }
     this.write('meta', meta);
     // The next service a slot later; after the last, the next round a whole
-    // pollMs after this one began. Never less than a slot after this poll:
-    // an alarm that ran late moves the rest later rather than bunching them
-    // up, so no service is asked twice within a round's length.
+    // pollMs after this one began, or longer while the feed fails
+    // (backoffOf). Never less than a slot after this poll: an alarm that ran
+    // late moves the rest later rather than bunching them up, so no service
+    // is asked twice within a round's length.
     const slot = meta.pollMs / Math.max(1, round.list.length);
-    const next = round.i < round.list.length ? round.start + round.i * slot : round.start + meta.pollMs;
+    const next = round.i < round.list.length ? round.start + round.i * slot : round.start + meta.pollMs * backoffOf(meta.failing ?? 0);
     await this.storage.setAlarm(Math.min(close, Math.max(next, now + slot)));
   }
 
@@ -230,8 +251,13 @@ export class TimelapseRecorder {
     const pending: Promise<unknown>[] = [];
     const ctx = { waitUntil: (p: Promise<unknown>) => void pending.push(p), passThroughOnException() {} } as unknown as ExecutionContext;
     try {
-      let upstream = false;
-      const live = await getBuses(env, ctx, svc, now, () => (upstream = true)).catch(() => null);
+      // Every request to NUS this poll made: usually one, more with a retry.
+      let calls = 0;
+      const live = await getBuses(env, ctx, svc, now, () => void calls++).catch(() => null);
+      const upstream = calls > 0;
+      // Each request past the first is counted too, so the dashboard's total
+      // is what NUS saw, not the polls.
+      for (let i = 1; i < calls; i++) logPoll(env, 'retry', svc, 0);
       // A failed request that reached NUS still counts as a request (`error`).
       if (!live) {
         logPoll(env, upstream ? 'error' : 'failed', svc, 0);

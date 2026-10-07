@@ -116,17 +116,19 @@ function Timelapse({ an }) {
   if (an.error || !an.timelapse) return null;
   const days = lastDays(14);
   const sum = (outcome) => an.timelapse.filter((r) => r.outcome === outcome).reduce((t, r) => t + Number(r.n), 0);
-  // A request to NUS is one that got an answer (upstream) or failed on the way (error).
+  // A request to NUS is one that got an answer (upstream), failed on the way
+  // (error), or was one more inside a poll (retry: a fresh token, a second call).
+  const REQUESTS = new Set(['upstream', 'error', 'retry']);
   const upstream = new Map();
   for (const r of an.timelapse) {
-    if (r.outcome !== 'upstream' && r.outcome !== 'error') continue;
+    if (!REQUESTS.has(r.outcome)) continue;
     const day = String(r.day).slice(0, 10);
     upstream.set(day, (upstream.get(day) ?? 0) + Number(r.n));
   }
   return html`
-    <p class="hint">${`${fmt(sum('upstream') + sum('error'))} requests to NUS (${fmt(sum('error'))} of them failed), ${fmt(sum('hit'))} answered from the cache, ${fmt(sum('stale') + sum('failed'))} not asked after a failure, ${fmt(sum('skipped'))} skipped with the breaker open.`}</p>
+    <p class="hint">${`${fmt(sum('upstream') + sum('error') + sum('retry'))} requests to NUS (${fmt(sum('error'))} of them failed, ${fmt(sum('retry'))} retries), ${fmt(sum('hit'))} answered from the cache, ${fmt(sum('stale') + sum('failed'))} not asked after a failure, ${fmt(sum('skipped'))} skipped with the breaker open.`}</p>
     <${Bars} rows=${days.map((d) => ({ label: d.slice(5), n: upstream.get(d) ?? 0 }))} />
-    <p class="hint">Requests to NUS per day. The only scheduled reads of the feed (CLAUDE.md, rule 2).</p>
+    <p class="hint">Requests to NUS per day. The only scheduled reads of the live buses (CLAUDE.md, rule 2).</p>
   `;
 }
 

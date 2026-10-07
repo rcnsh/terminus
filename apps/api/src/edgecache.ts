@@ -13,9 +13,17 @@
  * Keyed on what the answer is for (the stop code, the service), never the
  * request URL: a client's coordinates jitter on every call and would never
  * hit.
+ *
+ * The cache is one data centre's, shared by every isolate there, while the
+ * in-flight map is one isolate's. So that a key going stale doesn't send
+ * every isolate in a busy data centre to the feed at once, the one fetching
+ * leaves a marker (`#pending`); the others serve their stale answer until
+ * it's done. Without a stale answer they fetch too: a cold key has nothing
+ * else to give.
  */
 
-import type { FeedState } from './types.ts';
+import type { Env, FeedState } from './types.ts';
+import { isBeta } from './site.ts';
 
 export interface CachedOptions<T> {
   ctx: ExecutionContext;
@@ -43,11 +51,49 @@ export interface CachedOptions<T> {
   inflight: Map<string, Promise<T>>;
 }
 
-/** The host every edge-cache key lives on. Never fetched; only matched. */
-export const CACHE_BASE = 'https://terminus.internal';
+/**
+ * The host every edge-cache key lives on. Never fetched; only matched. The
+ * cache may be the zone's rather than the Worker's, and the stable site and
+ * the beta share a zone, so the beta's keys live on a host of their own:
+ * a beta refused for its version must not trip the stable
+ * site's breaker, nor feed it answers in a shape it doesn't know.
+ */
+export function cacheBase(): string {
+  return beta ? 'https://beta.terminus.internal' : 'https://terminus.internal';
+}
+
+let beta = false;
+
+/** Which site's keys: set from the Worker's env on every request, cron run
+ *  and Durable Object, before anything reads the cache. */
+export function scopeCache(env: Env): void {
+  beta = isBeta(env);
+}
 
 const memo = (reason: string, maxAgeS: number) =>
   new Response(reason.slice(0, 200), { headers: { 'cache-control': `max-age=${maxAgeS}` } });
+
+/** Whether a memo is set at `key` (a breaker, a failure): false without a cache. */
+export async function flagged(key: string): Promise<boolean> {
+  try {
+    return Boolean(await caches.default.match(new Request(key)));
+  } catch {
+    return false;
+  }
+}
+
+/** Sets a memo at `key` for `maxAgeS`; a failed write is shrugged off. */
+export async function flag(key: string, reason: string, maxAgeS: number): Promise<void> {
+  try {
+    await caches.default.put(new Request(key), memo(reason, maxAgeS));
+  } catch {
+    // A lost memo only means one more call later, never a failed answer.
+  }
+}
+
+/** How long a fetch's marker lasts if it never clears it: past the slowest
+ *  fetch (a call, a re-mint and a second call, each up to its timeout). */
+const PENDING_S = 20;
 
 /**
  * The answer for `key`: cached and fresh, else fetched, else stale, in that
@@ -82,10 +128,17 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
     throw new Error(`upstream recently failed: ${(await quiet.text()).slice(0, 120)}`);
   }
 
+  // Another isolate here is fetching it already: its answer will be in the
+  // cache in a moment, and the stale one does until then.
+  const pendingKey = new Request(`${o.key}#pending`);
+  if (stale && !o.inflight.has(o.key) && (await cache.match(pendingKey))) return stale;
+
   let job = o.inflight.get(o.key);
   if (!job) {
-    job = o
-      .fetch()
+    job = (async () => {
+      await cache.put(pendingKey, memo('fetching', PENDING_S)).catch(() => {});
+      return o.fetch();
+    })()
       .then(async (fresh) => {
         await cache.put(key, new Response(JSON.stringify(fresh), {
           headers: {
@@ -103,7 +156,10 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
         if (o.breaker?.trips(err)) await cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(() => {});
         throw err;
       })
-      .finally(() => o.inflight.delete(o.key));
+      .finally(() => {
+        o.inflight.delete(o.key);
+        o.ctx.waitUntil(cache.delete(pendingKey).catch(() => false));
+      });
     o.inflight.set(o.key, job);
   }
   // The fetch finishes (and fills the cache) even when this request stops

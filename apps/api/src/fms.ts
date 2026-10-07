@@ -11,8 +11,8 @@
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { TTL } from './config.ts';
 import { timedFetch } from './http.ts';
-import { CACHE_BASE, cachedFetch } from './edgecache.ts';
-import { UpstreamRejected, getSession, mintWith, proxyEnvelope, proxyHeaders } from './auth.ts';
+import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
+import { UpstreamHttpError, UpstreamRejected, getSession, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
 import type { Session } from './auth.ts';
 import graphJson from '../data/stops.json' with { type: 'json' };
 
@@ -288,6 +288,9 @@ async function proxyCall(
     headers: proxyHeaders(env, session.token),
     body: JSON.stringify({ ...(await proxyEnvelope(env, session)), ...params }),
   });
+  // Refusals come at HTTP 200 with a code; any other status is the host
+  // itself saying no (busy, down), which no token can fix, so it isn't retried.
+  if (!res.ok) throw new UpstreamHttpError(endpoint, res.status);
   const text = await res.text();
   try {
     return JSON.parse(text) as unknown;
@@ -303,17 +306,32 @@ async function proxyCall(
 export const NO_REMINT_CODES = new Set(['10009', '10000']);
 
 /**
- * One call to the bus proxy, accepted. A rejection gets exactly one retry
- * with a freshly minted token, unless its code says a token cannot help; a
- * second rejection THROWS.
+/**
+ * After a refused call: the session to try once more with, or null for no
+ * retry. Only a refusal a token might fix gets one, and only with a token
+ * other than the refused one (renewSession), so a code that keeps coming
+ * back costs one call per key per failMemoS, not a mint and two calls.
  */
-async function acceptedCall(env: Env, endpoint: string, params: Record<string, string>, nowMs: number): Promise<ProxyBody> {
+async function retryable(env: Env, nowMs: number, session: Session, body: unknown, onMint?: () => void): Promise<Session | null> {
+  if (proxyOk(body) || NO_REMINT_CODES.has(String((body as ProxyBody | null)?.code))) return null;
+  return renewSession(env, nowMs, session, onMint);
+}
+
+/**
+ * One call to the bus proxy, accepted. A rejection gets at most one retry
+ * with a fresher token (retryable), unless its code says a token cannot
+ * help; a second rejection THROWS. [onCall] is told of each request to NUS
+ * (a re-mint included), so the timelapse recorder counts what a poll cost.
+ */
+async function acceptedCall(env: Env, endpoint: string, params: Record<string, string>, nowMs: number, onCall?: () => void): Promise<ProxyBody> {
   if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
-  let session = await getSession(env, nowMs);
+  const session = await getSession(env, nowMs);
+  onCall?.();
   let body = await proxyCall(env, session, endpoint, params);
-  if (!proxyOk(body) && !NO_REMINT_CODES.has(String((body as ProxyBody | null)?.code))) {
-    session = await getSession(env, nowMs, { force: true });
-    body = await proxyCall(env, session, endpoint, params);
+  const renewed = await retryable(env, nowMs, session, body, onCall);
+  if (renewed) {
+    onCall?.();
+    body = await proxyCall(env, renewed, endpoint, params);
   }
   if (!proxyOk(body)) {
     const b = body as ProxyBody | null;
@@ -391,8 +409,8 @@ export async function getArrivals(
   return cachedFetch<StopArrivals>({
     ctx,
     nowMs,
-    key: `${CACHE_BASE}/arrivals/${encodeURIComponent(code)}`,
-    failKey: `${CACHE_BASE}/failed/${encodeURIComponent(code)}`,
+    key: `${cacheBase()}/arrivals/${encodeURIComponent(code)}`,
+    failKey: `${cacheBase()}/failed/${encodeURIComponent(code)}`,
     fetch: () => fetchArrivals(env, code, nowMs),
     freshMs: TTL.arrivalsMs,
     staleMaxS: TTL.staleMaxS,
@@ -403,17 +421,29 @@ export async function getArrivals(
   });
 }
 
-/** The shuttle feed's breaker: a refused version or key stops every call for breakerS. */
+/**
+ * Whether a failure says NUS will refuse every call for a while, whichever
+ * stop it's for: a refused version or key, or the host itself answering
+ * 429 (slow down) or 5xx (down), the mint's host included.
+ */
+export function tripsBreaker(err: unknown): boolean {
+  if (err instanceof UpstreamRejected) return NO_REMINT_CODES.has(err.code);
+  return err instanceof UpstreamHttpError && (err.status === 429 || err.status >= 500);
+}
+
+/** The shuttle feed's breaker: such a failure stops every call for breakerS. */
 const BREAKER = {
-  key: `${CACHE_BASE}/breaker`,
-  trips: (err: unknown) => err instanceof UpstreamRejected && NO_REMINT_CODES.has(err.code),
+  get key() {
+    return `${cacheBase()}/breaker`;
+  },
+  trips: tripsBreaker,
   maxAgeS: TTL.breakerS,
 };
 
-/** Whether the feed's breaker is open here: NUS refused our version or key a
- *  moment ago, and nothing should ask it again until it closes. */
+/** Whether the feed's breaker is open here: NUS refused us a moment ago, and
+ *  nothing should ask it again until it closes. */
 export async function breakerOpen(): Promise<boolean> {
-  return Boolean(await caches.default.match(new Request(BREAKER.key)));
+  return flagged(BREAKER.key);
 }
 
 /** One upstream fetch per stop per isolate, however many requests want it. */
@@ -473,9 +503,10 @@ export function normalizeBuses(data: unknown): RawBus[] {
   return out;
 }
 
-/** One service's buses, with one re-mint on a rejection, as fetchArrivals. */
-export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Date.now()): Promise<ActiveBuses> {
-  const body = await acceptedCall(env, 'active-bus', { route_code: svc }, nowMs);
+/** One service's buses, with one retry on a rejection, as fetchArrivals.
+ *  [onCall] is told of each request to NUS (acceptedCall). */
+export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Date.now(), onCall?: () => void): Promise<ActiveBuses> {
+  const body = await acceptedCall(env, 'active-bus', { route_code: svc }, nowMs, onCall);
   // No list at all is a changed payload, not "no buses running".
   if (!hasList(body.data)) throw new Error('active-bus answered in an unknown shape (no bus list)');
   // Rows it can't read would show as "No D2 buses running right now".
@@ -489,8 +520,9 @@ export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Da
  * per TTL.busesMs however many people watch it. The same quiet-under-failure
  * rules as getArrivals: a failed service waits failMemoS, the version
  * breaker stops everything, and a stale answer beats none. [onUpstream] is
- * called when this call itself goes to NUS (not a cache hit, not a fetch
- * another request started), so the timelapse recorder can count its real load.
+ * called for each request this call itself makes to NUS (not a cache hit,
+ * not a fetch another request started; a retry and its token are more), so
+ * the timelapse recorder can count its real load.
  */
 export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, nowMs: number = Date.now(), onUpstream?: () => void): Promise<ActiveBuses> {
   // No stale race: the map polls every few seconds and would rather wait
@@ -498,12 +530,9 @@ export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, now
   return cachedFetch<ActiveBuses>({
     ctx,
     nowMs,
-    key: `${CACHE_BASE}/buses/${encodeURIComponent(svc)}`,
-    failKey: `${CACHE_BASE}/failed-buses/${encodeURIComponent(svc)}`,
-    fetch: () => {
-      onUpstream?.();
-      return fetchActiveBuses(env, svc, nowMs);
-    },
+    key: `${cacheBase()}/buses/${encodeURIComponent(svc)}`,
+    failKey: `${cacheBase()}/failed-buses/${encodeURIComponent(svc)}`,
+    fetch: () => fetchActiveBuses(env, svc, nowMs, onUpstream),
     freshMs: TTL.busesMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,

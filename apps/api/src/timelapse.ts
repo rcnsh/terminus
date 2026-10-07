@@ -2,7 +2,7 @@
  * A day of NUS shuttles, recorded for a timelapse (the operator's page at
  * /admin/timelapse/ replays it and exports a video).
  *
- * This is the one place terminus reads the NUS feed on a schedule rather
+ * This is the one place terminus polls the NUS feed on a schedule rather
  * than because someone asked (CLAUDE.md rule 2 has the exception). It is
  * bounded on every side:
  *

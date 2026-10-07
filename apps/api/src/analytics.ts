@@ -147,11 +147,13 @@ export function logError(env: Env, path: string): void {
  * - `hit`: the edge cache had a fresh answer (a user's request paid for it);
  * - `stale`: the feed was failing and an older answer was all there was;
  * - `failed`: nothing to record, without asking (it failed a moment ago);
- * - `skipped`: the breaker was open, so it didn't ask at all.
+ * - `skipped`: the breaker was open, so it didn't ask at all;
+ * - `retry`: one more request inside a poll (a fresh token, a second call),
+ *   logged alongside the poll's own outcome.
  *
- * Requests to NUS are `upstream` plus `error`.
+ * Requests to NUS are `upstream` plus `error` plus `retry`.
  */
-export type PollOutcome = 'upstream' | 'error' | 'hit' | 'stale' | 'failed' | 'skipped';
+export type PollOutcome = 'upstream' | 'error' | 'hit' | 'stale' | 'failed' | 'skipped' | 'retry';
 
 export function logPoll(env: Env, outcome: PollOutcome, svc: string, buses: number): void {
   if (!analyticsEnabled(env)) return;

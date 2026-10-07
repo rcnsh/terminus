@@ -708,6 +708,109 @@ test('a refused token mint (10009) trips the breaker too, instead of minting for
   assert.equal(fetchImpl.counts.shuttle, 0);
 });
 
+test('a NUS host answering 429 or 5xx is not retried, and quiets every stop', async () => {
+  for (const status of [429, 503]) {
+    const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 }, proxyStatus: status });
+    const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+    assert.equal(fetchImpl.counts.shuttle, 1, `${status}: no second call`);
+    assert.equal(fetchImpl.counts.auth, 1, `${status}: no fresh token for it`);
+    for (const stop of ['COM3', 'UTOWN']) {
+      const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+      assert.equal((await res.json()).available, false);
+    }
+    assert.equal(fetchImpl.counts.shuttle, 1, `${status}: the breaker kept every stop off the feed`);
+  }
+});
+
+test('a failed token mint is not tried again by every stop that wants one', async () => {
+  // 400: the NUS load balancer's intermittent "Contradictory scheme headers".
+  for (const mintStatus of [400, 503]) {
+    const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, mintStatus });
+    const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+    for (const stop of ['COM3', 'UTOWN', 'KR-MRT']) {
+      const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+      assert.equal((await res.json()).available, false);
+    }
+    assert.equal(fetchImpl.counts.auth, 1, `${mintStatus}: one mint, not one per stop`);
+    assert.equal(fetchImpl.counts.shuttle, 0);
+  }
+});
+
+test('a refusal a fresh token did not cure is not met with another mint per stop', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 }, reject: 99, rejectCode: '10008' });
+  const env = makeEnv();
+  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl, env });
+  assert.equal(fetchImpl.counts.auth, 2, 'the first refusal gets a fresh token');
+  assert.equal(fetchImpl.counts.shuttle, 2);
+  await call('/arrivals?stop=COM3', { fetchImpl, env, cache });
+  assert.equal(fetchImpl.counts.auth, 2, 'within remintGapS, no second mint');
+  assert.equal(fetchImpl.counts.shuttle, 3, 'and no retry with the token already refused');
+  // A minute on, one more fresh token may be tried.
+  Date.now = () => FROZEN_NOW + 61_000;
+  await call('/arrivals?stop=UTOWN', { fetchImpl, env, cache });
+  assert.equal(fetchImpl.counts.auth, 3);
+  assert.equal(fetchImpl.counts.shuttle, 5);
+});
+
+test("a refused token is retried with another isolate's newer one from KV, without a mint", async () => {
+  const kv = makeKV();
+  const env = makeEnv(kv);
+  const { cache } = await call('/arrivals?stop=PGP', { fetchImpl: makeFetch({ byStop: { PGP: D2_IN_4 } }), env });
+  // Another isolate has since minted: its token is in KV, this one's memo is older.
+  const newer = { token: 'another-isolate-token-0123456789', userid: 'U2', domain: 'PUBLIC', expMs: FROZEN_NOW + 3_600_000, version: '0.0.0-test' };
+  await kv.put('auth:session', JSON.stringify(newer));
+  const fetchImpl = makeFetch({ byStop: { COM3: D2_IN_4 }, reject: 1, rejectCode: '10008' });
+  const { res } = await call('/arrivals?stop=COM3', { fetchImpl, env, cache });
+  assert.equal((await res.json()).available, true);
+  assert.equal(fetchImpl.counts.auth, 0, 'no mint');
+  assert.equal(fetchImpl.requests[1].body.token, newer.token);
+});
+
+test('while another isolate fetches a stale stop, the stale answer is served without a second fetch', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
+  const cache = installGlobals(fetchImpl);
+  const old = { code: 'PGP', arrivals: [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt: Date.now() - 20_000, stale: false };
+  cache.seed(ARRIVALS_KEY('PGP'), old);
+  cache.seed(`${ARRIVALS_KEY('PGP')}#pending`, 'fetching', 20);
+  const { res } = await call('/arrivals?stop=PGP', { fetchImpl, cache });
+  assert.equal((await res.json()).available, true);
+  assert.equal(fetchImpl.counts.shuttle, 0, 'the other fetch fills the cache');
+  // Its marker gone, the next request fetches, and clears its own marker after.
+  await cache.delete(`${ARRIVALS_KEY('PGP')}#pending`);
+  await call('/arrivals?stop=PGP', { fetchImpl, cache });
+  assert.equal(fetchImpl.counts.shuttle, 1);
+  assert.equal(await cache.match(`${ARRIVALS_KEY('PGP')}#pending`), undefined);
+});
+
+test('a code that is not a stop (a food court) is never sent to either feed', async () => {
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
+  installGlobals(fetchImpl);
+  const { collectArrivals } = await import('../src/answer.ts');
+  const ctx = makeCtx();
+  const out = await collectArrivals(makeEnv(), ctx, ['THE-DECK', 'PGP'], Date.now());
+  await ctx.settle();
+  assert.equal(out.get('THE-DECK').available, false);
+  assert.equal(out.get('PGP').available, true);
+  assert.deepEqual(fetchImpl.requests.map((r) => r.body.busstopname), ['PGP']);
+});
+
+test("the beta's cache keys are its own: the stable site's breaker doesn't quiet it, nor its answers feed it", async () => {
+  const { scopeCache } = await import('../src/edgecache.ts');
+  const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' };
+  const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
+  const cache = installGlobals(fetchImpl);
+  cache.seed('https://terminus.internal/breaker', 'refused', 60);
+  const { res } = await call('/arrivals?stop=PGP', { fetchImpl, env: beta, cache });
+  assert.equal((await res.json()).available, true, "the stable site's breaker isn't the beta's");
+  assert.ok(cache._store.has('https://beta.terminus.internal/arrivals/PGP'));
+  assert.ok(!cache._store.has(ARRIVALS_KEY('PGP')));
+  // The stable site, with its breaker open, still asks nothing.
+  const { res: stable } = await call('/arrivals?stop=PGP', { fetchImpl, cache });
+  assert.equal((await stable.json()).available, false);
+  assert.equal(fetchImpl.counts.shuttle, 1);
+  scopeCache(makeEnv());
+});
+
 test('a failed stop is not asked again straight away', async () => {
   const dead = makeFetch({ fail: true });
   const { cache } = await call('/arrivals?stop=PGP', { fetchImpl: dead });

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-How often does the live-bus feed move a bus? Polls active-bus once a second
-per service for a few minutes, and reports, per service, how long a moving
+How often does the live-bus feed move a bus? Polls active-bus every 5 s per
+service (never more often: the map's own cache, TTL.busesMs) for a few
+minutes, at most MAX_MINUTES, and reports, per service, how long a moving
 bus's position stays the same between changes. That says how often the map
 can usefully poll (/buses caches TTL.busesMs).
 
@@ -9,7 +10,7 @@ Same guest token and bus proxy as scrape_stops.py, and the same config
 (environment, falling back to .dev.vars). Never prints a credential, and
 buses are shown as #1, #2..., not plates.
 
-    python3 scripts/probe_buses.py [--minutes 3] [--every 1] [--trace FILE] [A1 A2 D2 ...]
+    python3 scripts/probe_buses.py [--minutes 3] [--every 5] [--trace FILE] [A1 A2 D2 ...]
 
 --trace also writes every reading, one JSON object a line (seconds since the
 start, service, bus number, lat, lng, speed, direction), for replaying through
@@ -28,6 +29,13 @@ import time
 from scrape_stops import REQUIRED, get_session, load_dev_vars, pick_list, proxy
 
 
+# The floor under --every, and the cap on --minutes: this calls NUS directly,
+# past the Worker's cache, so it must never ask faster than the map's cache
+# would (TTL.busesMs) nor for long. CLAUDE.md, rule 2.
+MIN_EVERY_S = 5.0
+MAX_MINUTES = 10.0
+
+
 def percentile(xs: list, p: float) -> float:
     xs = sorted(xs)
     return xs[min(len(xs) - 1, int(p * len(xs)))]
@@ -37,9 +45,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("services", nargs="*", default=["A1", "A2", "D1", "D2"])
     ap.add_argument("--minutes", type=float, default=3)
-    ap.add_argument("--every", type=float, default=1, help="seconds between polls of each service")
+    ap.add_argument("--every", type=float, default=MIN_EVERY_S, help=f"seconds between polls of each service, at least {MIN_EVERY_S:g}")
     ap.add_argument("--trace", help="also write every reading to this file, as JSON lines")
     args = ap.parse_args()
+    # NaN fails both comparisons, so it is caught here too.
+    if not args.every >= MIN_EVERY_S:
+        print(f"--every {args.every:g} is below the floor; using {MIN_EVERY_S:g} s", file=sys.stderr)
+        args.every = MIN_EVERY_S
+    if not 0 < args.minutes <= MAX_MINUTES:
+        print(f"--minutes {args.minutes:g} is out of range; using {MAX_MINUTES:g}", file=sys.stderr)
+        args.minutes = MAX_MINUTES
 
     load_dev_vars()
     missing = [k for k in REQUIRED if not os.environ.get(k)]
@@ -64,8 +79,11 @@ def main() -> int:
             except SystemExit as exc:
                 errors += 1
                 print(f"{svc}: {exc}", file=sys.stderr)
-                if errors > 20:
+                if errors > 5:
                     return 1
+                # Back off before a fresh token: 10 s, 20 s, 40 s... A feed
+                # that is refusing us is not helped by asking again at once.
+                time.sleep(min(60, 10 * 2 ** (errors - 1)))
                 session = get_session()
                 continue
             t = time.monotonic() - start

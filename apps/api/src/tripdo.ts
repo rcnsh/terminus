@@ -19,6 +19,7 @@ import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
 import { nudgeUser, pushDevices } from './push.ts';
 import { GRAPH } from './graph.ts';
+import { scopeCache } from './edgecache.ts';
 import { answerFor, collectArrivals } from './answer.ts';
 
 /** Trip records one day keeps at most (see /signal). */
@@ -44,6 +45,7 @@ export class Trip {
     this.state = state;
     this.storage = state.storage;
     this.env = env && typeof env === 'object' && 'DB' in env ? (env as Env) : null;
+    if (this.env) scopeCache(this.env);
   }
 
   async fetch(req: Request): Promise<Response> {

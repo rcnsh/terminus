@@ -79,11 +79,13 @@ A lot of `unknown` means upstream is flaky or auth is failing. A lot of
 
 ## What the timelapse recorder costs NUS
 
-The recorder (`src/timelapse.ts`) is the only scheduled reader of the feed,
+The recorder (`src/timelapse.ts`) is the only poller of the feed,
 so every poll writes a `timelapse` row: `blob2` says what it cost
 (`upstream` a real request to NUS that was answered, `error` one that
 failed, `hit` an answer the edge cache already had, `stale` and `failed`
-nothing new without asking, `skipped` the breaker was open),
+nothing new without asking, `skipped` the breaker was open), and each
+request past the first inside a poll (a fresh token, a second call) adds a
+`retry` row, so requests to NUS are `upstream` + `error` + `retry`;
 `blob3` the service, `double1` the buses the feed reported. The dashboard
 shows the same per day.
 

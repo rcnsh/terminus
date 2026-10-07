@@ -737,6 +737,25 @@ exception is the timelapse recorder (below): one bounded, switchable poller
 of live bus positions, through the same cache. It is not a pattern for
 anything else (CLAUDE.md, rule 2).
 
+The cache is one Cloudflare data centre's, shared by its isolates, so "one
+call per stop per 15 s" holds per data centre. Within it, concurrent misses
+in one isolate share a fetch (the in-flight map), and the isolate fetching
+leaves a `#pending` marker beside the key: other isolates serve their stale
+answer until it's done rather than fetch too. A cold key with nothing stale
+is fetched by whoever asks. The beta's keys live on their own host
+(`beta.terminus.internal`, `scopeCache()`), since the cache may be the
+zone's and both sites share one: the beta's breaker never quiets the
+stable site.
+
+**Under failure, less load, not more.** A NUS host answering 429 or 5xx,
+or a refused version or key (10009, 10000), opens the feed's breaker for
+`breakerS`, every stop and service with it. A failed token mint is memoised
+for `failMemoS`, so the next stops wait rather than each mint. Any other
+refusal gets one retry: with another isolate's newer token if there is one
+(memo, then KV), else a fresh mint, but at most one per `remintGapS` in a
+data centre; with neither, no retry. So a code that keeps coming back costs
+one call per key per `failMemoS`.
+
 **KV holds small, slow-changing state; arrivals stay in the edge cache.** The guest token
 and device id, the `config:appVersion` override, the monitor's view of the
 feed and its incidents, measured ride times (`ride:hops`) and a few
@@ -886,7 +905,8 @@ The guest JWT from step 1 is accepted by the proxy directly, with no seed token,
 refresh endpoint or buswidget hop. `data` is the old `ShuttleServiceResult`
 contents, so `normalize()` is unchanged. Like every uNivUS endpoint, failure
 comes back at HTTP 200 with a non-`"00000"` code; `fms.ts` retries once with a
-freshly minted token and otherwise reports the stop unavailable.
+fresher token (at most one mint a minute) and otherwise reports the stop
+unavailable. Any other HTTP status is the host saying no, and isn't retried.
 
 The retired ConnectX path (`fms.connectx.com.sg/apiy/NUSETA`, `nextbus_token2`
 as a query param) now answers `{"result":false,"error":4}` to everything.
@@ -1079,10 +1099,12 @@ says "Between LT13 and COM 3".
 
 A day of every shuttle, for a timelapse video
 ([`src/timelapse.ts`](../src/timelapse.ts),
-[`src/timelapsedo.ts`](../src/timelapsedo.ts)). It is the **only scheduled
-access to the NUS feed** and the one exception to "don't add load on NUS"
-(CLAUDE.md, rule 2). Everything else fetches because someone asked. It is
-bounded on every side:
+[`src/timelapsedo.ts`](../src/timelapsedo.ts)). It is the **only poller of
+the NUS feed** and the one exception to "don't add load on NUS"
+(CLAUDE.md, rule 2). Answers fetch because someone asked; the only other
+scheduled reads are the cron's health check (one stop from NUS and one from
+LTA every 15 minutes, past the cache) and each push user's Trip object
+(a card at most every 30 s, through the cache). It is bounded on every side:
 
 - **Rate.** Each service's live buses (`active-bus`, the map's call; the feed
   has no call for every service at once) once per `TIMELAPSE.pollMs`, 30 s
@@ -1107,20 +1129,28 @@ bounded on every side:
   (15 minutes; before the first bus of the morning). A round in which any
   service failed (an outage, the breaker, one service refused) doesn't count
   towards that, and starts the count again.
+- **Back-off.** A round in which no service it asked answered is a failing
+  feed. The next round then waits 2, 4, then 8 times `pollMs` (four minutes
+  at most), and the first round that gets an answer brings it back. The
+  failure memo is shorter than a round, so without this an outage would be
+  asked at the full rate all day. Each service's `asked` time is saved
+  before its request, so an alarm that throws afterwards, which the platform
+  runs again within seconds, doesn't ask again.
 - **Kill switch.** KV `config:timelapse` set to `off` (or `on`) wins.
   Otherwise the `TIMELAPSE_ENABLED` var applies: `on` for the stable site,
   `off` for the beta (so the two never poll twice), and off when unset. The
   switch is read once a round, so `off` stops it within 30 s, without a
   deploy. On again, the cron restarts it within 15 minutes.
 
-At the defaults that is at most 17,280 requests a day (8 services × 2 a
+At the defaults that is at most 17,280 polls a day (8 services × 2 a
 minute × 18 hours). The services' real hours make it about 13,300 on a
 weekday, 9,000 on a Saturday and 6,700 on a Sunday or holiday. Each poll
-is at most one `active-bus` call, plus the existing single retry with a
-fresh token on a rejection that a token can fix. The map alone, with one
+is one `active-bus` call, plus at most one retry on a rejection that a
+token might fix, with a token minted at most once a minute. The map alone, with one
 person watching one service, asks for it every 5 s: six times this rate.
 Every poll writes an Analytics Engine row saying what it cost (`upstream`,
-`error`, `hit`, `stale`, `failed`, `skipped`; analytics.md). A request
+`error`, `hit`, `stale`, `failed`, `skipped`; analytics.md), and a `retry`
+row for each request past the first. A request
 that reached NUS and failed is `error`, so an outage doesn't hide the load. The dashboard shows the
 real requests to NUS per day.
 

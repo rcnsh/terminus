@@ -50,6 +50,7 @@ import { shapeFor } from './campus.ts';
 import type { RouteShape } from './campus.ts';
 import type { RawBus } from './fms.ts';
 import { haversineM } from './geo.ts';
+import { cacheBase } from './edgecache.ts';
 import type { Crowd, Graph, GraphIndex } from './types.ts';
 
 /** Further than this from its line, a bus is not on its route. */
@@ -478,7 +479,7 @@ export interface Placed {
   tracks: Record<string, Track>;
 }
 
-const placedKey = (svc: string) => new Request(`https://terminus.internal/bus-tracks/${encodeURIComponent(svc)}`);
+const placedKey = (svc: string) => new Request(`${cacheBase()}/bus-tracks/${encodeURIComponent(svc)}`);
 
 /**
  * The service's buses at [now] for the feed update [live], placed once per

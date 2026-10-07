@@ -20,6 +20,7 @@
 import type { Env } from './types.ts';
 import { TTL } from './config.ts';
 import { timedFetch } from './http.ts';
+import { cacheBase, flag, flagged } from './edgecache.ts';
 
 const KV_TOKEN = 'auth:session';
 const KV_DEVICE = 'auth:deviceid';
@@ -204,12 +205,49 @@ export async function getSession(
   // stops in parallel; without this each one minted its own token, and a
   // single failed mint degraded that stop to "unknown". A forced caller that
   // joins an in-flight mint still gets a freshly minted token.
+  //
+  // A mint that failed a moment ago isn't tried again for failMemoS, here
+  // or in any isolate in this data centre: without the memo every stop and
+  // service asked for would mint its own while the auth host is down.
   if (!inflight) {
-    inflight = mint(env, nowMs, version).finally(() => {
+    inflight = (async () => {
+      if (await flagged(mintFailedKey())) throw new Error('token mint failed a moment ago');
+      return mint(env, nowMs, version).catch(async (err) => {
+        await flag(mintFailedKey(), String((err as Error)?.message ?? err), TTL.failMemoS);
+        throw err;
+      });
+    })().finally(() => {
       inflight = null;
     });
   }
   return inflight;
+}
+
+const mintFailedKey = () => `${cacheBase()}/mint-failed`;
+const remintedKey = () => `${cacheBase()}/reminted`;
+
+/**
+ * A session to retry with after NUS refused [rejected], or null for none.
+ * Another isolate's newer token, from its memo or KV, comes first. Failing
+ * that, a fresh mint, but at most one per remintGapS in this data centre: a
+ * refusal that a new token didn't cure won't be cured by another, and a
+ * mint per refused call would multiply the load just when NUS is unhappy.
+ * [onMint] is told when it mints.
+ */
+export async function renewSession(env: Env, nowMs: number, rejected: Session, onMint?: () => void): Promise<Session | null> {
+  const version = await appVersion(env, nowMs);
+  const usable = (s: Session | null | undefined): s is Session => Boolean(s && s.token !== rejected.token && s.expMs > nowMs && s.version === version);
+  const memo = memos.get(env.KV);
+  if (usable(memo)) return memo;
+  const kept = (await env.KV.get(KV_TOKEN, 'json').catch(() => null)) as Session | null;
+  if (usable(kept)) {
+    memos.set(env.KV, kept);
+    return kept;
+  }
+  if (await flagged(remintedKey())) return null;
+  await flag(remintedKey(), 'reminted', TTL.remintGapS);
+  onMint?.();
+  return getSession(env, nowMs, { force: true }).catch(() => null);
 }
 
 async function mint(env: Env, nowMs: number, version: string): Promise<Session> {
@@ -222,7 +260,7 @@ async function mint(env: Env, nowMs: number, version: string): Promise<Session> 
       version,
     }),
   });
-  if (!res.ok) throw new Error(`auth HTTP ${res.status}`);
+  if (!res.ok) throw new UpstreamHttpError('auth', res.status);
 
   // A wrong path returns HTML with a 200, and a bare SyntaxError from deep in
   // the stack is a miserable thing to debug at 08:39.
@@ -288,6 +326,19 @@ export function redactDetail(detail: string): string {
     .replace(/("(?:token|access_?token|refresh_?token|id_?token|userid|user_?id|deviceid|device_?id|authorization|password|passwd|secret|api_?key|x-api-key)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
     .replace(/eyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g, '[redacted]')
     .replace(/(Bearer\s+)[\w.~+/=-]+/gi, '$1[redacted]');
+}
+
+/**
+ * A NUS host answered with an HTTP error status, not its usual 200 and a
+ * code: a gateway or the host itself saying no. 429 and 5xx trip the
+ * feed's breaker (fms.ts tripsBreaker).
+ */
+export class UpstreamHttpError extends Error {
+  readonly status: number;
+  constructor(what: string, status: number) {
+    super(`${what} HTTP ${status}`);
+    this.status = status;
+  }
 }
 
 /**

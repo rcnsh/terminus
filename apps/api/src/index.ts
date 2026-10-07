@@ -3,10 +3,12 @@
  *
  * Fetch-on-demand with a 15-second edge cache; no poll loop for answers.
  * Workers has no long-lived process and Cron Triggers bottom out at
- * one-minute granularity. The one scheduled reader of the feed is the
- * timelapse recorder (timelapse.ts): a Durable Object on its own alarm, at
- * most one call per service per 30 s, through the same cache, inside fixed
- * hours, behind a kill switch. It is the exception, not a pattern to copy.
+ * one-minute granularity. The one poller of the feed is the timelapse
+ * recorder (timelapse.ts): a Durable Object on its own alarm, at most one
+ * call per service per 30 s, through the same cache, inside fixed hours,
+ * behind a kill switch. It is the exception, not a pattern to copy. The
+ * cron's health check (monitor.ts) and each push user's Trip object
+ * (tripdo.ts) also read on a schedule, a call or a card at a time.
  */
 
 
@@ -40,6 +42,7 @@ import { landmark, targetStops } from './landmarks.ts';
 import { allResidences } from './residences.ts';
 import { callerFor } from './access.ts';
 import { handleTimelapse } from './timelapse.ts';
+import { scopeCache } from './edgecache.ts';
 
 import { GRAPH, GRAPH_PUBLIC, twinOf } from './graph.ts';
 import { isBeta, markBeta, siteOrigin } from './site.ts';
@@ -366,10 +369,12 @@ const KEYED = ['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/st
 
 export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    scopeCache(env);
     ctx.waitUntil(runCron(env, Date.now()));
   },
 
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    scopeCache(env);
     // Every word the server writes is in this request's language (i18n.ts).
     const res = await withLang(langOfRequest(req), () => route(req, env, ctx));
     // A redirect or a download body passes through untouched apart from headers.

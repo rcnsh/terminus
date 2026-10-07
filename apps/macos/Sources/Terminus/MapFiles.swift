@@ -116,14 +116,18 @@ enum MapFiles {
         return fresh
     }
 
-    /// A GET to the API with the app's headers; the body of a 200.
+    /// A GET to the API with the app's headers; the body of a 200. It keeps
+    /// to the same Retry-After as the rest of the app (Quiet): the map polls
+    /// every few seconds, and asking through a 429 only keeps it tripped.
     static func get(_ path: String, token: String?) async throws -> Data {
+        if Date() < Quiet.until { throw ApiError(status: 429, message: "HTTP 429") }
         var req = URLRequest(url: URL(string: Api.base + path)!, timeoutInterval: 10)
         req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")
         req.setValue(Lang.header, forHTTPHeaderField: "accept-language")
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
         let (data, resp) = try await URLSession.shared.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")) }
         guard status == 200 else { throw ApiError(status: status, message: "HTTP \(status)") }
         return data
     }
