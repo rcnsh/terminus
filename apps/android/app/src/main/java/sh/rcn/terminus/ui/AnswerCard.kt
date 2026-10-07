@@ -182,8 +182,9 @@ internal fun AnswerCard(
 /**
  * The card as a screen reader says it: the server's words as sentences
  * ([Spoken.summary]), then how long until it's time to go, to the minute.
- * [withLead]: the notice and warning over the card too, when they're inside
- * the group rather than read on their own.
+ * [withLead]: the notice, phase, warning and where to as well, when they're
+ * inside the group rather than read on their own (the plain card's pill and
+ * heading).
  */
 @Composable
 private fun spokenCard(answer: NextAnswer, withLead: Boolean): String {
@@ -198,7 +199,7 @@ private fun spokenCard(answer: NextAnswer, withLead: Boolean): String {
     val lead = if (!withLead) emptyList() else listOfNotNull(answer.card?.notice, answer.card?.warning)
     return listOfNotNull(
         lead.joinToString("") { "${Spoken.spell(it).trimEnd('.', '。')}. " }.ifEmpty { null },
-        Spoken.summary(true, answer, null, now) { clock(ctx, it) },
+        Spoken.summary(true, answer, null, now, withHead = withLead) { clock(ctx, it) },
         Spoken.countdown(answer, now)?.let { "$it." },
     ).joinToString(" ")
 }
