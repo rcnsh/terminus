@@ -106,7 +106,7 @@ internal fun WherePicker(
         }
         if (top.isNotEmpty()) {
             Text(
-                stringResource(R.string.in_your_timetable),
+                stringResource(R.string.in_your_timetable).uppercase(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),

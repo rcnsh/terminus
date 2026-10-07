@@ -69,7 +69,7 @@ internal fun DayTimeline(
     val firstRemovable = day.items.firstOrNull { it.removable }?.key
     Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.today_heading), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.today_heading).uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
             if (hint && firstRemovable != null) {
                 Text(stringResource(R.string.swipe_to_remove), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

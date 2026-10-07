@@ -38,7 +38,7 @@ export interface TripView {
   phase: Phase;
   rec?: TripRecord;
   /** A trip skipped a moment ago, so it can be undone. */
-  undo?: { key: string; label: string } | null;
+  undo?: { key: string; label: string | null } | null;
   /** The bus the plan says to catch, kept once the answer has moved on to riding. */
   plan?: Boarded | null;
   /** The phase is the plan's, not something anyone said (no answer to the question). */
@@ -670,7 +670,7 @@ function v2(
   }
   if (trip.away) actions.push({ id: 'back', label: m().backOnCampus, trip: 'day' });
   if (trip.undo) {
-    actions.push({ id: 'reset', label: isHomeKey(trip.undo.key) ? m().undoHome : m().undoTo(trip.undo.label), trip: trip.undo.key });
+    actions.push({ id: 'reset', label: isHomeKey(trip.undo.key) ? m().undoHome : trip.undo.label ? m().undoTo(trip.undo.label) : m().undoTrip, trip: trip.undo.key });
   }
 
   // The next moment this card changes by itself: the trip's next phase, or

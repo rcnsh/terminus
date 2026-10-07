@@ -659,7 +659,7 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
             }) { Text(stringResource(R.string.map_walking_directions)) }
             val saved = places.savedAs(stop.code)
             when {
-                saved != null -> OutlinedButton(onClick = {}, enabled = false) { Text(stringResource(R.string.map_saved_as, saved)) }
+                saved != null -> OutlinedButton(onClick = {}, enabled = false) { Text(stringResource(R.string.map_saved_as)) }
                 places.full() -> OutlinedButton(onClick = {}, enabled = false) { Text(stringResource(R.string.map_places_full)) }
                 else -> OutlinedButton(onClick = { places.save(stop.code, stop.name) }) { Text(stringResource(R.string.map_save_place)) }
             }

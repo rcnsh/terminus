@@ -433,12 +433,12 @@ private fun summary(page: SettingsPage, state: AccountState, ui: UiState): Strin
             listOf(home ?: stringResource(R.string.no_home_stop), stringResource(R.string.pace_summary, stringResource(paceName(it.walkPace)))).joinToString(" · ")
         }
         SettingsPage.Timetable -> if (state.needsReimport) stringResource(R.string.reimport_needed) else profile?.let { classCount(it.trips.size + it.manual.size) }
-        SettingsPage.Favourites -> profile?.let { p -> p.places.joinToString(", ") { it.label }.ifEmpty { stringResource(R.string.none_yet) } }
+        SettingsPage.Favourites -> profile?.let { p -> p.places.joinToString(stringResource(R.string.list_sep)) { it.label }.ifEmpty { stringResource(R.string.none_yet) } }
         SettingsPage.Notifications -> listOfNotNull(
             if (ui.leaveAlerts) stringResource(R.string.short_leave_alerts) else null,
             if (ui.liveUpdates) stringResource(R.string.short_live) else null,
             if (ui.detectTrips) stringResource(R.string.short_detect) else null,
-        ).joinToString(", ").ifEmpty { stringResource(R.string.all_off) }
+        ).joinToString(stringResource(R.string.list_sep)).ifEmpty { stringResource(R.string.all_off) }
         SettingsPage.Devices -> when {
             state.email == null -> stringResource(R.string.devices_need_email)
             else -> state.devices?.let { deviceCount(it.size) }
@@ -1038,7 +1038,7 @@ private fun Favourites(profile: ProfileDoc, campus: Campus?, account: AccountVie
             val favourite = profile.places.map { it.to }.toSet()
             val timetable = (profile.trips + profile.manual).groupBy { it.to }
                 .filterKeys { it !in favourite }
-                .map { (to, classes) -> Destination(to, stopName(to), to, "timetable", detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(", ")) }
+                .map { (to, classes) -> Destination(to, stopName(to), to, "timetable", detail = classes.map { it.label.substringBefore(" @ ") }.distinct().joinToString(L.s(R.string.list_sep))) }
                 .sortedBy { it.label }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 WherePicker(stringResource(R.string.add_favourite), campus?.destinations.orEmpty(), null, timetable) { d ->

@@ -47,7 +47,7 @@
 "Code from the email" = "邮件中的验证码";
 "Continue" = "继续";
 "Couldn't change the login item: %@" = "无法更改登录项：%@";
-"Couldn't get this Mac's location. Pick your stop instead." = "无法获取这台 Mac 的位置。请自己选择车站。";
+"Couldn't get this Mac's location. Choose your stop instead." = "无法获取这台 Mac 的位置。请自己选择车站。";
 "Couldn't reach terminus. Check your connection and try again." = "无法连接 terminus。请检查网络后再试。";
 "Couldn't reach terminus. Try again in a moment." = "无法连接 terminus。请稍后再试。";
 "terminus is busy. Try again in a minute." = "terminus 正忙，请一分钟后再试。";
@@ -170,7 +170,7 @@
 "This Mac was signed out of your account. Sign in at %@/account and pair it again." = "这台 Mac 已从你的账户退出登录。请在 %@/account 登录并重新配对。";
 "Today" = "今天";
 "Try again" = "重试";
-"Turn on leave-by alerts" = "开启出发提醒";
+"Turn on leave alerts" = "开启出发提醒";
 "Two more things" = "最后两项";
 "Undo" = "撤销";
 "terminus sent something this version can't read." = "terminus 返回的内容这个版本无法读取。";

@@ -779,7 +779,14 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
       await saveNow((x) => withPlace(x, stop.code, stop.name));
       onSaved?.();
     } catch (err) {
-      setSaveMsg(err.status === 400 ? t("You've reached the limit of saved places. Remove one in Settings to add another.") : t('Not saved. {0}', err.message));
+      // The server's own words when it answered; the browser's ("Failed to fetch") aren't for people.
+      setSaveMsg(
+        err.status === 400
+          ? t("You can't add more favourites. Remove one in Settings first.")
+          : err.status
+            ? t('Not saved. {0}', err.message)
+            : t('Not saved. Check your connection.'),
+      );
     } finally {
       setSaving(false);
     }
@@ -803,7 +810,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
       <div class="sheet-actions">
         <button type="button" class="btn small accent" onClick=${() => onGoTo({ code: stop.code, name: stop.name, place: same?.key ?? null })}>${t('Go there')}</button>
         <a class="btn small ghost" href=${directions(stop)} target="_blank" rel="noopener">${t('Walking directions')}</a>
-        <button type="button" class="btn small ghost" disabled=${Boolean(same) || saving} onClick=${save}>${same ? t('Saved as {0}', same.label) : (saveMsg ?? t('Save as place'))}</button>
+        <button type="button" class="btn small ghost" disabled=${Boolean(same) || saving} onClick=${save}>${same ? t('In your favourites') : (saveMsg ?? t('Add to favourites'))}</button>
       </div>
     <//>
   `;

@@ -192,7 +192,7 @@ export async function dayPlan(
       kind: 'home',
       key,
       label: m().home,
-      title: m().homeFrom(name(after.to) ?? m().yourLastClass),
+      title: name(after.to) ? m().homeFrom(name(after.to)!) : m().homeAfterClass,
       line: null,
       status,
       from: after.to,

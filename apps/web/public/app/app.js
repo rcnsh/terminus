@@ -12,7 +12,7 @@
 // when the network is down; those replies carry x-terminus-cached with when
 // they were fetched, so the page can say it's showing old times.
 
-import { Icon, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
+import { Fill, Icon, MARK, Rich, html, render, store, useEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { api, clock, hour12, inkOn, send, serverNow, t } from '/account/dom.js';
 import { Card, InSky, Message, Report, isStale, signal } from '/account/preview.js';
 import { Celestial, Horizon, useNowSky, useSkyPhase } from '/account/sky.js';
@@ -570,7 +570,8 @@ async function togglePush() {
       push.set({ on: false, text: t('Notifications are blocked. To turn them on, allow notifications for this site in your browser settings.'), button: true });
     }
   } catch (err) {
-    push.set({ on: false, text: t("Couldn't turn on notifications. {0}", err.message), button: true });
+    // The server's own words when it answered; the browser's ("Failed to fetch") aren't for people.
+    push.set({ on: false, text: err.status ? t("Couldn't turn on notifications. {0}", err.message) : t("Couldn't turn on notifications. Try again in a minute."), button: true });
   }
 }
 
@@ -635,7 +636,14 @@ function InstallHint() {
     <section class="card install">
       <h2>${t('Add terminus to your Home Screen')}</h2>
       <ol class="install-steps">
-        <li>${t('Tap')} <span class="ios-share" aria-label=${t('the Share button')}><${Icon} paths=${share} size="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></span> ${t('at the bottom of Safari.')}</li>
+        <li>
+          <${Fill}
+            text=${t('Tap {0} at the bottom of Safari.', MARK)}
+            parts=${[
+              html`<span class="ios-share" aria-label=${t('the Share button')}><${Icon} paths=${share} size="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></span>`,
+            ]}
+          />
+        </li>
         <li><${Rich} text=${t('Choose <strong>Add to Home Screen</strong>.')} /></li>
         <li>${t('Open terminus from your Home Screen and sign in there once.')}</li>
       </ol>
@@ -723,7 +731,7 @@ function Where() {
 }
 
 /** A /me/day item's name: the server's `title` ("Home, from UTown"), else worded here (an older kept plan). */
-const itemTitle = (it) => it.title ?? (it.kind === 'home' ? t('Home, from {0}', it.fromName ?? t('your last class')) : it.label);
+const itemTitle = (it) => it.title ?? (it.kind === 'home' ? (it.fromName ? t('Home, from {0}', it.fromName) : t('Home after your last class')) : it.label);
 
 /**
  * The offline card: the day plan's next item (offline.js picks it), as the

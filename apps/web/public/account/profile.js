@@ -1,6 +1,6 @@
 // The signed-in account's profile and the campus it's about, shared by every
 // part of the page that shows or changes them: Settings, first-time setup,
-// and the map's "Save as place". One copy, so a place saved on the map is in
+// and the map's "Add to favourites". One copy, so a place saved on the map is in
 // Settings at once, and a change made in Settings is the one the map sees.
 
 import { html, store, useStore } from '../assets/ui.js';
@@ -77,7 +77,7 @@ export function edit(change) {
       toast(t('Saved'));
       saves.set((n) => n + 1);
     } catch (err) {
-      toast(t('Not saved. {0}', err.message));
+      toast(err.status ? t('Not saved. {0}', err.message) : t('Not saved. Check your connection.'));
     }
   }, 400);
 }
