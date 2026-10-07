@@ -43,6 +43,8 @@ export interface UpstreamState {
   failures?: number;
   /** Good checks in a row: it takes OKS_TO_RECOVER to come back up. */
   oks?: number;
+  /** The first of those good checks, epoch ms: when the feed came back. */
+  okSince?: number | null;
   /** An alert that has not been delivered yet; retried every run until it is. */
   pending?: 'down' | 'up' | null;
 }
@@ -211,13 +213,17 @@ export async function checkUpstream(
 
   const failures = ok ? 0 : (prev?.failures ?? 0) + 1;
   const oks = ok ? (prev?.oks ?? 0) + 1 : 0;
+  const okSince = ok ? (prev?.oks && prev.okSince ? prev.okSince : nowMs) : null;
   const was = prev?.up ?? true;
   const up = was ? failures < FAILS_TO_ALERT : oks >= OKS_TO_RECOVER;
   const changed = !prev || prev.up !== up;
   let pending = prev?.pending ?? null;
   if (pending && delivered === `${prev!.since} ${pending}`) pending = null;
   if (changed && (prev || !up)) pending = up ? 'up' : 'down';
-  const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, detail, auto, checkedAt: nowMs, failures, oks, pending };
+  // Back up, it has been since the first of the good checks that confirmed
+  // it, not the last: the outage ends there, on the status page and in the email.
+  const since = !changed ? prev!.since : up && okSince ? okSince : nowMs;
+  const state: UpstreamState = { up, since, reason, detail, auto, checkedAt: nowMs, failures, oks, okSince, pending };
 
   // Saved before the email goes, so a KV write that keeps failing can't send
   // the same email every run; it's sent once the state with it pending is kept.
