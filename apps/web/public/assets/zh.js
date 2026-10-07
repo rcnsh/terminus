@@ -190,6 +190,7 @@ window.TERMINUS_ZH = {
  "You're offline. Showing the last update.": "你已离线。显示的是上次更新的内容。",
  "You're offline. Showing the update from {0}.": "你已离线。显示的是 {0} 的更新内容。",
  "Slow connection. Showing the update from {0}.": "网络较慢。显示的是 {0} 的更新内容。",
+ "Couldn't update. Showing the update from {0}.": "无法更新。显示的是 {0} 的更新内容。",
  "terminus is busy. Try again in a minute.": "terminus 正忙，请一分钟后再试。",
  "Updating times…": "正在更新时间…",
  "On a Mac, open the terminus menu bar app and type the code.": "在 Mac 上，打开 terminus 菜单栏应用并输入代码。",
