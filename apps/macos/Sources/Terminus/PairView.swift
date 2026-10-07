@@ -181,7 +181,7 @@ func codeEdit(old: String, new: String) -> String {
 /// the phone and the web. One hidden field takes the typing and pastes, so a
 /// whole line from the email lands right; the sixth character sends it.
 struct CodeField: View {
-    static let length = 6
+    nonisolated static let length = 6
 
     @Binding var code: String
     let label: String
