@@ -7,8 +7,7 @@
  */
 
 import { m } from './i18n.ts';
-
-const SGT_MS = 8 * 3_600_000;
+import { SGT_MS } from './config.ts';
 
 /** "18:36", or "6:36 PM" with h12. */
 export function clockMin(minutes: number, h12 = false): string {

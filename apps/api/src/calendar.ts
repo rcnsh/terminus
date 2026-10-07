@@ -10,6 +10,7 @@
 
 import calendarJson from '../data/calendar.json' with { type: 'json' };
 import { m } from './i18n.ts';
+import { SGT_MS } from './config.ts';
 
 export interface CalendarData {
   /** When it was built (ISO); the newer of two copies wins where they differ. */
@@ -49,8 +50,8 @@ export function mergeCalendars(a: CalendarData, b: CalendarData): CalendarData {
     holidays: [...days.values()].sort((x, y) => x.date.localeCompare(y.date)),
   };
 }
+
 const DAY_MS = 86_400_000;
-const SGT_MS = 8 * 3_600_000;
 
 /**
  * 'unknown' means today is past the end of the calendar data. Imported
@@ -80,7 +81,7 @@ export function sgtDate(nowMs: number): string {
 }
 
 /** Midnight SGT of a YYYY-MM-DD date, as epoch ms. */
-function sgtMidnight(date: string): number {
+export function sgtMidnight(date: string): number {
   return Date.parse(`${date}T00:00:00Z`) - SGT_MS;
 }
 
