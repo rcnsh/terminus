@@ -5,6 +5,10 @@
 Dataset: `terminus` (the beta's is `terminus_beta`). Positional schema lives
 in `src/analytics.ts`. It is the query contract, so it is append-only.
 
+An `answer` row is an answer someone asked for: `/next`, `/trip` or
+`/me/next`. The Trip object's wakes and `/me/day`'s leave-bys are not
+logged, and neither are their `arrival` rows.
+
 ## Is the direction algorithm right?
 
 Nothing else measures this. High-confidence answers that keep pointing

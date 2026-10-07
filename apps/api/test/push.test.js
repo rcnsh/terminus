@@ -12,6 +12,7 @@ import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
 import { armTrips, remindTerm } from '../src/monitor.ts';
 import { endOfDayMs, sgtDate } from '../src/trip.ts';
+import { remindUser } from '../src/push.ts';
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
@@ -222,6 +223,29 @@ test('an access token that went stale is replaced, and the push still goes', asy
   await wakeUntil(() => fcm.sent.length > 0);
   assert.equal(fcm.sent[0].data.phase, 'due');
   assert.equal(fcm.oauth, 2, 'a new access token for the retry');
+});
+
+test('the access token is kept in the isolate: one KV read, not one per push batch', async () => {
+  const { call, phone, env, fcm } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const userId = env.DB._db.prepare('SELECT id FROM users').get().id;
+  const get = env.KV.get.bind(env.KV);
+  let reads = 0;
+  env.KV.get = (k, ...rest) => {
+    if (k === 'fcm:access') reads++;
+    return get(k, ...rest);
+  };
+  const notice = { title: 't', body: 'b', zhTitle: 't', zhBody: 'b' };
+  const t0 = Date.now();
+  assert.equal(await remindUser(env, userId, notice, t0), 1);
+  assert.equal(reads, 1, 'nothing kept yet: KV, then a new token');
+  assert.equal(fcm.oauth, 1);
+  assert.equal(await remindUser(env, userId, notice, t0 + 60_000), 1);
+  assert.equal(await remindUser(env, userId, notice, t0 + 49 * 60_000), 1);
+  assert.equal(reads, 1, 'the same token, without asking KV');
+  assert.equal(fcm.oauth, 1);
+  await remindUser(env, userId, notice, t0 + 51 * 60_000);
+  assert.equal(reads, 2, 'past when its KV entry would have gone, asked again');
 });
 
 test('a token Firebase no longer knows is dropped', async () => {

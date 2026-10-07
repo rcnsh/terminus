@@ -6,7 +6,7 @@
  */
 
 import type { Env } from './types.ts';
-import { authenticate, hashToken, newToken } from './accounts.ts';
+import { authenticate, hashToken, newToken, tokenFrom } from './accounts.ts';
 
 export const KEY_PREFIX = 'tk_';
 export const MAX_KEYS = 5;
@@ -49,6 +49,37 @@ export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: Exe
   }
   const session = await authenticate(db, req, nowMs, ctx);
   return session ? { kind: 'account', userId: session.user.id } : null;
+}
+
+/**
+ * Who was let in lately, by a hash of what they sent, for /buses only: the
+ * map asks every 5 s, and each ask would otherwise hash the token and look
+ * it up in D1 again. The trade-off: a session signed out, or a key revoked,
+ * still sees the buses on the map for up to CALLER_MEMO_MS in this isolate
+ * (and keeps its own rate-limit bucket that long). Only callers let in are
+ * kept, so someone just signed in is never turned away. Never used for
+ * /me/* or anything else that hands out an account's data.
+ */
+export const CALLER_MEMO_MS = 30_000;
+const CALLERS_KEPT = 2_000;
+const callerMemos = new WeakMap<object, Map<string, { at: number; caller: Caller }>>();
+
+export async function recentCallerFor(env: Env, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<Caller | null> {
+  const sent = [req.headers.get('x-api-key')?.trim() ?? '', tokenFrom(req) ?? ''];
+  if (!env.DB || (!sent[0] && !sent[1])) return callerFor(env, req, nowMs, ctx);
+  let memo = callerMemos.get(env.DB);
+  if (!memo) callerMemos.set(env.DB, (memo = new Map()));
+  const id = await hashToken(sent.join('\n'));
+  const kept = memo.get(id);
+  if (kept && nowMs >= kept.at && nowMs - kept.at < CALLER_MEMO_MS) return kept.caller;
+  const caller = await callerFor(env, req, nowMs, ctx);
+  memo.delete(id);
+  if (caller) {
+    // Oldest first in a Map: past the bound, drop the oldest.
+    if (memo.size >= CALLERS_KEPT) memo.delete(memo.keys().next().value!);
+    memo.set(id, { at: nowMs, caller });
+  }
+  return caller;
 }
 
 export interface KeyInfo {

@@ -186,7 +186,7 @@ export async function answerFor(
 
   // Synchronous, non-blocking, and swallows its own errors. Deliberately not
   // behind waitUntil: there is nothing to await.
-  logAnswer(env, {
+  if (input.log !== false) logAnswer(env, {
     answer,
     best: options[0] ?? null,
     dest: input.to,
@@ -195,6 +195,14 @@ export async function answerFor(
   });
 
   return answer;
+}
+
+/**
+ * The same deps, with answers that aren't logged (`log: false`): for the
+ * answers the server works out for itself rather than for someone asking.
+ */
+export function unlogged<D extends { answerFor: typeof answerFor }>(deps: D): D {
+  return { ...deps, answerFor: (env, ctx, input, label, nowMs) => deps.answerFor(env, ctx, { ...input, log: false }, label, nowMs) };
 }
 
 /** You are at the destination's stop. `live` because it is a current,
