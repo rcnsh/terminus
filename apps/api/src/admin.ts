@@ -107,10 +107,10 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
     .all<{ day: string; n: number }>();
   const { results: feedback } = await db
     .prepare(
-      `SELECT f.id, f.created, f.kind, f.note, f.platform, f.app_version AS appVersion, f.context, u.email
+      `SELECT f.id, f.created, f.kind, f.note, f.platform, f.app_version AS appVersion, f.context, f.reply_to AS replyTo, u.email
          FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.created DESC LIMIT 25`,
     )
-    .all<{ id: string; created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null; email: string | null }>();
+    .all<{ id: string; created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null; email: string | null }>();
 
   return {
     ...out,
@@ -130,6 +130,7 @@ export async function adminStats(env: Env, nowMs: number, fetchImpl: typeof fetc
         platform: f.platform,
         appVersion: f.appVersion,
         email: f.email,
+        replyTo: f.replyTo,
         answer: summarize(f.context),
         context: f.context ? JSON.parse(f.context) : null,
       })),

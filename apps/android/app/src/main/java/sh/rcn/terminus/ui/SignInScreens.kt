@@ -257,10 +257,13 @@ private fun Action(text: String, enabled: Boolean, message: String?, onClick: ()
     }
 }
 
+/** A simple local@domain.tld: enough to catch a typo before anything is sent. */
+internal fun looksLikeEmail(s: String) = Regex("^[^@\\s]+@[^@\\s]+\\.[a-zA-Z]{2,}$").matches(s.trim())
+
 @Composable
 private fun EmailStep(adding: Boolean, busy: Boolean, message: String?, onSend: (String) -> Unit, onEdit: () -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
-    val ok = Regex("^[^@\\s]+@[^@\\s]+\\.[a-zA-Z]{2,}$").matches(email.trim())
+    val ok = looksLikeEmail(email)
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     Group(stringResource(R.string.your_email), stringResource(if (adding) R.string.add_email_why else R.string.sign_in_why)) {

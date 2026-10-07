@@ -8,6 +8,7 @@
 import type { Env } from './types.ts';
 import { mailName, siteOrigin } from './site.ts';
 import { m } from './i18n.ts';
+import { normalizeEmail } from './accounts.ts';
 
 export const FEEDBACK_LIMITS = {
   note: 1000,
@@ -27,6 +28,8 @@ export interface FeedbackInput {
   platform: Platform;
   appVersion: string | null;
   context: string | null;
+  /** Typed on the Feedback page by an account without an email; never checked. */
+  replyTo: string | null;
 }
 
 export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput } | { ok: false; error: string } {
@@ -46,7 +49,12 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
     if (new TextEncoder().encode(context).length > FEEDBACK_LIMITS.contextBytes) return { ok: false, error: 'context is too large' };
   }
   if (kind === 'wrong' && !context && !note) return { ok: false, error: 'send the answer that was wrong, or a note' };
-  return { ok: true, value: { kind, note, platform, appVersion, context } };
+  let replyTo: string | null = null;
+  if (b.replyTo !== undefined && b.replyTo !== null && b.replyTo !== '') {
+    replyTo = normalizeEmail(b.replyTo);
+    if (!replyTo) return { ok: false, error: 'enter a valid email address' };
+  }
+  return { ok: true, value: { kind, note, platform, appVersion, context, replyTo } };
 }
 
 /** Stores the report; false when the account has sent its day's worth. */
@@ -56,10 +64,10 @@ export async function saveFeedback(db: D1Database, userId: string, f: FeedbackIn
   // see the count from before the others.
   const saved = await db
     .prepare(
-      `INSERT INTO feedback (id, user_id, created, kind, note, platform, app_version, context)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM feedback WHERE user_id = ? AND created > ?) < ? RETURNING id`,
+      `INSERT INTO feedback (id, user_id, created, kind, note, platform, app_version, context, reply_to)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM feedback WHERE user_id = ? AND created > ?) < ? RETURNING id`,
     )
-    .bind(id, userId, nowMs, f.kind, f.note, f.platform, f.appVersion, f.context, userId, nowMs - 86_400_000, FEEDBACK_LIMITS.perDay)
+    .bind(id, userId, nowMs, f.kind, f.note, f.platform, f.appVersion, f.context, f.replyTo, userId, nowMs - 86_400_000, FEEDBACK_LIMITS.perDay)
     .first<{ id: string }>();
   return saved ? id : null;
 }
@@ -80,14 +88,18 @@ export function summarize(context: string | null): string {
 /** Feedback emails to the operator a day, across everyone; past it, reports are only on the dashboard. */
 export const OPERATOR_MAILS_PER_DAY = 50;
 
-/** Emails the operator. The reporter's address is included so you can reply. */
-export async function mailFeedback(env: Env, id: string, email: string, f: FeedbackInput, nowMs: number): Promise<void> {
+/**
+ * Emails the operator. The reporter's address is included so you can reply:
+ * the account's own, or else the one they typed, marked as unchecked.
+ */
+export async function mailFeedback(env: Env, id: string, accountEmail: string | null, f: FeedbackInput, nowMs: number): Promise<void> {
   if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL) return;
   // A soft cap (KV is not atomic): new accounts are cheap, the inbox is not.
   const sentKey = `feedback:mailed:${new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10)}`;
   const sent = Number((await env.KV.get(sentKey).catch(() => null)) ?? 0);
   if (sent >= OPERATOR_MAILS_PER_DAY) return;
   await env.KV.put(sentKey, String(sent + 1), { expirationTtl: 2 * 86_400 }).catch(() => {});
+  const email = accountEmail ?? (f.replyTo ? `an anonymous account (reply to ${f.replyTo}, not checked)` : 'an anonymous account');
   const text = [
     `${f.kind === 'wrong' ? 'A wrong answer' : 'Feedback'} from ${email} on ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}, ${new Date(nowMs).toISOString()}.`,
     '',
