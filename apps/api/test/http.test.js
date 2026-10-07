@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { clientKey, coordsFrom, withSecurityHeaders } from '../src/http.ts';
+import { UpstreamUnreachable, clientKey, coordsFrom, timedFetch, withSecurityHeaders } from '../src/http.ts';
 import { landmark, targetStops } from '../src/landmarks.ts';
 import { termDay } from '../src/calendar.ts';
 import { FROZEN_NOW } from './_stubs.mjs';
@@ -82,4 +82,41 @@ test('the frozen test day is an ordinary teaching Thursday in the bundled calend
   assert.equal(d.kind, 'instructional');
   assert.equal(d.holiday, null);
   assert.equal(new Date(FROZEN_NOW + 8 * 3_600_000).getUTCDay(), 4);
+});
+
+test('timedFetch: a host that stalls mid-body, hangs or cannot be reached fails as unreachable, naming what', async () => {
+  const real = globalThis.fetch;
+  try {
+    // Headers at once, then a body that never ends: only the abort ends it.
+    globalThis.fetch = async (_url, init) =>
+      new Response(new ReadableStream({
+        start(c) {
+          const keep = setTimeout(() => {}, 30_000);
+          init.signal.addEventListener('abort', () => {
+            clearTimeout(keep);
+            c.error(init.signal.reason);
+          });
+        },
+      }));
+    await assert.rejects(timedFetch('feed', 'https://x.test/', {}, 50), (err) => {
+      assert.ok(err instanceof UpstreamUnreachable);
+      assert.equal(err.timedOut, true);
+      assert.equal(err.message, 'feed timeout after 50ms');
+      return true;
+    });
+
+    globalThis.fetch = async () => {
+      throw new TypeError('Network connection lost.');
+    };
+    await assert.rejects(timedFetch('feed', 'https://x.test/', {}, 50), (err) => err instanceof UpstreamUnreachable && !err.timedOut && /feed unreachable/.test(err.message));
+
+    // An answer, error statuses included, comes back whole and readable.
+    globalThis.fetch = async () => new Response('busy', { status: 503, headers: { 'x-a': '1' } });
+    const res = await timedFetch('feed', 'https://x.test/', {}, 50);
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('x-a'), '1');
+    assert.equal(await res.text(), 'busy');
+  } finally {
+    globalThis.fetch = real;
+  }
 });

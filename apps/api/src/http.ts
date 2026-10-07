@@ -81,12 +81,40 @@ export function clientKey(req: Request): string {
   return `${prefix.join(':')}::/64`;
 }
 
-/** fetch with a timeout whose error says what timed out. */
+/**
+ * A host that gave no answer at all: it timed out, or the connection
+ * failed. Unlike an HTTP status, nothing upstream said why, and a host that
+ * hangs costs more than one that says 503, so the feeds' breakers count it
+ * as the host being down (fms.ts tripsBreaker).
+ */
+export class UpstreamUnreachable extends Error {
+  readonly timedOut: boolean;
+  constructor(message: string, timedOut: boolean) {
+    super(message);
+    this.timedOut = timedOut;
+  }
+}
+
+/** Statuses whose Response may not carry a body. */
+const NO_BODY = new Set([204, 205, 304]);
+
+/**
+ * fetch with a timeout whose error says what timed out. The body is read
+ * here, under the same timeout, so a host that sends its headers and then
+ * stalls fails the same way as one that never answers, rather than with a
+ * raw TimeoutError from the caller's res.json(). Every caller reads a small
+ * body anyway.
+ */
 export async function timedFetch(what: string, url: string, init: RequestInit, ms = TTL.upstreamTimeoutMs): Promise<Response> {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
+    const body = NO_BODY.has(res.status) ? null : await res.arrayBuffer();
+    return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
   } catch (err) {
-    if ((err as Error)?.name === 'TimeoutError') throw new Error(`${what} timeout after ${ms}ms`);
+    const name = (err as Error)?.name;
+    if (name === 'TimeoutError') throw new UpstreamUnreachable(`${what} timeout after ${ms}ms`, true);
+    // fetch rejects with a TypeError when the connection itself fails.
+    if (name === 'TypeError') throw new UpstreamUnreachable(`${what} unreachable: ${(err as Error).message}`, false);
     throw err;
   }
 }
