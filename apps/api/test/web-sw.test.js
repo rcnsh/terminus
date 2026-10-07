@@ -52,14 +52,67 @@ function startupModules(entry) {
   return [...seen].sort();
 }
 
+/** What [page]'s module scripts load at startup, the scripts themselves left out (the page names them already). */
+function pageModules(page) {
+  const entries = [...read(page).matchAll(/<script type="module" src="([^"]+)"><\/script>/g)].map((m) => m[1]);
+  assert.ok(entries.length, `${page} has a module script`);
+  const all = new Set(entries.flatMap(startupModules));
+  for (const e of entries) all.delete(e);
+  return [...all].sort();
+}
+
 test('each page asks for every module it starts with at once (modulepreload), and only those', () => {
   // Without a bundler the browser finds a module's imports only once it has
   // it: one round trip per level. The page's list lets it ask for them all
   // in one go. Out of date, it would load a file for nothing, or miss one.
-  for (const [page, entry] of [['/app/index.html', '/app/app.js'], ['/account/index.html', '/account/app.js']]) {
+  const pages = [
+    '/app/index.html',
+    '/account/index.html',
+    '/index.html',
+    '/status/index.html',
+    '/privacy/index.html',
+    '/privacy/zh/index.html',
+    '/privacy/policy/index.html',
+    '/privacy/policy/zh/index.html',
+    '/not-found/index.html',
+  ];
+  for (const page of pages) {
     const listed = [...read(page).matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map((m) => m[1]).sort();
-    assert.deepEqual(listed, startupModules(entry), page);
+    assert.deepEqual(listed, pageModules(page), page);
   }
   // Settings and setup wait for sign-in on the account page.
   assert.ok(!startupModules('/account/app.js').includes('/account/settings.js'));
+});
+
+/** The modules [file] loads later with import(), resolved to site paths. */
+function lazyImportsOf(file) {
+  return [...read(file).matchAll(/\bimport\((['"])([^'"]+)\1\)/g)].map((m) => (m[2].startsWith('/') ? m[2] : path.posix.join(path.posix.dirname(file), m[2])));
+}
+
+test('Settings asks for all its modules at once, not one level at a time', () => {
+  // Each page imports Settings (and the account page, setup) with import(),
+  // along with every module those need that the page hasn't loaded yet.
+  for (const [entry, parts] of [['/app/app.js', ['/account/settings.js']], ['/account/app.js', ['/account/settings.js', '/account/onboarding.js']]]) {
+    const loaded = new Set([entry, ...startupModules(entry)]);
+    const needed = new Set(parts.flatMap((p) => [p, ...startupModules(p)]).filter((f) => !loaded.has(f)));
+    const asked = new Set(lazyImportsOf(entry));
+    assert.deepEqual([...needed].filter((f) => !asked.has(f)), [], entry);
+  }
+});
+
+test('Chinese is kept for offline only once it is asked for', () => {
+  // Only Chinese readers load zh.js (assets/i18n.js): the service worker keeps it when they do.
+  assert.ok(!shellFiles().has('/assets/zh.js'));
+  assert.match(read('sw.js'), /const ZH = '\/assets\/zh\.js'/);
+});
+
+test('the map libraries named in app/map-files.js are the vendored ones', () => {
+  // The one place their versions are written: the map, its early fetch,
+  // the timelapse page, and the service worker's clean-up all follow it.
+  const src = read('app/map-files.js');
+  for (const name of ['MAPLIBRE', 'PMTILES']) {
+    const at = new RegExp(`export const ${name} = '([^']+)'`).exec(src)[1];
+    assert.ok(fs.existsSync(new URL(decodeURIComponent(at).replace(/^\//, ''), PUBLIC)), at);
+  }
+  for (const f of ['app/map.js', 'admin/timelapse/timelapse.js']) assert.doesNotMatch(read(f), /maplibre-gl%40\d|pmtiles%40\d/, f);
 });

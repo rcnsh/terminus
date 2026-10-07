@@ -17,7 +17,7 @@
 
 import { loadCalendar } from './calendarsync.ts';
 import type { Env } from './types.ts';
-import { type Boarded, type DayRecord, type TripRecord, endOfDayMs, sgtDate } from './trip.ts';
+import { type Boarded, type DayRecord, type TripRecord, type TripUpdate, endOfDayMs, sgtDate } from './trip.ts';
 import type { MeDeps } from './me.ts';
 import { tripCardFor } from './me.ts';
 import { nudgeUser, pushDevices } from './push.ts';
@@ -62,8 +62,8 @@ export class Trip {
 
   async fetch(req: Request): Promise<Response> {
     // A change reads the day, waits for its body, then writes the day back.
-    // One /me/next sends a plan and a watch at once: without holding the
-    // object, the second would put back a copy from before the first.
+    // Two devices' changes can arrive at once: without holding the object,
+    // the second would put back a copy from before the first.
     if (req.method === 'POST') return this.state.blockConcurrencyWhile(() => this.handle(req));
     return this.handle(req);
   }
@@ -88,63 +88,65 @@ export class Trip {
       const { date } = (await req.json().catch(() => ({}))) as { date?: string };
       return Response.json(today(null, date ?? ''));
     }
-    const day = await this.storedDay();
 
     if (req.method === 'GET' && url.pathname === '/day') {
+      const day = await this.storedDay();
       const date = url.searchParams.get('date') ?? '';
       // Yesterday's signals are never today's, even before the alarm has run.
       return Response.json(day && day.date === date ? day : null);
     }
 
-    if (req.method === 'POST' && url.pathname === '/signal') {
-      // One trip's record, or several at once ("Not on campus today").
-      type Item = { key: string; rec: TripRecord | null };
-      const body = (await req.json()) as Partial<Item> & { items?: Item[]; date: string; deleteAt: number };
-      const items = body.items ?? [{ key: body.key!, rec: body.rec ?? null }];
-      const next = today(day, body.date);
-      for (const { key, rec } of items) {
-        // A day has a handful of trips; past this many a new one is refused,
-        // so the record stays far below a stored value's size limit.
-        if (rec && !(key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) continue;
-        if (rec) next.trips[key] = rec;
-        else delete next.trips[key];
-      }
-      await this.storage.put('day', next);
-      await this.arm(body.deleteAt);
-      return Response.json(next);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/plan') {
-      const body = (await req.json()) as { date: string; key: string; plan: Boarded; deleteAt: number };
-      const next = await this.putPlan(body.date, body.key, body.plan);
-      await this.arm(body.deleteAt);
-      return Response.json(next);
-    }
-
-    if (req.method === 'POST' && url.pathname === '/watch') {
-      const body = (await req.json()) as { userId: string; date: string; at: number; deleteAt: number };
-      const next = today(day, body.date);
-      next.watch = body.at;
-      await this.storage.put('day', next);
-      await this.storage.put('userId', body.userId);
-      // Only ever sooner: a device refreshing after a moment the object still
-      // owes a push for (say, "due") mustn't move that wake past it.
-      const pending = await this.storage.get<number>('wakeAt');
-      await this.storage.put('wakeAt', pending !== undefined ? Math.min(pending, body.at) : body.at);
-      await this.arm(body.deleteAt);
-      return Response.json({ ok: true });
-    }
-
-    if (req.method === 'POST' && url.pathname === '/followed') {
-      const body = (await req.json()) as { date: string; at: number; deleteAt: number };
-      const next = today(day, body.date);
-      next.followed = body.at;
-      await this.storage.put('day', next);
-      await this.arm(body.deleteAt);
-      return Response.json(next);
+    if (req.method === 'POST') {
+      const u = updateOf(url.pathname, await req.json());
+      if (u) return Response.json(await this.update(u));
     }
 
     return new Response('not found', { status: 404 });
+  }
+
+  /**
+   * Applies every change one request carries (signals, followed, plans, a
+   * watch) in one read and at most one write of the day, and sets the
+   * alarm only when its time moves: most requests change one thing or
+   * nothing, and each write and alarm is billed.
+   */
+  private async update(u: TripUpdate): Promise<DayRecord> {
+    const stored = await this.storedDay();
+    const next = today(stored, u.date);
+    let changed = next !== stored;
+    for (const { key, rec } of u.items ?? []) {
+      // A day has a handful of trips; past this many a new one is refused,
+      // so the record stays far below a stored value's size limit.
+      if (rec && !(key in next.trips) && Object.keys(next.trips).length >= MAX_DAY_TRIPS) continue;
+      if (rec) next.trips[key] = rec;
+      else delete next.trips[key];
+      changed = true;
+    }
+    if (u.followed !== undefined && next.followed !== u.followed) {
+      next.followed = u.followed;
+      changed = true;
+    }
+    if (u.plans && Object.keys(u.plans).length) {
+      next.plans = { ...next.plans, ...u.plans };
+      changed = true;
+    }
+    if (u.watch) {
+      if ((await this.storage.get<string>('userId')) !== u.watch.userId) await this.storage.put('userId', u.watch.userId);
+      // Only ever sooner: a device refreshing after a moment the object still
+      // owes a push for (say, "due") mustn't move that wake past it.
+      const pending = await this.storage.get<number>('wakeAt');
+      const at = pending !== undefined ? Math.min(pending, u.watch.at) : u.watch.at;
+      if (at !== pending) await this.storage.put('wakeAt', at);
+      // The wake actually pending, so the Worker can tell whether asking
+      // again would bring it any sooner (needsWatch).
+      if (next.watch !== at) {
+        next.watch = at;
+        changed = true;
+      }
+    }
+    if (changed) await this.storage.put('day', next);
+    await this.arm(u.deleteAt);
+    return next;
   }
 
   async alarm(): Promise<void> {
@@ -196,6 +198,14 @@ export class Trip {
         if (woke.next !== null && !woke.retry && next !== undefined) {
           const d = today(await this.storedDay(), sgtDate(nowMs));
           await this.storage.put('day', { ...d, watch: next });
+        } else if (next === undefined) {
+          // No wake left: the day says so, and a request asks again (needsWatch)
+          // rather than trusting a wake that's gone.
+          const d = await this.storedDay();
+          if (d?.watch !== undefined) {
+            const { watch: _gone, ...rest } = d;
+            await this.storage.put('day', rest);
+          }
         }
       }
       await this.arm();
@@ -214,12 +224,20 @@ export class Trip {
     const date = sgtDate(nowMs);
     const day = stored && stored.date === date ? stored : null;
     const ctx = { waitUntil: (p: Promise<unknown>) => this.state.waitUntil(p), passThroughOnException() {} } as unknown as ExecutionContext;
-    // Held like POST /plan, and not after a /clear.
-    const savePlan = (key: string, plan: Boarded) =>
-      this.state.blockConcurrencyWhile(async () => {
+    // Held like a POST, and not after a /clear. The card hands them to
+    // waitUntil; they're waited for here, so they land before the day is
+    // read back to note the next wake. Only they are: the object is billed
+    // for the time it's awake.
+    const plans: Promise<unknown>[] = [];
+    const savePlan = (key: string, plan: Boarded) => {
+      const p = this.state.blockConcurrencyWhile(async () => {
         if (!(await this.cleared())) await this.putPlan(date, key, plan);
       });
+      plans.push(p);
+      return p;
+    };
     const card = await tripCardFor(env, ctx, DEPS, userId, day, nowMs, savePlan);
+    await Promise.allSettled(plans);
     if (!card) return stop;
 
     const last = (await this.storage.get<Pushed>('pushed')) ?? null;
@@ -268,18 +286,48 @@ export class Trip {
     return next;
   }
 
-  /** One alarm for both jobs: whichever of midnight and the next wake (or one owed, see alarm) is sooner. */
+  /**
+   * One alarm for both jobs: whichever of midnight and the next wake (or one
+   * owed, see alarm) is sooner. Writes midnight and sets the alarm only when
+   * they change.
+   */
   private async arm(deleteAt?: number): Promise<void> {
-    if (deleteAt !== undefined) await this.storage.put('deleteAt', deleteAt);
-    const del = deleteAt ?? (await this.storage.get<number>('deleteAt'));
+    const stored = await this.storage.get<number>('deleteAt');
+    if (deleteAt !== undefined && deleteAt !== stored) await this.storage.put('deleteAt', deleteAt);
+    const del = deleteAt ?? stored;
     const wake = await this.storage.get<number>('wakeAt');
     const owed = await this.storage.get<number>('waking');
     const at = Math.min(...[del, wake, owed].filter((x): x is number => typeof x === 'number'));
-    if (Number.isFinite(at)) await this.storage.setAlarm(at);
+    // No alarm is pending while alarm() runs, so one is always set again then.
+    if (Number.isFinite(at) && (await this.storage.getAlarm()) !== at) await this.storage.setAlarm(at);
   }
 }
 
 /** Today's record: the stored one if it's today's, else a fresh one. */
 function today(day: DayRecord | null, date: string): DayRecord {
   return day && day.date === date ? day : { date, trips: {} };
+}
+
+/**
+ * The update a request asks for: /update carries any of the changes; the
+ * single-purpose paths are what a Worker from before it sends, still taken
+ * while a deploy rolls out.
+ */
+function updateOf(path: string, body: unknown): TripUpdate | null {
+  const b = (body ?? {}) as Record<string, unknown> & { date: string; deleteAt: number };
+  const base = { date: b.date, deleteAt: b.deleteAt };
+  switch (path) {
+    case '/update':
+      return b as unknown as TripUpdate;
+    case '/signal':
+      return { ...base, items: (b.items as TripUpdate['items']) ?? [{ key: b.key as string, rec: (b.rec as TripRecord | null) ?? null }] };
+    case '/plan':
+      return { ...base, plans: { [b.key as string]: b.plan as Boarded } };
+    case '/watch':
+      return { ...base, watch: { userId: b.userId as string, at: b.at as number } };
+    case '/followed':
+      return { ...base, followed: b.at as number };
+    default:
+      return null;
+  }
 }

@@ -1,8 +1,8 @@
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeD1 } from './_d1.mjs';
-import { MIN_SAMPLES, dayType, loadCrowdRisk, pruneCrowdSeen, recordCrowds } from '../src/crowd.ts';
+import { MIN_SAMPLES, dayType, forgetSent, loadCrowdRisk, pruneCrowdSeen, recordCrowds } from '../src/crowd.ts';
 import { leaveBy } from '../src/leave.ts';
 import { RIDE, WALK } from '../src/config.ts';
 
@@ -12,6 +12,21 @@ const MIN = 60_000;
 
 const sighting = (plate, crowd, etaS = 60) => ({ svc: 'D2', etaS, crowd, plate, berth: null });
 const at = (stop, arrivals, fetchedAt = THU) => new Map([[stop, { code: stop, arrivals, fetchedAt, stale: false, available: true }]]);
+
+beforeEach(() => forgetSent());
+
+test('a sighting already sent from this isolate is not sent to D1 again', async () => {
+  const db = makeD1();
+  let batches = 0;
+  const batch = db.batch.bind(db);
+  db.batch = async (s) => { batches++; return batch(s); };
+  await recordCrowds(db, at('COM3', [sighting('PD1A', 'high')]), THU);
+  await recordCrowds(db, at('COM3', [sighting('PD1A', 'high')]), THU + 30_000);
+  assert.equal(batches, 1, 'the second look costs nothing');
+  await recordCrowds(db, at('COM3', [sighting('PD1A', 'high')], THU + 31 * MIN), THU + 31 * MIN);
+  assert.equal(batches, 2, 'the next half hour is a new sighting');
+  assert.equal(db._db.prepare('SELECT SUM(n) AS n FROM crowd_stats').get().n, 2);
+});
 
 test('a bus is counted once per stop and half hour, however often it is looked at', async () => {
   const db = makeD1();

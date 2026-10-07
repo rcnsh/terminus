@@ -47,6 +47,15 @@
   .outages .ongoing { color: var(--warn-ink); font-weight: 600; }
   @media (max-width: 640px) { .facts { grid-template-columns: 1fr; } }
 </style>
+<!-- Every module the page starts with, asked for at once (web-sw.test.js keeps this list right). -->
+<link rel="modulepreload" href="/assets/ui.js">
+<link rel="modulepreload" href="/vendor/preact-10.29.8/preact.mjs">
+<link rel="modulepreload" href="/vendor/preact-10.29.8/hooks.mjs">
+<link rel="modulepreload" href="/vendor/preact-10.29.8/htm.mjs">
+<link rel="modulepreload" href="/account/daylight.js">
+<link rel="modulepreload" href="/account/dom.js">
+<link rel="modulepreload" href="/account/livery.js">
+<link rel="modulepreload" href="/account/sky.js">
 </head>
 <body>
 <section class="sky-panel head">

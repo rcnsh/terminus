@@ -1,12 +1,54 @@
 # Headers for the files served without the Worker (see runWorkerFirst in
 # apps/api/cloudflare.config.ts): the same ones withSecurityHeaders() in
 # apps/api/src/http.ts gives everything else. None of these is a page, so
-# no CSP is needed here.
+# no CSP is needed here. The pages in the folders below still go through
+# the Worker, which sets the same headers again (and the CSP).
+#
+# Two rules that match one file add their headers twice, so the rules
+# don't overlap. Cache-Control: left alone, a file is asked about again
+# on every load (max-age=0, must-revalidate), which suits files whose
+# name never changes. /vendor/ folders carry their version, so a browser
+# keeps them for a year without asking; fonts change about never.
 /assets/*
   X-Content-Type-Options: nosniff
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Referrer-Policy: strict-origin-when-cross-origin
+/assets/fonts/*
+  Cache-Control: public, max-age=604800
 /vendor/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin
+  Cache-Control: public, max-age=31536000, immutable
+/app/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin
+/account/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin
+/admin/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin
+/status/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin
+/pair/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: no-referrer
+/sw.js
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin
+/favicon.*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin
+/manifest.webmanifest
   X-Content-Type-Options: nosniff
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Referrer-Policy: strict-origin-when-cross-origin

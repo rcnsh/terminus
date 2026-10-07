@@ -3,6 +3,11 @@
 // - The app's own files come from the network, and a copy is kept so the
 //   app still opens without a connection. (Serving the copy first would show
 //   every update one load late, and could pair a new page with an old script.)
+//   On a slow connection the copy is used after a second's wait instead.
+//   Vendored files carry their version in their address, so they come from
+//   the copy first: they never change there.
+// - Chinese (assets/zh.js) is kept once a page asks for it, not before: only
+//   Chinese readers load it.
 // - /me, /me/next and /me/day go to the network first. The last good reply
 //   is kept, and served when the network is down, marked with
 //   x-terminus-cached (when it was fetched) so the page can say so.
@@ -15,7 +20,7 @@
 //   the pieces MapLibre asks for. So the campus map works offline after the
 //   first look. Live buses and arrivals are never kept.
 
-const SHELL = 'shell-v16';
+const SHELL = 'shell-v17';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -25,6 +30,7 @@ const SHELL_FILES = [
   '/app/',
   '/app/app.js',
   '/app/offline.js',
+  '/app/map-files.js',
   // The Buses tab too, so it opens offline and says it needs a connection.
   '/app/buses.js',
   '/app/app.css',
@@ -46,7 +52,6 @@ const SHELL_FILES = [
   '/assets/theme.js',
   '/assets/i18n.js',
   '/assets/sky-phase.js',
-  '/assets/zh.js',
   // The fonts too, so the app looks the same offline.
   '/assets/fonts.css',
   '/assets/fonts/inter-latin.woff2',
@@ -55,6 +60,8 @@ const SHELL_FILES = [
   '/favicon.svg',
   '/assets/icons/icon-192.png',
 ];
+/** The Chinese words: kept with the app's files, but only for a browser that reads them. */
+const ZH = '/assets/zh.js';
 const DATA_PATHS = new Set(['/me', '/me/next', '/me/day']);
 // Each changes whose account this browser is signed in to.
 const SIGN_OUT = [
@@ -67,7 +74,16 @@ const SIGN_OUT = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(SHELL);
+      await cache.addAll(SHELL_FILES);
+      // Chinese for a browser set to it, or one whose last version kept it
+      // (Chinese chosen in Settings). Not worth failing the update over.
+      if (/^zh/i.test(self.navigator.language ?? '') || (await caches.match(ZH))) await cache.add(ZH).catch(() => {});
+      await self.skipWaiting();
+    })(),
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -95,7 +111,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirst(req, event));
     return;
   }
-  if (SHELL_FILES.includes(url.pathname)) event.respondWith(shellFile(req, url.pathname, event));
+  if (SHELL_FILES.includes(url.pathname) || url.pathname === ZH) {
+    event.respondWith(url.pathname.startsWith('/vendor/') ? cacheFirst(req, SHELL) : shellFile(req, url.pathname, event));
+  }
   else if (url.pathname === TILES) event.respondWith(tiles(req, event));
   // The timelapse page's video encoder (admin/timelapse/) is the operator's, not the map's: never kept.
   else if (url.pathname.startsWith('/vendor/mediabunny')) return;
@@ -106,17 +124,20 @@ self.addEventListener('fetch', (event) => {
 /** On a slow connection, how long to wait for the network before using the
  *  kept copy. The network's answer still updates the copy when it comes. */
 const SLOW_MS = 4_000;
+/** The same for the app's own files: a page waits on some 30 of them, and
+ *  the copy is at most one edit old (the network's reply replaces it). */
+const SHELL_SLOW_MS = 1_000;
 
 /**
- * [network]'s reply, or, when it takes longer than SLOW_MS (or fails), the
+ * [network]'s reply, or, when it takes longer than [wait] (or fails), the
  * copy [kept] finds, if there is one. The network carries on in [event]'s
  * lifetime, so a late reply is still kept for next time.
  */
-async function soonest(network, kept, event) {
+async function soonest(network, kept, event, wait = SLOW_MS) {
   event?.waitUntil(network.catch(() => {}));
   let timer;
   const slow = new Promise((ok) => {
-    timer = setTimeout(ok, SLOW_MS, 'slow');
+    timer = setTimeout(ok, wait, 'slow');
   });
   const first = await Promise.race([network.then((res) => ({ res }), (err) => ({ err })), slow]);
   clearTimeout(timer);
@@ -130,13 +151,34 @@ async function soonest(network, kept, event) {
 /* ---------- the map ---------- */
 
 /** Files that never change at their address (versioned, or glyphs and icons). */
-async function cacheFirst(req) {
-  const cache = await caches.open(MAP);
+async function cacheFirst(req, name = MAP) {
+  const cache = await caches.open(name);
   const kept = await cache.match(req);
   if (kept) return kept;
   const res = await fetch(req);
-  if (res.ok) await cache.put(req, res.clone());
+  if (res.ok) {
+    await cache.put(req, res.clone());
+    await dropOtherVersions(cache, req.url);
+  }
   return res;
+}
+
+/** A vendored library's name and version, from its folder: /vendor/maplibre-gl@6.11.2/… */
+const vendored = (url) => /^\/vendor\/([^/@]+)@([^/]+)\//.exec(decodeURIComponent(new URL(url).pathname));
+
+/**
+ * A new version of a vendored library (MapLibre, PMTiles) has just been
+ * kept: the copies of any other version go. Only the version the app asks
+ * for now is ever kept, so the map's cache doesn't grow with each update,
+ * and the version is named in one place (app/map-files.js), not here too.
+ */
+async function dropOtherVersions(cache, url) {
+  const mine = vendored(url);
+  if (!mine) return;
+  for (const req of await cache.keys()) {
+    const v = vendored(req.url);
+    if (v && v[1] === mine[1] && v[2] !== mine[2]) await cache.delete(req);
+  }
 }
 
 /** The newest from the network, the kept copy without one. */
@@ -251,12 +293,20 @@ async function networkFirst(req, event) {
 
 async function shellFile(req, path, event) {
   const cache = await caches.open(SHELL);
-  const network = (async () => {
-    const res = await fetch(req);
-    if (res.ok) await cache.put(path, res.clone());
+  const network = fetch(req).then((res) => {
+    // Kept after the page has it, not before.
+    if (res.ok) event.waitUntil(keepShell(cache, path, res.clone()));
     return res;
-  })();
-  return soonest(network, () => cache.match(path), event).catch(() => Response.error());
+  });
+  return soonest(network, () => cache.match(path), event, SHELL_SLOW_MS).catch(() => Response.error());
+}
+
+/** Keeps [res] as [path]'s copy, unless it's the copy already kept (same ETag): most loads change nothing. */
+async function keepShell(cache, path, res) {
+  const etag = res.headers.get('etag');
+  const kept = etag ? await cache.match(path) : null;
+  if (kept && kept.headers.get('etag') === etag) return res.body?.cancel();
+  return cache.put(path, res);
 }
 
 // ---------- push (phase 5) ----------

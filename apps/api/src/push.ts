@@ -76,9 +76,25 @@ async function signJwt(a: ServiceAccount, nowS: number): Promise<string> {
   return `${head}.${claims}.${b64url(sig)}`;
 }
 
+/** How long Google's access tokens last. */
+const TOKEN_LIFE_S = 3600;
+
+/**
+ * The token kept in the isolate too, so a push batch doesn't read KV each
+ * time: until the KV entry would expire for one this isolate minted, and for
+ * one read back from KV (put there at most TOKEN_TTL_S ago) only for the
+ * part of its life that is certainly left.
+ */
+const tokenMemo = new WeakMap<object, { token: string; until: number }>();
+
 async function accessToken(env: Env, a: ServiceAccount, nowMs: number): Promise<string> {
+  const kept = tokenMemo.get(env.KV);
+  if (kept && nowMs < kept.until) return kept.token;
   const cached = await env.KV.get(TOKEN_KV).catch(() => null);
-  if (cached) return cached;
+  if (cached) {
+    tokenMemo.set(env.KV, { token: cached, until: nowMs + (TOKEN_LIFE_S - TOKEN_TTL_S) * 1000 });
+    return cached;
+  }
   const res = await fetch(a.token_uri ?? 'https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -89,6 +105,7 @@ async function accessToken(env: Env, a: ServiceAccount, nowMs: number): Promise<
   const { access_token } = (await res.json()) as { access_token?: string };
   if (!access_token) throw new Error('fcm oauth: no token');
   await env.KV.put(TOKEN_KV, access_token, { expirationTtl: TOKEN_TTL_S }).catch(() => {});
+  tokenMemo.set(env.KV, { token: access_token, until: nowMs + TOKEN_TTL_S * 1000 });
   return access_token;
 }
 
@@ -245,6 +262,7 @@ async function toAndroid(env: Env, a: ServiceAccount, fcm: Fcm, to: { push_token
   let res = await send(fcm.bearer);
   if (res.status === 401) {
     // The access token went stale before its cache entry did: a new one, and once more.
+    tokenMemo.delete(env.KV);
     await env.KV.delete(TOKEN_KV).catch(() => {});
     fcm.bearer = null;
     try {

@@ -25,6 +25,7 @@ import { isoSeconds, named } from './format.ts';
 import { clockAt } from './clock.ts';
 import { indexGraph } from './resolve.ts';
 import { tripAnswer } from './next.ts';
+import { unlogged } from './answer.ts';
 import { ASSUME_MS, type DayRecord, dayState, leaveOf, offStop, sgtDate } from './trip.ts';
 import { m } from './i18n.ts';
 
@@ -93,6 +94,9 @@ export async function dayPlan(
   const homeStop = profile.home?.stops[0] ?? null;
   const places: PlaceChip[] = [];
   const classes = classesOn(profile, nowMs);
+  // The leave-bys are worked out for the timeline, not asked for one by
+  // one: not logged as answers (the card that asks is).
+  const quiet = unlogged(deps);
 
   const items: DayItem[] = [];
   let prev: ImportedTrip | null = null;
@@ -151,7 +155,7 @@ export async function dayPlan(
     else if ((status === 'next' || status === 'later') && from) {
       const setOff = status === 'next' ? here : { lat: null, lon: null };
       pending.push(
-        tripAnswer(env, ctx, nowMs, deps, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, setOff, places, h12, earlier.has(key))
+        tripAnswer(env, ctx, nowMs, quiet, profile, { to: c.to, label: c.label, why: 'class', from, trip: c, fromVenue }, setOff, places, h12, earlier.has(key))
           .then((a) => {
             item.leave = a.leave ?? null;
             item.timing = a.timing ?? null;

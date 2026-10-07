@@ -35,17 +35,35 @@ export function dayType(nowMs: number): DayType {
 /** Half hours past midnight, SGT. */
 export const slotOf = (ms: number) => Math.floor(sgt(ms).minutes / 30);
 
+/**
+ * Sightings this isolate has already sent, so an answer refreshed every 30 s
+ * doesn't send the same ones to D1 again only to have them ignored. D1 still
+ * decides (crowd_seen); this only saves the round trip. Bounded: cleared
+ * when full.
+ */
+const sent = new Set<string>();
+const SENT_MAX = 5_000;
+
+/** For tests: forget what was sent. */
+export function forgetSent(): void {
+  sent.clear();
+}
+
 /** Tally the buses about to reach these stops. Never throws. */
 export async function recordCrowds(db: D1Database, byStop: Map<string, StopArrivals>, nowMs: number): Promise<void> {
   try {
     const daytype = dayType(nowMs);
     const stmts: D1PreparedStatement[] = [];
+    const keys: string[] = [];
     for (const [stop, sa] of byStop) {
       if (!sa.available || sa.stale) continue;
       for (const a of sa.arrivals) {
         if (!a.plate || !a.crowd || a.etaS == null || a.etaS > NEAR_S) continue;
         const at = sa.fetchedAt + a.etaS * 1000;
         const slot = slotOf(at);
+        const key = `${a.plate}|${stop}|${sgtDate(at)}|${slot}`;
+        if (sent.has(key) || keys.includes(key)) continue;
+        keys.push(key);
         stmts.push(
           db.prepare('INSERT OR IGNORE INTO crowd_seen (plate, stop, day, slot) VALUES (?, ?, ?, ?)').bind(a.plate, stop, sgtDate(at), slot),
           // Counts only when the line above added a row: a bus already seen
@@ -59,7 +77,10 @@ export async function recordCrowds(db: D1Database, byStop: Map<string, StopArriv
         );
       }
     }
-    if (stmts.length) await db.batch(stmts);
+    if (!stmts.length) return;
+    await db.batch(stmts);
+    if (sent.size + keys.length > SENT_MAX) sent.clear();
+    for (const k of keys) sent.add(k);
   } catch (err) {
     // A lost tally is nothing; a failed answer would be.
     console.error('crowd tally failed', err instanceof Error ? err.name : typeof err);

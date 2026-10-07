@@ -332,7 +332,10 @@ export function buildDestinations(graph: Graph): Destination[] {
   // theatre that is a building and a room) isn't listed again.
   const listed = new Set(out.map((d) => `${d.code}|${d.label}`));
   const named = new Set<string>();
-  for (const [code, v] of Object.entries(VENUES.venues).sort(([a], [b]) => a.length - b.length || a.localeCompare(b))) {
+  // Shortest code first, then in code-unit order: not localeCompare, which
+  // starts ICU for a thousand comparisons. For the real venues it keeps the
+  // same code for each building (campus.test.js).
+  for (const [code, v] of Object.entries(VENUES.venues).sort(([a], [b]) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0))) {
     const label = friendlyLabel(code);
     if (!label || !stops.has(v.stop) || named.has(`${label}|${v.stop}`) || listed.has(`${code}|${label}`)) continue;
     named.add(`${label}|${v.stop}`);

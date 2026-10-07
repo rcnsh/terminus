@@ -140,3 +140,19 @@ test('a version refused after the switch away from it does not open the breaker 
     assert.equal(await breakerOpen(), true);
   }
 });
+
+test('the device id is read from KV once, then kept; a new one is made only when none is stored', async () => {
+  const env = makeEnv();
+  delete env.NEXTBUS_DEVICE_ID;
+  const get = env.KV.get.bind(env.KV);
+  let reads = 0;
+  env.KV.get = (k, ...rest) => {
+    if (k === 'auth:deviceid') reads++;
+    return get(k, ...rest);
+  };
+  const made = await deviceId(env);
+  assert.match(made, /^[0-9a-f]{16}$/);
+  assert.equal(await deviceId(env), made, 'the stored id, stable');
+  assert.equal(await deviceId(env), made);
+  assert.equal(reads, 2, 'read once to find none, once to find it stored, then kept');
+});
