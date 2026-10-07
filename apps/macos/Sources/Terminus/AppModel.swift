@@ -280,9 +280,9 @@ final class AppModel {
     private static func hwModel() -> String? {
         var size = 0
         guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else { return nil }
-        var buf = [CChar](repeating: 0, count: size)
+        var buf = [UInt8](repeating: 0, count: size)
         guard sysctlbyname("hw.model", &buf, &size, nil, 0) == 0 else { return nil }
-        return String(cString: buf)
+        return String(decoding: buf.prefix { $0 != 0 }, as: UTF8.self)
     }
 
     // MARK: trip signals
