@@ -71,3 +71,9 @@ func L(_ en: String, _ args: String...) -> String {
     let s = Bundle.main.localizedString(forKey: en, value: en, table: nil)
     return args.isEmpty ? s : String(format: s, locale: Lang.locale, arguments: args)
 }
+
+/// `s` as VoiceOver should say it: "~09:11", a timetable guess, as "about
+/// 09:11" ("约 09:11"), since the "~" alone isn't read out.
+func spokenTimes(_ s: String) -> String {
+    s.replacingOccurrences(of: "~", with: L("about") + " ")
+}

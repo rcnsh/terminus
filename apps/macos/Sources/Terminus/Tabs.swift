@@ -49,8 +49,10 @@ struct Tabs: View {
     }
 
     private func strip(icons: Bool, inset: CGFloat = 10) -> some View {
-        HStack(spacing: 2) {
-            ForEach(tabs, id: \.0) { tab, title, icon in
+        let all = tabs
+        return HStack(spacing: 2) {
+            ForEach(Array(all.enumerated()), id: \.element.0) { i, entry in
+                let (tab, title, icon) = entry
                 let on = tab == current
                 Button {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { choose(tab) }
@@ -74,12 +76,13 @@ struct Tabs: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(title)
+                .accessibilityValue(L("Tab %@ of %@", "\(i + 1)", "\(all.count)"))
                 .accessibilityAddTraits(on ? .isSelected : [])
                 .id(tab)
                 // An added place's ×: off the tabs, as on the phone.
                 if case .code(let c, _) = tab, let p = model.added.first(where: { $0.code == c }) {
                     Button { model.removeAdded(p) } label: {
-                        Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(.secondary).padding(.trailing, 4)
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary).padding(.trailing, 4)
                     }
                     .buttonStyle(.plain)
                     .help(L("Remove %@", p.label))
@@ -88,6 +91,9 @@ struct Tabs: View {
             }
         }
         .padding(3)
+        // One group, named, so VoiceOver says where the tabs are.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L("Destinations"))
     }
 
     private func choose(_ tab: Tab) {
