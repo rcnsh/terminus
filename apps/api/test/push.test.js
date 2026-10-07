@@ -240,6 +240,36 @@ test('the week before a semester, push users with an older timetable are reminde
   assert.equal(await remindTerm(env, Date.now()), 0, 'no timetable to bring up to date');
 });
 
+test('a semester reminder that reaches nobody is tried again; one whose mark cannot be saved is not sent', async () => {
+  const { call, phone, fcm, env, clock } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  const p = { ...JSON.parse(env.DB._db.prepare('SELECT json FROM profiles').get().json), trips: [{ day: THU, arriveByMin: 600, to: 'UTOWN', label: 'GEA1000' }], term: { acadYear: '2025/2026', semester: 2 } };
+  env.DB._db.prepare('UPDATE profiles SET json = ?').run(JSON.stringify(p));
+  clock(Date.parse('2026-08-04T10:30:00+08:00'));
+  const quiet = console.error;
+  console.error = () => {};
+  // The mark can't be saved: nothing goes, rather than the batch every run.
+  const put = env.KV.put;
+  env.KV.put = async (k, ...rest) => {
+    if (k === 'term:reminded') throw new Error('KV write quota');
+    return put.call(env.KV, k, ...rest);
+  };
+  const before = fcm.sent.length;
+  await assert.rejects(remindTerm(env, Date.now()));
+  env.KV.put = put;
+  assert.equal(fcm.sent.length, before);
+  // Firebase failing: nothing reached, so not marked done.
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init) => (String(url).startsWith('https://fcm.googleapis.com/') ? new Response('unavailable', { status: 503 }) : real(url, init));
+  assert.equal(await remindTerm(env, Date.now()), 0);
+  globalThis.fetch = real;
+  console.error = quiet;
+  assert.equal(await env.KV.get('term:reminded'), null);
+  assert.equal(await remindTerm(env, Date.now()), 1, 'sent once it works');
+  assert.equal(fcm.sent.length, before + 1);
+  assert.equal(await remindTerm(env, Date.now()), 0, 'once a semester');
+});
+
 test('an access token that went stale is replaced, and the push still goes', async () => {
   const { call, phone, next, fcm, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });

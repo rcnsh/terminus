@@ -398,12 +398,20 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
     if (!Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) continue;
     due.push({ userId: r.user_id, notice: p.lang === 'en' ? en : p.lang === 'zh' ? zh : both });
   }
+  // The batch is marked before it's sent, so a mark that can't be saved
+  // sends nothing rather than the same batch every run.
+  const done = results.length < batch;
+  await env.KV.put(REMINDED_KEY, done ? id : `${id} ${results[results.length - 1].user_id}`, { expirationTtl: 30 * 86_400 });
   for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
     const n = await Promise.all(due.slice(i, i + ARM_AT_ONCE).map((u) => remindUser(env, u.userId, u.notice, nowMs).catch(() => 0)));
     sent += n.reduce((x, y) => x + y, 0);
   }
-  const done = results.length < batch;
-  await env.KV.put(REMINDED_KEY, done ? id : `${id} ${results[results.length - 1].user_id}`, { expirationTtl: 30 * 86_400 });
+  // Not one device reached (push itself broken, say): the batch goes again
+  // next run. Tokens that are gone were cleared, so they aren't asked twice.
+  if (due.length && !sent) {
+    console.error('term reminders not sent', due.length);
+    await (mark ? env.KV.put(REMINDED_KEY, mark, { expirationTtl: 30 * 86_400 }) : env.KV.delete(REMINDED_KEY));
+  }
   return sent;
 }
 
