@@ -51,8 +51,8 @@ function skyAt(s, t) {
 
 const PHASES = ['dawn', 'day', 'golden', 'dusk', 'night'];
 const LIGHT_SKY = new Set(['dawn', 'day', 'golden']);
-// Where the words are: below the sun's room, above the horizon.
-const WORDS = [0.25, 0.4, 0.55, 0.65, 0.72];
+// Where the words are: below the moon's short room, above the horizon.
+const WORDS = [0.12, 0.25, 0.4, 0.55, 0.65, 0.72];
 
 function skies() {
   const night = vars('body.sky');

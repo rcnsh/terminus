@@ -248,7 +248,7 @@ private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Uni
     val places = answer.places.isNotEmpty()
     val sky = LocalSky.current
     if (sky != null) {
-        SkyHead(108.dp) {
+        SkyHead(72.dp) {
             Text(answer.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 46.sp, lineHeight = 48.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp)
             sub?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 4.dp)) }
             upcoming?.let { UpcomingCard(it, glass = true) }

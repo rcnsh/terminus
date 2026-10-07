@@ -229,40 +229,32 @@ internal fun SettingsScreen(
  * short route (home, classes, pace), each stop opening its page; then the
  * rest as tiles, each saying what's set. Notifications all off shows in
  * amber: it's the setting that changes the most. About is under them.
- * The title and who you are are up in Now's sky (the same hour), which ends
- * on a horizon with a shuttle going by; the rest is on the ground. [top] and
- * [bottom]: the status bar's and the tab bar's room, inside the scrolling.
+ * The list is plain, on the page: the sky is only in the band at the top
+ * of each page. [top] and [bottom]: the status bar's and the tab bar's room,
+ * inside the scrolling.
  */
 @Composable
 private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bottom: Dp, onOpen: (SettingsPage) -> Unit) {
-    val ctx = LocalContext.current
     val ui by main.state.collectAsStateWithLifecycle()
     val profile = state.profile
     val scroll = rememberScrollState()
-    val sky = rememberSky(scroll, skyPhase(ui))
-    val shown = sky.end != null
-    val light = sky.palette.lightInk
-    NightStatusBar(shown && light)
-    val page = MaterialTheme.colorScheme.background
-    val measurer = rememberTextMeasurer()
-    CompositionLocalProvider(LocalSky provides sky) { Box(Modifier.fillMaxSize()) {
+    NightStatusBar(false)
+    Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(scroll)
-                .onGloballyPositioned { sky.contentTop = it.positionInRoot().y }
-                .skyBehind(sky, page, measurer)
                 .padding(top = top, bottom = bottom)
                 .padding(horizontal = 16.dp),
         ) {
-            SkyInk(shown, light) { TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) } }
-            // Who you are, up in the sky.
-            SkyHead(56.dp) { AccountTile(state, ui, onOpen) }
-            SkyGround()
+            TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
+            Spacer(Modifier.height(8.dp))
+            AccountTile(state, ui, onOpen)
+            Spacer(Modifier.height(20.dp))
             SettingsGround(state, ui, profile, onOpen)
         }
-        StatusStrip(sky, top, scroll)
-    } }
+        StatusStrip(null, top, scroll)
+    }
 }
 
 /** Who you are: your email (or that you're not signed in) and your devices, opening Account. */

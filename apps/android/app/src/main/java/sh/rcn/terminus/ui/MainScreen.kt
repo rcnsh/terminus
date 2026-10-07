@@ -219,7 +219,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         // switch or data arrives.
         Box(Modifier.fillMaxWidth().heightIn(min = 180.dp)) {
             if (state.showNearby) Column {
-                SkyHead(44.dp) {}
+                SkyHead(26.dp) {}
                 SkyGround()
                 NearbyList(state.nearby, state.loading, onOpenStop)
             } else {
