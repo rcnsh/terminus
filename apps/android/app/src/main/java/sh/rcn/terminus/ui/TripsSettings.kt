@@ -139,8 +139,8 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
                 stringResource(R.string.n_min, profile.homeWalkMin),
                 L.s(R.string.walk_one_less), L.s(R.string.walk_one_more),
                 profile.homeWalkMin > 0, profile.homeWalkMin < 30,
-                { account.edit { it.homeWalkMin = profile.homeWalkMin - 1 } },
-                { account.edit { it.homeWalkMin = profile.homeWalkMin + 1 } },
+                { account.edit { it.homeWalkMin = it.homeWalkMin - 1 } },
+                { account.edit { it.homeWalkMin = it.homeWalkMin + 1 } },
             )
         }
     }
@@ -164,8 +164,8 @@ private fun DayGroup(profile: ProfileDoc, account: AccountViewModel) {
                 if (h == 1.0) stringResource(R.string.one_hour) else stringResource(R.string.n_hours, if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()),
                 L.s(R.string.gap_shorter), L.s(R.string.gap_longer),
                 h > 0.5, h < 12,
-                { account.edit { it.gapHours = profile.gapHours - 0.5 } },
-                { account.edit { it.gapHours = profile.gapHours + 0.5 } },
+                { account.edit { it.gapHours = it.gapHours - 0.5 } },
+                { account.edit { it.gapHours = it.gapHours + 0.5 } },
             )
         }
     }

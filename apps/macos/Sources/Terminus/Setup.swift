@@ -50,7 +50,9 @@ final class SetupModel {
             async let c = api.campus()
             async let m = try? api.me()
             async let ch = try? api.choices()
-            profile = try object(await p)
+            let loaded = try object(await p)
+            // A change still being saved stays on screen.
+            if saveTask == nil { profile = loaded }
             Clock.pref = clock
             campus = try await c
             me = await m
@@ -148,25 +150,40 @@ final class SetupModel {
         edit { $0["clock"] = pref }
     }
 
-    /// Changes shown at once, saved in the background, put back if the save fails.
+    /// A save waiting or on its way; a reply from an older one doesn't undo the edits made since.
+    private var saveTask: Task<Void, Never>?
+    private var edits = 0
+    /// The profile as the server last had it, to go back to if a save fails.
+    private var confirmed: [String: Any]?
+
+    /// Changes shown at once, saved a moment later (a run of clicks is one
+    /// save, as on the web), put back if the save fails.
     func edit(_ change: (inout [String: Any]) -> Void) {
         guard let current = profile else { return }
+        if saveTask == nil { confirmed = current }
         var next = current
         change(&next)
         profile = next
         guard let body = try? JSONSerialization.data(withJSONObject: next) else { return }
-        Task {
+        edits += 1
+        let mine = edits
+        saveTask?.cancel()
+        saveTask = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            if Task.isCancelled { return }
             do {
-                profile = try object(await api.saveProfile(body))
-                message = nil
+                let saved = try object(await api.saveProfile(body))
+                confirmed = saved
                 onSaved()
-            } catch let e as ApiError {
-                profile = current
-                message = L("Not saved: %@", e.message)
+                guard mine == edits else { return }
+                profile = saved
+                message = nil
             } catch {
-                profile = current
-                message = L("Not saved: couldn't reach terminus")
+                guard mine == edits else { return }
+                profile = confirmed ?? current
+                message = (error as? ApiError).map { L("Not saved: %@", $0.message) } ?? L("Not saved: couldn't reach terminus")
             }
+            saveTask = nil
         }
     }
 

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
@@ -114,6 +115,8 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             }
             runCatching { ProfileDoc(api().profile()) }
                 .onSuccess { p ->
+                    // A change still being saved stays on screen.
+                    if (saveJob?.isActive == true) return@onSuccess
                     _state.update { it.copy(profile = p) }
                     syncLang(p)
                     Clock.keep(getApplication(), p.clock)
@@ -130,24 +133,47 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** A save waiting or on its way; a reply from an older one doesn't undo the edits made since. */
+    private var saveJob: Job? = null
+    private var edits = 0
+    /** The profile as the server last had it, to go back to if a save fails. */
+    private var confirmed: ProfileDoc? = null
+    /** An edit still in its moment before saving. */
+    private var waiting: ProfileDoc? = null
+
     /**
-     * Changes the profile and saves it. Shown straight away; if the server
-     * refuses, the saved one comes back with the reason.
+     * Changes the profile and saves it. Shown straight away and saved a
+     * moment later, so a run of taps is one save, as on the web; if the
+     * server refuses, the saved one comes back with the reason.
      */
     fun edit(change: (ProfileDoc) -> Unit) {
         val current = _state.value.profile ?: return
+        if (saveJob?.isActive != true) confirmed = current
         val next = current.copy().also(change)
         _state.update { it.copy(profile = next) }
-        viewModelScope.launch {
+        val mine = ++edits
+        saveJob?.cancel()
+        waiting = next
+        saveJob = viewModelScope.launch {
+            delay(400)
+            waiting = null
             try {
                 val saved = ProfileDoc(api().saveProfile(next.json))
-                _state.update { it.copy(profile = saved) }
+                confirmed = saved
+                if (mine == edits) _state.update { it.copy(profile = saved) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(profile = current, message = L.s(R.string.not_saved, fail(e))) }
+                if (mine == edits) _state.update { it.copy(profile = confirmed ?: current, message = L.s(R.string.not_saved, fail(e))) }
             }
         }
+    }
+
+    /** Leaving Settings straight after a tap: the change is still saved. */
+    override fun onCleared() {
+        val unsaved = waiting ?: return
+        val api = api()
+        CoroutineScope(Dispatchers.IO).launch { runCatching { api.saveProfile(unsaved.json) } }
     }
 
     fun import(share: String) {
