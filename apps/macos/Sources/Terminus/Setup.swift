@@ -291,9 +291,9 @@ final class SetupModel {
     // MARK: feedback, your data
 
     /// Send feedback; nil once sent, else why not.
-    func sendFeedback(_ note: String, replyTo: String? = nil) async -> String? {
+    func sendFeedback(_ note: String) async -> String? {
         do {
-            try await api.feedback(note: note.trimmingCharacters(in: .whitespacesAndNewlines), replyTo: replyTo)
+            try await api.feedback(note: note.trimmingCharacters(in: .whitespacesAndNewlines))
             return nil
         } catch let e as ApiError {
             return e.message

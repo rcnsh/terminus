@@ -361,15 +361,13 @@ struct AboutPane: View {
 }
 
 /// A note to the operator about anything, written like a message: who it's
-/// from, the note, then Send. An account with no email can give one to reply
-/// to, for this note only; a wrong answer is better sent from under the card.
+/// from, the note, then Send. Only an account with an email can send one, so
+/// there's someone to reply to; without one, the pane asks for an email. A
+/// wrong answer is better sent from under the card.
 struct FeedbackPane: View {
+    let app: AppModel
     let setup: SetupModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var note = ""
-    @State private var replyTo = ""
-    @State private var addingEmail = false
-    @FocusState private var emailFocused: Bool
     @State private var result: String?
     @State private var sent = false
     @State private var sending = false
@@ -389,12 +387,27 @@ struct FeedbackPane: View {
         return out
     }
 
-    private var reply: String { replyTo.trimmingCharacters(in: .whitespaces) }
-    /// Typed, but not local@domain.tld.
-    private var replyBad: Bool { addingEmail && !reply.isEmpty && reply.range(of: #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#, options: .regularExpression) == nil }
-    private var canSend: Bool { !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending && !replyBad }
+    private var canSend: Bool { !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending }
 
     var body: some View {
+        // As the Account pane decides: the flag kept on this Mac, or the account as loaded.
+        if app.anonymous || setup.me?.anonymous == true { needsEmail } else { compose }
+    }
+
+    private var needsEmail: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L("Add an email to send feedback")).fontWeight(.semibold)
+            Text(L("So we can reply to you. Your setup stays as it is."))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(L("Add an email…")) { app.settingsPane = .account }
+                .buttonStyle(.borderedProminent)
+                .padding(.top, 4)
+        }
+        .card(padding: 12)
+    }
+
+    private var compose: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 VStack(spacing: 0) {
@@ -405,11 +418,6 @@ struct FeedbackPane: View {
                     footer
                 }
                 .card(padding: 0)
-                if addingEmail {
-                    Hint(L("We’ll only use this to reply. It isn’t added to your account."))
-                        .padding(.horizontal, 4)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
                 if sent { Text(L("Thanks. Your feedback was sent.")).foregroundStyle(.secondary).padding(.horizontal, 4) }
                 if let result { Text(result).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4) }
             }
@@ -430,51 +438,15 @@ struct FeedbackPane: View {
         }
     }
 
-    private var animation: Animation { reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.85) }
-
-    /// "From": the account's email, or Anonymous with a way to give one for this note.
+    /// "From": the account's email.
     private var from: some View {
         HStack(spacing: 8) {
             Text(L("From")).foregroundStyle(.secondary)
-            if let email = setup.me?.email {
-                Text(email).lineLimit(1).truncationMode(.middle)
-                Spacer(minLength: 0)
-            } else {
-                ZStack(alignment: .leading) {
-                    if addingEmail {
-                        TextField(L("Email to reply to"), text: $replyTo, prompt: Text(L("Email to reply to")))
-                            .textFieldStyle(.plain)
-                            .textContentType(.emailAddress)
-                            .foregroundStyle(replyBad ? Color.red.opacity(0.85) : Color.primary)
-                            .focused($emailFocused)
-                            .onAppear { DispatchQueue.main.async { emailFocused = true } }
-                            .transition(.opacity.combined(with: .offset(y: 6)))
-                    } else {
-                        Text(L("Anonymous · no reply"))
-                            .foregroundStyle(.secondary)
-                            .transition(.opacity.combined(with: .offset(y: -6)))
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    withAnimation(animation) {
-                        if addingEmail { replyTo = "" }
-                        addingEmail.toggle()
-                    }
-                } label: {
-                    // Both words laid out, one shown: the button keeps its width as they crossfade.
-                    ZStack(alignment: .trailing) {
-                        Text(L("Add an email")).opacity(addingEmail ? 0 : 1)
-                        Text(L("Cancel")).opacity(addingEmail ? 1 : 0)
-                    }
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(addingEmail ? L("Cancel") : L("Add an email"))
-            }
+            Text(setup.me?.email ?? "").lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
         .frame(minHeight: 36)
-        .background(replyBad ? Color.red.opacity(0.06) : Color.clear)
     }
 
     /// The note, the card's body, scrolling inside it.
@@ -507,11 +479,9 @@ struct FeedbackPane: View {
             Spacer()
             Button(L("Send")) {
                 sending = true
-                let to = addingEmail && !reply.isEmpty ? reply : nil
                 Task {
-                    result = await setup.sendFeedback(note, replyTo: to)
+                    result = await setup.sendFeedback(note)
                     sent = result == nil
-                    // The address stays, for the next note.
                     if sent { note = "" }
                     sending = false
                 }

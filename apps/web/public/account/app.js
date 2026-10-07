@@ -285,7 +285,7 @@ function Preview({ me }) {
         : failed
           ? html`<${Message} text=${t('Preview unavailable right now.')}><button type="button" class="link-btn" onClick=${load}>${t('Try again')}</button><//>`
           : html`<${Message} text="…" />`}
-      <${Report} answer=${a} anonymous=${me.anonymous === true} />
+      <${Report} answer=${a} anonymous=${me.anonymous === true} onAddEmail=${startAdding} />
     </section>
   `;
 }

@@ -292,7 +292,7 @@
     <string name="replace_hint">替换会改变所有登录 %1$s 的设备上的设置。</string>
     <string name="replace_with_phone">用这部手机的设置替换</string>
     <string name="report_failed">发送失败。请检查网络后再试。</string>
-    <string name="report_hint">会发送这个答案和你的说明，以及你的邮箱地址（如果添加了），方便回复你。</string>
+    <string name="report_hint">会发送这个答案和你的说明，以及你的邮箱地址，方便回复你。</string>
     <string name="report_placeholder">D2 一直没来、步行比说的久…</string>
     <string name="reported_thanks">已反馈，谢谢</string>
     <string name="report_title">哪里不对？</string>
@@ -419,13 +419,12 @@
     <string name="feedback_label">想法、问题，什么都可以</string>
     <string name="feedback_placeholder">想法、问题，什么都可以：想去的地方、让你困惑的地方……</string>
     <string name="feedback_from">发件人</string>
-    <string name="feedback_anonymous">匿名 · 无法回复</string>
-    <string name="feedback_add_email">添加邮箱</string>
-    <string name="feedback_reply_to">用于回复的邮箱</string>
-    <string name="feedback_reply_to_hint">这个邮箱只用来回复你，不会添加到你的账户。</string>
     <string name="feedback_wrong_title">答案不对？</string>
     <string name="feedback_wrong_hint">请按它下面的“这不对？”，这样我们能看到你看到的内容。</string>
     <string name="feedback_thanks">谢谢，你的反馈已发送。</string>
+    <string name="report_needs_email">添加邮箱后才能反馈错误的结果，方便我们回复你。</string>
+    <string name="feedback_needs_email">添加邮箱后才能发送反馈</string>
+    <string name="feedback_needs_email_hint">这样我们才能回复你。你的设置会保持不变。</string>
     <string name="download_data">下载我的数据</string>
     <string name="export_saved">你的数据已保存。</string>
     <string name="unplaced_one">有 1 节课的地点我们无法确定。选择最近的车站，或跳过：</string>

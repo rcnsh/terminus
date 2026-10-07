@@ -346,7 +346,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         ${page('appearance', html`<${Appearance} />`)}
         ${page('account', html`<${Account} me=${me} inApp=${inApp} onAddEmail=${onAddEmail} onSignOut=${onSignOut} />`)}
         ${page('about', html`<${About} />`)}
-        ${page('feedback', html`<${Feedback} me=${me} />`)}
+        ${page('feedback', html`<${Feedback} me=${me} onAddEmail=${onAddEmail} />`)}
       </div>
     </div>
   `;

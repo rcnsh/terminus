@@ -418,12 +418,12 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     /* ---------- feedback, your data ---------- */
 
-    /** Send feedback, with [replyTo] if the person gave one; [onSent] clears the box once it's gone. */
-    fun sendFeedback(note: String, replyTo: String? = null, onSent: () -> Unit) {
+    /** Send feedback; [onSent] clears the box once it's gone. */
+    fun sendFeedback(note: String, onSent: () -> Unit) {
         viewModelScope.launch {
             _state.update { it.copy(busy = true) }
             try {
-                api().feedback(note.trim(), BuildConfig.VERSION_NAME, replyTo?.trim())
+                api().feedback(note.trim(), BuildConfig.VERSION_NAME)
                 _state.update { it.copy(busy = false, message = L.s(R.string.feedback_thanks)) }
                 onSent()
             } catch (e: CancellationException) {

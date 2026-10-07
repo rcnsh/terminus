@@ -102,7 +102,7 @@ internal fun skyPhase(): Phase {
 }
 
 @Composable
-internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, onOpenStop: (String) -> Unit) {
+internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, signedIn: Boolean, onAddEmail: () -> Unit, onOpenStop: (String) -> Unit) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
@@ -275,7 +275,16 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                             // A taller target than the words, for a thumb.
                             .padding(vertical = 10.dp),
                     )
-                    if (opened) {
+                    if (opened && !signedIn) {
+                        // The server takes reports only from an account with an email.
+                        AddEmailToReportDialog(
+                            onAddEmail = {
+                                opened = false
+                                onAddEmail()
+                            },
+                            onDismiss = { opened = false },
+                        )
+                    } else if (opened) {
                         ReportDialog(
                             sending = state.reportSending,
                             onSend = { note ->
@@ -396,7 +405,7 @@ internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings
     }
 }
 
-/** "Is this wrong?": an optional note, sent with the answer that was on screen. */
+/** "Is this wrong?": a note, sent with the answer that was on screen. Send waits for the note: the server needs one. */
 @Composable
 private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: () -> Unit) {
     var note by rememberSaveable { mutableStateOf("") }
@@ -421,7 +430,19 @@ private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: 
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onSend(note) }, enabled = !sending) { Text(stringResource(R.string.send)) } },
+        confirmButton = { TextButton(onClick = { onSend(note) }, enabled = !sending && note.isNotBlank()) { Text(stringResource(R.string.send)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+/** "Is this wrong?" from an account without an email: reports need one, so there's someone to reply to. */
+@Composable
+private fun AddEmailToReportDialog(onAddEmail: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.report_title)) },
+        text = { Text(stringResource(R.string.report_needs_email)) },
+        confirmButton = { TextButton(onClick = onAddEmail) { Text(stringResource(R.string.add_email)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }

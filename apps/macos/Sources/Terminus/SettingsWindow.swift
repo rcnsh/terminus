@@ -101,6 +101,11 @@ struct SettingsWindow: View {
             if let old, !going { visited.append(old) }
             going = false
         }
+        .onChange(of: app.settingsPane, initial: true) { _, asked in
+            guard let asked else { return }
+            pane = asked
+            app.settingsPane = nil
+        }
         .task {
             setup.onSaved = { Task { _ = await app.refresh() } }
             await setup.load()
@@ -178,7 +183,7 @@ struct SettingsPaneView: View {
             case .about:
                 AboutPane()
             case .feedback:
-                FeedbackPane(setup: setup)
+                FeedbackPane(app: app, setup: setup)
             }
         }
         // The import's answer replaces the profile, so nothing that edits it
