@@ -91,7 +91,9 @@ struct Header: View {
                 out.status = (a.leaveLate ? .red : .brand, sure(text), sure(spoken))
             }
         } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
-            out.status = (dotColor(a.quality), sure(countdown(to: at, now: now)), sure(countdown(to: at, now: now, spoken: true)))
+            // A guess counts down in minutes: its seconds would be false precision.
+            let guess = a.card?.quality != nil
+            out.status = (dotColor(a.quality), sure(countdown(to: at, now: now, minutes: guess)), sure(countdown(to: at, now: now, minutes: true)))
         } else if resting {
             out.status = (.brand, restStatus, restStatus)
         } else if let text = status(a) {
@@ -111,11 +113,12 @@ struct Header: View {
     }
 
     /// "Leaves in 4 min 12 s", then "Left 1 min ago" until the answer is
-    /// replaced or goes stale. Spoken, to the minute: "Leaves in 4 min".
-    private func countdown(to at: Date, now: Date, spoken: Bool = false) -> String {
+    /// replaced or goes stale. To the minute ("Leaves in 4 min") when
+    /// spoken, or for a guess.
+    private func countdown(to at: Date, now: Date, minutes: Bool = false) -> String {
         let left = Int(at.timeIntervalSince(now))
         if left <= 0 { return L("Left %@ min ago", "\((-left + 59) / 60)") }
-        if spoken { return left >= 60 ? L("Leaves in %@ min", "\((left + 30) / 60)") : L("Leaves in under a minute") }
+        if minutes { return left >= 60 ? L("Leaves in %@ min", "\((left + 30) / 60)") : L("Leaves in under a minute") }
         return left >= 60 ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)") : L("Leaves in %@ s", "\(left)")
     }
 
