@@ -187,17 +187,21 @@ export async function deviceId(env: Env): Promise<string> {
   // A failed read throws rather than making up an id: a new one each call
   // would mint a token for one device and call with another, and overwrite
   // the stored id with each.
-  let id = await env.KV.get(KV_DEVICE);
-  if (!id) {
-    const bytes = crypto.getRandomValues(new Uint8Array(8));
-    id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-    await env.KV.put(KV_DEVICE, id).catch(() => {});
+  const stored = await env.KV.get(KV_DEVICE);
+  if (stored) {
+    deviceIds.set(env.KV, stored);
+    return stored;
   }
-  deviceIds.set(env.KV, id);
+  // Made here, it isn't remembered: two isolates that both found none each
+  // make one and only the last write is kept, so the next call reads back
+  // whichever won rather than holding on to one that lost.
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+  await env.KV.put(KV_DEVICE, id).catch(() => {});
   return id;
 }
 
-/** The device id, once read or made, per KV binding (as `memos`). */
+/** The device id, once read from KV, per KV binding (as `memos`). */
 const deviceIds = new WeakMap<object, string>();
 
 /** Forget this isolate's remembered version, after writing a new one. */
