@@ -127,7 +127,7 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 // Said as soon as it shows: it's why nothing happened.
                 message?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Assertive }) }
-                Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                Button(onClick = onStart, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                     Text(if (busy) stringResource(R.string.starting) else stringResource(R.string.get_started))
                 }
                 Text(
@@ -137,7 +137,7 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
-                OutlinedButton(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                OutlinedButton(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                     Text(stringResource(R.string.have_account))
                 }
                 Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {

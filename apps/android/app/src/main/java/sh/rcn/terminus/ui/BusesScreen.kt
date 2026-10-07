@@ -749,7 +749,7 @@ private fun SwipeFor(name: String, onClick: () -> Unit) {
 private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolean = false) {
     val said = stringResource(if (paid) R.string.a11y_bus_paid else R.string.a11y_bus, svc)
     Box(
-        Modifier.semantics(mergeDescendants = true) { contentDescription = said }.widthIn(min = if (big) 64.dp else 46.dp).height(if (big) 44.dp else 32.dp).background(Color(color), RoundedCornerShape(if (big) 12.dp else 9.dp)).padding(horizontal = 8.dp),
+        Modifier.semantics(mergeDescendants = true) { contentDescription = said }.widthIn(min = if (big) 64.dp else 46.dp).heightIn(min = if (big) 44.dp else 32.dp).background(Color(color), RoundedCornerShape(if (big) 12.dp else 9.dp)).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(badgeText(svc, paid), color = inkOn(Color(color)), fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else 15.sp, maxLines = 1)
