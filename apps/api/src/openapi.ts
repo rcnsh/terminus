@@ -1110,7 +1110,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         get: {
           tags: ['Account'],
           summary: 'Download your data',
-          description: 'Everything kept for the account, as a JSON file: the profile, devices, API keys (names only), feedback and trip outcomes.',
+          description: 'Everything kept for the account, as a JSON file: the account and its dates, the profile, devices (with their app, version and push address), API keys (names only), feedback, trip outcomes and choices, sign-in requests still waiting, and today’s trip.',
           operationId: 'meExport',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ type: 'object' }), '401': errorResponse('No valid session.') },
