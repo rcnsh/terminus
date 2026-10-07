@@ -72,6 +72,13 @@ test('no bus is guessed after the service stops for the night', () => {
   // The last listed bus leaves before you can get there: no headway after it either.
   const listed = boards(codesOf(cands), now, { PGP: [{ svc: 'D2', etaS: 60 }] });
   assert.ok(!scoreOptions(GRAPH, cands, listed, now).some((o) => o.svc === 'D2'), 'after the last bus');
+  // Past the close itself, with the last bus still listed out of reach: no
+  // guessed bus after it ("D2 · ~11 min · estimated" at 23:02).
+  const later = at('2026-08-27T23:02');
+  const stillListed = boards(codesOf(cands), later, { PGP: [{ svc: 'D2', etaS: 60 }] });
+  assert.ok(!scoreOptions(GRAPH, cands, stillListed, later).some((o) => o.svc === 'D2'), 'after the close');
+  // With a class's openBy, the next start is tomorrow: still nothing tonight.
+  assert.ok(!scoreOptions(GRAPH, cands, stillListed, later, undefined, { openBy: at('2026-08-27T23:30') }).some((o) => o.svc === 'D2'));
 });
 
 test('a leave-by never boards a bus after the service has stopped', () => {
@@ -209,6 +216,23 @@ test('a stale answer\'s card counts from the request: its next change is never i
   assert.ok(Date.parse(card.nextChangeAt) > now, card.nextChangeAt);
 });
 
+test('a leave-by sliding just ahead of now asks for a refetch no sooner than 30 s', async () => {
+  const { nextPhaseAt, LEAVE_GAP_MS } = await import('../src/card.ts');
+  const { default: fixture } = await import('./fixtures/answers/class-bus.json', { with: { type: 'json' } });
+  const { card: _card, refreshAt: _r, ...answer } = fixture;
+  const now = Date.parse(answer.asOf);
+  const trip = { key: 'k', phase: 'due' };
+  // A late bus: leave in 5 s, and the next fetch would say 5 s again.
+  const sliding = { ...answer, leave: { ...answer.leave, at: new Date(now + 5_000).toISOString() } };
+  const card = cardFor(sliding, false, trip, null, now);
+  assert.equal(Date.parse(card.nextChangeAt), now + LEAVE_GAP_MS);
+  // The Trip object keeps the exact time (it has its own gap).
+  assert.equal(nextPhaseAt(sliding, trip, now), now + 5_000);
+  // A leave-by further off is kept to the second.
+  const later = { ...answer, leave: { ...answer.leave, at: new Date(now + 90_000).toISOString() } };
+  assert.equal(Date.parse(cardFor(later, false, trip, null, now).nextChangeAt), now + 90_000);
+});
+
 /* Fares. */
 
 test('walking is free: a public bus must beat it by its fare too', () => {
@@ -288,4 +312,32 @@ test('riding a public bus reads its arrival from the public graph, by its route'
   // A shuttle ride still asks the shuttle graph.
   await nextArrival({}, {}, deps, { svc: 'D2', stop: 'x', board: null, arrive: null, alightCode: 'COM3' }, nowMs);
   assert.equal(asked[1], GRAPH);
+});
+
+test('riding counts the bus from its own feed: at a shared shelter, not the older one', async () => {
+  const { liveArrival, nextArrival } = await import('../src/next.ts');
+  const nowMs = Date.parse('2026-08-27T02:00:00Z');
+  const pidx = indexGraph(GRAPH_PUBLIC);
+  const alight = [...pidx.routes.get('151/1').pos.keys()][1];
+  // The shuttle half was fetched a minute ago and is stale; LTA 5 s ago. The
+  // stop's own state is the two together: the older time, stale.
+  const shuttle = { fetchedAt: nowMs - 60_000, stale: true, available: true };
+  const pub = { fetchedAt: nowMs - 5_000, stale: false, available: true };
+  const deps = {
+    graph: GRAPH,
+    publicGraph: GRAPH_PUBLIC,
+    answerFor: async () => { throw new Error('not used'); },
+    collectArrivals: async (_env, _ctx, codes) => {
+      const arrivals = [{ svc: '151/1', etaS: 240, crowd: null, plate: 'SBS1A', berth: null }];
+      return new Map(codes.map((code) => [code, { code, arrivals, fetchedAt: shuttle.fetchedAt, stale: true, available: true, feeds: { shuttle, public: pub } }]));
+    },
+  };
+  const b = { svc: '151', route: '151/1', paid: true, stop: 'x', board: null, arrive: null, alightCode: alight, plate: 'SBS1A' };
+  const want = new Date(pub.fetchedAt + 240_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  assert.equal(await liveArrival({}, {}, deps, b, nowMs), want);
+  assert.equal(await nextArrival({}, {}, deps, b, nowMs), want);
+  // The public feed stale itself: no live time.
+  pub.stale = true;
+  assert.equal(await liveArrival({}, {}, deps, b, nowMs), null);
+  assert.equal(await nextArrival({}, {}, deps, b, nowMs), null);
 });

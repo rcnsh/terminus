@@ -25,6 +25,7 @@ import { refreshTable } from './ridetimes.ts';
 import { sgt } from './config.ts';
 import { isBeta } from './site.ts';
 import { ensureRecorder } from './timelapse.ts';
+import { logCronError } from './analytics.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -40,11 +41,18 @@ export interface UpstreamState {
   checkedAt: number;
   /** Failed checks in a row. */
   failures?: number;
+  /** Good checks in a row: it takes OKS_TO_RECOVER to come back up. */
+  oks?: number;
+  /** The first of those good checks, epoch ms: when the feed came back. */
+  okSince?: number | null;
   /** An alert that has not been delivered yet; retried every run until it is. */
   pending?: 'down' | 'up' | null;
 }
 
 const KEY = 'monitor:upstream';
+/** "<since> <kind>" of the last alert delivered. Its own key, as KV takes one
+ *  write a second to a key, and the state was saved just before the send. */
+const ALERTED_KEY = 'monitor:alerted';
 const INCIDENTS_KEY = 'monitor:incidents';
 /** Outages kept for the status page, newest first. */
 export const INCIDENTS_KEPT = 20;
@@ -72,12 +80,18 @@ export const DEVICE_IDLE_MS = 90 * 86_400_000;
 /** One bad check is often a blip (NUS answers some requests with a 400);
  *  two in a row, 15 minutes apart, is an outage. */
 export const FAILS_TO_ALERT = 2;
+/** And two good ones in a row to be back, so a feed that answers every other
+ *  check stays down rather than emailing "down" and "up" by turns. */
+export const OKS_TO_RECOVER = 2;
+/** How long an operator email may take to send. */
+export const MAIL_TIMEOUT_MS = 15_000;
 /** Warn this long before calendar.json runs out. */
 export const CALENDAR_WARN_DAYS = 45;
 
-/** A JSON value kept in KV, or null when it's missing, unreadable or not JSON. */
-async function readKvJson(env: Env, key: string): Promise<unknown> {
-  const raw = await env.KV.get(key).catch(() => null);
+/** A JSON value kept in KV, or null when it's missing or not JSON. A failed
+ *  read throws: the monitor must not take "KV is down" for "never checked". */
+async function getKvJson(env: Env, key: string): Promise<unknown> {
+  const raw = await env.KV.get(key);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -86,21 +100,35 @@ async function readKvJson(env: Env, key: string): Promise<unknown> {
   }
 }
 
+/** The same for readers that only show it (the status page, the card): null on any failure. */
+const readKvJson = (env: Env, key: string): Promise<unknown> => getKvJson(env, key).catch(() => null);
+
+const asIncidents = (list: unknown): Incident[] => (Array.isArray(list) ? (list as Incident[]) : []);
+
 export async function readIncidents(env: Env): Promise<Incident[]> {
-  const list = await readKvJson(env, INCIDENTS_KEY);
-  return Array.isArray(list) ? (list as Incident[]) : [];
+  return asIncidents(await readKvJson(env, INCIDENTS_KEY));
 }
 
-/** Opens an incident when the feed is confirmed down, closes it when it's back. */
+/**
+ * Brings the incident list in line with the confirmed state: an open
+ * incident while the feed is down, none once it's back. Checked every run
+ * and written only when something changes, so an earlier failed write is
+ * put right on the next run. A failed read throws rather than writing over
+ * the history.
+ */
 async function recordIncident(env: Env, state: UpstreamState, nowMs: number): Promise<void> {
-  const list = await readIncidents(env);
-  if (!state.up) {
-    const cause = /10009/.test(state.reason ?? '') ? 'version' : 'feed';
-    list.unshift({ start: nowMs, end: null, cause });
-  } else if (list[0] && list[0].end === null) {
-    list[0].end = nowMs;
+  const list = asIncidents(await getKvJson(env, INCIDENTS_KEY));
+  const open = list[0] && list[0].end === null ? list[0] : null;
+  if (state.up) {
+    if (!open) return;
+    open.end = Math.max(open.start, Math.min(state.since, nowMs));
   } else {
-    return;
+    // The outage under way is the one that started when it was confirmed.
+    if (open && open.start === state.since) return;
+    // An older one left open (its close was never saved) ended by then.
+    if (open) open.end = Math.max(open.start, state.since);
+    const cause = /10009/.test(state.reason ?? '') ? 'version' : 'feed';
+    list.unshift({ start: state.since, end: null, cause });
   }
   await env.KV.put(INCIDENTS_KEY, JSON.stringify(list.slice(0, INCIDENTS_KEPT)));
 }
@@ -136,6 +164,11 @@ export async function checkUpstream(
   probe: () => Promise<unknown> = () => fetchArrivals(env, PROBE_STOP, nowMs),
   fixVersion: (detail: string | null) => Promise<AutoResult> = (detail) => autoUpdateVersion(env, nowMs, detail, PROBE_STOP),
 ): Promise<{ state: UpstreamState; changed: boolean }> {
+  // Read first, and a failed read stops the check: taken as "never checked",
+  // it would close nothing, or mark the feed up in the middle of an outage.
+  const prev = (await getKvJson(env, KEY)) as UpstreamState | null;
+  // Unreadable, the pending alert goes again: one email too many beats none.
+  const delivered = prev?.pending ? await env.KV.get(ALERTED_KEY).catch(() => null) : null;
   let ok = true;
   let reason: string | null = null;
   let detail: string | null = null;
@@ -178,14 +211,25 @@ export async function checkUpstream(
     }
   }
 
-  const prev = await readUpstream(env);
   const failures = ok ? 0 : (prev?.failures ?? 0) + 1;
-  const up = ok ? true : failures >= FAILS_TO_ALERT ? false : (prev?.up ?? true);
+  const oks = ok ? (prev?.oks ?? 0) + 1 : 0;
+  const okSince = ok ? (prev?.oks && prev.okSince ? prev.okSince : nowMs) : null;
+  const was = prev?.up ?? true;
+  const up = was ? failures < FAILS_TO_ALERT : oks >= OKS_TO_RECOVER;
   const changed = !prev || prev.up !== up;
   let pending = prev?.pending ?? null;
+  if (pending && delivered === `${prev!.since} ${pending}`) pending = null;
   if (changed && (prev || !up)) pending = up ? 'up' : 'down';
-  const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, detail, auto, checkedAt: nowMs, failures, pending };
+  // Back up, it has been since the first of the good checks that confirmed
+  // it, not the last: the outage ends there, on the status page and in the email.
+  const since = !changed ? prev!.since : up && okSince ? okSince : nowMs;
+  const state: UpstreamState = { up, since, reason, detail, auto, checkedAt: nowMs, failures, oks, okSince, pending };
 
+  // Saved before the email goes, so a KV write that keeps failing can't send
+  // the same email every run; it's sent once the state with it pending is kept.
+  // The state is written once a run: delivery is noted under ALERTED_KEY, and
+  // the next run clears pending from it.
+  await env.KV.put(KEY, JSON.stringify(state));
   if (pending) {
     try {
       await alert(env, state, pending);
@@ -193,10 +237,15 @@ export async function checkUpstream(
     } catch (e) {
       console.error('alert failed', (e as Error)?.name ?? 'error');
     }
+    // Should this write fail, the email goes once more next run: better than none.
+    if (!state.pending) {
+      await env.KV.put(ALERTED_KEY, `${state.since} ${pending}`, { expirationTtl: 30 * 86_400 })
+        .catch((e) => console.error('alert not marked sent', (e as Error)?.name ?? 'error'));
+    }
   }
-  await env.KV.put(KEY, JSON.stringify(state));
-  // Only on a change of confirmed state, so a KV write per outage, not per run.
-  if (changed && (prev || !up)) {
+  // Every run, not only on a change, so an incident whose write failed is
+  // opened or closed on the next; it writes only when something changes.
+  if (prev || !up) {
     await recordIncident(env, state, nowMs).catch((e) => console.error('incident not recorded', (e as Error)?.name ?? 'error'));
   }
   return { state, changed };
@@ -225,7 +274,18 @@ export function adviceFor(reason: string | null): string {
  */
 async function mailOperator(env: Env, subject: string, text: string): Promise<boolean> {
   if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return false;
-  await env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
+  const send = env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
+  // Bounded, so a send that hangs can't hold up the rest of the cron. Timed
+  // out, it counts as failed: an alert stays pending and goes again next run.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('email timed out')), MAIL_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([send, late]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
   return true;
 }
 
@@ -309,6 +369,7 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
 /** From this hour (Singapore) each day, the cron starts the day's trip watching. */
 export const ARM_FROM_HOUR = 6;
 const ARMED_KEY = 'trips:armed';
+const ARM_RETRY_KEY = 'trips:retry';
 /** Users armed per cron run (every 15 minutes), so one run never runs out
  *  of time partway: the next run carries on after the last one armed. */
 const ARM_BATCH = 400;
@@ -331,21 +392,51 @@ export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Prom
   // "2026-10-03" when today is done; "2026-10-03 <user id>" while it's under
   // way, after that user. (Before batches it was the date alone, which still reads as done.)
   const mark = (await env.KV.get(ARMED_KEY)) ?? '';
-  if (mark === today) return 0;
+  // Users whose Trip object didn't take the request, asked again each run
+  // until it does: "<date> <id> <id> ...".
+  const kept = (await env.KV.get(ARM_RETRY_KEY)) ?? '';
+  const left = kept.startsWith(`${today} `) ? kept.slice(today.length + 1).split(' ') : [];
+  const retry = left.slice(0, batch);
+  if (mark === today && !retry.length) return 0;
   const after = mark.startsWith(`${today} `) ? mark.slice(today.length + 1) : '';
-  const { results } = await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL AND user_id > ? ORDER BY user_id LIMIT ?')
-    .bind(after, batch)
-    .all<{ user_id: string }>();
-  for (let i = 0; i < results.length; i += ARM_AT_ONCE) {
-    await Promise.all(results.slice(i, i + ARM_AT_ONCE).map((r) => watchTrip(env, r.user_id, nowMs, nowMs).catch(() => {})));
+  const { results } = mark === today
+    ? { results: [] as { user_id: string }[] }
+    : await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL AND user_id > ? ORDER BY user_id LIMIT ?')
+        .bind(after, batch)
+        .all<{ user_id: string }>();
+  const users = [...retry, ...results.map((r) => r.user_id)];
+  const failed: string[] = [];
+  for (let i = 0; i < users.length; i += ARM_AT_ONCE) {
+    const some = users.slice(i, i + ARM_AT_ONCE);
+    const took = await Promise.all(some.map((id) => watchTrip(env, id, nowMs, nowMs).catch(() => false)));
+    some.forEach((id, j) => took[j] || failed.push(id));
   }
-  // A short batch was the last one.
-  const done = results.length < batch;
-  await env.KV.put(ARMED_KEY, done ? today : `${today} ${results[results.length - 1].user_id}`, { expirationTtl: 2 * 86_400 });
-  return results.length;
+  if (mark !== today) {
+    // A short batch was the last one.
+    const done = results.length < batch;
+    await env.KV.put(ARMED_KEY, done ? today : `${today} ${results[results.length - 1].user_id}`, { expirationTtl: 2 * 86_400 });
+  }
+  if (failed.length || kept) {
+    const keep = [...new Set([...failed, ...left.slice(batch)])].slice(0, ARM_BATCH);
+    if (keep.length) await env.KV.put(ARM_RETRY_KEY, `${today} ${keep.join(' ')}`, { expirationTtl: 86_400 });
+    else await env.KV.delete(ARM_RETRY_KEY);
+    if (failed.length) console.error('trips not armed', failed.length);
+  }
+  return users.length - failed.length;
 }
 
 const REMINDED_KEY = 'term:reminded';
+/** Users whose reminder reached no device, asked again on later runs:
+ *  `{ term, run, users: [[user id, tries]] }`. Its own key, as KV takes one
+ *  write a second to a key and the mark is written before the sends. */
+const REMIND_RETRY_KEY = 'term:retry';
+/** Runs a failed reminder is tried again (two hours of the cron), so push
+ *  broken for a while still reaches them, and a token that never works stops. */
+const REMIND_TRIES = 8;
+/** A user due a reminder: id, the language chosen in Settings ('' for the device's), tries so far. */
+type Due = [string, string, number];
+/** Retried users' profiles read at once (D1 binds at most 100 values). */
+const PROFILES_AT_ONCE = 50;
 /** Not before 10 in the morning, Singapore time. */
 const REMIND_FROM_HOUR = 10;
 
@@ -363,28 +454,55 @@ export function termNotice(term: { acadYear: string; semester: number }, start: 
  * timetable from an earlier semester, to import the new one. Not to anyone
  * who has already imported it, nor to anyone with no timetable at all. Once
  * per semester, in batches like armTrips; the KV mark is "<year> <sem>" when
- * done and "<year> <sem> <last user id>" while under way.
+ * done and "<year> <sem> <last user id>" while under way, then "#<run>".
+ * Users no device took are kept under REMIND_RETRY_KEY, stamped with the
+ * run, and tried again on later runs.
  */
 export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {
   if (!env.DB || !pushEnabled(env)) return 0;
   const soon = semesterSoon(nowMs);
   if (!soon || new Date(nowMs + 8 * 3_600_000).getUTCHours() < REMIND_FROM_HOUR) return 0;
   const id = `${soon.term.acadYear} ${soon.term.semester}`;
-  const mark = (await env.KV.get(REMINDED_KEY)) ?? '';
-  if (mark === id) return 0;
+  const [mark, markRun] = ((await env.KV.get(REMINDED_KEY)) ?? '').split('#');
+  let retry: { term: string; run: number; users: [string, number][] } | null = null;
+  try {
+    retry = JSON.parse((await env.KV.get(REMIND_RETRY_KEY)) ?? 'null');
+  } catch {
+    retry = null;
+  }
+  // Only the list the last run left counts. One whose run could not save it
+  // is older, and holds users that run has already reached.
+  if (retry?.term !== id || !Array.isArray(retry.users) || String(retry.run) !== markRun) retry = null;
+  if (mark === id && !retry) return 0;
   const after = mark.startsWith(`${id} `) ? mark.slice(id.length + 1) : '';
-  const { results } = await env.DB.prepare(
-    'SELECT DISTINCT s.user_id AS user_id, p.json AS json FROM sessions s JOIN profiles p ON p.user_id = s.user_id WHERE s.push_token IS NOT NULL AND s.user_id > ? ORDER BY s.user_id LIMIT ?',
-  )
-    .bind(after, batch)
-    .all<{ user_id: string; json: string }>();
+  const { results } = mark === id
+    ? { results: [] as { user_id: string; json: string }[] }
+    : await env.DB.prepare(
+        'SELECT DISTINCT s.user_id AS user_id, p.json AS json FROM sessions s JOIN profiles p ON p.user_id = s.user_id WHERE s.push_token IS NOT NULL AND s.user_id > ? ORDER BY s.user_id LIMIT ?',
+      )
+        .bind(after, batch)
+        .all<{ user_id: string; json: string }>();
+  // Retried users are read again, so one who has imported the new semester
+  // since, or changed language, is skipped or told in the new one.
+  const triesOf = new Map(retry?.users ?? []);
+  const ids = [...triesOf.keys()];
+  const rows: { user_id: string; json: string; tries: number }[] = [];
+  for (let i = 0; i < ids.length; i += PROFILES_AT_ONCE) {
+    const some = ids.slice(i, i + PROFILES_AT_ONCE);
+    const { results: got } = await env.DB.prepare(`SELECT user_id, json FROM profiles WHERE user_id IN (${some.map(() => '?').join(', ')})`)
+      .bind(...some)
+      .all<{ user_id: string; json: string }>();
+    for (const r of got) rows.push({ ...r, tries: triesOf.get(r.user_id) ?? 0 });
+  }
+  for (const r of results) rows.push({ ...r, tries: 0 });
   const both = termNotice(soon.term, soon.start);
   // A language chosen in Settings wins over each device's.
   const en: Notice = { ...both, zhTitle: both.title, zhBody: both.body };
   const zh: Notice = { title: both.zhTitle, body: both.zhBody, zhTitle: both.zhTitle, zhBody: both.zhBody };
+  const notice = (lang: string) => (lang === 'en' ? en : lang === 'zh' ? zh : both);
   let sent = 0;
-  const due: { userId: string; notice: Notice }[] = [];
-  for (const r of results) {
+  const due: Due[] = [];
+  for (const r of rows) {
     let p: { trips?: unknown[]; term?: { acadYear: string; semester: number } | null; lang?: string } = {};
     try {
       p = JSON.parse(r.json);
@@ -392,14 +510,37 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
       continue;
     }
     if (!Array.isArray(p.trips) || !p.trips.length || termFrom(p.term, soon.start)) continue;
-    due.push({ userId: r.user_id, notice: p.lang === 'en' ? en : p.lang === 'zh' ? zh : both });
+    due.push([r.user_id, p.lang === 'en' || p.lang === 'zh' ? p.lang : '', r.tries]);
   }
+  // The batch is marked before it's sent, so a mark that can't be saved
+  // sends nothing rather than the same batch every run. The mark moves on
+  // whatever the sends do, so one user who can't be reached holds up no one.
+  // Its new run stamp sets aside the retry list just read: should the one
+  // this run leaves fail to save, no one tried now is sent it again.
+  const done = mark === id || results.length < batch;
+  await env.KV.put(REMINDED_KEY, `${done ? id : `${id} ${results[results.length - 1].user_id}`}#${nowMs}`, { expirationTtl: 30 * 86_400 });
+  const failed: Due[] = [];
   for (let i = 0; i < due.length; i += ARM_AT_ONCE) {
-    const n = await Promise.all(due.slice(i, i + ARM_AT_ONCE).map((u) => remindUser(env, u.userId, u.notice, nowMs).catch(() => 0)));
-    sent += n.reduce((x, y) => x + y, 0);
+    const some = due.slice(i, i + ARM_AT_ONCE);
+    const n = await Promise.all(some.map(([userId, lang]) => remindUser(env, userId, notice(lang), nowMs).catch(() => ({ sent: 0, failed: 1 }))));
+    // Only a send that failed is worth trying again; a user with no device
+    // it could go to (no usable key, every token gone) would fail every time.
+    some.forEach(([userId, lang, tries], j) => {
+      sent += n[j].sent;
+      if (n[j].sent === 0 && n[j].failed > 0) failed.push([userId, lang, tries + 1]);
+    });
   }
-  const done = results.length < batch;
-  await env.KV.put(REMINDED_KEY, done ? id : `${id} ${results[results.length - 1].user_id}`, { expirationTtl: 30 * 86_400 });
+  // Users no device took (push itself failing, say) are tried again on the
+  // next runs, up to REMIND_TRIES times, so a token that never works stops.
+  const again = failed.filter(([, , tries]) => tries < REMIND_TRIES).slice(0, ARM_BATCH);
+  if (failed.length) console.error('term reminders not sent', failed.length);
+  if (again.length) {
+    const users = again.map(([userId, , n]): [string, number] => [userId, n]);
+    await env.KV.put(REMIND_RETRY_KEY, JSON.stringify({ term: id, run: nowMs, users }), { expirationTtl: 30 * 86_400 });
+  } else if (retry) {
+    // Left in place, the old list is set aside by the mark's run stamp anyway.
+    await env.KV.delete(REMIND_RETRY_KEY).catch((e) => console.error('term retry not cleared', (e as Error)?.name ?? 'error'));
+  }
   return sent;
 }
 
@@ -451,6 +592,8 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
       await fn();
     } catch (err) {
       console.error('cron', name, err instanceof Error ? err.message : String(err));
+      // On the dashboard too, where a step that fails every run shows.
+      logCronError(env, name);
     }
   };
   await step('upstream', () => checkUpstream(env, nowMs));

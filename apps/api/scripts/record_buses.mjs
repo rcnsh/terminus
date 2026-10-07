@@ -29,6 +29,9 @@ const EVERY_MS = 5_000;
 const BACK_M = 60;
 const AHEAD_M = 100;
 const AHEAD_MS = 20;
+/** A request the site hasn't answered in this long has failed: a hung one would stall the recording. */
+const TIMEOUT_MS = 15_000;
+const within = () => AbortSignal.timeout(TIMEOUT_MS);
 
 function haversine(aLat, aLon, bLat, bLon) {
   const r = Math.PI / 180;
@@ -44,7 +47,7 @@ function lengthOf(line) {
 }
 
 async function record() {
-  const res = await fetch(`${SITE}/auth/anon`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-terminus-client': 'probe/1' }, body: '{"name":"bus recorder"}' });
+  const res = await fetch(`${SITE}/auth/anon`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-terminus-client': 'probe/1' }, body: '{"name":"bus recorder"}', signal: within() });
   const { token } = await res.json().catch(() => ({}));
   if (!token) throw new Error(`no anonymous account: HTTP ${res.status}`);
   const headers = { authorization: `Bearer ${token}` };
@@ -52,7 +55,7 @@ async function record() {
   let failed = 0;
   let routes = {};
   try {
-    const campus = await (await fetch(`${SITE}/campus`, { headers })).json();
+    const campus = await (await fetch(`${SITE}/campus`, { headers, signal: within() })).json();
     // /campus says which routes are loops: a loop's line can end tens of
     // metres from where it starts (A1, A2), so the ends can't tell.
     routes = Object.fromEntries(SERVICES.map((s) => [s, { line: campus.routes?.[s]?.line ?? [], loop: campus.routes?.[s]?.loop === true }]));
@@ -62,7 +65,7 @@ async function record() {
       await Promise.all(
         SERVICES.map(async (svc) => {
           try {
-            const r = await fetch(`${SITE}/buses?svc=${encodeURIComponent(svc)}`, { headers });
+            const r = await fetch(`${SITE}/buses?svc=${encodeURIComponent(svc)}`, { headers, signal: within() });
             if (!r.ok) return void failed++;
             const d = await r.json();
             // Which Cloudflare data centre answered: each keeps its own tracks.
@@ -76,7 +79,7 @@ async function record() {
       await new Promise((ok) => setTimeout(ok, Math.max(0, EVERY_MS - (Date.now() - tick))));
     }
   } finally {
-    await fetch(`${SITE}/me`, { method: 'DELETE', headers }).catch(() => {});
+    await fetch(`${SITE}/me`, { method: 'DELETE', headers, signal: within() }).catch(() => {});
   }
   return { routes, rows, failed };
 }

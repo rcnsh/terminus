@@ -7,6 +7,7 @@ import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { ME_ROUTES } from '../src/me.ts';
 import { API_VERSION } from '../src/openapi.ts';
+import { forgetHeads } from '../src/map.ts';
 
 const BASE = 'https://bus.example.test';
 const ARRIVALS_KEY = (code) => `https://terminus.internal/arrivals/${code}`;
@@ -173,6 +174,8 @@ test('/health reports what is configured without leaking any of it', async () =>
   assert.equal(h.ok, true);
   assert.equal(h.config.auth, true);
   assert.equal(h.config.proxy, true);
+  assert.equal(h.config.pushAndroid, false, 'no Firebase account in this env');
+  assert.equal(h.config.pushWeb, false);
   assert.match(h.graph.source, /scrape_stops\.py/, 'the graph comes from our own scraper');
   assert.ok(h.graph.services.includes('D2'));
 
@@ -722,6 +725,26 @@ test('a NUS host answering 429 or 5xx is not retried, and quiets every stop', as
   }
 });
 
+test('a NUS host that never answers, or cannot be reached, quiets every stop', async () => {
+  // Short timeouts, so the test doesn't wait out the real 5 s.
+  const { TTL } = await import('../src/config.ts');
+  const saved = TTL.upstreamTimeoutMs;
+  TTL.upstreamTimeoutMs = 50;
+  try {
+    for (const opts of [{ hang: true }, { fail: true }]) {
+      const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 }, ...opts });
+      const { cache } = await call('/arrivals?stop=PGP', { fetchImpl });
+      for (const stop of ['COM3', 'UTOWN']) {
+        const { res } = await call(`/arrivals?stop=${stop}`, { fetchImpl, cache });
+        assert.equal((await res.json()).available, false);
+      }
+      assert.equal(fetchImpl.counts.shuttle, 1, `${Object.keys(opts)[0]}: the breaker kept every stop off the feed`);
+    }
+  } finally {
+    TTL.upstreamTimeoutMs = saved;
+  }
+});
+
 test('a failed token mint is not tried again by every stop that wants one', async () => {
   // 400: the NUS load balancer's intermittent "Contradictory scheme headers".
   for (const mintStatus of [400, 503]) {
@@ -1104,6 +1127,60 @@ test('map pieces are kept at the edge: R2 is read once per piece, and a new uplo
     assert.notEqual(fresh.headers.get('etag'), etag);
   } finally {
     Date.now = was;
+  }
+});
+
+test('when R2 fails, map pieces in the edge cache are still served and the rest are 503, never 416', async () => {
+  const files = new Map([['map/campus.pmtiles', 'PMTiles-0123456789']]);
+  const bucket = rangedBucket(files);
+  const env = { ...makeEnv(), DOWNLOADS: bucket };
+  const cache = installGlobals(makeFetch({}));
+  const get = async (p, headers) => (await call(p, { env, cache, headers })).res;
+  // Past what earlier tests taught this isolate of the file.
+  const was = Date.now;
+  let aheadMs = 30 * 60_000;
+  Date.now = () => was() + aheadMs;
+  const { head, get: read } = bucket;
+  try {
+    assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).text(), 'PMTiles');
+
+    // R2 goes down, and this isolate's memo of the file lapses.
+    let heads = 0;
+    bucket.head = async () => {
+      heads++;
+      throw new Error('internal error (10001)');
+    };
+    bucket.get = async () => {
+      throw new Error('internal error (10001)');
+    };
+    aheadMs += 10 * 60_000;
+    const cached = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
+    assert.equal(cached.status, 206, 'the piece is in the edge cache');
+    assert.equal(await cached.text(), 'PMTiles');
+    // The last known ETag is trusted a while: cached pieces don't each ask R2 again.
+    for (let i = 0; i < 3; i++) assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).status, 206);
+    assert.equal(heads, 1);
+    aheadMs += 31_000;
+    assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).status, 206);
+    assert.equal(heads, 2, 'R2 is asked again after 30 s');
+    // A new isolate never saw R2 answer, but the data centre's cache kept the head.
+    forgetHeads();
+    const fresh = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
+    assert.equal(fresh.status, 206, 'a new isolate serves the cached piece too');
+    assert.equal(await fresh.text(), 'PMTiles');
+    for (const headers of [{ range: 'bytes=8-11' }, {}, { range: 'bytes=0-1,4-5' }, { 'if-range': '"x"', range: 'bytes=0-1' }]) {
+      const res = await get('/map/campus.pmtiles', headers);
+      assert.equal(res.status, 503, JSON.stringify(headers));
+      assert.equal(res.headers.get('retry-after'), '60');
+    }
+
+    // R2 is back: the file wasn't taken for replaced, and a range past its end is still 416.
+    Object.assign(bucket, { head, get: read });
+    assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=8-11' })).text(), '0123');
+    assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=99-' })).status, 416);
+  } finally {
+    Date.now = was;
+    Object.assign(bucket, { head, get: read });
   }
 });
 

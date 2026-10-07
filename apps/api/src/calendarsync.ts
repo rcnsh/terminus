@@ -128,7 +128,16 @@ export async function refreshCalendar(env: Pick<Env, 'KV'>, nowMs: number): Prom
     const [nusmods, holidays] = await Promise.all([getJson(NUSMODS_CALENDAR), getJson(SG_HOLIDAYS)]);
     const fetched = fromSources(nusmods, holidays, nowMs);
     if (!valid(fetched)) throw new Error('fetched calendar failed its checks');
-    const kept = (await env.KV.get(CALENDAR_DATA_KEY, 'json').catch(() => null)) as CalendarData | null;
+    // A failed read throws (and the fetch is tried again tomorrow): taken as
+    // "nothing kept", the write below would drop the years merged before.
+    // Only a copy that isn't JSON at all is written over.
+    const raw = await env.KV.get(CALENDAR_DATA_KEY);
+    let kept: CalendarData | null = null;
+    try {
+      kept = raw ? (JSON.parse(raw) as CalendarData) : null;
+    } catch {
+      // Unreadable: nothing worth keeping.
+    }
     const before = kept && valid(kept) ? kept : null;
     const next = mergeCalendars(before ?? { semesters: [], holidays: [] }, fetched);
     await env.KV.put(CALENDAR_NEXT_KEY, String(nowMs + EVERY_MS));

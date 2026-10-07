@@ -55,7 +55,8 @@ const waitMin = Number(o['wait-min']);
 if (!Number.isFinite(waitMin) || waitMin < 0) fail('--wait-min must be a number of minutes, 0 or more');
 const until = Date.now() + waitMin * 60_000;
 for (;;) {
-  const res = await fetch(`${o.base}/timelapse/days`, { headers: { 'x-health-token': token } }).catch((err) => ({ ok: false, status: err.message }));
+  // Bounded: a request that hangs would stall the wait for good.
+  const res = await fetch(`${o.base}/timelapse/days`, { headers: { 'x-health-token': token }, signal: AbortSignal.timeout(30_000) }).catch((err) => ({ ok: false, status: err.message }));
   if (res.ok) {
     const { days } = await res.json();
     const day = days.find((d) => d.date === o.date);

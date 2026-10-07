@@ -42,13 +42,53 @@ export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: Exe
   if (row) {
     if (row.last_used === null || nowMs - row.last_used > TOUCH_MS) {
       const touch = db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').bind(nowMs, row.id).run();
-      if (ctx) ctx.waitUntil(touch.catch(() => {}));
+      if (ctx) ctx.waitUntil(touch.catch((err) => console.error('api key last_used not updated:', err instanceof Error ? err.message : String(err))));
       else await touch;
     }
     return { kind: 'key', keyId: row.id, userId: row.user_id };
   }
   const session = await authenticate(db, req, nowMs, ctx);
   return session ? { kind: 'account', userId: session.user.id } : null;
+}
+
+/** The answer when D1 can't be reached to check who's asking. */
+export const ACCOUNTS_DOWN = "terminus can't reach your account right now; try again in a minute";
+
+/**
+ * Whether an error is D1 being unreachable or overloaded for a moment, worth
+ * a 503 and a retry, rather than a fault in the code or the schema (a
+ * missing column or a broken constraint stays a 500).
+ */
+export function d1Unavailable(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  // D1's own errors say so ("D1_ERROR: Network connection lost."); a
+  // timeout from a fetch to NUS doesn't, and isn't about accounts. Faults
+  // in the query itself (a bad binding, too many variables) stay a 500, so
+  // a bug doesn't read as "try again in a minute".
+  return /\bD1\b|D1_/.test(msg)
+    && !/constraint|no such (?:table|column|function)|syntax error|D1_TYPE_ERROR|D1_COLUMN_NOTFOUND|too many (?:SQL )?variables|too many terms|too ?big|datatype mismatch|out of range/i.test(msg);
+}
+
+/**
+ * callerFor, tried once more when D1 is unreachable, since it sometimes
+ * drops a single query. Null with `down` when it still fails: the caller answers 503 rather
+ * than a bare 500, so the apps know to try again.
+ */
+export async function callerOrDown(env: Env, req: Request, nowMs: number, ctx?: ExecutionContext): Promise<{ caller: Caller | null; down: boolean }> {
+  try {
+    return { caller: await callerFor(env, req, nowMs, ctx), down: false };
+  } catch (first) {
+    // A fault in the query (a missing column after a deploy that ran ahead
+    // of its migration) won't pass by itself: a 500, not a retry and a 503.
+    if (!d1Unavailable(first)) throw first;
+    try {
+      return { caller: await callerFor(env, req, nowMs, ctx), down: false };
+    } catch (err) {
+      if (!d1Unavailable(err)) throw err;
+      console.error('callerFor: D1 failed twice:', err instanceof Error ? err.message : String(err));
+      return { caller: null, down: true };
+    }
+  }
 }
 
 export interface KeyInfo {

@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.clock
+import sh.rcn.terminus.widget.isOld
 import sh.rcn.terminus.widget.redrawWidgets
 
 /**
@@ -126,7 +127,17 @@ class LiveService : Service() {
             }
             nm?.notify(NOTIFICATION_ID, build(this, answer, watching = watch != null))
             // Following by location: every fix counts, screen on or off.
-            delay(if (watch != null) WATCH_MS else if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS)
+            val wait = if (watch != null) WATCH_MS else if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS
+            // The header's countdown runs on past zero ("-1:20") until it's
+            // rebuilt: rebuilt just after it ends, without a fetch.
+            val end = countdownAt(answer)?.let { it - ServerClock.now() + 1_000 }?.takeIf { it in 1 until wait }
+            if (end != null) {
+                delay(end)
+                nm?.notify(NOTIFICATION_ID, build(this, store.lastAnswer()?.first ?: answer, watching = watch != null))
+                delay(wait - end)
+            } else {
+                delay(wait)
+            }
         }
         stopWatching()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -192,6 +203,16 @@ class LiveService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
+        /** What the header counts down to: getting off, leaving for a class, or the bus. */
+        private fun countdownAt(answer: NextAnswer): Long? {
+            val card = answer.card
+            return when {
+                card?.phase == "riding" && card.ride != null -> card.ride.arriveMs
+                answer.isClassPlan -> answer.leaveAtMs
+                else -> answer.departsAtMs?.takeIf { answer.quality != "unknown" }
+            }
+        }
+
         private fun build(ctx: Context, answer: NextAnswer?, watching: Boolean = false): Notification {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             nm?.createNotificationChannel(
@@ -230,39 +251,46 @@ class LiveService : Service() {
             // the top of the shade and on the lock screen, with the card's
             // glance ("Off 9:52") as the chip in the status bar.
             val card = answer.card
+            val fmt = { ms: Long -> clock(ctx, ms) }
+            // Past its staleAt with no fresh answer (offline, or the server
+            // failing): the bus may be long gone. No countdown then, and said so.
+            val unconfirmed = if (isOld(answer, now)) Store(ctx).lastAnswer()?.second?.let { L.s(R.string.unconfirmed_checked, fmt(it)) } else null
             // SDK_INT_FULL only exists from API 36: reading it on 12-15 throws, so check SDK_INT first.
             if (android.os.Build.VERSION.SDK_INT >= 36 && android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1 && card?.phase in TRIP_PHASES) {
                 b.setRequestPromotedOngoing(true)
-                card?.glance?.let { b.setShortCriticalText(it) }
+                if (unconfirmed == null) card?.glance?.let { b.setShortCriticalText(it) }
             }
             // On the bus: the ride, stop by stop (RideStyle).
             val ride = card?.ride
             if (card != null && card.phase == "riding" && ride != null) {
                 b.setSubText(answer.destLabel)
-                return RideStyle.apply(ctx, b, card, ride, now).build()
+                RideStyle.apply(ctx, b, card, ride, now)
+                // The stops are the clock's estimate either way; unconfirmed, it says so.
+                if (unconfirmed != null) b.setContentText(listOf(unconfirmed, ride.nextText(now)).joinToString(" · "))
+                return b.build()
             }
 
             // Collapsed, one line each: the bus, then when to leave. Where to
             // goes in the header, next to the ticking countdown.
-            val fmt = { ms: Long -> clock(ctx, ms) }
             if (answer.isClassPlan) {
-                // A class: count down to leaving, not to the next bus.
+                // A class: count down to leaving, not to the next bus. Unconfirmed,
+                // the leave time as it was, not "Leave now" for a bus that's gone.
                 val catch = answer.catchLine
-                b.setContentTitle(answer.leaveHeadline(now))
-                    .setContentText(catch)
-                    .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(catch, answer.leaveNote, answer.goNowLine).joinToString("\n")))
+                b.setContentTitle(if (unconfirmed != null) card?.leaveBy ?: answer.leaveHeadline(now) else answer.leaveHeadline(now))
+                    .setContentText(unconfirmed ?: catch)
+                    .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(unconfirmed, catch, answer.leaveNote.takeIf { unconfirmed == null }, answer.goNowLine.takeIf { unconfirmed == null }).joinToString("\n")))
                     .setSubText(listOfNotNull(answer.destLabel, answer.classAtMs?.let { L.s(R.string.starts_at, fmt(it)) }).joinToString(" · "))
                 // A class card can come without a leave time: no countdown then.
-                return b.countdownTo(answer.leaveAtMs, now).build()
+                return b.countdownTo(answer.leaveAtMs.takeIf { unconfirmed == null }, now).build()
             }
             val title = if (answer.arrived) answer.label else answer.clockLabel(fmt)
-            val leave = answer.leaveText(now)
+            val leave = answer.leaveText(now).takeIf { unconfirmed == null }
             b.setContentTitle(title)
-                .setContentText(leave ?: answer.detail)
-                .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(leave, answer.detail).joinToString("\n")))
+                .setContentText(unconfirmed ?: leave ?: answer.detail)
+                .setStyle(Notification.BigTextStyle().bigText(listOfNotNull(unconfirmed ?: leave, answer.detail).joinToString("\n")))
             (answer.destLabel ?: if (answer.mode == "nearby") L.s(R.string.chip_nearby) else null)?.let { b.setSubText(it) }
             // The system ticks this down; nothing to redraw between refreshes.
-            return b.countdownTo(answer.departsAtMs?.takeIf { answer.quality != "unknown" }, now).build()
+            return b.countdownTo(answer.departsAtMs?.takeIf { answer.quality != "unknown" && unconfirmed == null }, now).build()
         }
     }
 }

@@ -1,6 +1,7 @@
 package sh.rcn.terminus.ui
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -62,6 +63,9 @@ data class MapUi(
     val downloadFailed: Boolean = false,
 )
 
+/** Buses from a poll this old, with none since, are drawn faded: three missed 5 s polls. */
+private const val BUSES_OLD_MS = 15_000L
+
 /**
  * The Map tab. The screen drives the polling (only while it's on screen):
  * [refreshBuses] every 5 s while a pill is on, [refreshBoard] every 15 s
@@ -73,6 +77,9 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<MapUi> = _state
 
     private var styleKey: Pair<Boolean, Boolean>? = null
+
+    /** When /buses last answered (elapsedRealtime, which counts on in sleep), to tell when the buses shown are old. */
+    private var busesAt = 0L
 
     private fun api() = Api(store.token)
 
@@ -139,6 +146,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
                 list.buses.isEmpty() -> BusStatus.NoneRunning
                 else -> BusStatus.Running(list.buses.size)
             }
+            busesAt = SystemClock.elapsedRealtime()
             _state.update { s ->
                 // A bus whose card is open and has gone: close the card.
                 val sheet = s.sheet.let { sh -> if (sh is MapSheet.Bus && list.buses.none { it.id == sh.id }) null else sh }
@@ -147,7 +155,10 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (svc == _state.value.selected) _state.update { it.copy(busStatus = BusStatus.Unavailable) }
+            // No answer: the buses stay where they were last seen, faded once
+            // that's a few polls ago, as when the feed itself is down.
+            val old = SystemClock.elapsedRealtime() - busesAt > BUSES_OLD_MS
+            if (svc == _state.value.selected) _state.update { it.copy(busStatus = BusStatus.Unavailable, busesStale = it.busesStale || (old && it.buses.isNotEmpty())) }
         }
     }
 

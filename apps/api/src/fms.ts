@@ -10,9 +10,9 @@
 
 import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { MAX_ETA_S, TTL } from './config.ts';
-import { timedFetch } from './http.ts';
+import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
-import { UpstreamHttpError, UpstreamRejected, getSession, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
+import { UpstreamHttpError, UpstreamRejected, getSession, markIfOutdated, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
 import type { Session } from './auth.ts';
 import graphJson from '../data/stops.json' with { type: 'json' };
 
@@ -448,22 +448,34 @@ async function retryable(env: Env, nowMs: number, session: Session, body: unknow
  * with a fresher token (retryable), unless its code says a token cannot
  * help; a second rejection THROWS. [onCall] is told of each request to NUS
  * (a re-mint included), so the timelapse recorder counts what a poll cost.
+ *
+ * `sentAtMs` is when the call that answered went out, on nowMs's clock: the
+ * feed's times are relative to then. After a mint, a refusal and a re-mint
+ * that is up to 15 s after nowMs, and reading them from nowMs would put
+ * every bus that much early. Not the reply's time, which would put them late.
  */
-async function acceptedCall(env: Env, endpoint: string, params: Record<string, string>, nowMs: number, onCall?: () => void): Promise<ProxyBody> {
+async function acceptedCall(env: Env, endpoint: string, params: Record<string, string>, nowMs: number, onCall?: () => void): Promise<{ body: ProxyBody; sentAtMs: number }> {
   if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
+  const startMs = Date.now();
+  const sinceNow = () => nowMs + Math.max(0, Date.now() - startMs);
   const session = await getSession(env, nowMs);
   onCall?.();
+  let sentAtMs = sinceNow();
   let body = await proxyCall(env, session, endpoint, params);
   const renewed = await retryable(env, nowMs, session, body, onCall);
   if (renewed) {
     onCall?.();
+    sentAtMs = sinceNow();
     body = await proxyCall(env, renewed, endpoint, params);
   }
   if (!proxyOk(body)) {
     const b = body as ProxyBody | null;
-    throw new UpstreamRejected(String(b?.code ?? '?'), `${endpoint} rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
+    const err = new UpstreamRejected(String(b?.code ?? '?'), `${endpoint} rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
+    err.version = (renewed ?? session).version;
+    await markIfOutdated(env, err);
+    throw err;
   }
-  return body;
+  return { body, sentAtMs };
 }
 
 /**
@@ -476,14 +488,14 @@ export async function fetchArrivals(
   code: string,
   nowMs: number = Date.now(),
 ): Promise<StopArrivals> {
-  const body = await acceptedCall(env, 'shuttle-service', { busstopname: code }, nowMs);
+  const { body, sentAtMs } = await acceptedCall(env, 'shuttle-service', { busstopname: code }, nowMs);
   // "00000" with no list anywhere is not "no bus": the payload changed shape,
   // and reading it as an empty board would print confident headway guesses.
   if (!hasList(body.data, ARRIVAL_LIST_KEYS)) throw new Error('shuttle-service answered in an unknown shape (no arrivals list)');
   const arrivals = normalize(body.data);
   const problem = arrivalsProblem(body.data, arrivals);
   if (problem) throw new Error(`shuttle-service answered in an unknown shape (${problem})`);
-  return { code, arrivals, fetchedAt: nowMs, stale: false, available: true };
+  return { code, arrivals, fetchedAt: sentAtMs, stale: false, available: true };
 }
 
 /**
@@ -540,6 +552,7 @@ export async function getArrivals(
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
+    memoes: notOutdated,
     breaker: BREAKER,
     inflight,
   });
@@ -547,13 +560,22 @@ export async function getArrivals(
 
 /**
  * Whether a failure says NUS will refuse every call for a while, whichever
- * stop it's for: a refused version or key, or the host itself answering
- * 429 (slow down) or 5xx (down), the mint's host included.
+ * stop it's for: a refused version or key, the host itself answering 429
+ * (slow down) or 5xx (down), or no answer at all (a timeout, a failed
+ * connection), the mint's host included. A host that hangs is down too, and
+ * costs more: left to each key's failMemoS, every stop and service would
+ * hold a connection open for the whole timeout, again and again.
  */
 export function tripsBreaker(err: unknown): boolean {
-  if (err instanceof UpstreamRejected) return NO_REMINT_CODES.has(err.code);
+  // A version refused after the switch away from it says nothing of the new one.
+  if (err instanceof UpstreamRejected) return NO_REMINT_CODES.has(err.code) && !err.outdated;
+  if (err instanceof UpstreamUnreachable) return true;
   return err instanceof UpstreamHttpError && (err.status === 429 || err.status >= 500);
 }
+
+/** Whether a failure quiets its stop or service for failMemoS: all but a
+ *  refusal of a version already switched away from, as with the breaker. */
+const notOutdated = (err: unknown): boolean => !(err instanceof UpstreamRejected && err.outdated);
 
 /** The shuttle feed's breaker: such a failure stops every call for breakerS. */
 const BREAKER = {
@@ -630,14 +652,14 @@ export function normalizeBuses(data: unknown): RawBus[] {
 /** One service's buses, with one retry on a rejection, as fetchArrivals.
  *  [onCall] is told of each request to NUS (acceptedCall). */
 export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Date.now(), onCall?: () => void): Promise<ActiveBuses> {
-  const body = await acceptedCall(env, 'active-bus', { route_code: svc }, nowMs, onCall);
+  const { body, sentAtMs } = await acceptedCall(env, 'active-bus', { route_code: svc }, nowMs, onCall);
   // No list at all is a changed payload, not "no buses running".
   if (!hasList(body.data, BUS_LIST_KEYS)) throw new Error('active-bus answered in an unknown shape (no bus list)');
   // Rows it can't read would show as "No D2 buses running right now".
   const buses = normalizeBuses(body.data);
   const problem = busesProblem(body.data, buses);
   if (problem) throw new Error(`active-bus answered in an unknown shape (${problem})`);
-  return { svc, buses, fetchedAt: nowMs, stale: false };
+  return { svc, buses, fetchedAt: sentAtMs, stale: false };
 }
 
 /**
@@ -661,6 +683,7 @@ export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, now
     freshMs: TTL.busesMs,
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
+    memoes: notOutdated,
     breaker: BREAKER,
     inflight: inflightBuses,
   });

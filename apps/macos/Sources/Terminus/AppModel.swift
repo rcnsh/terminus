@@ -211,10 +211,12 @@ final class AppModel {
     /// The menu bar text at `now` (on the server's clock): the card's glance,
     /// worded on the server as the phone's widget shows it, or nil for the
     /// plain icon. An answer from an older server, without a card, counts
-    /// down from its departure time here.
+    /// down from its departure time here. Offline with the plan gone stale
+    /// and no day plan to fall back on, the plain icon: the old glance would
+    /// pass for current.
     func menuTitle(at now: Date) -> String? {
         if let p = offlinePick(at: now) { return OfflineDay.menuTitle(p) }
-        guard let plan else { return nil }
+        guard let plan, error == nil || !isOld(plan, at: now) else { return nil }
         if let card = plan.card { return card.glance.flatMap { $0.isEmpty ? nil : $0 } }
         guard plan.quality != "ended", !plan.isFree else { return nil }
         guard plan.hasLiveTime, let at = plan.departure else {
@@ -339,7 +341,9 @@ final class AppModel {
             error = nil
             LeaveNotifier.shared.update(a)
             dayFetched = Date()
-            day = try? await api.day()
+            // A failed fetch keeps the plan there was (offline falls back to
+            // it), and the next refresh asks again.
+            if let d = try? await api.day() { day = d } else { dayFetched = nil }
             return nil
         } catch {
             let message = failureMessage(error, otherwise: L("Offline"))
@@ -433,7 +437,7 @@ final class AppModel {
             LeaveNotifier.shared.update(a)
             select(.plan)
             dayFetched = Date()
-            day = try? await Api(token: token).day()
+            if let d = try? await Api(token: token).day() { day = d } else { dayFetched = nil }
             return nil
         } catch {
             return failureMessage(error, otherwise: L("Couldn't add it. Check your connection."))
@@ -498,10 +502,25 @@ final class AppModel {
 
     /// The choice after adding an email: the account's setup, or this Mac's.
     func keepSetup(mac: Bool) {
-        guard let c = chooseSetup else { return }
+        guard let c = chooseSetup, !signingIn else { return }
         let anon = anonToken
+        signInError = nil
+        signingIn = true
         Task {
-            if let anon { try? await Api(token: c.token).merge(anon: anon, keepDevice: mac) }
+            defer { signingIn = false }
+            if let anon {
+                do {
+                    try await Api(token: c.token).merge(anon: anon, keepDevice: mac)
+                } catch let e as ApiError where e.status == 400 {
+                    // This Mac's account is already gone: an earlier try merged
+                    // it and only the reply was lost. Nothing left to keep.
+                } catch {
+                    // Not merged: the choice stays up, with this Mac's account
+                    // kept, so a second try can still keep its setup.
+                    signInError = failureMessage(error)
+                    return
+                }
+            }
             chooseSetup = nil
             finishSignIn(SignInPoll(status: "approved", token: c.token, email: c.email, outcome: "signed-in"))
         }
@@ -720,7 +739,11 @@ final class AppModel {
         loop = Task {
             while !Task.isCancelled {
                 var ok = true
-                if !paused && paired { ok = await refresh() }
+                if !paused && paired {
+                    ok = await refresh()
+                    // The leave reminders say whether their times still stand.
+                    if ok { LeaveNotifier.shared.confirmed(plan) } else { LeaveNotifier.shared.unconfirmed(since: updated) }
+                }
                 try? await Task.sleep(for: .seconds(nextDelay(failed: !ok)))
             }
         }
@@ -873,7 +896,11 @@ final class AppModel {
         ]
         for (center, name) in pauses {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.paused = true }
+                MainActor.assumeIsolated {
+                    self?.paused = true
+                    // Nothing refreshes them until it's back.
+                    LeaveNotifier.shared.unconfirmed(since: self?.updated)
+                }
             }
         }
         for (center, name) in resumes {

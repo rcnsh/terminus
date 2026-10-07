@@ -101,6 +101,24 @@ test('a source that drops a year loses nothing', async () => {
   assert.equal(termDay(Date.UTC(2027, 7, 31, 2, 0)).acadYear, '2027/2028');
 });
 
+test('a KV read that fails keeps the merged years: nothing is written over them', async () => {
+  const env = makeEnv(makeKV());
+  globalThis.fetch = sources();
+  await refreshCalendar(env, NOW);
+  const kept = await env.KV.get(CALENDAR_DATA_KEY);
+  const { '2027/2028': _gone, ...without } = withNextYear;
+  globalThis.fetch = sources({ cal: without });
+  const get = env.KV.get;
+  env.KV.get = async (k, ...rest) => {
+    if (k === CALENDAR_DATA_KEY) throw new Error('KV unavailable');
+    return get.call(env.KV, k, ...rest);
+  };
+  await assert.rejects(refreshCalendar(env, NOW + 7 * DAY), /KV unavailable/);
+  env.KV.get = get;
+  assert.equal(await env.KV.get(CALENDAR_DATA_KEY), kept);
+  assert.equal(Number(await env.KV.get(CALENDAR_NEXT_KEY)), NOW + 8 * DAY, 'tried again the next day');
+});
+
 test('a broken copy in KV is ignored: the bundled calendar answers', async () => {
   const env = makeEnv(makeKV({ [CALENDAR_DATA_KEY]: { semesters: [{ acadYear: 'x', semester: 9, start: 'soon' }], holidays: [] } }));
   await loadCalendar(env, NOW);

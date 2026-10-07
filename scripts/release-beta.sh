@@ -101,7 +101,8 @@ if [ $DRY -eq 1 ]; then
 fi
 
 echo "== beta Worker"
-(cd apps/api && pnpm exec cf d1 migrations apply "$BETA_D1" && pnpm run deploy:beta)
+# deploy:beta applies the beta D1's pending migrations first.
+(cd apps/api && pnpm run deploy:beta)
 
 echo "== upload"
 # Wrangler, not `cf r2 objects put`: cf percent-encodes the slashes in the key.

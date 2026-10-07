@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { hashToken, newPairCode, normalizePairCode } from '../src/accounts.ts';
+import { MAIL_TIMEOUT_MS, checkTurnstile, hashToken, newPairCode, normalizePairCode, sendMail, verifyTurnstile } from '../src/accounts.ts';
+import { d1Unavailable } from '../src/access.ts';
 import { WALK } from '../src/config.ts';
 import { GRAPH } from '../src/graph.ts';
 import venuesJson from '../data/venues.json' with { type: 'json' };
@@ -23,8 +24,9 @@ function setup() {
   return { db, email, env };
 }
 
-async function call(env, path, { method = 'GET', body, token, form, cookie, key, accept } = {}) {
+async function call(env, path, { method = 'GET', body, token, form, cookie, key, accept, ifMatch } = {}) {
   const headers = {};
+  if (ifMatch) headers['if-match'] = ifMatch;
   if (key) headers['x-api-key'] = key;
   if (accept) headers.accept = accept;
   let payload;
@@ -79,6 +81,19 @@ test('Turnstile: enforced once a secret is set', async () => {
   assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'good' } })).status, 200);
   assert.equal(email.sent.length, 1);
   assert.ok(verify.every((u) => u.includes('challenges.cloudflare.com')));
+});
+
+test('Turnstile not answering: sign-in says try again later (503), not that the check failed', async () => {
+  const { env, email } = setup();
+  globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
+  const e = { ...env, TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  for (const path of ['/auth/login', '/auth/anon/web']) {
+    const res = await call(e, path, { method: 'POST', body: { email: INVITED, turnstile: 'good' } });
+    assert.equal(res.status, 503, path);
+    assert.equal(res.headers.get('retry-after'), '60');
+    assert.match((await res.json()).error, /not answering/);
+  }
+  assert.equal(email.sent.length, 0);
 });
 
 test('opening the link does not spend it; the POST does, once', async () => {
@@ -757,7 +772,8 @@ test('an unexpected error is logged and answered with a bare 500', async () => {
   const errors = [];
   const orig = console.error;
   console.error = (...a) => errors.push(a.join(' '));
-  env.DB.prepare = () => { throw new Error('D1_ERROR: secret internals'); };
+  // A fault (here a missing column), not D1 being away for a moment.
+  env.DB.prepare = () => { throw new Error('D1_ERROR: no such column: secret_internals'); };
   const r = await call(env, '/me?lat=1.29&lon=103.77', { cookie: '__Host-tm_s=whatever' });
   console.error = orig;
   assert.equal(r.status, 500);
@@ -1262,4 +1278,221 @@ test('a page that isn\'t there is the not-found page for a browser, still a 404'
   const script = await call(env, '/no-such-page.js', { accept: '*/*' });
   assert.equal(script.status, 404);
   assert.equal(await script.text(), 'not found');
+});
+
+test('the test D1 counts the rows a RETURNING statement changed, as D1 does', async () => {
+  const db = makeD1();
+  db.exec("INSERT INTO blocklist VALUES ('a@example.com', 0), ('b@example.com', 0)");
+  const del = await db.prepare('DELETE FROM blocklist RETURNING email').run();
+  assert.equal(del.results.length, 2);
+  assert.equal(del.meta.changes, 2);
+  const read = await db.prepare('SELECT * FROM blocklist').run();
+  assert.equal(read.meta.changes, 0);
+});
+
+test('profile: a save sent with If-Match is refused when another device saved first; one without is not', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const fresh = await call(env, '/me/profile', { cookie });
+  assert.equal(fresh.headers.get('etag'), '"0"', 'never saved');
+  const first = await call(env, '/me/profile', { method: 'PUT', cookie, ifMatch: '"0"', body: { home: { stops: ['PGP'] } } });
+  assert.equal(first.status, 200);
+  const v1 = first.headers.get('etag');
+  assert.match(v1, /^"[1-9]\d*"$/);
+  assert.equal((await call(env, '/me/profile', { cookie })).headers.get('etag'), v1);
+
+  // Another device saves; a save from the old version is refused, compressed ETag or not.
+  const other = await call(env, '/me/profile', { method: 'PUT', cookie, ifMatch: `W/${v1}`, body: { home: { stops: ['UTOWN'] } } });
+  assert.equal(other.status, 200);
+  assert.notEqual(other.headers.get('etag'), v1, 'a new version, even within the same millisecond');
+  const stale = await call(env, '/me/profile', { method: 'PUT', cookie, ifMatch: v1, body: { home: { stops: ['KR-MRT'] } } });
+  assert.equal(stale.status, 412);
+  assert.equal((await stale.json()).error, 'your settings were changed on another device; try again');
+  assert.deepEqual((await (await call(env, '/me/profile', { cookie })).json()).home.stops, ['UTOWN']);
+  assert.equal((await call(env, '/me/profile', { method: 'PUT', cookie, ifMatch: '"0"', body: {} })).status, 412, 'one is saved already');
+
+  // Without If-Match (the apps installed today), the last save wins as before.
+  assert.equal((await call(env, '/me/profile', { method: 'PUT', cookie, body: { home: { stops: ['KR-MRT'] } } })).status, 200);
+  assert.deepEqual((await (await call(env, '/me/profile', { cookie })).json()).home.stops, ['KR-MRT']);
+});
+
+test('a one-off trip added while another device saves is not lost, nor is the other save', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  const tomorrow = new Date(Date.now() + 8 * 3_600_000 + 86_400_000).toISOString().slice(0, 10);
+  const add = (to, atMin) => call(env, '/me/once', { method: 'POST', cookie, body: { to, atMin, date: tomorrow } });
+  assert.equal((await add('COM3', 600)).status, 200);
+  // Just after this request reads the profile, another device adds a trip.
+  const prepare = db.prepare;
+  let armed = true;
+  db.prepare = (sql) => {
+    const st = prepare(sql);
+    if (!sql.startsWith('SELECT json')) return st;
+    return {
+      ...st,
+      bind: (...p) => {
+        const b = st.bind(...p);
+        return {
+          ...b,
+          async first(col) {
+            const row = await b.first(col);
+            if (armed) {
+              armed = false;
+              db._db
+                .prepare("UPDATE profiles SET json = json_insert(json, '$.once[#]', json(?)), updated = updated + 1")
+                .run(JSON.stringify({ date: tomorrow, arriveByMin: 1000, to: 'KR-MRT', label: 'KR MRT' }));
+            }
+            return row;
+          },
+        };
+      },
+    };
+  };
+  assert.equal((await add('UTOWN', 900)).status, 200);
+  db.prepare = prepare;
+  const saved = (await (await call(env, '/me/profile', { cookie })).json()).once.map((o) => o.to).sort();
+  assert.deepEqual(saved, ['COM3', 'KR-MRT', 'UTOWN']);
+});
+
+test('D1 down: the answers and /me say 503 with Retry-After; one dropped query is tried again', async () => {
+  const { env, email } = setup();
+  delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
+  const cookie = await signIn(env, email);
+  const log = console.error;
+  console.error = () => {};
+  const prepare = env.DB.prepare;
+  try {
+    let fails = 1;
+    env.DB.prepare = (sql) => {
+      if (fails > 0) {
+        fails--;
+        throw new Error('D1_ERROR: Network connection lost.');
+      }
+      return prepare(sql);
+    };
+    assert.equal((await call(env, '/campus', { cookie })).status, 200, 'a single dropped query is retried');
+
+    env.DB.prepare = () => {
+      throw new Error('D1_ERROR: Network connection lost.');
+    };
+    for (const path of ['/campus', '/me']) {
+      const r = await call(env, path, { cookie });
+      assert.equal(r.status, 503, path);
+      assert.equal(r.headers.get('retry-after'), '30');
+      assert.deepEqual(await r.json(), { error: "terminus can't reach your account right now; try again in a minute" });
+    }
+
+    // D1's overload message says "too many", yet it is an outage all the same.
+    env.DB.prepare = () => {
+      throw new Error('D1 DB is overloaded. Too many requests queued.');
+    };
+    for (const path of ['/campus', '/me']) assert.equal((await call(env, path, { cookie })).status, 503, path);
+
+    // A fault in the query, as when a deploy runs ahead of its migration,
+    // is a 500 and isn't run twice.
+    let tries = 0;
+    env.DB.prepare = () => {
+      tries++;
+      throw new Error('D1_ERROR: no such column: last_used: SQLITE_ERROR');
+    };
+    const broken = await call(env, '/campus', { cookie });
+    assert.equal(broken.status, 500);
+    assert.equal(broken.headers.get('retry-after'), null);
+    assert.equal(tries, 1);
+  } finally {
+    env.DB.prepare = prepare;
+    console.error = log;
+  }
+});
+
+test('Turnstile down is logged, not only told to the visitor as a failed check', async () => {
+  const env = { TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  const errors = [];
+  const log = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  try {
+    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => { throw new Error('timed out'); }), false);
+    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => new Response('<html>bad gateway</html>', { status: 502 })), false);
+    assert.equal(errors.length, 2);
+    assert.ok(errors.every((e) => e.startsWith('Turnstile siteverify failed') && !e.includes('visitor-token-7')));
+    // A visitor who fails the check is not an outage.
+    assert.equal(await verifyTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false, 'error-codes': ['invalid-input-response'] })), false);
+    assert.equal(errors.length, 2);
+    // Told apart, for a caller that would say "try again" rather than "failed".
+    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => { throw new Error('timed out'); }), 'unavailable');
+    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false })), 'failed');
+    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: true })), 'ok');
+  } finally {
+    console.error = log;
+  }
+});
+
+test('a last_seen update that fails is logged, and the request still answers', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  db._db.prepare('UPDATE sessions SET last_seen = ?').run(Date.now() - 86_400_000);
+  const errors = [];
+  const log = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  const batch = db.batch;
+  db.batch = async () => {
+    throw new Error('D1_ERROR: Network connection lost.');
+  };
+  try {
+    assert.equal((await call(env, '/me', { cookie })).status, 200);
+  } finally {
+    db.batch = batch;
+    console.error = log;
+  }
+  assert.ok(errors.some((e) => e.startsWith('last_seen not updated')), errors.join('\n'));
+});
+
+test('a code whose sign-in fails part way can be typed again', async () => {
+  const { env, email, db } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const code = email.lastCode();
+  const batch = db.batch;
+  db.batch = async () => {
+    throw new Error('D1_ERROR: Network connection lost.');
+  };
+  const log = console.error;
+  console.error = () => {};
+  try {
+    assert.ok((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status >= 500);
+  } finally {
+    db.batch = batch;
+    console.error = log;
+  }
+  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 200);
+});
+
+test('only an unreachable D1 counts as an outage; a fault in the query stays a 500', () => {
+  for (const msg of ['D1_ERROR: Network connection lost.', 'D1 DB is overloaded. Requests queued for too long.', 'D1 DB is overloaded. Too many requests queued.', 'D1_ERROR: internal error']) {
+    assert.equal(d1Unavailable(new Error(msg)), true, msg);
+  }
+  for (const msg of [
+    'D1_TYPE_ERROR: Type \'undefined\' not supported for value \'undefined\'',
+    'D1_ERROR: too many SQL variables: SQLITE_ERROR',
+    'D1_ERROR: string or blob too big: SQLITE_TOOBIG',
+    'D1_ERROR: UNIQUE constraint failed: users.email',
+    'D1_ERROR: no such column: reply_to',
+    'fetch to NUS timed out',
+  ]) {
+    assert.equal(d1Unavailable(new Error(msg)), false, msg);
+  }
+});
+
+test('an email send that hangs fails after MAIL_TIMEOUT_MS, as a failed send does', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = { EMAIL: { send: () => new Promise(() => {}) } };
+  const sending = sendMail(env, { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' });
+  t.mock.timers.tick(MAIL_TIMEOUT_MS - 1);
+  let settled = false;
+  sending.catch(() => {}).finally(() => (settled = true));
+  await Promise.resolve();
+  assert.equal(settled, false);
+  t.mock.timers.tick(1);
+  await assert.rejects(sending, /timed out/);
+  // A send that answers in time is not held up by the timer.
+  await sendMail({ EMAIL: { send: async () => ({ messageId: 'x' }) } }, { from: 'a@example.test', to: 'b@example.test', subject: 's', text: 't' });
 });

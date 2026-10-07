@@ -241,6 +241,18 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(m.menuTitle(at: at.addingTimeInterval(600)) == "Leave 09:36")
 }
 
+/// Offline with no day plan kept, an old glance would pass for current: the plain icon instead.
+@MainActor @Test func offlineTheMenuBarDropsAGlanceGoneStale() throws {
+    let m = AppModel(snapshot: true)
+    m.answers[.plan] = try golden("class-bus")
+    let stale = try #require(m.plan?.card?.staleAt.flatMap(parseISODate))
+    m.error = "Offline"
+    #expect(m.menuTitle(at: stale.addingTimeInterval(-1)) == m.plan?.card?.glance)
+    #expect(m.menuTitle(at: stale) == nil)
+    m.error = nil
+    #expect(m.menuTitle(at: stale) == m.plan?.card?.glance)
+}
+
 /// The rule every client follows: a card without staleAt never dims; only an answer with no card is old.
 @MainActor @Test func onlyAnAnswerWithoutACardIsOldWithoutStaleAt() throws {
     let m = AppModel(snapshot: true)

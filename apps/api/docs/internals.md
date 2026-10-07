@@ -102,16 +102,16 @@ pnpm run deploy
 | `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
 | `GET /line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/buses` read, plus one `/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
 | `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group), each with its walk to its nearest stop in metres (`walkM`) and in whole minutes at the normal pace (`walkMin`, never under 1). Written once per isolate, with an ETag: a client revalidating gets a 304. |
-| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. |
+| `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. When R2 fails, cached pieces are still served (the last ETag R2 gave is kept in the edge cache too, so a new isolate finds them, and R2 is asked again every 30 s) and the rest are 503 with `Retry-After`; 416 is only for a range past the file's end. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
-| `GET /health` | Graph age and which config is present, never values. `?probe=1` tests auth. |
-| `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
+| `GET /health` | Graph age and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). `?probe=1` tests auth. |
+| `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time stays down; the outage ends at the first of the two. The [status page](../../web/public/status) shows it. |
 | `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set, and the timelapse recorder's polls by what they cost NUS). Needs `x-health-token`; anything else gets a 404. |
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
-| `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store`. Needs `x-health-token` (operator or timelapse token). |
+| `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store` (503 if its recorder doesn't answer within 10 s). Needs `x-health-token` (operator or timelapse token). |
 | `GET /account` | The account page ([apps/web](../../web)), served as static assets. |
 | `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account and emailed to `ALERT_EMAIL`. It needs a note, and an account with an email: an anonymous one gets 403. |
 
@@ -124,6 +124,13 @@ for buses every 5 s. `/health`, `/status.json`, `/admin/stats`,
 `/timelapse/*` and `/download/*` stay limited by IP. `/map/*` is limited by IP only where it
 reads R2 (`RL_MAP`, 300 a minute): a piece already in the edge cache is
 never refused, so a lecture hall can open the map at once.
+
+When D1 can't be reached, checking the key or session behind a keyed
+route is tried once more, then answered 503 with `Retry-After: 30`
+(`callerOrDown` in access.ts); a D1 outage anywhere else under `/me` is a
+503 too (`d1Unavailable`), so the apps try again rather than report a
+fault. A fault in the query itself (a missing column, a bad binding, too
+many variables) stays a 500, so a bug doesn't read as "try again".
 
 Every 429 carries `Retry-After`, and every client waits it out, at most 5
 minutes, sending nothing meanwhile (web `send()` in `account/dom.js`,
@@ -157,6 +164,13 @@ after it the feed knows (`later`), and
   when its hours are unknown or it isn't running;
 - `running`: true on every row, unless asked for the stopped ones (below).
 
+Times count from the request, as `scoreOptions` does: a cached or stale
+answer's times are less its age, and a bus whose time passed more than a
+minute ago (`BOARD_GONE_S`; the feed's times are whole minutes) is left
+out. A live time from a stale feed is `stale`. The response's `asOf` is the
+oldest fetch the board used (`boardAsOf`), so the apps' "Updated N ago" is
+as old as the times are.
+
 A service outside its hours (`inService`) with no time from the feed is
 left off the board. With `?stopped=1` (`/arrivals`, `/me/nearby`; `/line`
 always asks this way) it's listed after every running row, by name, with
@@ -181,11 +195,11 @@ Each row also comes worded, in the request's language, so the Buses tab,
 Nearby and the map say the same thing (they used to word these
 themselves, and drifted):
 
-- `eta`: `etaS` in words with `mins()` ("4 min", "now"), a `scheduled` time
-  marked "~6 min" ("约 6 分钟"); null when `etaS` is. Each `later` entry has
+- `eta`: `etaS` in words with `mins()` ("4 min", "now"), a `scheduled` or
+  `stale` time marked "~6 min" ("约 6 分钟"); null when `etaS` is. Each `later` entry has
   its own `eta` the same way;
-- `laterText`: up to three later buses in whole minutes, each `scheduled` one
-  marked, "then 12, ~20 min" ("之后 12、约 20 分钟"); null with none;
+- `laterText`: up to three later buses in whole minutes, each `scheduled` or
+  `stale` one marked, "then 12, ~20 min" ("之后 12、约 20 分钟"); null with none;
 - `toText`: `towards` as "to A, B" ("经 A，开往 B"), "to A" ("开往 A"), or
   "Ends here" ("本站为终点站").
 
@@ -197,6 +211,16 @@ count in the weeks they run ([src/calendar.ts](../src/calendar.ts), built from
 NUSMods' semester dates and MOM's public holidays by
 `scripts/fetch_calendar.py`). [`src/config.ts`](../src/config.ts) holds the cache
 TTLs and tuning constants.
+
+The profile is one JSON document per account, with a version (`updated`,
+which every save moves forward). `POST /me/once` and `POST /me/import`
+change part of it: they save only if the version is still the one they read,
+and otherwise read it again and redo the change (three tries, then 409), so
+a one-off trip added on one phone isn't lost to a save from another.
+`PUT /me/profile` replaces the whole document; the version is its `ETag`
+(`GET /me/profile` sends it, `"0"` before the first save). A client that
+sends it back as `If-Match` is refused with 412 if another device saved
+since; without it, as the apps installed today send, the last save wins.
 
 The calendar keeps itself up to date without a deploy
 ([src/calendarsync.ts](../src/calendarsync.ts)). `data/calendar.json` is
@@ -386,6 +410,29 @@ account into another one.
   priority for due and missed; the app fetches /me/next
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).
+  - A phase counts as pushed once a device got it (or none could be sent
+    to); when every send failed, the next wake tries again. It's saved as
+    soon as the send is done, so an alarm the platform runs again after a
+    later failure doesn't push it twice. A wake that
+    throws (D1, the feed) is tried again after 30 s, doubling up to 8 min.
+    The wake owed is kept as `waking` until the wake is done, so an alarm
+    the platform runs again still wakes.
+  - The wake's last writes hold the object like a POST: a `/watch` for
+    sooner, or a `/clear`, that came in meanwhile stands.
+  - At the Worker's compatibility date `deleteAll()` leaves the alarm, so
+    `/clear` and midnight delete it first.
+  - Each call to Firebase has a 5 s limit, and each device is sent to on
+    its own, so one that fails or hangs doesn't keep the push from the
+    rest. A token is dropped only when FCM says it's unregistered (404,
+    `UNREGISTERED`), names it as the bad value, or says the registration
+    token isn't valid (FCM's usual words for one); any other 400 is logged
+    with FCM's code and the token kept.
+  - The Worker's calls to the Trip object time out after 3 s
+    (`TRIP_TIMEOUT_MS`): the card is answered without its trip state, as
+    when the object fails.
+  - A push secret that's set but won't parse turns that push off; it's
+    logged once per isolate, and `/health` says which push is usable
+    (`config.pushAndroid`, `config.pushWeb`).
 
 The planner ([src/profile.ts](../src/profile.ts), `planFor`):
 
@@ -419,10 +466,14 @@ from the class or home before them.
 
 Card v2 adds `phase`, `phaseText`, `glance` (12 characters, for a menu bar
 or a tile), `line` (one line, for a notification), `actions`, `warning` and
-`nextChangeAt` (when the card changes by itself). The glance is never a
-minute count, which a menu bar left unrefreshed would freeze: outside a trip
-it is the headline bus and its clock time ("D2 09:41", "~" for an
-estimate), the label's own words when there's no time.
+`nextChangeAt` (when the card changes by itself). A leave-by counts there
+no sooner than 30 s ahead (`LEAVE_GAP_MS`): a late bus keeps sliding it a
+few seconds past now, and clients refetching at it would poll every few
+seconds; they say "Leave now" themselves once `leave.at` passes. The glance
+is never a minute count, which a menu bar left unrefreshed would freeze:
+outside a trip it is the headline bus and its clock time ("D2 09:41", "~"
+for an estimate or an old reading), the label's own words when there's no
+time.
 
 The card also has its headline and the line above it worded: `title`, the
 departure as a clock time ("D2 · 09:42", "~09:42" for a timetable estimate),
@@ -512,6 +563,17 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
 - The link's page names the account by its whole address: a masked one
   (`f•••@u.nus.edu`) can't be told from a forwarded link to someone else's
   account at the same domain, which would sign the visitor in to it.
+- A sign-in (link, code, pairing code or app request) is spent in the same
+  D1 batch as the account changes and the new session, each statement
+  guarded by "not spent yet" (`Live` in accounts.ts). A failure part way
+  changes nothing, so the same link or code works again (the code's KV
+  entry is dropped only once the batch has answered), and of two racing
+  attempts only one gets a session. An app poll that fails this way answers
+  `pending`, and the next poll finishes it.
+- An email send that hasn't finished in 20 s (`MAIL_TIMEOUT_MS`) counts as
+  failed, and its link or app request is deleted. The Email binding can't
+  cancel the send, so one that finishes later still arrives, with a dead
+  link and code; the limit is long so that stays rare.
 - Signing out everywhere also deletes the account's pairing codes, unspent
   sign-in links and app sign-ins not yet collected, so nothing made just
   before it can still become a new session.
@@ -519,11 +581,32 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   POST uses up the link. Outlook's link scanner opens links before the user
   does, so a GET that spent the token would break NUS addresses.
 
-Setup:
+Setup and deploys: `pnpm run deploy` (and `deploy:beta`) applies the
+database's pending migrations, then deploys. The code reads columns from
+recent migrations (`magic_links.code_tries` from 0009, `feedback.reply_to`
+from 0010), so a Worker deployed to a database without them answers 500.
+By hand, the same first step is:
 
 ```bash
 pnpm exec cf d1 migrations apply <database id from cloudflare.config.ts>
 ```
+
+**Migrations must be additive (expand, then contract).** The migration runs
+while the old Worker is still serving, and if the deploy after it fails, the
+old Worker keeps serving on the new schema. So a migration may only add:
+new tables, new indexes, new columns that are nullable or have a `DEFAULT`.
+Renaming or dropping a table or column (0002 renamed one; 0006 rebuilt
+five), or adding `NOT NULL` without a default, breaks the running code. Do those in steps, one deploy each:
+
+1. **Expand.** Add the new column or table; deploy code that writes both the
+   old and the new and reads the new, falling back to the old.
+2. **Backfill** the new from the old, in a later migration or a one-off
+   statement.
+3. **Contract.** Once no deployed code reads the old, a later migration drops
+   it.
+
+The beta takes each step first. Old migration files are never edited:
+D1 records them by name and won't run one again.
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and terminus.rcn.sh onboarded under Email Service >
@@ -586,7 +669,8 @@ Settings. It uses the same routes as the account page, with the session cookie.
   an account with an email, so the operator's inbox only gets reports that
   say something, from someone who can be answered; an anonymous account is
   asked to sign in instead. (`reply_to` on old feedback rows is from when an
-  anonymous account could type an address; nothing writes it now.)
+  anonymous account could type an address; nothing writes it now. The data
+  export and the dashboard still read it, so they rely on migration 0010.)
 - **12- or 24-hour times.** The profile's `clock` (`auto`, `12`, `24`)
   is the account's choice, set in Language and time or in setup. The server
   words every card in it (`hour12()` in next.ts: the profile's choice, else
@@ -649,7 +733,8 @@ Settings. It uses the same routes as the account page, with the session cookie.
   object of every user with a push address to watch the day, 400 users a
   run, 20 at a time; each 15-minute run carries on after the last user the
   one before armed (`trips:armed` in KV holds the date and that user, then
-  the date alone when the day is done). It works out the card, wakes at each
+  the date alone when the day is done). A Trip object that doesn't take the
+  request goes on `trips:retry`, and later runs that day ask only those again. It works out the card, wakes at each
   change and pushes, and on a day without classes it stops. Saving a subscription also refreshes the card, so a Trip object that
   woke before the subscription existed is asked again.
 - **What a push shows.** A web push must show a notification (iOS insists).
@@ -668,7 +753,15 @@ Settings. It uses the same routes as the account page, with the session cookie.
   its own. Anyone who has already imported the new semester, or has never
   imported one, is skipped. It goes once per semester, 400 users a run, with
   `term:reminded` in KV marking the semester and the last user reached, as
-  `trips:armed` does. A tap opens the timetable settings on the web, and the
+  `trips:armed` does. The mark is saved before the batch is sent, so a mark
+  that can't be saved sends nothing rather than the batch every run. A user
+  no device took (push itself failing, say) goes on `term:retry` and is
+  tried again on the next eight runs, while the batches carry on, so one
+  phone that can't be reached holds up no one. Each run stamps the mark
+  with its time and the list it leaves with the same, so a list that
+  couldn't be saved is set aside rather than sent to again. A retried
+  user's profile is read afresh: imported since, they're skipped; with a
+  new language, they're told in it. A tap opens the timetable settings on the web, and the
   app on Android. The Mac app has no push, so it isn't told.
 
 ### Every trip, detected
@@ -844,8 +937,12 @@ zone's and both sites share one: the beta's breaker never quiets the
 stable site.
 
 **Under failure, less load, not more.** A NUS host answering 429 or 5xx,
-or a refused version or key (10009, 10000), opens the feed's breaker for
-`breakerS`, every stop and service with it. A failed token mint is memoised
+not answering at all (a timeout, a failed connection, the body included:
+`timedFetch` reads it under the same timeout), or a refused version or key
+(10009, 10000), opens the feed's breaker for `breakerS`, every stop and
+service with it. A host that hangs is treated as down at once: left to each
+key's `failMemoS`, every stop and service would hold a connection for the
+whole timeout, again and again. A failed token mint is memoised
 for `failMemoS`, so the next stops wait rather than each mint. Any other
 refusal gets one retry: with another isolate's newer token if there is one
 (memo, then KV), else a fresh mint, but at most one per `remintGapS` in a
@@ -935,8 +1032,9 @@ down reads as "no data" for the shuttles and not as "no bus", while the 95
 stays live, and the other way round. DataMall is called like NUS is: one
 call per stop per 15 s through the edge cache (`edgecache.ts`, which both
 feeds now use), a failed stop not asked again for `failMemoS`, a refused
-key (401) tripping a breaker for `breakerS`. The cron probes it once a run
-for `/status.json` (`publicFeed`) and `/health`; it raises no alerts, since
+key (401), a 429, a 5xx or no answer at all (a timeout, a failed
+connection) tripping a breaker for `breakerS`. The cron probes it once a
+run for `/status.json` (`publicFeed`) and `/health`; it raises no alerts, since
 the shuttle is the product and this is extra. LTA has no live train feed,
 so the MRT is not here; nor are live public buses on the map, which the
 per-stop feed cannot give without polling every stop. Contains information
@@ -1064,7 +1162,12 @@ likeliest strings with NUS (a token and one bus call each, three at most),
 writes the one NUS accepts to `config:appVersion`, and emails to say so. Each
 candidate is tried once, and the pages are read at most hourly while NUS keeps
 refusing. If nothing works, the usual "feed is down" email follows, saying what
-it tried, with the command above and NUS's full response. To see what it would
+it tried, with the command above and NUS's full response. After a switch, the
+isolates still sending the old version (for up to `versionMemoMs`) are refused
+too; a refusal of a version `config:appVersion` no longer holds opens neither
+the breaker nor the mint memo, nor quiets its stop or service for
+`failMemoS`, so it doesn't stop the isolates already
+sending the new one, and that isolate forgets its old version. To see what it would
 find today, without calling NUS: `GET /health?versions=1` with the
 `x-health-token` header.
 
@@ -1110,6 +1213,18 @@ the schema contract are in [docs/analytics.md](analytics.md).
 
 Logging is a no-op without the binding and swallows its own errors. A logging
 failure never fails an answer.
+
+A cron step that fails (the feed check, the calendar, arming trips, ...) is
+logged and also written as an `error` row with the route `cron <step>`, so
+it shows with the errors on the dashboard; it sends no email. The cron's
+handler waits for every step, so a long run isn't cut off partway while the
+trigger's history says it succeeded. The monitor never acts on a KV read
+that failed: it changes no state, sends nothing and writes no incident, and
+the next run carries on. Its state is saved before an alert is emailed (an
+email that fails, or takes over 15 s, is sent again the next run). KV takes
+one write a second to a key, so the state is written once a run: a delivered
+alert is noted under `monitor:alerted`, and the next run clears it from the
+state. Each run puts the outage list right if an earlier write of it failed.
 
 ## Known weaknesses
 
@@ -1253,7 +1368,9 @@ LTA every 15 minutes, past the cache) and each push user's Trip object
 - **Hours.** Only inside `TIMELAPSE.hours`, 06:30 to 00:30 Singapore time.
   The window crosses midnight, so a day is the date its window opened, until
   it closes the next morning. Within it, only services inside their own
-  operating hours (`inService`), checked again before each poll. No service
+  operating hours (`inService`, on the same calendar as the rest of the
+  Worker, so a holiday known only from KV runs holiday hours), checked
+  again before each poll. No service
   is asked again within `pollMs` of its last ask, across rounds too (a round
   with fewer services has shorter slots). After `idleRounds` rounds
   in a row (3 minutes) in which every running service answered and no bus was out
@@ -1270,15 +1387,22 @@ LTA every 15 minutes, past the cache) and each push user's Trip object
   failure memo is shorter than a round, so without this an outage would be
   asked at the full rate all day. Each service's `asked` time is saved
   before its request, so an alarm that throws afterwards, which the platform
-  runs again within seconds, doesn't ask again.
+  runs again within seconds, doesn't ask again. A poll that throws after
+  its request (placing the buses, storage) counts as a failed poll and the
+  round moves on, so one service failing every time can't stall the day.
 - **Kill switch.** KV `config:timelapse` set to `off` (or `on`) wins.
   Otherwise the `TIMELAPSE_ENABLED` var applies: `on` for the stable site,
-  `off` for the beta (so the two never poll twice), and off when unset. The
+  `off` for the beta (so the two never poll twice), and off when unset or
+  when KV can't be read (it may hold an `off`). The
   switch is read once a round, so `off` stops it within 30 s, without a
   deploy. On again, the cron restarts it within 15 minutes.
 
 At the defaults that is at most 17,280 polls a day (8 services × 2 a
-minute × 18 hours). The services' real hours make it about 13,300 on a
+minute × 18 hours), and the code holds it there: `pollInterval()`
+lengthens the interval when `stops.json` has more routes (the weekly
+scrape commits it unattended), so that services × ceil(window ÷
+interval) stays within `TIMELAPSE.maxPollsPerDay`. A day already running
+takes the longer interval from its next round after such a deploy. The services' real hours make it about 13,300 on a
 weekday, 9,000 on a Saturday and 6,700 on a Sunday or holiday. Each poll
 is one `active-bus` call, plus at most one retry on a rejection that a
 token might fix, with a token minted at most once a minute. The map alone, with one
@@ -1316,9 +1440,18 @@ than draw them on the wrong line.
 
 **At the close** the object writes the day to R2 (the site's downloads
 bucket) as `timelapse/YYYY-MM-DD.json.gz` (`DayFile`), deletes everything,
-its alarm included, and costs nothing from then on. If the write fails it
-keeps the day and tries again 10 minutes later; meanwhile `/timelapse/days`
-still lists it (the recorders of the past week are asked too). `/download/*`
+its alarm included, and costs nothing from then on. If anything on the
+way fails (R2, or the object's own storage) it keeps the day and tries
+again 10 minutes later, for a week after the close; meanwhile
+`/timelapse/days` still lists it (the recorders of the past week are asked
+too). Past the week the day is given up and the storage deleted. Once a
+day, at the cron's first run after the window opens, the recorders of the
+past eight days are asked to start: one holding a day whose alarm is gone
+(the platform's retries of a throwing alarm ran out) is woken to close it,
+and one holding nothing does nothing. The eighth day covers a day whose
+retries ran to a week after its close, later than the last morning that
+asked it. Asking about a day nobody recorded
+creates no storage. `/download/*`
 serves only release files, so the days are reachable only through
 `/timelapse/days`, with the operator token or `TIMELAPSE_TOKEN`. The second
 opens these routes and nothing else, so the machine that renders the videos

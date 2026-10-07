@@ -13,7 +13,8 @@
  * listing no buses for a few minutes), after which it asks again.
  *
  * When the window closes it writes the day to R2 and deletes everything,
- * its alarm included, so a finished day costs nothing.
+ * its alarm too (deleteAll() keeps it at this compatibility date, so it is
+ * deleted first), so a finished day costs nothing.
  *
  * States: `polling`; `resting` (idle, asks again after idleSleepMs); `off`
  * (the kill switch, until the cron finds it on again); `done` (idle after
@@ -28,7 +29,8 @@ import { breakerOpen, getBuses } from './fms.ts';
 import { trackedPlacement } from './buses.ts';
 import { inService } from './resolve.ts';
 import { logPoll } from './analytics.ts';
-import { buildDayFile, dayKey, encodeBus, gzip, lineKeys, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
+import { loadCalendar } from './calendarsync.ts';
+import { buildDayFile, dayKey, encodeBus, gzip, HELD_DAYS, lineKeys, mapSnapshot, pollInterval, timelapseEnabled, windowOf } from './timelapse.ts';
 import type { DayFile, RecorderStatus, Row } from './timelapse.ts';
 
 type State = 'polling' | 'resting' | 'off' | 'done';
@@ -74,6 +76,7 @@ export const backoffOf = (failing: number): number => 2 ** Math.min(Math.max(0, 
 
 /** After the day failed to reach R2, try again this much later. */
 const RETRY_MS = 10 * 60_000;
+const DAY_MS = 86_400_000;
 
 export class TimelapseRecorder {
   private readonly state: DurableObjectState;
@@ -95,7 +98,15 @@ export class TimelapseRecorder {
     return sql;
   }
 
+  /** Whether there are tables at all: a read mustn't create them, or asking
+   *  about a day nobody recorded (/timelapse/days asks about a week of them)
+   *  would leave storage behind that nothing ever deletes. */
+  private hasTables(): boolean {
+    return this.storage.sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").toArray().length > 0;
+  }
+
   private read<T>(k: string): T | null {
+    if (!this.hasTables()) return null;
     const row = this.schema().exec<{ v: string }>('SELECT v FROM meta WHERE k = ?', k).toArray()[0];
     return row ? (JSON.parse(row.v) as T) : null;
   }
@@ -105,6 +116,7 @@ export class TimelapseRecorder {
   }
 
   private count(): number {
+    if (!this.hasTables()) return 0;
     return this.schema().exec<{ n: number }>('SELECT COUNT(*) AS n FROM samples').one().n;
   }
 
@@ -145,8 +157,9 @@ export class TimelapseRecorder {
       meta.round = null;
       this.write('meta', meta);
       await this.storage.setAlarm(now);
-    } else if (meta.state === 'polling' && (await this.storage.getAlarm()) === null) {
-      // Never stranded: a polling day always has its next alarm.
+    } else if ((await this.storage.getAlarm()) === null) {
+      // Never stranded: a day always has its next alarm, whatever its
+      // state (a past day whose writes to R2 ran out of retries closes now).
       await this.storage.setAlarm(now);
     }
     return Response.json({ state: meta.state });
@@ -156,6 +169,10 @@ export class TimelapseRecorder {
     const now = Date.now();
     const meta = this.read<Meta>('meta');
     if (!meta) return;
+    // The calendar the rest of the Worker answers from: a public holiday
+    // known only from KV runs Sunday hours, and services that aren't
+    // running then mustn't be asked.
+    await loadCalendar(this.env, now);
     const { close } = windowOf(meta.date);
     if (now >= close) return this.close(meta);
     if (meta.state === 'off' || meta.state === 'done') return this.storage.setAlarm(close);
@@ -170,6 +187,9 @@ export class TimelapseRecorder {
         this.write('meta', meta);
         return this.storage.setAlarm(close);
       }
+      // A deploy since the day began may have added routes: the interval
+      // they need to stay under the day's ceiling, from this round on.
+      meta.pollMs = Math.max(meta.pollMs, pollInterval());
       // Only the services running now; none running is a round with no bus.
       round = { list: Object.keys(GRAPH.routes ?? {}).filter((svc) => inService(GRAPH, svc, now)).sort(), start: now, i: 0, buses: 0, answered: 0 };
       meta.state = 'polling';
@@ -193,7 +213,16 @@ export class TimelapseRecorder {
         // Kept before asking: an alarm that throws after the request is run
         // again by the platform within seconds, and must find it asked.
         this.write('meta', meta);
-        const buses = await this.poll(meta, svc, now);
+        let buses: number | null = null;
+        try {
+          buses = await this.poll(meta, svc, now);
+        } catch (err) {
+          // Something after the request failed (placing the buses, storage):
+          // a failed poll, and on to the next service. Thrown, the alarm's
+          // retries would find this service asked too recently and wait, so
+          // one service failing every time would stop the round for good.
+          console.error('timelapse', svc, err instanceof Error ? err.message : String(err));
+        }
         if (buses !== null) {
           round.buses += buses;
           round.answered++;
@@ -291,9 +320,16 @@ export class TimelapseRecorder {
         if (p < 0) p = meta.plates.push(b.plate) - 1;
         buses.push(...encodeBus({ plate: b.plate, lat: b.lat, lon: b.lon, along: along.get(b.plate) ?? null }, p));
       }
-      this.schema().exec('INSERT INTO samples (dt, svc, buses) VALUES (?, ?, ?)', live.fetchedAt - meta.lastT, svc, JSON.stringify(buses));
-      meta.lastT = live.fetchedAt;
-      meta.last[svc] = live.fetchedAt;
+      // The row and the times that date it, saved together: a reset between
+      // the two would skew every later row's dt or keep this reading twice.
+      const dt = live.fetchedAt - meta.lastT;
+      const next: Meta = { ...meta, lastT: live.fetchedAt, last: { ...meta.last, [svc]: live.fetchedAt } };
+      this.storage.transactionSync(() => {
+        this.schema().exec('INSERT INTO samples (dt, svc, buses) VALUES (?, ?, ?)', dt, svc, JSON.stringify(buses));
+        this.write('meta', next);
+      });
+      meta.lastT = next.lastT;
+      meta.last = next.last;
       return live.buses.length;
     } finally {
       await Promise.allSettled(pending);
@@ -308,19 +344,30 @@ export class TimelapseRecorder {
     return buildDayFile({ date: meta.date, t0: meta.t0, pollMs: meta.pollMs, plates: meta.plates, rows, map: this.read<DayFile>('map') ?? mapSnapshot() });
   }
 
-  /** The window has closed: the day to R2, then nothing left here. */
+  /**
+   * The window has closed: the day to R2, then nothing left here. Anything
+   * failing on the way keeps the day and tries again RETRY_MS later, for
+   * HELD_DAYS after the close (as long as /timelapse/days lists it); past
+   * that the day is given up and the storage deleted, so it can't stay for
+   * ever.
+   */
   private async close(meta: Meta): Promise<void> {
-    if (this.count() > 0) {
-      try {
+    try {
+      const samples = this.count();
+      if (samples > 0) {
         if (!this.env.DOWNLOADS) throw new Error('no DOWNLOADS bucket');
         const body = await gzip(JSON.stringify(this.dayFile(meta)));
-        await this.env.DOWNLOADS.put(dayKey(meta.date), body, { httpMetadata: { contentType: 'application/gzip' }, customMetadata: { samples: String(this.count()) } });
-      } catch (err) {
-        // Kept, and tried again: losing a day to one failed write would be a waste.
-        console.error('timelapse', meta.date, err instanceof Error ? err.message : String(err));
-        return this.storage.setAlarm(Date.now() + RETRY_MS);
+        await this.env.DOWNLOADS.put(dayKey(meta.date), body, { httpMetadata: { contentType: 'application/gzip' }, customMetadata: { samples: String(samples) } });
       }
+      await this.storage.deleteAlarm();
+      await this.storage.deleteAll();
+    } catch (err) {
+      console.error('timelapse', meta.date, err instanceof Error ? err.message : String(err));
+      const now = Date.now();
+      if (now < windowOf(meta.date).close + HELD_DAYS * DAY_MS) return this.storage.setAlarm(now + RETRY_MS);
+      console.error('timelapse', meta.date, 'given up: not written to R2');
+      await this.storage.deleteAlarm();
+      await this.storage.deleteAll();
     }
-    await this.storage.deleteAll();
   }
 }

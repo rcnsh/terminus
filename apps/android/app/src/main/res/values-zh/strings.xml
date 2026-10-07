@@ -238,6 +238,7 @@
     <string name="offline">离线</string>
     <string name="ok">确定</string>
     <string name="old_times">时间可能已过时 · 点按 ↻ 刷新</string>
+    <string name="unconfirmed_checked">未确认 · 上次查询于 %1$s</string>
     <string name="on_">已开启。</string>
     <string name="on_mac_enter">在你的 Mac 上打开 terminus，输入：</string>
     <string name="on_the">在 %1$s 上</string>
@@ -389,6 +390,7 @@
     <string name="your_timetable">你的课表</string>
     <string name="your_timetable_sub">粘贴你的 NUSMods 分享链接。每节课会对应离教室最近的车站。</string>
     <string name="busy_try_again">terminus 正忙，请一分钟后再试。</string>
+    <string name="server_not_answering">terminus 暂时没有回应，请稍后再试。</string>
     <string name="where_you_live">你的住处</string>
     <string name="only_stops_saved">只保存车站。</string>
     <string name="residence">宿舍</string>

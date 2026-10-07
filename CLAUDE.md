@@ -34,12 +34,14 @@ affiliated with NUS.
    (`TTL.arrivalsMs`), live buses 5 s per service (`TTL.busesMs`), all in
    `src/config.ts`. Never lower these, poll in bulk, or scan for endpoints.
    Upstream failures back off (`failMemoS`, `breakerS`): a refused version
-   or key, or a 429 or 5xx from a NUS host, opens the breaker; a failed
-   token mint isn't tried again for `failMemoS`; a refused call is retried
-   once, with a token minted at most once a minute (`remintGapS`). These
-   limits hold per Cloudflare data centre, whose cache every isolate there
-   shares. The same goes for LTA DataMall, the public buses' feed (`src/lta.ts`): one call per stop
-   per 15 s, through the same cache (`src/edgecache.ts`).
+   or key, a 429 or 5xx from a NUS host, or no answer at all (a timeout,
+   a failed connection), opens the breaker; a failed token mint isn't
+   tried again for `failMemoS`; a refused call is retried once, with a
+   token minted at most once a minute (`remintGapS`). These limits hold
+   per Cloudflare data centre, whose cache every isolate there shares.
+   The same goes for LTA DataMall, the public buses' feed (`src/lta.ts`):
+   one call per stop per 15 s, through the same cache
+   (`src/edgecache.ts`).
 
    **One exception: the timelapse recorder**
    (`src/timelapse.ts`, `src/timelapsedo.ts`). It is the only code that
@@ -59,8 +61,9 @@ affiliated with NUS.
    - **Back-off:** after a round in which no service answered, the next
      waits 2, 4, then 8 times as long.
 
-   At most 17,280 polls a day, and every request counted on the dashboard
-   (a retry inside a poll too). Don't add another poller, don't widen this one's
+   At most 17,280 polls a day (`TIMELAPSE.maxPollsPerDay`, enforced in
+   code: more routes in `stops.json` lengthen the interval), and every
+   request counted on the dashboard (a retry inside a poll too). Don't add another poller, don't widen this one's
    hours or rate, don't point it at arrivals or LTA, and don't reuse its
    alarm for anything else that calls NUS.
 
@@ -273,8 +276,9 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
 - **Feed etiquette.** The feed answers through a 15 s edge cache per stop.
   On failure it serves a stale answer if one exists (up to `staleMaxS`), and
   a failed stop isn't asked again for `failMemoS`. A version or key
-  rejection trips a breaker. The uNivUS version string must track the Play
-  Store; KV `config:appVersion` overrides the secret.
+  rejection, a 429 or 5xx, or no answer at all (a timeout, a failed
+  connection) trips a breaker. The uNivUS version string must track the
+  Play Store; KV `config:appVersion` overrides the secret.
 - **Accounts.** D1. Sign-in is by emailed code or link. Apps get a device
   token: anonymous on first launch, then sign-in approved from the email, or
   pairing codes. Rate limits are Workers rate-limit bindings (`RL_*`). The
@@ -374,11 +378,17 @@ scripts/              release.sh, release-beta.sh, github-release.sh, package-ma
 
 - **Deploying.** `main` is **not** auto-deployed.
   - Deploy from `apps/api` with `pnpm run deploy` (not `pnpm deploy`, which
-    is a pnpm built-in). It runs `cf deploy` and needs `CLOUDFLARE_API_TOKEN`.
-  - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2.
-  - When a migration is involved, apply it **before** deploying:
+    is a pnpm built-in). It applies the stable D1's pending migrations, then
+    runs `cf deploy`, and needs `CLOUDFLARE_API_TOKEN`.
+  - The beta is `pnpm run deploy:beta`, with its own D1, KV and R2; it
+    applies the beta D1's migrations the same way.
+  - By hand, a migration is applied **before** deploying:
     `pnpm exec cf d1 migrations apply <db-id>` (ids are in
-    `cloudflare.config.ts`).
+    `cloudflare.config.ts`; `test/deploy.test.js` checks the scripts match).
+  - Migrations must be additive, since the old Worker runs on the new schema
+    until the deploy lands: no renames, drops or `NOT NULL` without a default.
+    Change a column in steps (expand, backfill, contract; see
+    `docs/internals.md`), and never edit a migration already applied.
   - `wrangler` is only installed in `apps/api`, so run wrangler/R2 commands
     from there.
   - Server-side changes, the website included, are live for everyone once

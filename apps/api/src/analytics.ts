@@ -25,7 +25,8 @@
  * starts lying.
  *
  *   blob1   kind        'answer' | 'arrival' | 'error' | 'timelapse'
- *   blob2   stop        boarding stop code; for 'error', the route (no query);
+ *   blob2   stop        boarding stop code; for 'error', the route (no query),
+ *                       or 'cron <step>' for a cron step that failed;
  *                       for 'timelapse', the poll's outcome (see logPoll)
  *   blob3   svc         service, '' on an ended answer
  *   blob4   dest        destination stop code, '' for a bare /next
@@ -136,6 +137,19 @@ export function logError(env: Env, path: string): void {
     env.AE!.writeDataPoint({ blobs: ['error', route], doubles: [], indexes: ['error'] });
   } catch {
     // Same rule as above: logging never breaks a response.
+  }
+}
+
+/**
+ * A cron step that failed (monitor.ts runCron), counted with the errors on
+ * the dashboard as the route 'cron <step>'. No email: the logs say why.
+ */
+export function logCronError(env: Env, step: string): void {
+  if (!analyticsEnabled(env)) return;
+  try {
+    env.AE!.writeDataPoint({ blobs: ['error', `cron ${step}`], doubles: [], indexes: ['error'] });
+  } catch {
+    // Same rule as above: a lost count never stops the cron.
   }
 }
 

@@ -6,7 +6,7 @@ import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/campus.ts';
-import { boardAt, indexGraph, serviceResumesAt, stoppedReason, towardsFrom } from '../src/resolve.ts';
+import { boardAsOf, boardAt, indexGraph, serviceResumesAt, stoppedReason, towardsFrom } from '../src/resolve.ts';
 import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/graph.ts';
 
 const GRAPH = graphJson;
@@ -172,6 +172,38 @@ test('boardAt: the buses after the next one come in later, soonest first, each k
   assert.equal(bySvc.get('D2').etaS, 240);
   assert.deepEqual(bySvc.get('D2').later, [{ etaS: 900, quality: 'scheduled', eta: '~15 min' }]);
   assert.deepEqual(bySvc.get('D1').later, []);
+});
+
+test('boardAt: an old answer counts from now, its gone buses dropped, and boardAsOf says how old', () => {
+  const idx = indexGraph(GRAPH);
+  const nowMs = Date.parse('2026-03-02T05:00:00Z');
+  // Fetched four minutes ago, and stale since.
+  const fetchedAt = nowMs - 240_000;
+  const sa = {
+    code: 'COM3',
+    arrivals: [
+      { svc: 'D2', etaS: 120, crowd: null, plate: 'PA0', berth: null }, // left two minutes ago
+      { svc: 'D2', etaS: 420, crowd: null, plate: 'PA1', berth: null },
+      { svc: 'D2', etaS: 900, crowd: null, plate: 'PA2', berth: null, scheduled: true },
+      { svc: 'D1', etaS: 600, crowd: null, plate: 'PB1', berth: null, scheduled: true },
+    ],
+    fetchedAt,
+    stale: true,
+    available: true,
+  };
+  const bySvc = new Map(boardAt(GRAPH, idx, 'COM3', sa, nowMs).map((r) => [r.svc, r]));
+  const d2 = bySvc.get('D2');
+  assert.equal(d2.etaS, 180, 'due in 3 minutes now, not 7');
+  assert.equal(d2.quality, 'stale');
+  assert.equal(d2.eta, '~3 min');
+  assert.deepEqual(d2.later, [{ etaS: 660, quality: 'scheduled', eta: '~11 min' }]);
+  // A timetable time keeps its quality, counted from now too.
+  assert.equal(bySvc.get('D1').etaS, 360);
+  assert.equal(bySvc.get('D1').eta, '~6 min');
+  // The board is as old as its oldest feed; one that never answered doesn't count.
+  const down = { code: 'X', arrivals: [], fetchedAt: nowMs, stale: false, available: false };
+  assert.equal(boardAsOf([sa, down, undefined], nowMs), fetchedAt);
+  assert.equal(boardAsOf([down], nowMs), nowMs);
 });
 
 test('boardAt: a feed that never answered is unknown, never a fabricated time', () => {

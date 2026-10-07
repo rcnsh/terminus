@@ -8,7 +8,8 @@
  *
  * - one Durable Object per Singapore day (timelapsedo.ts), driven by its own
  *   alarm, asks for each service's buses once per TIMELAPSE.pollMs (never
- *   below MIN_POLL_MS), the services spread across that time, never in a
+ *   below MIN_POLL_MS, and never more than TIMELAPSE.maxPollsPerDay polls a
+ *   day: pollInterval()), the services spread across that time, never in a
  *   burst;
  * - only inside TIMELAPSE.hours, and only for services inside their own
  *   operating hours;
@@ -34,11 +35,6 @@ import { sgtDate, sgtMidnight as midnightOf } from './calendar.ts';
 /* When it records                                                     */
 /* ------------------------------------------------------------------ */
 
-/** The poll interval actually used: [ms], but never below MIN_POLL_MS. */
-export function pollInterval(ms: number = TIMELAPSE.pollMs): number {
-  return Number.isFinite(ms) ? Math.max(MIN_POLL_MS, ms) : TIMELAPSE.pollMs;
-}
-
 export interface Hours {
   start: string;
   end: string;
@@ -50,6 +46,27 @@ const minutesOf = (hhmm: string) => {
 };
 
 const DAY_MS = 86_400_000;
+
+/** How long a recording window lasts, ms: 18 hours at 06:30 to 00:30. */
+export function windowLength(hours: Hours = TIMELAPSE.hours): number {
+  const start = minutesOf(hours.start);
+  const end = minutesOf(hours.end);
+  return ((end <= start ? 1440 : 0) + end - start) * 60_000;
+}
+
+/**
+ * The poll interval actually used: [ms], but never below MIN_POLL_MS, and
+ * long enough that [services] services can't be polled more than
+ * TIMELAPSE.maxPollsPerDay times in a window. No service is asked twice
+ * within it, so each is asked at most ceil(window / interval) times a day.
+ * The weekly scrape can add a route to stops.json without anyone looking:
+ * the day then polls each service a little less often, never NUS more.
+ */
+export function pollInterval(ms: number = TIMELAPSE.pollMs, services: number = Object.keys(GRAPH.routes ?? {}).length): number {
+  const asked = Number.isFinite(ms) ? Math.max(MIN_POLL_MS, ms) : TIMELAPSE.pollMs;
+  const perService = Math.max(1, Math.floor(TIMELAPSE.maxPollsPerDay / Math.max(1, services)));
+  return Math.max(asked, Math.ceil(windowLength() / perService));
+}
 
 /** When day [date]'s window opens and closes, epoch ms. One that crosses
  *  midnight (06:30 to 00:30) closes the next morning. */
@@ -86,10 +103,16 @@ export function nextOpen(ms: number, hours: Hours = TIMELAPSE.hours): number {
  * The kill switch. KV `config:timelapse` ("on" or "off") wins, so the
  * recorder can be stopped at once without a deploy; without it, the
  * TIMELAPSE_ENABLED var. Unset everywhere is off: nothing polls NUS unless
- * someone turned it on.
+ * someone turned it on. KV failing to answer is off too: it may hold an
+ * "off" that the var would otherwise override.
  */
 export async function timelapseEnabled(env: Env): Promise<boolean> {
-  const kv = await env.KV.get('config:timelapse').catch(() => null);
+  let kv: string | null;
+  try {
+    kv = await env.KV.get('config:timelapse');
+  } catch {
+    return false;
+  }
   const v = (kv ?? env.TIMELAPSE_ENABLED ?? '').trim().toLowerCase();
   return v === 'on' || v === 'true' || v === '1';
 }
@@ -208,6 +231,27 @@ export const dayKey = (date: string) => `timelapse/${date}.json.gz`;
 /* The recorder, from the Worker                                        */
 /* ------------------------------------------------------------------ */
 
+/** How long a recorder keeps a closed day that R2 refused, trying again,
+ *  and how many days back /timelapse/days looks for one. A week is plenty
+ *  to notice. */
+export const HELD_DAYS = 7;
+
+/** The cron runs every 15 minutes. */
+const CRON_MS = 15 * 60_000;
+
+/** How long the Worker waits for a recorder to answer: one that's stuck
+ *  mustn't hold up the cron's other steps or an operator's request. */
+const RECORDER_WAIT_MS = 10_000;
+
+/** [path] from a recorder, or a rejection after RECORDER_WAIT_MS. */
+function askRecorder(stub: DurableObjectStub, path: string, init?: RequestInit): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('the timelapse recorder did not answer')), RECORDER_WAIT_MS);
+  });
+  return Promise.race([stub.fetch(`https://timelapse.internal${path}`, init), late]).finally(() => clearTimeout(timer));
+}
+
 /** The recorder for day [date]. In Asia, near the feed and most of its users,
  *  so the edge cache it reads is likely the one the map fills. */
 export function recorderFor(env: Env, date: string): DurableObjectStub | null {
@@ -220,11 +264,23 @@ export function recorderFor(env: Env, date: string): DurableObjectStub | null {
  * today's recorder is running (it does nothing when it already is). The
  * recorder keeps itself going with its alarm from then on; this only starts
  * it each morning, and again after the switch comes back on.
+ *
+ * Once a day, at the first run after the window opens, the past
+ * HELD_DAYS + 1 days' recorders are asked too, switch or not: one still
+ * holding a day whose alarm is gone (its retries ran out) is woken to write
+ * it and empty itself. The extra day reaches a day whose retries ran until
+ * HELD_DAYS after its close, past the last morning that asked it. One
+ * holding nothing does nothing, and stores nothing.
  */
 export async function ensureRecorder(env: Env, nowMs: number): Promise<void> {
-  if (!env.TIMELAPSE || !inWindow(nowMs) || !(await timelapseEnabled(env))) return;
+  if (!env.TIMELAPSE || !inWindow(nowMs)) return;
   const date = serviceDate(nowMs);
-  await recorderFor(env, date)!.fetch(`https://timelapse.internal/start?date=${date}`, { method: 'POST' });
+  const start = (d: string) => askRecorder(recorderFor(env, d)!, `/start?date=${d}`, { method: 'POST' });
+  if (nowMs - windowOf(date).open < CRON_MS) {
+    await Promise.allSettled(Array.from({ length: HELD_DAYS + 1 }, (_, i) => start(serviceDate(nowMs - (i + 1) * DAY_MS))));
+  }
+  if (!(await timelapseEnabled(env))) return;
+  await start(date);
 }
 
 /* ------------------------------------------------------------------ */
@@ -240,9 +296,6 @@ export interface RecorderStatus {
   state: string;
 }
 
-/** How many days back /timelapse/days looks for a recorder still holding
- *  its day, R2 having refused it. Its retries go on; a week is plenty to notice. */
-const HELD_DAYS = 7;
 
 /**
  * GET /timelapse/days and /timelapse/days/:date, for the operator or a
@@ -291,7 +344,12 @@ export async function handleTimelapse(req: Request, url: URL, env: Env, nowMs: n
   }
   // Not closed yet: the recorder's day so far.
   const open = recorderFor(env, date);
-  const res = open ? await open.fetch(`https://timelapse.internal/day?date=${date}`) : null;
+  let res: Response | null = null;
+  try {
+    res = open ? await askRecorder(open, `/day?date=${date}`) : null;
+  } catch {
+    return json({ error: 'terminus is busy, try again in a minute' }, 503, { 'retry-after': '60' });
+  }
   if (!res || !res.ok) return json({ error: 'no timelapse for that day' }, 404);
   return new Response(res.body, { headers: { 'content-type': 'application/gzip', 'cache-control': 'no-store' } });
 }
@@ -300,7 +358,7 @@ async function recorderStatus(env: Env, date: string): Promise<RecorderStatus | 
   const stub = recorderFor(env, date);
   if (!stub) return null;
   try {
-    const res = await stub.fetch(`https://timelapse.internal/status?date=${date}`);
+    const res = await askRecorder(stub, `/status?date=${date}`);
     return res.ok ? ((await res.json()) as RecorderStatus) : null;
   } catch {
     return null;

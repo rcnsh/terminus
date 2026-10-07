@@ -530,6 +530,27 @@ test('a stale stop marks every option stale and keeps the original timestamp', (
   assert.match(a.detail, /old/);
 });
 
+test('a stale answer under a minute old never reads "0 min old"', async () => {
+  const { withLang } = await import('../src/i18n.ts');
+  const fetchedAt = NOW - 20_000;
+  const cands = candidateStops(GRAPH, { lat: null, lon: null, to: 'COM3', originCode: 'PGP' });
+  const options = scoreOptions(
+    GRAPH,
+    cands,
+    arrivalsFor(Object.fromEntries([sa('PGP', [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt, true)])),
+    NOW,
+  );
+  const answer = () => buildAnswer({ options, alt: null, fallbackStop: options[0].stop, nearestStop: null, destLabel: 'COM3', walkAllS: null, confidence: 0.75, arrivals: [], nowMs: NOW });
+  const a = answer();
+  assert.equal(a.quality, 'stale');
+  assert.match(a.label, /\(<1 min ago\)$/);
+  assert.match(a.detail, /under a minute old/);
+  assert.doesNotMatch(`${a.label} ${a.detail}`, /\b0 ?m/);
+  const zh = withLang('zh', answer);
+  assert.match(zh.label, /不到 1 分钟前/);
+  assert.match(zh.detail, /不到 1 分钟前的数据/);
+});
+
 test('alt always differs in its first leg', () => {
   const options = [opt(), opt({ boardS: 250, totalS: 535 }), opt({ svc: 'A1', boardS: 400, totalS: 600 })];
   assert.equal(pickAlt(options).svc, 'A1');

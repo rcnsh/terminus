@@ -329,11 +329,12 @@ function Choices() {
   const load = () =>
     api('/me/choices')
       .then(setR)
-      .catch(() => {});
+      .catch(() => setR((was) => was ?? { failed: true }));
   useEffect(() => {
     load();
   }, [version]);
   if (!r) return null;
+  if (r.failed) return html`<p class="hint group-hint" role="status">${t("Couldn't load your classes and trip history. Check your connection.")}</p>`;
   const name = (c) => c.label ?? t('A class no longer in your timetable');
   return html`
     ${r.choices.length > 0 &&
@@ -874,20 +875,32 @@ export const CLOCKS = () => [
 /** Each as a row of pills: Auto follows this browser. The languages are named in themselves. */
 export function Language() {
   const p = useStore(profile);
+  // Bumped when a language isn't saved, so its pills are drawn again on the one still in use.
+  const [langTry, setLangTry] = useState(0);
   return html`
     <div class="trips">
       <${Group} title=${t('Language')} id="lang-label" hint=${t('Also used for emails and on your other devices. Place and bus names stay in English, as on the signs.')}>
         <div class="field">
           <${Pills}
+            key=${langTry}
             name="lang"
             value=${window.i18n?.pref() ?? 'auto'}
             options=${[['auto', t('Auto')], ['en', 'English'], ['zh', '中文']]}
             labelledBy="lang-label"
             full
             onChange=${async (v) => {
-              // This browser and the account, so emails and the other devices follow.
+              // The account first, so emails and the other devices follow. If
+              // that fails, nothing changes here: switching reloads the page at
+              // once, which would hide the error, and the next load would
+              // follow the account's old choice back anyway.
+              try {
+                await saveNow((x) => (x.lang = v));
+              } catch (err) {
+                toast(t('Not saved. {0}', err.message));
+                setLangTry((n) => n + 1);
+                return;
+              }
               window.i18n?.noteAccount(v);
-              await saveNow((x) => (x.lang = v)).catch(() => {});
               window.i18n?.setLang(v);
             }}
           />
@@ -1069,7 +1082,7 @@ function Keys() {
   const load = () =>
     api('/me/keys')
       .then((r) => setKeys(r.keys))
-      .catch(() => {});
+      .catch(() => setMsg(t("Couldn't load your API keys. Check your connection.")));
   useEffect(() => {
     load();
   }, []);

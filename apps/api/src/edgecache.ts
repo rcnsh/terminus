@@ -24,6 +24,7 @@
 
 import type { Env, FeedState } from './types.ts';
 import { isBeta } from './site.ts';
+import { TTL } from './config.ts';
 
 export interface CachedOptions<T> {
   ctx: ExecutionContext;
@@ -45,6 +46,13 @@ export interface CachedOptions<T> {
    * few seconds, like the map, is better served by a wait than a stale jump).
    */
   raceMs?: number;
+  /**
+   * Whether a failure quiets this key for failMemoS. Absent: every failure
+   * does. One that says nothing of the next call (a refusal of a version
+   * already switched away from) shouldn't quiet the key for the isolates
+   * that would be answered.
+   */
+  memoes?: (err: unknown) => boolean;
   /** The feed's breaker: tripped by a failure that `trips`, it quiets every key that names it. */
   breaker?: { key: string; trips: (err: unknown) => boolean; maxAgeS: number };
   /** One in-flight fetch per key per isolate. The caller owns the map, so each feed has its own. */
@@ -92,8 +100,10 @@ export async function flag(key: string, reason: string, maxAgeS: number): Promis
 }
 
 /** How long a fetch's marker lasts if it never clears it: past the slowest
- *  fetch (a call, a re-mint and a second call, each up to its timeout). */
-const PENDING_S = 20;
+ *  fetch, a mint, a call, a re-mint and a second call, each up to its
+ *  timeout, with room for the KV and cache reads between them. Shorter, and
+ *  the marker would lapse mid-fetch and let the other isolates fetch too. */
+const PENDING_S = Math.ceil((4 * TTL.upstreamTimeoutMs) / 1000) + 10;
 
 /**
  * The answer for `key`: cached and fresh, else fetched, else stale, in that
@@ -140,6 +150,8 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
       return o.fetch();
     })()
       .then(async (fresh) => {
+        // A failed write loses the cache, not the answer: it's still good,
+        // and turning it into a failure would quiet the key for failMemoS.
         await cache.put(key, new Response(JSON.stringify(fresh), {
           headers: {
             'content-type': 'application/json',
@@ -147,12 +159,11 @@ export async function cachedFetch<T extends { fetchedAt: number }>(o: CachedOpti
             // decided above from fetchedAt, not by the cache.
             'cache-control': `max-age=${o.staleMaxS}`,
           },
-        }));
+        })).catch(() => {});
         return fresh;
-      })
-      .catch(async (err) => {
+      }, async (err) => {
         const reason = String((err as Error)?.message ?? err);
-        await cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {});
+        if (o.memoes?.(err) ?? true) await cache.put(o.failKey, memo(reason, o.failMemoS)).catch(() => {});
         if (o.breaker?.trips(err)) await cache.put(o.breaker.key, memo(reason, o.breaker.maxAgeS)).catch(() => {});
         throw err;
       })

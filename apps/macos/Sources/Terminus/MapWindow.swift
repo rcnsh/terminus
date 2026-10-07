@@ -23,8 +23,11 @@ final class MapModel {
     /// Bumped by every answer from `/buses`, the same or not: each one plans
     /// the slides again, so a bus that hasn't moved still counts as heard from.
     var busAnswers = 0
-    /// The feed is down and these are its last places: drawn faded.
+    /// The feed is down, or the last answer is old, and these are its last
+    /// places: drawn faded.
     var busesStale = false
+    /// When `/buses` last answered (this Mac's clock).
+    private var heardAt: Date?
     var busStatus: BusStatus?
     var sheet: Sheet?
     var board: StopBoard?
@@ -60,13 +63,16 @@ final class MapModel {
         selected = svc == selected ? nil : svc
         buses = []
         busesStale = false
+        heardAt = nil
         busStatus = selected == nil ? nil : .finding
         if case .bus = sheet { sheet = nil }
     }
 
     /// A failed poll keeps the buses drawn and says so, as the web map does:
-    /// "need a connection" when this Mac is offline (`online`). A signed-out
-    /// Mac (401) says nothing: the popover asks it to sign in again.
+    /// "need a connection" when this Mac is offline (`online`). Once the last
+    /// answer is 15 s old (three polls) they're faded, so last places don't
+    /// pass for live. A signed-out Mac (401) says nothing: the popover asks
+    /// it to sign in again.
     func refreshBuses(online: Bool) async {
         guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
         let list: BusList?
@@ -75,7 +81,10 @@ final class MapModel {
         } catch let e as ApiError where e.status == 401 {
             return
         } catch {
-            if !Task.isCancelled, svc == selected { busStatus = online ? .unavailable : .offline }
+            if !Task.isCancelled, svc == selected {
+                busStatus = online ? .unavailable : .offline
+                if let heardAt, Date().timeIntervalSince(heardAt) > 15 { busesStale = true }
+            }
             return
         }
         guard svc == selected else { return }
@@ -85,6 +94,7 @@ final class MapModel {
         }
         buses = list.buses
         busesStale = list.available && list.stale
+        heardAt = Date()
         busAnswers += 1
         busStatus = !list.available ? .unavailable : list.stale ? .stale : list.buses.isEmpty ? .noneRunning : .running(list.buses.count)
         if case .bus(let id) = sheet, !buses.contains(where: { $0.id == id }) { sheet = nil }

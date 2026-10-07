@@ -4,7 +4,7 @@
 
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { api, browserHour12, clock, inkOn, locationError, t } from './dom.js';
-import { campus, limit, profile, ResidenceOptions, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast } from './profile.js';
+import { campus, limit, profile, ResidenceOptions, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast, TOAST_MS } from './profile.js';
 import { CLOCKS, StopSelect } from './settings-pages.js';
 
 const PACES = [
@@ -24,7 +24,14 @@ export function Onboarding({ onDone }) {
   const { n, dir, out } = step;
 
   const finish = async () => {
-    await saveNow((x) => (x.seen = [...new Set([...(x.seen ?? []), 'onboarding'])])).catch(() => {});
+    // Not saved, setup comes back next time: say so, but let them in. The
+    // notice stays up here for its time first, since leaving may load
+    // another page (back to the web app), which would take it away unread.
+    const saved = await saveNow((x) => (x.seen = [...new Set([...(x.seen ?? []), 'onboarding'])])).then(
+      () => true,
+      (err) => (toast(t('Not saved. {0}', err.message)), false),
+    );
+    if (!saved) await new Promise((done) => setTimeout(done, TOAST_MS));
     setLeaving(true);
     setTimeout(
       () => {

@@ -194,6 +194,8 @@ button.bt-row { cursor: pointer; }
 @media (hover: hover) { button.bt-row:hover { background: var(--surface-2); } }
 button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-row.soon { background: var(--accent-soft); }
+/* Times that couldn't be refreshed: counted down, but faded so they don't pass for live. */
+.bt-row.old .bt-big, .bt-row.old .bt-then { opacity: 0.55; }
 .bt-chip { grid-area: chip; align-self: start; min-width: 46px; height: 32px; font: 700 0.95rem/1 var(--display); border-radius: 9px; }
 .bt-chip.big { min-width: 54px; height: 40px; font-size: 1.15rem; border-radius: 11px; }
 .svc-tag.small { min-width: 0; padding: 2px 6px; font-size: 0.7rem; border-radius: 5px; }
@@ -230,7 +232,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-foot { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 6px 0; font-size: 0.8rem; color: var(--muted); }
 .bt-ends { display: grid; gap: 4px; }
 .bt-ends > div { display: flex; align-items: center; gap: 6px; }
-.bt-status { margin-left: auto; text-align: right; }
+.bt-status { display: grid; gap: 2px; margin-left: auto; text-align: right; }
 .bt-error { color: var(--warn-ink); }
 .bt-hint { margin-top: 6px; padding: 0 6px; font-size: 0.78rem; color: var(--faint); }
 .bt-empty { padding: 28px 4px; text-align: center; }
