@@ -289,8 +289,8 @@ internal fun ClassPlan(answer: NextAnswer) {
  * The day's done, or there's nothing to catch: the label large, what's next
  * on a card of its own, then your favourites to plan a trip to instead. On
  * Now it's all up in the sky ([SkyHead]), the favourites on the ground
- * below the horizon; after your day that sky is the night. Elsewhere, a
- * panel: the night's after your day, else a plain one.
+ * below the horizon, under the hour's sky. Elsewhere, a panel: the night's
+ * after your day, else a plain one.
  */
 @Composable
 private fun DayDone(answer: NextAnswer, night: Boolean, onPlace: (String) -> Unit) {

@@ -762,7 +762,7 @@ function NearbyCard({ stops }) {
 /**
  * The card for what's chosen, under Now's sky (sky.js): whatever it shows,
  * its top is up in the sky and it ends on the horizon, so the sky stays as
- * the chips switch. The sky is the hour's; after your day, the night.
+ * the chips switch. The sky is the hour's, whatever the card says.
  */
 function CardArea() {
   const c = useStore(card);
@@ -773,7 +773,7 @@ function CardArea() {
   // Undo once: in the removed entry's row while it's there, not on the card as well.
   const a = c.a?.card && bar?.undo ? { ...c.a, card: { ...c.a.card, actions: c.a.card.actions.filter((x) => !(x.id === 'reset' && x.trip === bar.it.key)) } } : c.a;
   const clockNow = new Date();
-  useNowSky(a?.mode === 'rest' ? 'night' : phaseAt(clockNow.getHours() * 60 + clockNow.getMinutes()));
+  useNowSky(phaseAt(clockNow.getHours() * 60 + clockNow.getMinutes()));
   const body = a
     ? html`<${Card} a=${a} sky onAnswer=${answered} onChoice=${refresh} onPlace=${(key) => choose({ kind: 'place', key })} />`
     : c.offline

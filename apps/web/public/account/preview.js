@@ -199,8 +199,8 @@ const UpcomingCard = ({ u }) => html`
  * on a card of its own, then your favourites to plan a trip to instead,
  * where there's somewhere to show one (`onPlace`, the web app's Now). On
  * Now (`sky`) the words are up in the page's sky, above the horizon, the
- * favourites on the ground; after your day that sky is the night. On the
- * account page's preview it's a panel, the night's after your day.
+ * favourites on the ground, under the hour's sky. On the account page's
+ * preview it's a panel, the night's after your day.
  */
 function DayDone({ a, night, sky, onPlace, children }) {
   const places = onPlace ? (a.places ?? []) : [];
