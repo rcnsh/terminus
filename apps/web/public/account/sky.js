@@ -97,6 +97,55 @@ const busParts = (fill, band, dim = -1) => html`
 /** How much bigger than its numbers the horizon with the road is drawn: the bus and your stop are the picture. */
 const ROAD_SCALE = 1.25;
 
+/** How many shuttles may be driving along the page's horizons at once, and how many are. */
+const MAX_DRIVING = 2;
+let driving = 0;
+/** The colour the last one to pull out wore, so the next is another service. */
+let lastColour = null;
+
+/**
+ * One side of the road on a horizon with `drive`: a shuttle in one of
+ * `colours` drives across, left to right (or right to left, `back`, on the
+ * far side, behind), at a speed of its own, then after a pause another
+ * comes. One pulls out only while `go` (the road is on screen) and while
+ * fewer than MAX_DRIVING are out across the page, so there are never three
+ * at once. `first`: the one that starts the page, at once.
+ */
+function Lane({ colours, vw, y, back = false, go, first = false }) {
+  // The shuttle on the road (its colour and speed), or null between them.
+  const [trip, setTrip] = useState(null);
+  const started = useRef(false);
+  useEffect(() => {
+    if (trip) return () => void driving--;
+    if (!go) return;
+    let t;
+    const pullOut = () => {
+      if (driving >= MAX_DRIVING) return void (t = setTimeout(pullOut, 1000 + Math.random() * 2000));
+      const pick = colours.filter((c) => c !== lastColour);
+      lastColour = pick[Math.floor(Math.random() * pick.length)];
+      driving++;
+      setTrip({ colour: lastColour, speed: 38 + Math.random() * 14 });
+    };
+    const wait = first && !started.current ? 0 : (back && !started.current ? 4000 : 1500) + Math.random() * 8000;
+    started.current = true;
+    t = setTimeout(pullOut, wait);
+    return () => clearTimeout(t);
+  }, [Boolean(trip), go]);
+  if (!trip) return null;
+  return html`<g transform=${`translate(0 ${y})`}>
+    <g
+      class=${back ? 'driving back' : 'driving'}
+      style=${{ '--svc': trip.colour, '--to': `${vw + 20}px`, animationDuration: `${Math.round((vw + 80) / trip.speed)}s` }}
+      onAnimationEnd=${() => setTrip(null)}
+    >
+      <g transform=${back ? 'matrix(-1 0 0 1 38 0)' : null}>
+        <path class="beam" d="M38 9L60 6L60 13Z" />
+        ${busParts('body', 'band', 3)}
+      </g>
+    </g>
+  </g>`;
+}
+
 /**
  * Where the sky ends: the hills, a building or two, rain trees, Singapore's
  * flag by the road, and Marina Bay Sands far off in the city. The near hill
@@ -112,25 +161,27 @@ const ROAD_SCALE = 1.25;
  * for Now's sky to reach down to it, or null for one in a sky of its own.
  * `low`: just the hills, the trees and the city, with no road and drawn at
  * its own size (the band at the top of Settings' pages); otherwise it's
- * drawn ROAD_SCALE times bigger. `drive`: the services' colours, for a
- * shuttle that drives across the road and round again in one picked at
- * random each time (the website's landing page, sky.css), where it
- * otherwise stands; it stands still for anyone who asks for less motion.
+ * drawn ROAD_SCALE times bigger. `drive`: the services' colours, for
+ * shuttles that drive along the road instead of one standing (the website's
+ * landing page, Lane); for anyone who asks for less motion one stands.
  */
 export function Horizon({ stop = false, bus = null, shuttle = true, drive = null, on = 'now', low = false }) {
   const box = useRef(null);
   const [w, setW] = useState(0);
-  // Which of `drive`'s colours is going by: never the same one twice running.
-  const [svc, setSvc] = useState(() => Math.floor(Math.random() * (drive?.length || 1)));
-  const nextSvc = () => setSvc((i) => (i + 1 + Math.floor(Math.random() * (drive.length - 1))) % drive.length);
+  // Shuttles only pull out while the road is on screen.
+  const [seen, setSeen] = useState(false);
+  const moving = drive?.length > 0 && !reducedMotion();
   useLayoutEffect(() => {
     const el = box.current;
     const ground = on && grounds[on];
     ground?.set([...ground.get(), el]);
-    const seen = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
-    seen.observe(el);
+    const sized = new ResizeObserver(() => setW(Math.round(el.clientWidth)));
+    sized.observe(el);
+    const shown = moving && new IntersectionObserver(([e]) => setSeen(e.isIntersecting));
+    if (shown) shown.observe(el);
     return () => {
-      seen.disconnect();
+      sized.disconnect();
+      if (shown) shown.disconnect();
       ground?.set(ground.get().filter((x) => x !== el));
     };
   }, []);
@@ -205,21 +256,18 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
         ${!low &&
         !bus &&
         shuttle &&
-        (drive?.length
-          ? html`<g transform="translate(0 57)">
-              <g
-                class="driving"
-                style=${{ '--svc': drive[svc % drive.length], '--rest': `${passing}px`, '--to': `${vw + 20}px`, animationDuration: `${Math.round(vw / 45)}s` }}
-                onAnimationIteration=${nextSvc}
-              >
+        (moving
+          ? html`<${Lane} colours=${drive} vw=${vw} y=${53} back=${true} go=${seen} />
+              <${Lane} colours=${drive} vw=${vw} y=${57} go=${seen} first=${true} />`
+          : drive?.length
+            ? html`<g class="parked" transform=${`translate(${passing} 57)`} style=${{ '--svc': drive[0] }}>
                 <path class="beam" d="M38 9L60 6L60 13Z" />
                 ${busParts('body', 'band', 3)}
-              </g>
-            </g>`
-          : html`<g transform=${`translate(${passing} 57)`}>
-              <path class="beam" d="M38 9L60 6L60 13Z" />
-              ${busParts('bus', 'stripe', 3)}
-            </g>`)}
+              </g>`
+            : html`<g transform=${`translate(${passing} 57)`}>
+                <path class="beam" d="M38 9L60 6L60 13Z" />
+                ${busParts('bus', 'stripe', 3)}
+              </g>`)}
       </svg>`}
     </div>
   `;
