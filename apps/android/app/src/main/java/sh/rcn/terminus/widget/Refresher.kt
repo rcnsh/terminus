@@ -17,24 +17,26 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import sh.rcn.terminus.Api
+import sh.rcn.terminus.ApiError
+import sh.rcn.terminus.L
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
-import sh.rcn.terminus.ApiError
-import sh.rcn.terminus.ParseError
-import sh.rcn.terminus.hour12
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
+import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.Push
+import sh.rcn.terminus.R
+import sh.rcn.terminus.RideStyle
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
+import sh.rcn.terminus.hour12
 import java.util.concurrent.TimeUnit
-import sh.rcn.terminus.R
-import sh.rcn.terminus.L
 
 /**
  * Keeping the widget true without a process running:
@@ -151,7 +153,7 @@ object Refresher {
                 // "Leave by" turns into "Leave now" at the leave time.
                 answer.leaveAtMs?.let { if (it > now) add(it) }
                 // On the bus: at each stop, so the progress bar and the arrival move on.
-                answer.card?.ride?.takeIf { answer.card.phase == "riding" }?.let { r -> sh.rcn.terminus.RideStyle.nextRedrawAt(r, now)?.let(::add) }
+                answer.card?.ride?.takeIf { answer.card.phase == "riding" }?.let { r -> RideStyle.nextRedrawAt(r, now)?.let(::add) }
                 add(fetchedAt + MAX_AGE_MS)
             }
         }
@@ -189,8 +191,10 @@ object Refresher {
 
     fun cancel(ctx: Context) {
         WorkManager.getInstance(ctx).cancelUniqueWork(WORK)
-        ctx.getSystemService(AlarmManager::class.java)?.cancel(alarmIntent(ctx))
-        ctx.getSystemService(AlarmManager::class.java)?.cancel(redrawIntent(ctx))
+        ctx.getSystemService(AlarmManager::class.java)?.run {
+            cancel(alarmIntent(ctx))
+            cancel(redrawIntent(ctx))
+        }
         LeaveAlerts.cancel(ctx)
         LiveService.stop(ctx)
     }
@@ -236,7 +240,7 @@ class RefreshReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Refresher.ACTION_REFRESH, Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
-            android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
+            AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
                 // Boot or update: the live notification comes back if it was on.
                 if (intent.action != Refresher.ACTION_REFRESH) LiveService.start(context)
                 if (Refresher.active(context)) {
@@ -244,29 +248,30 @@ class RefreshReceiver : BroadcastReceiver() {
                     Refresher.schedule(context)
                 }
             }
-            Refresher.ACTION_REDRAW -> {
-                // Offline: the widget's day-plan line moves on; then the next such moment.
-                val pending = goAsync()
-                CoroutineScope(Dispatchers.Default).launch {
-                    try {
-                        redrawWidgets(context)
-                        val store = Store(context)
-                        if (store.lastError != null) Refresher.armOfflineRedraw(context, store)
-                    } finally {
-                        pending.finish()
-                    }
-                }
+            // Offline: the widget's day-plan line moves on; then the next such moment.
+            Refresher.ACTION_REDRAW -> finishAsync(Dispatchers.Default) {
+                redrawWidgets(context)
+                val store = Store(context)
+                if (store.lastError != null) Refresher.armOfflineRedraw(context, store)
             }
-            Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_LOCALE_CHANGED -> {
-                val pending = goAsync()
-                CoroutineScope(Dispatchers.Default).launch {
-                    try {
-                        redrawWidgets(context)
-                    } finally {
-                        pending.finish()
-                    }
-                }
+            Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_LOCALE_CHANGED -> finishAsync(Dispatchers.Default) {
+                redrawWidgets(context)
             }
+        }
+    }
+}
+
+/**
+ * Runs [block] on [dispatcher], keeping the broadcast open (goAsync) until
+ * it's done, rather than letting the process go once onReceive returns.
+ */
+internal fun BroadcastReceiver.finishAsync(dispatcher: CoroutineDispatcher, block: suspend () -> Unit) {
+    val pending = goAsync()
+    CoroutineScope(dispatcher).launch {
+        try {
+            block()
+        } finally {
+            pending.finish()
         }
     }
 }
