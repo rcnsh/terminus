@@ -4,7 +4,7 @@
  * card can say what phase it's in (trip.ts).
  */
 
-import type { Answer, Env, Graph, MeAnswer, PlaceChip, ResolveInput, Why } from './types.ts';
+import type { Answer, Env, Graph, MeAnswer, PlaceChip, ResolveInput, StopArrivals, Why } from './types.ts';
 import type { MeDeps } from './me.ts';
 import {
   HOME_BY_MIN,
@@ -228,16 +228,29 @@ function undoOf(day: DayRecord | null, nowMs: number): TripView['undo'] {
 }
 
 /**
+ * The arrivals at the stop you get off at, from the feed the bus you're on
+ * is in: LTA's for a public bus, through the public graph, so a ride on the
+ * 151 never costs NUS a call that can't list it.
+ */
+function rideStopArrivals(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<StopArrivals | undefined> {
+  const graph = b.paid ? (deps.publicGraph ?? deps.graph) : deps.graph;
+  return deps.collectArrivals(env, ctx, [b.alightCode!], nowMs, graph).then((byStop) => byStop.get(b.alightCode!));
+}
+
+/** The service as the feed's rows name it: a public bus's route (`151/1`) when its number can't. */
+const rideSvc = (b: Boarded): string => b.route ?? b.svc;
+
+/**
  * When the bus you're on reaches your stop, from the feed: the same plate in
  * that stop's arrivals. Null without a plate, or once it's no longer listed
  * there (it has arrived, or the feed dropped it); the tap's estimate is used then.
  */
 export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<string | null> {
   if (!b.plate || !b.alightCode) return null;
-  const sa = (await deps.collectArrivals(env, ctx, [b.alightCode], nowMs)).get(b.alightCode);
+  const sa = await rideStopArrivals(env, ctx, deps, b, nowMs);
   if (!sa?.available || sa.stale) return null;
   // A loop can list the same bus twice at one stop; the first pass is the one.
-  const etas = sa.arrivals.filter((x) => x.plate === b.plate && x.svc === b.svc && x.etaS !== null).map((x) => x.etaS!);
+  const etas = sa.arrivals.filter((x) => x.plate === b.plate && x.svc === rideSvc(b) && x.etaS !== null).map((x) => x.etaS!);
   if (!etas.length) return null;
   const at = sa.fetchedAt + Math.min(...etas) * 1000;
   return at > nowMs ? isoSeconds(at) : null;
@@ -251,9 +264,9 @@ export async function liveArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
  */
 export async function nextArrival(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<string | null> {
   if (!b.alightCode) return null;
-  const sa = (await deps.collectArrivals(env, ctx, [b.alightCode], nowMs)).get(b.alightCode);
+  const sa = await rideStopArrivals(env, ctx, deps, b, nowMs);
   if (!sa?.available || sa.stale) return null;
-  const due = sa.arrivals.filter((x) => x.svc === b.svc && x.etaS !== null).map((x) => sa.fetchedAt + x.etaS! * 1000).filter((at) => at > nowMs);
+  const due = sa.arrivals.filter((x) => x.svc === rideSvc(b) && x.etaS !== null).map((x) => sa.fetchedAt + x.etaS! * 1000).filter((at) => at > nowMs);
   return due.length ? isoSeconds(Math.min(...due)) : null;
 }
 

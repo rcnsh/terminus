@@ -263,3 +263,29 @@ test('choosing the stops that go there still asks the feed about WALK.maxCandida
   const cands = candidateStops(GRAPH, { lat: 1.297, lon: 103.771, to: 'UTOWN', originCode: null });
   assert.ok(cands.length <= WALK.maxCandidates);
 });
+
+test('riding a public bus reads its arrival from the public graph, by its route', async () => {
+  const { nextArrival } = await import('../src/next.ts');
+  const nowMs = Date.parse('2026-08-27T02:00:00Z');
+  // A stop on the 151's first direction in the public graph.
+  const pidx = indexGraph(GRAPH_PUBLIC);
+  const alight = [...pidx.routes.get('151/1').pos.keys()][1];
+  const asked = [];
+  const deps = {
+    graph: GRAPH,
+    publicGraph: GRAPH_PUBLIC,
+    answerFor: async () => { throw new Error('not used'); },
+    collectArrivals: async (_env, _ctx, codes, at, graph) => {
+      asked.push(graph);
+      const arrivals = [{ svc: '151/1', etaS: 240, crowd: null, plate: null, berth: null }];
+      return new Map(codes.map((code) => [code, { code, arrivals, fetchedAt: at, stale: false, available: true }]));
+    },
+  };
+  const b = { svc: '151', route: '151/1', paid: true, stop: 'x', board: null, arrive: null, alightCode: alight };
+  assert.equal(await nextArrival({}, {}, deps, b, nowMs), new Date(nowMs + 240_000).toISOString().replace(/\.\d{3}Z$/, 'Z'));
+  assert.equal(asked[0], GRAPH_PUBLIC, 'asked of the graph that has LTA, not the shuttle feed');
+
+  // A shuttle ride still asks the shuttle graph.
+  await nextArrival({}, {}, deps, { svc: 'D2', stop: 'x', board: null, arrive: null, alightCode: 'COM3' }, nowMs);
+  assert.equal(asked[1], GRAPH);
+});
