@@ -210,6 +210,22 @@ test('/docs is the API documentation, rendered from /openapi.json', async () => 
   }
 });
 
+test('/openapi.json and /docs are built once and sent the same', async () => {
+  const { openApiJson, openApiSpec, docsPageFor, docsPage } = await import('../src/openapi.ts');
+  const a = openApiJson(BASE);
+  assert.equal(openApiJson(BASE), a, 'the same string, not rebuilt');
+  assert.deepEqual(JSON.parse(a), openApiSpec(BASE));
+  assert.equal(JSON.parse(openApiJson('https://other.test')).servers[0].url, 'https://other.test', 'per origin');
+  for (let i = 0; i < 20; i++) openApiJson(`https://h${i}.test`);
+  assert.deepEqual(JSON.parse(openApiJson(BASE)), openApiSpec(BASE), 'many origins: still right');
+  assert.equal(docsPageFor('dusk'), docsPage('dusk'));
+  const { res } = await call('/openapi.json');
+  assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8');
+  assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  assert.equal(await res.text(), openApiJson(BASE));
+});
+
 test('the OpenAPI spec documents exactly the routes that exist', async () => {
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4, COM3: D2_IN_4 } });
   const { res } = await call('/openapi.json', { fetchImpl });

@@ -2333,3 +2333,31 @@ export function docsPage(phase: Phase): string {
 </body>
 </html>`;
 }
+
+/**
+ * The spec as sent, kept per origin: it is a few hundred kilobytes built and
+ * stringified from the same constants every time. A few origins at most (the
+ * site, the beta, workers.dev); past that it starts again, so a stream of
+ * made-up hosts can't grow it.
+ */
+const specMemo = new Map<string, string>();
+const SPEC_ORIGINS_KEPT = 8;
+
+export function openApiJson(origin: string): string {
+  let text = specMemo.get(origin);
+  if (text === undefined) {
+    if (specMemo.size >= SPEC_ORIGINS_KEPT) specMemo.clear();
+    text = JSON.stringify(openApiSpec(origin));
+    specMemo.set(origin, text);
+  }
+  return text;
+}
+
+/** The docs page for each of the sky's five phases, built once each. */
+const docsMemo = new Map<Phase, string>();
+
+export function docsPageFor(phase: Phase): string {
+  let page = docsMemo.get(phase);
+  if (page === undefined) docsMemo.set(phase, (page = docsPage(phase)));
+  return page;
+}
