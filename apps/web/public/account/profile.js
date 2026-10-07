@@ -18,23 +18,32 @@ export const walkSpeed = store(1.3);
 export const saves = store(0);
 /** Bumped when the lists the server keeps apart from the profile change (devices, keys, choices). */
 export const lists = store(0);
-/** The short message at the bottom of the screen ("Saved"), or null. */
+/** The short message at the bottom of the screen: { text, error } ("Saved"), or null. */
 export const toastText = store(null);
 
+/** How long a message stays: long enough to read. A problem stays until it's closed or another comes. */
+const TOAST_MS = 4_000;
 let toastTimer = null;
-export function toast(text) {
-  toastText.set(text);
+/** Shows `text` at the bottom of the screen; `error`, something that went wrong, which stays until closed. */
+export function toast(text, { error = false } = {}) {
+  toastText.set({ text, error });
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastText.set(null), 1800);
+  if (!error) toastTimer = setTimeout(() => toastText.set(null), TOAST_MS);
 }
 
-/** Where toast() shows: once per page. */
+/** Where toast() shows: once per page. Its words are on a status line, so they're heard as well as seen. */
 export function Toast() {
-  const text = useStore(toastText);
+  const now = useStore(toastText);
   // Kept while it fades out, so the words don't vanish first.
-  const last = text ?? Toast.last ?? '';
+  const last = now ?? Toast.last ?? { text: '' };
   Toast.last = last;
-  return html`<p class=${text ? 'toast show' : 'toast'} role="status" aria-live="polite">${last}</p>`;
+  return html`
+    <div class=${`toast${now ? ' show' : ''}${last.error ? ' error' : ''}`}>
+      <p role="status">${now ? now.text : ''}</p>
+      ${now?.error && html`<button type="button" class="toast-close" aria-label=${t('Close')} onClick=${() => toastText.set(null)}>×</button>`}
+      ${!now && html`<p aria-hidden="true">${last.text}</p>`}
+    </div>
+  `;
 }
 
 /* ---------- loading and saving ---------- */
@@ -77,7 +86,7 @@ export function edit(change) {
       toast(t('Saved'));
       saves.set((n) => n + 1);
     } catch (err) {
-      toast(t('Not saved. {0}', err.message));
+      toast(t('Not saved. {0}', err.message), { error: true });
     }
   }, 400);
 }

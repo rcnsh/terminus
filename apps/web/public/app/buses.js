@@ -10,7 +10,7 @@
 // Only the times the API gives are shown: `later` is every later bus the
 // feed reported, and a line shows no times at stops other than yours.
 
-import { Fill, Icon, MARK, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useStore } from '/assets/ui.js';
+import { Fill, Icon, MARK, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useStore } from '/assets/ui.js';
 import { clock, inkOn, send, serverNow, t } from '/account/dom.js';
 import { campus, edit, limit, loadCampus, profile, reloadProfile, toast } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
@@ -107,7 +107,7 @@ async function findNearest({ ask = false } = {}) {
   const state = await navigator.permissions?.query({ name: 'geolocation' }).then((p) => p.state).catch(() => null);
   canAsk.set(Boolean(navigator.geolocation) && state !== 'denied');
   const at = await locate({ ask });
-  if (ask && !at) toast(t('Location is off for this site. Search for a stop instead.'));
+  if (ask && !at) toast(t('Location is off for this site. Search for a stop instead.'), { error: true });
   try {
     const q = `?${new URLSearchParams({ ...at, stopped: '1' })}`;
     const data = await getJSON(`/me/nearby${q}`);
@@ -167,13 +167,13 @@ function showBoard(code) {
 
 async function togglePin(code) {
   if (!profile.get()) await reloadProfile().catch(() => {});
-  if (!profile.get()) return toast(t("Couldn't pin that. Check your connection."));
+  if (!profile.get()) return toast(t("Couldn't pin that. Check your connection."), { error: true });
   if (pins().includes(code)) {
     edit((p) => {
       p.pinnedStops = (p.pinnedStops ?? []).filter((c) => c !== code);
     });
   } else if (pins().length >= pinMax()) {
-    toast(t('You can pin up to {0} stops.', pinMax()));
+    toast(t('You can pin up to {0} stops.', pinMax()), { error: true });
   } else {
     edit((p) => {
       p.pinnedStops = [...(p.pinnedStops ?? []), code];
@@ -212,6 +212,8 @@ function onHash() {
   if (JSON.stringify(next) === JSON.stringify(route.get())) return;
   route.set(next);
   window.scrollTo(0, 0);
+  // What was focused (a row, Back) has gone with the page: its heading takes it.
+  if (location.hash.startsWith('#buses') && document.activeElement !== document.body) focusSoon(() => document.querySelector('#tab-buses .bt-head'));
   if (next.kind === 'stop') showBoard(next.code);
   else if (next.kind === 'line') loadLine(next.svc, next.stop);
 }
@@ -418,7 +420,7 @@ function StopView({ code, kicker, dots, peek }) {
     <div class="bt-top">
       <div class="bt-title">
         ${kicker && html`<p class="bt-kicker">${kicker}</p>`}
-        <h1>${name}</h1>
+        <h2 class="bt-head" tabindex="-1">${name}</h2>
         ${shown !== name && html`<p class="bt-code">${shown}</p>`}
       </div>
       <button type="button" class=${pinned ? 'bt-star on' : 'bt-star'} aria-pressed=${String(pinned)} aria-label=${pinned ? t('Unpin {0}', name) : t('Pin {0}', name)} onClick=${() => togglePin(shown)}>
@@ -441,7 +443,7 @@ function FindPage() {
   const ask = useStore(canAsk);
   return html`
     <div class="bt-find">
-      <h1>${t('Find the stop nearest you')}</h1>
+      <h2 class="bt-head" tabindex="-1">${t('Find the stop nearest you')}</h2>
       <p class="hint">${t('Or search for a stop above, and pin it with the star to keep it here.')}</p>
       ${ask && html`<button type="button" class="btn small ghost" onClick=${() => findNearest({ ask: true })}><${Icon} paths=${ARROW} class="bt-btn-icon" />${t('Use my location')}</button>`}
     </div>
@@ -463,6 +465,13 @@ function Home() {
   const scrollTo = (j, smooth = true) => {
     const el = row.current;
     if (el) el.scrollTo({ left: j * el.clientWidth, behavior: smooth && !reducedMotion() ? 'smooth' : 'auto' });
+  };
+  // A dot or "Swipe for" pressed: the page it brings in has the focus, at its
+  // stop's name (the button pressed is on the page going out of view).
+  const turnTo = (j) => {
+    scrollTo(j);
+    const head = row.current?.children[j]?.querySelector('.bt-head');
+    head?.focus({ preventScroll: true });
   };
   // Back on the home: the page it was on. A page unpinned: the one before it.
   useLayoutEffect(() => {
@@ -487,9 +496,9 @@ function Home() {
   return html`
     <div class="bt-pages" ref=${row} onScroll=${onScroll}>
       ${pages.map((pg, j) => {
-        const dots = html`<${Dots} index=${j} count=${pages.length} nearestFirst=${pages[0].kind === 'nearest'} onDot=${(k) => scrollTo(k)} />`;
+        const dots = html`<${Dots} index=${j} count=${pages.length} nearestFirst=${pages[0].kind === 'nearest'} onDot=${turnTo} />`;
         const nextPage = pages[j + 1];
-        const peek = nextPage?.code && html`<${Peek} code=${nextPage.code} onClick=${() => scrollTo(j + 1)} />`;
+        const peek = nextPage?.code && html`<${Peek} code=${nextPage.code} onClick=${() => turnTo(j + 1)} />`;
         if (pg.kind === 'loading') return html`<section class="bt-page" key="loading"><p class="hint bt-empty">${t('Checking…')}</p>${dots}${peek}</section>`;
         if (pg.kind === 'find') return html`<section class="bt-page" key="find"><${FindPage} />${dots}${peek}</section>`;
         let kicker;
@@ -549,8 +558,8 @@ function Find() {
 
 function BackBar({ label, parent }) {
   return html`
-    <nav class="bt-nav">
-      <button type="button" class="bt-back" onClick=${() => back(parent)}><${Icon} paths=${BACK} /><span>${label}</span></button>
+    <nav class="bt-nav" aria-label=${t('Back')}>
+      <button type="button" class="bt-back" aria-label=${t('Back to {0}', label)} onClick=${() => back(parent)}><${Icon} paths=${BACK} /><span>${label}</span></button>
     </nav>
   `;
 }
@@ -568,8 +577,9 @@ function StopPage({ code }) {
   `;
 }
 
-/** A bus drawn on the line, with its plate and how full it is. */
-const BusMark = () => html`<span class="bt-bus" aria-hidden="true"><${Icon} paths=${BUS} /></span>`;
+/** A bus drawn on the line, with its plate and how full it is; `between`, on the line between two stops. Said in words too. */
+const BusMark = ({ between = false }) =>
+  html`<span class="bt-bus" aria-hidden="true"><${Icon} paths=${BUS} /></span><span class="sr-only">${between ? t('Bus between stops') : t('Bus here')}</span>`;
 const Plate = ({ b }) => html`${b.plate && html`<span class="bt-plate">${b.plate}</span>`}<${Crowd} crowd=${b.crowd} />`;
 
 /** Your stop's time on the line, from its board row: nothing worked out here. */
@@ -612,7 +622,7 @@ function LinePage({ svc, stop }) {
     <${BackBar} label=${label} parent=${parent} />
     <div class="bt-line-title">
       <${Chip} svc=${svc} color=${color} cls="bt-chip big" />
-      <div><h1>${svc}</h1>${where && html`<p class="hint">${where}</p>`}</div>
+      <div><h2 class="bt-head" tabindex="-1">${svc}</h2>${where && html`<p class="hint">${where}</p>`}</div>
     </div>
   `;
   if (!data) return html`${head}<p class="hint bt-empty">${mine?.error ?? t('Checking…')}</p>`;
@@ -651,7 +661,7 @@ function LinePage({ svc, stop }) {
           </li>
           ${between.map(
             (b) => html`<li key=${b.id} class="bt-gap">
-              <${BusMark} />
+              <${BusMark} between />
               <span class="bt-bus-info"><${Plate} b=${b} /><span>${t('Next: {0}', longName(data.stops[(i + 1) % n]))}</span></span>
             </li>`,
           )}
