@@ -1,0 +1,4 @@
+/* The location prompt in Simplified Chinese, keyed by Info.plist's keys. */
+
+"NSLocationUsageDescription" = "terminus 会用你的定位，从离你最近的车站出发。";
+"NSLocationWhenInUseUsageDescription" = "terminus 会用你的定位，从离你最近的车站出发。";
