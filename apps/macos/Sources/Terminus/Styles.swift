@@ -26,8 +26,12 @@ extension Color {
     static let brand = themed(light: 0xC2410C, dark: 0xFB923C)
     /// "On time", matching the site's --good-ink.
     static let good = themed(light: 0x166534, dark: 0x4ADE80)
-    /// Warning amber for "tight", matching the web's --warn.
-    static let warn = themed(light: 0xB45309, dark: 0xFBBF24)
+    /// Warning amber for "tight": a shade darker than the web's --warn in
+    /// light mode, so small text reads on its own tint (WCAG AA).
+    static let warn = themed(light: 0x92400E, dark: 0xFBBF24)
+    /// Errors and "late", for text: the system red is too light to read on
+    /// the popover (3.3:1), and on its own tint in a pill.
+    static let bad = themed(light: 0xB91C1C, dark: 0xF87171)
 
     /// One colour in light mode and another in dark, following the appearance.
     private static func themed(light: UInt32, dark: UInt32) -> Color {
@@ -51,11 +55,35 @@ struct Wordmark: View {
 extension View {
     /// The inset card every section sits on.
     func card(padding: CGFloat = 12) -> some View {
-        self
+        modifier(Card(padding: padding))
+    }
+
+    /// Says `message`, which this view shows, to VoiceOver when it appears
+    /// and when it changes: an error or a result that turns up on its own,
+    /// away from the focus.
+    func announced(_ message: String) -> some View {
+        onAppear { announce(message) }.onChange(of: message) { _, m in announce(m) }
+    }
+}
+
+/// Says `message` to VoiceOver now; nothing for nil or empty.
+@MainActor func announce(_ message: String?) {
+    guard let message, !message.isEmpty else { return }
+    AccessibilityNotification.Announcement(message).post()
+}
+
+/// The card's fill and edge, both stronger with Increase Contrast on.
+private struct Card: ViewModifier {
+    let padding: CGFloat
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        let more = contrast == .increased
+        content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.primary.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.primary.opacity(more ? 0.08 : 0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(more ? 0.35 : 0.08)))
     }
 }
 
@@ -66,6 +94,9 @@ struct SectionLabel: View {
             .font(.system(size: 11, weight: .semibold))
             .tracking(0.6)
             .foregroundStyle(.secondary)
+            // Spoken as written, not spelled out in capitals.
+            .accessibilityLabel(text)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

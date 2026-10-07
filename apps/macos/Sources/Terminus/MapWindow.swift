@@ -150,7 +150,7 @@ struct MapWindow: View {
             if let campus = map.campus {
                 VStack(alignment: .leading, spacing: 8) {
                     Pills(campus: campus, selected: map.selected) { map.choose($0) }
-                    if let status = map.busStatus { StatusChip(text: status.text(map.selected ?? "")) }
+                    if let status = map.busStatus { StatusChip(text: status.text(map.selected ?? "")).announced(status.text(map.selected ?? "")) }
                     if map.downloading {
                         StatusChip(text: L("Downloading the street map (about 4 MB)…"), busy: true)
                     } else if map.downloadFailed {

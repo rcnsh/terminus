@@ -25,8 +25,8 @@ struct AnswerDetail: View {
                     // Each arrival next to the bus it belongs to.
                     // The bus to catch (it names the stop), then when it gets you there.
                     // One colour for "go" (the countdown in the header); red only when it's late.
-                    if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.red : Color.primary) }
-                    if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(a.leaveLate ? Color.red : Color.secondary) }
+                    if let c = a.catchHow { Row(icon: a.leave?.svc == nil ? "figure.walk" : "bus.fill", text: c).fontWeight(.semibold).foregroundStyle(a.leaveLate ? Color.bad : Color.primary) }
+                    if let arrive = a.catchArrive { Row(icon: "flag.checkered", text: arrive).foregroundStyle(a.leaveLate ? Color.bad : Color.secondary) }
                     if let note = a.card?.note { Row(icon: "person.3.fill", text: note).foregroundStyle(.secondary) }
                     if let e = a.card?.estimate { Row(icon: "info.circle", text: e).foregroundStyle(.secondary) }
                     if let g = a.goNowLine { Row(icon: "bus", text: g).foregroundStyle(.secondary) }
@@ -45,7 +45,7 @@ struct AnswerDetail: View {
                 let timing = a.card?.ride == nil ? a.timing?.text : nil
                 if !a.isClassPlan, !a.isFree, timing != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
-                        if let t = a.timing, let text = timing { Pill(text: text, color: t.status == "late" ? .red : t.status == "tight" ? .warn : .good) }
+                        if let t = a.timing, let text = timing { Pill(text: text, color: t.status == "late" ? .bad : t.status == "tight" ? .warn : .good) }
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
                     }
                 }
@@ -381,9 +381,10 @@ struct TodayList: View {
                 if let f = failed, f.key == item.key {
                     Label(f.message, systemImage: "exclamationmark.circle")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.bad)
                         .padding(.leading, 68)
                         .fixedSize(horizontal: false, vertical: true)
+                        .announced(f.message)
                 }
             }
             if at == day.items.count, let r = removed { RemovedRow(item: r, onUndo: onUndo) }

@@ -76,6 +76,8 @@ struct Header: View {
             .accessibilityLabel(model.loading ? L("Refreshing") : L("Refresh"))
         }
         .card()
+        // The error shows on the status line, away from the focus: say it.
+        .onChange(of: model.error) { _, e in announce(e) }
     }
 
     /// "D2 · 09:42", "A1 · ~09:11", or the label when there's no time: the
