@@ -1,5 +1,4 @@
 import SwiftUI
-import os
 
 struct Search: View {
     @Bindable var model: AppModel

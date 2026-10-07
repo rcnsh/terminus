@@ -1,5 +1,4 @@
 import SwiftUI
-import os
 
 /// Creates the model at launch, so refreshing starts even before (or
 /// without) SwiftUI ever drawing the menu bar item.
@@ -120,7 +119,6 @@ struct Ticking<Content: View>: View {
         }
     }
 }
-
 
 struct Popover: View {
     @Bindable var model: AppModel
