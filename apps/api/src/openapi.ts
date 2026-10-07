@@ -85,7 +85,7 @@ const jsonBody = (schema: Record<string, unknown>, example?: Record<string, unkn
 
 const answerExample = {
   label: 'D2 · 4 min',
-  detail: 'KR MRT · cross the road · UTown ~12 min · crowding: low · or A2 9 min',
+  detail: 'KR MRT · cross the road · UTown in ~12 min · crowding: low · or A2 in 9 min',
   alt: 'A2 · 9 min · KR MRT',
   stop: { code: 'KR-MRT', name: 'KR MRT', confidence: 0.97 },
   quality: 'live',

@@ -91,9 +91,39 @@ test('every error string in the API has a Chinese translation', () => {
       }
       if (!(text in ERRORS_ZH)) missing.push(`${f}: ${text}`);
     }
+    // An error worded by an expression, like a ternary: each string in it.
+    for (const [, expr] of src.matchAll(/error: (?!['"`])([^\n]*)/g)) {
+      for (const text of literalsIn(expr)) {
+        if (!(text in ERRORS_ZH)) missing.push(`${f}: ${text}`);
+      }
+    }
   }
   assert.deepEqual(missing, []);
 });
+
+/**
+ * The strings an expression can give, up to the comma or bracket that ends
+ * it: the branches of a ternary or `??` (a literal after `?`, `:` or `??`),
+ * not the values it compares.
+ */
+function literalsIn(expr) {
+  const out = [];
+  let depth = 0;
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i];
+    if (c === "'" || c === '"') {
+      let j = i + 1;
+      while (j < expr.length && expr[j] !== c) j += expr[j] === '\\' ? 2 : 1;
+      if (depth === 0 && /(\?|:)\s*$/.test(expr.slice(0, i))) out.push(expr.slice(i + 1, j));
+      i = j;
+    } else if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) {
+      if (depth === 0) break;
+      depth--;
+    } else if (c === ',' && depth === 0) break;
+  }
+  return out;
+}
 
 test('json() says the error in the request language', async () => {
   const body = await withLang('zh', () => json({ error: 'sign in first' }, 401)).json();

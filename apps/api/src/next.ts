@@ -224,7 +224,7 @@ function undoOf(day: DayRecord | null, nowMs: number): TripView['undo'] {
   const recent = Object.entries(day?.trips ?? {})
     .filter(([, r]) => r.kind === 'skipped' && !r.away && nowMs - r.at < UNDO_MS)
     .sort(([, a], [, b]) => b.at - a.at)[0];
-  return recent ? { key: recent[0], label: recent[1].label ?? m().it } : null;
+  return recent ? { key: recent[0], label: recent[1].label ?? null } : null;
 }
 
 /**

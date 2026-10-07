@@ -481,7 +481,7 @@ test('/line: an unknown service or a stop it doesn’t call at is a 400, and cos
   assert.equal(stop.status, 400);
   assert.equal((await stop.json()).error, 'stop not on this service');
   const { res: zh } = await call('/line?svc=D1&stop=PGP', { fetchImpl: none, headers: { 'accept-language': 'zh-CN' } });
-  assert.equal((await zh.json()).error, '这条路线不经过这个车站');
+  assert.equal((await zh.json()).error, '这条线路不经过这个车站');
   assert.equal(none.counts.shuttle, 0);
 
   // An unreachable feed: unavailable, no buses, and the row is unknown rather than made up.
