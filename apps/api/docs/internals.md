@@ -1106,8 +1106,11 @@ only secrets. Everything else in `.dev.vars.example` is a URL or a version.
 
 ## Analytics
 
-Every answer writes one decision row, plus one row per timed arrival, to a
-Workers Analytics Engine dataset. Two purposes: checking whether the direction
+Every answer someone asks for (`/next`, `/trip`, `/me/next`) writes one
+decision row, plus one row per timed arrival, to a Workers Analytics Engine
+dataset. Answers the server works out for itself are not logged
+(`log: false`): the Trip object's wakes, and each class's leave-by on
+`/me/day`. They would cost rows and count as answers on the dashboard. Two purposes: checking whether the direction
 algorithm is right, which nothing else measures, and inter-stop
 travel times from the feed's own predictions (`plate` is the join key), a
 cross-check on the ride times detection measures. Queries and
