@@ -129,7 +129,8 @@ When D1 can't be reached, checking the key or session behind a keyed
 route is tried once more, then answered 503 with `Retry-After: 30`
 (`callerOrDown` in access.ts); a D1 outage anywhere else under `/me` is a
 503 too (`d1Unavailable`), so the apps try again rather than report a
-fault. A schema fault (a missing column) stays a 500.
+fault. A fault in the query itself (a missing column, a bad binding, too
+many variables) stays a 500, so a bug doesn't read as "try again".
 
 Every 429 carries `Retry-After`, and every client waits it out, at most 5
 minutes, sending nothing meanwhile (web `send()` in `account/dom.js`,

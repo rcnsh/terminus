@@ -62,8 +62,11 @@ export const ACCOUNTS_DOWN = "terminus can't reach your account right now; try a
 export function d1Unavailable(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   // D1's own errors say so ("D1_ERROR: Network connection lost."); a
-  // timeout from a fetch to NUS doesn't, and isn't about accounts.
-  return /\bD1\b|D1_/.test(msg) && !/constraint|no such (?:table|column)|syntax error/i.test(msg);
+  // timeout from a fetch to NUS doesn't, and isn't about accounts. Faults
+  // in the query itself (a bad binding, too many variables) stay a 500, so
+  // a bug doesn't read as "try again in a minute".
+  return /\bD1\b|D1_/.test(msg)
+    && !/constraint|no such (?:table|column|function)|syntax error|D1_TYPE_ERROR|D1_COLUMN_NOTFOUND|too many|too ?big|datatype mismatch|out of range/i.test(msg);
 }
 
 /**
