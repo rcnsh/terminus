@@ -312,7 +312,8 @@ function AccountPage() {
   // Signed in, the parts are loaded before the view changes (start).
   if (!p) return null;
   const { Onboarding, Settings } = p;
-  if (view === 'onboarding') return html`<${Onboarding} onDone=${afterSetup} />`;
+  // The toast too: setup says there when it couldn't be saved.
+  if (view === 'onboarding') return html`<${Onboarding} onDone=${afterSetup} /><${Toast} />`;
   return html`
     ${adding && html`<${SignIn} adding=${true} />`}
     <div id="app" hidden=${adding}>
