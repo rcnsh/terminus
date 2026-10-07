@@ -1913,6 +1913,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
 
 /** Pinned so a breaking Elements release cannot change the page underneath us. */
 const ELEMENTS = 'https://unpkg.com/@stoplight/elements@9.0.25';
+/** How wide the docs bar's hills are, in pixels: wider than any screen. */
+const HZ_W = 4000;
 
 /**
  * The docs page at the sky's hour in Singapore (pagesky.ts): its bar is a
@@ -1937,12 +1939,14 @@ export function docsPage(phase: Phase): string {
        beside their menu. */
     html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; }
     body { position: fixed; top: 0; left: 0; right: 0; height: 100%; height: 100dvh; display: flex; flex-direction: column; }
-    .bar { flex: none; box-sizing: border-box; height: 76px; font: 500 14px/1 system-ui, -apple-system, sans-serif; ${skyVars(phase)}; background: linear-gradient(var(--s0), var(--s1) 50%, var(--s2) 86%, var(--s3)); }
-    .bar .row { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; }
+    .bar { flex: none; position: relative; overflow: hidden; box-sizing: border-box; height: 76px; font: 500 14px/1 system-ui, -apple-system, sans-serif; ${skyVars(phase)}; background: linear-gradient(var(--s0), var(--s1) 50%, var(--s2) 86%, var(--s3)); }
+    .bar .row { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 16px; }
     .bar a { color: var(--band-ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
     .bar b { color: ${lightInkAt(phase) ? '#fb923c' : '#9a3412'}; font-weight: inherit; }
     .bar .back { padding: 12px 0; opacity: 0.85; }
-    .bar .hz { display: block; width: 100%; height: 28px; }
+    /* The hills at their own size along the bar's foot, behind its links,
+       as wide as any screen: a wider bar shows more of them, not bigger. */
+    .bar .hz { position: absolute; left: 0; bottom: 0; width: ${HZ_W}px; height: 52px; }
     .hz .far { fill: var(--h-far); } .hz .tree { fill: var(--h-tree); } .hz .city { fill: var(--h-city); } .hz .lit { fill: #fde9c9; } .hz .near { fill: #fff; }
     elements-api { display: block; flex: 1; min-height: 0; }
     /* Below Elements' breakpoint the sidebar becomes a drawer (layout="responsive"). */
@@ -1989,7 +1993,7 @@ export function docsPage(phase: Phase): string {
       <a href="/"><img src="/assets/mark.svg" alt="" width="22" height="22"><span>termi<b>nus</b> API</span></a>
       <a class="back" href="/">Back to terminus</a>
     </div>
-    ${horizonSvg(phase === 'dusk' || phase === 'night', 1600)}
+    ${horizonSvg(phase === 'dusk' || phase === 'night', HZ_W)}
   </div>
   <noscript><p style="padding:16px">The docs need JavaScript. Without it: the spec, every endpoint with examples, is at <a href="/openapi.json">/openapi.json</a>, and a short guide to the API, in Markdown, is at <a href="/llms.txt">/llms.txt</a>.</p></noscript>
   <elements-api apiDescriptionUrl="/openapi.json" router="hash" layout="responsive"></elements-api>
