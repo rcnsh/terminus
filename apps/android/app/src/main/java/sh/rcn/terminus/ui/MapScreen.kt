@@ -53,7 +53,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -111,6 +111,7 @@ import org.maplibre.compose.util.DpPadding
 import org.maplibre.spatialk.geojson.BoundingBox
 import org.maplibre.spatialk.geojson.Position
 import sh.rcn.terminus.CampusMap
+import sh.rcn.terminus.Ink
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.Locator
@@ -494,11 +495,11 @@ private fun Pills(campus: CampusMap, selected: String?, onChoose: (String?) -> U
                 selected = on,
                 onClick = { onChoose(svc) },
                 label = { Text(svc, fontWeight = FontWeight.SemiBold) },
-                leadingIcon = { Box(Modifier.size(10.dp).background(if (on) Color.White else c, CircleShape)) },
+                leadingIcon = { Box(Modifier.size(10.dp).background(if (on) inkOn(c) else c, CircleShape)) },
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     selectedContainerColor = c,
-                    selectedLabelColor = Color.White,
+                    selectedLabelColor = inkOn(c),
                 ),
                 elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
             )
@@ -536,11 +537,8 @@ private fun StatusChip(text: String, busy: Boolean = false) {
     }
 }
 
-/**
- * White or near-black, whichever reads on a service's colour (WCAG
- * contrast): white on the yellow A2 or blue K was under 3.5:1.
- */
-internal fun inkOn(c: Color): Color = if (1.05f / (c.luminance() + 0.05f) >= (c.luminance() + 0.05f) / 0.061f) Color.White else Color(0xFF1C1917)
+/** White or near-black, whichever reads on a service's colour ([Ink]). */
+internal fun inkOn(c: Color): Color = Color(Ink.on(c.toArgb().toLong() and 0xFFFFFFFFL))
 
 /** A service's code on its colour, as on the bus. Also Nearby's, on Now. */
 @Composable

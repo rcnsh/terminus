@@ -743,7 +743,7 @@ private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolea
         Modifier.widthIn(min = if (big) 64.dp else 46.dp).height(if (big) 44.dp else 32.dp).background(Color(color), RoundedCornerShape(if (big) 12.dp else 9.dp)).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(badgeText(svc, paid), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else 15.sp, maxLines = 1)
+        Text(badgeText(svc, paid), color = inkOn(Color(color)), fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else 15.sp, maxLines = 1)
     }
 }
 
@@ -936,7 +936,7 @@ private fun Rail(color: Color, first: Boolean, last: Boolean, bus: Boolean, here
         }
         if (bus) {
             Box(Modifier.size(28.dp).background(color, RoundedCornerShape(8.dp)).border(2.dp, paper, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = inkOn(color), modifier = Modifier.size(16.dp))
             }
         }
     }

@@ -182,7 +182,7 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
             if (bus != null) {
                 Box(Modifier.size(64.dp).background(Color(bus.color), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                    Text(badgeText(bus.svc, bus.paid), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, maxLines = 1)
+                    Text(badgeText(bus.svc, bus.paid), color = inkOn(Color(bus.color)), fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, maxLines = 1)
                 }
             } else {
                 Box(Modifier.size(64.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
@@ -455,13 +455,13 @@ private fun Tags(answer: NextAnswer, journey: Journey) {
 /** The badge's text: the service, with a $ after a public bus's number so the fare is never a surprise. */
 internal fun badgeText(svc: String, paid: Boolean): String = if (paid) "$svc \$" else svc
 
-/** A service as it's painted on the bus: white on its colour. */
+/** A service as it's painted on the bus: its code on its colour, in the ink that reads there ([inkOn]). */
 @Composable
 internal fun BusBadge(svc: String, color: Long, size: TextUnit, pad: Dp = 6.dp, paid: Boolean = false) {
     val fare = stringResource(R.string.public_bus_fare)
     Text(
         badgeText(svc, paid),
-        color = Color.White,
+        color = inkOn(Color(color)),
         fontWeight = FontWeight.ExtraBold,
         fontSize = size,
         maxLines = 1,
