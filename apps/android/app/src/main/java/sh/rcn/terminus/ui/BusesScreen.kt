@@ -872,7 +872,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    line.endsAtMs?.let { Text(stringResource(R.string.buses_runs_until, clock(it, h12)), color = c.onSurfaceVariant) }
+                    line.endsAtMs?.let { Text(stringResource(R.string.buses_runs_until, clock(it, h12)), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
         }
