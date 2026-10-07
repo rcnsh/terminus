@@ -21,6 +21,7 @@
 
 import type { Graph, Stop } from './types.ts';
 import { haversineM } from './geo.ts';
+import { roundCoord } from './http.ts';
 import { indexGraph, rideStops } from './resolve.ts';
 import { atHome } from './residences.ts';
 import { ASSUME_MS, AT_STOP_M, type Boarded, type Phase, type TripRecord } from './trip.ts';
@@ -50,14 +51,14 @@ const EARLY_MS = 2 * 60_000;
 
 export type Detected = 'boarded' | 'missed' | 'arrived';
 
-/** A fix from a request body, or null when it isn't one. */
+/** A fix from a request body, rounded like any location (roundCoord), or null when it isn't one. */
 export function fixOf(body: Record<string, unknown> | null): Fix | null {
   const lat = body?.lat;
   const lon = body?.lon;
   if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
-  return { lat, lon, speedMs: num(body?.speed), accM: num(body?.acc) };
+  return { lat: roundCoord(lat), lon: roundCoord(lon), speedMs: num(body?.speed), accM: num(body?.acc) };
 }
 
 /** Whether detection may still act on this trip. */
