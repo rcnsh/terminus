@@ -195,7 +195,7 @@ test('boardAt: an old answer counts from now, its gone buses dropped, and boardA
   const d2 = bySvc.get('D2');
   assert.equal(d2.etaS, 180, 'due in 3 minutes now, not 7');
   assert.equal(d2.quality, 'stale');
-  assert.equal(d2.eta, '3 min');
+  assert.equal(d2.eta, '~3 min');
   assert.deepEqual(d2.later, [{ etaS: 660, quality: 'scheduled', eta: '~11 min' }]);
   // A timetable time keeps its quality, counted from now too.
   assert.equal(bySvc.get('D1').etaS, 360);

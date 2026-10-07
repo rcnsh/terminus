@@ -195,11 +195,11 @@ Each row also comes worded, in the request's language, so the Buses tab,
 Nearby and the map say the same thing (they used to word these
 themselves, and drifted):
 
-- `eta`: `etaS` in words with `mins()` ("4 min", "now"), a `scheduled` time
-  marked "~6 min" ("约 6 分钟"); null when `etaS` is. Each `later` entry has
+- `eta`: `etaS` in words with `mins()` ("4 min", "now"), a `scheduled` or
+  `stale` time marked "~6 min" ("约 6 分钟"); null when `etaS` is. Each `later` entry has
   its own `eta` the same way;
-- `laterText`: up to three later buses in whole minutes, each `scheduled` one
-  marked, "then 12, ~20 min" ("之后 12、约 20 分钟"); null with none;
+- `laterText`: up to three later buses in whole minutes, each `scheduled` or
+  `stale` one marked, "then 12, ~20 min" ("之后 12、约 20 分钟"); null with none;
 - `toText`: `towards` as "to A, B" ("经 A，开往 B"), "to A" ("开往 A"), or
   "Ends here" ("本站为终点站").
 

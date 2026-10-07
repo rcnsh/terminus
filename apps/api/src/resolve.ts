@@ -495,7 +495,7 @@ export interface BoardRow {
   stopped?: StoppedReason;
   /** When it next starts (ISO), or null when no start is found. Only on a row that isn't running. */
   resumesAt?: string | null;
-  /** `etaS` in words: "4 min", "now", "~6 min" for a timetable time. Null with no time. */
+  /** `etaS` in words: "4 min", "now", "~6 min" for a timetable or stale time. Null with no time. */
   eta: string | null;
   /** The next few buses after it: "then 12, ~20 min". Null when the feed gives none.
    *  Not called `then`, which would make a row look like a promise to `await`. */
@@ -507,20 +507,27 @@ export interface BoardRow {
 /** How many later buses a row's `then` names: more is noise on a phone. */
 export const THEN_MAX = 3;
 
-/** A time on a board, in words: a timetable time is marked as an estimate ("~6 min"), but not "now", which "~" can't make vaguer. */
+/**
+ * A time on a board, in words: a timetable time is marked as an estimate
+ * ("~6 min"), and so is a stale one, counted down from an old reading as the
+ * card's are; but not "now", which "~" can't make vaguer.
+ */
 export function etaText(etaS: number, quality: Quality): string {
   const t = mins(etaS);
-  return quality === 'scheduled' && t !== m().now ? m().approx(t) : t;
+  return approxQ(quality) && t !== m().now ? m().approx(t) : t;
 }
+
+/** Whether a board time is a guess rather than a fresh live one. */
+const approxQ = (q: Quality): boolean => q === 'scheduled' || q === 'stale';
 
 /**
  * "then 12, ~20 min": the later buses as whole minutes (never under 1, as a
- * row's own time never says "0 min"), each timetable one marked. Null with none.
+ * row's own time never says "0 min"), each timetable or stale one marked. Null with none.
  */
 export function thenText(later: { etaS: number; quality: Quality }[]): string | null {
   if (!later.length) return null;
   const n = (s: number) => String(Math.max(1, Math.round(s / 60)));
-  return m().thenMin(listOf(later.slice(0, THEN_MAX).map((x) => (x.quality === 'scheduled' ? m().approx(n(x.etaS)) : n(x.etaS)))));
+  return m().thenMin(listOf(later.slice(0, THEN_MAX).map((x) => (approxQ(x.quality) ? m().approx(n(x.etaS)) : n(x.etaS)))));
 }
 
 /** `towards` in words (see BoardRow.toText). */
