@@ -551,10 +551,14 @@ Settings. It uses the same routes as the account page, with the session cookie.
   Preact, so it can swap them between its halves; MapLibre is driven
   directly inside the Map tab's effects. With no bundler the browser finds
   a module's imports only once it has it, one round trip per level, so
-  `/app/` and `/account/` list every module they start with as
-  `modulepreload` links (kept right by `web-sw.test.js`). What isn't
-  needed at first loads with `import()`: the map and Settings in the app,
-  and Settings and setup on the account page once someone is signed in.
+  every page with modules (`/app/`, `/account/`, the landing page, status,
+  privacy, not-found) lists every module it starts with as `modulepreload`
+  links (kept right by `web-sw.test.js`). What isn't needed at first loads
+  with `import()`: the map and Settings in the app, and Settings and setup
+  on the account page once someone is signed in. Those `import()` every
+  module they need at once, not just the top one, and touching or hovering
+  the Map tab asks for `map.js` and MapLibre together (`app/map-files.js`,
+  the one place MapLibre's and PMTiles' versions are written).
 
 - **Tabs.** Now, Map and Settings are three views of one page (`#map`,
   `#settings` in the address, so Back and a reload keep the tab). Switching
@@ -621,7 +625,12 @@ Settings. It uses the same routes as the account page, with the session cookie.
   `/account/?add=1&next=/app/` adds an email from the app's Settings.
 - **Offline.** `/sw.js` fetches the app's files network-first and keeps a
   copy for offline (`SHELL_FILES`; `web-sw.test.js` fails if a module the app
-  imports at startup is missing from it). `/me`, `/me/next` and `/me/day` are
+  imports at startup is missing from it). On a slow connection it uses the
+  copy after 1 s, and the late reply replaces it for the next load; a reply
+  with the kept copy's ETag isn't written again. Vendored files (their
+  version in their folder) come from the copy first. `assets/zh.js` is kept
+  only once a page asks for it (or the browser is set to Chinese), and the
+  map's cache drops an old MapLibre or PMTiles once a new one is kept. `/me`, `/me/next` and `/me/day` are
   also network-first, and the last good reply is kept (one per route, place
   and `to`, so a searched stop's card never stands in for the plan's). When the network
   is down, the kept reply comes back with `x-terminus-cached` (when it was
