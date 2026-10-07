@@ -71,6 +71,9 @@ const STARS5 = [0, 1, 2, 3, 4].map((i) => [0.85 * Math.sin((i * 2 * Math.PI) / 5
  */
 const grounds = { now: store([]) };
 
+/** A shuttle's headlight beam, ahead of it on the road. */
+const BEAM = 'M38 9L60 6L60 13Z';
+
 /**
  * A single-decker from the side, heading right: 38 by 12, standing on the
  * road 1 below. The air-con on its roof, a row of windows, the driver's,
@@ -139,7 +142,7 @@ function Lane({ colours, vw, y, back = false, go, first = false }) {
       onAnimationEnd=${() => setTrip(null)}
     >
       <g transform=${back ? 'matrix(-1 0 0 1 38 0)' : null}>
-        <path class="beam" d="M38 9L60 6L60 13Z" />
+        <path class="beam" d=${BEAM} />
         ${busParts('body', 'band', 3)}
       </g>
     </g>
@@ -264,11 +267,11 @@ export function Horizon({ stop = false, bus = null, shuttle = true, drive = null
               <${Lane} colours=${drive} vw=${vw} y=${57} go=${seen} first=${true} />`
           : drive?.length
             ? html`<g class="parked" transform=${`translate(${passing} 57)`} style=${{ '--svc': drive[0] }}>
-                <path class="beam" d="M38 9L60 6L60 13Z" />
+                <path class="beam" d=${BEAM} />
                 ${busParts('body', 'band', 3)}
               </g>`
             : html`<g transform=${`translate(${passing} 57)`}>
-                <path class="beam" d="M38 9L60 6L60 13Z" />
+                <path class="beam" d=${BEAM} />
                 ${busParts('bus', 'stripe', 3)}
               </g>`)}
       </svg>`}
@@ -333,11 +336,9 @@ export function useSkyPhase() {
  * list and its pages (body.set-sky, from settings.js).
  */
 export function useNowSky(phase) {
-  const bar = useRef(null);
   useLayoutEffect(() => {
     const body = document.body;
     const meta = Object.assign(document.createElement('meta'), { name: 'theme-color' });
-    bar.current = meta;
     // Map and Settings are drawn over a hidden Now (app.js sets on-map and
     // on-settings); Settings has the sky only in its band.
     const tab = () => {

@@ -8,7 +8,6 @@ import { lists } from './profile.js';
 import { Journey, cardStyle } from './journey.js';
 import { Celestial, Horizon, NightSky } from './sky.js';
 
-
 /** Past the card's staleAt: its bus has gone, the plan has moved on, or it's 15 minutes old. */
 export const isStale = (a) => Boolean(a?.card?.staleAt) && Date.now() >= Date.parse(a.card.staleAt);
 
@@ -19,17 +18,23 @@ const leaveHead = (a) => (a.card.phase !== 'waiting' && Date.now() >= Date.parse
 /** Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP". */
 const leaveText = (a) => [leaveHead(a), a.card.leaveVia].filter(Boolean).join(' · ');
 
+/** The time now, ticking every second; started afresh when `from` changes. */
+function useEverySecond(from) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [from]);
+  return now;
+}
+
 /**
  * "Leaves in 3 min 12 s", ticking every second from `departsAt`, as the
  * Android and Mac apps do, so the card never shows an old "4 min". Only this
  * line re-renders each second.
  */
 function Countdown({ at }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1_000);
-    return () => clearInterval(id);
-  }, [at]);
+  const now = useEverySecond(at);
   const left = Math.floor((Date.parse(at) - now) / 1000);
   const text =
     left > 60 ? t('Leaves in {0} min {1} s', Math.floor(left / 60), left % 60)
@@ -46,11 +51,7 @@ export const signal = (body) => api(`/me/signal${hour12() ? '?h12=1' : ''}`, { m
  * ticking every second so the headline turns into "Leave now" on time.
  */
 function LeaveBy({ a, late }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1_000);
-    return () => clearInterval(id);
-  }, [a.leave.at]);
+  const now = useEverySecond(a.leave.at);
   // At the stop the headline is the bus and its time: nothing to count down to.
   const left = a.card.phase === 'waiting' ? 0 : Math.floor((Date.parse(a.leave.at) - now) / 1000);
   return html`
