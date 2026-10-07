@@ -847,7 +847,7 @@ export const ME_ROUTES: MeRoute[] = [
       const id = await saveFeedback(db, session.user.id, parsed.value, nowMs);
       if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429);
       ctx.waitUntil(
-        mailFeedback(env, id, email, parsed.value, nowMs).catch((e) =>
+        mailFeedback(env, id, parsed.value, nowMs).catch((e) =>
           console.error('feedback email failed', e instanceof Error ? e.name : typeof e),
         ),
       );
