@@ -1,39 +1,43 @@
 package sh.rcn.terminus.widget
 
 import android.content.Context
+import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.ColorFilter
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
+import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
-import androidx.glance.action.actionStartActivity
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.action.actionStartService
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.compose.runtime.remember
-import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.glance.currentState
-import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.background
+import androidx.glance.color.ColorProviders
+import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ColumnScope
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
@@ -44,19 +48,31 @@ import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
+import org.json.JSONObject
 import sh.rcn.terminus.CardStyle
+import sh.rcn.terminus.Destinations
+import sh.rcn.terminus.L
+import sh.rcn.terminus.Locator
+import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.OfflineDay
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Store
+import sh.rcn.terminus.Target
+import sh.rcn.terminus.hour12
+import sh.rcn.terminus.parseNearby
 import sh.rcn.terminus.ui.BrandDark
 import sh.rcn.terminus.ui.BrandLight
 import sh.rcn.terminus.ui.MainActivity
+import sh.rcn.terminus.ui.eta
+import java.text.SimpleDateFormat
 import java.util.Date
-import sh.rcn.terminus.L
+import java.util.TimeZone
 
 /**
  * Two widgets in the picker. "Next bus" is one glanceable line; "Next bus +
@@ -95,19 +111,21 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     }
 
     /** What the widget shows from the app, read again on each redraw (and only then, so it's all in here). */
-    private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?, val live: Boolean, val added: List<sh.rcn.terminus.Destinations.Dest>)
+    private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?, val live: Boolean, val added: List<Destinations.Dest>)
 
     private data class ModeState(val mode: Mode, val at: Long?, val json: String?, val fetchedAt: Long?, val error: String?, val swap: NearbySwap.Swap? = null) {
+        /** Nearby's stops in the API's order (nearest first); null before any, or when they can't be read. */
+        fun nearbyStops(): List<NearbyStop>? = json?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() }
+
         /** Nearby's stops as shown: the API's order, or the twin first after a swap. */
-        fun nearby(now: Long): List<sh.rcn.terminus.NearbyStop>? =
-            json?.let { runCatching { sh.rcn.terminus.parseNearby(org.json.JSONObject(it)) }.getOrNull() }?.let { NearbySwap.order(it, swap, now) }
+        fun nearby(now: Long): List<NearbyStop>? = nearbyStops()?.let { NearbySwap.order(it, swap, now) }
     }
 
     /** The row of buttons, worked out once for the layout. */
     private data class Bottom(val chips: List<Mode>, val mode: Mode, val appWidgetId: Int)
 
     @Composable
-    private fun Content(paired: Boolean, plan: NextAnswer?, planAt: Long?, planError: String?, live: Boolean, added: List<sh.rcn.terminus.Destinations.Dest>, chosen: ModeState, store: Store, appWidgetId: Int) {
+    private fun Content(paired: Boolean, plan: NextAnswer?, planAt: Long?, planError: String?, live: Boolean, added: List<Destinations.Dest>, chosen: ModeState, store: Store, appWidgetId: Int) {
         val ctx = LocalContext.current
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
@@ -128,7 +146,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // What's shown: the plan, or this widget's own answer for a place.
         val answer = when (mode) {
             Mode.Timetable -> plan
-            is Mode.To -> chosen.json?.let { runCatching { NextAnswer.parse(org.json.JSONObject(it)) }.getOrNull() }
+            is Mode.To -> chosen.json?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() }
             Mode.Nearby -> null
         }
         val fetchedAt = if (onTimetable) planAt else chosen.fetchedAt
@@ -149,7 +167,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             when (mode) {
                 Mode.Timetable -> MainActivity.intentFor(ctx)
                 Mode.Nearby -> MainActivity.intentFor(ctx, nearby = true)
-                is Mode.To -> (mode.target as? sh.rcn.terminus.Target.SavedPlace)?.let { MainActivity.intentFor(ctx, place = it.key) }
+                is Mode.To -> (mode.target as? Target.SavedPlace)?.let { MainActivity.intentFor(ctx, place = it.key) }
                     ?: MainActivity.intentFor(ctx, to = mode.dest.id.removePrefix("stop:"), label = mode.label)
             },
         )
@@ -183,81 +201,47 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     }
                     mode == Mode.Nearby -> {
                         NearbyBody(chosen, large)
-                        if (large) {
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                            Spacer(GlanceModifier.height(6.dp))
-                        }
+                        ButtonRow(ctx, bottom, large)
                         Footer(ctx, chosen.fetchedAt, chosen.error, roomy)
                     }
                     offline != null -> {
                         val lines = OfflineDay.lines(offline) { clock(ctx, it) }
                         // A roomy widget's footer already says Offline; a compact one has no footer.
                         Text(if (roomy) lines.head else "${L.s(R.string.offline)} · ${lines.head}", style = muted, maxLines = 1)
-                        Text(lines.big, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp), maxLines = 1)
+                        Text(lines.big, style = headStyle(colors.onSurface, large), maxLines = 1)
                         lines.how?.let { Text(it, style = muted, maxLines = 1) }
-                        if (large) {
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                            Spacer(GlanceModifier.height(6.dp))
-                        }
+                        ButtonRow(ctx, bottom, large)
                         Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer == null -> {
                         Text(if (onTimetable) error ?: L.s(R.string.loading) else "${mode.label} · ${error ?: L.s(R.string.loading)}", style = TextStyle(color = colors.onSurface, fontSize = 16.sp))
                         Text(L.s(R.string.tap_to_refresh), style = muted)
-                        if (large) {
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                        }
+                        ButtonRow(ctx, bottom, large, gap = false)
                     }
-                    answer.arrived -> {
+                    answer.arrived || answer.mode == "rest" || answer.isFree -> {
+                        // There: a tick. Outside the user's day: a moon and the next
+                        // class, no bus. A day with no classes: the same, without the moon.
+                        val icon = when {
+                            answer.arrived -> R.drawable.ic_check
+                            answer.mode == "rest" -> R.drawable.ic_moon
+                            else -> null
+                        }
                         // Short: centred in the space above the chips, not stuck to the top.
                         if (large) Spacer(GlanceModifier.defaultWeight())
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                provider = ImageProvider(R.drawable.ic_check),
-                                contentDescription = null,
-                                colorFilter = ColorFilter.tint(colors.primary),
-                                modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
-                            )
-                            Spacer(GlanceModifier.width(8.dp))
-                            Text(answer.label, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
-                        }
-                        Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
-                        if (large) {
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                            Spacer(GlanceModifier.height(6.dp))
-                        }
-                        Footer(ctx, fetchedAt, error, roomy)
-                    }
-                    answer.mode == "rest" || answer.isFree -> {
-                        // Outside the user's day: a moon and the next class, no bus.
-                        // A day with no classes: the same, without the moon.
-                        if (large) Spacer(GlanceModifier.defaultWeight())
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (answer.mode == "rest") {
+                            if (icon != null) {
                                 Image(
-                                    provider = ImageProvider(R.drawable.ic_moon),
+                                    provider = ImageProvider(icon),
                                     contentDescription = null,
                                     colorFilter = ColorFilter.tint(colors.primary),
                                     modifier = GlanceModifier.size(if (large) 22.dp else 18.dp),
                                 )
                                 Spacer(GlanceModifier.width(8.dp))
                             }
-                            Text(
-                                answer.label,
-                                style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp),
-                                maxLines = 1,
-                            )
+                            Text(answer.label, style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 22.sp else 18.sp), maxLines = 1)
                         }
                         Text(answer.detail, style = muted, maxLines = if (large) 2 else 1)
-                        if (large) {
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                            Spacer(GlanceModifier.height(6.dp))
-                        }
+                        ButtonRow(ctx, bottom, large)
                         Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer.card?.phase == "riding" && answer.card.ride != null -> {
@@ -268,7 +252,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Text(listOfNotNull(answer.phaseText, answer.destLabel).joinToString(" · "), style = muted, maxLines = 1)
                         Text(
                             L.s(R.string.off_at_time, ride.stops.last(), clock(ctx, ride.arriveMs)),
-                            style = TextStyle(color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
+                            style = headStyle(colors.onSurface, large),
                             maxLines = 1,
                         )
                         Text(if (error == UPDATING) L.s(R.string.updating) else ride.nextText(now), style = muted, maxLines = 1)
@@ -281,12 +265,8 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                                 backgroundColor = colors.secondaryContainer,
                             )
                         }
-                        if (large) {
-                            answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                            Spacer(GlanceModifier.height(6.dp))
-                        }
+                        if (large) answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
+                        ButtonRow(ctx, bottom, large)
                         Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer.card?.journey != null && !isOld(answer, fetchedAt, now0) -> {
@@ -297,11 +277,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         // second after a tap on ↻ looked like the widget breaking.
                         val note = error?.takeIf { !roomy }?.let { if (it == UPDATING) L.s(R.string.updating) else it }
                         WidgetJourney(answer, answer.card.journey, CardStyle.pref(ctx), large, roomy, note)
-                        if (large) {
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                            Spacer(GlanceModifier.height(6.dp))
-                        }
+                        ButtonRow(ctx, bottom, large)
                         Footer(ctx, fetchedAt, error, roomy, updating = true)
                     }
                     answer.isClassPlan -> {
@@ -317,14 +293,13 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         )
                         Text(
                             answer.leaveHeadline(now).orEmpty(),
-                            style = TextStyle(
-                                color = when {
+                            style = headStyle(
+                                when {
                                     old -> colors.onSurfaceVariant
                                     answer.leaveLate -> colors.error
                                     else -> colors.onSurface
                                 },
-                                fontWeight = FontWeight.Bold,
-                                fontSize = if (large) 24.sp else 20.sp,
+                                large,
                             ),
                             maxLines = 1,
                         )
@@ -342,11 +317,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             else if (answer.leaveEstimated) Text(L.s(R.string.estimated_gap), style = tiny, maxLines = 1)
                             else answer.qualityText?.let { Text(it, style = muted, maxLines = 1) }
                         }
-                        if (large) {
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                            Spacer(GlanceModifier.height(6.dp))
-                        }
+                        ButtonRow(ctx, bottom, large)
                         Footer(ctx, fetchedAt, error, roomy)
                     }
                     else -> {
@@ -363,11 +334,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         val old = isOld(answer, fetchedAt, now)
                         Text(
                             answer.clockLabel { clock(ctx, it) },
-                            style = TextStyle(
-                                color = if (old) colors.onSurfaceVariant else colors.onSurface,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = if (large) 24.sp else 20.sp,
-                            ),
+                            style = headStyle(if (old) colors.onSurfaceVariant else colors.onSurface, large),
                             maxLines = 1,
                         )
                         // A compact widget has no footer, so a problem goes on this line.
@@ -389,11 +356,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                             answer.qualityText?.let { Text(it, style = muted, maxLines = 1) }
                             answer.timingText?.let { Text(it, style = TextStyle(color = timingColor(answer.timingStatus, colors), fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
                         }
-                        if (large) {
-                            Spacer(GlanceModifier.defaultWeight())
-                            ModeRow(ctx, bottom)
-                            Spacer(GlanceModifier.height(6.dp))
-                        }
+                        ButtonRow(ctx, bottom, large)
                         Footer(ctx, fetchedAt, error, roomy)
                     }
                 }
@@ -404,7 +367,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
     /** Bottom right: refreshes what the widget shows (a tap elsewhere opens the app). */
     @Composable
-    private fun RefreshButton(action: androidx.glance.action.Action) {
+    private fun RefreshButton(action: Action) {
         Box(
             modifier = GlanceModifier
                 .size(40.dp)
@@ -434,7 +397,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         if (roomy && foot.isNotEmpty()) Text(foot, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp), maxLines = 1)
     }
 
-    private fun timingColor(status: String?, colors: androidx.glance.color.ColorProviders) = when (status) {
+    private fun timingColor(status: String?, colors: ColorProviders) = when (status) {
         "late" -> colors.error
         "tight" -> colors.tertiary
         else -> colors.primary
@@ -442,12 +405,20 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
     /**
      * The bottom of a large widget: the row that switches what it shows
-     * (phase 8.3). Nothing here asks what happened on the trip.
+     * (phase 8.3), pushed to the foot, then (with [gap]) a little room above
+     * the footer. Nothing here asks what happened on the trip. None on a
+     * compact widget.
      */
     @Composable
-    private fun ModeRow(ctx: Context, b: Bottom) {
+    private fun ColumnScope.ButtonRow(ctx: Context, b: Bottom, large: Boolean, gap: Boolean = true) {
+        if (!large) return
+        Spacer(GlanceModifier.defaultWeight())
         if (b.chips.isNotEmpty()) ModeChips(ctx, b)
+        if (gap) Spacer(GlanceModifier.height(6.dp))
     }
+
+    /** The widget's big line (when to leave, the bus's time, where you get off), in [color]. */
+    private fun headStyle(color: ColorProvider, large: Boolean) = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp)
 
     /**
      * Timetable, Nearby, then the places you usually go: each switches this
@@ -483,7 +454,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
         val now = System.currentTimeMillis()
-        val api = chosen.json?.let { runCatching { sh.rcn.terminus.parseNearby(org.json.JSONObject(it)) }.getOrNull() }
+        val api = chosen.nearbyStops()
         val stops = api?.let { NearbySwap.order(it, chosen.swap, now) }
         val age = chosen.fetchedAt?.let { (now - it) / 1000 } ?: 0L
         val old = age > NEARBY_OLD_S
@@ -505,7 +476,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         }
         Text(
             departures(first, age, 2).ifEmpty { if (first.available) L.s(R.string.no_buses_due) else L.s(R.string.no_live_data) },
-            style = TextStyle(color = if (old) colors.onSurfaceVariant else colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
+            style = headStyle(if (old) colors.onSurfaceVariant else colors.onSurface, large),
             maxLines = 1,
         )
         val lines = when {
@@ -520,7 +491,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 
     /** Shows the stop across the road first, or the nearest one again. */
     @Composable
-    private fun SwapButton(other: sh.rcn.terminus.NearbyStop, nearest: String) {
+    private fun SwapButton(other: NearbyStop, nearest: String) {
         Box(
             modifier = GlanceModifier
                 .size(28.dp)
@@ -528,7 +499,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                 .semantics { contentDescription = L.s(R.string.nearby_swap, other.name) }
                 .clickable(
                     actionRunCallback<SwapAction>(
-                        androidx.glance.action.actionParametersOf(SwapAction.FROM to nearest, SwapAction.TO to other.code),
+                        actionParametersOf(SwapAction.FROM to nearest, SwapAction.TO to other.code),
                     ),
                 ),
             contentAlignment = Alignment.Center,
@@ -547,12 +518,11 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         private const val NEARBY_OLD_S = 180L
 
         /** "D2 3 min · A1 7 min", counted down by `ageS`. */
-        fun departures(s: sh.rcn.terminus.NearbyStop, ageS: Long, n: Int, skip: Int = 0): String =
+        fun departures(s: NearbyStop, ageS: Long, n: Int, skip: Int = 0): String =
             s.board.filter { it.etaS != null }.drop(skip).take(n).joinToString(" · ") { r ->
                 val left = (r.etaS!! - ageS).toInt()
-                "${r.svc} ${sh.rcn.terminus.ui.eta(left.coerceAtLeast(0), r.quality)}"
+                "${r.svc} ${eta(left.coerceAtLeast(0), r.quality)}"
             }
-
     }
 
     /** Nearby, as a sentence for screen readers. */
@@ -566,12 +536,12 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
 }
 
 /** A widget button: Timetable at once; Nearby and places through a location fix when location is allowed. */
-internal fun chipAction(ctx: Context, mode: Mode, appWidgetId: Int): androidx.glance.action.Action =
-    if (mode != Mode.Timetable && sh.rcn.terminus.Locator.hasForeground(ctx)) {
-        androidx.glance.appwidget.action.actionStartService(WidgetModeService.intent(ctx, appWidgetId, mode), isForegroundService = true)
+internal fun chipAction(ctx: Context, mode: Mode, appWidgetId: Int): Action =
+    if (mode != Mode.Timetable && Locator.hasForeground(ctx)) {
+        actionStartService(WidgetModeService.intent(ctx, appWidgetId, mode), isForegroundService = true)
     } else {
         actionRunCallback<ModeAction>(
-            androidx.glance.action.actionParametersOf(ModeAction.MODE_ID to mode.id, ModeAction.MODE_LABEL_PARAM to mode.label),
+            actionParametersOf(ModeAction.MODE_ID to mode.id, ModeAction.MODE_LABEL_PARAM to mode.label),
         )
     }
 
@@ -587,7 +557,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
             answer.destLabel?.let { L.s(R.string.a11y_on_the_to, ride.svc, it) } ?: L.s(R.string.on_the, ride.svc),
             L.s(R.string.a11y_off_at, ride.stops.last(), clock(ctx, ride.arriveMs)),
             ride.nextText(now).replace(" · ", ", "),
-        ).joinToString(". ") + "." + L.s(R.string.a11y_open)
+        ).spoken()
     }
     if (answer.isClassPlan && !old) {
         val fmt = { ms: Long -> clock(ctx, ms) }
@@ -597,7 +567,7 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
             answer.leaveHeadline(now),
             answer.catchLine?.replace(" · ", ", "),
             answer.goNowLine?.replace(" · ", ", "),
-        ).joinToString(". ") + "." + L.s(R.string.a11y_open)
+        ).spoken()
     }
     val parts = listOfNotNull(
         answer.destLabel?.let { L.s(R.string.a11y_to, it) },
@@ -607,8 +577,11 @@ fun spokenSummary(ctx: Context, paired: Boolean, answer: NextAnswer?, fetchedAt:
         answer.timingText?.takeIf { !old },
         error?.takeIf { it != UPDATING },
     )
-    return parts.joinToString(". ") + "." + L.s(R.string.a11y_open)
+    return parts.spoken()
 }
+
+/** The parts read as sentences, then what a tap does. */
+private fun List<String>.spoken() = joinToString(". ") + "." + L.s(R.string.a11y_open)
 
 /** The app's brand colours, so the widget doesn't take the wallpaper's. */
 private val BrandColors = androidx.glance.material3.ColorProviders(light = BrandLight, dark = BrandDark)
@@ -673,9 +646,9 @@ class PlacesWidgetReceiver : BusWidgetReceiver(PlacesWidget())
 fun clock(ctx: Context, ms: Long): String {
     // In the account's 12- or 24-hour style, as the server writes the card.
     val locale = ctx.resources.configuration.locales[0]
-    val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, if (sh.rcn.terminus.hour12(ctx)) "hmm" else "HHmm")
-    return java.text.SimpleDateFormat(pattern, locale)
-        .apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Singapore") }
+    val pattern = DateFormat.getBestDateTimePattern(locale, if (hour12(ctx)) "hmm" else "HHmm")
+    return SimpleDateFormat(pattern, locale)
+        .apply { timeZone = TimeZone.getTimeZone("Asia/Singapore") }
         .format(Date(ms))
         // "下午 6:36", with the space the server's Chinese has.
         .replace(Regex("([上下]午)(\\d)"), "$1 $2")

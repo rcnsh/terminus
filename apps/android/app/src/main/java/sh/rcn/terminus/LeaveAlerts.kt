@@ -10,12 +10,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.clock
+import sh.rcn.terminus.widget.finishAsync
 
 /**
  * "Time to leave" for the next class, and then the trip, in one notification.
@@ -257,28 +256,12 @@ class LeaveReceiver : BroadcastReceiver() {
             // A fresh answer re-arms or posts, through Refresher -> LeaveAlerts.arm.
             // Fetched right here: the alarm's idle allowance is seconds long,
             // and a queued job could run after the heads-up was due.
-            LeaveAlerts.ACTION_CHECK -> {
-                val pending = goAsync()
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        Refresher.refresh(context, fast = true)
-                    } finally {
-                        pending.finish()
-                    }
-                }
-            }
+            LeaveAlerts.ACTION_CHECK -> finishAsync(Dispatchers.IO) { Refresher.refresh(context, fast = true) }
             LeaveAlerts.ACTION_NOW -> LeaveAlerts.leaveNow(context)
             LeaveAlerts.ACTION_RIDE -> LeaveAlerts.redrawRide(context)
             LeaveAlerts.ACTION_SKIP -> {
                 val trip = intent.getStringExtra(LeaveAlerts.EXTRA_TRIP) ?: return
-                val pending = goAsync()
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        LeaveAlerts.skip(context, trip)
-                    } finally {
-                        pending.finish()
-                    }
-                }
+                finishAsync(Dispatchers.IO) { LeaveAlerts.skip(context, trip) }
             }
         }
     }

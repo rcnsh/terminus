@@ -8,8 +8,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import androidx.core.net.toUri
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
@@ -19,7 +21,6 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
-import androidx.core.net.toUri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,15 +30,16 @@ import org.json.JSONObject
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Destinations
+import sh.rcn.terminus.L
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NextAnswer
+import sh.rcn.terminus.Place
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
-import sh.rcn.terminus.L
 
 /**
  * What a widget shows (phase 8.3). The timetable's plan by default; a row of
@@ -123,7 +125,7 @@ object WidgetModes {
     }
 
     /** The buttons for a row this wide: Timetable and Nearby, then favourites and added places. None if those two don't fit. */
-    fun chips(store: Store, places: List<sh.rcn.terminus.Place>, added: List<Destinations.Dest>, widthDp: Float, now: Long = System.currentTimeMillis()): List<Mode> {
+    fun chips(store: Store, places: List<Place>, added: List<Destinations.Dest>, widthDp: Float, now: Long = System.currentTimeMillis()): List<Mode> {
         val ranked = Destinations.rank(places, added, store.destinationUses(), now).map { Mode.To(it) }
         return pick(listOf(Mode.Timetable, Mode.Nearby) + ranked, ranked.firstOrNull { it.dest.id == added.firstOrNull()?.id }, widthDp)
     }
@@ -231,7 +233,7 @@ object WidgetModes {
 
 /** A widget button that needs no location: Timetable (and every button without location permission). */
 class ModeAction : ActionCallback {
-    override suspend fun onAction(context: android.content.Context, glanceId: GlanceId, parameters: ActionParameters) {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val mode = Mode.of(parameters[MODE_ID], parameters[MODE_LABEL_PARAM])
         WidgetModes.show(context, glanceId, mode, fresh = false)
     }
@@ -308,7 +310,7 @@ class WidgetModeService : Service() {
         fun intent(ctx: Context, appWidgetId: Int, mode: Mode): Intent =
             Intent(ctx, WidgetModeService::class.java)
                 // Distinct per widget and mode, so each button keeps its own PendingIntent.
-                .setData("terminus-widget://$appWidgetId/${android.net.Uri.encode(mode.id)}".toUri())
+                .setData("terminus-widget://$appWidgetId/${Uri.encode(mode.id)}".toUri())
                 .putExtra(EXTRA_WIDGET, appWidgetId)
                 .putExtra(EXTRA_MODE, mode.id)
                 .putExtra(EXTRA_LABEL, mode.label)
