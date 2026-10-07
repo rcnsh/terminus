@@ -97,14 +97,14 @@
   .lede-sm { color: var(--muted); margin-top: 8px; max-width: 36rem; }
 
   /* What it does, each shown as the app shows it. */
-  .does { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+  .does { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
   .does > div { display: grid; grid-template-rows: auto 1fr; gap: 16px; padding: 18px; border-radius: 24px; background: var(--surface-2); }
   .does h3 { font-size: 1.1rem; margin-bottom: 4px; }
   .does p { color: var(--muted); font-size: 0.95rem; }
   .show { display: grid; align-content: center; min-height: 170px; padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; }
-  .week { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 0.75rem; }
+  .week { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; font-size: 0.75rem; }
   .week b { text-align: center; color: var(--muted); font-weight: 600; }
-  .week span { padding: 6px 2px; border-radius: 8px; text-align: center; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+  .week span { min-width: 0; overflow-wrap: anywhere; padding: 6px 2px; border-radius: 8px; text-align: center; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
   .week span.off { background: none; border: 1px dashed var(--line-strong); color: var(--muted); font-weight: 500; }
   .show .pn-lead { font-size: 1.5rem; color: var(--ink); }
   .show .pn-lead em { font-style: normal; color: var(--accent); }
@@ -135,7 +135,7 @@
   .setup p { color: var(--muted); font-size: 0.93rem; }
 
   /* Everywhere: the widget, the Mac, the web. */
-  .places { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+  .places { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
   .places figure { margin: 0; display: grid; gap: 14px; align-content: start; padding: 14px 14px 20px; border-radius: 24px; background: var(--surface-2); }
   .places figcaption { padding: 0 4px; }
   .places h3 { font-size: 1.05rem; margin-bottom: 4px; }
@@ -173,12 +173,12 @@
   .foot { margin-top: 0; border-top: 0; }
 
   @media (max-width: 860px) {
-    .hero { grid-template-columns: 1fr; padding-top: 20px; gap: 8px; }
+    .hero { grid-template-columns: minmax(0, 1fr); padding-top: 20px; gap: 8px; }
     .hero-copy { padding-bottom: 28px; }
     .hero-phone { margin-bottom: -300px; }
     .after-hero { padding-top: 300px; }
-    .does, .places { grid-template-columns: 1fr; }
-    .setup { grid-template-columns: 1fr; gap: 22px; }
+    .does, .places { grid-template-columns: minmax(0, 1fr); }
+    .setup { grid-template-columns: minmax(0, 1fr); gap: 22px; }
     .setup::before { top: 11px; bottom: 30px; left: 9px; right: auto; width: 4px; height: auto; }
     .setup > div { display: grid; grid-template-columns: 22px 1fr; column-gap: 16px; }
     .setup > div::before { grid-row: span 2; margin: 0; }

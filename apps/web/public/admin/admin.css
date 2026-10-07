@@ -9,7 +9,7 @@ code { font-size: 0.85em; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
 .tile .n { font: 700 1.8rem/1.1 var(--display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .tile .k { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 16px; margin-bottom: 16px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); gap: 16px; margin-bottom: 16px; }
 .card { margin-bottom: 16px; }
 .grid .card { margin-bottom: 0; }
 .bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; }

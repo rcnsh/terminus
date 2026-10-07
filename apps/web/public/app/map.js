@@ -747,6 +747,18 @@ function Frame({ id, title, sub, children, box }) {
   useEffect(() => {
     head.current?.focus({ preventScroll: true });
   }, [id]);
+  // How tall it is, for the map's buttons to sit above it on a phone (app.css).
+  useLayoutEffect(() => {
+    const el = box.current;
+    const tab = el?.closest('.map-tab');
+    if (!tab) return;
+    const sized = new ResizeObserver(() => tab.style.setProperty('--sheet-h', `${el.offsetHeight}px`));
+    sized.observe(el);
+    return () => {
+      sized.disconnect();
+      tab.style.removeProperty('--sheet-h');
+    };
+  }, []);
   return html`
     <section
       class="map-sheet"
