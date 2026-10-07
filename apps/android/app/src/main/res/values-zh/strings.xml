@@ -241,6 +241,7 @@
     <string name="offline">离线</string>
     <string name="ok">确定</string>
     <string name="old_times">时间可能已过时 · 点按 ↻ 刷新</string>
+    <string name="unconfirmed_checked">未确认 · 上次查询于 %1$s</string>
     <string name="on_">已开启。</string>
     <string name="on_mac_enter">在你的 Mac 上打开 terminus，输入：</string>
     <string name="on_the">在 %1$s 上</string>
