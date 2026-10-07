@@ -128,6 +128,7 @@ test('a version refused after the switch away from it does not open the breaker 
     await ctx.settle();
     assert.equal(await breakerOpen(), false, `mint refused: ${mintRefused}`);
     assert.equal(await flagged('https://terminus.internal/mint-failed'), false, 'nor the mint memo');
+    assert.equal(await flagged('https://terminus.internal/failed/COM3'), false, 'nor the stop');
     // This isolate sends the new one from now on.
     assert.equal(await appVersion(env, FROZEN_NOW), NEW);
 
