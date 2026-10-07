@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { makeKV } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import { readFileSync } from 'node:fs';
-import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_ID, adviceFor, checkCalendar, checkUpstream, feedDownSince, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
+import { DEVICE_IDLE_MS, INCIDENTS_KEPT, KV_NAMESPACE_ID, MAIL_TIMEOUT_MS, adviceFor, checkCalendar, checkUpstream, feedDownSince, housekeeping, readIncidents, readUpstream, runCron } from '../src/monitor.ts';
 import { UpstreamRejected } from '../src/auth.ts';
 import { cardFor } from '../src/card.ts';
 import { withLang } from '../src/i18n.ts';
@@ -38,8 +38,11 @@ test('alerts once when the feed goes down, once when it recovers', async () => {
   assert.equal((await readUpstream(e)).since, 3000, 'since = when it was confirmed down');
 
   await checkUpstream(e, 4000, ok);
+  assert.equal(e.EMAIL.sent.length, 1, 'one good check could be a blip too');
+  await checkUpstream(e, 4500, ok);
   assert.equal(e.EMAIL.sent.length, 2);
   assert.match(e.EMAIL.sent[1].subject, /recovered/);
+  assert.equal((await readUpstream(e)).since, 4500, 'since = when it was confirmed back');
 });
 
 test('confirmed outages are kept for the status page, with a cause and no error text', async () => {
@@ -53,7 +56,8 @@ test('confirmed outages are kept for the status page, with a cause and no error 
   assert.deepEqual(await readIncidents(e), [{ start: 3000, end: null, cause: 'feed' }]);
   await checkUpstream(e, 4000, ok);
   await checkUpstream(e, 4500, ok);
-  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 4000, cause: 'feed' }]);
+  await checkUpstream(e, 4700, ok);
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 4500, cause: 'feed' }]);
 
   const refused = fail('auth rejected: code=10009 msg=We have a new release of uNivUS');
   const noFix = async () => ({ status: 'failed', note: 'nothing found' });
@@ -66,10 +70,161 @@ test('confirmed outages are kept for the status page, with a cause and no error 
 
   for (let i = 0, t = 7000; i < INCIDENTS_KEPT; i++, t += 3000) {
     await checkUpstream(e, t, ok);
+    await checkUpstream(e, t + 500, ok);
     await checkUpstream(e, t + 1000, fail('network'));
     await checkUpstream(e, t + 2000, fail('network'));
   }
   assert.equal((await readIncidents(e)).length, INCIDENTS_KEPT, 'capped');
+});
+
+/** Makes KV reads (or writes) of the keys matching `re` fail until undone. */
+function breakKV(e, re, op = 'get') {
+  const real = e.KV[op];
+  e.KV[op] = async (k, ...rest) => {
+    if (re.test(k)) throw new Error('KV unavailable');
+    return real.call(e.KV, k, ...rest);
+  };
+  return () => {
+    e.KV[op] = real;
+  };
+}
+
+async function confirmedDown(e) {
+  await checkUpstream(e, 1000, ok);
+  await checkUpstream(e, 2000, fail('network'));
+  await checkUpstream(e, 3000, fail('network'));
+  assert.equal((await readUpstream(e)).up, false);
+}
+
+test('a KV read that fails changes nothing: no state, no email, no incident', async () => {
+  // While the feed is down: read as "never checked", it would be marked up
+  // and the next failure would email "down" a second time.
+  const e = env();
+  await confirmedDown(e);
+  const before = e.KV._map.get('monitor:upstream');
+  const undo = breakKV(e, /^monitor:upstream$/);
+  await assert.rejects(checkUpstream(e, 4000, fail('network')));
+  await assert.rejects(checkUpstream(e, 5000, ok));
+  undo();
+  assert.equal(e.KV._map.get('monitor:upstream'), before);
+  await checkUpstream(e, 6000, fail('network'));
+  assert.equal(e.EMAIL.sent.length, 1, 'one "down" email');
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: null, cause: 'feed' }]);
+  // And once it's back, the incident closes.
+  await checkUpstream(e, 7000, ok);
+  await checkUpstream(e, 8000, ok);
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 8000, cause: 'feed' }]);
+});
+
+test('an incident whose close was not saved is closed on the next run', async () => {
+  const e = env();
+  await confirmedDown(e);
+  const undo = breakKV(e, /^monitor:incidents$/, 'put');
+  const quiet = console.error;
+  console.error = () => {};
+  await checkUpstream(e, 4000, ok);
+  await checkUpstream(e, 5000, ok);
+  console.error = quiet;
+  undo();
+  assert.equal((await readIncidents(e))[0].end, null, 'still open');
+  await checkUpstream(e, 6000, ok);
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: 5000, cause: 'feed' }], 'closed when it came back');
+  await checkUpstream(e, 7000, fail('network'));
+  await checkUpstream(e, 8000, fail('network'));
+  assert.deepEqual((await readIncidents(e)).map((i) => [i.start, i.end]), [[8000, null], [3000, 5000]]);
+});
+
+test('an incident whose opening was not saved is opened on the next run, once', async () => {
+  const e = env();
+  const undo = breakKV(e, /^monitor:incidents$/, 'put');
+  const quiet = console.error;
+  console.error = () => {};
+  await confirmedDown(e);
+  console.error = quiet;
+  undo();
+  assert.deepEqual(await readIncidents(e), []);
+  await checkUpstream(e, 4000, fail('network'));
+  await checkUpstream(e, 5000, fail('network'));
+  assert.deepEqual(await readIncidents(e), [{ start: 3000, end: null, cause: 'feed' }]);
+});
+
+test('an older incident left open is closed, at the latest when a new one opens', async () => {
+  const e = env();
+  await e.KV.put('monitor:upstream', JSON.stringify({ up: true, since: 500, reason: null, checkedAt: 500 }));
+  await e.KV.put('monitor:incidents', JSON.stringify([{ start: 100, end: null, cause: 'feed' }]));
+  const undo = breakKV(e, /^monitor:incidents$/, 'put');
+  const quiet = console.error;
+  console.error = () => {};
+  await checkUpstream(e, 1000, ok);
+  await checkUpstream(e, 2000, fail('network'));
+  console.error = quiet;
+  undo();
+  await checkUpstream(e, 3000, fail('network'));
+  assert.deepEqual(await readIncidents(e), [
+    { start: 3000, end: null, cause: 'feed' },
+    { start: 100, end: 3000, cause: 'feed' },
+  ]);
+});
+
+test('a failed read of the incidents never writes over their history', async () => {
+  const e = env();
+  const history = Array.from({ length: 5 }, (_, i) => ({ start: 100 * i, end: 100 * i + 50, cause: 'feed' }));
+  await e.KV.put('monitor:incidents', JSON.stringify(history));
+  const undo = breakKV(e, /^monitor:incidents$/);
+  const quiet = console.error;
+  console.error = () => {};
+  await confirmedDown(e);
+  console.error = quiet;
+  undo();
+  assert.deepEqual(await readIncidents(e), history);
+  await checkUpstream(e, 4000, fail('network'));
+  const list = await readIncidents(e);
+  assert.equal(list.length, 6, 'opened on the next run, with the history kept');
+  assert.deepEqual(list[0], { start: 3000, end: null, cause: 'feed' });
+});
+
+test('a feed that answers every other check stays down: no "up" and "down" by turns', async () => {
+  const e = env();
+  await confirmedDown(e);
+  for (let t = 4000; t < 12_000; t += 2000) {
+    await checkUpstream(e, t, ok);
+    await checkUpstream(e, t + 1000, fail('network'));
+  }
+  assert.equal(e.EMAIL.sent.length, 1);
+  assert.equal((await readIncidents(e)).length, 1);
+  assert.equal(await feedDownSince(e, 20_000), 3000);
+});
+
+test('a state that cannot be saved sends no email, rather than the same one every run', async () => {
+  const e = env();
+  await checkUpstream(e, 1000, ok);
+  await checkUpstream(e, 2000, fail('network'));
+  e.KV.put = async () => {
+    throw new Error('KV write quota');
+  };
+  for (let t = 3000; t <= 6000; t += 1000) await assert.rejects(checkUpstream(e, t, fail('network')));
+  assert.equal(e.EMAIL.sent.length, 0);
+});
+
+test('an alert email that hangs gives up and stays pending', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const e = env();
+  await checkUpstream(e, 1000, fail('network'));
+  let asked;
+  const called = new Promise((r) => (asked = r));
+  e.EMAIL.send = () => {
+    asked();
+    return new Promise(() => {});
+  };
+  const quiet = console.error;
+  console.error = () => {};
+  const run = checkUpstream(e, 2000, fail('network'));
+  await called;
+  t.mock.timers.tick(MAIL_TIMEOUT_MS);
+  const { state } = await run;
+  console.error = quiet;
+  assert.equal(state.pending, 'down');
+  assert.equal((await readUpstream(e)).pending, 'down', 'sent again next run');
 });
 
 test('down from the very first checks still alerts', async () => {

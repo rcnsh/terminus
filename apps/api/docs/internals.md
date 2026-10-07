@@ -108,7 +108,7 @@ pnpm run deploy
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
 | `GET /health` | Graph age and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). `?probe=1` tests auth. |
-| `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. The [status page](../../web/public/status) shows it. |
+| `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time stays down. The [status page](../../web/public/status) shows it. |
 | `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set, and the timelapse recorder's polls by what they cost NUS). Needs `x-health-token`; anything else gets a 404. |
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
 | `GET /timelapse/days/<date>` | One recorded day as gzipped JSON (see "The timelapse recorder"). A closed day never changes and is cached for a year; today's is built from what the recorder holds so far, `no-store`. Needs `x-health-token` (operator or timelapse token). |
@@ -1144,6 +1144,16 @@ the schema contract are in [docs/analytics.md](analytics.md).
 
 Logging is a no-op without the binding and swallows its own errors. A logging
 failure never fails an answer.
+
+A cron step that fails (the feed check, the calendar, arming trips, ...) is
+logged and also written as an `error` row with the route `cron <step>`, so
+it shows with the errors on the dashboard; it sends no email. The cron's
+handler waits for every step, so a long run isn't cut off partway while the
+trigger's history says it succeeded. The monitor never acts on a KV read
+that failed: it changes no state, sends nothing and writes no incident, and
+the next run carries on. Its state is saved before an alert is emailed (an
+email that fails, or takes over 15 s, is sent again the next run), and each
+run puts the outage list right if an earlier write of it failed.
 
 ## Known weaknesses
 
