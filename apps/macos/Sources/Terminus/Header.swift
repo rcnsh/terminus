@@ -50,6 +50,7 @@ struct Header: View {
                     .background(Circle().fill(.primary.opacity(0.06)))
             }
             .buttonStyle(.plain)
+            .keyboardShortcut("r")
             .help(L("Refresh"))
             .accessibilityLabel(model.loading ? L("Refreshing") : L("Refresh"))
         }

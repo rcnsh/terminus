@@ -36,7 +36,17 @@ struct Footer: View {
                     Label(L("Map"), systemImage: "map")
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut("m")
                 .padding(.leading, 12)
+                // ⌘, for Settings, as in any Mac app: the menu's items only
+                // answer their shortcuts while it's open.
+                .background {
+                    Button("") { open("settings") }
+                        .keyboardShortcut(",")
+                        .opacity(0)
+                        .focusable(false)
+                        .accessibilityHidden(true)
+                }
             }
             Spacer()
             Button {
@@ -45,6 +55,7 @@ struct Footer: View {
                 Label(L("Quit"), systemImage: "power")
             }
             .buttonStyle(.plain)
+            .keyboardShortcut("q")
         }
         .font(.system(size: 12, weight: .medium))
         .foregroundStyle(.secondary)

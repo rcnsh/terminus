@@ -152,7 +152,7 @@ struct GoLater: View {
                     DatePicker(L("Go later today at…"), selection: $at, displayedComponents: .hourAndMinute)
                         .environment(\.timeZone, .campus)
                     Spacer()
-                    Button(L("Cancel")) { open = false }.controlSize(.small)
+                    Button(L("Cancel")) { open = false }.controlSize(.small).keyboardShortcut(.cancelAction)
                     Button(L("Plan it")) {
                         let c = Self.calendar.dateComponents([.hour, .minute], from: at)
                         sending = true
@@ -191,7 +191,7 @@ struct ReportForm: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
-                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small)
+                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small).keyboardShortcut(.cancelAction)
                 Button(L("Add an email…")) {
                     model.cancelReport()
                     model.settingsPane = .account
@@ -218,7 +218,7 @@ struct ReportForm: View {
             if let r = model.reportResult { Text(r).font(.caption).foregroundStyle(Color.bad).announced(r) }
             HStack {
                 Spacer()
-                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small)
+                Button(L("Cancel")) { model.cancelReport() }.controlSize(.small).keyboardShortcut(.cancelAction)
                 Button(L("Send")) { model.sendReport() }
                     .controlSize(.small)
                     .keyboardShortcut(.defaultAction)
