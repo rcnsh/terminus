@@ -158,7 +158,7 @@ test('app sign-in: the email carries a link, never the number; the page offers t
   assert.doesNotMatch(words, new RegExp(`\\b${s.match}\\b`), 'the number is only on the device');
 
   const page = await (await call(env, `/auth/approve?r=${lastLink(email)}`)).text();
-  assert.match(page, /Sign in terminus on MacBook Air\?/);
+  assert.match(page, /Sign in to terminus on MacBook Air\?/);
   const shown = [...page.matchAll(/name="n" value="(\d+)"/g)].map((m) => Number(m[1]));
   assert.equal(shown.length, 3);
   assert.ok(shown.includes(s.match));

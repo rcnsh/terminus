@@ -321,7 +321,9 @@ async function serve(req, res) {
   res.writeHead(out.status, outHeaders);
   res.end(Buffer.from(await out.arrayBuffer()));
   if (email.sent.length) {
-    console.log('sign-in code:', email.lastCode(), ' link:', email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`);
+    // An app's sign-in mails an approval link instead of a verify link.
+    const approve = /\/auth\/approve\?r=[A-Za-z0-9_-]+/.exec(email.sent.at(-1)?.text ?? '')?.[0];
+    console.log('sign-in code:', email.lastCode(), ' link:', approve ? `http://localhost:${PORT}${approve}` : email.lastToken() && `http://localhost:${PORT}/auth/verify?t=${email.lastToken()}`);
     email.sent.length = 0;
   }
 }

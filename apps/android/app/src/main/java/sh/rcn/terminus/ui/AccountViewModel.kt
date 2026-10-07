@@ -252,6 +252,13 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** "Use a different email": back to the address, dropping the request sent. */
+    fun differentEmail() {
+        pollJob?.cancel()
+        request = null
+        _state.update { it.copy(signIn = SignIn.Email, busy = false, message = null) }
+    }
+
     fun cancelSignIn() {
         pollJob?.cancel()
         request = null
