@@ -563,7 +563,9 @@ export async function authenticate(
         .bind(nowMs, client.client, client.platform, client.platform, client.client, hash),
       db.prepare('UPDATE users SET last_seen = ? WHERE id = ?').bind(nowMs, row.id),
     ]);
-    if (ctx) ctx.waitUntil(touch.catch(() => {}));
+    // Logged when it fails: the cron deletes anonymous accounts by last_seen,
+    // so a touch that keeps failing would lose accounts still in use.
+    if (ctx) ctx.waitUntil(touch.catch((err) => console.error('last_seen not updated:', err instanceof Error ? err.message : String(err))));
     else await touch;
   }
   return { user: { id: row.id, email: row.email }, kind: row.kind, tokenHash: hash };

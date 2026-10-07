@@ -42,7 +42,7 @@ export async function callerFor(env: Env, req: Request, nowMs: number, ctx?: Exe
   if (row) {
     if (row.last_used === null || nowMs - row.last_used > TOUCH_MS) {
       const touch = db.prepare('UPDATE api_keys SET last_used = ? WHERE id = ?').bind(nowMs, row.id).run();
-      if (ctx) ctx.waitUntil(touch.catch(() => {}));
+      if (ctx) ctx.waitUntil(touch.catch((err) => console.error('api key last_used not updated:', err instanceof Error ? err.message : String(err))));
       else await touch;
     }
     return { kind: 'key', keyId: row.id, userId: row.user_id };
