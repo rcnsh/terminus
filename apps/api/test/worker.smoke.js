@@ -918,15 +918,10 @@ test('downloads serve whatever latest.json points at', async () => {
   };
   const reads = [];
   const env = { ...makeEnv(), DOWNLOADS: bucket };
-  // latest.json and the appcast are kept five minutes: a put shows once
-  // that has passed (the clock moves on with each).
-  let at = FROZEN_NOW;
-  const putLater = (k, v) => {
-    put(k, v);
-    at += 300_000;
-  };
+  // latest.json and the appcast are read on every request: a put shows at once.
+  const putLater = put;
   const get = async (p) => {
-    const cache = installGlobals(makeFetch({}), at);
+    const cache = installGlobals(makeFetch({}), FROZEN_NOW);
     return (await call(p, { env, cache })).res;
   };
 
@@ -984,13 +979,12 @@ test('downloads serve whatever latest.json points at', async () => {
   const feed = await get('/download/appcast.xml');
   assert.equal(feed.headers.get('content-type'), 'application/xml; charset=utf-8');
   assert.equal(await feed.text(), '<rss/>');
-  // Read from R2 once in five minutes, not on every request.
-  assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.1');
+  // Read from R2 on every request, so a release is live the moment it's put.
   const before = reads.length;
   assert.equal(await (await get('/download/appcast.xml')).text(), '<rss/>');
   assert.equal((await (await get('/download/latest.json')).json()).version, '1.0.1');
   assert.equal((await get('/download/latest.json')).headers.get('cache-control'), 'public, max-age=300');
-  assert.deepEqual(reads.slice(before), [], 'both kept');
+  assert.deepEqual(reads.slice(before), ['appcast.xml', 'latest.json', 'latest.json'], 'neither kept');
   const byPath = await get('/download/releases/1.0.1/terminus-1.0.1.dmg');
   assert.equal(byPath.status, 200);
   assert.equal(byPath.headers.get('content-type'), 'application/x-apple-diskimage');

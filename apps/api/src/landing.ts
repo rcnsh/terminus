@@ -10,7 +10,7 @@
  */
 
 import type { Env } from './types.ts';
-import { RELEASE_VERSION, latestRelease, resetReleaseMemos } from './downloads.ts';
+import { RELEASE_VERSION, latestRelease } from './downloads.ts';
 import { authenticate } from './accounts.ts';
 import { matchesEtag } from './map.ts';
 import { isBeta } from './site.ts';
@@ -18,11 +18,11 @@ import { isBeta } from './site.ts';
 /** Only a version as release.sh writes it goes into the page. */
 const VERSION = new RegExp(`^${RELEASE_VERSION}$`);
 
-/** The current release's version, from latest.json (kept as downloads.ts keeps it), or null. */
-export async function latestVersion(env: Env, nowMs: number): Promise<string | null> {
+/** The current release's version, from latest.json as it is now, or null. */
+export async function latestVersion(env: Env): Promise<string | null> {
   if (!env.DOWNLOADS) return null;
   try {
-    const v = (await latestRelease(env.DOWNLOADS, nowMs))?.version;
+    const v = (await latestRelease(env.DOWNLOADS))?.version;
     return typeof v === 'string' && VERSION.test(v) ? v : null;
   } catch {
     // No version is the page as written: its script asks for it.
@@ -64,7 +64,7 @@ export async function landingEtag(assetEtag: string, version: string | null, sig
 export async function landingPage(req: Request, assets: Fetcher, env: Env, nowMs: number, ctx?: ExecutionContext): Promise<Response> {
   const [res, version, session] = await Promise.all([
     assets.fetch(new Request(req.url, { method: req.method, headers: { accept: req.headers.get('accept') ?? 'text/html' } })),
-    latestVersion(env, nowMs),
+    latestVersion(env),
     env.DB ? authenticate(env.DB, req, nowMs, ctx).catch(() => null) : null,
   ]);
   if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('text/html')) return res;
@@ -86,9 +86,4 @@ export async function landingPage(req: Request, assets: Fetcher, env: Env, nowMs
   }
   const body = req.method === 'HEAD' ? null : fillLanding(await res.text(), { version, signedIn });
   return new Response(body, { status: res.status, headers });
-}
-
-/** For tests: forget the memoised version. */
-export function resetLandingMemo(): void {
-  resetReleaseMemos();
 }
