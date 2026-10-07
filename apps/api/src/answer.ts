@@ -4,7 +4,6 @@
  * by /me/next in me.ts (through MeDeps).
  */
 
-
 import type { Answer, Arrival, Env, FeedState, Graph, ResolveInput, ScoredOption, Stop, StopArrivals } from './types.ts';
 import { WALK } from './config.ts';
 import { getArrivals } from './fms.ts';
@@ -25,7 +24,6 @@ import { logAnswer } from './analytics.ts';
 import { leaveBy } from './leave.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
 import { hopSecondsFor, loadTable } from './ridetimes.ts';
-
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { m } from './i18n.ts';
 
@@ -219,4 +217,3 @@ export function needsSetupAnswer(nowMs: number): Answer {
     arrivals: [],
   };
 }
-

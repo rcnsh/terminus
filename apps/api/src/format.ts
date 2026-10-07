@@ -56,6 +56,13 @@ export function clampLabel(s: string): string {
   return s.length <= LABEL_MAX ? s : s.slice(0, LABEL_MAX - 1).trimEnd() + '…';
 }
 
+/**
+ * Whole-second ISO, "2026-09-28T01:14:02Z". Clients parse these, and a
+ * default Swift ISO8601DateFormatter rejects the ".000" toISOString adds.
+ */
+export const isoSeconds = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+const iso = isoSeconds;
+
 function crowdWord(c: Arrival['crowd']): string | null {
   return c === 'low' ? m().crowdLow : c === 'medium' ? m().crowdMedium : c === 'high' ? m().crowdHigh : null;
 }
@@ -133,10 +140,10 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
   };
 }
 
-/** One option rendered standalone, for the `alt` field. */
 /** The bus as it's named in text: "95 ($)" for a public bus, so the fare shows wherever the badge doesn't. */
 export const named = (o: { svc: string; paid?: true }): string => (o.paid ? `${svcName(o.svc)} ($)` : svcName(o.svc));
 
+/** One option rendered standalone, for the `alt` field. */
 export function renderAlt(o: ScoredOption): string {
   return `${named(o)} · ${etaPhrase(o)} · ${shortStop(o.stop.name)}`;
 }
@@ -211,13 +218,6 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
  * A three-minute-old answer honestly labelled beats a spinner, and beats an
  * empty tile that reads as "no buses".
  */
-/**
- * Whole-second ISO, "2026-09-28T01:14:02Z". Clients parse these, and a
- * default Swift ISO8601DateFormatter rejects the ".000" toISOString adds.
- */
-export const isoSeconds = (ms: number) => new Date(Math.round(ms / 1000) * 1000).toISOString().replace('.000Z', 'Z');
-const iso = isoSeconds;
-
 export function buildAnswer(f: FormatInput): Answer {
   const best = f.options[0];
 

@@ -51,7 +51,6 @@ export const GRAPH = {
  */
 export const GRAPH_PUBLIC: Graph = withPublic(GRAPH, publicJson as unknown as PublicData);
 
-
 /**
  * The stop Nearby offers in place of `stop`: its twin across the road, or a
  * stop listed only for Nearby (data/opposites.json `nearby`), near enough for

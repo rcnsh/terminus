@@ -1,11 +1,9 @@
 /**
  * NUSMods timetable import.
  *
- * A user pastes their NUSMods share URL; we turn it into the same kind of
- * recurring trips config.ts hardcodes -- except discovered from their real
- * schedule instead of hand-edited. The output is stateless: it encodes into
- * the user's personal /next link, so nothing about anyone's timetable is
- * stored server-side.
+ * A user pastes their NUSMods share URL; we turn it into recurring trips
+ * (a weekday, an arrive-by time and a destination stop) read from their
+ * real schedule. The caller keeps them in the account's profile.
  *
  * The chain: share URL -> (module, lessonType, classNo) selections
  *   -> NUSMods API per module -> (day, startTime, venue)
@@ -271,7 +269,7 @@ export async function resolveTrips(
     }
   });
 
-  // A stable order makes the encoded link deterministic.
+  // A stable order: the same link always gives the same trips, in the same order.
   trips.sort((a, b) => a.day - b.day || a.arriveByMin - b.arriveByMin || a.to.localeCompare(b.to));
   return { trips, unresolved, term, missing, failed, online };
 }
