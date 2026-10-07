@@ -206,7 +206,7 @@ struct SettingsPaneView: View {
                     .accessibilityLabel(L("Remove %@", p.label))
             }
         }
-        if setup.places.count < SetupModel.maxPlaces {
+        if setup.places.count < setup.maxPlaces {
             FavouriteSearch(app: app, setup: setup)
         }
         Hint(L("To go somewhere every week, add it to your timetable."))
@@ -382,7 +382,7 @@ struct TripsPane: View {
             }
             Divider()
             LabeledContent(L("Walk to your stop")) {
-                Stepper(L("%@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: 0...30)
+                Stepper(L("%@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: setup.limits.homeWalkMin)
             }
         } else {
             ProgressView()

@@ -8,7 +8,7 @@ struct Place: Decodable, Hashable {
 /// `/me/next`. label and detail are display-ready; show them verbatim.
 struct NextAnswer: Decodable {
     struct Stop: Decodable { let code: String; let name: String }
-    struct Dest: Decodable { let to: String; let label: String; let why: String }
+    struct Dest: Decodable { let to: String?; let label: String; let why: String }
 
     // Only `label` is required. Anything else missing (a newer or older API)
     // must not turn the whole answer into "Offline".
@@ -40,7 +40,12 @@ struct NextAnswer: Decodable {
 
     struct Timing: Decodable { let status: String?; let text: String?; let classAt: String?; let reachAt: String? }
     struct Leave: Decodable { let at: String; let estimated: Bool?; let svc: String?; let stop: String?; let board: String?; let arrive: String?; let note: String? }
+    /// Every field but `kind` is optional and read on its own: one field this
+    /// version can't read is left out (nil, or gone from its list), never the
+    /// whole card with it.
     struct Card: Decodable {
+        /// class, trip, nearby, rest, arrived, setup or free; "trip" for one
+        /// missing or this version doesn't know.
         let kind: String
         let staleAt: String?
         let crowd: String?
@@ -73,6 +78,123 @@ struct NextAnswer: Decodable {
         let notice: String?
         /// The next class, on a free day, after your day and at home.
         let upcoming: Upcoming?
+        /// The headline: "R2 · 09:06", "A1 · ~09:11", or the label when there's no time.
+        let title: String?
+        /// "Next class · GEA1000 @ UTown", "Heading home"; nil with nowhere to go.
+        let heading: String?
+        /// When the leave reminder goes; nil: no reminder for this trip.
+        let remindAt: String?
+        /// The trip as steps, worded on the server.
+        let journey: Journey?
+        /// On the bus: the stops from boarding to getting off.
+        let ride: Ride?
+
+        static let kinds: Set = ["class", "trip", "nearby", "rest", "arrived", "setup", "free"]
+
+        enum CodingKeys: String, CodingKey {
+            case kind, staleAt, crowd, quality, leaveBy, leaveVia, `catch`, arrive, late, goNow, note, estimate, phase, phaseText, glance, line, actions, warning, nextChangeAt, remind, suggestion, notice, upcoming
+            case title, heading, remindAt, journey, ride
+        }
+
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            let s = { (k: CodingKeys) in try? c.decodeIfPresent(String.self, forKey: k) }
+            kind = s(.kind).flatMap { Self.kinds.contains($0) ? $0 : nil } ?? "trip"
+            staleAt = s(.staleAt)
+            crowd = s(.crowd)
+            quality = s(.quality)
+            leaveBy = s(.leaveBy)
+            leaveVia = s(.leaveVia)
+            `catch` = s(.catch)
+            arrive = s(.arrive)
+            late = try? c.decodeIfPresent(Bool.self, forKey: .late)
+            goNow = s(.goNow)
+            note = s(.note)
+            estimate = s(.estimate)
+            phase = s(.phase)
+            phaseText = s(.phaseText)
+            glance = s(.glance)
+            line = s(.line)
+            actions = c.lenientList(CardAction.self, forKey: .actions)
+            warning = s(.warning)
+            nextChangeAt = s(.nextChangeAt)
+            remind = try? c.decodeIfPresent(Bool.self, forKey: .remind)
+            suggestion = try? c.decodeIfPresent(Suggestion.self, forKey: .suggestion)
+            notice = s(.notice)
+            upcoming = try? c.decodeIfPresent(Upcoming.self, forKey: .upcoming)
+            title = s(.title)
+            heading = s(.heading)
+            remindAt = s(.remindAt)
+            journey = try? c.decodeIfPresent(Journey.self, forKey: .journey)
+            ride = try? c.decodeIfPresent(Ride.self, forKey: .ride)
+        }
+    }
+
+    /// The trip as steps, every line worded on the server: "To GEA1000 @ UTown · starts 10:00",
+    /// "5 min walk", "10 min ride · off at Opp NUSS", "Arrive ~09:51 · 9 min early".
+    /// Each line on its own: one this version can't read is left out.
+    struct Journey: Decodable {
+        let title: String
+        let byText: String?
+        let walkText: String?
+        let rideText: String?
+        let walkEndText: String?
+        let arriveText: String?
+        let arriveWhere: String?
+        let backupText: String?
+        let summary: String?
+        /// The bus to catch, for its service and colour beside the ride.
+        let bus: Bus?
+        struct Bus: Decodable { let svc: String; let color: String? }
+
+        enum CodingKeys: String, CodingKey { case title, byText, walkText, rideText, walkEndText, arriveText, arriveWhere, backupText, summary, bus }
+
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            title = try c.decode(String.self, forKey: .title)
+            let s = { (k: CodingKeys) in try? c.decodeIfPresent(String.self, forKey: k) }
+            byText = s(.byText)
+            walkText = s(.walkText)
+            rideText = s(.rideText)
+            walkEndText = s(.walkEndText)
+            arriveText = s(.arriveText)
+            arriveWhere = s(.arriveWhere)
+            backupText = s(.backupText)
+            summary = s(.summary)
+            bus = try? c.decodeIfPresent(Bus.self, forKey: .bus)
+        }
+    }
+
+    /// The ride: its stops from boarding to getting off, and when each end is.
+    /// Where the bus is comes from the clock, the stops taken as evenly spaced
+    /// between the two times, as the phone and the web show it.
+    struct Ride: Decodable {
+        struct Stop: Decodable, Hashable { let code: String?; let name: String }
+        let svc: String
+        let stops: [Stop]
+        let board: String
+        let arrive: String
+
+        enum CodingKeys: String, CodingKey { case svc, stops, board, arrive }
+
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            svc = try c.decode(String.self, forKey: .svc)
+            stops = c.lenientList(Stop.self, forKey: .stops) ?? []
+            board = try c.decode(String.self, forKey: .board)
+            arrive = try c.decode(String.self, forKey: .arrive)
+            // Fewer than two stops: there's no ride to draw.
+            guard stops.count >= 2 else { throw DecodingError.dataCorruptedError(forKey: .stops, in: c, debugDescription: "a ride needs two stops") }
+        }
+
+        /// 0 to 1 along the ride at `now` (the server's clock).
+        func progress(at now: Date) -> Double {
+            guard let b = parseISODate(board), let a = parseISODate(arrive) else { return 0 }
+            return min(1, max(0, now.timeIntervalSince(b) / max(1, a.timeIntervalSince(b))))
+        }
+
+        /// How many stops have been passed at `now`; the last is where you get off.
+        func passed(at now: Date) -> Int { Int(progress(at: now) * Double(stops.count - 1)) }
     }
     /// Worded on the server: "Tomorrow · Fri", "CS2030 at 10:00", "At COM1 · get off at COM 3",
     /// and why today has none on a break ("Recess week").
@@ -90,11 +212,11 @@ struct NextAnswer: Decodable {
         asOf = try? c.decodeIfPresent(String.self, forKey: .asOf)
         mode = try? c.decodeIfPresent(String.self, forKey: .mode)
         dest = try? c.decodeIfPresent(Dest.self, forKey: .dest)
-        places = try? c.decodeIfPresent([Place].self, forKey: .places)
+        places = c.lenientList(Place.self, forKey: .places)
         departsAt = try? c.decodeIfPresent(String.self, forKey: .departsAt)
         refreshAt = try? c.decodeIfPresent(String.self, forKey: .refreshAt)
         timing = try? c.decodeIfPresent(Timing.self, forKey: .timing)
-        arrivals = try? c.decodeIfPresent([ArrivalLite].self, forKey: .arrivals)
+        arrivals = c.lenientList(ArrivalLite.self, forKey: .arrivals)
         arrived = (try? c.decodeIfPresent(Bool.self, forKey: .arrived)) ?? false
         leave = try? c.decodeIfPresent(Leave.self, forKey: .leave)
         card = try? c.decodeIfPresent(Card.self, forKey: .card)
@@ -104,6 +226,7 @@ struct NextAnswer: Decodable {
 
     var departure: Date? { departsAt.flatMap(parseISODate) }
     var planChanges: Date? { refreshAt.flatMap(parseISODate) }
+    /// The service, for an older server's answer without a card (the menu bar's fallback).
     var service: String { label.components(separatedBy: " · ").first ?? label }
     var leaveAt: Date? { leave.flatMap { parseISODate($0.at) } }
     var classAt: Date? { timing?.classAt.flatMap(parseISODate) }
@@ -119,7 +242,7 @@ struct NextAnswer: Decodable {
     var nextChange: Date? { card?.nextChangeAt.flatMap(parseISODate) }
     /// "Leave by ~09:38", or "Leave now" once it has passed: the only part that ticks.
     /// At the stop it's the bus to wait for ("D2 at 09:41"), as the server says it.
-    func leaveHeadline(now: Date = Date()) -> String? {
+    func leaveHeadline(now: Date = ServerClock.now) -> String? {
         guard let at = leaveAt else { return nil }
         if card?.phase == "waiting" { return card?.leaveBy }
         return now >= at ? L("Leave now") : card?.leaveBy
@@ -133,12 +256,80 @@ struct NextAnswer: Decodable {
         return detail.localizedCaseInsensitiveContains(c) ? nil : c
     }
     /// Other trips: "Leave by 09:38 · catch the 09:41 D2 at PGP".
-    func leaveText(now: Date = Date()) -> String? {
+    func leaveText(now: Date = ServerClock.now) -> String? {
         guard let head = leaveHeadline(now: now) else { return nil }
         return card?.leaveVia.map { "\(head) · \($0)" } ?? head
     }
 
     var hasLiveTime: Bool { departure != nil && quality != "unknown" && quality != "ended" }
+}
+
+/// One element of a list that may not decode: nil instead of failing the list.
+private struct Lossy<T: Decodable>: Decodable {
+    let value: T?
+    init(from d: Decoder) throws { value = try? T(from: d) }
+}
+
+extension KeyedDecodingContainer {
+    /// A list with the elements this version can't read left out; nil when
+    /// it's missing or isn't a list at all.
+    func lenientList<T: Decodable>(_ type: T.Type, forKey key: Key) -> [T]? {
+        (try? decodeIfPresent([Lossy<T>].self, forKey: key))?.compactMap(\.value)
+    }
+}
+
+/// The server's clock, as near as this Mac can tell. Times in answers
+/// (departures, leave-bys, staleAt) are the server's; a Mac clock a minute
+/// out would count them down a minute out. The error is learned from the
+/// HTTP `Date` header of uncached API responses.
+enum ServerClock {
+    /// `Date` has one-second resolution, and the answer takes a moment to
+    /// arrive: anything under this is noise, not a wrong clock.
+    static let ignoreS: TimeInterval = 3
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var offset: TimeInterval = 0
+
+    /// Seconds to add to this Mac's clock to get the server's.
+    static var skew: TimeInterval { lock.withLock { offset } }
+
+    /// Now, on the server's clock: use it wherever a server time is compared with now.
+    static var now: Date { now(local: Date()) }
+
+    static func now(local: Date) -> Date { now(local: local, skew: skew) }
+
+    static func now(local: Date, skew: TimeInterval) -> Date { local.addingTimeInterval(skew) }
+
+    /// The server's `Date` minus this Mac's at the response; 0 when it's within `ignoreS`.
+    static func skew(server: Date, local: Date) -> TimeInterval {
+        let s = server.timeIntervalSince(local)
+        return abs(s) < ignoreS ? 0 : s
+    }
+
+    /// "Wed, 07 Oct 2026 01:14:02 GMT" (RFC 9110's IMF-fixdate).
+    static func parseHTTPDate(_ s: String) -> Date? { httpDate.date(from: s) }
+
+    /// The skew a response says, if it came from the server just now: a
+    /// cached one (anything but `no-store`) carries the time it was first sent.
+    static func skew(from resp: HTTPURLResponse, at local: Date) -> TimeInterval? {
+        guard (resp.value(forHTTPHeaderField: "cache-control") ?? "").contains("no-store"),
+              let server = resp.value(forHTTPHeaderField: "date").flatMap(parseHTTPDate) else { return nil }
+        return skew(server: server, local: local)
+    }
+
+    /// Learns the skew from a response read at `local`.
+    static func observe(_ resp: HTTPURLResponse, at local: Date = Date()) {
+        guard let s = skew(from: resp, at: local) else { return }
+        lock.withLock { offset = s }
+    }
+
+    private static let httpDate: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "GMT")
+        f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return f
+    }()
 }
 
 /// The API's times may or may not carry milliseconds ("…:02Z" or "…:02.000Z").
@@ -222,8 +413,14 @@ struct BoardRow: Decodable, Hashable {
     var paid: Bool? = nil
     /// The buses after this one (/me/nearby), soonest first.
     var later: [Later]? = nil
+    /// "4 min", "now", "~6 min", worded on the server; nil from an older one (or with no time).
+    var eta: String? = nil
 
-    struct Later: Decodable, Hashable { let etaS: Int?; let quality: String }
+    struct Later: Decodable, Hashable {
+        let etaS: Int?
+        let quality: String
+        var eta: String? = nil
+    }
 }
 
 struct NearbyStop: Decodable, Identifiable {
@@ -254,36 +451,49 @@ struct Destination: Decodable, Hashable {
     var goesTo: String { kind == "landmark" ? code : stopCode }
 }
 
-/// The destination search, same rules as the account page and Android: exact,
-/// then starts with, then a word starts with, then contains; stops before
-/// buildings before rooms, and rooms only once two characters say which.
-func rankDestinations(_ all: [Destination], _ query: String, max: Int = 6) -> [Destination] {
-    let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+/// The destination search, with the rules and cases every client is held to
+/// (apps/api/test/fixtures/search.json; the web's account/search.js is the
+/// reference): exact, then starts with, then a word starts with, then
+/// contains; then by kind, then the shorter label, then the list's own order.
+/// Rooms only once two characters say which.
+func rankDestinations(_ all: [Destination], _ query: String, max: Int = 8) -> [Destination] {
+    let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    let q = trimmed.lowercased()
     guard !q.isEmpty else { return [] }
-    let norm = { (s: String) in s.lowercased().filter { !" -_".contains($0) } }
+    /// A code as typed any way: lower case, without whitespace, hyphens or underscores.
+    let norm = { (s: String) in s.lowercased().replacingOccurrences(of: #"[\s\-_]+"#, with: "", options: .regularExpression) }
     let nq = norm(q)
-    let kinds = ["stop", "landmark", "building", "room"]
+    let kinds = ["timetable", "place", "class", "service", "stop", "landmark", "building", "room"]
+    func kindRank(_ k: String) -> Int { kinds.firstIndex(of: k) ?? kinds.count }
+    func words(_ s: String) -> [Substring] { s.split(whereSeparator: { $0.isWhitespace || "()·,/&-".contains($0) }) }
+    // Plain comparisons, as JavaScript makes them: by UTF-16 code units, not Unicode equivalence.
+    func same(_ a: String, _ b: String) -> Bool { a.utf16.elementsEqual(b.utf16) }
+    func starts(_ a: some StringProtocol, _ p: String) -> Bool { a.utf16.starts(with: p.utf16) }
+    func contains(_ a: String, _ p: String) -> Bool { a.range(of: p, options: .literal) != nil }
     func score(_ d: Destination) -> Int {
-        let names = [d.code.lowercased(), d.label.lowercased()] + (d.aliases ?? [])
-        if names.contains(q) || norm(d.code) == nq { return 0 }
-        if names.contains(where: { $0.hasPrefix(q) }) || norm(d.code).hasPrefix(nq) { return 1 }
-        let words = names.flatMap { $0.split(whereSeparator: { " ()·,/&-".contains($0) }) }
-        if words.contains(where: { $0.hasPrefix(q) }) { return 2 }
-        if names.contains(where: { $0.contains(q) }) { return 3 }
+        let names = [d.code.lowercased(), d.label.lowercased()] + (d.aliases ?? []).map { $0.lowercased() }
+        // Only hyphens or underscores typed: nothing to match a code by.
+        let code: String? = nq.isEmpty ? nil : norm(d.code)
+        if names.contains(where: { same($0, q) }) || code.map({ same($0, nq) }) == true { return 0 }
+        if names.contains(where: { starts($0, q) }) || code.map({ starts($0, nq) }) == true { return 1 }
+        if names.contains(where: { words($0).contains { starts($0, q) } }) { return 2 }
+        if names.contains(where: { contains($0, q) }) { return 3 }
         return -1
     }
-    return all
-        .filter { $0.kind != "room" || q.count >= 2 }
-        .map { ($0, score($0)) }
-        .filter { $0.1 >= 0 }
+    return all.enumerated()
+        .filter { $0.element.kind != "room" || trimmed.utf16.count >= 2 }
+        .map { (i: $0.offset, d: $0.element, s: score($0.element)) }
+        .filter { $0.s >= 0 }
         .sorted { a, b in
-            if a.1 != b.1 { return a.1 < b.1 }
-            let ka = kinds.firstIndex(of: a.0.kind) ?? 3, kb = kinds.firstIndex(of: b.0.kind) ?? 3
+            if a.s != b.s { return a.s < b.s }
+            let ka = kindRank(a.d.kind), kb = kindRank(b.d.kind)
             if ka != kb { return ka < kb }
-            return a.0.label.count < b.0.label.count
+            let la = a.d.label.utf16.count, lb = b.d.label.utf16.count
+            if la != lb { return la < lb }
+            return a.i < b.i
         }
         .prefix(max)
-        .map { $0.0 }
+        .map(\.d)
 }
 
 /// What the popover shows: the planned trip, a saved place, or any stop/venue.
@@ -297,7 +507,8 @@ enum Target: Hashable {
 struct Campus: Decodable {
     struct Stop: Decodable, Hashable { let code: String; let name: String; let lat: Double?; let lon: Double? }
     /// `common`: where most students live (PGP, UTown Residence), shown first in the pickers.
-    struct Residence: Decodable, Hashable { let code: String; let name: String; let stops: [String]; let walkM: Double?; var common: Bool? }
+    /// `walkMin`: minutes on foot to its stop at a normal pace, as the server works it out.
+    struct Residence: Decodable, Hashable { let code: String; let name: String; let stops: [String]; let walkM: Double?; var walkMin: Int?; var common: Bool? }
     let stops: [Stop]
     let residences: [Residence]
 
@@ -404,6 +615,10 @@ struct DayPlan: Decodable {
         let kind: String
         let key: String
         let label: String
+        /// "GEA1000 @ UTown", "Home, from UTown": worded on the server.
+        let serverTitle: String?
+        /// "Leave by ~09:36 · R2 from PGP", "Not going"; nil when done.
+        let line: String?
         /// done | now | next | later | skipped
         let status: String
         let fromName: String?
@@ -417,8 +632,16 @@ struct DayPlan: Decodable {
         let removable: Bool?
         var id: String { key }
 
-        /// "Leave by 09:38 · D2 from PGP", "On the D2 · off at UTown · arrive 09:52", or nil.
+        enum CodingKeys: String, CodingKey {
+            case kind, key, label, line, status, fromName, startsAt, endsAt, leave, timing, onBus, removable
+            case serverTitle = "title"
+        }
+
+        /// "Leave by 09:38 · D2 from PGP", "On the D2 · off at UTown · arrive 09:52", or nil:
+        /// the server's `line`, worded here only for an older server's plan.
         var sub: String? {
+            if let line { return line }
+            if serverTitle != nil || status == "done" { return nil }
             if status == "skipped" { return L("Not going") }
             if status == "done" { return nil }
             if let b = onBus {
@@ -428,7 +651,7 @@ struct DayPlan: Decodable {
             let how = l.svc.map { L("%@ from %@", $0, l.stop ?? fromName ?? "") } ?? L("walk")
             return ([L("Leave by %@", l.estimated == true ? L("~%@", campusTime(at)) : campusTime(at)), how, timing?.status == "late" ? timing?.text : nil] as [String?]).compactMap { $0 }.joined(separator: " · ")
         }
-        var title: String { kind == "home" ? L("Home, from %@", fromName ?? L("your last class")) : label }
+        var title: String { serverTitle ?? (kind == "home" ? L("Home, from %@", fromName ?? L("your last class")) : label) }
     }
     var items: [Item]
     let note: String?
@@ -768,6 +991,7 @@ struct Api {
         }
         let (data, resp) = try await URLSession.shared.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if let http = resp as? HTTPURLResponse { ServerClock.observe(http) }
         if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")) }
         guard (200..<300).contains(status) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String

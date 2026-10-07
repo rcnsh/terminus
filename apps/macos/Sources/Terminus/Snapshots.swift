@@ -24,8 +24,8 @@ enum Snapshots {
         """
         let answer = try! JSONDecoder().decode(NextAnswer.self, from: Data(json.utf8))
         let nearbyJSON = """
-        [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"quality":"live","color":"#8e44c9","later":[{"etaS":840,"quality":"live"},{"etaS":1500,"quality":"scheduled"}]},{"svc":"A1","etaS":540,"quality":"live","color":"#e5484d","later":[{"etaS":1260,"quality":"live"}]},{"svc":"K","etaS":20,"quality":"live","color":"#2b9ad6"},{"svc":"R2","etaS":780,"quality":"live","color":"#34a853"},{"svc":"BTC1","etaS":1260,"quality":"scheduled","later":[{"etaS":3060,"quality":"scheduled"}]},{"svc":"95","etaS":360,"quality":"live","paid":true},{"svc":"E","etaS":null,"quality":"ended"}]},
-         {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"quality":"live"}]}]
+        [{"stop":{"code":"PGP","name":"PGP"},"walkS":200,"available":true,"board":[{"svc":"D2","etaS":240,"eta":"4 min","quality":"live","color":"#8e44c9","later":[{"etaS":840,"eta":"14 min","quality":"live"},{"etaS":1500,"eta":"~25 min","quality":"scheduled"}]},{"svc":"A1","etaS":540,"eta":"9 min","quality":"live","color":"#e5484d","later":[{"etaS":1260,"eta":"21 min","quality":"live"}]},{"svc":"K","etaS":20,"eta":"now","quality":"live","color":"#2b9ad6"},{"svc":"R2","etaS":780,"eta":"13 min","quality":"live","color":"#34a853"},{"svc":"BTC1","etaS":1260,"eta":"~21 min","quality":"scheduled","later":[{"etaS":3060,"eta":"~51 min","quality":"scheduled"}]},{"svc":"95","etaS":360,"eta":"6 min","quality":"live","paid":true},{"svc":"E","etaS":null,"quality":"ended"}]},
+         {"stop":{"code":"PGPR","name":"PGP Foyer"},"walkS":150,"available":true,"board":[{"svc":"A2","etaS":660,"eta":"11 min","quality":"live"}]}]
         """
         let nearby = try! JSONDecoder().decode([NearbyStop].self, from: Data(nearbyJSON.utf8))
 
@@ -94,6 +94,8 @@ enum Snapshots {
         ]
         renderShowcase(to: dir)
         renderSetup(to: dir)
+        renderGoldens(to: dir)
+        renderMapStatus(to: dir)
         for (name, m) in cases {
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
                 let view = Popover(model: m, startShown: true)
@@ -102,6 +104,63 @@ enum Snapshots {
                     .environment(\.colorScheme, scheme)
                 write(view, scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")")
             }
+        }
+    }
+
+    /// The API's golden answers (apps/api/test/fixtures/answers), at the
+    /// moment they were answered: the journey's steps and the ride's line.
+    static func renderGoldens(to dir: String) {
+        let answers = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("../api/test/fixtures/answers").standardized
+        // Three of the ride's six stops behind it: the bus halfway along.
+        let cases: [(String, String, String)] = [
+            ("golden-scheduled", "scheduled.json", "2026-08-27T01:00:00Z"),
+            ("golden-place", "place.json", "2026-08-27T01:00:00Z"),
+            ("golden-riding", "riding.json", "2026-08-27T01:47:00Z"),
+            ("golden-riding-zh", "zh/riding.json", "2026-08-27T01:47:00Z"),
+            ("golden-class", "class-bus.json", "2026-08-27T01:00:00Z"),
+        ]
+        for (name, file, at) in cases {
+            guard var o = (try? Data(contentsOf: answers.appendingPathComponent(file))).flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }),
+                  let now = parseISODate(at) else { continue }
+            // The riding golden goes stale before its ride: drawn mid-ride, it's kept fresh.
+            if var card = o["card"] as? [String: Any], card["ride"] is [String: Any] {
+                card["staleAt"] = "2026-08-27T01:55:00Z"
+                o["card"] = card
+            }
+            guard let data = try? JSONSerialization.data(withJSONObject: o),
+                  let a = try? JSONDecoder().decode(NextAnswer.self, from: data) else { continue }
+            let m = AppModel(snapshot: true)
+            m.paired = true
+            m.answers = [.plan: a]
+            m.places = a.places ?? []
+            m.updated = now
+            m.clock = now
+            for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
+                let r = ImageRenderer(content: Popover(model: m, startShown: true).environment(\.fixedNow, now).background(bg).environment(\.colorScheme, scheme))
+                r.scale = 2
+                guard let img = r.nsImage, let tiff = img.tiffRepresentation,
+                      let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
+                try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
+            }
+        }
+    }
+
+    /// The map's status chips (the map itself is MapLibre's, which ImageRenderer can't draw).
+    static func renderMapStatus(to dir: String) {
+        let statuses: [MapModel.BusStatus] = [.running(3), .stale, .unavailable, .offline]
+        let view = VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(statuses.enumerated()), id: \.offset) { _, s in StatusChip(text: s.text("D2")) }
+        }
+        .padding(.vertical, 12)
+        .frame(width: 360, alignment: .leading)
+        for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.85))] {
+            let r = ImageRenderer(content: view.background(bg).environment(\.colorScheme, scheme))
+            r.scale = 2
+            guard let img = r.nsImage, let tiff = img.tiffRepresentation,
+                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
+            try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("map-status-\(scheme == .dark ? "dark" : "light").png"))
         }
     }
 

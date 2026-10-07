@@ -58,6 +58,8 @@ enum OfflineDay {
         let item = p.item
         let start = parseISODate(item.startsAt).map(campusTime) ?? ""
         if p.step == .home { return Lines(head: start, big: item.title, how: nil) }
+        // The rest is worked out here: offline, a leave-by planned a while ago
+        // is always an estimate, which the line kept from then may not say.
         let leave = item.leave
         let at = leave.flatMap { parseISODate($0.at) }
         let big: String
@@ -68,7 +70,7 @@ enum OfflineDay {
         }
         let how = leave.map { l in l.svc.map { L("%@ from %@", $0, l.stop ?? item.fromName ?? "") } ?? L("walk") }
         // Capitalised: on a line of its own, not after "Leave by …" as in Today.
-        return Lines(head: "\(item.label) · \(L("starts %@", start))", big: big, how: how.map { $0.prefix(1).uppercased() + $0.dropFirst() })
+        return Lines(head: "\(item.title) · \(L("starts %@", start))", big: big, how: how.map { $0.prefix(1).uppercased() + $0.dropFirst() })
     }
 
     /// The menu bar's text: as for a class plan ("Leave 09:36", "Leave now"); the plain icon for a trip home.

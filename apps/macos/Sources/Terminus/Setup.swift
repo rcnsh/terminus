@@ -82,10 +82,30 @@ final class SetupModel {
     /// The residence whose stops are the home stops, if they're one's.
     var residence: Campus.Residence? { campus?.residences.first { $0.stops == homeStops } }
 
+    /// The account's limits, as the server sends them with the profile
+    /// (`limits`); today's values until it does (an older server).
+    struct Limits: Sendable {
+        var homeStops = 3
+        var places = 12
+        var placeLabel = 24
+        var homeWalkMin = 0...30
+
+        init(_ o: [String: Any]? = nil) {
+            guard let o else { return }
+            if let n = o["homeStops"] as? Int, n > 0 { homeStops = n }
+            if let n = o["places"] as? Int, n > 0 { places = n }
+            if let n = o["placeLabel"] as? Int, n > 0 { placeLabel = n }
+            if let w = o["homeWalkMin"] as? [String: Any], let lo = w["min"] as? Int, let hi = w["max"] as? Int, lo <= hi { homeWalkMin = lo...hi }
+        }
+    }
+
+    var limits: Limits { Limits(profile?["limits"] as? [String: Any]) }
+
     func setHomeStops(_ stops: [String]) {
         var unique: [String] = []
         for s in stops where !unique.contains(s) { unique.append(s) }
-        edit { $0["home"] = unique.isEmpty ? NSNull() : ["stops": Array(unique.prefix(3))] }
+        let most = limits.homeStops
+        edit { $0["home"] = unique.isEmpty ? NSNull() : ["stops": Array(unique.prefix(most))] }
     }
 
     /// The home stop picker: `code` first, the other stops after it. "Choose
@@ -105,11 +125,18 @@ final class SetupModel {
     }
 
     func setResidence(_ r: Campus.Residence) {
-        // The residence's walk at a normal pace, as the phone and the account page set it.
+        let walk = Self.homeWalk(r, within: limits.homeWalkMin)
         edit {
             $0["home"] = ["stops": r.stops]
-            $0["homeWalkMin"] = max(1, Int(((r.walkM ?? 0) / 1.3 / 60).rounded()))
+            $0["homeWalkMin"] = walk
         }
+    }
+
+    /// The residence's walk to its stop at a normal pace, as the server works
+    /// it out (`walkMin`); an older server's in metres, at 1.3 m/s as it would have.
+    nonisolated static func homeWalk(_ r: Campus.Residence, within range: ClosedRange<Int>) -> Int {
+        let walk = r.walkMin ?? max(1, Int(((r.walkM ?? 0) / 1.3 / 60).rounded()))
+        return min(range.upperBound, max(range.lowerBound, walk))
     }
 
     /// Favourites, as the profile keeps them: key, label, and the stop (or food court) they go to.
@@ -120,8 +147,8 @@ final class SetupModel {
         }
     }
 
-    /// The account's limit (PROFILE_LIMITS.places in the API).
-    static let maxPlaces = 12
+    /// How many favourites the account may have (PROFILE_LIMITS.places in the API).
+    var maxPlaces: Int { limits.places }
 
     /**
      A favourite from a search result, called what was picked, short, as it
@@ -133,7 +160,7 @@ final class SetupModel {
     func addPlace(_ d: Destination) -> String? {
         let to = d.goesTo
         if let same = places.first(where: { $0.to == to }) { return same.label }
-        let label = String((d.kind == "building" || d.kind == "room" ? d.code : d.label).prefix(24))
+        let label = String((d.kind == "building" || d.kind == "room" ? d.code : d.label).prefix(limits.placeLabel))
         let slug = label.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         var key = String(slug.prefix(24)).isEmpty ? "place" : String(slug.prefix(24))
         while places.contains(where: { $0.key == key }) { key = "\(key.prefix(21))-\(Int.random(in: 10...99))" }
@@ -153,7 +180,10 @@ final class SetupModel {
         }
     }
 
-    func setHomeWalk(_ min: Int) { edit { $0["homeWalkMin"] = Swift.min(30, Swift.max(0, min)) } }
+    func setHomeWalk(_ min: Int) {
+        let range = limits.homeWalkMin
+        edit { $0["homeWalkMin"] = Swift.min(range.upperBound, Swift.max(range.lowerBound, min)) }
+    }
     func setPace(_ pace: String) { edit { $0["walkPace"] = pace } }
     func setFullBusMargin(_ on: Bool) { edit { $0["fullBusMargin"] = on } }
     func setPublicBuses(_ on: Bool) { edit { $0["publicBuses"] = on } }
@@ -587,7 +617,7 @@ struct HomeStep: View {
                 .buttonStyle(.link)
                 if let locating { Hint(locating) }
             }
-            Stepper(L("Walk from home to your stop: %@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: 0...30)
+            Stepper(L("Walk from home to your stop: %@ min", "\(setup.homeWalkMin)"), value: Binding(get: { setup.homeWalkMin }, set: { setup.setHomeWalk($0) }), in: setup.limits.homeWalkMin)
                 .padding(.top, 6)
             Hint(L("Included in your departure time when your location isn't available."))
         } else {

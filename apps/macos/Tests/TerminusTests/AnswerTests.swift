@@ -12,7 +12,7 @@ private func golden(_ name: String) throws -> NextAnswer {
     return try JSONDecoder().decode(NextAnswer.self, from: data)
 }
 
-@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "class-room", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup"])
+@Test(arguments: ["class-bus", "class-walk", "class-late", "class-from-dorm", "class-started", "class-room", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup", "riding", "scheduled", "no-timetable"])
 func everyGoldenAnswerDecodesWithACard(name: String) throws {
     #expect(try golden(name).card != nil)
 }
@@ -74,8 +74,6 @@ func everyGoldenAnswerDecodesWithACard(name: String) throws {
     let m = AppModel(snapshot: true)
     m.answers[.plan] = try golden("class-late")
     #expect(m.menuTitle(at: Date()) == m.plan?.card?.glance)
-    m.answers[.plan] = try golden("free")
-    #expect(m.menuTitle(at: Date()) == nil, "no bus title on a free day")
 }
 
 @MainActor @Test func staleFollowsTheServer() throws {
@@ -144,8 +142,9 @@ func theNextClassComesWithTheCard(name: String) throws {
     let r = try JSONDecoder().decode(R.self, from: Data(contentsOf: dir.appendingPathComponent("nearby-list.json")))
     let d2 = try #require(r.stops.first?.board.first { $0.svc == "D2" })
     #expect(d2.later?.first?.etaS == 840)
-    #expect(FlowPills.later(d2) == ["14m"])
-    #expect(FlowPills.spoken(d2) == "D2: 4m, 14m")
+    #expect(FlowPills.eta(d2) == "4 min", "the server's words")
+    #expect(FlowPills.later(d2) == ["14 min"])
+    #expect(FlowPills.spoken(d2) == "D2: 4 min, 14 min")
 }
 
 @Test func aTimetableGuessInNearbyIsNeverShownAsLive() {
@@ -164,4 +163,242 @@ func theNextClassComesWithTheCard(name: String) throws {
     let undo = CardAction(id: "reset", label: "Undo", trip: "u")
     #expect(AnswerDetail.grouped([skip, away, undo]) == [[skip, away], [undo]])
     #expect(AnswerDetail.grouped([skip, undo]) == [[skip], [undo]])
+}
+
+/// A golden's JSON with `edit` applied to it, decoded.
+private func goldenEdited(_ name: String, _ edit: (inout [String: Any]) -> Void) throws -> NextAnswer {
+    let dir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("../api/test/fixtures/answers").standardized
+    var o = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("\(name).json"))) as? [String: Any])
+    edit(&o)
+    return try JSONDecoder().decode(NextAnswer.self, from: JSONSerialization.data(withJSONObject: o))
+}
+
+private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) -> Void) {
+    var card = o["card"] as? [String: Any] ?? [:]
+    edit(&card)
+    o["card"] = card
+}
+
+@Test func oneBrokenActionLeavesTheCard() throws {
+    let a = try goldenEdited("class-late") { o in
+        editCard(&o) { c in c["actions"] = (c["actions"] as? [Any] ?? []) + [["id": 5, "label": NSNull()]] }
+    }
+    let card = try #require(a.card, "the card survives")
+    #expect(card.actions?.map(\.id) == ["skipped"], "only the broken action is left out")
+    #expect(card.glance == "R2 09:06")
+    #expect(a.tripUnderWay)
+}
+
+@Test func brokenNestedPartsOfTheCardAreLeftOut() throws {
+    let a = try goldenEdited("free") { o in
+        editCard(&o) { c in
+            c["suggestion"] = ["id": "x"]
+            c["upcoming"] = "tomorrow"
+            c["actions"] = "none"
+            c["late"] = "no"
+        }
+    }
+    let card = try #require(a.card)
+    #expect(card.suggestion == nil)
+    #expect(card.upcoming == nil)
+    #expect(card.actions == nil)
+    #expect(card.late == nil)
+    #expect(card.kind == "free")
+    #expect(card.glance == "No classes")
+}
+
+@Test func aMissingOrUnknownKindIsATrip() throws {
+    let missing = try goldenEdited("place") { o in editCard(&o) { $0.removeValue(forKey: "kind") } }
+    #expect(missing.card?.kind == "trip")
+    let unknown = try goldenEdited("class-bus") { o in editCard(&o) { $0["kind"] = "teleport" } }
+    #expect(unknown.card?.kind == "trip")
+    #expect(unknown.card?.leaveBy == "Leave by ~09:36")
+    let number = try goldenEdited("place") { o in editCard(&o) { $0["kind"] = 3 } }
+    #expect(number.card?.kind == "trip")
+}
+
+@Test func theDestinationNeedsNoCode() throws {
+    let a = try goldenEdited("class-bus") { o in
+        var d = o["dest"] as? [String: Any] ?? [:]
+        d.removeValue(forKey: "to")
+        o["dest"] = d
+    }
+    #expect(a.dest?.label != nil)
+    #expect(a.dest?.to == nil)
+}
+
+@MainActor @Test func theMenuBarShowsTheServersGlance() throws {
+    let m = AppModel(snapshot: true)
+    for name in ["class-bus", "place", "free", "home", "setup"] {
+        m.answers[.plan] = try golden(name)
+        #expect(m.menuTitle(at: Date()) == m.plan?.card?.glance, "\(name)")
+    }
+    m.answers[.plan] = try golden("class-bus")
+    // Whatever the time: the glance is a clock time, not a count.
+    let at = try #require(m.plan?.leaveAt)
+    #expect(m.menuTitle(at: at.addingTimeInterval(600)) == "Leave 09:36")
+}
+
+/// The rule every client follows: a card without staleAt never dims; only an answer with no card is old.
+@MainActor @Test func onlyAnAnswerWithoutACardIsOldWithoutStaleAt() throws {
+    let m = AppModel(snapshot: true)
+    let now = Date()
+    for name in ["class-bus", "setup", "rest", "free"] {
+        let a = try goldenEdited(name) { o in editCard(&o) { $0["staleAt"] = NSNull() } }
+        #expect(!m.isOld(a, at: now), "\(name)")
+    }
+    let noCard = try goldenEdited("place") { $0.removeValue(forKey: "card") }
+    #expect(m.isOld(noCard, at: now))
+    #expect(!m.isOld(nil, at: now))
+}
+
+@MainActor @Test func offThePlansTabTheMenuBarsPlanIsReused() throws {
+    let m = AppModel(snapshot: true)
+    let a = try golden("class-bus")
+    let staleAt = try #require(a.staleAt)
+    let fetched = staleAt.addingTimeInterval(-120)
+    #expect(m.planDue(at: fetched), "no plan yet")
+    m.answers[.plan] = a
+    #expect(m.planDue(at: fetched), "never fetched here")
+    m.planFetched = fetched
+    #expect(!m.planDue(at: fetched.addingTimeInterval(60), local: fetched.addingTimeInterval(60)), "a minute old, nothing passed")
+    #expect(m.planDue(at: fetched.addingTimeInterval(60), local: fetched.addingTimeInterval(301)), "over 5 minutes old")
+    #expect(m.planDue(at: staleAt, local: fetched.addingTimeInterval(120)), "one of its own times has passed")
+}
+
+@Test func theServersClockComesFromItsDateHeader() throws {
+    let local = try #require(ServerClock.parseHTTPDate("Wed, 07 Oct 2026 01:14:02 GMT"))
+    #expect(local == parseISODate("2026-10-07T01:14:02Z"))
+    #expect(ServerClock.parseHTTPDate("yesterday") == nil)
+    // Date's one-second steps and the trip there: not a wrong clock.
+    #expect(ServerClock.skew(server: local.addingTimeInterval(2.9), local: local) == 0)
+    #expect(ServerClock.skew(server: local.addingTimeInterval(-2.9), local: local) == 0)
+    #expect(ServerClock.skew(server: local.addingTimeInterval(90), local: local) == 90, "this Mac is 90 s slow")
+    #expect(ServerClock.skew(server: local.addingTimeInterval(-45), local: local) == -45, "this Mac is 45 s fast")
+    let url = URL(string: "https://terminus.rcn.sh/me/next")!
+    let fresh = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Date": "Wed, 07 Oct 2026 01:15:32 GMT", "Cache-Control": "no-store"]))
+    #expect(ServerClock.skew(from: fresh, at: local) == 90)
+    let cached = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Date": "Wed, 07 Oct 2026 01:15:32 GMT", "Cache-Control": "private, max-age=5"]))
+    #expect(ServerClock.skew(from: cached, at: local) == nil, "a cached answer was dated when it was first sent")
+    #expect(ServerClock.now(local: local, skew: 90) == local.addingTimeInterval(90))
+}
+
+@Test func theCardSaysItsTitleAndHeading() throws {
+    let bus = try golden("class-bus")
+    #expect(bus.card?.title == "R2 · 09:06")
+    #expect(bus.card?.heading == "Next class · GEA1000 @ UTown")
+    #expect(try golden("scheduled").card?.title == "A1 · ~09:11", "a timetable guess keeps its ~")
+    #expect(try golden("free").card?.heading == nil)
+    #expect(try golden("riding").card?.phaseText == "On the bus")
+}
+
+@Test func theReminderGoesWhenTheServerSays() throws {
+    let bus = try golden("class-bus")
+    let at = try #require(bus.card?.remindAt.flatMap(parseISODate))
+    let leave = try #require(bus.leaveAt)
+    #expect(at < leave)
+    #expect(try golden("place").card?.remindAt == nil, "no reminder for this trip")
+}
+
+@Test func theJourneyComesAsSteps() throws {
+    let j = try #require(try golden("class-bus").card?.journey)
+    #expect(j.title == "To GEA1000 @ UTown · starts 10:00")
+    #expect(j.walkText == "5 min walk")
+    #expect(j.rideText == "10 min ride")
+    #expect(j.arriveText == "Arrive ~09:51 · 9 min early")
+    #expect(j.backupText == "Or go now: R2 at 09:06 from PGP")
+    #expect(j.bus?.svc == "R2")
+    // One line the wrong type: only it is left out.
+    let odd = try goldenEdited("class-bus") { o in editCard(&o) { c in
+        var j = c["journey"] as? [String: Any] ?? [:]
+        j["walkText"] = 5
+        c["journey"] = j
+    } }
+    #expect(odd.card?.journey?.walkText == nil)
+    #expect(odd.card?.journey?.title == j.title)
+}
+
+@Test func theRideGoesFromBoardingToGettingOff() throws {
+    let r = try #require(try golden("riding").card?.ride)
+    #expect(r.svc == "R2")
+    #expect(r.stops.first?.name == "PGP")
+    #expect(r.stops.last?.name == "UTown")
+    let board = try #require(parseISODate(r.board)), arrive = try #require(parseISODate(r.arrive))
+    #expect(r.progress(at: board.addingTimeInterval(-60)) == 0)
+    #expect(r.passed(at: board) == 0)
+    #expect(r.passed(at: board.addingTimeInterval(arrive.timeIntervalSince(board) / 2)) == 3, "halfway: three of six stops passed")
+    #expect(r.passed(at: arrive) == r.stops.count - 1)
+    let short = try goldenEdited("riding") { o in editCard(&o) { c in
+        var ride = c["ride"] as? [String: Any] ?? [:]
+        ride["stops"] = [["code": "PGP", "name": "PGP"]]
+        c["ride"] = ride
+    } }
+    #expect(short.card != nil && short.card?.ride == nil, "one stop is no ride")
+}
+
+@MainActor @Test func aSetupCardAsksForSetup() throws {
+    let m = AppModel(snapshot: true)
+    m.paired = true
+    m.answers[.plan] = try golden("setup")
+    #expect(m.plan?.card?.kind == "setup")
+    #expect(m.wantsSetup)
+    #expect(m.menuTitle(at: Date()) == "Set up")
+    m.answers[.plan] = try golden("no-timetable")
+    #expect(!m.wantsSetup, "no timetable yet is a free day, not setup")
+}
+
+@Test func todaysLinesComeFromTheServer() throws {
+    let dir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("../api/test/fixtures/answers").standardized
+    let day = try JSONDecoder().decode(DayPlan.self, from: Data(contentsOf: dir.appendingPathComponent("day.json")))
+    #expect(day.items[0].sub == "Leave by ~09:36 · R2 from PGP")
+    #expect(day.items[1].title == "Home, from UTown")
+    #expect(day.items[1].sub == nil)
+}
+
+/// The search every client is held to (apps/api/test/fixtures/search.json).
+/// The Mac has no Buses tab, so only its "destinations" section.
+@Test func theSearchFollowsTheSharedCases() throws {
+    struct Fixture: Decodable {
+        struct Section: Decodable {
+            struct Query: Decodable { let q: String; let expect: [String]; let why: String? }
+            let limit: Int
+            let index: [Destination]
+            let queries: [Query]
+        }
+        let destinations: Section
+    }
+    let dir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("../api/test/fixtures").standardized
+    let f = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: dir.appendingPathComponent("search.json"))).destinations
+    #expect(!f.queries.isEmpty)
+    for c in f.queries {
+        let got = rankDestinations(f.index, c.q, max: f.limit).map { "\($0.kind):\($0.code)" }
+        #expect(got == c.expect, "\(c.q.debugDescription): \(c.why ?? "")")
+    }
+    #expect(rankDestinations(f.index, "a").count <= 8, "8 by default")
+}
+
+@Test func aResidencesWalkIsTheServers() throws {
+    let json = #"{"stops": [], "residences": [{"code": "PGPR", "name": "PGP Residences", "stops": ["PGP"], "walkM": 300, "walkMin": 6}, {"code": "OLD", "name": "Old", "stops": ["COM3"], "walkM": 420}]}"#
+    let c = try JSONDecoder().decode(Campus.self, from: Data(json.utf8))
+    let pgp = try #require(c.residences.first { $0.code == "PGPR" })
+    #expect(SetupModel.homeWalk(pgp, within: 0...30) == 6, "not 300 m at 1.3 m/s (4 min)")
+    let old = try #require(c.residences.first { $0.code == "OLD" })
+    #expect(SetupModel.homeWalk(old, within: 0...30) == 5, "an older server: worked out here")
+    #expect(SetupModel.homeWalk(pgp, within: 0...3) == 3, "held to the account's limit")
+}
+
+@Test func theProfileSaysItsLimits() {
+    let l = SetupModel.Limits(["homeStops": 4, "places": 20, "placeLabel": 30, "homeWalkMin": ["min": 1, "max": 45]])
+    #expect(l.homeStops == 4)
+    #expect(l.places == 20)
+    #expect(l.placeLabel == 30)
+    #expect(l.homeWalkMin == 1...45)
+    let old = SetupModel.Limits(nil)
+    #expect(old.homeStops == 3 && old.places == 12 && old.placeLabel == 24 && old.homeWalkMin == 0...30, "today's values without them")
 }
