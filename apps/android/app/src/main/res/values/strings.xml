@@ -287,7 +287,7 @@
     <string name="report_failed">Couldn\'t send it. Check your connection and try again.</string>
     <string name="report_hint">Sends this answer and your note, with your email address (if you\'ve added one) so you can get a reply.</string>
     <string name="report_placeholder">The D2 never came, the walk is longer…</string>
-    <string name="report_thanks">Thanks for the report. It helps us improve terminus.</string>
+    <string name="reported_thanks">Reported, thanks</string>
     <string name="report_title">What was wrong?</string>
     <string name="request_expired">That request expired. Send a new one.</string>
     <string name="residence_stops">Stops for %1$s: %2$s. terminus won\'t direct you home when you\'re already there.</string>

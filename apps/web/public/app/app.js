@@ -785,8 +785,8 @@ function CardArea() {
     <section class="card app-card">
       ${body}
       <div class="card-foot">
-        ${to.kind !== 'nearby' && html`<${Report} answer=${c.a ?? null} anonymous=${who?.anonymous === true} />`}
         <div class="updated hint">${when}</div>
+        ${to.kind !== 'nearby' && html`<${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} />`}
       </div>
     </section>
   `;

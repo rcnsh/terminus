@@ -302,7 +302,8 @@ export const Message = ({ text, children, cls = 'widget' }) => html`
 
 /**
  * "Is this wrong?": sends the answer on screen (`answer`, as it was when the
- * form was opened: the card refreshes meanwhile) with an optional note.
+ * form was opened: the card refreshes meanwhile) with an optional note. Once
+ * sent, the link says so in its place; give it a new `key` for a new answer.
  */
 export function Report({ answer, anonymous = false }) {
   const [open, setOpen] = useState(false);
@@ -310,6 +311,7 @@ export function Report({ answer, anonymous = false }) {
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
   const [reported, setReported] = useState(null);
+  const [done, setDone] = useState(false);
   const box = useRef(null);
   useEffect(() => {
     if (open) box.current?.focus();
@@ -328,7 +330,7 @@ export function Report({ answer, anonymous = false }) {
       await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note: note.trim(), platform: 'web', context: reported ?? undefined } });
       setOpen(false);
       setNote('');
-      setMsg(t('Thanks for the report. It helps us improve terminus.'));
+      setDone(true);
     } catch (err) {
       setMsg(err.message);
     } finally {
@@ -336,7 +338,9 @@ export function Report({ answer, anonymous = false }) {
     }
   };
   return html`
+    ${done && html`<span class="report-done">✓ ${t('Reported, thanks')}</span>`}
     ${!open &&
+    !done &&
     html`<button
       type="button"
       class="link-btn report-open"

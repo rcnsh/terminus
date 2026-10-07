@@ -258,7 +258,7 @@ window.TERMINUS_ZH = {
  "Sun": "周日",
  "Sunday": "星期日",
  "Tap": "点按 Safari 底部的",
- "Thanks for the report. It helps us improve terminus.": "感谢你的反馈，这能帮助我们改进 terminus。",
+ "Reported, thanks": "已反馈，谢谢",
  "That device is now signed in.": "那台设备已经登录了。",
  "You're all set. It updates throughout the day and stays quiet in the evening.": "设置完成。它会全天更新，晚上则保持安静。",
  "The Android home-screen widget: leave by 9:39 AM for GEA1000, with the trip drawn as a line from you to PGP to UTown, and buttons for favourites.": "Android 主屏幕小组件：上午 9:39 前出发去 GEA1000，行程画成一条线，从你到 PGP 再到 UTown，还有收藏按钮。",

@@ -9,11 +9,13 @@ body.app { padding-bottom: env(safe-area-inset-bottom); }
 .app-card { padding: 4px 0 0; background: none; border: 0; box-shadow: none; border-radius: 0; }
 .app-card .widget { box-shadow: none; border: 0; padding: 0; background: none; }
 .app-card .widget .chips { display: none; }
-/* "Is this wrong?" on the left, "Updated 9:41" in the bottom right corner. */
-.app-card .card-foot { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-top: 12px; }
-.app-card .updated { margin-left: auto; font-size: 0.8rem; }
+/* One quiet line: "Updated 9:41 · Is this wrong?". */
+.app-card .card-foot { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; margin-top: 12px; }
+.app-card .updated { font-size: 0.8rem; }
+.app-card .updated:empty { display: none; }
+.app-card .updated:has(+ :is(.report-open, .report-done))::after { content: '·'; margin-left: 6px; }
 /* The report's form and its message under them, each on a line of its own. */
-.app-card .card-foot > :not(.report-open, .updated) { flex-basis: 100%; }
+.app-card .card-foot > :not(.report-open, .report-done, .updated) { flex-basis: 100%; }
 .app-card .card-foot > p { order: 1; margin: 0; }
 body.is-offline .app-card .widget { opacity: 0.6; }
 /* The day plan's next thing, offline: still the thing to do, so not dimmed (the banner says offline). */

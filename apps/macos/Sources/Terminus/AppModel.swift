@@ -85,6 +85,8 @@ final class AppModel {
     var reportNote = ""
     var reportSending = false
     var reportResult: String?
+    /// The last report went: "✓ Reported, thanks" under the answer, where the form was.
+    var reportSent = false
     /// The answer on screen when the form opened; the refresh loop may replace it meanwhile.
     private var reported: Data?
     var popoverOpen = false {
@@ -609,6 +611,7 @@ final class AppModel {
         reported = showNearby ? nil : shown?.raw
         reportNote = ""
         reportResult = nil
+        reportSent = false
         reporting = true
     }
 
@@ -629,7 +632,7 @@ final class AppModel {
             do {
                 try await Api(token: TokenStore.read()).report(note: note, answer: reported)
                 reporting = false
-                reportResult = L("Thanks for the report. It helps us improve terminus.")
+                reportSent = true
             } catch let e as ApiError {
                 reportResult = e.message
             } catch {
@@ -641,6 +644,8 @@ final class AppModel {
     // MARK: what the popover shows
 
     func select(_ t: Target) {
+        // "Reported" was for the answer on the tab it was sent from.
+        if t != target { reportSent = false }
         target = t
         showNearby = false
         kick()
