@@ -159,7 +159,9 @@ final class SetupModel {
     /// Changes shown at once, saved a moment later (a run of clicks is one
     /// save, as on the web), put back if the save fails.
     func edit(_ change: (inout [String: Any]) -> Void) {
-        guard let current = profile else { return }
+        // While an import runs, its answer replaces the profile: an edit now
+        // would save the old timetable over it.
+        guard let current = profile, !importing else { return }
         if saveTask == nil { confirmed = current }
         var next = current
         change(&next)
