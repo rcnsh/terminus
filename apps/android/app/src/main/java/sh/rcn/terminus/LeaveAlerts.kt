@@ -184,8 +184,10 @@ object LeaveAlerts {
             .apply { skipAction(ctx, answer)?.let { addAction(it) } }
             .build()
         nm.notify(NOTIFICATION_ID, n)
-        // The bus's place on the bar is the clock's estimate: move it on at each stop.
-        val redraw = ride?.let { RideStyle.nextRedrawAt(it, now) }
+        // The bus's place on the bar is the clock's estimate: move it on at
+        // each stop. A second late, so the last one (getting off) is surely
+        // past it and drops the countdown rather than leaving it to run below zero.
+        val redraw = ride?.let { RideStyle.nextRedrawAt(it, now) }?.plus(1_000)
         if (redraw != null) setAlarm(ctx, ACTION_RIDE, redraw) else cancelAlarm(ctx, ACTION_RIDE)
     }
 
