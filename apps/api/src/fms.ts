@@ -60,6 +60,11 @@ export function pickList(node: unknown, keys: string[]): unknown[] {
   return [];
 }
 
+/** Where the feed's rows are, by the names the arrivals and bus lists have had. */
+const ARRIVAL_LIST_KEYS = ['timings', 'shuttles', 'Shuttles', 'ShuttleService', 'services', 'arrivals'];
+const BUS_LIST_KEYS = ['activebus', 'activeBus', 'ActiveBus', 'buses'];
+const BUS_PLATE_KEYS = ['vehplate', 'veh_plate', 'vehiclePlate', 'plate'];
+
 const NO_BUS = new Set(['-', '--', '', 'n.a.', 'na', 'n/a', 'nil', 'null', 'undefined', '?']);
 
 /**
@@ -146,7 +151,7 @@ function field(o: Record<string, unknown>, ...keys: string[]): unknown {
  * `arrivalTime`. Trusting it produces negative ETAs. Relative minutes only.
  */
 export function normalize(raw: unknown): Arrival[] {
-  const list = pickList(raw, ['timings', 'shuttles', 'Shuttles', 'ShuttleService', 'services', 'arrivals']);
+  const list = pickList(raw, ARRIVAL_LIST_KEYS);
   const out: Arrival[] = [];
 
   for (const entry of list) {
@@ -232,7 +237,7 @@ const hasKey = (o: Record<string, unknown>, ...keys: string[]) => keys.some((k) 
  * passes; only rows that lost the field altogether count.
  */
 export function arrivalsProblem(raw: unknown, arrivals: Arrival[] = normalize(raw), known: ReadonlySet<string> = KNOWN_SERVICES): string | null {
-  const rows = objects(pickList(raw, ['timings', 'shuttles', 'Shuttles', 'ShuttleService', 'services', 'arrivals']));
+  const rows = objects(pickList(raw, ARRIVAL_LIST_KEYS));
   if (!rows.length) return null;
   if (!arrivals.length) return 'no row names a service';
   if (!arrivals.some((a) => known.has(a.svc))) return `no service it names is known (${[...new Set(arrivals.map((a) => a.svc))].slice(0, 4).join(', ')})`;
@@ -244,9 +249,9 @@ export function arrivalsProblem(raw: unknown, arrivals: Arrival[] = normalize(ra
 
 /** Why a bus list with rows can't be read: no row has a plate, or none a position. */
 export function busesProblem(raw: unknown): string | null {
-  const rows = objects(pickList(raw, ['activebus', 'activeBus', 'ActiveBus', 'buses']));
+  const rows = objects(pickList(raw, BUS_LIST_KEYS));
   if (!rows.length) return null;
-  if (!rows.some((r) => hasKey(r, 'vehplate', 'veh_plate', 'vehiclePlate', 'plate'))) return 'no row has a plate';
+  if (!rows.some((r) => hasKey(r, ...BUS_PLATE_KEYS))) return 'no row has a plate';
   if (!rows.some((r) => hasKey(r, 'lat', 'latitude') && hasKey(r, 'lng', 'lon', 'longitude'))) return 'no row has a position';
   return null;
 }
@@ -278,7 +283,7 @@ async function proxyCall(
   endpoint: string,
   params: Record<string, string>,
 ): Promise<unknown> {
-  const res = await timedFetch(`${endpoint}`, proxyUrl(env, endpoint), {
+  const res = await timedFetch(endpoint, proxyUrl(env, endpoint), {
     method: 'POST',
     headers: proxyHeaders(env, session.token),
     body: JSON.stringify({ ...(await proxyEnvelope(env, session)), ...params }),
@@ -298,28 +303,36 @@ async function proxyCall(
 export const NO_REMINT_CODES = new Set(['10009', '10000']);
 
 /**
- * One stop's arrivals via the bus proxy. A rejection gets exactly one retry
+ * One call to the bus proxy, accepted. A rejection gets exactly one retry
  * with a freshly minted token, unless its code says a token cannot help; a
- * second rejection THROWS, so the stop is reported unavailable and the answer
- * degrades to an honest `unknown` rather than passing an empty result off as
- * "the feed says no bus".
+ * second rejection THROWS.
+ */
+async function acceptedCall(env: Env, endpoint: string, params: Record<string, string>, nowMs: number): Promise<ProxyBody> {
+  if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
+  let session = await getSession(env, nowMs);
+  let body = await proxyCall(env, session, endpoint, params);
+  if (!proxyOk(body) && !NO_REMINT_CODES.has(String((body as ProxyBody | null)?.code))) {
+    session = await getSession(env, nowMs, { force: true });
+    body = await proxyCall(env, session, endpoint, params);
+  }
+  if (!proxyOk(body)) {
+    const b = body as ProxyBody | null;
+    throw new UpstreamRejected(String(b?.code ?? '?'), `${endpoint} rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
+  }
+  return body;
+}
+
+/**
+ * One stop's arrivals via the bus proxy (acceptedCall). A refusal throws, so
+ * the stop is reported unavailable and the answer degrades to an honest
+ * `unknown` rather than passing an empty result off as "the feed says no bus".
  */
 export async function fetchArrivals(
   env: Env,
   code: string,
   nowMs: number = Date.now(),
 ): Promise<StopArrivals> {
-  if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
-  let session = await getSession(env, nowMs);
-  let body = await proxyCall(env, session, 'shuttle-service', { busstopname: code });
-  if (!proxyOk(body) && !NO_REMINT_CODES.has(String((body as ProxyBody | null)?.code))) {
-    session = await getSession(env, nowMs, { force: true });
-    body = await proxyCall(env, session, 'shuttle-service', { busstopname: code });
-  }
-  if (!proxyOk(body)) {
-    const b = body as ProxyBody | null;
-    throw new UpstreamRejected(String(b?.code ?? '?'), `shuttle-service rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
-  }
+  const body = await acceptedCall(env, 'shuttle-service', { busstopname: code }, nowMs);
   // "00000" with no list anywhere is not "no bus": the payload changed shape,
   // and reading it as an empty board would print confident headway guesses.
   if (!hasList(body.data)) throw new Error('shuttle-service answered in an unknown shape (no arrivals list)');
@@ -328,8 +341,6 @@ export async function fetchArrivals(
   if (problem) throw new Error(`shuttle-service answered in an unknown shape (${problem})`);
   return { code, arrivals, fetchedAt: nowMs, stale: false, available: true };
 }
-
-export { UpstreamRejected };
 
 /**
  * Whether NUS accepts a version string: a token mint plus one shuttle-service
@@ -438,10 +449,10 @@ export interface ActiveBuses {
  */
 export function normalizeBuses(data: unknown): RawBus[] {
   const out: RawBus[] = [];
-  for (const raw of pickList(data, ['activebus', 'activeBus', 'ActiveBus', 'buses'])) {
+  for (const raw of pickList(data, BUS_LIST_KEYS)) {
     if (!raw || typeof raw !== 'object') continue;
     const item = raw as Record<string, unknown>;
-    const plate = plateOf(field(item, 'vehplate', 'veh_plate', 'vehiclePlate', 'plate'));
+    const plate = plateOf(field(item, ...BUS_PLATE_KEYS));
     // Missing or blank is missing, not 0 (Number(null) and Number('') are 0).
     const num = (v: unknown) => (v == null || v === '' ? NaN : Number(v));
     const lat = num(field(item, 'lat', 'latitude'));
@@ -464,17 +475,7 @@ export function normalizeBuses(data: unknown): RawBus[] {
 
 /** One service's buses, with one re-mint on a rejection, as fetchArrivals. */
 export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Date.now()): Promise<ActiveBuses> {
-  if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
-  let session = await getSession(env, nowMs);
-  let body = await proxyCall(env, session, 'active-bus', { route_code: svc });
-  if (!proxyOk(body) && !NO_REMINT_CODES.has(String((body as ProxyBody | null)?.code))) {
-    session = await getSession(env, nowMs, { force: true });
-    body = await proxyCall(env, session, 'active-bus', { route_code: svc });
-  }
-  if (!proxyOk(body)) {
-    const b = body as ProxyBody | null;
-    throw new UpstreamRejected(String(b?.code ?? '?'), `active-bus rejected: code=${b?.code ?? '?'} msg=${String(b?.msg ?? '').slice(0, 120)}`, JSON.stringify(body));
-  }
+  const body = await acceptedCall(env, 'active-bus', { route_code: svc }, nowMs);
   // No list at all is a changed payload, not "no buses running".
   if (!hasList(body.data)) throw new Error('active-bus answered in an unknown shape (no bus list)');
   // Rows it can't read would show as "No D2 buses running right now".
