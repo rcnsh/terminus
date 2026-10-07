@@ -171,10 +171,15 @@ export class Trip {
     const date = sgtDate(nowMs);
     const day = stored && stored.date === date ? stored : null;
     // Plans are written before wake() reads the day back to note its next
-    // wake, so that write can't put back a day from before them.
+    // wake, so that write can't put back a day from before them. Only they
+    // are waited for: the object is billed for the time it's awake.
     const plans: Promise<unknown>[] = [];
-    const ctx = { waitUntil: (p: Promise<unknown>) => void plans.push(p), passThroughOnException() {} } as unknown as ExecutionContext;
-    const card = await tripCardFor(env, ctx, DEPS, userId, day, nowMs, (key, plan) => this.putPlan(date, key, plan).then(() => undefined));
+    const ctx = { waitUntil: (p: Promise<unknown>) => this.state.waitUntil(p), passThroughOnException() {} } as unknown as ExecutionContext;
+    const card = await tripCardFor(env, ctx, DEPS, userId, day, nowMs, (key, plan) => {
+      const p = this.putPlan(date, key, plan).then(() => undefined);
+      plans.push(p);
+      return p;
+    });
     await Promise.allSettled(plans);
     if (!card) return null;
 
