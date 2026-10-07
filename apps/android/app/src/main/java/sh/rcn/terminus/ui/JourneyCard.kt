@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -83,7 +85,10 @@ internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, le
         SkyGround(road)
         RoadLine(journey, now)
     }
-    when (style) {
+    // At a large text size the route's points are too narrow for their names
+    // and times: the trip as steps then, one point to a line, with room to wrap.
+    val big = LocalDensity.current.fontScale > LARGE_TEXT
+    when (if (big && style != CardStyle.TICKET) CardStyle.STEPS else style) {
         CardStyle.TICKET -> Ticket(answer, journey, now, top)
         CardStyle.STEPS -> Steps(answer, journey, now, top)
         else -> Route(answer, journey, now, top)
@@ -102,7 +107,7 @@ internal fun JourneyCard(answer: NextAnswer, journey: Journey, style: String, le
 private fun Route(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     top {
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
-        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         LeaveHead(answer, journey, now)
         val under = listOfNotNull(JourneyText.by(answer, journey, now), JourneyText.arrive(journey)).joinToString(" · ")
         if (under.isNotEmpty()) Text(under, color = if (answer.leaveLate) MaterialTheme.colorScheme.error else muted)
@@ -153,8 +158,9 @@ private fun Point(name: String, time: String, dot: Color, narrow: Boolean = fals
     Column(if (narrow) Modifier.widthIn(min = 44.dp, max = 64.dp) else Modifier.width(76.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(CAPTION))
         Box(Modifier.size(DOT), contentAlignment = Alignment.Center) { Box(Modifier.size(14.dp).background(dot, CircleShape)) }
-        Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
-        Text(time, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, textAlign = TextAlign.Center)
+        // A long name takes two lines; the time is never cut.
+        Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+        Text(time, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 
@@ -169,6 +175,9 @@ private fun Stretch(modifier: Modifier, above: @Composable () -> Unit, takes: St
     }
 }
 
+/** Text scaled past this (Settings › Display), the route card is drawn as steps. */
+private const val LARGE_TEXT = 1.3f
+
 private val CAPTION = 22.dp
 private val DOT = 18.dp
 
@@ -178,10 +187,10 @@ private fun Ticket(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     val bus = journey.bus
     top {
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
-        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
             if (bus != null) {
-                Box(Modifier.size(64.dp).background(Color(bus.color), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                Box(Modifier.sizeIn(minWidth = 64.dp, minHeight = 64.dp).background(Color(bus.color), RoundedCornerShape(16.dp)).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
                     Text(badgeText(bus.svc, bus.paid), color = inkOn(Color(bus.color)), fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, maxLines = 1)
                 }
             } else {
@@ -239,7 +248,7 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
     val late = answer.leaveLate
     top {
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
-        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(JourneyText.to(answer, journey, clockOf()), color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         LeaveHead(answer, journey, now)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOfNotNull(JourneyText.by(answer, journey, now), journey.slack).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
@@ -264,7 +273,7 @@ private fun Steps(answer: NextAnswer, journey: Journey, now: Long, top: Top) {
             JourneyText.ride(journey).orEmpty(),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(bus.stop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(bus.stop, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 BusBadge(bus.svc, bus.color, 13.sp, paid = bus.paid)
                 JourneyText.busIn(journey, now)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1) }
             }
@@ -304,7 +313,9 @@ private sealed interface Line {
 private fun LinePoint(time: String, dot: Dot, line: Line?, below: String?, late: Boolean = false, title: @Composable () -> Unit) {
     val c = MaterialTheme.colorScheme
     Row(Modifier.height(IntrinsicSize.Min)) {
-        Text(time, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.width(72.dp).padding(top = 3.dp))
+        // Wider with larger text, the same for every point so the line stays straight.
+        val wide = LocalDensity.current.fontScale.coerceIn(1f, 1.8f)
+        Text(time, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(72.dp * wide).padding(top = 3.dp))
         Column(Modifier.width(26.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
             val ring = c.onSurface
             val bg = c.background

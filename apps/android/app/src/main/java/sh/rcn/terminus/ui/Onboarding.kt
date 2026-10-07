@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -199,9 +200,9 @@ private fun StepButtons(next: () -> Unit, back: (() -> Unit)?, nextLabel: String
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (back != null) TextButton(onClick = back) { Text(stringResource(R.string.back)) }
         if (skip != null) {
-            OutlinedButton(onClick = next, modifier = Modifier.weight(1f).height(52.dp)) { Text(skip) }
+            OutlinedButton(onClick = next, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text(skip) }
         } else {
-            Button(onClick = next, enabled = enabled, modifier = Modifier.weight(1f).height(52.dp)) { Text(nextLabel ?: stringResource(R.string.continue_)) }
+            Button(onClick = next, enabled = enabled, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text(nextLabel ?: stringResource(R.string.continue_)) }
         }
     }
 }

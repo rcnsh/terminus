@@ -241,10 +241,10 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
         Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, w.mapsUri())) } },
-                modifier = Modifier.weight(1f).height(48.dp),
-            ) { Text(stringResource(R.string.directions_to, w.name), maxLines = 1) }
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text(stringResource(R.string.directions_to, w.name), maxLines = 2, overflow = TextOverflow.Ellipsis) }
             if (skips.isNotEmpty()) SkipMenu(skips, onAction, busy, label = null)
-            else actions.firstOrNull()?.let { a -> OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.height(48.dp)) { Text(a.label, maxLines = 1) } }
+            else actions.firstOrNull()?.let { a -> OutlinedButton(onClick = { onAction(a) }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(a.label, maxLines = 2, overflow = TextOverflow.Ellipsis) } }
         }
     }
     val rest = if (walkTo != null && skips.isEmpty()) actions.drop(1) else actions
