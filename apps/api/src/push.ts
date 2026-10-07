@@ -240,19 +240,21 @@ async function toAndroid(env: Env, a: ServiceAccount, fcm: Fcm, pushToken: strin
 }
 
 type FcmErrorBody = {
-  error?: { status?: string; details?: { errorCode?: string; fieldViolations?: { field?: string }[] }[] };
+  error?: { status?: string; message?: string; details?: { errorCode?: string; fieldViolations?: { field?: string }[] }[] };
 };
 
 /**
  * Whether FCM's error says this device's token is no good: UNREGISTERED (the
- * app was uninstalled), or a 400 that names the token as the bad field. Any
- * other 400 is our message's fault, and must not cost every phone its token.
+ * app was uninstalled), or a 400 that names the token as the bad field or, as
+ * FCM usually words it, says the registration token isn't valid. Any other 400
+ * is our message's fault, and must not cost every phone its token.
  */
 export async function fcmError(res: Response): Promise<{ tokenGone: boolean; code: string }> {
   const body = (await res.json().catch(() => null)) as FcmErrorBody | null;
   const details = Array.isArray(body?.error?.details) ? body.error.details : [];
   const code = details.find((d) => typeof d?.errorCode === 'string')?.errorCode ?? body?.error?.status ?? '';
-  const badToken = details.some((d) => Array.isArray(d?.fieldViolations) && d.fieldViolations.some((v) => v?.field === 'message.token'));
+  const namesToken = details.some((d) => Array.isArray(d?.fieldViolations) && d.fieldViolations.some((v) => v?.field === 'message.token'));
+  const badToken = namesToken || /registration token/i.test(String(body?.error?.message ?? ''));
   return { tokenGone: res.status === 404 || code === 'UNREGISTERED' || (res.status === 400 && badToken), code };
 }
 
