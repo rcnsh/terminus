@@ -22,6 +22,7 @@ import {
   endSession,
   listDevices,
   loadProfileJson,
+  loadProfileRow,
   normalizeEmail,
   normalizePairCode,
   tokenFrom,
@@ -37,6 +38,7 @@ import {
   requestLink,
   revokeDevice,
   saveProfileJson,
+  saveProfileIf,
   sessionCookie,
   PLATFORMS,
 } from './accounts.ts';
@@ -246,6 +248,45 @@ export async function getProfile(db: D1Database, userId: string, graph: Graph, r
   useProfileLang(LANG_PREFS.includes(p.lang) ? p.lang : 'auto');
   return salvageProfile(p, (c) => idx.byCode.has(c) || landmark(c) !== null, pinnable(graph));
 }
+
+/** Tries before a read-modify-write of the profile gives up to another device's writes. */
+const PROFILE_TRIES = 3;
+const PROFILE_CHANGED = 'your settings were changed on another device; try again';
+
+/**
+ * A change to the saved profile that can't lose another device's write made
+ * meanwhile: it saves only if nothing was saved since it read, and otherwise
+ * reads again and redoes the change. `change` returns the new profile, or a
+ * Response to answer with instead (a refusal).
+ */
+async function changeProfile(
+  db: D1Database,
+  userId: string,
+  graph: Graph,
+  nowMs: number,
+  change: (p: Profile) => Profile | Response,
+): Promise<{ profile: Profile; version: number } | Response> {
+  for (let i = 0; i < PROFILE_TRIES; i++) {
+    const row = await loadProfileRow(db, userId);
+    const next = change(await getProfile(db, userId, graph, row?.json ?? null));
+    if (next instanceof Response) return next;
+    const version = await saveProfileIf(db, userId, next, nowMs, row?.updated ?? null);
+    if (version !== null) return { profile: next, version };
+  }
+  return json({ error: PROFILE_CHANGED }, 409);
+}
+
+/** The version in an If-Match header (`"123"`, or weakened by compression,
+ *  `W/"123"`; `"0"` for a profile never saved); undefined when there is none
+ *  to go by, and the write is unconditional as before. */
+export function ifMatchVersion(req: Request): number | null | undefined {
+  const m = /^\s*(?:W\/)?"(\d{1,16})"\s*$/.exec(req.headers.get('if-match') ?? '');
+  if (!m) return undefined;
+  const v = Number(m[1]);
+  return v === 0 ? null : v;
+}
+
+const versionTag = (v: number | null | undefined) => `"${v ?? 0}"`;
 
 /** A stop a pin may name: one of `graph`'s, or a public bus's stop of its own. */
 function pinnable(graph: Graph): (code: string) => boolean {
@@ -481,7 +522,11 @@ export const ME_ROUTES: MeRoute[] = [
     run: async ({ deps, db, session }) => {
       // The limits ride along, so clients needn't hard-code them; a client
       // that sends the whole profile back sends them too, and they're ignored.
-      return json({ ...(await getProfile(db, session.user.id, deps.graph)), limits: profileLimits() });
+      // The version goes in the ETag, not the body, for the same reason: a
+      // client that sends it back as If-Match has asked for the check.
+      const row = await loadProfileRow(db, session.user.id);
+      const profile = await getProfile(db, session.user.id, deps.graph, row?.json ?? null);
+      return json({ ...profile, limits: profileLimits() }, 200, { etag: versionTag(row?.updated) });
     },
   },
   {
@@ -495,8 +540,12 @@ export const ME_ROUTES: MeRoute[] = [
       if (!r.ok) return json({ error: r.error }, 400);
       // One-off trips are done with once their day has passed.
       r.profile.once = r.profile.once.filter((o) => o.date >= sgtDate(nowMs));
-      await saveProfileJson(db, session.user.id, r.profile, nowMs);
-      return json({ ...r.profile, limits: profileLimits() });
+      // With If-Match (the ETag of the profile it started from), the save
+      // happens only if no other device saved since; without, as before.
+      const from = ifMatchVersion(req);
+      const version = from === undefined ? await saveProfileJson(db, session.user.id, r.profile, nowMs) : await saveProfileIf(db, session.user.id, r.profile, nowMs, from);
+      if (version === null) return json({ error: PROFILE_CHANGED }, 412);
+      return json({ ...r.profile, limits: profileLimits() }, 200, { etag: versionTag(version) });
     },
   },
   {
@@ -506,24 +555,28 @@ export const ME_ROUTES: MeRoute[] = [
       // A one-off trip (phase 8.3): "Science library at 14:00 today". Planned
       // like a class on its day; "Not going" drops it. Answers with /me/next.
       const body = await readJson(req);
-      const profile = await getProfile(db, session.user.id, deps.graph);
-      // A favourite by its key, or a stop, food court or room by its code.
-      const saved = typeof body?.place === 'string' ? profile.places.find((p) => p.key === body.place) : undefined;
-      const dest = saved ? { to: saved.to, label: saved.label } : typeof body?.to === 'string' ? resolveTo(deps.graph, body.to) : null;
-      if (!dest) return json({ error: "send place (a favourite's key) or to (a stop, place or room code)" }, 400);
-      const atMin = body?.atMin;
-      if (typeof atMin !== 'number' || !Number.isInteger(atMin) || atMin < 0 || atMin > 1439) return json({ error: 'atMin must be minutes past midnight, Singapore time' }, 400);
-      const today = sgtDate(nowMs);
-      const date = typeof body?.date === 'string' ? body.date : today;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || date > sgtDate(nowMs + 7 * 86_400_000)) return json({ error: 'date must be today or within the next week (YYYY-MM-DD)' }, 400);
-      if (date === today && atMin <= sgt(nowMs).minutes) return json({ error: 'that time has passed today' }, 400);
-      const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, PROFILE_LIMITS.label) : dest.label;
-      const once = profile.once.filter((o) => o.date >= today && !(o.date === date && o.arriveByMin === atMin && o.to === dest.to));
-      if (once.length >= PROFILE_LIMITS.once) return json({ error: m().tooManyOnce(PROFILE_LIMITS.once) }, 400);
-      once.push({ date, arriveByMin: atMin, to: dest.to, label });
-      once.sort((a, b) => a.date.localeCompare(b.date) || a.arriveByMin - b.arriveByMin);
-      const next = { ...profile, once };
-      await saveProfileJson(db, session.user.id, next, nowMs);
+      // Read, changed and saved again if another device saved meanwhile, so
+      // neither write is lost.
+      const changed = await changeProfile(db, session.user.id, deps.graph, nowMs, (profile) => {
+        // A favourite by its key, or a stop, food court or room by its code.
+        const saved = typeof body?.place === 'string' ? profile.places.find((p) => p.key === body.place) : undefined;
+        const dest = saved ? { to: saved.to, label: saved.label } : typeof body?.to === 'string' ? resolveTo(deps.graph, body.to) : null;
+        if (!dest) return json({ error: "send place (a favourite's key) or to (a stop, place or room code)" }, 400);
+        const atMin = body?.atMin;
+        if (typeof atMin !== 'number' || !Number.isInteger(atMin) || atMin < 0 || atMin > 1439) return json({ error: 'atMin must be minutes past midnight, Singapore time' }, 400);
+        const today = sgtDate(nowMs);
+        const date = typeof body?.date === 'string' ? body.date : today;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || date > sgtDate(nowMs + 7 * 86_400_000)) return json({ error: 'date must be today or within the next week (YYYY-MM-DD)' }, 400);
+        if (date === today && atMin <= sgt(nowMs).minutes) return json({ error: 'that time has passed today' }, 400);
+        const label = typeof body?.label === 'string' && body.label.trim() ? body.label.trim().slice(0, PROFILE_LIMITS.label) : dest.label;
+        const once = profile.once.filter((o) => o.date >= today && !(o.date === date && o.arriveByMin === atMin && o.to === dest.to));
+        if (once.length >= PROFILE_LIMITS.once) return json({ error: m().tooManyOnce(PROFILE_LIMITS.once) }, 400);
+        once.push({ date, arriveByMin: atMin, to: dest.to, label });
+        once.sort((a, b) => a.date.localeCompare(b.date) || a.arriveByMin - b.arriveByMin);
+        return { ...profile, once };
+      });
+      if (changed instanceof Response) return changed;
+      const next = changed.profile;
       const [day, prefs] = await Promise.all([tripDay(env, session.user.id, next, nowMs), prefsFor(db, session.user.id, next, nowMs)]);
       return json(await nextBody(url, env, ctx, nowMs, deps, next, day, session.user.id, prefs));
     },
@@ -561,12 +614,17 @@ export const ME_ROUTES: MeRoute[] = [
         const why = r.missing.length ? m().modsNoClasses(r.missing.join(', '), r.missing.length !== 1, term) : m().linkNoClasses(term);
         return json({ error: m().nothingImported(why), missing: r.missing }, 422);
       }
-      const profile = await getProfile(db, session.user.id, deps.graph);
-      profile.trips = r.trips.slice(0, PROFILE_LIMITS.trips);
-      profile.share = share;
-      profile.term = r.term;
-      await saveProfileJson(db, session.user.id, profile, nowMs);
-      return json({ profile: { ...profile, limits: profileLimits() }, unresolved: r.unresolved, missing: r.missing, online: r.online, term });
+      // The timetable replaces the old one; the rest of the profile is read
+      // again if another device saved it meanwhile, so that write isn't lost.
+      const changed = await changeProfile(db, session.user.id, deps.graph, nowMs, (profile) => ({
+        ...profile,
+        trips: r.trips.slice(0, PROFILE_LIMITS.trips),
+        share,
+        term: r.term,
+      }));
+      if (changed instanceof Response) return changed;
+      const { profile } = changed;
+      return json({ profile: { ...profile, limits: profileLimits() }, unresolved: r.unresolved, missing: r.missing, online: r.online, term }, 200, { etag: versionTag(changed.version) });
     },
   },
   {

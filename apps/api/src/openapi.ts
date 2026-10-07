@@ -1015,6 +1015,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         get: {
           tags: ['Account'],
           summary: 'Your setup',
+          description: 'The `ETag` header is the profile’s version (`"0"` before it is first saved). Send it back as `If-Match` on PUT to save only if no other device saved since.',
           operationId: 'getProfile',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ $ref: '#/components/schemas/Profile' }), '401': errorResponse('No valid session.') },
@@ -1022,11 +1023,20 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         put: {
           tags: ['Account'],
           summary: 'Replace your setup',
-          description: 'Replaces the whole profile. Missing fields are reset to their defaults.',
+          description:
+            'Replaces the whole profile. Missing fields are reset to their defaults. Optional: send `If-Match` with the `ETag` from the GET the edit started from, ' +
+            'and the save happens only if the profile is still that version (412 otherwise: read it again and redo the edit). Without it, the last save wins. ' +
+            'The new version comes back as `ETag`.',
           operationId: 'putProfile',
           security: [{ bearer: [] }, { cookie: [] }],
+          parameters: [{ name: 'If-Match', in: 'header', required: false, schema: { type: 'string', example: '"1767225600000"' }, description: 'The `ETag` of the profile this edit started from.' }],
           requestBody: jsonBody({ $ref: '#/components/schemas/Profile' }),
-          responses: { '200': ok({ $ref: '#/components/schemas/Profile' }), '400': errorResponse('Invalid field; the message names it.'), '401': errorResponse('No valid session.') },
+          responses: {
+            '200': ok({ $ref: '#/components/schemas/Profile' }),
+            '400': errorResponse('Invalid field; the message names it.'),
+            '401': errorResponse('No valid session.'),
+            '412': errorResponse('Sent with If-Match, and another device saved the profile since.'),
+          },
         },
       },
       '/me/once': {
@@ -1036,14 +1046,18 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description:
             '"Science library at 14:00 today": `place` (a favourite\'s key) or `to` (a stop, place or room code), `atMin` (minutes past midnight, Singapore time), and optionally `label` ' +
             'and `date` (today by default, up to a week ahead). Kept in the profile\'s `once` and planned like a class that day, with its leave-by, ' +
-            'question and "Not going". Answers with the new /me/next.',
+            'question and "Not going". Answers with the new /me/next. A save from another device at the same moment is kept: the trip is added to it.',
           operationId: 'meOnce',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
             { type: 'object', required: ['atMin'], properties: { place: { type: 'string' }, to: { type: 'string' }, atMin: { type: 'integer' }, label: { type: 'string' }, date: { type: 'string', format: 'date' } } },
             { to: 'CLB', atMin: 840, label: 'Science library' },
           ),
-          responses: { '200': ok({ type: 'object', description: 'The same as GET /me/next.' }), '400': errorResponse('Unknown place, a time already past, or too many.') },
+          responses: {
+            '200': ok({ type: 'object', description: 'The same as GET /me/next.' }),
+            '400': errorResponse('Unknown place, a time already past, or too many.'),
+            '409': errorResponse('Other devices kept saving the profile meanwhile; try again.'),
+          },
         },
       },
       '/me/import': {
@@ -1064,6 +1078,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             }),
             '400': errorResponse('Not a NUSMods share link.'),
             '401': errorResponse('No valid session.'),
+            '409': errorResponse('Other devices kept saving the profile meanwhile; try again.'),
           },
         },
       },

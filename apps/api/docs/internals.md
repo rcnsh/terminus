@@ -198,6 +198,16 @@ NUSMods' semester dates and MOM's public holidays by
 `scripts/fetch_calendar.py`). [`src/config.ts`](../src/config.ts) holds the cache
 TTLs and tuning constants.
 
+The profile is one JSON document per account, with a version (`updated`,
+which every save moves forward). `POST /me/once` and `POST /me/import`
+change part of it: they save only if the version is still the one they read,
+and otherwise read it again and redo the change (three tries, then 409), so
+a one-off trip added on one phone isn't lost to a save from another.
+`PUT /me/profile` replaces the whole document; the version is its `ETag`
+(`GET /me/profile` sends it, `"0"` before the first save). A client that
+sends it back as `If-Match` is refused with 412 if another device saved
+since; without it, as the apps installed today send, the last save wins.
+
 The calendar keeps itself up to date without a deploy
 ([src/calendarsync.ts](../src/calendarsync.ts)). `data/calendar.json` is
 bundled at deploy time, and the scrape workflow refreshes it weekly, but a
