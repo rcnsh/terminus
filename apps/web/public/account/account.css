@@ -148,6 +148,7 @@ a.settings-row { text-decoration: none; }
 /* Delete account: the only red on any page, alone in its card at the foot. */
 .settings-row.danger-row .row-title { color: var(--bad); }
 .unit { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+.unit .unit-and { display: inline; margin: 0; font-size: inherit; color: inherit; }
 .unit input[type="time"] { width: auto; padding: 6px 10px; border: 0; background: var(--surface-2); }
 .trips .list { margin: 0; padding: 0 16px; }
 /* A checkbox drawn as an on/off switch. */
@@ -331,9 +332,13 @@ a.settings-row { text-decoration: none; }
 .code-input::placeholder { color: var(--muted); opacity: 0.45; }
 .code { font: 700 1.7rem/1 ui-monospace, "SF Mono", monospace; letter-spacing: 0.16em; margin: 14px 0 4px; }
 
-/* Bottom right, clear of the buttons in the content column. */
-.toast { position: fixed; bottom: 18px; right: 18px; margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+/* Bottom right, clear of the buttons in the content column. A problem
+   stays, with × to close it, so it can be clicked. */
+.toast { position: fixed; z-index: 25; bottom: 18px; right: 18px; max-width: calc(100vw - 36px); display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 14px; border-radius: 18px; background: var(--ink); color: var(--bg); font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
 .toast.show { opacity: 1; }
+.toast.error.show { pointer-events: auto; }
+.toast-close { flex: none; margin: -6px -8px -6px 0; padding: 4px 10px; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.toast-close:focus-visible { outline-color: var(--bg); outline-offset: -2px; }
 
 /* ---------- Onboarding ----------
    Motion is short and quiet: steps slide 16px and fade, the progress bar
@@ -410,6 +415,7 @@ a.settings-row { text-decoration: none; }
 }
 @keyframes search-in { from { opacity: 0; transform: translateY(-4px); } }
 .search-list.flip { left: auto; right: 0; }
+.search-sub { margin: 0; padding: 0; list-style: none; }
 .search-group { padding: 8px 10px 4px; font: 600 0.7rem/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .search-list [role=option] { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
 .search-list [role=option].active, .search-list [role=option]:hover { background: var(--surface-2); }

@@ -2,7 +2,7 @@
 // out and moves between them). Each saves as it changes, through the shared
 // profile (profile.js).
 
-import { Rich, html, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
+import { Rich, html, refocusAfterRemove, store, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, clockOpts, locale, spaced, t } from './dom.js';
 import { Journey, STYLES, cardStyle, setCardStyle, styleHint, styleName } from './journey.js';
 import {
@@ -130,21 +130,25 @@ function Field({ id, label, sub, children }) {
 function Group({ title, hint, id, children }) {
   return html`
     <section class="trips-group">
-      <h3 class="eyebrow" id=${id}>${title}</h3>
+      <h3 class="eyebrow" id=${id} tabindex="-1">${title}</h3>
       <div class="card settings-list">${children}</div>
       ${hint && html`<p class="hint group-hint">${hint}</p>`}
     </section>
   `;
 }
 
-/** Two or three choices as pills on one track (radios underneath); `full` spreads them across the row. */
+/**
+ * Two or three choices as pills on one track (radios underneath); `full`
+ * spreads them across the row. An option is [value, label], or [value,
+ * label, lang] for a label in another language than the page's.
+ */
 export function Pills({ name, value, options, onChange, labelledBy, full = false }) {
   return html`
     <div class=${full ? 'segmented full' : 'segmented'} role="radiogroup" aria-labelledby=${labelledBy}>
       ${options.map(
-        ([v, label]) => html`<label key=${v}>
+        ([v, label, lang]) => html`<label key=${v}>
           <input type="radio" name=${name} value=${v} checked=${value === v} onChange=${() => onChange(v)} />
-          <span>${label}</span>
+          <span lang=${lang}>${label}</span>
         </label>`,
       )}
     </div>
@@ -215,7 +219,7 @@ export function Trips() {
     if (v == null) return;
     const next = { ...p, [field]: v };
     if (next.dayStartMin >= next.dayEndMin) {
-      toast(t('The start time must be before the end time'));
+      toast(t('The start time must be before the end time'), { error: true });
       e.currentTarget.value = hhmm(p[field]);
       return;
     }
@@ -255,7 +259,7 @@ export function Trips() {
               <//>
               <div class="field field-note">
                 <button type="button" class="link-btn" onClick=${locate}>${t('Pick the stop nearest me')}</button>
-                ${msg && html`<span class="hint" role="status">${msg}</span>`}
+                <span class="hint" role="status">${msg}</span>
               </div>
             `
           : null}
@@ -278,9 +282,9 @@ export function Trips() {
       <${Group} title=${t('Your day')} hint=${t('Outside these hours, you see your next class instead of a bus.')}>
         <${Field} id="day-start" label=${t('Show buses between')}>
           <span class="unit">
-            <input id="day-start" type="time" aria-label=${t('Day starts')} value=${hhmm(p.dayStartMin ?? 360)} onChange=${dayTime('dayStartMin')} />
-            ${t('and')}
-            <input id="day-end" type="time" aria-label=${t('Day ends')} value=${hhmm(p.dayEndMin ?? 1080)} onChange=${dayTime('dayEndMin')} />
+            <input id="day-start" type="time" value=${hhmm(p.dayStartMin ?? 360)} onChange=${dayTime('dayStartMin')} />
+            <label class="unit-and" for="day-end">${t('and')}<span class="sr-only"> (${t('Day ends')})</span></label>
+            <input id="day-end" type="time" value=${hhmm(p.dayEndMin ?? 1080)} onChange=${dayTime('dayEndMin')} />
           </span>
         <//>
         <div class="field">
@@ -454,7 +458,7 @@ export function Timetable({ me }) {
             <input id="share" ref=${shareBox} type="url" placeholder="https://nusmods.com/timetable/sem-1/share?…" value=${share} onInput=${(e) => setShare(e.currentTarget.value)} />
             <button type="submit" class="btn small">${t('Import')}</button>
           </div>
-          ${msg && html`<p class="hint" role="status">${msg}</p>`}
+          <p class="hint" role="status">${msg}</p>
         </form>
       <//>
       <${Group} title=${count} hint=${all.length || usual.length ? '' : t('No classes yet. Import from NUSMods or add them by hand.')}>
@@ -502,7 +506,10 @@ function ClassRow({ c, list }) {
           type="button"
           class="remove"
           aria-label=${t('Remove {0}', c.label)}
-          onClick=${() => edit((x) => (x[list] = x[list].filter((y) => !same(y, c))))}
+          onClick=${(e) => {
+            refocusAfterRemove(e.currentTarget, e.currentTarget.closest('.trips-group')?.querySelector('h3'));
+            edit((x) => (x[list] = x[list].filter((y) => !same(y, c))));
+          }}
         >${t('Remove')}</button>
       </div>
     </details>
@@ -525,7 +532,10 @@ function UsualRow({ u }) {
           type="button"
           class="remove"
           aria-label=${t('Remove {0}', `${place.label} ${DAYS[u.day]} ${clockMin(u.atMin)}`)}
-          onClick=${() => edit((x) => (x.usual = (x.usual ?? []).filter((y) => !(y.place === u.place && y.day === u.day && y.atMin === u.atMin))))}
+          onClick=${(e) => {
+            refocusAfterRemove(e.currentTarget, e.currentTarget.closest('.trips-group')?.querySelector('h3'));
+            edit((x) => (x.usual = (x.usual ?? []).filter((y) => !(y.place === u.place && y.day === u.day && y.atMin === u.atMin))));
+          }}
         >${t('Remove')}</button>
       </div>
     </details>
@@ -720,11 +730,14 @@ function Place({ place }) {
           type="button"
           class="remove"
           aria-label=${t('Remove {0}', place.label)}
-          onClick=${() =>
+          onClick=${(e) => {
+            // The list's last one gone, the search box to add another is next.
+            refocusAfterRemove(e.currentTarget, document.querySelector('#place-form input'));
             edit((x) => {
               x.places = x.places.filter((y) => y.key !== place.key);
               x.usual = (x.usual ?? []).filter((u) => u.place !== place.key);
-            })}
+            });
+          }}
         >${t('Remove')}</button>
       </div>
     </li>
@@ -774,9 +787,11 @@ export function Devices({ me }) {
                 type="button"
                 class="remove"
                 aria-label=${t('Remove {0}', d.name ?? t('Device'))}
-                onClick=${async () => {
+                onClick=${async (e) => {
+                  const button = e.currentTarget;
                   await api(`/me/devices/${d.id}`, { method: 'DELETE' });
-                  load();
+                  await load();
+                  refocusAfterRemove(button, document.querySelector('.add-device'));
                 }}
               >${t('Remove')}</button>
             </li>`,
@@ -784,7 +799,7 @@ export function Devices({ me }) {
         </ul>
       <//>`}
       <section class="trips-group">
-        <button type="button" class="btn wide" onClick=${() => setPairing((n) => (n ?? 0) + 1)}>${t('Add a device')}</button>
+        <button type="button" class="btn wide add-device" onClick=${() => setPairing((n) => (n ?? 0) + 1)}>${t('Add a device')}</button>
         <${Rich} as="p" class="hint group-hint" text=${t('Get the <a href="/download/android">Android app</a> or <a href="/download/mac">Mac app</a> and sign in with this email, or pair it here with a code.')} />
         ${pairing && html`<div class="card"><${Pairing} key=${pairing} count=${devices?.length ?? 0} reload=${load} /></div>`}
       </section>
@@ -850,7 +865,7 @@ function Pairing({ count, reload }) {
   }, []);
   return html`
     <div class="pairing">
-      <div class="qr" ref=${qr} aria-label=${t('QR code to pair a phone')}></div>
+      <div class="qr" ref=${qr} role="img" aria-label=${t('QR code to pair a phone')}></div>
       ${state.code
         ? html`<p class="flaps" role="img" aria-label=${state.text}>${[...state.code].map((c, i) => html`<span class="flap" key=${i}>${c}</span>`)}</p>`
         : html`<p class="code">${state.text}</p>`}
@@ -877,7 +892,7 @@ export function Language() {
           <${Pills}
             name="lang"
             value=${window.i18n?.pref() ?? 'auto'}
-            options=${[['auto', t('Auto')], ['en', 'English'], ['zh', '中文']]}
+            options=${[['auto', t('Auto')], ['en', 'English', 'en'], ['zh', '中文', 'zh-Hans']]}
             labelledBy="lang-label"
             full
             onChange=${async (v) => {
@@ -897,7 +912,7 @@ export function Language() {
             options=${[['auto', t('Auto')], ...CLOCKS().map((c) => [c.value, c.label])]}
             labelledBy="clock-label"
             full
-            onChange=${(v) => saveNow((x) => (x.clock = v)).catch((err) => toast(t('Not saved. {0}', err.message)))}
+            onChange=${(v) => saveNow((x) => (x.clock = v)).catch((err) => toast(t('Not saved. {0}', err.message), { error: true }))}
           />
         </div>
       <//>
@@ -1051,7 +1066,7 @@ export function Account({ me, inApp, onAddEmail, onSignOut }) {
         <div class="card settings-list">
           <button type="button" class="settings-row danger-row" onClick=${remove}><span class="row-text"><span class="row-title">${t('Delete account')}</span></span>${chev}</button>
         </div>
-        ${msg && html`<p class="hint group-hint" role="status">${msg}</p>`}
+        <p class="hint group-hint" role="status">${msg}</p>
       </section>
     </div>
   `;
@@ -1082,11 +1097,13 @@ function Keys() {
                 type="button"
                 class="remove"
                 aria-label=${t('Revoke {0}', k.name)}
-                onClick=${async () => {
+                onClick=${async (e) => {
+                  const button = e.currentTarget;
                   if (!confirm(t('Revoke "{0}"? Anything using it stops working straight away.', k.name))) return;
                   await api(`/me/keys/${k.id}`, { method: 'DELETE' });
                   setMade(null);
-                  load();
+                  await load();
+                  refocusAfterRemove(button, document.querySelector('.keys-name'));
                 }}
               >${t('Revoke')}</button>
             </li>`,
@@ -1107,7 +1124,7 @@ function Keys() {
             }
           }}
         >
-          <input name="name" maxlength="40" required placeholder=${t("What it's for, e.g. My script")} aria-label=${t('Key name')} value=${name} onInput=${(e) => setName(e.currentTarget.value)} />
+          <input name="name" class="keys-name" maxlength="40" required placeholder=${t("What it's for, e.g. My script")} aria-label=${t('Key name')} value=${name} onInput=${(e) => setName(e.currentTarget.value)} />
           <button type="submit" class="btn small">${t('Create')}</button>
         </form>
         ${made &&
@@ -1123,15 +1140,15 @@ function Keys() {
                   await navigator.clipboard.writeText(made);
                   toast(t('Copied'));
                 } catch {
-                  toast(t('Select the key and copy it'));
+                  toast(t('Select the key and copy it'), { error: true });
                 }
               }}
             >${t('Copy')}</button>
           </div>
           <p class="hint">${t('Try it:')} <code>${`curl -H "x-api-key: ${made}" "${location.origin}/arrivals?stop=COM3"`}</code></p>
         </div>`}
-        ${msg && html`<p class="hint group-body" role="status">${msg}</p>`}
       </div>
+      <p class="hint group-hint" role="status">${msg}</p>
       <${Rich} as="p" class="hint group-hint" text=${t('For your own scripts and projects. See the <a href="/docs">API docs</a>; send the key in the <code>x-api-key</code> header.')} />
     </section>
   `;
@@ -1238,7 +1255,7 @@ export function Feedback({ me, onAddEmail }) {
           <button type="submit" class="btn small" disabled=${sending || !note.trim()}>${t('Send')}</button>
         </div>
       </div>
-      ${msg && html`<p class="hint compose-msg" role="status">${msg}</p>`}
+      <p class="hint compose-msg" role="status">${msg}</p>
       <div class="card compose-wrong">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z" /><path d="M12 8.5v3M12 13.6v.1" /></svg>
         <p><span class="row-title">${t('A wrong answer?')}</span><span class="hint">${t('Press “Is this wrong?” under it, so we see what you saw.')}</span></p>

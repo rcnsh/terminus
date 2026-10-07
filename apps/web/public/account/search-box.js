@@ -93,14 +93,11 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
     onKeyDown?.(e);
   };
 
-  let group = null;
-  const rows = [];
+  // Results in groups (stops, buildings, …), each a group in the list with its name.
+  const groups = [];
   items.forEach((d, i) => {
-    if (d.kind !== group) {
-      group = d.kind;
-      rows.push(html`<li class="search-group" role="presentation" key=${`g-${group}`}>${groupOf(d)}</li>`);
-    }
-    rows.push(html`
+    if (groups.at(-1)?.kind !== d.kind) groups.push({ kind: d.kind, name: groupOf(d), rows: [] });
+    groups.at(-1).rows.push(html`
       <li
         id=${`${listId}-${i}`}
         key=${`${d.kind}-${d.code}`}
@@ -118,6 +115,8 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
       </li>
     `);
   });
+  // How many there are, said once typing settles on it (the list itself isn't read out).
+  const count = !shown || !text.trim() ? '' : items.length === 0 ? empty : items.length === 1 ? t('1 result') : t('{0} results', items.length);
 
   return html`
     <div class="search" ref=${wrap}>
@@ -137,8 +136,16 @@ export function SearchBox({ source, suggestions = () => [], pinned, stopName, em
         onKeyDown=${keys}
       />
       <ul id=${listId} ref=${list} class=${flip ? 'search-list flip' : 'search-list'} role="listbox" hidden=${!shown}>
-        ${rows.length ? rows : html`<li class="search-empty">${empty}</li>`}
+        ${groups.length
+          ? groups.map(
+              (g) => html`<li role="group" aria-label=${g.name} key=${`g-${g.kind}`}>
+                <div class="search-group" aria-hidden="true">${g.name}</div>
+                <ul class="search-sub" role="none">${g.rows}</ul>
+              </li>`,
+            )
+          : html`<li class="search-empty" role="none">${empty}</li>`}
       </ul>
+      <p class="sr-only" role="status">${count}</p>
     </div>
   `;
 }

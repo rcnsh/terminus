@@ -104,6 +104,8 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 /* The buses after the next one: there, but not the one to catch. */
 .road-bus.later { opacity: 0.35; }
 
+/* Its status line stays on the page; empty, it takes no room in Now's column. */
+.banner-slot:empty { position: absolute; }
 .offline {
   padding: 10px 14px;
   border-radius: var(--radius);
@@ -166,7 +168,7 @@ body.on-buses > .nav { display: none; }
 .bt-kicker .link-btn { padding: 0; font-size: inherit; font-weight: 600; }
 .bt-kicker-icon { width: 13px; height: 13px; fill: var(--accent); }
 .bt-kicker-icon.star { fill: var(--warn); }
-.bt-title h1 { margin-top: 6px; font: 700 2.2rem/1.05 var(--display); letter-spacing: -0.025em; overflow-wrap: anywhere; }
+.bt-title h2 { margin-top: 6px; font: 700 2.2rem/1.05 var(--display); letter-spacing: -0.025em; overflow-wrap: anywhere; }
 .bt-code { margin-top: 6px; font: 600 0.7rem/1 var(--display); letter-spacing: 0.08em; color: var(--faint); }
 .bt-star { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--muted); cursor: pointer; }
 .bt-star svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
@@ -239,7 +241,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-peek-chips { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .bt-peek svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .bt-find { padding: 28px 4px 8px; display: grid; gap: 10px; justify-items: start; }
-.bt-find h1 { font: 700 1.6rem/1.15 var(--display); letter-spacing: -0.02em; }
+.bt-find h2 { font: 700 1.6rem/1.15 var(--display); letter-spacing: -0.02em; }
 .bt-btn-icon { width: 14px; height: 14px; fill: currentColor; }
 
 /* A page of its own (a stop, a line): Back to where it came from. */
@@ -249,7 +251,7 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 
 /* A service's line: its stops down a line in its colour, its buses on it. */
 .bt-line-title { display: flex; align-items: center; gap: 12px; padding: 8px 4px 0; }
-.bt-line-title h1 { font: 700 2.2rem/1 var(--display); letter-spacing: -0.025em; }
+.bt-line-title h2 { font: 700 2.2rem/1 var(--display); letter-spacing: -0.025em; }
 .bt-line-title .hint { margin-top: 4px; font-size: 0.85rem; }
 .bt-summary { margin: 10px 4px 0; font-size: 0.85rem; color: var(--ink); }
 .bt-summary:empty { display: none; }
@@ -323,6 +325,9 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
 }
 .map-status[hidden] { display: none; }
+/* The stops as a list (map.js StopList): seen only while it has the focus. */
+.map-stops { width: auto; max-width: 100%; box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
+.map-stops:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
 
 /* A stop's or a bus's details, over the bottom of the map. */
 .map-sheet {

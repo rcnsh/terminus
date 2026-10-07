@@ -6,7 +6,7 @@
 // address names the page (#trips, or #settings/trips in the web app), so
 // Back and a reload keep it.
 
-import { Icon, html, reducedMotion, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
+import { Icon, focusSoon, html, reducedMotion, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clockOpts, locale, spaced, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
@@ -138,7 +138,12 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
     sliding.current = [];
     const prev = view.shown;
     const from = window.scrollY;
-    if (wide) return setView({ shown: want, leaving: null });
+    if (wide) {
+      setView({ shown: want, leaving: null });
+      // Side by side the list stays, but the focus goes to the page opened, as on a phone.
+      if (want) focusSoon(() => document.getElementById(`page-${want}`));
+      return;
+    }
     if (want) listScroll.current = from;
     const to = want ? 0 : listScroll.current;
     const onScreen = !root.current?.closest('[hidden]') && document.visibilityState === 'visible';
@@ -229,7 +234,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
         swipedTo.current = dx;
         closePage();
       } else if (dx > 0) {
-        page.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+        page.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: reducedMotion() ? 0 : 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
       }
     };
     box.addEventListener('touchstart', down, { passive: true });
