@@ -245,7 +245,7 @@ const RECORDER_WAIT_MS = 10_000;
 
 /** [path] from a recorder, or a rejection after RECORDER_WAIT_MS. */
 function askRecorder(stub: DurableObjectStub, path: string, init?: RequestInit): Promise<Response> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   const late = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error('the timelapse recorder did not answer')), RECORDER_WAIT_MS);
   });
