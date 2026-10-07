@@ -383,6 +383,8 @@ export interface BoardRow {
   ambiguousBerth: boolean;
   /** A public bus, with a fare. Absent for a shuttle. */
   paid?: true;
+  /** The buses after that one, soonest first, as far as the feed knows them. */
+  later: { etaS: number; quality: Quality }[];
 }
 
 /**
@@ -421,9 +423,12 @@ export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: Sto
       quality = 'scheduled';
     }
     // Only a real arrival goes stale; a guess stays a guess.
-    if (feed?.stale && quality === 'live') quality = 'stale';
+    const aged = (q: Quality): Quality => (feed?.stale && q === 'live' ? 'stale' : q);
+    quality = aged(quality);
+    // Each later bus keeps its own quality: a timetabled one after a live one stays a guess.
+    const later = etas.slice(1).map((a) => ({ etaS: a.etaS as number, quality: aged(a.scheduled ? 'scheduled' : 'live') }));
 
-    out.push({ svc: svcName(svc), etaS, quality, ambiguousBerth, ...(pub ? { paid: true as const } : {}) });
+    out.push({ svc: svcName(svc), etaS, quality, ambiguousBerth, ...(pub ? { paid: true as const } : {}), later });
   }
 
   out.sort(

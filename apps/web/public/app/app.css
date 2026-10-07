@@ -62,12 +62,14 @@ body.is-offline .app-card .widget.offline-plan { opacity: 1; }
 .nearby-row .svc-col { flex: none; display: flex; width: 3.4rem; }
 .nearby-row .eta { flex: none; min-width: 4.6rem; text-align: right; font-weight: 800; font-size: 0.95rem; white-space: nowrap; }
 .stop-sign.nearest .nearby-row .eta { font-size: 1.1rem; }
-/* The road to the stop (the ring at its end), and the bus on it, nearer the sooner it's due. */
+/* The road to the stop (the ring at its end), and the buses on it, nearer the sooner they're due. */
 .road { position: relative; flex: 1; height: 18px; min-width: 40px; }
 .road::before { content: ''; position: absolute; left: 0; right: 10px; top: 8px; height: 2px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 10px); }
 .road::after { content: ''; position: absolute; right: 0; top: 3px; width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2.5px solid var(--ink); background: var(--surface); }
 .road-bus { position: absolute; top: 3px; left: calc((100% - 38px) * (1 - var(--far))); width: 18px; height: 12px; box-sizing: border-box; border-radius: 4px; border: 2px solid var(--svc); }
-.road.live .road-bus { background: var(--svc); }
+.road-bus.live { background: var(--svc); }
+/* The buses after the next one: there, but not the one to catch. */
+.road-bus.later { opacity: 0.35; }
 
 .offline {
   padding: 10px 14px;

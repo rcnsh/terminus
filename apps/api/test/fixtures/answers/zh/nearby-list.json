@@ -15,6 +15,12 @@
           "etaS": 240,
           "quality": "live",
           "ambiguousBerth": false,
+          "later": [
+            {
+              "etaS": 840,
+              "quality": "live"
+            }
+          ],
           "color": "#8e44c9"
         },
         {
@@ -22,6 +28,7 @@
           "etaS": null,
           "quality": "scheduled",
           "ambiguousBerth": false,
+          "later": [],
           "color": "#d9a000"
         },
         {
@@ -29,6 +36,7 @@
           "etaS": null,
           "quality": "scheduled",
           "ambiguousBerth": false,
+          "later": [],
           "color": "#2b9ad6"
         }
       ]
@@ -48,6 +56,12 @@
           "etaS": 240,
           "quality": "live",
           "ambiguousBerth": false,
+          "later": [
+            {
+              "etaS": 840,
+              "quality": "live"
+            }
+          ],
           "color": "#8e44c9"
         },
         {
@@ -55,6 +69,12 @@
           "etaS": 360,
           "quality": "live",
           "ambiguousBerth": false,
+          "later": [
+            {
+              "etaS": 1080,
+              "quality": "live"
+            }
+          ],
           "color": "#34a853"
         },
         {
@@ -62,6 +82,12 @@
           "etaS": 540,
           "quality": "live",
           "ambiguousBerth": false,
+          "later": [
+            {
+              "etaS": 1140,
+              "quality": "live"
+            }
+          ],
           "color": "#e53935"
         },
         {
@@ -69,6 +95,7 @@
           "etaS": null,
           "quality": "scheduled",
           "ambiguousBerth": false,
+          "later": [],
           "color": "#2b9ad6"
         },
         {
@@ -76,6 +103,7 @@
           "etaS": null,
           "quality": "scheduled",
           "ambiguousBerth": false,
+          "later": [],
           "color": "#f57c1f"
         }
       ]

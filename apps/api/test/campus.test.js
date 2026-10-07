@@ -151,6 +151,28 @@ test('boardAt: live etas sort first, an ended service is dropped, an unreachable
   assert.equal(rows[0].svc, 'D2');
 });
 
+test('boardAt: the buses after the next one come in later, soonest first, each keeping its own quality', () => {
+  const idx = indexGraph(GRAPH);
+  const nowMs = Date.parse('2026-03-02T05:00:00Z');
+  const sa = {
+    code: 'COM3',
+    arrivals: [
+      { svc: 'D2', etaS: 900, crowd: null, plate: 'PA2', berth: 'COM3-D2-S', scheduled: true },
+      { svc: 'D2', etaS: 240, crowd: null, plate: 'PA1', berth: 'COM3-D2-S' },
+      // A run ending here is not a bus you can board, now or later.
+      { svc: 'D2', etaS: 60, crowd: null, plate: 'PA0', berth: 'COM3-D2-E' },
+      { svc: 'D1', etaS: 120, crowd: null, plate: 'PB1', berth: null },
+    ],
+    fetchedAt: nowMs,
+    stale: true,
+    available: true,
+  };
+  const bySvc = new Map(boardAt(GRAPH, idx, 'COM3', sa, nowMs).map((r) => [r.svc, r]));
+  assert.equal(bySvc.get('D2').etaS, 240);
+  assert.deepEqual(bySvc.get('D2').later, [{ etaS: 900, quality: 'scheduled' }]);
+  assert.deepEqual(bySvc.get('D1').later, []);
+});
+
 test('boardAt: a feed that never answered is unknown, never a fabricated time', () => {
   const idx = indexGraph(GRAPH);
   const nowMs = Date.parse('2026-03-02T05:00:00Z');

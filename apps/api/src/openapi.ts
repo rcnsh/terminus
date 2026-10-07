@@ -246,8 +246,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   example: {
                     stop: { code: 'COM3', name: 'COM 3' },
                     board: [
-                      { svc: 'D1', etaS: 180, quality: 'live', ambiguousBerth: false },
-                      { svc: 'D2', etaS: 420, quality: 'live', ambiguousBerth: false },
+                      { svc: 'D1', etaS: 180, quality: 'live', ambiguousBerth: false, later: [{ etaS: 900, quality: 'live' }] },
+                      { svc: 'D2', etaS: 420, quality: 'live', ambiguousBerth: false, later: [] },
                     ],
                     asOf: '2026-09-28T01:14:02.000Z',
                     available: true,
@@ -1491,13 +1491,18 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
         BoardRow: {
           type: 'object',
-          required: ['svc', 'etaS', 'quality', 'ambiguousBerth'],
+          required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later'],
           properties: {
             svc: { type: 'string' },
             etaS: { type: ['integer', 'null'] },
             quality: { $ref: '#/components/schemas/Quality' },
             ambiguousBerth: { type: 'boolean', description: 'True when the direction of this service at this stop could not be confirmed.' },
             paid: { type: 'boolean', enum: [true], description: 'A public bus, with a fare. Absent for a shuttle.' },
+            later: {
+              type: 'array',
+              description: 'The buses after the one in `etaS`, soonest first, as far as the feed knows them (usually one more for a shuttle, up to two for a public bus). Each has its own quality: a timetabled one is `scheduled`.',
+              items: { type: 'object', required: ['etaS', 'quality'], properties: { etaS: { type: 'integer' }, quality: { $ref: '#/components/schemas/Quality' } } },
+            },
           },
         },
         StopBoard: {

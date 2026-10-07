@@ -206,7 +206,10 @@ the Mac.
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
 - `GET /me/nearby` lists departures at up to three stops near you, each with
-  its service's colour (`color`, as on the buses and the map).
+  its service's colour (`color`, as on the buses and the map). Each row
+  (as on `/stops/{code}`) has the next bus in `etaS` and the ones after it
+  the feed knows in `later`, each with its own quality; Nearby draws them
+  all on the road, the next one solid and the rest faded.
 - On a day with no classes (or none left), `/me/next` says so (`mode: free`)
   with the next class, and no bus: a bus you have no reason to take reads
   like advice. Departures near you are `/me/nearby`.
