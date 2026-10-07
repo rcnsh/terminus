@@ -236,24 +236,50 @@ test('a failed poll records nothing, but a request that reached NUS still counts
   assert.deepEqual(h.ae.rows('timelapse').map((r) => r.blobs[1]), ['error', 'failed']);
 });
 
-test('an alarm that throws after asking, run again by the platform, does not ask again', async () => {
+test('a poll that throws after asking is a failed poll: the round goes on, and that service is not asked again sooner', async () => {
   const h = harness({ buses: { D2: [busOn('D2', 400)] } });
   await start(h);
   const inst = h.ns.instances.get(DATE);
   const real = inst.poll;
-  // The request went out, then something after it threw (placement, storage, CPU).
-  inst.poll = async function (...args) {
-    await real.apply(this, args);
+  // The request went out, then something after it threw (placement, storage), every time.
+  const broken = RUNNING[0];
+  inst.poll = async function (meta, svc, now) {
+    const n = await real.call(this, meta, svc, now);
+    if (svc === broken) throw new Error('boom');
+    return n;
+  };
+  await h.ns.fireDue(FROZEN_NOW);
+  assert.equal(h.busCalls().length, 1);
+  const slot = 30_000 / RUNNING.length;
+  assert.equal(h.ns.alarms.get(DATE), FROZEN_NOW + slot, 'on to the next service, a slot later');
+  // A whole day's worth of rounds would be lost otherwise: every service is
+  // still recorded, and the broken one asked no more than once a round.
+  await runUntil(h, FROZEN_NOW + 3 * 30_000 - 1);
+  const asked = h.busCalls().map((r) => r.body.route_code);
+  for (const svc of RUNNING) assert.equal(asked.filter((s) => s === svc).length, 3, `${svc}: once a round`);
+  assert.equal((await status(h)).state, 'polling');
+  assert.ok((await status(h)).samples >= 3 * (RUNNING.length - 1));
+  assert.equal(inst.read('meta').failing, 0, 'the others answered: not a failing feed');
+  inst.poll = real;
+});
+
+test('an alarm that throws after asking, run again by the platform, does not ask again', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  const inst = h.ns.instances.get(DATE);
+  // The request went out, then setting the next alarm failed.
+  const { setAlarm } = inst.storage;
+  inst.storage.setAlarm = async () => {
+    inst.storage.setAlarm = setAlarm;
     throw new Error('boom');
   };
   await assert.rejects(h.ns.fireDue(FROZEN_NOW));
-  inst.poll = real;
   assert.equal(h.busCalls().length, 1);
-  // The platform retries a thrown alarm within seconds; past the 5 s cache.
+  // The platform retries a thrown alarm within seconds: the next service, not this one again.
   Date.now = () => FROZEN_NOW + 6_000;
   await inst.alarm();
-  assert.equal(h.busCalls().length, 1, 'not asked again within pollMs');
-  assert.ok(h.ns.alarms.get(DATE) >= FROZEN_NOW + 30_000, 'it waits out pollMs instead');
+  const asked = h.busCalls().map((r) => r.body.route_code);
+  assert.deepEqual(asked, RUNNING.slice(0, 2));
 });
 
 test('a feed failing round after round is asked less and less often, and as usual once it answers', async () => {
