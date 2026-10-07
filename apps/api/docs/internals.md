@@ -690,9 +690,10 @@ Settings. It uses the same routes as the account page, with the session cookie.
   imported one, is skipped. It goes once per semester, 400 users a run, with
   `term:reminded` in KV marking the semester and the last user reached, as
   `trips:armed` does. The mark is saved before the batch is sent, so a mark
-  that can't be saved sends nothing rather than the batch every run; a batch
-  that reached no device at all (push itself failing) is marked back and
-  sent again the next run. A tap opens the timetable settings on the web, and the
+  that can't be saved sends nothing rather than the batch every run. A user
+  no device took (push itself failing, say) goes on `term:retry` and is
+  tried again on the next eight runs, while the batches carry on, so one
+  phone that can't be reached holds up no one. A tap opens the timetable settings on the web, and the
   app on Android. The Mac app has no push, so it isn't told.
 
 ### Every trip, detected
@@ -1152,8 +1153,10 @@ handler waits for every step, so a long run isn't cut off partway while the
 trigger's history says it succeeded. The monitor never acts on a KV read
 that failed: it changes no state, sends nothing and writes no incident, and
 the next run carries on. Its state is saved before an alert is emailed (an
-email that fails, or takes over 15 s, is sent again the next run), and each
-run puts the outage list right if an earlier write of it failed.
+email that fails, or takes over 15 s, is sent again the next run). KV takes
+one write a second to a key, so the state is written once a run: a delivered
+alert is noted under `monitor:alerted`, and the next run clears it from the
+state. Each run puts the outage list right if an earlier write of it failed.
 
 ## Known weaknesses
 
