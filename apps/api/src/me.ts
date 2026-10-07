@@ -133,9 +133,13 @@ function knownTrip(profile: Profile, key: string, nowMs: number): boolean {
   return [...profile.trips, ...profile.manual, ...classesOn(profile, nowMs)].some((t) => classKey(t) === key);
 }
 
-/** "Pixel 8": what the app calls itself, shown in emails and the device list. */
+/**
+ * "Pixel 8": what the app calls itself, shown in emails and the device list.
+ * '' when it gives no name: the emails then say "a device", and the device
+ * list shows each app's own word for one.
+ */
 function deviceName(body: Record<string, unknown> | null): string {
-  if (typeof body?.name !== 'string') return 'Device';
+  if (typeof body?.name !== 'string') return '';
   // It goes into sign-in emails: a device's name, not a message. Letters,
   // digits and a little punctuation; no links, no line breaks.
   const name = body.name
@@ -143,7 +147,7 @@ function deviceName(body: Record<string, unknown> | null): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 40);
-  return name || 'Device';
+  return name;
 }
 
 /** The client header, or the platform an app names in its body when it has no header. */
@@ -1058,7 +1062,7 @@ export async function handleMe(
       const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
       const a = link ? await approvable(db, link, nowMs) : null;
       if (!a) return html(page(m().pageRequestExpired, m().approveExpiredHtml), 400);
-      const device = escapeHtml(a.device);
+      const device = escapeHtml(a.device || m().aDevice);
       const buttons = a.choices
         .map((n) => `<button type="submit" name="n" value="${n}" class="btn">${n}</button>`)
         .join('');
@@ -1307,7 +1311,7 @@ async function nearbyFor(url: URL, env: Env, ctx: ExecutionContext, nowMs: numbe
   // Without a location, start from the first home stop.
   const homeStop = profile.home ? indexGraph(graph).byCode.get(profile.home.stops[0]) : undefined;
   if (lat === null && homeStop) ({ lat, lon } = homeStop);
-  if (lat === null || lon === null) return json({ error: 'send lat and lon, or set a home' }, 400);
+  if (lat === null || lon === null) return json({ error: 'turn on location, or add a home stop in Settings' }, 400);
 
   const idx = indexGraph(graph);
   const ranked = graph.stops

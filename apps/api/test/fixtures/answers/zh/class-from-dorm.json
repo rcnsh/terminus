@@ -65,7 +65,7 @@
     }
   ],
   "label": "D2 · 14 分钟",
-  "detail": "PGP · 步行 6 分钟 · 约 24 分钟 到 GEA1000 @ UTown · 或 R2，18 分钟后",
+  "detail": "PGP · 步行 6 分钟 · 约 24 分钟到 GEA1000 @ UTown · 或 R2，18 分钟后",
   "alt": "R2 · 18 分钟 · PGP",
   "departsAt": "2026-08-27T01:14:00Z",
   "arriveAt": "2026-08-27T01:23:30Z",
@@ -134,10 +134,10 @@
     "crowd": "拥挤程度：低",
     "quality": null,
     "leaveBy": "约 09:35 前出发",
-    "leaveVia": "在 PGP 搭 约 09:42 的 R2",
-    "catch": "在 PGP 搭 约 09:42 的 R2",
+    "leaveVia": "在 PGP 搭约 09:42 的 R2",
+    "catch": "在 PGP 搭约 09:42 的 R2",
     "arrive": "约 09:51 到达 · 早到 9 分钟",
-    "catchLine": "在 PGP 搭 约 09:42 的 R2 · 约 09:51 到达，早到 9 分钟",
+    "catchLine": "在 PGP 搭约 09:42 的 R2 · 约 09:51 到达，早到 9 分钟",
     "late": false,
     "goNow": "或现在走：09:14 的 D2 · 09:23 到达",
     "note": null,
@@ -206,7 +206,7 @@
       "arriveText": "约 09:51 到达 · 早到 9 分钟",
       "arriveWhere": "在 UTown",
       "backupText": "或现在走：在 PGP 搭 09:14 的 D2",
-      "summary": "约 09:51 到达 · 在 PGP 搭 约 09:42 的 R2"
+      "summary": "约 09:51 到达 · 在 PGP 搭约 09:42 的 R2"
     },
     "upcoming": null,
     "title": "D2 · 09:14",
