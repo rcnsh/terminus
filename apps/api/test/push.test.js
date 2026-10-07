@@ -204,13 +204,30 @@ test('the week before a semester, push users with an older timetable are reminde
   assert.match(sent.data.body, /NUSMods/);
   assert.equal(await remindTerm(env, Date.now()), 0, 'once a semester');
 
+  // An app that fetches the words is pushed only the kind; it asks for them itself.
+  await env.KV.delete('term:reminded');
+  env.DB._db.prepare("UPDATE sessions SET client = 'android/2.5.0' WHERE push_token = 'fcm-phone'").run();
+  const bare = fcm.sent.length;
+  assert.equal(await remindTerm(env, Date.now()), 1);
+  assert.deepEqual(fcm.sent.slice(bare)[0].data, { kind: 'term' }, 'no words through Firebase');
+  const { notice } = await (await call('/me/notice', { token: phone })).json();
+  assert.equal(notice.title, 'Sem 1 2026/27 starts Mon 10 Aug');
+  assert.equal(notice.zhTitle, '2026/27 第 1 学期将于 8月10日（周一）开始');
+
   // Already imported for the new semester, or no timetable: nothing.
   await env.KV.delete('term:reminded');
   setProfile({ term: { acadYear: '2026/2027', semester: 1 } });
   assert.equal(await remindTerm(env, Date.now()), 0, 'already imported');
+  assert.equal((await (await call('/me/notice', { token: phone })).json()).notice, null, 'nothing to fetch either');
   await env.KV.delete('term:reminded');
   setProfile({ trips: [], term: { acadYear: '2025/2026', semester: 2 } });
   assert.equal(await remindTerm(env, Date.now()), 0, 'no timetable to bring up to date');
+});
+
+test('which apps fetch the reminder words themselves: Android from 2.5.0', async () => {
+  const { fetchesNotice } = await import('../src/push.ts');
+  for (const c of ['android/2.5.0', 'android/2.5.0-beta.1', 'android/2.10.0', 'android/3.0.0']) assert.equal(fetchesNotice(c), true, c);
+  for (const c of ['android/2.4.2', 'android/2.4.10', 'android/1.9.9', 'mac/3.0.0', 'web', null, '']) assert.equal(fetchesNotice(c), false, String(c));
 });
 
 test('an access token that went stale is replaced, and the push still goes', async () => {

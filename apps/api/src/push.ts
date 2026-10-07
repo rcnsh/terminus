@@ -7,8 +7,11 @@
  * 'card'` and the phase), and the app fetches /me/next itself, so the words
  * are never worked out twice and nothing sensitive travels through Google.
  * It's high priority only when the user should look: the trip is due, or it
- * was missed. The one exception is the new semester's reminder (`kind:
- * 'term'`), which carries its own words, in English and Chinese.
+ * was missed. The new semester's reminder (`kind: 'term'`) is the same to
+ * an app that can fetch its words (GET /me/notice): only to an older
+ * Android app, which shows what it's sent, does it carry the words, in
+ * English and Chinese (fetchesNotice). Web pushes are encrypted for the
+ * browser, so they always carry them.
  *
  * The Worker signs its own OAuth token from the service account in
  * FCM_SERVICE_ACCOUNT (RS256 with WebCrypto) and keeps it in KV for 50
@@ -107,12 +110,29 @@ export interface Notice {
 }
 
 /**
- * The new semester's reminder (monitor.ts): a notification the apps show as
- * it is, rather than a card to fetch. Returns how many devices it went to.
+ * The new semester's reminder (monitor.ts): a notification the apps show,
+ * rather than a card to fetch. Returns how many devices it went to.
  */
 export async function remindUser(env: Env, userId: string, notice: Notice, nowMs: number): Promise<number> {
   const words = { title: notice.title, body: notice.body, zhTitle: notice.zhTitle, zhBody: notice.zhBody };
-  return deliver(env, userId, { web: { kind: 'term', ...words }, fcm: { kind: 'term', ...words }, urgent: false, collapse: 'term', ttlS: 2 * 86_400 }, nowMs);
+  return deliver(
+    env,
+    userId,
+    { web: { kind: 'term', ...words }, fcm: { kind: 'term', ...words }, fcmBare: { kind: 'term' }, urgent: false, collapse: 'term', ttlS: 2 * 86_400 },
+    nowMs,
+  );
+}
+
+/** The first Android version that fetches the reminder's words itself (GET /me/notice). */
+export const NOTICE_FETCH_FROM = [2, 5, 0] as const;
+
+/** Whether the app behind this session (its x-terminus-client, "android/2.5.0") fetches the reminder's words. */
+export function fetchesNotice(client: string | null): boolean {
+  const v = /^android\/(\d+)\.(\d+)\.(\d+)/.exec(client ?? '');
+  if (!v) return false;
+  const [a, b, c] = v.slice(1).map(Number);
+  const [x, y, z] = NOTICE_FETCH_FROM;
+  return a !== x ? a > x : b !== y ? b > y : c >= z;
 }
 
 interface Delivery {
@@ -120,6 +140,8 @@ interface Delivery {
   web: Record<string, unknown> | null;
   /** FCM data: strings only. */
   fcm: Record<string, string>;
+  /** What an app that fetches the words itself is sent instead (fetchesNotice). */
+  fcmBare?: Record<string, string>;
   urgent: boolean;
   /** A newer message with the same key replaces one not yet delivered. */
   collapse: string;
@@ -131,9 +153,9 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
   const a = account(env);
   if (!pushEnabled(env) || !env.DB) return 0;
   try {
-    const { results } = await env.DB.prepare('SELECT token_hash, push_token FROM sessions WHERE user_id = ? AND push_token IS NOT NULL AND token_hash != ?')
+    const { results } = await env.DB.prepare('SELECT token_hash, push_token, client FROM sessions WHERE user_id = ? AND push_token IS NOT NULL AND token_hash != ?')
       .bind(userId, exceptTokenHash ?? '')
-      .all<{ token_hash: string; push_token: string }>();
+      .all<{ token_hash: string; push_token: string; client: string | null }>();
     if (!results.length) return 0;
     let bearer: string | null = null;
     let sent = 0;
@@ -165,7 +187,7 @@ async function deliver(env: Env, userId: string, msg: Delivery, nowMs: number, e
           body: JSON.stringify({
             message: {
               token: r.push_token,
-              data: msg.fcm,
+              data: msg.fcmBare && fetchesNotice(r.client) ? msg.fcmBare : msg.fcm,
               android: { priority: msg.urgent ? 'HIGH' : 'NORMAL', ttl: `${msg.ttlS}s`, collapse_key: msg.collapse },
             },
           }),
