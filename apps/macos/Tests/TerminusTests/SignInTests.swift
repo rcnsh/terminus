@@ -44,3 +44,13 @@ private func type(_ s: String, from start: String = "") -> String {
     #expect(q.last?.value == "160")
     #expect(Api.coords(nil, 103.78, 20).isEmpty)
 }
+
+/// Send is offered once the email looks like one; the server checks the rest.
+@Test func anEmailIsOfferedACodeOnceItLooksLikeOne() {
+    #expect(looksLikeEmail("you@u.nus.edu"))
+    #expect(looksLikeEmail("  you@u.nus.edu "))
+    #expect(!looksLikeEmail("you@u"))
+    #expect(!looksLikeEmail("you u@nus.edu"))
+    #expect(!looksLikeEmail("you@@nus.edu"))
+    #expect(!looksLikeEmail("you@nus.e"))
+}

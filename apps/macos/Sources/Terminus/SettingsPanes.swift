@@ -15,16 +15,15 @@ func clockMin(_ min: Int) -> String {
 }
 
 /// "Mon", in the app's language; `day` is 0 for Sunday, as the profile keeps it.
-func dayShort(_ day: Int) -> String {
-    var cal = Calendar(identifier: .gregorian)
-    cal.locale = Lang.locale
-    return cal.shortWeekdaySymbols[((day % 7) + 7) % 7]
-}
+func dayShort(_ day: Int) -> String { weekday(day, short: true) }
 
-func dayLong(_ day: Int) -> String {
+/// "Monday", as `dayShort`.
+func dayLong(_ day: Int) -> String { weekday(day, short: false) }
+
+private func weekday(_ day: Int, short: Bool) -> String {
     var cal = Calendar(identifier: .gregorian)
     cal.locale = Lang.locale
-    return cal.weekdaySymbols[((day % 7) + 7) % 7]
+    return (short ? cal.shortWeekdaySymbols : cal.weekdaySymbols)[((day % 7) + 7) % 7]
 }
 
 /// Monday first, as the week reads.
@@ -112,8 +111,8 @@ struct TimetablePane: View {
                         Hint(L("In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester."))
                     }
                     if let r = setup.imported {
-                        Text(r.classes == 1 ? L("Imported 1 class for %@.", r.term) : L("Imported %@ classes for %@.", "\(r.classes)", r.term))
-                        if !r.missing.isEmpty { Hint(L("NUSMods has no classes this semester for %@.", r.missing.joined(separator: ", "))) }
+                        Text(r.summary)
+                        if let m = r.missingText { Hint(m) }
                     }
                 }
                 .padding(.top, 6)
@@ -221,7 +220,7 @@ private struct AddClassForm: View {
                 Button(L("Add")) {
                     guard let d = picked else { return }
                     let a = minutes(start), b = minutes(end)
-                    setup.addManual(day: day, at: a, end: hasEnd && b > a ? b : nil, to: d.kind == "landmark" ? d.code : d.stopCode, label: name.trimmingCharacters(in: .whitespaces))
+                    setup.addManual(day: day, at: a, end: hasEnd && b > a ? b : nil, to: d.goesTo, label: name.trimmingCharacters(in: .whitespaces))
                     name = ""
                     query = ""
                     picked = nil
@@ -267,18 +266,27 @@ struct WhereField: View {
                     Button {
                         picked = d
                     } label: {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(d.label)
-                            if d.label != d.code { Text(d.code).font(.caption).foregroundStyle(.secondary) }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+                        DestinationLabel(destination: d)
                     }
                     .buttonStyle(.plain)
                     .padding(.vertical, 2)
                 }
             }
         }
+    }
+}
+
+/// A search result in Settings: its name, and its code under it when that's different.
+struct DestinationLabel: View {
+    let destination: Destination
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(destination.label)
+            if destination.label != destination.code { Text(destination.code).font(.caption).foregroundStyle(.secondary) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -501,7 +509,7 @@ struct AddEmail: View {
     @State private var email = ""
     @State private var code = ""
 
-    private var emailOK: Bool { email.trimmingCharacters(in: .whitespaces).range(of: #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#, options: .regularExpression) != nil }
+    private var emailOK: Bool { looksLikeEmail(email) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

@@ -248,6 +248,10 @@ struct Destination: Decodable, Hashable {
     let stops: [String]?
     /// What a landmark is ("Food court").
     let detail: String?
+
+    /// Where a favourite or a class added here goes: a landmark (a food
+    /// court) itself, anything else its stop.
+    var goesTo: String { kind == "landmark" ? code : stopCode }
 }
 
 /// The destination search, same rules as the account page and Android: exact,
@@ -347,6 +351,16 @@ struct ImportResult {
         }
         missing = o["missing"] as? [String] ?? []
         term = o["term"] as? String ?? ""
+    }
+
+    /// "Imported 12 classes for AY2026/27 Semester 1."
+    var summary: String {
+        classes == 1 ? L("Imported 1 class for %@.", term) : L("Imported %@ classes for %@.", "\(classes)", term)
+    }
+
+    /// The modules NUSMods had nothing for this semester, if any.
+    var missingText: String? {
+        missing.isEmpty ? nil : L("NUSMods has no classes this semester for %@.", missing.joined(separator: ", "))
     }
 }
 

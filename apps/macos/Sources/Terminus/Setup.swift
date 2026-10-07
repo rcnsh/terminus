@@ -79,10 +79,29 @@ final class SetupModel {
     var share: String? { profile?["share"] as? String }
     var importedClasses: Int { (profile?["trips"] as? [Any])?.count ?? 0 }
 
+    /// The residence whose stops are the home stops, if they're one's.
+    var residence: Campus.Residence? { campus?.residences.first { $0.stops == homeStops } }
+
     func setHomeStops(_ stops: [String]) {
         var unique: [String] = []
         for s in stops where !unique.contains(s) { unique.append(s) }
         edit { $0["home"] = unique.isEmpty ? NSNull() : ["stops": Array(unique.prefix(3))] }
+    }
+
+    /// The home stop picker: `code` first, the other stops after it. "Choose
+    /// a stop" (a blank code) clears the first one rather than saving a blank stop.
+    func setFirstHomeStop(_ code: String) {
+        setHomeStops((code.isEmpty ? [] : [code]) + homeStops.dropFirst().filter { $0 != code })
+    }
+
+    /// "Pick the stop nearest me": this Mac's nearest stop first among the
+    /// home stops. What happened, to show under the button.
+    func pickNearestStop(app: AppModel, campus: Campus) async -> String {
+        guard let loc = await app.whereAmI(), let near = campus.nearest(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) else {
+            return L("Couldn't get this Mac's location. Pick your stop instead.")
+        }
+        setHomeStops([near.code] + homeStops.filter { $0 != near.code })
+        return L("Picked %@. Change it if you use a different stop.", near.name)
     }
 
     func setResidence(_ r: Campus.Residence) {
@@ -112,7 +131,7 @@ final class SetupModel {
      */
     @discardableResult
     func addPlace(_ d: Destination) -> String? {
-        let to = d.kind == "landmark" ? d.code : d.stopCode
+        let to = d.goesTo
         if let same = places.first(where: { $0.to == to }) { return same.label }
         let label = String((d.kind == "building" || d.kind == "room" ? d.code : d.label).prefix(24))
         let slug = label.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
@@ -532,7 +551,7 @@ struct HomeStep: View {
     @State private var offCampus = false
     @State private var locating: String?
 
-    private var residence: Campus.Residence? { setup.campus?.residences.first { $0.stops == setup.homeStops } }
+    private var residence: Campus.Residence? { setup.residence }
 
     var body: some View {
         StepTitle(title: L("Where do you live?"), sub: L("Where you catch the bus in the morning and head back to at night. Only the stops are saved."))
@@ -556,22 +575,14 @@ struct HomeStep: View {
             } else {
                 Picker(L("Home stop"), selection: Binding(
                     get: { setup.homeStops.first ?? "" },
-                    // "Choose a stop" clears the first one rather than saving a blank stop.
-                    set: { code in setup.setHomeStops((code.isEmpty ? [] : [code]) + setup.homeStops.dropFirst().filter { $0 != code }) }
+                    set: { setup.setFirstHomeStop($0) }
                 )) {
                     Text(L("Choose a stop")).tag("")
                     ForEach(campus.stops, id: \.code) { Text($0.name).tag($0.code) }
                 }
                 Button(L("Pick the stop nearest me")) {
                     locating = L("Finding the nearest stop…")
-                    Task {
-                        if let loc = await app.whereAmI(), let near = campus.nearest(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) {
-                            setup.setHomeStops([near.code] + setup.homeStops.filter { $0 != near.code })
-                            locating = L("Picked %@. Change it if you use a different stop.", near.name)
-                        } else {
-                            locating = L("Couldn't get this Mac's location. Pick your stop instead.")
-                        }
-                    }
+                    Task { locating = await setup.pickNearestStop(app: app, campus: campus) }
                 }
                 .buttonStyle(.link)
                 if let locating { Hint(locating) }
@@ -602,22 +613,29 @@ struct TimetableStep: View {
         Button(setup.importing ? L("Importing…") : L("Import")) { Task { await setup.importTimetable(link) } }
             .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || setup.importing)
         if let r = setup.imported {
-            Text(r.classes == 1 ? L("Imported 1 class for %@.", r.term) : L("Imported %@ classes for %@.", "\(r.classes)", r.term))
+            Text(r.summary)
             UnplacedList(setup: setup)
-            if !r.missing.isEmpty { Hint(L("NUSMods has no classes this semester for %@.", r.missing.joined(separator: ", "))) }
+            if let m = r.missingText { Hint(m) }
         } else if setup.importedClasses > 0 {
             Hint(setup.importedClasses == 1 ? L("1 class imported.") : L("%@ classes imported.", "\(setup.importedClasses)"))
         }
     }
 }
 
+/// The walking paces as the profile names them, with what each means.
+enum WalkPace {
+    static var all: [(String, String, String)] {
+        [
+            ("slow", L("Slow"), L("400 m in about 6 min. A relaxed pace, or if you often carry a bag.")),
+            ("normal", L("Normal"), L("400 m in about 5 min. An average pace.")),
+            ("fast", L("Fast"), L("400 m in about 4 min. A brisk pace.")),
+        ]
+    }
+}
+
 struct PaceStep: View {
     let setup: SetupModel
-    private let paces = [
-        ("slow", L("Slow"), L("400 m in about 6 min. A relaxed pace, or if you often carry a bag.")),
-        ("normal", L("Normal"), L("400 m in about 5 min. An average pace.")),
-        ("fast", L("Fast"), L("400 m in about 4 min. A brisk pace.")),
-    ]
+    private let paces = WalkPace.all
 
     var body: some View {
         StepTitle(title: L("How you get around"), sub: L("Walks follow the paths on campus. Your pace sets how long they take."))
