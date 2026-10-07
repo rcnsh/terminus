@@ -384,7 +384,9 @@ account into another one.
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).
   - A phase counts as pushed once a device got it (or none could be sent
-    to); when every send failed, the next wake tries again. A wake that
+    to); when every send failed, the next wake tries again. It's saved as
+    soon as the send is done, so an alarm the platform runs again after a
+    later failure doesn't push it twice. A wake that
     throws (D1, the feed) is tried again after 30 s, doubling up to 8 min.
     The wake owed is kept as `waking` until the wake is done, so an alarm
     the platform runs again still wakes.
@@ -395,7 +397,8 @@ account into another one.
   - Each call to Firebase has a 5 s limit, and each device is sent to on
     its own, so one that fails or hangs doesn't keep the push from the
     rest. A token is dropped only when FCM says it's unregistered (404,
-    `UNREGISTERED`) or names it as the bad value; any other 400 is logged
+    `UNREGISTERED`), names it as the bad value, or says the registration
+    token isn't valid (FCM's usual words for one); any other 400 is logged
     with FCM's code and the token kept.
   - The Worker's calls to the Trip object time out after 3 s
     (`TRIP_TIMEOUT_MS`): the card is answered without its trip state, as

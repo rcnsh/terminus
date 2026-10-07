@@ -38,10 +38,9 @@ interface Pushed {
   phase: string;
 }
 
-/** What a wake found: when to wake next (null: stop), and what it pushed. */
+/** What a wake found: when to wake next (null: stop). */
 interface Woke {
   next: number | null;
-  pushed?: Pushed;
   /** The wake failed: `next` is when to try again, not the card's next change. */
   retry?: boolean;
 }
@@ -174,7 +173,6 @@ export class Trip {
     await this.state.blockConcurrencyWhile(async () => {
       if (await this.cleared()) return;
       if (woke) {
-        if (woke.pushed) await this.storage.put('pushed', woke.pushed);
         const asked = await this.storage.get<number>('wakeAt');
         const next = woke.next === null ? asked : asked === undefined ? woke.next : Math.min(asked, woke.next);
         if (next === undefined) await this.storage.delete('wakeAt');
@@ -215,19 +213,25 @@ export class Trip {
     // Only what was actually pushed counts: one device having fetched a card
     // says nothing about the others. Nothing to say yet is never the first push.
     const changed = last ? last.key !== now.key || last.phase !== now.phase : now.phase !== 'idle';
-    let pushed: Pushed | undefined;
     if (changed) {
       // Wake the phone for what the user should see: time to go, a missed bus.
       const urgent = now.phase === 'due' || now.phase === 'missed';
       const out = await nudgeUser(env, userId, { phase: now.phase, urgent, remind: card.remind }, nowMs);
       // Pushed once a device has it, or when none could be sent to (a quiet
       // card for a browser): not when every send failed, so a later wake tries again.
-      if (out.sent > 0 || out.failed === 0) pushed = now;
+      // Saved at once, held like a POST and not after a /clear: an alarm the
+      // platform runs again (the object reset before the wake was done) then
+      // sees it sent, rather than pushing it again within seconds.
+      if (out.sent > 0 || out.failed === 0) {
+        await this.state.blockConcurrencyWhile(async () => {
+          if (!(await this.cleared())) await this.storage.put('pushed', now);
+        });
+      }
     }
     // Keep waking while there's a trip and someone to tell.
     // A leave-by that keeps sliding (a late bus) mustn't wake it every few seconds.
     const next = card.wakeAt === null ? null : Math.max(card.wakeAt, nowMs + MIN_WAKE_GAP_MS);
-    return { next: card.key ? next : null, pushed };
+    return { next: card.key ? next : null };
   }
 
   /** Whether /clear emptied the object (or midnight did): every stored day has its deleteAt. */
