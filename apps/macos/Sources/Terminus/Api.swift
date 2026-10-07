@@ -651,7 +651,7 @@ struct DayPlan: Decodable {
             let how = l.svc.map { L("%@ from %@", $0, l.stop ?? fromName ?? "") } ?? L("walk")
             return ([L("Leave by %@", l.estimated == true ? L("~%@", campusTime(at)) : campusTime(at)), how, timing?.status == "late" ? timing?.text : nil] as [String?]).compactMap { $0 }.joined(separator: " · ")
         }
-        var title: String { serverTitle ?? (kind == "home" ? L("Home, from %@", fromName ?? L("your last class")) : label) }
+        var title: String { serverTitle ?? (kind == "home" ? (fromName.map { L("Home, from %@", $0) } ?? L("Home after your last class")) : label) }
     }
     var items: [Item]
     let note: String?
@@ -995,7 +995,7 @@ struct Api {
         if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")) }
         guard (200..<300).contains(status) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw ApiError(status: status, message: msg.map(sentence) ?? "HTTP \(status)")
+            throw ApiError(status: status, message: msg.map(sentence) ?? L("Couldn't reach terminus. Try again in a moment."))
         }
         return data
     }

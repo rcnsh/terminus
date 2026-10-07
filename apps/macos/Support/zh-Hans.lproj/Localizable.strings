@@ -1,13 +1,13 @@
 /* Simplified Chinese for the Mac app (phase 10), keyed by the English it replaces. Generated with the rest of the translations; place and bus names stay English. */
 
-" or " = "或";
+" or " = " 或 ";
 "%@ added" = "已添加 %@";
 "%@ classes imported." = "已导入 %@ 节课。";
 "%@ from %@" = "在 %2$@ 搭 %1$@";
 "%@ min walk" = "步行 %@ 分钟";
 "%@ stop" = "%@ 站";
 "%@ removed from today" = "已从今天移除 %@";
-"%@m" = "%@分";
+"%@m" = "%@ 分";
 ", %@ min walk" = "，步行 %@ 分钟";
 "1 class imported." = "已导入 1 节课。";
 "400 m in about 4 min. A brisk pace." = "400 米约 4 分钟。步伐轻快。";
@@ -30,12 +30,12 @@
 "Allow terminus in System Settings → Notifications" = "请在“系统设置”→“通知”中允许 terminus";
 "Allowed." = "已允许。";
 "Already a favourite: %@" = "已在收藏中：%@";
-"Also used for emails and on your other devices. Place and bus names stay in English, as on the signs." = "也用于电子邮件和你的其他设备。地点和巴士名称保持英文，与站牌一致。";
+"Also used for emails and on your other devices. Place and bus names stay in English, as on the signs." = "也用于邮件和你的其他设备。地点和巴士名称保持英文，与站牌一致。";
 "Appearance" = "外观";
 "Available in one tap from the menu bar, the phone app and its widget." = "在菜单栏、手机应用及其小组件中一键可用。";
 "Back" = "返回";
 "Both are optional. You can change them later in Settings." = "都是可选的，之后可以在“设置”里修改。";
-"Bus stop" = "巴士站";
+"Bus stop" = "车站";
 "Buses near you are under Nearby." = "附近的巴士在“附近”里。";
 "Cancel" = "取消";
 "Check for updates (move to Applications first)" = "检查更新（请先移到“应用程序”）";
@@ -44,7 +44,7 @@
 "Checking…" = "正在查询…";
 "Choose a stop" = "选择车站";
 "Clear search" = "清除搜索";
-"Code from the email" = "邮件中的代码";
+"Code from the email" = "邮件中的验证码";
 "Continue" = "继续";
 "Couldn't change the login item: %@" = "无法更改登录项：%@";
 "Couldn't get this Mac's location. Pick your stop instead." = "无法获取这台 Mac 的位置。请自己选择车站。";
@@ -88,7 +88,7 @@
 "Ride progress" = "行程进度";
 "Light" = "浅色";
 "Location" = "定位";
-"Location is off, so times are based on your timetable" = "位置已关闭，因此时间按你的课表计算";
+"Location is off, so times are based on your timetable" = "定位已关闭，因此时间按你的课表计算";
 "Long gap · home" = "空档较长 · 回家";
 "Move terminus to Applications first, then turn this on" = "请先把 terminus 移到“应用程序”，再开启这个选项";
 "NUSMods has no classes this semester for %@." = "NUSMods 上 %@ 本学期没有课。";
@@ -120,7 +120,7 @@
 "Updating times…" = "正在更新时间…";
 "On the %@" = "在 %@ 上";
 "On the other device, open terminus and enter:" = "在另一台设备上打开 terminus，输入：";
-"On your phone: Settings, then Add a device. Or on %@/account: Add a device. Then enter the 6-character code here." = "在你的手机上：进入“设置”，然后选“添加设备”。或在 %@/account 选择“添加设备”。然后在这里输入 6 位代码。";
+"On your phone: Settings, then Add a device. Or on %@/account: Add a device. Then enter the 6-character code here." = "在你的手机上：进入“设置”，然后选“添加设备”。或在 %@/account 选择“添加设备”。然后在这里输入 6 位配对代码。";
 "On." = "已开启。";
 "Open Location settings" = "打开定位设置";
 "Open at login" = "登录时打开";
@@ -142,7 +142,7 @@
 "Remove" = "移除";
 "Remove %@ from today" = "从今天移除 %@";
 "Remove from today" = "从今天移除";
-"Removing a device signs it out. You'll get an email whenever a device is added or removed." = "移除设备会将其登出。每当添加或移除设备时，你都会收到电子邮件。";
+"Removing a device signs it out. You'll get an email whenever a device is added or removed." = "移除设备会让它退出登录。每当添加或移除设备时，你都会收到邮件。";
 "Report a wrong answer…" = "报告错误的答案…";
 "Residence" = "宿舍";
 "Send" = "发送";
@@ -161,8 +161,8 @@
 "Step %@ of %@" = "第 %1$@ 步，共 %2$@ 步";
 "Stops for %@: %@. terminus won't direct you home when you're already there." = "%@ 的车站：%@。你已经在宿舍时，terminus 不会再引导你回家。";
 "Reported, thanks" = "已反馈，谢谢";
-"That request expired. Send a new one." = "请求已过期。请重新发送。";
-"The D2 never came, the walk is longer…" = "D2 一直没来、步行比说的久…";
+"That request expired. Send a new one." = "请求已失效。请重新发送。";
+"The D2 never came, the walk is longer…" = "D2 一直没来、步行比说的久……";
 "The number to choose: %@" = "要选择的数字：%@";
 "The sign-in was cancelled from the email. If that was you, send a new one." = "登录已在邮件中取消。如果是你取消的，请重新发送。";
 "The trip home" = "回家的行程";
@@ -173,13 +173,13 @@
 "Turn on leave-by alerts" = "开启出发提醒";
 "Two more things" = "最后两项";
 "Undo" = "撤销";
-"Unexpected response from terminus" = "terminus 返回了意外的响应";
+"terminus sent something this version can't read." = "terminus 返回的内容这个版本无法读取。";
 "Update" = "更新";
 "Update terminus to continue" = "请更新 terminus 以继续使用";
 "Updated" = "已更新";
 "Use the email you set up terminus with. We'll send you a code to enter here." = "请使用你设置 terminus 时用的邮箱。我们会发送一个验证码，请在此输入。";
 "Walk from home to your stop: %@ min" = "从家步行到车站：%@ 分钟";
-"Walks follow the paths on campus. Your pace sets how long they take." = "步行按校园里的路线计算。你的步速决定要走多久。";
+"Walks follow the paths on campus. Your pace sets how long they take." = "步行按校园里的小路计算。你的步速决定要走多久。";
 "What was wrong?" = "哪里不对？";
 "When the bus you'd wait for is often full at that stop and time, aim one bus earlier." = "如果你要等的巴士在那个车站和时间经常满员，就提早一班。";
 "Where do you live?" = "你住在哪里？";
@@ -199,8 +199,10 @@
 "starts %@" = "%@ 开始";
 "terminus %@ is out" = "terminus %@ 已发布";
 "walk" = "步行";
-"your last class" = "上一节课";
+"Home after your last class" = "下课后回家";
 "~%@" = "约 %@";
+"%@: %@" = "%@：%@";
+", " = "，";
 
 "Language and time" = "语言和时间";
 "Time format" = "时间格式";
@@ -257,11 +259,11 @@
 "This link is for %@, which has ended. Copy this semester's link from NUSMods and import it below." = "此链接属于已结束的 %@。请从 NUSMods 复制本学期的链接并在下方导入。";
 "Add a class or commitment by hand" = "手动添加课或其他安排";
 "Import from NUSMods" = "从 NUSMods 导入";
-"In NUSMods: Timetable → Share/Sync → Copy. Re-import each semester." = "在 NUSMods 中：Timetable → Share/Sync → Copy。每学期重新导入一次。";
+"In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here. Re-import each semester." = "在 NUSMods 中：打开 Timetable，然后 Share/Sync。复制链接并粘贴到这里。每学期重新导入一次。";
 "1 class" = "1 节课";
 "%@ classes" = "%@ 节课";
 "No classes yet. Import from NUSMods or add them by hand." = "还没有课。从 NUSMods 导入，或手动添加。";
-"wk %@–%@" = "第 %@–%@ 周";
+"weeks %@–%@" = "第 %@–%@ 周";
 "Day" = "星期";
 "Starts" = "开始";
 "Ends" = "结束";
@@ -325,7 +327,7 @@
 "No %@ buses running right now." = "%@ 现在没有巴士在运行。";
 "Live buses aren’t available right now." = "暂时看不到实时巴士。";
 "Live buses need a connection." = "实时巴士需要联网。";
-"Bus positions may be out of date" = "车辆位置可能不是最新的";
+"Bus positions may be out of date" = "巴士位置可能不是最新的";
 "%@: show its line and live buses" = "%@：显示路线和实时巴士";
 "Close" = "关闭";
 "At %@" = "在 %@";
@@ -339,7 +341,7 @@
 "Live times need a connection." = "实时时间需要联网。";
 "No buses due" = "暂时没有巴士";
 "No times right now" = "暂时没有时间";
-"Services here" = "经过这里的路线";
+"Services here" = "经过这里的线路";
 "Added to terminus in the menu bar" = "已加到菜单栏的 terminus 里";
 "Go there" = "去这里";
 "Walking directions" = "步行路线";
@@ -355,9 +357,9 @@
 "Opens the account page, where you confirm it." = "会打开账户页面，在那里确认。";
 "Skip this class" = "这节课不去";
 "Skip every trip left today" = "今天剩下的行程都不去";
-"Is this wrong?" = "这不对？";
+"Is this wrong?" = "答案不对？";
 "%@ of %@ characters" = "%@ / %@ 个字符";
 "Add an email…" = "添加邮箱…";
-"Add an email to report a wrong answer, so we can reply to you." = "添加邮箱后才能反馈错误的结果，方便我们回复你。";
+"Add an email to report a wrong answer, so we can reply to you." = "添加邮箱后才能报告错误的答案，方便我们回复你。";
 "Add an email to send feedback" = "添加邮箱后才能发送反馈";
 "So we can reply to you. Your setup stays as it is." = "这样我们才能回复你。你的设置会保持不变。";

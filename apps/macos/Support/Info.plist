@@ -30,9 +30,9 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSLocationUsageDescription</key>
-	<string>terminus uses your location to start from the bus stop you're nearest.</string>
+	<string>terminus uses your location to start from the bus stop nearest you.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>terminus uses your location to start from the bus stop you're nearest.</string>
+	<string>terminus uses your location to start from the bus stop nearest you.</string>
 	<key>SUAutomaticallyUpdate</key>
 	<true/>
 	<key>SUEnableAutomaticChecks</key>
