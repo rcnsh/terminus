@@ -87,7 +87,7 @@ import sh.rcn.terminus.widget.clock
 private fun minuteOfDay(): Int = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
 
 /**
- * The hour of the sky over Now, and over Settings' list: by the phone's
+ * The hour of the sky over Now, and in Settings' bands: by the phone's
  * clock, ticking each minute, whatever the chip shows.
  */
 @Composable

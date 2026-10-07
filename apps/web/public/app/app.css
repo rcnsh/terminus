@@ -338,9 +338,9 @@ body.sky .sky-head :is(.countdown:not(.gone), .phase, .upcoming .eyebrow) { colo
 /* Small coloured words on the sky's chip (see its ink above). */
 body.sky .sky-head :is(.tag, .tag.live, .phase) { background: var(--k-chip); }
 body.sky .sky-head :is(.notice, .warning) { width: fit-content; padding: 4px 10px; border-radius: 10px; background: var(--k-chip); }
-/* A slim band of the sky at the top of each of Settings' pages: the title in
-   it with the moon on the right at night, ending on the low horizon (just
-   the hills). The page's controls stay on the plain page under it. The page
+/* A slim band of the sky at the top of Settings and of each of its pages:
+   the title in it with the moon on the right at night, ending on the low
+   horizon (just the hills). The page's controls stay on the plain page under it. The page
    has a background of its own (it slides over the list), so the band draws
    its sky itself, across the window and up past the page's top. */
 .page-band { position: relative; isolation: isolate; margin: 0 calc(50% - 50vw); padding: 0 calc(50vw - 50%);

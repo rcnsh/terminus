@@ -447,7 +447,11 @@ Settings. It uses the same routes as the account page, with the session cookie.
   saying what's set, opening its page. The page is in the address (`#trips`
   on the account page, `#settings/trips` in the app), so the browser's Back
   returns to the list. On a phone the page slides in over the list; from
-  900 px wide they sit side by side. The installed app on an iPhone, which has
+  900 px wide they sit side by side. On a phone, in the app (web and
+  Android), the list's title and each page's sit in the same slim band of
+  the hour's sky, ending on the low hills, so opening a page doesn't change
+  the top; it turns with the phone's clock each minute, whatever tab is on
+  screen. The installed app on an iPhone, which has
   no browser swipe, goes back on a swipe from the left edge. "Notify me when
   to leave" is under Notifications. Send feedback posts a note to `/me/feedback`
   as `kind: 'other'`; a wrong answer is better reported from under the card,

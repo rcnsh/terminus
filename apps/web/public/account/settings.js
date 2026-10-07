@@ -10,6 +10,7 @@ import { api, clockOpts, locale, spaced, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 import { cardStyle, styleName } from './journey.js';
+import { Celestial, Horizon } from './sky.js';
 
 /** The pages shown as tiles, two to a row, with their icons. */
 const TILES = ['favourites', 'notifications', 'language', 'appearance', 'devices', 'feedback'];
@@ -78,9 +79,9 @@ function summaries({ p, me, notifyOn, devices, imported }) {
  * in the address. `Notify` (a component) is the app's "Notify me when to
  * leave", for Notifications, and `notifyOn` whether it's on. `side` goes above
  * the list (the account page's preview). `onAddEmail` and `onSignOut` are
- * Account's buttons; by default, the web app's. `sky`: the list's top (the
- * title and your account) up in Now's sky, ending on a horizon (sky.js), and
- * each page's title in a slim band of it, on a phone; the web app's.
+ * Account's buttons; by default, the web app's. `sky`: the list's title and
+ * each page's in a slim band of Now's sky, ending on the low hills (sky.js),
+ * on a phone; the web app's.
  */
 export function Settings({ me, inApp = false, Notify = null, notifyOn = false, side = null, sky = false, onAddEmail = addEmailFromApp, onSignOut = signOut }) {
   const p = useStore(profile);
@@ -241,13 +242,13 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
 
   const shown = view.shown;
   const leaving = view.leaving;
-  // A band of the sky at the top of each page; the list itself is plain.
-  // set-sky tells Now's sky (sky.js) to colour the browser's bar for it.
+  // A band of the sky at the top of the list and of each page, under it all
+  // plain. set-sky tells Now's sky (sky.js) to colour the browser's bar for it.
   const skyHere = sky && !wide;
   useEffect(() => {
-    document.body.classList.toggle('set-sky', skyHere && shown !== null);
+    document.body.classList.toggle('set-sky', skyHere);
     return () => document.body.classList.remove('set-sky');
-  }, [skyHere, shown]);
+  }, [skyHere]);
   const sum = summaries({ p, me, notifyOn, devices, imported });
   // Nothing imported, or a link for a semester that's over: Timetable asks, in the accent.
   const reimport = me.needsReimport && !imported;
@@ -275,7 +276,9 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
     <div class=${shown !== null ? 'settings page-open' : 'settings'} ref=${root}>
       <div class=${onSide ? 'settings-side leaving' : 'settings-side'} style=${onSide ? { top: `${leaving.shift}px` } : undefined} ref=${side_}>
         ${side}
-        <h1 class="settings-title">${t('Settings')}</h1>
+        ${skyHere
+          ? html`<div class="page-band"><div class="sky-head"><${Celestial} band /><h1 class="settings-title">${t('Settings')}</h1></div><${Horizon} on=${null} low /></div>`
+          : html`<h1 class="settings-title">${t('Settings')}</h1>`}
         <nav class="settings-groups" aria-label=${t('Settings')}>
           ${account}
           <section class="set-day" aria-labelledby="set-day-title">
