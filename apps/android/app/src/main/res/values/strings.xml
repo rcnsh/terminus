@@ -205,6 +205,8 @@
     <string name="no_answer_yet">No answer yet</string>
     <string name="no_buses_due">No buses due</string>
     <string name="no_classes_yet">No classes yet</string>
+    <string name="choose_your_stop">Choose your stop</string>
+    <string name="import_from_nusmods">Import from NUSMods</string>
     <string name="no_home_stop">No home stop yet</string>
     <string name="no_live_data">No live data</string>
     <string name="no_location">Couldn\'t get your location. Pick your stop instead.</string>

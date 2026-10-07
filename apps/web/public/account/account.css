@@ -44,21 +44,25 @@
 .settings-row.set-account { padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 .set-account .avatar { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--accent); color: var(--bg); font: 800 1.1rem var(--display); }
 .set-account .row-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Your day as a short route: home stop, classes, pace, each opening its page. */
-.set-day { padding: 14px 0 6px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+/* Your day as a route down the card: home stop, classes, hours, pace, each a
+   row opening its page. The line runs dot to dot, through every row's dot. */
+.set-day { padding: 14px 0 2px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
 .set-day .eyebrow { margin: 0 14px; }
-.day-route { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
-.day-route::before { content: ''; position: absolute; top: 13px; left: 16.67%; right: 16.67%; height: 4px; border-radius: 2px; background: var(--accent); }
-.day-stop { position: relative; display: grid; justify-items: center; gap: 2px; padding: 6px 4px 8px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; cursor: pointer; min-width: 0; }
-/* No background, which would cover the line: the stop's dot fills instead,
-   in the accent's soft colour on hover, in the accent when its page is open. */
-.day-stop:hover .day-dot { background: var(--accent-soft); }
-.day-stop:hover strong { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
-.day-stop[aria-current] .day-dot { background: var(--accent); }
-.day-stop[aria-current] strong { color: var(--accent); }
-.day-stop .day-dot { width: 18px; height: 18px; margin-bottom: 6px; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--accent); background: var(--surface); }
-.day-stop strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.93rem; }
-.day-stop > span:last-child { font-size: 0.8rem; color: var(--muted); }
+.day-route { margin-top: 4px; }
+.settings-row.day-stop { position: relative; padding: 0 14px; border: 0; }
+.day-stop .day-dot { position: relative; align-self: stretch; width: 16px; flex: none; }
+.day-stop .day-dot::before { content: ''; position: absolute; left: 6.5px; top: 0; bottom: 0; width: 3px; background: var(--accent); }
+.day-stop:first-child .day-dot::before { top: 50%; }
+.day-stop:last-child .day-dot::before { bottom: 50%; }
+.day-stop .day-dot::after { content: ''; position: absolute; left: 1px; top: 50%; width: 14px; height: 14px; margin-top: -7px; box-sizing: border-box; border-radius: 50%; border: 3.5px solid var(--accent); background: var(--surface); }
+.day-stop:hover .day-dot::after { background: var(--accent-soft); }
+.day-stop[aria-current] .day-dot::after { background: var(--accent); }
+/* The divider starts after the dot, so the line reads unbroken. */
+.day-stop .row-text { align-self: stretch; align-content: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.day-stop:last-child .row-text { border-bottom: 0; }
+.day-stop .row-sum { font-size: 0.8rem; }
+.day-stop strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.93rem; }
+.day-stop strong.todo { color: var(--accent); }
 /* The rest as tiles, two to a row. */
 .set-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .set-tile { display: grid; align-content: start; gap: 2px; min-height: 112px; padding: 14px; text-align: left; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; cursor: pointer; }
@@ -67,7 +71,7 @@
 .set-tile .row-title { font-weight: 700; }
 .set-tile .row-sum { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .set-tile .row-sum.off { color: var(--warn-ink); font-weight: 600; }
-.set-tile:focus-visible, .day-stop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.set-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .settings-row.inline { cursor: default; flex-wrap: wrap; }
 .settings-row.inline:hover { background: none; }
 /* About: the words, then its links as rows like the list's. */
