@@ -34,6 +34,7 @@ import { calendarThrough } from './calendar.ts';
 import { llmsTxt, robotsTxt, SITEMAP } from './seo.ts';
 import { calendarSource, loadCalendar } from './calendarsync.ts';
 import { handleDownload } from './downloads.ts';
+import { landingPage } from './landing.ts';
 import { handleMap, matchesEtag } from './map.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { allResidences } from './residences.ts';
@@ -416,8 +417,11 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/buses':
         return await handleBuses(url, env, ctx, nowMs);
       default:
-        // Everything else is the website.
-        if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return markBeta(await sitePage(req, env.ASSETS), env);
+        // Everything else is the website; the landing page with its version and account link.
+        if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) {
+          if (url.pathname === '/') return markBeta(await landingPage(req, env.ASSETS, env, nowMs, ctx), env);
+          return markBeta(await sitePage(req, env.ASSETS), env);
+        }
         return json({ error: 'not found' }, 404);
     }
   } catch (err) {

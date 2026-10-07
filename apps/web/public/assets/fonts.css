@@ -9,11 +9,14 @@
 /* Until the fonts arrive, text is drawn in Arial (Roboto on Android) scaled
    to the width the real font will take, so lines break in the same places
    and nothing moves when it swaps. The sizes are measured: the same text's
-   width in each font, at each weight. A face whose local font is missing is
-   skipped, so Arial and Roboto each need a family of their own. */
-@font-face { font-family: 'Inter Fallback'; font-weight: 400 500; src: local('Arial'), local('ArialMT'); size-adjust: 106.9%; }
-@font-face { font-family: 'Inter Fallback'; font-weight: 600 700; src: local('Arial Bold'), local('Arial-BoldMT'); size-adjust: 101%; }
-@font-face { font-family: 'Inter Fallback Roboto'; font-weight: 400 500; src: local('Roboto'), local('Roboto-Regular'); size-adjust: 107.3%; }
-@font-face { font-family: 'Inter Fallback Roboto'; font-weight: 600 700; src: local('Roboto Bold'), local('Roboto-Bold'); size-adjust: 109.4%; }
-@font-face { font-family: 'Space Grotesk Fallback'; font-weight: 500 700; src: local('Arial Bold'), local('Arial-BoldMT'); size-adjust: 101.2%; }
-@font-face { font-family: 'Space Grotesk Fallback Roboto'; font-weight: 500 700; src: local('Roboto Bold'), local('Roboto-Bold'); size-adjust: 109.6%; }
+   width in each font, at each weight. The overrides give each line the real
+   font's height (Inter 0.969 above and 0.241 below, Space Grotesk 0.984 and
+   0.292, no line gap where Arial has one), divided by the size, which scales
+   them too. A face whose local font is missing is skipped, so Arial and
+   Roboto each need a family of their own. */
+@font-face { font-family: 'Inter Fallback'; font-weight: 400 500; src: local('Arial'), local('ArialMT'); size-adjust: 106.9%; ascent-override: 90.62%; descent-override: 22.56%; line-gap-override: 0%; }
+@font-face { font-family: 'Inter Fallback'; font-weight: 600 700; src: local('Arial Bold'), local('Arial-BoldMT'); size-adjust: 101%; ascent-override: 95.92%; descent-override: 23.88%; line-gap-override: 0%; }
+@font-face { font-family: 'Inter Fallback Roboto'; font-weight: 400 500; src: local('Roboto'), local('Roboto-Regular'); size-adjust: 107.3%; ascent-override: 90.28%; descent-override: 22.48%; line-gap-override: 0%; }
+@font-face { font-family: 'Inter Fallback Roboto'; font-weight: 600 700; src: local('Roboto Bold'), local('Roboto-Bold'); size-adjust: 109.4%; ascent-override: 88.55%; descent-override: 22.05%; line-gap-override: 0%; }
+@font-face { font-family: 'Space Grotesk Fallback'; font-weight: 500 700; src: local('Arial Bold'), local('Arial-BoldMT'); size-adjust: 101.2%; ascent-override: 97.23%; descent-override: 28.85%; line-gap-override: 0%; }
+@font-face { font-family: 'Space Grotesk Fallback Roboto'; font-weight: 500 700; src: local('Roboto Bold'), local('Roboto-Bold'); size-adjust: 109.6%; ascent-override: 89.78%; descent-override: 26.64%; line-gap-override: 0%; }
