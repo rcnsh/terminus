@@ -1,9 +1,10 @@
 // The landing page: the page itself is plain HTML (it should read without
-// any script); this adds the live parts. The version next to the download
-// buttons and Account for someone signed in are small Preact components
-// drawn into the page; the sky's horizon and night are sky-page.js's. The
-// install steps' and the download menu's placement are behaviours on the
-// page's own markup, so they stay plain functions.
+// any script); this adds the live parts. The Worker writes in the version
+// next to the download buttons and Account for someone signed in
+// (src/landing.ts), so neither changes once the page is up; the version is
+// asked for here only when it couldn't. The sky's horizon and night are
+// sky-page.js's. The install steps' and the download menu's placement are
+// behaviours on the page's own markup, so they stay plain functions.
 
 import { html, render, useEffect, useState } from '/assets/ui.js';
 import { t } from '/account/dom.js';
@@ -23,25 +24,7 @@ function Version() {
 }
 for (const id of ['version', 'dl-version']) {
   const box = document.getElementById(id);
-  if (box) render(html`<${Version} />`, box);
-}
-
-/** The header's Sign in, or Account when signed in already. */
-function AccountLink() {
-  const [signedIn, setSignedIn] = useState(false);
-  useEffect(() => {
-    fetch('/me', { credentials: 'same-origin' })
-      .then((r) => r.ok && setSignedIn(true))
-      .catch(() => {});
-  }, []);
-  return signedIn ? t('Account') : t('Sign in');
-}
-{
-  const link = document.getElementById('account-link');
-  if (link) {
-    link.replaceChildren();
-    render(html`<${AccountLink} />`, link);
-  }
+  if (box && !box.firstChild) render(html`<${Version} />`, box);
 }
 
 // The hero's text is centred beside the phone, so opening "How to install"

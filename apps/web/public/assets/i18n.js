@@ -84,6 +84,18 @@
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE || node.hasAttribute('data-no-t')) return;
+    // Text with a value in it, written by the server (the landing page's
+    // version): its English and the values ride along, as t() takes them.
+    if (node.dataset.t) {
+      let args = [];
+      try {
+        args = JSON.parse(node.dataset.tArgs || '[]');
+      } catch {
+        // Unreadable values: the blanks stay empty.
+      }
+      node.textContent = t(node.dataset.t, ...args);
+      return;
+    }
     // A text box's placeholder, though not what's typed in it.
     for (const a of ATTRS) {
       const v = node.getAttribute(a);

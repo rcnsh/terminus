@@ -37,6 +37,13 @@ same). An address the website doesn't have, asked for by a browser, gets
 plain 404. `/docs` takes its bar's band from pagesky.ts, at Singapore's
 hour, like the Worker's small pages.
 
+The landing page is sent with the current release's version (from
+`latest.json`, remembered for five minutes) and, for someone with a live
+session, Account in place of Sign in, both written in by `src/landing.ts`
+so nothing changes once the page is up. It's `private, no-cache` with no
+ETag, so a browser never shows its own older copy. The version carries its
+English in `data-t`, which `i18n.js` words in Chinese.
+
 ---
 
 ## Quick start

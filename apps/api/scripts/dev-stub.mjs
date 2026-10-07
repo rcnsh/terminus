@@ -42,6 +42,7 @@ import { Trip } from '../src/tripdo.ts';
 import { TimelapseRecorder } from '../src/timelapsedo.ts';
 import { ensureRecorder, inWindow, nextOpen } from '../src/timelapse.ts';
 import { SESSION_COOKIE as DEV_COOKIE } from '../src/accounts.ts';
+import { API_VERSION } from '../src/openapi.ts';
 import { makeD1, makeEmail } from '../test/_d1.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -205,9 +206,11 @@ const ASSETS = {
 };
 
 // The map's files (fonts, icons, the map file if there is one) from dev/map/,
-// standing in for R2, byte ranges and all.
+// standing in for R2, byte ranges and all. latest.json names this version,
+// for the landing page; there are no app files behind it.
 const MAP_DIR = new URL('../../../dev/map/', import.meta.url).pathname;
 const DOWNLOADS = makeBucket(async (key) => {
+  if (key === 'latest.json') return new TextEncoder().encode(JSON.stringify({ version: API_VERSION }));
   if (!key.startsWith('map/')) return null;
   const file = path.join(MAP_DIR, key.slice(4));
   if (!file.startsWith(MAP_DIR)) return null;

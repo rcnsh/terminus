@@ -330,7 +330,7 @@ export function makeBucket(readFrom) {
       if (offset >= data.length) throw new Error('range not satisfiable');
       const body = data.slice(offset, offset + length);
       bucket.gets++;
-      return { ...base, body, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), ...(ranged ? { range: { offset, length: body.length } } : {}) };
+      return { ...base, body, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), text: async () => new TextDecoder().decode(body), json: async () => JSON.parse(new TextDecoder().decode(body)), ...(ranged ? { range: { offset, length: body.length } } : {}) };
     },
   };
   return bucket;
