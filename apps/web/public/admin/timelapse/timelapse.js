@@ -15,10 +15,9 @@
 
 import { html, render, store, useEffect, useRef, useStore } from '/assets/ui.js';
 import { busesAt, clockAt, countBySvc, decodeDay, timeOn } from '/admin/timelapse/replay.js';
+import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 
-// "@" spelled %40, as in app/map.js: the static assets redirect the "@" form.
-const MAPLIBRE = '/vendor/maplibre-gl%406.11.2/';
-const PMTILES = '/vendor/pmtiles%404.5.0/pmtiles.mjs';
+// "@" spelled %40, as in app/map-files.js: the static assets redirect the "@" form.
 const MEDIABUNNY = '/vendor/mediabunny%401.61.3/mediabunny.min.mjs';
 const KEY = 'terminus-operator-token';
 const FPS = 30;
