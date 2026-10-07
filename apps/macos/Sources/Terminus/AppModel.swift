@@ -211,10 +211,12 @@ final class AppModel {
     /// The menu bar text at `now` (on the server's clock): the card's glance,
     /// worded on the server as the phone's widget shows it, or nil for the
     /// plain icon. An answer from an older server, without a card, counts
-    /// down from its departure time here.
+    /// down from its departure time here. Offline with the plan gone stale
+    /// and no day plan to fall back on, the plain icon: the old glance would
+    /// pass for current.
     func menuTitle(at now: Date) -> String? {
         if let p = offlinePick(at: now) { return OfflineDay.menuTitle(p) }
-        guard let plan else { return nil }
+        guard let plan, error == nil || !isOld(plan, at: now) else { return nil }
         if let card = plan.card { return card.glance.flatMap { $0.isEmpty ? nil : $0 } }
         guard plan.quality != "ended", !plan.isFree else { return nil }
         guard plan.hasLiveTime, let at = plan.departure else {
