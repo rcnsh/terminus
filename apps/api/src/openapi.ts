@@ -21,6 +21,16 @@ const quality = {
     '`ended`: the service is outside its operating hours.',
 };
 
+/** `?stopped=1`: the services not running now too, for the Buses tab. */
+const stoppedParam = {
+  name: 'stopped',
+  in: 'query',
+  description:
+    'Set to `1` to list the services that call at the stop but are outside their hours now, after the running ones, by name, with `running: false`, why (`stopped`) and when each starts again (`resumesAt`). ' +
+    'A service the feed still gives a time for is running. Default: running services only.',
+  schema: { type: 'string', enum: ['1'] },
+};
+
 /** `?public=1`: the public buses too, as an account's `publicBuses` does for `/me/*`. */
 const publicParam = {
   name: 'public',
@@ -239,6 +249,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               example: 'COM3',
             },
             publicParam,
+            stoppedParam,
           ],
           responses: {
             '200': {
@@ -249,8 +260,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   example: {
                     stop: { code: 'YIH', name: 'YIH', longName: 'Yusof Ishak House', opposite: 'YIH-OPP', oppositeAcross: true, oppositeName: 'Opp Yusof Ishak House' },
                     board: [
-                      { svc: 'K', etaS: 180, quality: 'live', ambiguousBerth: false, later: [{ etaS: 900, quality: 'live' }], color: '#2b9ad6', towards: ['Central Library', 'Prince George’s Park Foyer'], crowd: 'low', endsAt: '2026-09-28T15:04:00.000Z' },
-                      { svc: 'D1', etaS: 420, quality: 'live', ambiguousBerth: false, later: [], color: '#ec4fa0', towards: ['Central Library', 'COM 3'], crowd: 'high', endsAt: '2026-09-28T15:00:00.000Z' },
+                      { svc: 'K', etaS: 180, quality: 'live', ambiguousBerth: false, later: [{ etaS: 900, quality: 'live' }], color: '#2b9ad6', towards: ['Central Library', 'Prince George’s Park Foyer'], crowd: 'low', endsAt: '2026-09-28T15:04:00.000Z', running: true },
+                      { svc: 'D1', etaS: 420, quality: 'live', ambiguousBerth: false, later: [], color: '#ec4fa0', towards: ['Central Library', 'COM 3'], crowd: 'high', endsAt: '2026-09-28T15:00:00.000Z', running: true },
                     ],
                     asOf: '2026-09-28T01:14:02.000Z',
                     available: true,
@@ -298,7 +309,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'One service’s line',
           description:
-            'A service’s whole line, for a page about it: its stops in route order (a loop’s first stop is not listed again at its end), each with the other shuttle services that call there, and its buses placed on that list, each at a stop (`at`, an index into `stops`) or between two (`after`: between `stops[after]` and the next, which on a loop’s last stop is the first again). The buses are the same ones as `/buses`, placed the same way, from the same 5-second cache. With `stop`, `stop.row` is the service’s board row at that stop, as on `/arrivals`, through the same 15-second cache. No times are worked out for the other stops: only the live feed’s own are given.',
+            'A service’s whole line, for a page about it: its stops in route order (a loop’s first stop is not listed again at its end), each with the other shuttle services that call there, and its buses placed on that list, each at a stop (`at`, an index into `stops`) or between two (`after`: between `stops[after]` and the next, which on a loop’s last stop is the first again). The buses are the same ones as `/buses`, placed the same way, from the same 5-second cache. With `stop`, `stop.row` is the service’s board row at that stop, as on `/arrivals?stopped=1`, through the same 15-second cache. `running`, `stopped` and `resumesAt` say whether the service is inside its hours now, and if not, why and when it starts again. No times are worked out for the other stops: only the live feed’s own are given.',
           operationId: 'getLine',
           parameters: [
             { name: 'svc', in: 'query', required: true, description: 'Service code, case-insensitive. Shuttle services only.', schema: { type: 'string' }, example: 'D1' },
@@ -314,6 +325,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     svc: 'D1',
                     color: '#ec4fa0',
                     endsAt: '2026-10-07T15:00:00.000Z',
+                    running: true,
+                    stopped: null,
+                    resumesAt: null,
                     stops: [
                       { code: 'COM3', name: 'COM 3', longName: 'COM 3', services: ['D2'] },
                       { code: 'HSSML-OPP', name: 'Opp HSSML', longName: 'Opp HSSML', services: ['A2', 'R2'] },
@@ -325,7 +339,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     stop: {
                       code: 'YIH',
                       index: 8,
-                      row: { svc: 'D1', etaS: 240, quality: 'live', ambiguousBerth: false, later: [], color: '#ec4fa0', towards: ['Central Library', 'COM 3'], crowd: 'low', endsAt: '2026-10-07T15:00:00.000Z' },
+                      row: { svc: 'D1', etaS: 240, quality: 'live', ambiguousBerth: false, later: [], color: '#ec4fa0', towards: ['Central Library', 'COM 3'], crowd: 'low', endsAt: '2026-10-07T15:00:00.000Z', running: true },
                     },
                     available: true,
                     asOf: '2026-10-07T05:14:02.000Z',
@@ -698,7 +712,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '(across the road, or a stop easily mistaken for it) when it isn\'t one of them. `opposite` is each stop\'s twin, if it has one. Each departure has its service\'s `color`. Without coordinates, uses your home.',
           operationId: 'meNearby',
           security: [{ bearer: [] }, { cookie: [] }],
-          parameters: coordParams,
+          parameters: [...coordParams, stoppedParam],
           responses: {
             '200': ok({
               type: 'object',
@@ -1533,7 +1547,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
         BoardRow: {
           type: 'object',
-          required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later', 'color', 'towards', 'crowd', 'endsAt'],
+          required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later', 'color', 'towards', 'crowd', 'endsAt', 'running'],
           properties: {
             svc: { type: 'string' },
             etaS: { type: ['integer', 'null'] },
@@ -1554,6 +1568,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             },
             crowd: { type: ['string', 'null'], enum: ['low', 'medium', 'high', null], description: 'How full the bus in `etaS` is, from the live feed. Null when it gives none, or there is no bus.' },
             endsAt: { type: ['string', 'null'], format: 'date-time', description: 'When the service stops running today. Null when its hours are not known.' },
+            running: { type: 'boolean', description: 'False only on a row for a service outside its hours, listed with `?stopped=1`: no time (`etaS` null, `quality` `ended`), no crowding, after every running row.' },
+            stopped: { type: 'string', enum: ['ended', 'notYet', 'noService'], description: 'Only when `running` is false: `ended` (it ran today and has finished), `notYet` (it starts later today) or `noService` (it does not run today; Sunday hours on a public holiday).' },
+            resumesAt: { type: ['string', 'null'], format: 'date-time', description: 'Only when `running` is false: when it next starts, looking up to 8 days ahead. Null when no start is found.' },
           },
         },
         StopBoard: {
@@ -1627,11 +1644,14 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
         Line: {
           type: 'object',
-          required: ['svc', 'color', 'endsAt', 'stops', 'buses', 'available', 'asOf'],
+          required: ['svc', 'color', 'endsAt', 'running', 'stopped', 'resumesAt', 'stops', 'buses', 'available', 'asOf'],
           properties: {
             svc: { type: 'string' },
             color: { type: ['string', 'null'] },
             endsAt: { type: ['string', 'null'], format: 'date-time', description: 'When the service stops running today. Null when its hours are not known.' },
+            running: { type: 'boolean', description: 'Whether the service is inside its hours now, as a board row’s `running` (unknown hours count as running).' },
+            stopped: { type: ['string', 'null'], enum: ['ended', 'notYet', 'noService', null], description: 'Why it is not running, as on a board row. Null while it runs.' },
+            resumesAt: { type: ['string', 'null'], format: 'date-time', description: 'When it next starts, as on a board row. Null while it runs, or when no start is found in 8 days.' },
             stops: {
               type: 'array',
               description: 'The stops in route order. A loop’s first stop is not listed again at its end.',
@@ -1667,7 +1687,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               properties: {
                 code: { type: 'string' },
                 index: { type: 'integer', description: 'Its place in `stops`.' },
-                row: { oneOf: [{ $ref: '#/components/schemas/BoardRow' }, { type: 'null' }], description: 'The service’s row on the stop’s board. Null when the service is not on it (it has stopped for the day).' },
+                row: { oneOf: [{ $ref: '#/components/schemas/BoardRow' }, { type: 'null' }], description: 'The service’s row on the stop’s board, as `/arrivals?stopped=1` gives it: a service outside its hours has a row with `running: false`.' },
               },
             },
             available: { type: 'boolean', description: 'False when the live feed could not be reached.' },

@@ -6,7 +6,9 @@
  * Runs the real Worker code in Node with:
  *   - a stubbed NUS feed: every service arrives every 12 minutes, offset per
  *     service, moving with the real clock (so countdowns and dimming behave)
- *   - every service treated as running at any hour
+ *   - every service treated as running at any hour; with STUB_HOURS=real,
+ *     the real hours (data/service-hours.json) instead, and no buses or
+ *     times for a service outside them (the Buses tab's stopped rows)
  *   - an in-memory database with a test account (you@u.nus.edu),
  *     three saved places, a class later today, and pairing codes TEST67, TEST78, TEST89
  *   - crowd history saying every bus at PGP is usually packed (the full-bus warning)
@@ -19,6 +21,9 @@
  * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
  * light and dark screenshots of the same moment. POST /__stub/skip?min=N
  * moves it ahead, to walk through a trip (phase 8: detection on the emulator).
+ * STUB_NOW=<ISO time> starts the clock there, and POST /__stub/at?t=<ISO time>
+ * moves it there (it runs on from it): STUB_NOW=2026-10-07T13:30:00Z is a
+ * Wednesday 21:30 in Singapore, when R1 and R2 have stopped.
  *
  * The timelapse recorder runs too, on the fake buses, as it would in its
  * window (the cron that starts it is a timer here). POST
@@ -54,8 +59,13 @@ const realNow = Date.now.bind(Date);
 let frozenAt = null;
 // POST /__stub/skip?min=N moves the clock N minutes ahead (and keeps it
 // there), to walk through a trip without waiting for it.
-let skipMs = 0;
+let skipMs = process.env.STUB_NOW ? Date.parse(process.env.STUB_NOW) - realNow() : 0;
+if (Number.isNaN(skipMs)) throw new Error('STUB_NOW must be an ISO time, such as 2026-10-07T13:30:00Z');
 const stubNow = () => (frozenAt ?? realNow()) + skipMs;
+// STUB_HOURS=real: services keep their real hours, and the fake feed has
+// nothing for one outside them. Set once the Worker's graph is loaded.
+const REAL_HOURS = process.env.STUB_HOURS === 'real';
+let running = (_svc) => true;
 
 const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
 const servingStop = new Map();
@@ -76,7 +86,7 @@ const shapes = (await import('../data/shapes.json', { with: { type: 'json' } }))
  *  line. Like the real feed, a bus's position only moves every 18 s. */
 function fakeBuses(svc) {
   const shape = shapes[svc];
-  if (!shape) return [];
+  if (!shape || !running(svc)) return [];
   const t = Math.floor(stubNow() / 18_000) * 18_000;
   const pts = shape.line;
   const seg = pts.slice(1).map((p, i) => Math.hypot((p[0] - pts[i][0]) * 111_320, (p[1] - pts[i][1]) * 110_540));
@@ -125,7 +135,7 @@ async function feed(input, init = {}) {
   if (url.includes('bus-proxy')) {
     const stop = JSON.parse(init.body ?? '{}').busstopname;
     const nowMin = stubNow() / 60_000;
-    const shuttles = (servingStop.get(stop) ?? []).map((svc, i) => {
+    const shuttles = (servingStop.get(stop) ?? []).filter((svc) => running(svc)).map((svc, i) => {
       const offset = (svc.charCodeAt(0) * 7 + i * 5) % 12;
       const eta = Math.max(1, Math.round(((offset - nowMin) % 12 + 12) % 12) + 1);
       return { name: svc, arrivalTime: String(eta), nextArrivalTime: String(eta + 12), passengers: crowds[(eta + i) % 3] };
@@ -150,11 +160,16 @@ async function feed(input, init = {}) {
   return res;
 }
 
-installGlobals(feed);
+const edgeCache = installGlobals(feed);
 Date.now = stubNow; // installGlobals freezes the clock for tests; the dev server wants real time.
 
 const { default: worker, GRAPH } = await import('../src/index.ts');
-GRAPH.serviceHours = {}; // every service "running", whatever the hour
+if (REAL_HOURS) {
+  const { inService } = await import('../src/resolve.ts');
+  running = (svc) => inService(GRAPH, svc, stubNow());
+} else {
+  GRAPH.serviceHours = {}; // every service "running", whatever the hour
+}
 
 const db = makeD1();
 const email = makeEmail();
@@ -301,6 +316,18 @@ async function serve(req, res) {
   }
   if (req.method === 'POST' && req.url.startsWith('/__stub/skip')) {
     skipMs += Number(new URL(req.url, 'http://x').searchParams.get('min') ?? 0) * 60_000;
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    return res.end(`now ${new Date(stubNow()).toISOString()}\n`);
+  }
+  if (req.method === 'POST' && req.url.startsWith('/__stub/at')) {
+    const at = Date.parse(new URL(req.url, 'http://x').searchParams.get('t') ?? '');
+    if (Number.isNaN(at)) {
+      res.writeHead(400, { 'content-type': 'text/plain' });
+      return res.end('t must be an ISO time, such as 2026-10-07T13:30:00Z\n');
+    }
+    skipMs = at - (frozenAt ?? realNow());
+    // What's cached was cached at the old time: going back, it would never expire.
+    edgeCache._store.clear();
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end(`now ${new Date(stubNow()).toISOString()}\n`);
   }

@@ -567,4 +567,10 @@
     <string name="buses_times_here_only">Times are shown for your stop only.</string>
     <string name="buses_unknown_line">This service\'s line isn\'t available.</string>
     <string name="buses_ends_here">Ends here</string>
+    <string name="buses_stopped_today">Stopped for today</string>
+    <string name="buses_not_yet">Not running yet</string>
+    <string name="buses_no_service">No service today</string>
+    <string name="buses_back_tomorrow">Back tomorrow at %1$s</string>
+    <string name="buses_back_on">Back %1$s at %2$s</string>
+    <string name="buses_starts_at">Starts at %1$s</string>
 </resources>

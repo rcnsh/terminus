@@ -217,6 +217,15 @@ button.bt-row:focus-visible { outline-offset: -2px; }
 .bt-crowd.low { color: var(--good-ink); background: color-mix(in srgb, var(--good) 12%, transparent); }
 .bt-crowd.high { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 15%, transparent); }
 .bt-then { grid-area: then; justify-self: end; font: 600 0.85rem/1.2 var(--display); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A service not running: greyed, its words where the minutes go. */
+.bt-row.stopped { color: var(--muted); }
+.bt-row.stopped .bt-dir, .bt-row.stopped .bt-dir b { color: var(--faint); font-weight: 500; }
+.bt-chip.muted { background: color-mix(in srgb, var(--svc) 30%, var(--surface-2)); color: var(--muted); }
+.bt-row.stopped .bt-big.none { color: var(--muted); font-weight: 600; }
+/* No minutes after it: its line takes the row's width. */
+.bt-row.stopped .bt-meta { grid-column: 1 / -1; color: var(--muted); }
+.bt-stopped-note { display: grid; gap: 2px; margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font-size: 0.85rem; }
+.bt-stopped-note span:first-child { color: var(--ink); font-weight: 600; font-size: 0.95rem; }
 
 .bt-foot { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 6px 0; font-size: 0.8rem; color: var(--muted); }
 .bt-ends { display: grid; gap: 4px; }

@@ -567,4 +567,10 @@
     <string name="buses_times_here_only">只显示你的车站的时间。</string>
     <string name="buses_unknown_line">这条线路暂时无法显示。</string>
     <string name="buses_ends_here">本站为终点站</string>
+    <string name="buses_stopped_today">今天已停运</string>
+    <string name="buses_not_yet">尚未开始运行</string>
+    <string name="buses_no_service">今天不运行</string>
+    <string name="buses_back_tomorrow">明天 %1$s 恢复</string>
+    <string name="buses_back_on">%1$s %2$s 恢复</string>
+    <string name="buses_starts_at">%1$s 开始</string>
 </resources>

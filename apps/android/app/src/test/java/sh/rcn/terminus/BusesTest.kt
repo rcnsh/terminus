@@ -224,4 +224,50 @@ class BusesTest {
         assertFalse(nb.oppositeAcross)
         assertEquals("Prince George's Park Foyer", nb.oppositeName)
     }
+
+    private fun at(iso: String) = java.time.Instant.parse(iso).toEpochMilli()
+
+    @Test fun aStoppedRowParsesAndAnOlderOneRuns() {
+        val b = Board.parse(JSONObject("""{"stop": {"code": "PGP"}, "board": [
+          {"svc": "R1", "etaS": null, "quality": "ended", "later": [], "towards": ["Kent Ridge MRT"], "running": false, "stopped": "ended", "resumesAt": "2026-10-07T23:40:00.000Z"},
+          {"svc": "A1", "etaS": 60, "quality": "live", "later": []}]}"""))
+        val r1 = b.rows[0]
+        assertFalse(r1.running)
+        assertEquals("ended", r1.stopped)
+        assertEquals(at("2026-10-07T23:40:00Z"), r1.resumesAtMs)
+        assertTrue("no `running` from an older server: running", b.rows[1].running)
+        assertNull(b.rows[1].stopped)
+        val l = Line.parse(JSONObject("""{"svc": "R1", "stops": [], "buses": [], "running": false, "stopped": "noService", "resumesAt": null}"""))
+        assertFalse(l.running)
+        assertEquals("noService", l.stopped)
+        assertTrue(Line.parse(JSONObject("""{"svc": "R1", "stops": [], "buses": []}""")).running)
+    }
+
+    @Test fun aStoppedServiceSaysWhenItsBackInSingaporeDays() {
+        TestStrings.install()
+        // Wednesday 21:30 in Singapore.
+        val now = at("2026-10-07T13:30:00Z")
+        assertNull(Stopped.of(true, null, null, now))
+        // Thursday 07:40 in Singapore: tomorrow, though it's the same UTC day.
+        assertEquals("Stopped for today" to "Back tomorrow at 7:40 am", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(true))
+        assertEquals("Stopped for today" to "Back tomorrow at 07:40", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(false))
+        // Saturday morning, back Monday.
+        val sat = at("2026-10-10T02:00:00Z")
+        assertEquals("No service today" to "Back Monday at 7:40 am", Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), sat)!!.lines(true))
+        // 06:00 on a weekday: later today, so it starts, never "Back today".
+        val early = at("2026-10-07T22:00:00Z")
+        assertEquals("Not running yet" to "Starts at 7:04 am", Stopped.of(false, "notYet", at("2026-10-07T23:04:00Z"), early)!!.lines(true))
+        assertEquals("No time found: the first line only", "Stopped for today" to null, Stopped.of(false, "ended", null, now)!!.lines(true))
+    }
+
+    @Test fun aStoppedServiceInChinese() {
+        TestStrings.install("values-zh")
+        try {
+            val now = at("2026-10-07T13:30:00Z")
+            assertEquals("今天已停运" to "明天 07:40 恢复", Stopped.of(false, "ended", at("2026-10-07T23:40:00Z"), now)!!.lines(false))
+            assertEquals("今天不运行" to "星期一 07:40 恢复", Stopped.of(false, "noService", at("2026-10-11T23:40:00Z"), at("2026-10-10T02:00:00Z"))!!.lines(false))
+        } finally {
+            TestStrings.install()
+        }
+    }
 }

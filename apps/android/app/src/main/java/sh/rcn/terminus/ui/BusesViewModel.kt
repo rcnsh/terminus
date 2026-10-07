@@ -86,7 +86,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         val ctx = getApplication<Application>()
         val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
         try {
-            val json = api().nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
+            val json = api().nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
             val asOf = json.optString("asOf").takeIf { it.isNotEmpty() }?.let(::parseInstant)
             val stops = parseNearby(json).map { Board.of(it, asOf) }
             val first = stops.firstOrNull()

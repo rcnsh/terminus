@@ -340,6 +340,43 @@ export function serviceEndsAt(graph: Graph, svc: string, nowMs: number): number 
   return midnight + ((w.close >= w.open ? 0 : 1440) + w.close) * 60_000;
 }
 
+/** Why a service isn't running now: it has finished for today, it starts
+ *  later today, or it doesn't run today at all. */
+export type StoppedReason = 'ended' | 'notYet' | 'noService';
+
+/** How far ahead serviceResumesAt looks: past a week, so a service off for a weekend and a holiday still has a next start. */
+const RESUME_DAYS = 8;
+
+/**
+ * Why `svc` isn't running now (SGT), or null when it is, by inService's
+ * rules: unknown hours count as running, Sunday hours on public holidays.
+ */
+export function stoppedReason(graph: Graph, svc: string, nowMs: number): StoppedReason | null {
+  if (inService(graph, svc, nowMs)) return null;
+  const hours = graph.serviceHours?.[svc];
+  const w = hours ? parseWindow(windowOn(hours, nowMs)) : null;
+  if (!w) return 'noService';
+  return sgt(nowMs).minutes < w.open ? 'notYet' : 'ended';
+}
+
+/**
+ * When `svc` next starts running (SGT), epoch ms: the first opening after
+ * now, today or up to RESUME_DAYS ahead, by each day's hours (Sunday's on a
+ * public holiday). Null when the hours are unknown or none open in that time.
+ */
+export function serviceResumesAt(graph: Graph, svc: string, nowMs: number): number | null {
+  const hours = graph.serviceHours?.[svc];
+  if (!hours) return null;
+  const { minutes } = sgt(nowMs);
+  const midnight = nowMs - (minutes * 60_000 + (nowMs % 60_000));
+  for (let d = 0; d <= RESUME_DAYS; d++) {
+    const day = midnight + d * 86_400_000;
+    const w = parseWindow(windowOn(hours, day));
+    if (w && day + w.open * 60_000 > nowMs) return day + w.open * 60_000;
+  }
+  return null;
+}
+
 /**
  * Pick the boardable rows when one service reports under several berths.
  *
@@ -396,6 +433,12 @@ export interface BoardRow {
   crowd: Crowd | null;
   /** When the service stops running today (ISO); null when its hours are unknown. */
   endsAt: string | null;
+  /** False only on a row for a service outside its hours, listed when asked for (`stopped`). */
+  running: boolean;
+  /** Why it isn't running. Only on a row that isn't. */
+  stopped?: StoppedReason;
+  /** When it next starts (ISO), or null when no start is found. Only on a row that isn't running. */
+  resumesAt?: string | null;
 }
 
 /** A stop's name as a sign would give it ("Central Library", not "CLB"). */
@@ -427,8 +470,20 @@ export function towardsFrom(idx: GraphIndex, svc: string, stopCode: string): str
  * standing there (or checking before they leave), not racing to catch one.
  * Shares its quality ladder and berth handling with scoreOptions() so a stop
  * never disagrees with itself between the Now answer and the map.
+ *
+ * A service outside its hours with no time from the feed is left out, or,
+ * with `stopped`, listed after the others as not running, with why and when
+ * it starts again. One the feed still gives a time for is running: the feed
+ * is what's on the road, the hours only a guide.
  */
-export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: StopArrivals | undefined, nowMs: number): BoardRow[] {
+export function boardAt(
+  graph: Graph,
+  idx: GraphIndex,
+  stopCode: string,
+  sa: StopArrivals | undefined,
+  nowMs: number,
+  opts: { stopped?: boolean } = {},
+): BoardRow[] {
   const services = idx.servingStop.get(stopCode) ?? [];
   const out: BoardRow[] = [];
 
@@ -449,7 +504,24 @@ export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: Sto
       quality = etas[0].scheduled ? 'scheduled' : 'live';
       etaS = etas[0].etaS;
     } else if (!inService(graph, svc, nowMs)) {
-      continue; // ended: do not list a service that is not running
+      if (!opts.stopped) continue; // not running: left out unless asked for
+      const resumes = serviceResumesAt(graph, svc, nowMs);
+      out.push({
+        svc: svcName(svc),
+        etaS: null,
+        quality: 'ended',
+        ambiguousBerth: false,
+        ...(pub ? { paid: true as const } : {}),
+        later: [],
+        color: ROUTE_COLORS[svcName(svc)] ?? null,
+        towards: towardsFrom(idx, svc, stopCode),
+        crowd: null,
+        endsAt: null,
+        running: false,
+        stopped: stoppedReason(graph, svc, nowMs) ?? 'ended',
+        resumesAt: resumes === null ? null : new Date(resumes).toISOString(),
+      });
+      continue;
     } else if (!available) {
       quality = 'unknown';
     } else {
@@ -473,11 +545,14 @@ export function boardAt(graph: Graph, idx: GraphIndex, stopCode: string, sa: Sto
       towards: towardsFrom(idx, svc, stopCode),
       crowd: etas[0]?.crowd ?? null,
       endsAt: ends === null ? null : new Date(ends).toISOString(),
+      running: true,
     });
   }
 
   out.sort(
     (a, b) =>
+      // Not running: after every service that is, by name.
+      Number(a.running === false) - Number(b.running === false) ||
       Number(isMeasured(b.quality)) - Number(isMeasured(a.quality)) ||
       (a.etaS ?? Infinity) - (b.etaS ?? Infinity) ||
       a.svc.localeCompare(b.svc),

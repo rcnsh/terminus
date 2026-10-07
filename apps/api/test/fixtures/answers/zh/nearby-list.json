@@ -30,7 +30,8 @@
             "COM 3"
           ],
           "crowd": "low",
-          "endsAt": "2026-08-27T15:00:00.000Z"
+          "endsAt": "2026-08-27T15:00:00.000Z",
+          "running": true
         },
         {
           "svc": "A2",
@@ -44,7 +45,8 @@
             "Kent Ridge Bus Terminal"
           ],
           "crowd": null,
-          "endsAt": "2026-08-27T15:00:00.000Z"
+          "endsAt": "2026-08-27T15:00:00.000Z",
+          "running": true
         },
         {
           "svc": "K",
@@ -55,7 +57,8 @@
           "color": "#2b9ad6",
           "towards": [],
           "crowd": null,
-          "endsAt": "2026-08-27T15:04:00.000Z"
+          "endsAt": "2026-08-27T15:04:00.000Z",
+          "running": true
         }
       ]
     },
@@ -89,7 +92,8 @@
             "COM 3"
           ],
           "crowd": "low",
-          "endsAt": "2026-08-27T15:00:00.000Z"
+          "endsAt": "2026-08-27T15:00:00.000Z",
+          "running": true
         },
         {
           "svc": "R2",
@@ -108,7 +112,8 @@
             "Kent Vale"
           ],
           "crowd": "medium",
-          "endsAt": "2026-08-27T11:30:00.000Z"
+          "endsAt": "2026-08-27T11:30:00.000Z",
+          "running": true
         },
         {
           "svc": "A1",
@@ -127,7 +132,8 @@
             "Kent Ridge Bus Terminal"
           ],
           "crowd": "high",
-          "endsAt": "2026-08-27T15:00:00.000Z"
+          "endsAt": "2026-08-27T15:00:00.000Z",
+          "running": true
         },
         {
           "svc": "K",
@@ -141,7 +147,8 @@
             "Prince George's Park Foyer"
           ],
           "crowd": null,
-          "endsAt": "2026-08-27T15:04:00.000Z"
+          "endsAt": "2026-08-27T15:04:00.000Z",
+          "running": true
         },
         {
           "svc": "R1",
@@ -152,7 +159,8 @@
           "color": "#f57c1f",
           "towards": [],
           "crowd": null,
-          "endsAt": "2026-08-27T11:30:00.000Z"
+          "endsAt": "2026-08-27T11:30:00.000Z",
+          "running": true
         }
       ]
     }

@@ -79,7 +79,8 @@ async function loadBoard(code) {
   // The public buses there too, when the account has them on.
   const pub = profile.get()?.publicBuses ? '&public=1' : '';
   try {
-    const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub}`);
+    // stopped=1: the services not running now are listed too, greyed.
+    const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub}&stopped=1`);
     keep(code, { stop: { ...data.stop, opposite: data.stop.opposite ?? stopOf(code)?.opposite ?? null }, board: data.board, available: data.available !== false, at: Date.now() });
   } catch (err) {
     if (err.message === 'signed out') return;
@@ -99,7 +100,7 @@ async function findNearest({ ask = false } = {}) {
   const at = await locate({ ask });
   if (ask && !at) toast(t('Location is off for this site. Search for a stop instead.'));
   try {
-    const q = at ? `?${new URLSearchParams(at)}` : '';
+    const q = `?${new URLSearchParams({ ...at, stopped: '1' })}`;
     const data = await getJSON(`/me/nearby${q}`);
     const first = data.stops?.[0];
     if (!first) return nearest.set({ status: 'none' });
@@ -270,8 +271,43 @@ function Chip({ svc, color, paid, cls = '' }) {
   return html`<span class=${`svc-tag ${cls}`} style=${svcVars(color ?? colorOf(svc))}>${svc}${paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span>`;
 }
 
+/** The date on campus (YYYY-MM-DD) of a moment, for "tomorrow". */
+const campusDate = (ms) => new Date(ms + 8 * 3600_000).toISOString().slice(0, 10);
+const WEEKDAYS = () => [t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), t('Thursday'), t('Friday'), t('Saturday')];
+
+/**
+ * Why a service isn't running and when it's back, from the API's `stopped`
+ * and `resumesAt`: ["Stopped for today", "Back tomorrow at 7:40 am"]. The
+ * second is null when the API knows no next start.
+ */
+function stoppedWords(stopped, resumesAt, now = Date.now()) {
+  const first = stopped === 'notYet' ? t('Not running yet') : stopped === 'noService' ? t('No service today') : t('Stopped for today');
+  if (!resumesAt) return [first, null];
+  const at = Date.parse(resumesAt);
+  const time = clock(resumesAt);
+  const day = campusDate(at);
+  if (day === campusDate(now)) return [first, t('Starts at {0}', time)];
+  if (day === campusDate(now + 86_400_000)) return [first, t('Back tomorrow at {0}', time)];
+  return [first, t('Back {0} at {1}', WEEKDAYS()[new Date(at + 8 * 3600_000).getUTCDay()], time)];
+}
+
+/** A service that isn't running: greyed, saying so where the minutes go, still opening its line. */
+function StoppedRow({ r, stop }) {
+  const [first, second] = stoppedWords(r.stopped, r.resumesAt, tick.get());
+  // "Ends here" says nothing about a bus that isn't coming: no line then.
+  return html`
+    <button type="button" class="bt-row stopped" onClick=${() => go(lineHash(r.svc, stop))}>
+      <${Chip} svc=${r.svc} color=${r.color} cls="bt-chip muted" />
+      <span class="bt-dir">${r.towards?.length ? html`<${Towards} to=${r.towards} />` : ''}</span>
+      <span class="bt-big none">${first}</span>
+      <span class="bt-meta">${second}</span>
+    </button>
+  `;
+}
+
 /** A service's row on a board. Tapped, its line; a public bus has none here. */
 function Row({ r, stop }) {
+  if (r.running === false) return html`<${StoppedRow} r=${r} stop=${stop} />`;
   const cls = `bt-row${r.etaS != null && r.etaS < 60 && r.quality === 'live' ? ' soon' : ''}`;
   const body = html`
     <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
@@ -534,6 +570,7 @@ const Plate = ({ b }) => html`${b.plate && html`<span class="bt-plate">${b.plate
 /** Your stop's time on the line, from its board row: nothing worked out here. */
 function YourTime({ r }) {
   if (!r) return null;
+  if (r.running === false) return html`<span class="bt-yours"><span class="bt-big none">${stoppedWords(r.stopped, r.resumesAt, tick.get())[0]}</span></span>`;
   return html`
     <span class="bt-yours">
       <${Big} r=${r} />
@@ -576,14 +613,18 @@ function LinePage({ svc, stop }) {
   if (!data) return html`${head}<p class="hint bt-empty">${mine?.error ?? t('Checking…')}</p>`;
 
   const n = data.stops.length;
-  const buses = data.available ? data.buses : [];
+  // Not running: its stops, no buses, and why.
+  const stopped = data.running === false;
+  const buses = data.available && !stopped ? data.buses : [];
   const running = buses.length === 0 ? t('No buses running') : buses.length === 1 ? t('1 bus running') : t('{0} buses running', buses.length);
   const ends = data.endsAt && Date.parse(data.endsAt) > now ? t('Runs until {0}', clock(data.endsAt)) : null;
   const yours = data.stop?.index ?? -1;
   return html`
     ${head}
-    <p class="bt-summary">${[data.available ? running : null, ends].filter(Boolean).join(' · ')}</p>
-    ${!data.available && html`<p class="bt-note">${t('Bus positions are unavailable right now.')}</p>`}
+    ${stopped
+      ? html`<p class="bt-stopped-note">${stoppedWords(data.stopped, data.resumesAt, now).filter(Boolean).map((w, i) => html`<span key=${i}>${w}</span>`)}</p>`
+      : html`<p class="bt-summary">${[data.available ? running : null, ends].filter(Boolean).join(' · ')}</p>`}
+    ${!data.available && !stopped && html`<p class="bt-note">${t('Bus positions are unavailable right now.')}</p>`}
     <div class="bt-line-label"><span class="eyebrow">${t('{0} stops', n)}</span>${mine.error ? html`<span class="bt-error">${mine.error}</span>` : html`<${Updated} at=${mine.at} />`}</div>
     <ol class="bt-route" style=${svcVars(color)}>
       ${data.stops.map((s, i) => {

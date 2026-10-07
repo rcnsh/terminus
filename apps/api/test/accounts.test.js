@@ -428,6 +428,22 @@ test('/me/nearby lists boards for stops near the given point', async () => {
   // Its twin is always there, for the widget to swap to.
   assert.equal(body.stops[0].opposite, 'PGPR');
   assert.ok(body.stops.some((s) => s.stop.code === 'PGPR'));
+  assert.ok(body.stops.every((s) => s.board.every((r) => r.running === true)), 'only running services, without stopped=1');
+});
+
+test('/me/nearby?stopped=1 lists the services not running too', async () => {
+  const { env, email } = setup();
+  const realNow = Date.now;
+  Date.now = () => Date.UTC(2026, 9, 7, 13, 30); // Wednesday 21:30 in Singapore
+  try {
+    const cookie = await signIn(env, email);
+    const body = await (await call(env, '/me/nearby?lat=1.2918&lon=103.7804&stopped=1', { cookie })).json();
+    const r1 = body.stops[0].board.find((r) => r.svc === 'R1');
+    assert.deepEqual([r1.running, r1.stopped, r1.resumesAt], [false, 'ended', '2026-10-07T23:40:00.000Z']);
+    assert.equal(body.stops[0].board.at(-1).running, false, 'after the running ones');
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 test('the public API still works without the DB binding', async () => {

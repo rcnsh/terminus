@@ -100,7 +100,7 @@ pnpm run deploy
 | `GET /trip?to=<stop\|venue>&lat&lon` | The answer for a stop or venue code. Without coordinates, `&from=<stop>` sets the origin. |
 | `GET /arrivals?stop=<code>` | One stop's board, through the same per-stop cache, with the stop across the road (`stop.opposite`, as `/me/nearby` gives it). See "Board rows" below. |
 | `GET /buses?svc=<service>` | One service's live buses for the map: the stop each is at (within 40 m along its route) or the two it's between, where to draw it (the stop's dot, or a point on the route line between the stops), the road's heading there, crowding and the next stop; between stops, the stretch of route it's on. A bus away from its route is left out. One upstream call per service per 5 s; each bus with its number plate. |
-| `GET /line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there. One `/buses` read, plus one `/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
+| `GET /line?svc=<service>[&stop=<code>]` | One service's whole line, for the Buses tab's service page: its stops in route order (a loop's first stop not listed again at the end), each with the other shuttle services there; its buses from `/buses`, each by index into that list (`at` a stop, or `after` the stop it passed); with `stop`, that stop's index and the service's board row there (a stopped row too); whether the service is running now, and if not why and when it's back (`running`, `stopped`, `resumesAt`). One `/buses` read, plus one `/arrivals` read with `stop`, both through their caches. No times are worked out for the other stops. 400 for an unknown service or a stop it doesn't call at. |
 | `GET /campus` | Stops (with the services that call there), each route's path along the roads, the services' colours, destination search data, and the residences for "Where do you live?" (PGP and UTown Residence, where most students live, first and marked `common`; the pickers show them in their own group). Written once per isolate, with an ETag: a client revalidating gets a 304. |
 | `GET /map/campus.pmtiles` | The campus street map from R2, by byte range (PMTiles). Open, like the website. Each piece, font and icon is kept in the edge cache under the file's ETag and its byte range, so R2 is read once per piece per data centre; a new upload is seen within 5 minutes. |
 | `GET /map/style.json?theme=&lang=` | The map's MapLibre style, light or dark, English or Chinese: Protomaps' map without its points of interest, every URL on this domain. |
@@ -154,7 +154,25 @@ after it the feed knows (`later`), and
   same; none at the end of a line that doesn't loop (K at PGP Foyer);
 - `crowd`: how full the bus in `etaS` is, from the feed, null without one;
 - `endsAt`: when the service stops running today (`serviceEndsAt`), null
-  when its hours are unknown or it isn't running.
+  when its hours are unknown or it isn't running;
+- `running`: true on every row, unless asked for the stopped ones (below).
+
+A service outside its hours (`inService`) with no time from the feed is
+left off the board. With `?stopped=1` (`/arrivals`, `/me/nearby`; `/line`
+always asks this way) it's listed after every running row, by name, with
+`running: false`, no time (`quality: ended`), and
+
+- `stopped`: why (`stoppedReason`): `ended` (it ran today and has
+  finished), `notYet` (it starts later today) or `noService` (it doesn't run
+  today: Sunday hours on a public holiday, as `inService` has it);
+- `resumesAt`: its next opening (`serviceResumesAt`), looking up to 8 days
+  ahead, null when none is found.
+
+A service the feed still gives a time for stays a running row, whatever its
+hours say: the feed is what's on the road. Unknown hours count as running.
+The Now tab, the map and the widgets don't ask, so their boards are as
+before. `/line` also says it for the service itself: `running`, `stopped`
+and `resumesAt` at the top (null while it runs).
 
 Only the feed's own times are given: a later bus the feed doesn't report
 has no row of its own and no guessed time.

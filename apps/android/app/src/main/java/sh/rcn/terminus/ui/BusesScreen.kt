@@ -53,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -93,6 +94,7 @@ import sh.rcn.terminus.LineBus
 import sh.rcn.terminus.LineItem
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.Pins
+import sh.rcn.terminus.Stopped
 import sh.rcn.terminus.R
 import sh.rcn.terminus.hhmm
 import sh.rcn.terminus.hhmm12
@@ -465,10 +467,16 @@ private fun BoardCard(board: Board?, failed: Boolean, colors: Map<String, Long>,
             )
             else -> {
                 if (!board.available) Text(stringResource(R.string.buses_feed_down), color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
-                for ((i, row) in board.rows.withIndex()) {
+                // The services not running come after the ones that are, as the API sorts them.
+                val rows = board.rows.filter { it.running } + board.rows.filter { !it.running }
+                val now = ticking()
+                for ((i, row) in rows.withIndex()) {
                     if (i > 0 || !board.available) HorizontalDivider(color = c.outlineVariant)
+                    val color = row.color?.let(::parseColor) ?: colors[row.svc] ?: GREY
                     // A public bus has no line page: /line is the shuttles'.
-                    BoardRowView(row, row.color?.let(::parseColor) ?: colors[row.svc] ?: GREY, if (row.paid) null else ({ onRow(row) }))
+                    val open = if (row.paid) null else ({ onRow(row) })
+                    val stopped = Stopped.of(row.running, row.stopped, row.resumesAtMs, now)
+                    if (stopped != null) StoppedRowView(row, color, stopped, open) else BoardRowView(row, color, open)
                 }
             }
         }
@@ -505,6 +513,33 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(min = 72.dp)) {
             BigTime(row.etaS, row.quality, arriving)
             thenText(row)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.End, modifier = Modifier.padding(top = 4.dp)) }
+        }
+    }
+}
+
+/**
+ * A service that calls here but isn't running: greyed, its chip faded, and
+ * where the minutes go, why and when it's back. No time, no Live, no crowd.
+ */
+@Composable
+private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick: (() -> Unit)?) {
+    val c = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
+    val (why, back) = stopped.lines(remember { hour12(ctx) })
+    Row(
+        Modifier.fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.alpha(0.35f)) { SvcChip(row.svc, color, paid = row.paid) }
+        Column(Modifier.weight(1f)) {
+            if (row.towards.isNotEmpty()) {
+                Text(stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.buses_towards_sep))), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(why, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
+            back?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
         }
     }
 }
@@ -615,7 +650,7 @@ private fun Foot(board: Board) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp, end = 4.dp), verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f)) {
-            for ((svc, at) in BusTimes.endingSoon(board.rows, now)) {
+            for ((svc, at) in BusTimes.endingSoon(board.rows.filter { it.running }, now)) {
                 val time = clock(at, h12)
                 val full = stringResource(R.string.buses_svc_runs_until, svc, time)
                 Text(
@@ -693,9 +728,11 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     var hereY by remember { mutableStateOf<Int?>(null) }
     var scrolled by rememberSaveable(key) { mutableStateOf(false) }
     val gap = with(LocalDensity.current) { 160.dp.roundToPx() }
-    LaunchedEffect(hereY) {
+    // Not running, the banner at the top says it all: no scrolling past it.
+    val running = line?.running != false
+    LaunchedEffect(hereY, running) {
         val y = hereY ?: return@LaunchedEffect
-        if (!scrolled) {
+        if (!scrolled && running) {
             scrolled = true
             scroll.animateScrollTo((y - gap).coerceAtLeast(0))
         }
@@ -729,6 +766,14 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                 }
             }
         }
+        // Not running: why and when it's back, over the stops (it has no buses to show).
+        line?.let { Stopped.of(it.running, it.stopped, it.resumesAtMs, now) }?.let { st ->
+            val (why, back) = st.lines(h12)
+            Column(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp)).background(c.secondaryContainer).padding(horizontal = 14.dp, vertical = 12.dp)) {
+                Text(why, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                back?.let { Text(it, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp)) }
+            }
+        }
         HorizontalDivider(Modifier.padding(top = 16.dp), color = c.outlineVariant)
         when {
             line == null && key in state.lineFailed -> Text(stringResource(R.string.buses_unknown_line), color = c.onSurfaceVariant, modifier = Modifier.padding(vertical = 16.dp))
@@ -739,7 +784,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                     line.asOfMs?.let { Text(updated(it, now), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant) }
                 }
                 LineList(line, Color(color), colors = state.campus?.routes?.mapValues { it.value.color }.orEmpty(), onHere = { hereY = it }) { code -> vm.open(BusRoute.Stop(code)) }
-                if (line.here != null) Text(stringResource(R.string.buses_times_here_only), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+                if (line.here != null && line.running) Text(stringResource(R.string.buses_times_here_only), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
             }
         }
     }
@@ -775,7 +820,7 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
                                     }
                                 }
                             }
-                            if (here) line.here?.row?.let { HereTime(it) }
+                            if (here) line.here?.row?.takeIf { it.running }?.let { HereTime(it) }
                         }
                         if (here) Box(Modifier.padding(top = 6.dp)) { Tag(stringResource(R.string.buses_your_stop), c.primary) }
                         if (item.buses.isNotEmpty()) BusesOnLine(item.buses, stringResource(R.string.buses_at_stop))
