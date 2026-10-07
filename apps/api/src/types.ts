@@ -239,6 +239,9 @@ export interface Leave {
   /** ISO, whole seconds. */
   at: string;
   estimated: boolean;
+  /** The bus's time is from an older reading (a stale feed, or a plan kept
+   *  from an earlier answer): exact, but not live now. Absent otherwise. */
+  stale?: true;
   /** The bus this is for, and where to board it. Null when walking. */
   svc: string | null;
   stop: string | null;
@@ -427,7 +430,13 @@ export interface ScoredOption {
   totalS: number;
   quality: Quality;
   arrival: Arrival | null;
+  /** When the arrivals behind this were fetched (epoch ms): how old a stale time is. */
   fetchedAt: number;
+  /** The instant `boardS` and `totalS` count from (epoch ms): the request's now. */
+  fromMs: number;
+  /** Of `boardS`, the wait for a service that hasn't started yet, which you
+   *  can spend wherever you are. Absent when it's running. */
+  opensInS?: number;
   /**
    * True when this stop reports this service under more than one berth, so
    * the earliest ETA may belong to the pass going the other way. Until the

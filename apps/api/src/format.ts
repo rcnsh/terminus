@@ -12,7 +12,7 @@
  */
 
 import type { Answer, Arrival, BusLeg, Quality, ScoredOption, Stop } from './types.ts';
-import { LABEL_MAX, WALK, isMeasured } from './config.ts';
+import { LABEL_MAX, PUBLIC, WALK, isMeasured } from './config.ts';
 import { svcName } from './public.ts';
 import { m } from './i18n.ts';
 
@@ -79,7 +79,8 @@ function ageMin(nowMs: number, fetchedAt: number): number {
  */
 export function etaPhrase(o: ScoredOption): string {
   if (o.quality === 'unknown') return m().noTimes;
-  return o.quality === 'scheduled' ? m().approx(mins(o.boardS)) : mins(o.boardS);
+  // An old reading, aged to now, is no more exact than a guess.
+  return o.quality === 'scheduled' || o.quality === 'stale' ? m().approx(mins(o.boardS)) : mins(o.boardS);
 }
 
 export interface FormatInput {
@@ -89,6 +90,8 @@ export interface FormatInput {
   fallbackStop: Stop | null;
   /** Nearest stop of any kind, or null when we have no coordinates. */
   nearestStop: Stop | null;
+  /** Without coordinates, the stop the trip is assumed to start from. */
+  origin?: Stop | null;
   /** Short destination name, e.g. "UTown". Null for a bare /next. */
   destLabel: string | null;
   /** Seconds to walk the entire way, when known. */
@@ -114,8 +117,11 @@ export type WalkVerdict = 'win' | 'close' | 'lose';
 export function walkVerdict(walkAllS: number | null, best: ScoredOption | undefined, bestEndS = 0): WalkVerdict {
   if (walkAllS == null || !best) return 'lose';
   const margin = isMeasured(best.quality) ? WALK.beatsBusByS : 0;
-  // Both the whole way: `walkAllS` and the bus's `bestEndS` include the walk on to a room or food court.
-  const busS = best.totalS + bestEndS;
+  // Both the whole way: `walkAllS` and the bus's `bestEndS` include the walk
+  // on to a room or food court. Not the wait for a service to start, which
+  // the walk would wait out too; and a fare, as when ranking buses: walking
+  // is free.
+  const busS = best.totalS - (best.opensInS ?? 0) + bestEndS + (best.paid ? PUBLIC.fareWorthS : 0);
   if (walkAllS + margin < busS) return 'win';
   if (walkAllS < busS + WALK.mentionWithinS) return 'close';
   return 'lose';
@@ -130,8 +136,8 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
     stopCode: o.stop.code,
     walkS: o.walkS,
     rideS: o.rideS,
-    board: timed ? iso(o.fetchedAt + o.boardS * 1000) : null,
-    arrive: timed ? iso(o.fetchedAt + o.totalS * 1000) : null,
+    board: timed ? iso(o.fromMs + o.boardS * 1000) : null,
+    arrive: timed ? iso(o.fromMs + o.totalS * 1000) : null,
     estimated: o.quality === 'scheduled',
     ...(o.off ? { off: shortStop(o.off.name) } : {}),
     ...(o.to ? { toStop: shortStop(o.to.name) } : {}),
@@ -164,6 +170,8 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   // the bus, and it is also the one that looks wrong. Say it out loud.
   const elsewhere = Boolean(f.nearestStop && f.nearestStop.code !== best.stop.code);
   if (elsewhere && f.nearestStop?.opposite === best.stop.code) parts.push(m().crossRoad);
+  // No coordinates, but the bus goes from across the road from where the trip starts.
+  else if (!f.nearestStop && f.origin && f.origin.opposite === best.stop.code) parts.push(m().crossRoad);
   else if (best.walkS >= 60) parts.push(m().walkToStop(mins(best.walkS)));
   else if (elsewhere) parts.push(m().shortWalk);
   // No nearestStop means no coordinates, so we cannot claim you are anywhere.
@@ -268,17 +276,18 @@ export function buildAnswer(f: FormatInput): Answer {
     arrivals: f.arrivals,
   };
 
-  // Board and ride times count from when the arrivals were fetched. An
-  // 'unknown' option's times are sort keys, never clock times.
+  // Board and ride times count from now (scoreOptions). An 'unknown'
+  // option's times are sort keys, never clock times.
   const timed = best.quality !== 'unknown';
-  const departsAt = timed ? iso(best.fetchedAt + best.boardS * 1000) : null;
-  const arriveAt = timed ? iso(best.fetchedAt + best.totalS * 1000) : null;
+  const departsAt = timed ? iso(best.fromMs + best.boardS * 1000) : null;
+  const arriveAt = timed ? iso(best.fromMs + best.totalS * 1000) : null;
 
   if (verdict === 'win' && f.walkAllS != null) {
+    // As compared: the trip itself, not the wait for the service to start.
     const busPhrase =
       best.quality === 'unknown'
         ? m().busNoLive(svcName(best.svc))
-        : m().busWouldBe(svcName(best.svc), mins(best.totalS + bestEndS));
+        : m().busWouldBe(svcName(best.svc), mins(best.totalS - (best.opensInS ?? 0) + bestEndS));
     return {
       ...common,
       label: clampLabel(m().walkLabel(mins(walkThereS ?? f.walkAllS))),

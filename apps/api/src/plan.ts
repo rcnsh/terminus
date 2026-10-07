@@ -11,6 +11,7 @@
  * - **Kept** for a device without a location (the widget, the background
  *   refresh, the Mac, the web) when the plan was made from the phone's
  *   location: it would otherwise plan from where the timetable puts you.
+ *   The same bus in this answer is shown with this answer's times.
  * - **Told:** from when you'd be at the stop for it (and so from the
  *   heads-up), the bus you were told stays the plan while it still gets you
  *   there in time. Answers a minute apart can prefer another (the feed lists
@@ -84,7 +85,9 @@ export function choosePlan({ stored, made, located, classAtMs, nowMs }: PlanInpu
 
   const frozen = stored?.board && nowMs >= Math.min(at(stored.board), at(stored.leave)) ? stored : null;
   if (frozen) return { bus: frozen, save: false };
-  if (!located && stored?.located && ahead) return { bus: stored, save: false };
+  // Kept, but when this answer has that same bus its times are the newer:
+  // the plan's are from when the phone made it, minutes ago.
+  if (!located && stored?.located && ahead) return { bus: sameBus(stored, made) ? made : stored, save: false };
 
   const told =
     located && stored?.located && ahead && stored.leave && stored.arrive && classAtMs !== null &&

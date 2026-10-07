@@ -1463,7 +1463,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               type: ['object', 'null'],
               description:
                 'The latest time to set off. On `/me/next` for a class, the latest that still gets you there on time; otherwise, for the bus in `departsAt`. ' +
-                'When you will be late whatever you do, `at` is now. Null or absent when you should go now. Once `at` has passed, show "Leave now".',
+                'When you will be late whatever you do, `at` is now, or, when the first bus waits for the service to start, when to leave for that one. Null or absent when you should go now. Once `at` has passed, show "Leave now".',
               required: ['at', 'estimated', 'svc', 'stop', 'board', 'arrive'],
               properties: {
                 at: { type: 'string', format: 'date-time' },
@@ -1477,7 +1477,12 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 offCode: { type: 'string', description: 'Stop code of `off`. Absent without a crossing.' },
                 paid: { type: 'boolean', enum: [true], description: 'The bus is a public one, with a fare. Absent for a shuttle.' },
                 route: { type: 'string', description: 'For a public two-way service, its route in the graph (`151/1`), which `svc` (`151`) cannot name. Absent otherwise.' },
-                estimated: { type: 'boolean', description: 'Based on the usual gap between buses rather than a live time. Show it with a `~`.' },
+                estimated: { type: 'boolean', description: 'Based on the usual gap between buses, or on a timetable, rather than a live time. Show it with a `~`.' },
+                stale: {
+                  type: 'boolean',
+                  enum: [true],
+                  description: 'The bus time is from an older reading: live times a few minutes old, or the plan an earlier answer kept for this trip. Exact, but not live now: do not mark it live. Absent otherwise.',
+                },
                 walkS: { type: 'integer', description: 'Seconds on foot to `stop`. Absent when walking.' },
                 rideS: { type: 'integer', description: 'Seconds on the bus. Absent when walking.' },
                 endWalkS: {

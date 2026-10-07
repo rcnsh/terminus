@@ -80,6 +80,12 @@ export const RIDE = {
    * situation you are in. Phase 2 replaces this with a measured table.
    */
   secondsPerHop: 95,
+  /**
+   * The fastest a shuttle covers a long hop, in metres of straight line a
+   * second (about 25 km/h; faster on the road, which winds). Only route P's
+   * hops are long enough for this to beat secondsPerHop.
+   */
+  longHopMs: 7,
 } as const;
 
 /** Used when the feed returns no ETA but the service is within its hours. */

@@ -1221,7 +1221,7 @@ async function nextWithTrip(
   const isPlan = !url.searchParams.get('place') && !url.searchParams.get('to');
   const full: MeAnswer = isPlan ? { ...answer, refreshAt: isoSeconds(planChangesAt(profile, nowMs)) } : answer;
   // The display-ready card, in the client's 12- or 24-hour style.
-  const card = cardFor(full, hour12(url, profile), trip, await feedDownSince(env, nowMs));
+  const card = cardFor(full, hour12(url, profile), trip, await feedDownSince(env, nowMs), nowMs);
   // Push: have the Trip object wake when this card next changes, to tell the phones.
   const at = nextPhaseAt(full, trip, nowMs);
   if (!local && at !== null && pushEnabled(env) && day?.watch !== at && classesOn(profile, nowMs).length) {

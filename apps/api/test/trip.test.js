@@ -773,7 +773,8 @@ test('a ride seen from start to end is measured, with no user or location in it'
 });
 
 test('there for the last class: the way home is shown, but not "Time to get going" until the class ends', async () => {
-  const t = await setup({ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
+  // Home at PGPR: the D2 from UTown gets there without its terminal (COM3), where the run ends.
+  const t = await setup({ home: { stops: ['PGPR'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')] });
   await t.signal(t.phone, { kind: 'arrived', trip: FIRST });
   t.clock(FROZEN_NOW + 70 * 60_000); // 10:10, in class
   const inClass = await t.next(t.phone);
@@ -905,7 +906,8 @@ test('having been at the stop is not an answer: after the bus leaves, the phone 
 
 test('a NUSMods class ends half an hour before its timetable end: the day, "till", and the trip home go by that', async () => {
   // 10:00-12:00 from NUSMods: really out by about 11:30.
-  const t = await setup({ home: { stops: ['PGP'] }, trips: [{ day: THU, arriveByMin: 600, endMin: 720, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }] });
+  // Home at PGPR: the D2 from UTown gets there without its terminal (COM3), where the run ends.
+  const t = await setup({ home: { stops: ['PGPR'] }, trips: [{ day: THU, arriveByMin: 600, endMin: 720, to: 'UTOWN', label: 'GEA1000 @ UTown', venue: '' }] });
   const day = await (await t.call('/me/day', { token: t.phone })).json();
   const cls = day.items.find((i) => i.kind === 'class');
   assert.equal(Date.parse(cls.endsAt), FROZEN_NOW + 150 * 60_000, 'ends 11:30');

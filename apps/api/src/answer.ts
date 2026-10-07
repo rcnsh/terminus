@@ -18,7 +18,7 @@ import {
   nearestStop,
   pickAlt,
   scoreOptions,
-  walkAllTheWayS,
+  wholeWalk,
 } from './resolve.ts';
 import { logAnswer } from './analytics.ts';
 import { leaveBy } from './leave.ts';
@@ -144,22 +144,27 @@ export async function answerFor(
   // On from where a bus gets you off to the place itself, from that stop: a
   // food court's other stop can be further from it than its first.
   const endWalk = (o: ScoredOption) => input.endWalkByStopS?.[o.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
-  const options = scoreOptions(graph, cands, byStop, nowMs, endWalk);
+  // For a class, a service that starts before it is a way there, not "ended".
+  const options = scoreOptions(graph, cands, byStop, nowMs, endWalk, input.arriveBy ? { openBy: input.arriveBy.atMs } : {});
   const alt = pickAlt(options);
   const chosen = options[0]?.stop.code ?? fallbackStop?.code ?? '';
   // As the buses are named: a two-way public route's key carries its direction.
   const arrivals: Arrival[] = (byStop.get(chosen)?.arrivals ?? []).map((a) => (a.svc === svcName(a.svc) ? a : { ...a, svc: svcName(a.svc) }));
 
-  const walkAllS = walkAllTheWayS(graph, input, fallbackStop);
+  // Without coordinates the walk starts where the trip does, whichever stop the bus would go from.
+  const walk = wholeWalk(graph, input, originStop ?? fallbackStop);
+  const walkAllS = walk?.s ?? null;
+  const walkEndS = walk?.endS ?? input.endWalkByStopS?.[input.to ?? ''] ?? input.endWalkS ?? 0;
   const answer = buildAnswer({
     options,
     alt,
     fallbackStop,
     nearestStop: nearestStop(graph, input.lat, input.lon),
+    origin: input.lat == null ? originStop : null,
     destLabel,
     walkAllS,
     endWalk,
-    walkEndS: input.endWalkByStopS?.[input.to ?? ''] ?? input.endWalkS ?? 0,
+    walkEndS,
     confidence: confidence(options, input.lat != null, endWalk),
     arrivals,
     nowMs,
@@ -173,6 +178,7 @@ export async function answerFor(
     graph,
     arriveBy: input.arriveBy,
     walkAllS: walking ? walkAllS : null,
+    walkEndS,
     endWalk,
     nowMs,
     crowdRisk,

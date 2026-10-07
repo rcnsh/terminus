@@ -206,8 +206,13 @@ not merged.
 `/health` says which is in use (`calendar.source`: `bundled` or `fetched`)
 and how far it goes. The "calendar runs out soon" email only comes when even
 the fetched copy is within 45 days of its end, that is when NUSMods doesn't
-list the next academic year yet. Past the end, imported classes count every
-week, as before.
+list the next academic year yet. The end is three weeks past the last
+semester's exams, but never into the week the next academic year's first
+semester would start (52 weeks after the last one), which Special Term II
+ends a week before. Past the end, imported classes count every week, as
+before, except a timetable for a semester the data says has ended; a lesson
+with its own dates keeps to them. A sem-1 link pasted then is read as the new
+year's, with the old one to fall back on (`termsForImport`).
 
 ## Accounts
 
@@ -719,6 +724,45 @@ and riding in the same unit (seconds) so the trade-off is legible. On a loop
 route both sides technically reach the destination; the wrong side loses on hop
 count rather than on a special case.
 
+**Which stops are tried.** With a location, the nearest few stops that have a
+bus to the destination (`WALK.maxCandidates`), so a closer stop nothing there
+calls at can't push out one that does. Without one, the stop the trip starts
+from, the stop across the road from it (a crossing further), and, from home,
+every home stop. The alternative is another service, or the same one from
+another stop only when it gets you there within `WALK.mentionWithinS` of the
+best: across the road it's usually the same bus the wrong way round the loop.
+
+**A loop's run ends at its terminal.** The shuttle loops start and end at
+theirs (KRB, COM3, Kent Vale), where the feed lists the run that ends under an
+`-E` berth; a public loop ends at its interchange, which can be off campus
+between its last campus stop and its first. Riding on past it is the next run,
+so it costs a headway (`reach().through`). Rides are `RIDE.secondsPerHop` a
+stop, or the measured figure, but no faster than `RIDE.longHopMs` over a long
+stretch: route P's stops are kilometres apart.
+
+**Every time counts from now.** A stop's arrivals count from when they were
+fetched; `scoreOptions` counts each option from the request (`fromMs`), so a
+cached or stale answer's bus is compared with a walk that starts now, and
+with another stop's fresher times, on one clock. A stale answer's `asOf`
+stays its fetch time. The card is made with the request's now too.
+
+**Operating hours bound every guess.** A headway guess, from the last bus the
+feed lists or from nothing, is dropped once it's after the service stops
+(`serviceEndsAt`), and the leave-by never projects a bus past it. For a class,
+a service that starts before the class is kept, its first bus a headway after
+it starts: at 06:30 the 08:00 class's bus is the D2 from 07:15, not
+"Services ended". The wait for it to start doesn't count against it when
+walking is weighed. With no live times and too late for the usual bus, the
+leave-by boards when you can reach the stop, never in the past.
+
+**The walk the whole way follows the paths.** With a location, out by the
+stops near you and on by the routed walks between stops (`walks.json`); the
+straight line with its detour only for a stop or room within
+`WALK.maxRadiusM`. A room that close is walked to directly rather than by its
+stop. A place with several stops is walked to by whichever makes it shortest
+(`wholeWalk`). Walking is free: a public bus has to beat it by
+`PUBLIC.fareWorthS` as well.
+
 **In a residence, the walk is from the building, then from your room.** A
 location inside a residence's outline ([`residences.ts`](../src/residences.ts))
 starts from that residence's own stops, at the path distance from the
@@ -817,7 +861,11 @@ counts: a public bus is the headline only when it beats the free bus by
 its badge. Only a time LTA marks `Monitored: 1` is `live`; any other value
 (0, `false`, missing, renamed) is the operator's timetable, `scheduled`, so
 a change in how the field is written can't pass a timetabled time off as
-live. The leave-by keeps a timetabled time estimated too. A day both of
+live. The leave-by keeps a timetabled time estimated too
+(`leave.estimated`). A leave-by from a stale feed, or a plan an earlier
+answer kept for the trip, carries `stale: true` and is never drawn as
+live. A plan kept for a device without a location shows this answer's
+times when it has that same bus. A day both of
 whose LTA times are "-" is `null` in `serviceHours`, "not running today":
 95B, 96A and the other weekday-only services aren't guessed at weekends.
 

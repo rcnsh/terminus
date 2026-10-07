@@ -26,7 +26,7 @@ import {
 } from '../src/resolve.ts';
 import { arrivalsProblem, busesProblem, crowdFromLoad, hasList, normalize, normalizeBuses, parseCrowd, parseEtaS, parseSeconds, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
-import { LABEL_MAX } from '../src/config.ts';
+import { LABEL_MAX, WALK } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
 
 const GRAPH = graphJson;
@@ -217,7 +217,8 @@ test('reach(): linear routes are strict, loop routes wrap', () => {
 
   const loop = indexGraph(GRAPH);
   assert.deepEqual(reach(loop, 'D2', 'KR-MRT', 'UTOWN'), { hops: 5 });
-  assert.deepEqual(reach(loop, 'D2', 'KR-MRT-OPP', 'UTOWN'), { hops: 11 }, 'wraps the long way');
+  assert.deepEqual(reach(loop, 'D2', 'KR-MRT-OPP', 'UTOWN'), { hops: 11, through: true }, 'wraps the long way, on past the terminal at COM3');
+  assert.deepEqual(reach(loop, 'D2', 'KR-MRT-OPP', 'COM3'), { hops: 3 }, 'to the terminal itself: getting off there');
   assert.deepEqual(reach(loop, 'D2', 'KR-MRT', 'KR-MRT'), { hops: 0 });
   assert.equal(reach(loop, 'A1', 'KR-MRT', 'UTOWN'), null, 'A1 serves KR MRT but not UTown');
 });
@@ -358,6 +359,7 @@ const opt = (over = {}) => ({
   quality: 'live',
   arrival: { svc: 'D2', etaS: 240, crowd: 'low', plate: 'PA1' },
   fetchedAt: NOW,
+  fromMs: NOW,
   ...over,
 });
 
@@ -581,10 +583,25 @@ test('being sent across the road says so, in words', () => {
 
   assert.equal(a.stop.code, 'KR-MRT');
   assert.match(a.detail, /cross the road/);
-  // The alt is the same service off the other stop; naming only the service
-  // would read as "another D2 is coming here", which is the opposite of true.
-  assert.match(a.detail, /or Opp KR MRT/);
-  assert.ok(!/or D2/.test(a.detail));
+  // The D2 from this side goes the wrong way round the loop: no alternative.
+  assert.equal(a.alt, null);
+  assert.ok(!/ or /.test(a.detail), a.detail);
+
+  // When the same service from the other stop is a real alternative, it's
+  // named by its stop: naming only the service would read as "another D2 is
+  // coming here", which is the opposite of true.
+  const other = options.find((o) => o.stop.code === 'KR-MRT-OPP');
+  const b = buildAnswer({ options, alt: other, fallbackStop: options[0].stop, nearestStop: near, destLabel: 'UTown', walkAllS: null, confidence: 0.9, arrivals: [], nowMs: NOW });
+  assert.match(b.detail, /or Opp KR MRT/);
+  assert.ok(!/or D2/.test(b.detail));
+});
+
+test('the same service from the other stop is an alternative only when it gets you there about as soon', () => {
+  const at = (code, totalS) => ({ stop: { code, name: code }, svc: 'D2', totalS, boardS: 60, quality: 'live' });
+  assert.equal(pickAlt([at('KR-MRT', 600), at('KR-MRT-OPP', 600 + WALK.mentionWithinS)]).stop.code, 'KR-MRT-OPP');
+  assert.equal(pickAlt([at('KR-MRT', 600), at('KR-MRT-OPP', 601 + WALK.mentionWithinS)]), null, 'round the loop the wrong way');
+  // Another service is a choice whatever it takes.
+  assert.equal(pickAlt([at('KR-MRT', 600), { ...at('KR-MRT', 2000), svc: 'A1' }]).svc, 'A1');
 });
 
 test('standing at the right stop does not invent a walk', () => {
@@ -627,6 +644,7 @@ const busOpt = (over = {}) => ({
   quality: 'live',
   arrival: { svc: 'D2', etaS: 600, crowd: null, plate: null },
   fetchedAt: NOW,
+  fromMs: NOW,
   ...over,
 });
 
@@ -1167,7 +1185,8 @@ test('the proxy reports failure at HTTP 200, so only code "00000" counts as succ
 });
 
 test('a place served by two stops: any bus to either one counts, the shorter ride wins', () => {
-  const legs = (input) => new Map(candidateStops(realGraph, input)[0].legs.map((l) => [l.svc, l.hops]));
+  // From KR MRT itself (its twin across the road is a candidate of its own).
+  const legs = (input) => new Map((candidateStops(realGraph, input).find((c) => c.stop.code === 'KR-MRT')?.legs ?? []).map((l) => [l.svc, l.hops]));
   const base = { lat: null, lon: null, originCode: 'KR-MRT' };
   const a = legs({ ...base, to: 'AS5' });
   const b = legs({ ...base, to: 'NUSS-OPP' });
