@@ -546,7 +546,7 @@ private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick
         Box(Modifier.alpha(0.35f)) { SvcChip(row.svc, color, paid = row.paid) }
         Column(Modifier.weight(1f)) {
             if (row.towards.isNotEmpty()) {
-                Text(row.toText ?: stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.buses_towards_sep))), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(row.toText ?: stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.list_sep))), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(why, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
             back?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
@@ -565,7 +565,7 @@ private fun towards(text: String, next: String?, endsHere: Boolean): AnnotatedSt
 /** "to **Central Library**, Kent Vale", worked out here for an older server without `toText`. */
 @Composable
 private fun towards(names: List<String>): AnnotatedString {
-    val joined = names.joinToString(stringResource(R.string.buses_towards_sep))
+    val joined = names.joinToString(stringResource(R.string.list_sep))
     val full = stringResource(R.string.buses_towards, joined)
     val at = full.indexOf(joined)
     return buildAnnotatedString {
@@ -675,7 +675,7 @@ private fun thenText(row: BoardRow): String? {
     row.laterText?.let { return it }
     val later = BusTimes.later(row)
     if (later.isEmpty()) return null
-    val list = later.joinToString(", ")
+    val list = later.joinToString(L.s(R.string.list_sep))
     return L.s(if (BusTimes.laterScheduled(row)) R.string.buses_then_scheduled else R.string.buses_then, list)
 }
 

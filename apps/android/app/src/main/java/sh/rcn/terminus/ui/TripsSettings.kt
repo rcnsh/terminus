@@ -89,7 +89,7 @@ private fun HomeGroup(profile: ProfileDoc, campus: Campus, account: AccountViewM
             label = stringResource(R.string.residence),
             options = campus.residences.map { it.code to it.name },
             selected = if (picking) null else residence.code,
-            sub = if (picking) null else stringResource(R.string.your_stops, residence.stops.joinToString(", ") { campus.stopName(it) }),
+            sub = if (picking) null else stringResource(R.string.your_stops, residence.stops.joinToString(stringResource(R.string.list_sep)) { campus.stopName(it) }),
             blank = stringResource(R.string.off_campus_short),
             headings = residenceHeadings(campus.residences),
             onSelect = { code ->

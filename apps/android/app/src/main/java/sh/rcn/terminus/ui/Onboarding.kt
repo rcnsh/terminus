@@ -472,7 +472,7 @@ internal fun TimetableImport(state: AccountState, account: AccountViewModel, lin
     if (r != null) {
         Text(if (r.classes == 1) stringResource(R.string.imported_one, r.term) else stringResource(R.string.imported_n, r.classes, r.term), modifier = Modifier.padding(top = 8.dp))
         Unplaced(state, account)
-        if (r.missing.isNotEmpty()) Hint(stringResource(R.string.nusmods_missing, r.missing.joinToString(", ")))
+        if (r.missing.isNotEmpty()) Hint(stringResource(R.string.nusmods_missing, r.missing.joinToString(stringResource(R.string.list_sep))))
     } else {
         val n = state.profile?.trips?.size ?: 0
         if (n > 0) Hint(if (n == 1) stringResource(R.string.one_imported) else stringResource(R.string.n_imported, n), Modifier.padding(top = 8.dp))
