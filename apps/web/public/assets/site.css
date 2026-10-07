@@ -245,3 +245,10 @@ label { display: block; font-size: 0.875rem; color: var(--muted); margin: 12px 0
 .flaps { display: flex; justify-content: center; gap: 7px; margin: 14px 0 6px; }
 .flap { display: grid; place-items: center; flex: 1; max-width: 56px; aspect-ratio: 0.72; border-radius: 9px; border: 1px solid #34302b; color: #f2efeb; font: 800 2rem/1 ui-monospace, "SF Mono", monospace; background: linear-gradient(#24211e 49%, #0a0908 49% 51%, #1c1a17 51%); }
 .flap.empty { background: #151311; }
+
+/* The livery over the sign-in card (account/livery.js): the stripes edge to edge,
+   the mark on them with a ring of the card round it. */
+.livery { position: relative; height: 180px; margin: -32px -28px 18px; overflow: hidden; border-radius: var(--radius) var(--radius) 0 0; }
+.livery svg { display: block; width: 100%; height: 100%; }
+.livery-accent { fill: var(--accent-bright); }
+.livery-mark { position: absolute; left: 50%; bottom: 6px; width: 76px; height: 76px; transform: translateX(-50%); border-radius: 20px; box-shadow: 0 0 0 6px var(--surface); }

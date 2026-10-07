@@ -1,11 +1,11 @@
 // The landing page: the page itself is plain HTML (it should read without
 // any script); this adds the live parts. The version next to the download
-// buttons, Account for someone signed in, and the light | dark comparisons
-// are small Preact components drawn into the page. The install steps' and
-// the download menu's placement are behaviours on the page's own markup,
-// so they stay plain functions.
+// buttons and Account for someone signed in are small Preact components
+// drawn into the page; the sky's horizon and night are sky-page.js's. The
+// install steps' and the download menu's placement are behaviours on the
+// page's own markup, so they stay plain functions.
 
-import { html, render, useEffect, useRef, useState } from '/assets/ui.js';
+import { html, render, useEffect, useState } from '/assets/ui.js';
 import { t } from '/account/dom.js';
 
 const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -125,110 +125,4 @@ twoColumns.addEventListener('change', () => {
       install.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
     });
   }
-}
-
-// Light | dark split images: a handle on each, drag or arrow keys to move the
-// seam; on first view it sweeps in from all-light, unless motion is reduced.
-function Split({ split }) {
-  const knob = useRef(null);
-  const [x, setX] = useState(null);
-  // The seam leans by --tilt, so it has to pass that far beyond either edge
-  // before the image is all light or all dark. The drag stays one to one and
-  // horizontal: dragging a little past the phone's edge gets you there.
-  const tilt = () => parseFloat(getComputedStyle(split).getPropertyValue('--tilt')) || 0;
-  // Where the seam rests: the middle, or where the interesting part is.
-  const rest = Number(split.dataset.x) || 50;
-  const set = (pct) => {
-    const lean = tilt();
-    const next = Math.max(-lean, Math.min(100 + lean, pct));
-    split.style.setProperty('--x', `${next}%`);
-    const full = next >= 100 + lean ? 'light' : next <= -lean ? 'dark' : '';
-    if (full) split.dataset.full = full;
-    else delete split.dataset.full;
-    setX(next);
-  };
-
-  useEffect(() => {
-    set(rest);
-    // The seam is slanted: put it under the pointer at the pointer's height.
-    const fromPointer = (e) => {
-      const r = split.getBoundingClientRect();
-      const y = (e.clientY - r.top) / r.height;
-      set(((e.clientX - r.left) / r.width) * 100 - tilt() * (1 - 2 * y));
-    };
-    const down = (e) => {
-      split.classList.remove('sweep');
-      split.classList.add('dragging');
-      split.setPointerCapture(e.pointerId);
-      fromPointer(e);
-    };
-    const move = (e) => split.classList.contains('dragging') && fromPointer(e);
-    const up = () => split.classList.remove('dragging');
-    split.addEventListener('pointerdown', down);
-    split.addEventListener('pointermove', move);
-    split.addEventListener('pointerup', up);
-    split.addEventListener('pointercancel', up);
-    // Without @property support the sweep is a jump, which is fine.
-    let io = null;
-    if (!still && 'IntersectionObserver' in window) {
-      set(100 + tilt());
-      io = new IntersectionObserver(
-        (entries) => {
-          if (!entries[0].isIntersecting) return;
-          io.disconnect();
-          split.classList.add('sweep');
-          requestAnimationFrame(() => set(rest));
-          split.addEventListener('transitionend', () => split.classList.remove('sweep'), { once: true });
-        },
-        { threshold: 0.45 },
-      );
-      io.observe(split);
-    }
-    return () => {
-      io?.disconnect();
-      split.removeEventListener('pointerdown', down);
-      split.removeEventListener('pointermove', move);
-      split.removeEventListener('pointerup', up);
-      split.removeEventListener('pointercancel', up);
-    };
-  }, []);
-
-  const lean = x === null ? 0 : tilt();
-  const full = x === null ? '' : x >= 100 + lean ? 'light' : x <= -lean ? 'dark' : '';
-  const dark = x === null ? 50 : Math.round(((100 + lean - x) / (100 + 2 * lean)) * 100);
-  return html`
-    <div class="seam"></div>
-    <span class="tag l">${t('Light')}</span>
-    <span class="tag d">${t('Dark')}</span>
-    <div
-      class="knob"
-      ref=${knob}
-      tabindex="0"
-      role="slider"
-      aria-label=${t('Compare light and dark')}
-      aria-valuemin="0"
-      aria-valuemax="100"
-      aria-valuenow=${String(100 - dark)}
-      aria-valuetext=${full ? (full === 'light' ? t('all light') : t('all dark')) : t('{0}% dark', dark)}
-      onKeyDown=${(e) => {
-        const now = parseFloat(split.style.getPropertyValue('--x')) || rest;
-        const step = { ArrowLeft: -5, ArrowRight: 5, Home: -200, End: 200 }[e.key];
-        if (step === undefined) return;
-        e.preventDefault();
-        split.classList.remove('sweep');
-        set(now + step);
-      }}
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" /></svg>
-    </div>
-  `;
-}
-
-for (const split of document.querySelectorAll('[data-split]')) {
-  // Its own box, laid out as if its parts were the picture's (display: contents),
-  // so the picture itself stays as the page has it.
-  const ui = document.createElement('div');
-  ui.style.display = 'contents';
-  split.append(ui);
-  render(html`<${Split} split=${split} />`, ui);
 }

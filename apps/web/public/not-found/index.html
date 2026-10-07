@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Not found · terminus</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts.css">
+<script src="/assets/theme.js"></script>
+<script src="/assets/sky-phase.js"></script>
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/assets/sky.css">
+<script src="/assets/i18n.js"></script>
+<style>
+  /* Any address the website doesn't have (the Worker's sitePage): the sky,
+     your stop's sign on an empty road, and the way home. */
+  .lost { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+  .lost > .wrap { width: 100%; }
+  .lost .msg { flex: 1; display: grid; align-content: center; justify-items: start; gap: 12px; padding-top: 32px; padding-bottom: 32px; }
+  .lost .code { font: 600 0.8rem/1 var(--font); letter-spacing: 0.12em; color: var(--muted); }
+  .lost h1 { font-size: clamp(2.4rem, 6vw, 4rem); letter-spacing: -0.035em; }
+  .lost p { color: var(--muted); max-width: 30rem; font-size: 1.05rem; }
+  .lost .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .lost .night-sky { --sky-room: 420px; }
+</style>
+</head>
+<body>
+<section class="sky-panel lost">
+  <div data-stars></div>
+  <header class="wrap nav">
+    <a class="brand" href="/"><img src="/assets/mark.svg" alt=""><span class="wordmark">termi<b>nus</b></span></a>
+  </header>
+  <main class="wrap msg">
+    <p class="code">404</p>
+    <h1>No bus stops here.</h1>
+    <p>This page isn't on any route. It may have moved, or the link has a typo.</p>
+    <div class="acts"><a class="btn accent" href="/">Go home</a><a class="btn ghost" href="/app/">Open the app</a></div>
+  </main>
+  <div data-horizon data-stop data-shuttle="no"></div>
+</section>
+<script type="module" src="/assets/sky-page.js"></script>
+</body>
+</html>

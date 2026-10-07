@@ -201,13 +201,16 @@ apps/web/public/
                       settings-pages.js (Settings, shared with the app), preview.js (the
                       card), profile.js (the profile and /campus, shared), search.js
                       (ranking, tested) + search-box.js; journey.js (the card styles,
-                      as on Android); dom.js has t, api, clock
+                      as on Android); dom.js has t, api, clock; sky.js (Now's sky
+                      and horizon), livery.js (the services' stripes)
   app/                Installed web app: app.js (Now, tabs), map.js (campus map), offline.js
-  admin/, status/, pair/, privacy/
+  admin/, status/, pair/, privacy/ (the summary; privacy/policy/ the full policy;
+                      each with zh/), not-found/ (the Worker's 404 page)
   admin/timelapse/    Replays a recorded day on the map and exports a video
                       (replay.js, shared with the API tests; Mediabunny encodes)
   assets/             ui.js (Preact, hooks, htm, stores), site.css (shared colours/type),
-                      i18n.js, zh.js (Chinese), theme.js, landing.js, shots/
+                      i18n.js, zh.js (Chinese), theme.js, landing.js, shots/;
+                      sky.css + sky-phase.js + sky-page.js: the app's sky on the site's pages
   vendor/             Preact + htm (scripts/vendor-preact.sh), MapLibre GL + PMTiles
                       (scripts/vendor-map.sh), Mediabunny (scripts/vendor-mediabunny.sh):
                       never hand-edited, not linted

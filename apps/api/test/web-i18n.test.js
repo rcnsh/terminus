@@ -19,7 +19,7 @@ function zh() {
 }
 
 // The privacy policy has a page of its own in Chinese (privacy/zh/), checked below.
-const PAGES = ['index.html', 'account/index.html', 'app/index.html', 'pair/index.html', 'status/index.html'];
+const PAGES = ['index.html', 'account/index.html', 'app/index.html', 'pair/index.html', 'status/index.html', 'not-found/index.html'];
 const SCRIPTS = [
   'account/app.js',
   'account/settings.js',
@@ -37,8 +37,9 @@ const SCRIPTS = [
   'pair/pair.js',
 ];
 
-// Names and codes that read the same in Chinese.
-const SAME = /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.rcn\.sh\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;
+// Names and codes that read the same in Chinese: places and module codes too,
+// as on the signs (the landing page's pictures of the app).
+const SAME = /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|PGP|UTown|Kent Ridge MRT|[A-Z]{2,3}\d{4}[A-Z]?|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.rcn\.sh\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;
 
 test('every t() string in the scripts is translated', () => {
   const dict = zh();
@@ -163,11 +164,16 @@ test('the Chinese is Chinese', () => {
   }
 });
 
-test('the privacy policy has a Chinese translation that names the English as the one that counts', () => {
-  const page = read('privacy/zh/index.html');
-  assert.match(read('privacy/index.html'), /data-alt-zh="\/privacy\/zh\/"/);
-  assert.match(page, /以英文版为准/);
-  // Every section of the English has one in the Chinese.
-  const count = (s) => (s.match(/<h2>/g) ?? []).length;
-  assert.equal(count(page), count(read('privacy/index.html')));
+test('the privacy summary and the full policy each have a Chinese translation that names the English as the one that counts', () => {
+  for (const dir of ['privacy/', 'privacy/policy/']) {
+    const en = read(`${dir}index.html`);
+    const page = read(`${dir}zh/index.html`);
+    assert.match(en, new RegExp(`data-alt-zh="/${dir}zh/"`));
+    assert.match(page, new RegExp(`data-alt-en="/${dir}"`));
+    assert.match(page, /以英文版为准/);
+    // Every section of the English has one in the Chinese.
+    const count = (s) => (s.match(/<h2[\s>]/g) ?? []).length;
+    assert.ok(count(en) > 0, dir);
+    assert.equal(count(page), count(en), dir);
+  }
 });

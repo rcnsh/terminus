@@ -66,15 +66,17 @@ const dip = (lo: number, hi: number) => {
   return best;
 };
 
-/** The band's width in its own units; a narrower card shows its middle. */
-const W = 400;
+/** The band's width in its own units; a narrower card shows its middle. A
+ * wide bar (the API docs') asks for more, so it shows more hills, not
+ * bigger ones. */
+const BAND_W = 400;
 
 /**
  * The low horizon (sky.js Horizon `low`): the city's top to the near hill,
  * with two buildings, rain trees and the flag, and the near hill in the
  * card's colour. Lit windows after dark. Colours come from the band's CSS.
  */
-export function horizonSvg(lights: boolean): string {
+export function horizonSvg(lights: boolean, W = BAND_W): string {
   const at = (f: number) => Math.round(W * f);
   const [b1, b2, flag] = [at(0.18), at(0.62), at(0.76)];
   const mbs = dip(Math.max(at(0.8) - 40, flag + 30), Math.min(at(0.8) + 40, W - 29));
@@ -98,6 +100,12 @@ ${lights ? `<g class="lit"><rect x="${b2 - 5}" y="${r1(farY(b2) - 16)}" width="3
 
 const vars = (s: PageSky, lightInk: boolean) =>
   `--s0:${s.sky[0]};--s1:${s.sky[1]};--s2:${s.sky[2]};--s3:${s.sky[3]};--h-far:${s.far};--h-tree:${s.tree};--h-city:${s.city};--band-ink:${lightInk ? '#f5f3f0' : '#1c1917'}`;
+
+/** Whether the words over the sky at `phase` are light, on a light page. */
+export const lightInkAt = (phase: Phase) => LIGHT_INK.has(phase);
+
+/** The sky's colours at `phase` as CSS variables: on a light page, or on a dark one. */
+export const skyVars = (phase: Phase, page: 'light' | 'dark' = 'light') => vars(PAGE_SKIES[page][phase], page === 'dark' || LIGHT_INK.has(phase));
 
 /** The band's CSS at `phase`: its colours on a light page and on a dark one, and how it's laid out. */
 export function bandCss(phase: Phase): string {

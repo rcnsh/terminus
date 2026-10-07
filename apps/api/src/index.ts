@@ -23,7 +23,8 @@ import { trackedBuses } from './buses.ts';
 import { stopPairs } from './pairs.ts';
 import { adminStats, isOperator } from './admin.ts';
 import { analyticsEnabled, logError } from './analytics.ts';
-import { DOCS_PAGE, openApiSpec } from './openapi.ts';
+import { docsPage, openApiSpec } from './openapi.ts';
+import { phaseAt, sgtMinute } from './pagesky.ts';
 import { CORS, clientKey, coordsFrom, json, jsonCached, numParam, withSecurityHeaders } from './http.ts';
 import { type MeDeps, handleMe } from './me.ts';
 import { accountsConfigured } from './accounts.ts';
@@ -210,6 +211,19 @@ async function handleBuses(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   }, 200, { 'cache-control': 'private, max-age=5' });
 }
 
+/**
+ * A page of the website. One that isn't there, asked for by a browser, is
+ * the not-found page (web/public/not-found/), still with a 404; anything
+ * else, a script or a client, gets what the website answered.
+ */
+async function sitePage(req: Request, assets: Fetcher): Promise<Response> {
+  const res = await assets.fetch(req);
+  if (res.status !== 404 || !(req.headers.get('accept') ?? '').includes('text/html')) return res;
+  const page = await assets.fetch(new Request(new URL('/not-found/', req.url), { headers: req.headers }));
+  if (!page.ok) return res;
+  return new Response(page.body, { status: 404, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+}
+
 /** The cron runs every 15 minutes; older than this and it has stopped. */
 const CRON_STALE_MS = 40 * 60_000;
 
@@ -366,7 +380,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
       case '/docs':
         // The landing page at / is a static asset (apps/web). The beta's
         // docs, like its pages, ask not to be indexed.
-        return new Response(DOCS_PAGE, {
+        return new Response(docsPage(phaseAt(sgtMinute(nowMs))), {
           headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...(isBeta(env) ? { 'x-robots-tag': 'noindex' } : {}) },
         });
       case '/robots.txt':
@@ -403,7 +417,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         return await handleBuses(url, env, ctx, nowMs);
       default:
         // Everything else is the website.
-        if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return markBeta(await env.ASSETS.fetch(req), env);
+        if (env.ASSETS && (req.method === 'GET' || req.method === 'HEAD')) return markBeta(await sitePage(req, env.ASSETS), env);
         return json({ error: 'not found' }, 404);
     }
   } catch (err) {

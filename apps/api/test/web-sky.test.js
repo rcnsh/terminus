@@ -9,6 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 const css = fs.readFileSync(new URL('../../web/public/app/app.css', import.meta.url), 'utf8');
 
@@ -93,4 +94,48 @@ test("the sky's words read over the sky, the glass and the chip, at every hour",
     for (const role of ['ink', 'muted', 'good', 'warn', 'bad', 'accent-small']) check(role, 4.5, 'k-chip');
   }
   assert.deepEqual(bad, []);
+});
+
+// The website's own pages (the landing page, status, privacy, pair, not
+// found) draw the same sky on an element (assets/sky.css), with the hour on
+// <html data-sky> from a script that runs before the page (assets/sky-phase.js).
+const siteCss = fs.readFileSync(new URL('../../web/public/assets/sky.css', import.meta.url), 'utf8');
+
+/** Every rule in `src` whose body is only custom properties: selector -> body, spaces evened out. */
+function varRules(src) {
+  const out = new Map();
+  for (const [, sel, body] of src.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!/^\s*--/.test(body)) continue;
+    out.set(sel.replace(/\s+/g, ' ').trim(), body.replace(/\s+/g, ' ').trim());
+  }
+  return out;
+}
+
+test("the website's sky has app.css's colours, rule for rule", () => {
+  // app.css's body.sky and body.sky-<hour> are sky.css's .sky-panel and [data-sky="<hour>"] .sky-panel.
+  const site = (sel) =>
+    sel
+      .replace(/(:root(?::not\(\[data-theme="light"\]\)|\[data-theme="dark"\])) body\.sky-(\w+)/g, '$1[data-sky="$2"] .sky-panel')
+      .replace(/body\.sky-(\w+)/g, '[data-sky="$1"] .sky-panel')
+      .replace(/body\.sky\b/g, '.sky-panel');
+  const app = varRules(css.slice(css.indexOf('\nbody.sky {'), css.indexOf('\nbody.sky { --end')));
+  const web = varRules(siteCss);
+  assert.ok(app.size >= 12, 'found the palette in app.css');
+  for (const [sel, body] of app) {
+    // body.sky also lays out the page in the app; the colours are what must match.
+    const vars = body.replace(/^position: relative; overflow-x: clip;\s*/, '');
+    assert.equal(web.get(site(sel)), vars, sel);
+  }
+});
+
+test("the website's pages take the hour from the same clock as Now", async () => {
+  const { phaseAt } = await import('../../web/public/account/daylight.js');
+  const src = fs.readFileSync(new URL('../../web/public/assets/sky-phase.js', import.meta.url), 'utf8');
+  for (let min = 0; min < 1440; min += 5) {
+    const html = { dataset: {} };
+    const at = new Date(2026, 9, 7, Math.floor(min / 60), min % 60);
+    const box = { document: { documentElement: html }, setInterval: () => 0, Date: class extends Date { constructor() { super(at); } } };
+    vm.runInNewContext(src, box);
+    assert.equal(html.dataset.sky, phaseAt(min), `${min} min`);
+  }
 });
