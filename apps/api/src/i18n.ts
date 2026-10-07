@@ -230,7 +230,7 @@ const en = {
   busTime: ((svc: string, t: string) => `${svc} ${t}`) as Fn<[string, string]>,
   // Today's timeline (day.ts)
   homeFrom: ((from: string) => `Home, from ${from}`) as Fn<[string]>,
-  yourLastClass: 'your last class',
+  homeAfterClass: 'Home after your last class',
 
   // Rest, the next class, will I make it (profile.ts, calendar.ts)
   dayStarts: ((t: string) => `Day starts ${t}`) as Fn<[string]>,
@@ -510,7 +510,7 @@ const zh: Msgs = {
   atStop: (stop) => zs`在${stop}`,
   busTime: (svc, t) => zs`${t}的${svc}`,
   homeFrom: (from) => zs`回家，从${from}出发`,
-  yourLastClass: '上一节课',
+  homeAfterClass: '下课后回家',
 
   dayStarts: (t) => zs`${t}开始一天`,
   doneForToday: '今天结束了',
