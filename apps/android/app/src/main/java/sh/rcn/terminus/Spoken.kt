@@ -13,9 +13,11 @@ object Spoken {
     /**
      * The answer as sentences: where to, the trip's phase, the bus and its
      * time, what to do, and how sure the times are. [now] is on the server's
-     * clock; [clock] writes an instant as the account's clock does.
+     * clock; [clock] writes an instant as the account's clock does. Without
+     * [withHead], a plain card leaves out its phase and where to: Now shows
+     * and reads those on their own, just above.
      */
-    fun summary(paired: Boolean, answer: NextAnswer?, error: String?, now: Long, clock: (Long) -> String): String {
+    fun summary(paired: Boolean, answer: NextAnswer?, error: String?, now: Long, withHead: Boolean = true, clock: (Long) -> String): String {
         if (!paired) return L.s(R.string.a11y_not_paired)
         if (answer == null) return L.s(R.string.a11y_loading, error ?: L.s(R.string.a11y_loading_word))
         val old = isOld(answer, now)
@@ -39,8 +41,8 @@ object Spoken {
             )
         }
         return sentences(
-            answer.phaseText,
-            answer.destLabel?.let { L.s(R.string.a11y_to, it) },
+            answer.phaseText?.takeIf { withHead },
+            answer.destLabel?.takeIf { withHead }?.let { L.s(R.string.a11y_to, it) },
             if (answer.mode == "rest") answer.label else answer.clockLabel(clock).replace(" · ", L.s(R.string.a11y_leaves)),
             if (old) L.s(R.string.a11y_old) else answer.detail,
             answer.leaveText(now)?.takeIf { !old },
