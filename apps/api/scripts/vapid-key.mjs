@@ -1,5 +1,5 @@
 /**
- * Makes a VAPID key for Web Push (phase 5): a P-256 private key as a JWK,
+ * Makes a VAPID key for Web Push: a P-256 private key as a JWK,
  * the value of the VAPID_PRIVATE_KEY secret. Once only: changing it drops
  * every web app's subscription until it subscribes again.
  *

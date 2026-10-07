@@ -1,6 +1,6 @@
 /**
- * Push, phase 3: Firebase Cloud Messaging (HTTP v1) to Android devices, and
- * (phase 5) Web Push to the installed web app (webpush.ts), both kept as the
+ * Push: Firebase Cloud Messaging (HTTP v1) to Android devices, and Web
+ * Push to the installed web app (webpush.ts), both kept as the
  * session's push_token: an FCM token, or `web:` and a subscription.
  *
  * A push is usually only a nudge. It says the card has changed (`kind:
@@ -206,7 +206,7 @@ export async function pushDevices(env: Env, userId: string): Promise<number> {
   return r?.n ?? 0;
 }
 
-/** Registers (or with null, forgets) this device's FCM token. A token lives on one session only. */
+/** Registers (or with null, forgets) this device's push token: an FCM token or a web subscription. A token lives on one session only. */
 export async function setPushToken(db: D1Database, tokenHash: string, pushToken: string | null): Promise<void> {
   const stmts = [];
   if (pushToken) stmts.push(db.prepare('UPDATE sessions SET push_token = NULL WHERE push_token = ?').bind(pushToken));

@@ -258,7 +258,7 @@ export async function housekeeping(db: D1Database, nowMs: number): Promise<void>
     db.prepare('DELETE FROM pair_codes WHERE expires < ?').bind(nowMs),
     db.prepare("DELETE FROM sessions WHERE kind = 'web' AND expires < ?").bind(nowMs),
     db.prepare("DELETE FROM sessions WHERE kind = 'device' AND last_seen < ?").bind(nowMs - DEVICE_IDLE_MS),
-    // Trip outcomes (phase 3) are kept 35 days.
+    // Trip outcomes are kept KEEP_DAYS days.
     db.prepare('DELETE FROM trip_outcomes WHERE at < ?').bind(nowMs - KEEP_DAYS * 86_400_000),
   ]);
 }
@@ -382,7 +382,6 @@ export async function remindTerm(env: Env, nowMs: number, batch = ARM_BATCH): Pr
   return sent;
 }
 
-/** Each step on its own: a KV failure must not stop D1 cleanup, and the reverse. */
 /** The public feed's state, as the cron last saw it. No alerts: the shuttle is the product; this is extra. */
 export interface PublicFeedState {
   up: boolean;
@@ -430,6 +429,7 @@ export async function checkPublicFeed(
   return state;
 }
 
+/** Each step on its own: a KV failure must not stop D1 cleanup, and the reverse. */
 export async function runCron(env: Env, nowMs: number): Promise<void> {
   const step = async (name: string, fn: () => Promise<unknown>) => {
     try {
@@ -455,6 +455,6 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   // Starts the day's timelapse recorder in the morning (it runs itself after that).
   await step('timelapse', () => ensureRecorder(env, nowMs));
   await step('term', () => remindTerm(env, nowMs));
-  // Measured ride times (phase 8.2): once a day, early, before the day's trips.
+  // Measured ride times: once a day, early, before the day's trips.
   if (env.DB && sgt(nowMs).minutes >= 4 * 60) await step('ride times', () => refreshTable(env, nowMs));
 }

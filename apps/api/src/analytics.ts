@@ -8,12 +8,11 @@
  *    never once tell you it was wrong. Logging the decision means you can go
  *    back and check.
  *
- * 2. It is phase-2 segment travel-time collection, starting now instead of in
- *    two months. Inter-stop times are not in the feed, and the router cannot
- *    be good without them. `plate` is the join key: the same vehicle seen at
- *    two stops with two ETAs gives you the travel time between them. That data
- *    needs calendar time you do not have much of, so it collects from day one
- *    even though nothing reads it yet.
+ * 2. It collects segment travel times. Inter-stop times are not in the feed,
+ *    and the router cannot be good without them. `plate` is the join key: the
+ *    same vehicle seen at two stops with two ETAs gives you the travel time
+ *    between them. That data needs calendar time, so it is collected even
+ *    though nothing reads it yet.
  *
  * Analytics Engine writes are synchronous, non-blocking and unsampled at this
  * volume. Nothing here may ever throw into a response path -- an answer that

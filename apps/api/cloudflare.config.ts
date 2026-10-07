@@ -194,7 +194,7 @@ function site(mode: string | undefined) {
 				NEXTBUS_PROXY_BASE: bindings.secret(),
 				TURNSTILE_SECRET: bindings.secret(),
 				FCM_SERVICE_ACCOUNT: bindings.secret(),
-				// Web Push (phase 5): the VAPID key, a P-256 JWK (scripts/vapid-key.mjs).
+				// Web Push: the VAPID key, a P-256 JWK (scripts/vapid-key.mjs).
 				VAPID_PRIVATE_KEY: bindings.secret(),
 				...s.env,
 			},
