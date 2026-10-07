@@ -48,6 +48,9 @@ export interface UpstreamState {
 }
 
 const KEY = 'monitor:upstream';
+/** "<since> <kind>" of the last alert delivered. Its own key, as KV takes one
+ *  write a second to a key, and the state was saved just before the send. */
+const ALERTED_KEY = 'monitor:alerted';
 const INCIDENTS_KEY = 'monitor:incidents';
 /** Outages kept for the status page, newest first. */
 export const INCIDENTS_KEPT = 20;
@@ -162,6 +165,8 @@ export async function checkUpstream(
   // Read first, and a failed read stops the check: taken as "never checked",
   // it would close nothing, or mark the feed up in the middle of an outage.
   const prev = (await getKvJson(env, KEY)) as UpstreamState | null;
+  // Unreadable, the pending alert goes again: one email too many beats none.
+  const delivered = prev?.pending ? await env.KV.get(ALERTED_KEY).catch(() => null) : null;
   let ok = true;
   let reason: string | null = null;
   let detail: string | null = null;
@@ -210,11 +215,14 @@ export async function checkUpstream(
   const up = was ? failures < FAILS_TO_ALERT : oks >= OKS_TO_RECOVER;
   const changed = !prev || prev.up !== up;
   let pending = prev?.pending ?? null;
+  if (pending && delivered === `${prev!.since} ${pending}`) pending = null;
   if (changed && (prev || !up)) pending = up ? 'up' : 'down';
   const state: UpstreamState = { up, since: changed ? nowMs : prev!.since, reason, detail, auto, checkedAt: nowMs, failures, oks, pending };
 
   // Saved before the email goes, so a KV write that keeps failing can't send
   // the same email every run; it's sent once the state with it pending is kept.
+  // The state is written once a run: delivery is noted under ALERTED_KEY, and
+  // the next run clears pending from it.
   await env.KV.put(KEY, JSON.stringify(state));
   if (pending) {
     try {
@@ -224,7 +232,10 @@ export async function checkUpstream(
       console.error('alert failed', (e as Error)?.name ?? 'error');
     }
     // Should this write fail, the email goes once more next run: better than none.
-    if (!state.pending) await env.KV.put(KEY, JSON.stringify(state)).catch((e) => console.error('alert not marked sent', (e as Error)?.name ?? 'error'));
+    if (!state.pending) {
+      await env.KV.put(ALERTED_KEY, `${state.since} ${pending}`, { expirationTtl: 30 * 86_400 })
+        .catch((e) => console.error('alert not marked sent', (e as Error)?.name ?? 'error'));
+    }
   }
   // Every run, not only on a change, so an incident whose write failed is
   // opened or closed on the next; it writes only when something changes.
