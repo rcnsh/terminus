@@ -661,7 +661,6 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
     }
 }
 
-/** A bus on the map: a disc of [fill], 11 dp across the middle, ringed 2.5 dp in [ring]. */
 /** The tapped bus's ring, in the map's ink, a little way out from the bus. */
 private class RingIcon(private val ink: Color) : Painter() {
     override val intrinsicSize: Size = Size.Unspecified
@@ -676,6 +675,7 @@ private class RingIcon(private val ink: Color) : Painter() {
     override fun hashCode() = ink.hashCode()
 }
 
+/** A bus on the map: a disc of [fill], 11 dp across the middle, ringed 2.5 dp in [ring]. */
 private class BusIcon(private val fill: Color, private val ring: Color) : Painter() {
     override val intrinsicSize: Size = Size.Unspecified
 

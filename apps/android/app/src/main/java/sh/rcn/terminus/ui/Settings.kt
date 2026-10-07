@@ -7,10 +7,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.PaddingValues
 import android.graphics.Bitmap
@@ -104,7 +100,6 @@ import sh.rcn.terminus.Destination
 import sh.rcn.terminus.LeaveAlerts
 import sh.rcn.terminus.Device
 import sh.rcn.terminus.ProfileDoc
-import sh.rcn.terminus.SavedPlace
 import sh.rcn.terminus.Theme
 import sh.rcn.terminus.Trip
 import sh.rcn.terminus.WEEKDAYS

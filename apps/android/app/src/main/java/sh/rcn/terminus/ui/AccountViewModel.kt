@@ -205,7 +205,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissShared() = _state.update { it.copy(sharedLink = null) }
 
-    /** Setup finished or skipped: never shown again, on any device. */
     /**
      * The account's language and this phone's: a language picked here before
      * the account had one (on the welcome screen) goes to the account; one
@@ -241,6 +240,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         sh.rcn.terminus.widget.Refresher.refreshSoon(app)
     }
 
+    /** Setup finished or skipped: never shown again, on any device. */
     fun finishSetup() {
         store.needsSetup = false
         val p = _state.value.profile
@@ -413,8 +413,6 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
                 .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
         }
     }
-
-
 
     /* ---------- feedback, your data ---------- */
 

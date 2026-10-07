@@ -43,7 +43,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +58,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -447,7 +445,6 @@ private fun AddEmailToReportDialog(onAddEmail: () -> Unit, onDismiss: () -> Unit
     )
 }
 
-/** Fades the trailing edge out while [scroll] can still go further, so a cut-off row reads as scrollable. */
 /** The chip showing, filled in the ink (the web's too), so it stands out from the rest over any sky. */
 @Composable
 private fun chosenChip() = MaterialTheme.colorScheme.let {
@@ -483,6 +480,7 @@ private fun AddedChip(label: String, selected: Boolean, onClick: () -> Unit, onR
     )
 }
 
+/** Fades the trailing edge out while [scroll] can still go further, so a cut-off row reads as scrollable. */
 private fun Modifier.fadeEnd(scroll: ScrollState, width: Dp = 32.dp): Modifier =
     graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
         drawContent()

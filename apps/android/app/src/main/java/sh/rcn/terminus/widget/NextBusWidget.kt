@@ -422,9 +422,11 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         }
     }
 
-    /** "Updated 17:14", with any problem in front, where there's room. */
+    /**
+     * "Updated 17:14", with any problem in front, where there's room.
+     * [updating]: say "Updating…" here; the other layouts say it on a line of their own.
+     */
     @Composable
-    /** [updating]: say "Updating…" here; the other layouts say it on a line of their own. */
     private fun Footer(ctx: Context, fetchedAt: Long?, error: String?, roomy: Boolean, updating: Boolean = false) {
         val stamp = fetchedAt?.let { L.s(R.string.updated_at, clock(ctx, it)) }
         val problem = error?.let { if (it == UPDATING) L.s(R.string.updating).takeIf { updating } else it }
@@ -499,7 +501,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val other = NearbySwap.offer(api.orEmpty(), chosen.swap, now, (listOf(first) + next).map { it.code })
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(L.s(R.string.nearby_line, first.name, walk), style = muted, maxLines = 1, modifier = GlanceModifier.defaultWeight())
-            if (other != null) SwapButton(other, api!!.first().code)
+            if (other != null) SwapButton(other, api.first().code)
         }
         Text(
             departures(first, age, 2).ifEmpty { if (first.available) L.s(R.string.no_buses_due) else L.s(R.string.no_live_data) },

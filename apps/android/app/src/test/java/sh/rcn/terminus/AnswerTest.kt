@@ -83,12 +83,13 @@ class AnswerTest {
 
     @Test fun cardV2CarriesThePhaseAndOnlyPlans() {
         val a = golden("class-late")
-        assertEquals("heading", a.card!!.phase)
+        val card = a.card!!
+        assertEquals("heading", card.phase)
         assertEquals("On your way", a.phaseText)
-        assertEquals(listOf("skipped"), a.card!!.actions.map { it.id })
-        assertTrue(a.card!!.actions.all { it.trip == "4:545:UTOWN" })
-        assertTrue(a.card!!.glance!!.length <= 12)
-        assertNotNull(a.card!!.nextChangeAtMs)
+        assertEquals(listOf("skipped"), card.actions.map { it.id })
+        assertTrue(card.actions.all { it.trip == "4:545:UTOWN" })
+        assertTrue(card.glance!!.length <= 12)
+        assertNotNull(card.nextChangeAtMs)
     }
 
     @Test fun staleFollowsTheServer() {
@@ -226,7 +227,7 @@ class AnswerTest {
     @Test fun aClassJourneyOffersTheSoonerBusToGoNowOn() {
         val a = golden("class-bus")
         assertEquals("Or go now: R2 at 09:06 from PGP", JourneyText.backup(a, a.card!!.journey!!))
-        assertEquals("Arrive ~09:51 · 9 min early", JourneyText.arrive(a.card.journey!!))
+        assertEquals("Arrive ~09:51 · 9 min early", JourneyText.arrive(a.card.journey))
     }
 
     @Test fun aClassJourneySaysWhenTheClassStarts() {
