@@ -3,7 +3,7 @@
 // Appearance: Steps (the default), Route or Ticket, as the Android app draws
 // them. Every word and time is the server's; only the countdowns tick here.
 
-import { Icon, html, store, useEffect, useState } from '../assets/ui.js';
+import { Fill, Icon, MARK, html, store, useEffect, useState } from '../assets/ui.js';
 import { clock, inkOn, t } from './dom.js';
 import { Celestial, Horizon } from './sky.js';
 
@@ -141,15 +141,15 @@ function onTheRoad(j, now) {
 
 /**
  * The horizon's road in words, on the ground under it at the page's size:
- * your bus and when it reaches your stop ("about" for a timetable guess).
+ * your bus and when it reaches your stop ("about" for a timetable guess),
+ * the stop's name in bold.
  */
 function RoadLine({ j, now }) {
   const left = dueIn(j, now);
   const n = Math.round(left / 60);
-  const stop = j.bus.stop;
   const text =
-    left <= 0 ? t('from {0}', stop) : left < 60 ? t('arriving at {0}', stop) : j.live ? t('reaches {0} in {1} min', stop, n) : t('reaches {0} in about {1} min', stop, n);
-  return html`<div class="road-line"><${Badge} bus=${j.bus} /><span>${text}</span></div>`;
+    left <= 0 ? t('from {0}', MARK) : left < 60 ? t('arriving at {0}', MARK) : j.live ? t('reaches {0} in {1} min', MARK, n) : t('reaches {0} in about {1} min', MARK, n);
+  return html`<div class="road-line"><${Badge} bus=${j.bus} /><span><${Fill} text=${text} parts=${[html`<strong>${j.bus.stop}</strong>`]} /></span></div>`;
 }
 
 /**
