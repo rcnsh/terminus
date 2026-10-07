@@ -13,7 +13,7 @@
 // icons (/map/*), routes and stops (/campus), buses (/buses), arrivals
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
-import { html, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '/assets/ui.js';
+import { html, reducedMotion, store, useEffect, useLayoutEffect, useRef, useState, useStore } from '/assets/ui.js';
 import { inkOn, send, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 
@@ -44,6 +44,8 @@ const AT_STOP_STEP_PX = 26;
 const NEAR_CAMPUS_M = 3_000;
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts). */
 const BOUNDS = [[103.755, 1.28], [103.83, 1.332]];
+/** Room round the whole campus, clear of the pills along the top. */
+const CAMPUS_PADDING = { top: 70, bottom: 30, left: 30, right: 30 };
 
 /* ---------- what's on screen ---------- */
 
@@ -75,6 +77,9 @@ let fit = null;
 const dark = () => window.theme?.dark() ?? window.matchMedia('(prefers-color-scheme: dark)').matches;
 const lang = () => (window.i18n?.lang === 'zh' ? 'zh' : 'en');
 const styleUrl = () => `/map/style.json?theme=${dark() ? 'dark' : 'light'}&lang=${lang()}`;
+/** The page's ink and paper, for what's drawn over the street map. */
+const pageInk = () => (dark() ? '#f2efeb' : '#1c1917');
+const pagePaper = () => (dark() ? '#1a1816' : '#ffffff');
 const colorOf = (svc) => campusData.get()?.routes[svc]?.color ?? '#8a939c';
 const svcVars = (svc) => `--svc:${colorOf(svc)};--svc-ink:${inkOn(colorOf(svc))}`;
 
@@ -113,7 +118,7 @@ async function build(container) {
     container,
     style: styleUrl(),
     bounds: fit,
-    fitBoundsOptions: { padding: { top: 70, bottom: 30, left: 30, right: 30 } },
+    fitBoundsOptions: { padding: CAMPUS_PADDING },
     maxBounds: [[BOUNDS[0][0] - 0.02, BOUNDS[0][1] - 0.02], [BOUNDS[1][0] + 0.02, BOUNDS[1][1] + 0.02]],
     // Not past the campus area: the map file covers only that.
     minZoom: 13,
@@ -141,7 +146,7 @@ async function build(container) {
         b.setAttribute('aria-label', t('Back to campus'));
         // A constant, never data.
         b.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>';
-        b.onclick = () => map.fitBounds(fit, { padding: { top: 70, bottom: 30, left: 30, right: 30 }, duration: 600 });
+        b.onclick = () => map.fitBounds(fit, { padding: CAMPUS_PADDING, duration: 600 });
         this.box.append(b);
         return this.box;
       },
@@ -219,8 +224,8 @@ const empty = { type: 'FeatureCollection', features: [] };
 
 function addLayers() {
   const campus = campusData.get();
-  const ink = dark() ? '#f2efeb' : '#1c1917';
-  const paper = dark() ? '#1a1816' : '#ffffff';
+  const ink = pageInk();
+  const paper = pagePaper();
   map.addSource('routes', {
     type: 'geojson',
     data: {
@@ -311,7 +316,7 @@ const busSize = (zoom) => Math.max(0.64, Math.min(1, 0.64 + ((zoom - 13) * 0.36)
 /** The bus icon in the chosen service's colour, ringed in the page's: one
  *  service's buses are shown at a time. */
 function paintBus() {
-  const paper = dark() ? '#1a1816' : '#ffffff';
+  const paper = pagePaper();
   const color = colorOf(selected.get());
   // At 2 pixels a point: 11 across the disc, with a 2.5 ring.
   const size = 60;
@@ -332,7 +337,7 @@ function paintBus() {
   const rc = document.createElement('canvas');
   rc.width = rc.height = ringSize;
   const rg = rc.getContext('2d');
-  rg.strokeStyle = dark() ? '#f2efeb' : '#1c1917';
+  rg.strokeStyle = pageInk();
   rg.lineWidth = 5;
   rg.beginPath();
   rg.arc(ringSize / 2, ringSize / 2, 33, 0, Math.PI * 2);
@@ -425,7 +430,7 @@ function moveTo(buses) {
   const now = performance.now();
   const stale = now - lastAnswer > STALE_MS;
   lastAnswer = now;
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce = reducedMotion();
   const path = pathOf(campusData.get()?.routes[selected.get()]?.line);
   shown.set(new Map(buses.map((b) => [b.id, b])));
   const next = new Map();

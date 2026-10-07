@@ -207,12 +207,13 @@ async function prepare() {
   }
   // The fonts the overlay is drawn in, before the first frame uses them.
   await Promise.all([document.fonts.load('700 100px "Space Grotesk"'), document.fonts.load('500 40px Inter'), mark.decode().catch(() => {})]);
+  const f = framing(day, w, h);
   if (!map) {
     map = new ml.Map({
       container: stage,
       style: styleUrl(),
-      bounds: framing(day, w, h).bounds,
-      fitBoundsOptions: { padding: framing(day, w, h).padding },
+      bounds: f.bounds,
+      fitBoundsOptions: { padding: f.padding },
       interactive: false,
       attributionControl: false,
       // One map pixel per video pixel, whatever the screen.
@@ -233,7 +234,6 @@ async function prepare() {
     } else {
       addLayers();
     }
-    const f = framing(day, w, h);
     map.fitBounds(f.bounds, { padding: f.padding, duration: 0 });
   }
   shape = want;
