@@ -13,9 +13,8 @@
  */
 
 import type { ArriveBy, Candidate, Graph, Leave, ScoredOption, StopArrivals } from './types.ts';
-import { WALK } from './config.ts';
+import { PUBLIC, WALK } from './config.ts';
 import { feedFor, headwayFor, legRideS, resolveBerths } from './resolve.ts';
-import { PUBLIC } from './config.ts';
 import { isPublic, svcName } from './public.ts';
 import { ON_TIME_SLACK_S } from './profile.ts';
 import { isoSeconds, shortStop } from './format.ts';
@@ -60,6 +59,10 @@ const fareMs = (leg: { paid?: true }) => (leg.paid ? PUBLIC.fareWorthS * 1000 : 
 /** `paid` only on a public bus, so shuttle answers are unchanged; with it the route key a two-way service's number can't name. */
 const paidOf = (leg: { svc: string; paid?: true }) => (leg.paid ? { paid: true as const, ...(leg.svc !== svcName(leg.svc) ? { route: leg.svc } : {}) } : {});
 
+/** A leave-by with what ranked it (see leaveBy), and without. */
+type Ranked = Leave & { ms: number; worth: number };
+const unranked = ({ ms: _ms, worth: _worth, ...leave }: Ranked): Leave => leave;
+
 /** `off` only when there is one, so answers without a crossing are unchanged; `toStop` likewise. */
 const offOf = (leg: { off?: { code: string; name: string }; to?: { code: string; name: string } }) => ({
   ...(leg.off ? { off: shortStop(leg.off.name), offCode: leg.off.code } : {}),
@@ -86,27 +89,23 @@ export function leaveBy(f: LeaveInput): Leave | null {
   const legs: Leg[] = f.options.length
     ? f.options.map((o) => ({ svc: o.svc, stop: o.stop, walkS: o.walkS, rideS: o.rideS, off: o.off, to: o.to, ...paidOf(o) }))
     : fallbackLegs(f.candidates, f.graph);
-  let onTime: (Leave & { ms: number; worth: number }) | null = null;
-  let late: (Leave & { ms: number; worth: number }) | null = null;
+  let onTime: Ranked | null = null;
+  let late: Ranked | null = null;
   for (const leg of legs) {
     const r = forLeg(leg, f.byStop.get(leg.stop.code), f.graph, f.arriveBy, f.nowMs, f.crowdRisk);
     // How late it lets you leave, less what a fare is worth: a public bus
     // must buy clearly more time at home than the free one to be the answer.
     const worth = r.ms - fareMs(leg);
-    const out = { at: isoSeconds(r.ms), estimated: r.estimated, svc: svcName(leg.svc), stop: shortStop(leg.stop.name), stopCode: leg.stop.code, board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, walkS: leg.walkS, rideS: leg.rideS, ...offOf(leg), ...paidOf(leg), ms: r.ms, worth };
+    const out: Ranked = { at: isoSeconds(r.ms), estimated: r.estimated, svc: svcName(leg.svc), stop: shortStop(leg.stop.name), stopCode: leg.stop.code, board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, walkS: leg.walkS, rideS: leg.rideS, ...offOf(leg), ...paidOf(leg), ms: r.ms, worth };
     // The latest on-time departure wins; if nothing is on time, the soonest.
     if (!r.late && (!onTime || worth > onTime.worth || (worth === onTime.worth && onTime.estimated && !r.estimated))) onTime = out;
     if (r.late && (!late || r.ms < late.ms)) late = out;
   }
-  if (onTime) {
-    const { ms: _ms, worth: _worth, ...leave } = onTime;
-    return leave;
-  }
+  if (onTime) return unranked(onTime);
   if (!late) return null;
   // You'll be late whatever you do: the answer is to go now, for the first
   // bus you can catch. Clients show "Leave now" once `at` has passed.
-  const { ms: _ms, worth: _worth, ...leave } = late;
-  return { ...leave, at: isoSeconds(Math.min(late.ms, f.nowMs)) };
+  return { ...unranked(late), at: isoSeconds(Math.min(late.ms, f.nowMs)) };
 }
 
 interface LegLeave {
@@ -139,7 +138,7 @@ function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: 
     // With no live times the bus is somewhere in that headway: `board` is
     // when you reach the stop. Often packed then: one more headway early.
     const crowd = crowdCheck(leg, latestBoard, arriveBy, risk);
-    const back = crowd.earlier ? 2 : arriveBy.oneEarlier ? 2 : 1;
+    const back = crowd.earlier || arriveBy.oneEarlier ? 2 : 1;
     const ms = latestBoard - headway * back - walk;
     return { ms, board: ms + walk, arrive: arriveAfter(latestBoard - (back - 1) * headway), estimated: true, late: ms < nowMs, note: crowd.note ?? (arriveBy.oneEarlier ? m().oneEarlierNote : null) };
   }

@@ -9,7 +9,7 @@
  * dimming once `card.staleAt` passes.
  */
 
-import type { BusLeg, Crowd, Dest, MeAnswer, Quality } from './types.ts';
+import type { BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
 import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
@@ -485,6 +485,8 @@ function v2(
   const svc = l?.svc ?? null;
   const phase = trip.phase;
   const detected = trip.rec?.detected === true && (phase === 'riding' || phase === 'missed');
+  // "D2 9:41", or the walk when there's no bus.
+  const busGlance = (leave: Leave) => (svc ? `${svc} ${leave.board ? short(leave.board) : m().now}` : m().walkNow);
 
   // One line and a glance per phase; outside a trip, the answer's own words.
   let line = a.detail ? `${a.label} · ${a.detail.split(' · ')[0]}` : a.label;
@@ -503,19 +505,18 @@ function v2(
     } else if (phase === 'heading' || phase === 'waiting') {
       line = svc ? m().svcAtStop(svc, l.board ? est(l.board) : null, l.stop ?? '') : m().walkThereNow;
       if (card.arrive && l.arrive && a.timing) line += ` · ${m().arriveLower(est(l.arrive), slackText((Date.parse(a.timing.classAt) - Date.parse(l.arrive)) / 1000))}`;
-      glance = svc ? `${svc} ${l.board ? short(l.board) : m().now}` : m().walkNow;
+      glance = busGlance(l);
     } else if (phase === 'missed') {
       const missed = trip.rec?.missed ? m().missedThe(at(trip.rec.missed)) : m().missedIt;
       const next = svc ? `${svc}${l.board ? ` ${est(l.board)}` : ''}` : m().walk;
       line = m().missedLine(missed, next, a.timing?.status === 'late' ? a.timing.text : null);
-      glance = svc ? `${svc} ${l.board ? short(l.board) : m().now}` : m().walkNow;
+      glance = busGlance(l);
     }
   }
   const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);
   if (phase === 'riding' && onBus) {
-    const b = onBus;
-    line = `${m().onThe(b.svc)}${b.arrive ? ` · ${m().offAtTime(offStop(b) ?? a.dest?.label ?? m().yourStop, at(b.arrive))}` : ''}`;
-    glance = b.arrive ? m().offGlance(short(b.arrive)) : m().onThe(b.svc);
+    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${m().offAtTime(offStop(onBus) ?? a.dest?.label ?? m().yourStop, at(onBus.arrive))}` : ''}`;
+    glance = onBus.arrive ? m().offGlance(short(onBus.arrive)) : m().onThe(onBus.svc);
   }
   glance = glance.slice(0, 12);
 

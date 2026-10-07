@@ -113,14 +113,12 @@ function median(nums: number[]): number {
 
 export function buildCampusMap(graph: Graph): CampusMap {
   const stops = graph.stops;
-  const meanLatRad = (median(stops.map((s) => s.lat)) * Math.PI) / 180;
-  const metersPerDegLonAll = METERS_PER_DEG_LAT * Math.cos(meanLatRad);
-
   // Classify core vs. outlier from distance to the median center, in real
   // meters -- independent of whatever bounding box ends up driving the
   // projection scale below.
   const clat = median(stops.map((s) => s.lat));
   const clon = median(stops.map((s) => s.lon));
+  const metersPerDegLonAll = METERS_PER_DEG_LAT * Math.cos((clat * Math.PI) / 180);
   const distFromCenter = new Map<string, number>();
   for (const s of stops) {
     const dx = (s.lon - clon) * metersPerDegLonAll;
@@ -312,7 +310,8 @@ export function buildDestinations(graph: Graph): Destination[] {
   const stops = new Set(graph.stops.map((s) => s.code));
   const out: Destination[] = [];
   for (const s of graph.stops) {
-    out.push({ code: s.code, label: s.name, stopCode: s.code, kind: 'stop', ...(aliasesFor(s.code) ? { aliases: aliasesFor(s.code) } : {}) });
+    const aliases = aliasesFor(s.code);
+    out.push({ code: s.code, label: s.name, stopCode: s.code, kind: 'stop', ...(aliases ? { aliases } : {}) });
   }
   for (const [code, lm] of allLandmarks()) {
     const served = Object.keys(lm.stops).filter((c) => stops.has(c));
