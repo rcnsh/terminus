@@ -193,12 +193,15 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
 }
 
 /** How long an email may take to send before it counts as failed. */
-export const MAIL_TIMEOUT_MS = 10_000;
+export const MAIL_TIMEOUT_MS = 20_000;
 
 /**
  * Sends through the Email binding, failing after MAIL_TIMEOUT_MS like any
  * other failed send: one that hangs would otherwise hold a sign-in open
  * until the Worker is cut off, with its link or request never cleaned up.
+ * The send itself can't be cancelled, so one that finishes after this
+ * still arrives, with a link or code its caller has already deleted; the
+ * limit is long so that stays rare.
  */
 export async function sendMail(env: Env, msg: EmailMessageBuilder): Promise<void> {
   if (!env.EMAIL) throw new Error('email sending not configured');
@@ -442,8 +445,11 @@ export async function redeemCode(env: Env, db: D1Database, email: string, code: 
     if (spent.code_tries >= ACCOUNT_TTL.codeTries) await env.KV.delete(key).catch(() => {});
     return null;
   }
+  // Dropped only once the link's batch has answered: one that fails leaves
+  // the code to be typed again, as it leaves the link.
+  const redeemed = await spendLink(db, pending.t, nowMs, anonId);
   await env.KV.delete(key).catch(() => {});
-  return spendLink(db, pending.t, nowMs, anonId);
+  return redeemed;
 }
 
 export async function ensureUser(db: D1Database, email: string, nowMs: number, via: 'web' | 'app' = 'web'): Promise<User> {

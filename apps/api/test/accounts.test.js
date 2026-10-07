@@ -1416,6 +1416,25 @@ test('a last_seen update that fails is logged, and the request still answers', a
   assert.ok(errors.some((e) => e.startsWith('last_seen not updated')), errors.join('\n'));
 });
 
+test('a code whose sign-in fails part way can be typed again', async () => {
+  const { env, email, db } = setup();
+  await call(env, '/auth/login', { method: 'POST', body: { email: INVITED } });
+  const code = email.lastCode();
+  const batch = db.batch;
+  db.batch = async () => {
+    throw new Error('D1_ERROR: Network connection lost.');
+  };
+  const log = console.error;
+  console.error = () => {};
+  try {
+    assert.ok((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status >= 500);
+  } finally {
+    db.batch = batch;
+    console.error = log;
+  }
+  assert.equal((await call(env, '/auth/code', { method: 'POST', body: { email: INVITED, code } })).status, 200);
+});
+
 test('only an unreachable D1 counts as an outage; a fault in the query stays a 500', () => {
   for (const msg of ['D1_ERROR: Network connection lost.', 'D1 DB is overloaded. Requests queued for too long.', 'D1_ERROR: internal error']) {
     assert.equal(d1Unavailable(new Error(msg)), true, msg);

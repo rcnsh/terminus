@@ -552,9 +552,14 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
 - A sign-in (link, code, pairing code or app request) is spent in the same
   D1 batch as the account changes and the new session, each statement
   guarded by "not spent yet" (`Live` in accounts.ts). A failure part way
-  changes nothing, so the same link or code works again, and of two racing
+  changes nothing, so the same link or code works again (the code's KV
+  entry is dropped only once the batch has answered), and of two racing
   attempts only one gets a session. An app poll that fails this way answers
   `pending`, and the next poll finishes it.
+- An email send that hasn't finished in 20 s (`MAIL_TIMEOUT_MS`) counts as
+  failed, and its link or app request is deleted. The Email binding can't
+  cancel the send, so one that finishes later still arrives, with a dead
+  link and code; the limit is long so that stays rare.
 - Signing out everywhere also deletes the account's pairing codes, unspent
   sign-in links and app sign-ins not yet collected, so nothing made just
   before it can still become a new session.
