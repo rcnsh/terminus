@@ -123,9 +123,15 @@ const unavailable = () => json({ error: 'terminus is busy, try again in a minute
 
 /** How long an isolate trusts what it last learnt of a file (its ETag and size). */
 const HEAD_TTL_MS = 5 * 60_000;
+/** While R2 fails, how long the last known ETag is trusted before R2 is asked again. */
+const HEAD_RETRY_MS = 30_000;
 /** Pieces bigger than this go straight from R2, uncached. The whole map file is about 4 MB. */
 const MAX_CACHED_BYTES = 32 * 1024 * 1024;
-const heads = new Map<string, { etag: string; httpEtag: string; size: number; atMs: number }>();
+type Head = { etag: string; httpEtag: string; size: number; atMs: number };
+const heads = new Map<string, Head>();
+
+/** Forgets what this isolate learnt of every file, as a new isolate would start. For tests. */
+export const forgetHeads = () => heads.clear();
 
 /** What this isolate knows of the file, while it still trusts it. */
 const known = (key: string, nowMs: number) => {
@@ -133,28 +139,51 @@ const known = (key: string, nowMs: number) => {
   return head && nowMs - head.atMs < HEAD_TTL_MS ? head : undefined;
 };
 
+/** Where the data centre keeps the last head R2 gave, for isolates that never saw R2 answer. */
+const headId = (key: string) => new Request(`https://terminus.internal/map-head/${encodeURIComponent(key)}`);
+
 /**
  * The file's ETag and size; null when there's no such file. When R2 fails,
- * the last thing this isolate learnt still names the pieces in the edge
- * cache, so it stands in (and R2 is asked again next time); with nothing
- * learnt, 'unavailable'.
+ * the last head learnt (by this isolate, or by any in the data centre
+ * through the edge cache) still names the pieces in the edge cache, so it
+ * stands in, trusted for HEAD_RETRY_MS so cached pieces don't each cost an
+ * R2 call; with nothing learnt, 'unavailable'.
  */
-async function headOf(bucket: R2Bucket, key: string, nowMs: number) {
+async function headOf(bucket: R2Bucket, key: string, nowMs: number, cache: Cache, ctx?: ExecutionContext) {
   const fresh = known(key, nowMs);
   if (fresh) return fresh;
   let obj: R2Object | null;
   try {
     obj = await bucket.head(key);
   } catch {
-    return heads.get(key) ?? 'unavailable';
+    const last = heads.get(key) ?? (await cachedHead(cache, key));
+    if (!last) return 'unavailable';
+    const head = { ...last, atMs: nowMs - HEAD_TTL_MS + HEAD_RETRY_MS };
+    heads.set(key, head);
+    return head;
   }
+  let save: Promise<unknown>;
   if (!obj) {
     heads.delete(key);
-    return null;
+    save = cache.delete(headId(key)).catch(() => {});
+  } else {
+    const head = { etag: obj.etag, httpEtag: obj.httpEtag, size: obj.size, atMs: nowMs };
+    heads.set(key, head);
+    save = cache.put(headId(key), Response.json(head, { headers: { 'cache-control': 'public, max-age=2592000' } })).catch(() => {});
   }
-  const head = { etag: obj.etag, httpEtag: obj.httpEtag, size: obj.size, atMs: nowMs };
-  heads.set(key, head);
-  return head;
+  if (ctx) ctx.waitUntil(save);
+  else await save;
+  return obj ? heads.get(key)! : null;
+}
+
+async function cachedHead(cache: Cache, key: string): Promise<Head | undefined> {
+  try {
+    const hit = await cache.match(headId(key));
+    const head = hit ? ((await hit.json()) as Head) : undefined;
+    return head && typeof head.etag === 'string' && typeof head.httpEtag === 'string' && Number.isFinite(head.size) ? head : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -199,7 +228,7 @@ async function edgePart(
   if (!cache) return fromR2();
   const nowMs = Date.now();
   if (!known(key, nowMs) && !(await mayRead())) return slowDown();
-  const head = await headOf(bucket, key, nowMs);
+  const head = await headOf(bucket, key, nowMs, cache, ctx);
   if (head === 'unavailable') return unavailable();
   if (!head) return json({ error: 'not found' }, 404);
   const headers = partHeaders(type, maxAgeS, head.httpEtag);

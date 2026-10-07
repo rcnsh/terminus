@@ -7,6 +7,7 @@ import worker, { coordsFrom, numParam } from '../src/index.ts';
 import { LABEL_MAX } from '../src/config.ts';
 import { ME_ROUTES } from '../src/me.ts';
 import { API_VERSION } from '../src/openapi.ts';
+import { forgetHeads } from '../src/map.ts';
 
 const BASE = 'https://bus.example.test';
 const ARRIVALS_KEY = (code) => `https://terminus.internal/arrivals/${code}`;
@@ -1144,14 +1145,29 @@ test('when R2 fails, map pieces in the edge cache are still served and the rest 
     assert.equal(await (await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).text(), 'PMTiles');
 
     // R2 goes down, and this isolate's memo of the file lapses.
+    let heads = 0;
     bucket.head = async () => {
+      heads++;
       throw new Error('internal error (10001)');
     };
-    bucket.get = bucket.head;
+    bucket.get = async () => {
+      throw new Error('internal error (10001)');
+    };
     aheadMs += 10 * 60_000;
     const cached = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
     assert.equal(cached.status, 206, 'the piece is in the edge cache');
     assert.equal(await cached.text(), 'PMTiles');
+    // The last known ETag is trusted a while: cached pieces don't each ask R2 again.
+    for (let i = 0; i < 3; i++) assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).status, 206);
+    assert.equal(heads, 1);
+    aheadMs += 31_000;
+    assert.equal((await get('/map/campus.pmtiles', { range: 'bytes=0-6' })).status, 206);
+    assert.equal(heads, 2, 'R2 is asked again after 30 s');
+    // A new isolate never saw R2 answer, but the data centre's cache kept the head.
+    forgetHeads();
+    const fresh = await get('/map/campus.pmtiles', { range: 'bytes=0-6' });
+    assert.equal(fresh.status, 206, 'a new isolate serves the cached piece too');
+    assert.equal(await fresh.text(), 'PMTiles');
     for (const headers of [{ range: 'bytes=8-11' }, {}, { range: 'bytes=0-1,4-5' }, { 'if-range': '"x"', range: 'bytes=0-1' }]) {
       const res = await get('/map/campus.pmtiles', headers);
       assert.equal(res.status, 503, JSON.stringify(headers));
