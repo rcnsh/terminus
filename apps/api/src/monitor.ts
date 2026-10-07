@@ -218,31 +218,37 @@ export function adviceFor(reason: string | null): string {
   return 'Check `pnpm exec wrangler tail` and /health?probe=1.';
 }
 
-// Operator alerts about the NUS feed and the calendar come from the stable
-// Worker only: the beta shares both, and one email is enough.
+/**
+ * Emails the operator; false, sending nothing, without email set up. Alerts
+ * about the NUS feed and the calendar come from the stable Worker only: the
+ * beta shares both, and one email is enough.
+ */
+async function mailOperator(env: Env, subject: string, text: string): Promise<boolean> {
+  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return false;
+  await env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
+  return true;
+}
+
 async function alert(env: Env, s: UpstreamState, kind: 'up' | 'down'): Promise<void> {
-  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return;
   const when = new Date(s.since).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
   const subject = kind === 'up' ? 'terminus: NUS bus feed recovered' : 'terminus: NUS bus feed is down';
   const text = kind === 'up'
     ? `The NUS bus feed is answering again as of ${when}. Live times are back.`
     : `The NUS bus feed stopped answering at ${when}.\n\nError: ${s.reason}\n\n${s.auto ? `Tried automatically: ${s.auto}.\n\n` : ''}${adviceFor(s.reason)}\n\nUntil then every answer says "live times unavailable".${s.detail ? `\n\nNUS's full response:\n${s.detail}` : ''}`;
-  await env.EMAIL.send({ from: { email: env.EMAIL_FROM, name: 'terminus' }, to: env.ALERT_EMAIL, subject, text });
+  await mailOperator(env, subject, text);
 }
 
 async function switchedAlert(env: Env, r: Extract<AutoResult, { status: 'switched' }>): Promise<void> {
-  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return;
   const name = /univus_android_(.+)_\d+$/.exec(r.to)?.[1] ?? r.to;
-  await env.EMAIL.send({
-    from: { email: env.EMAIL_FROM, name: 'terminus' },
-    to: env.ALERT_EMAIL,
-    subject: `terminus: switched to uNivUS ${name} automatically`,
-    text: [
+  await mailOperator(
+    env,
+    `terminus: switched to uNivUS ${name} automatically`,
+    [
       `NUS started refusing ${r.from || 'the old version string'}, so a new uNivUS is out. terminus found ${r.to}, NUS accepted it, and it is now in ${KV_APP_VERSION}.`,
       'Nothing to do. To undo it, from apps/api:',
       `  pnpm exec cf kv keys delete ${KV_APP_VERSION} --namespace-id ${KV_NAMESPACE_ID}`,
     ].join('\n\n'),
-  });
+  );
 }
 
 /**
@@ -273,13 +279,12 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
   if (daysLeft > CALENDAR_WARN_DAYS) return false;
   const last = Number(await env.KV.get(CALENDAR_KEY).catch(() => null)) || 0;
   if (nowMs - last < 7 * 86_400_000) return false;
-  if (!env.EMAIL || !env.EMAIL_FROM || !env.ALERT_EMAIL || isBeta(env)) return false;
-  await env.EMAIL.send({
-    from: { email: env.EMAIL_FROM, name: 'terminus' },
-    to: env.ALERT_EMAIL,
-    subject: 'terminus: academic calendar data runs out soon',
-    text: `The academic calendar covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nThe Worker fetches the calendar itself every week, from NUSMods and data.gov.sg, so either NUSMods doesn't list the next academic year yet, or the fetch is failing (look for "cron calendar" in the Worker's logs).\n\nWhen NUSMods has the year, nothing else is needed. To bundle it as well:\n  python3 apps/api/scripts/fetch_calendar.py && pnpm run deploy`,
-  });
+  const sent = await mailOperator(
+    env,
+    'terminus: academic calendar data runs out soon',
+    `The academic calendar covers dates up to ${through} (${daysLeft} days from now). After that, imported classes are shown every week, including recess and exams.\n\nThe Worker fetches the calendar itself every week, from NUSMods and data.gov.sg, so either NUSMods doesn't list the next academic year yet, or the fetch is failing (look for "cron calendar" in the Worker's logs).\n\nWhen NUSMods has the year, nothing else is needed. To bundle it as well:\n  python3 apps/api/scripts/fetch_calendar.py && pnpm run deploy`,
+  );
+  if (!sent) return false;
   await env.KV.put(CALENDAR_KEY, String(nowMs));
   return true;
 }

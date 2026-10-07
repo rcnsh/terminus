@@ -121,9 +121,17 @@ const CSP_BASE = [
   "frame-ancestors 'none'",
 ];
 const CSP_SITE = CSP_BASE.join('; ');
-const CSP_DOCS = CSP_BASE.map((d) =>
-  d.startsWith('script-src') || d.startsWith('style-src') ? `${d} ${ELEMENTS}/` : d.startsWith('img-src') ? `${d} https:` : d.startsWith('font-src') ? `${d} data: ${ELEMENTS}/` : d,
-).join('; ');
+/** What /docs adds to a directive: Stoplight Elements (pinned), its fonts, and images from anywhere. */
+const DOCS_EXTRA: Record<string, string> = {
+  'script-src': `${ELEMENTS}/`,
+  'style-src': `${ELEMENTS}/`,
+  'img-src': 'https:',
+  'font-src': `data: ${ELEMENTS}/`,
+};
+const CSP_DOCS = CSP_BASE.map((d) => {
+  const extra = DOCS_EXTRA[d.split(' ')[0]];
+  return extra ? `${d} ${extra}` : d;
+}).join('; ');
 
 export function withSecurityHeaders(res: Response, path: string): Response {
   const out = new Response(res.body, res);
