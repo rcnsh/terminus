@@ -254,6 +254,20 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
             onPair = { screen = Screen.Pair },
             onLang = { pref -> Lang.set(ctx, pref); recreateOn12(ctx) },
         )
+    } else if (screen == Screen.SignIn) {
+        // Edge to edge for its band of the sky: it keeps the insets itself.
+        BackHandler { account.cancelSignIn(); screen = Screen.Main }
+        SignInScreen(
+            acct,
+            adding = state.paired,
+            phase = skyPhase(state),
+            onSend = { account.sendSignIn(it, signedIn) },
+            onCode = { account.enterCode(it, signedIn) },
+            onChoose = { keepPhone -> account.choose(keepPhone, signedIn) },
+            onDifferentEmail = account::differentEmail,
+            onEdit = account::clearMessage,
+            onCancel = { account.cancelSignIn(); screen = Screen.Main },
+        )
     } else Column(
         Modifier
             .fillMaxSize()
@@ -262,17 +276,6 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
             .padding(horizontal = 16.dp),
     ) {
         when {
-            screen == Screen.SignIn -> {
-                BackHandler { account.cancelSignIn(); screen = Screen.Main }
-                SignInScreen(
-                    acct,
-                    adding = state.paired,
-                    onSend = { account.sendSignIn(it, signedIn) },
-                    onCode = { account.enterCode(it, signedIn) },
-                    onChoose = { keepPhone -> account.choose(keepPhone, signedIn) },
-                    onCancel = { account.cancelSignIn(); screen = Screen.Main },
-                )
-            }
             !state.paired && screen == Screen.Pair -> {
                 BackHandler { screen = Screen.Main }
                 PairScreen(state, vm::pair, onBack = { screen = Screen.Main })

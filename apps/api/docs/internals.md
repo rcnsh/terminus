@@ -179,6 +179,13 @@ get one of three ways:
   wrong codes kill the request. Reading mail on another device, the link's
   page (`GET /auth/approve?r=`) offers three numbers; picking the one the
   app shows (`match`) approves, a wrong one or "This wasn't me" kills it.
+  That page, like the Worker's other small pages (`page()` in me.ts), has
+  a band of the hour's sky across its card, as Settings' pages do in the
+  apps: no script, so the hour is the server's, in Singapore
+  ([src/pagesky.ts](../src/pagesky.ts); pagesky.test.js keeps its hours
+  and colours the web app's). The Android app takes the code in six boxes,
+  one field underneath: a paste spreads over them, keeping only the code
+  from around it (`codeEdit`, SignInCode.kt).
   The app polls `POST /auth/app/poll {request, poll}` every 3 s and gets
   `{status: 'approved', token, outcome}` once. The poll secret, the link
   and the code are all different, so the app that starts a request can't confirm it. Sent

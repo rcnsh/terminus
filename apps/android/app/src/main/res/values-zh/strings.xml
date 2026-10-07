@@ -96,7 +96,13 @@
     <string name="clear_history_text">这会清除你的行程记录。你为各节课做的设置不会改变。</string>
     <string name="clear_history_title">清除行程记录？</string>
     <string name="code_from_email">邮件里的验证码</string>
-    <string name="code_wait_hint">你完成后，这部手机会自动登录。如果一分钟后仍未收到邮件，请检查垃圾邮件。验证码 15 分钟后失效。</string>
+    <string name="code_sent_hint">已发送到 %1$s。一分钟后还没收到？请检查垃圾邮件。验证码 15 分钟内有效。</string>
+    <string name="different_email">换一个邮箱</string>
+    <string name="email_example">例如 you@u.nus.edu</string>
+    <string name="other_device_row">打开邮件里的链接，然后选择</string>
+    <string name="other_device_title">在另一台设备上看邮件？</string>
+    <string name="signs_in_itself">选好后，这部手机会自动登录。</string>
+    <string name="your_email">你的邮箱</string>
     <string name="continue_">继续</string>
     <string name="couldnt_load">无法加载</string>
     <string name="day">星期</string>
@@ -110,7 +116,6 @@
     <string name="device_removed">设备已移除。请在应用里重新配对。</string>
     <string name="directions_to">到 %1$s 的路线</string>
     <string name="done">完成</string>
-    <string name="email">邮箱</string>
     <string name="email_me_code">给我发验证码</string>
     <string name="ends">结束</string>
     <string name="estimated_gap">~ 根据通常的班次间隔估计</string>
@@ -249,7 +254,6 @@
     <string name="open_url">打开 %1$s</string>
     <string name="or_list">或</string>
     <string name="or_scan">或用另一部手机的相机扫描：</string>
-    <string name="other_device_hint">在另一台设备上看邮件？打开邮件里的链接，看到提示时选择：</string>
     <string name="pace_fast">快</string>
     <string name="pace_fast_hint">400 米约 4 分钟。步伐轻快。</string>
     <string name="pace_normal">正常</string>
@@ -304,7 +308,6 @@
     <string name="send">发送</string>
     <string name="send_pair_code">发送配对代码</string>
     <string name="sending">正在发送…</string>
-    <string name="sent_code_to">我们已向 %1$s 发送验证码。在这里输入：</string>
     <string name="settings">设置</string>
     <string name="short_detect">上车识别</string>
     <string name="short_leave_alerts">出发提醒</string>

@@ -65,6 +65,7 @@ import { footM, paceSpeed } from './walk.ts';
 import { clientKey, coordsFrom, json } from './http.ts';
 import { siteOrigin } from './site.ts';
 import { LANG_PREFS, lang, m, useProfileLang } from './i18n.ts';
+import { bandCss, bandHtml, phaseAt, sgtMinute } from './pagesky.ts';
 
 export interface MeDeps {
   graph: Graph;
@@ -77,16 +78,29 @@ export interface MeDeps {
 const html = (body: string, status = 200, extra: Record<string, string> = {}) =>
   new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...extra } });
 
-/** Minimal pages served by the Worker itself, in the site's style. */
-const page = (title: string, inner: string) => `<!doctype html>
+/**
+ * Minimal pages served by the Worker itself, in the site's style: a card
+ * with a band of the hour's sky across its top, the mark in it, as
+ * Settings' pages have in the apps (pagesky.ts).
+ */
+const page = (title: string, inner: string) => {
+  const phase = phaseAt(sgtMinute(Date.now()));
+  return `<!doctype html>
 <html lang="${lang() === 'zh' ? 'zh-Hans' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>${title} · terminus</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/fonts.css">
 <link rel="stylesheet" href="/assets/site.css">
-<style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px}.box img{width:44px;height:44px;margin-bottom:20px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}.choices{display:flex;gap:10px;margin-top:20px}.box .choices .btn{flex:1;margin:0;font-size:1.5rem;font-variant-numeric:tabular-nums}.linkbtn{display:block;margin:18px auto 0;background:none;border:0;color:inherit;opacity:.7;text-decoration:underline;font:inherit;cursor:pointer}</style>
-</head><body><main class="wrap"><div class="card box"><img src="/assets/mark.svg" alt="">${inner}</div></main></body></html>`;
+<style>.box{max-width:25rem;margin:10vh auto 0;padding:32px 28px;overflow:hidden}.band .brand img{width:28px;height:28px}.box h1{font-size:1.6rem;margin-bottom:8px}.box .btn{width:100%;margin-top:20px}
+.when{color:var(--muted)}.box .eyebrow{display:block;margin:24px 4px 8px;line-height:1.4}.box .hint.after{margin:8px 4px 0;font-size:.85rem}.box .hint.center{margin-top:4px;text-align:center;font-size:.85rem}
+.choices{display:flex;gap:8px;padding:10px;border:1px solid var(--line);border-radius:16px;background:var(--bg)}
+.box .choices .btn{flex:1;margin:0;min-height:60px;padding:0;border-radius:12px;background:var(--surface-2);color:var(--ink);border-color:var(--line);font:700 1.6rem/1 var(--display);font-variant-numeric:tabular-nums}
+.box .choices .btn:hover,.box .choices .btn:focus-visible{transform:none;border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.linkbtn{display:block;margin:22px auto 0;background:none;border:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--muted);font:500 .95rem var(--font);cursor:pointer}
+${bandCss(phase)}</style>
+</head><body><main class="wrap"><div class="card box">${bandHtml(phase)}${inner}</div></main></body></html>`;
+};
 
 /** A whole profile is a few KB; nothing legitimate comes close to this. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -1028,10 +1042,15 @@ export async function handleMe(
       const buttons = a.choices
         .map((n) => `<button type="submit" name="n" value="${n}" class="btn">${n}</button>`)
         .join('');
+      // The question, when it was asked, then the three numbers under a
+      // heading, saying what a choice does; "This wasn't me" quietly under them.
       return html(page(m().pageApprove, `<h1>${m().approveTitle(device)}</h1>
-<p class="hint">${m().approveHint(escapeHtml(sgtTime(a.created)), device)}</p>
-<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><div class="choices">${buttons}</div></form>
-<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><button type="submit" name="n" value="none" class="linkbtn">${m().notMe}</button></form>`));
+<p class="when">${m().approveWhen(escapeHtml(sgtTime(a.created)))}</p>
+<h2 class="eyebrow" id="pick">${m().approveNumber(device)}</h2>
+<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><div class="choices" role="group" aria-labelledby="pick">${buttons}</div></form>
+<p class="hint after">${m().approveRule}</p>
+<form method="post" action="/auth/approve"><input type="hidden" name="r" value="${link}"><button type="submit" name="n" value="none" class="linkbtn">${m().notMe}</button></form>
+<p class="hint center">${m().notMeHint}</p>`));
     }
     if (req.method === 'POST') {
       if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429);

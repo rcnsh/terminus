@@ -55,6 +55,34 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
+import sh.rcn.terminus.CODE_LENGTH
+import sh.rcn.terminus.codeEdit
 
 /**
  * First launch: start straight away, or sign in to an account you already
@@ -167,96 +195,201 @@ private fun Livery(modifier: Modifier) {
 
 /**
  * Sign in by email, approved from the email on any device: type the address,
- * then choose the number shown here on the page the email links to.
+ * then the code from the email, or choose the number shown here on the page
+ * the email links to. As Settings' pages: the title in a band of the sky
+ * ([phase]), with a back arrow that cancels, then the plain page.
  */
 @Composable
-internal fun SignInScreen(state: AccountState, adding: Boolean, onSend: (String) -> Unit, onCode: (String) -> Unit, onChoose: (Boolean) -> Unit, onCancel: () -> Unit) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        when (val s = state.signIn) {
-            is SignIn.Waiting -> Waiting(s, state.busy, onCode, onCancel)
-            is SignIn.Choose -> Choose(s, state.busy, onChoose)
-            else -> EmailStep(adding, state.busy, onSend, onCancel)
+internal fun SignInScreen(
+    state: AccountState,
+    adding: Boolean,
+    phase: Phase,
+    onSend: (String) -> Unit,
+    onCode: (String) -> Unit,
+    onChoose: (Boolean) -> Unit,
+    onDifferentEmail: () -> Unit,
+    onEdit: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val s = state.signIn
+    val title = when (s) {
+        is SignIn.Waiting -> R.string.check_email
+        is SignIn.Choose -> R.string.which_setup
+        else -> if (adding) R.string.add_email else R.string.sign_in
+    }
+    // Edge to edge, so the band reaches the top; the keyboard pushes the page up.
+    Column(Modifier.fillMaxSize().imePadding()) {
+        SkyBand(phase, WindowInsets.statusBars.asPaddingValues().calculateTopPadding()) {
+            TabHeader {
+                // The arrow sits in the margin, so the title lines up with the page.
+                IconButton(onClick = onCancel, modifier = Modifier.offset(x = (-12).dp)) {
+                    Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
+                }
+                Text(stringResource(title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.offset(x = (-12).dp))
+            }
         }
-        state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                .padding(horizontal = 16.dp),
+        ) {
+            Groups {
+                when (s) {
+                    // Editing what went wrong takes its message away ([onEdit]).
+                    is SignIn.Waiting -> Waiting(s, state.busy, state.message, onCode, onDifferentEmail, onEdit)
+                    is SignIn.Choose -> Choose(s, state.busy, state.message, onChoose)
+                    else -> EmailStep(adding, state.busy, state.message, onSend, onEdit)
+                }
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+/** The main button, across the page, and what went wrong under it. */
+@Composable
+private fun Action(text: String, enabled: Boolean, message: String?, onClick: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        InkButton(text, onClick, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled)
+        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 4.dp)) }
     }
 }
 
 @Composable
-private fun EmailStep(adding: Boolean, busy: Boolean, onSend: (String) -> Unit, onCancel: () -> Unit) {
+private fun EmailStep(adding: Boolean, busy: Boolean, message: String?, onSend: (String) -> Unit, onEdit: () -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
     val ok = Regex("^[^@\\s]+@[^@\\s]+\\.[a-zA-Z]{2,}$").matches(email.trim())
-    Text(if (adding) stringResource(R.string.add_email) else stringResource(R.string.sign_in), style = MaterialTheme.typography.headlineSmall)
-    Text(
-        if (adding) {
-            stringResource(R.string.add_email_why)
-        } else {
-            stringResource(R.string.sign_in_why)
-        },
-    )
-    OutlinedTextField(
-        value = email,
-        onValueChange = { email = it },
-        label = { Text(stringResource(R.string.email)) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send),
-        keyboardActions = KeyboardActions(onSend = { if (ok && !busy) onSend(email) }),
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Button(onClick = { onSend(email) }, enabled = ok && !busy, modifier = Modifier.fillMaxWidth()) {
-        Text(if (busy) stringResource(R.string.sending) else stringResource(R.string.email_me_code))
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Group(stringResource(R.string.your_email), stringResource(if (adding) R.string.add_email_why else R.string.sign_in_why)) {
+        OutlinedTextField(
+            value = email,
+            onValueChange = {
+                if (it != email && message != null) onEdit()
+                email = it
+            },
+            placeholder = { Text(stringResource(R.string.email_example)) },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, autoCorrectEnabled = false, imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { if (ok && !busy) onSend(email) }),
+            modifier = Modifier.fillMaxWidth().padding(12.dp).focusRequester(focus),
+        )
     }
-    TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+    Action(stringResource(if (busy) R.string.sending else R.string.email_me_code), ok && !busy, message) { onSend(email) }
 }
 
 @Composable
-private fun Waiting(s: SignIn.Waiting, busy: Boolean, onCode: (String) -> Unit, onCancel: () -> Unit) {
-    var code by rememberSaveable { mutableStateOf("") }
-    Text(stringResource(R.string.check_email), style = MaterialTheme.typography.headlineSmall)
-    Text(stringResource(R.string.sent_code_to, s.email))
-    OutlinedTextField(
-        value = code,
+private fun ColumnScope.Waiting(s: SignIn.Waiting, busy: Boolean, message: String?, onCode: (String) -> Unit, onDifferentEmail: () -> Unit, onEdit: () -> Unit) {
+    var field by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
+    val code = field.text
+    Group(stringResource(R.string.code_from_email), stringResource(R.string.code_sent_hint, s.email)) {
+        CodeBoxes(
+            field,
+            onChange = { next ->
+                // The sixth character, typed or pasted, sends it.
+                val full = next.text.length == CODE_LENGTH && code.length < CODE_LENGTH
+                if (next.text != code && message != null) onEdit()
+                field = next
+                if (full && !busy) onCode(next.text)
+            },
+            onDone = { if (code.length == CODE_LENGTH && !busy) onCode(code) },
+            modifier = Modifier.padding(12.dp),
+        )
+    }
+    Action(stringResource(if (busy) R.string.checking else R.string.sign_in), code.length == CODE_LENGTH && !busy, message) { onCode(code) }
+    // Or approve it from the email on another device, by the number shown here.
+    Group(stringResource(R.string.other_device_title)) {
+        FieldRow(stringResource(R.string.other_device_row), sub = stringResource(R.string.signs_in_itself)) {
+            val numberLabel = stringResource(R.string.number_to_choose, s.match.toString())
+            Box(
+                Modifier
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(14.dp))
+                    .heightIn(min = 52.dp)
+                    .widthIn(min = 64.dp)
+                    .padding(horizontal = 12.dp)
+                    .semantics { contentDescription = numberLabel },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(s.match.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+    TextButton(
+        onClick = onDifferentEmail,
+        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+        modifier = Modifier.align(Alignment.CenterHorizontally),
+    ) { Text(stringResource(R.string.different_email)) }
+}
+
+/**
+ * The code from the email in six boxes. One text field takes the keys,
+ * pastes and deletes, drawn as the boxes: each character typed fills the
+ * next box, a pasted code spreads over all six ([codeEdit]), and the box
+ * that's next is outlined in the ink.
+ */
+@Composable
+private fun CodeBoxes(field: TextFieldValue, onChange: (TextFieldValue) -> Unit, onDone: () -> Unit, modifier: Modifier = Modifier) {
+    val c = MaterialTheme.colorScheme
+    val focus = remember { FocusRequester() }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    val label = stringResource(R.string.code_from_email)
+    BasicTextField(
+        value = field,
         onValueChange = { v ->
-            val clean = v.filter { it.isLetterOrDigit() }.uppercase().take(6)
-            // The sixth character, typed or pasted, sends it.
-            val full = clean.length == 6 && code.length < 6
-            code = clean
-            if (full && !busy) onCode(clean)
+            val code = codeEdit(field.text, v.text)
+            // Kept as typed while the keyboard's text is already clean, so it isn't
+            // interrupted mid-word; otherwise the cleaned code. The cursor stays at the end.
+            onChange(if (code == v.text) v.copy(selection = TextRange(code.length)) else TextFieldValue(code, TextRange(code.length)))
         },
-        label = { Text(stringResource(R.string.code_from_email)) },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { if (code.length == 6 && !busy) onCode(code) }),
-        textStyle = MaterialTheme.typography.headlineSmall.copy(letterSpacing = 4.sp),
-        modifier = Modifier.fillMaxWidth(),
+        textStyle = TextStyle(color = Color.Transparent),
+        cursorBrush = SolidColor(Color.Transparent),
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.Characters,
+            autoCorrectEnabled = false,
+            keyboardType = KeyboardType.Ascii,
+            imeAction = ImeAction.Done,
+        ),
+        keyboardActions = KeyboardActions(onDone = { onDone() }),
+        modifier = modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused = it.isFocused }.semantics { contentDescription = label },
+        decorationBox = { inner ->
+            Box {
+                // The field itself, unseen behind the boxes: it's what long-press Paste reaches.
+                Box(Modifier.matchParentSize()) { inner() }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (i in 0 until CODE_LENGTH) {
+                        val next = focused && i == minOf(field.text.length, CODE_LENGTH - 1)
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                                .background(c.background, RoundedCornerShape(12.dp))
+                                .border(if (next) 2.dp else 1.5.dp, if (next) c.onSurface else c.outlineVariant, RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(field.text.getOrNull(i)?.toString().orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        },
     )
-    Button(onClick = { onCode(code) }, enabled = code.length == 6 && !busy, modifier = Modifier.fillMaxWidth()) {
-        Text(if (busy) stringResource(R.string.checking) else stringResource(R.string.sign_in))
-    }
-    Spacer(Modifier.height(8.dp))
-    Hint(stringResource(R.string.other_device_hint))
-    val numberLabel = stringResource(R.string.number_to_choose, s.match.toString())
-    Text(
-        s.match.toString(),
-        style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold),
-        color = MaterialTheme.colorScheme.primary,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = numberLabel },
-    )
-    Hint(stringResource(R.string.code_wait_hint))
-    TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
 }
 
 @Composable
-private fun Choose(s: SignIn.Choose, busy: Boolean, onChoose: (Boolean) -> Unit) {
-    Text(stringResource(R.string.which_setup), style = MaterialTheme.typography.headlineSmall)
-    Text(stringResource(R.string.which_setup_text, s.email))
-    Button(onClick = { onChoose(false) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.keep_account))
+private fun Choose(s: SignIn.Choose, busy: Boolean, message: String?, onChoose: (Boolean) -> Unit) {
+    Text(stringResource(R.string.which_setup_text, s.email), modifier = Modifier.padding(horizontal = 4.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Action(stringResource(R.string.keep_account), !busy, message) { onChoose(false) }
+        OutlinedButton(onClick = { onChoose(true) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.replace_with_phone))
+        }
+        Hint(stringResource(R.string.replace_hint, s.email), Modifier.padding(horizontal = 4.dp))
     }
-    OutlinedButton(onClick = { onChoose(true) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.replace_with_phone))
-    }
-    Hint(stringResource(R.string.replace_hint, s.email))
 }
 
 /** "English · 中文" on the first screen, before there's an account to keep it in. */
