@@ -722,6 +722,33 @@ test('a past day whose alarm is gone is woken by the next morning\'s cron and wr
   assert.equal(h.ns.instances.size, before);
 });
 
+test('a day still retrying a week after its close is cleaned up by the next morning\'s cron', async () => {
+  const h = harness({ buses: { D2: [busOn('D2', 400)] } });
+  await start(h);
+  await runUntil(h, FROZEN_NOW + 30_000 - 1);
+  h.bucket.put = async () => {
+    throw new Error('R2 down');
+  };
+  const { close } = windowOf(DATE);
+  // Retrying past the last morning within a week (09:00 on the seventh
+  // day after), then the alarm is lost before the give-up.
+  const late = close + 6 * 86_400_000 + 9 * 3_600_000;
+  Date.now = () => late;
+  h.ns.alarms.set(DATE, late);
+  await h.ns.fireDue(late);
+  assert.equal(h.ns.alarms.get(DATE), late + 10 * 60_000, 'still retrying');
+  h.ns.alarms.delete(DATE);
+  // The morning after the give-up deadline still asks this day.
+  const morning = sgt(serviceDate(close + 7 * 86_400_000 + 6 * 3_600_000), '06:30');
+  assert.ok(morning > close + 7 * 86_400_000);
+  Date.now = () => morning;
+  await ensureRecorder(h.env, morning);
+  assert.equal(h.ns.alarms.get(DATE), morning);
+  await h.ns.fireDue(morning);
+  assert.equal(h.ns.alarms.has(DATE), false);
+  assert.deepEqual(await status(h), { date: null, samples: 0, state: 'idle' }, 'storage deleted');
+});
+
 /* ------------------------------------------------------------------ */
 /* The routes                                                          */
 /* ------------------------------------------------------------------ */
