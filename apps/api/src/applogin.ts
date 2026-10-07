@@ -41,6 +41,7 @@ import {
   profileFor,
   removeAnonymous,
   saveProfileJson,
+  sendMail,
   sessionFor,
   userFor,
 } from './accounts.ts';
@@ -143,7 +144,7 @@ async function sendApproval(env: Env, email: string, device: string, code: strin
   const site = new URL(origin).host;
   const t = m();
   const why = t.codeWhyApp(site, device);
-  await env.EMAIL!.send({
+  await sendMail(env, {
     from: { email: env.EMAIL_FROM!, name: mailName(env) },
     to: email,
     subject: t.codeSubject(code),

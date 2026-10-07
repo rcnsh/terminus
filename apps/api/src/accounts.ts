@@ -192,6 +192,27 @@ export async function requestLink(env: Env, db: D1Database, email: string, origi
   return 'sent';
 }
 
+/** How long an email may take to send before it counts as failed. */
+export const MAIL_TIMEOUT_MS = 10_000;
+
+/**
+ * Sends through the Email binding, failing after MAIL_TIMEOUT_MS like any
+ * other failed send: one that hangs would otherwise hold a sign-in open
+ * until the Worker is cut off, with its link or request never cleaned up.
+ */
+export async function sendMail(env: Env, msg: EmailMessageBuilder): Promise<void> {
+  if (!env.EMAIL) throw new Error('email sending not configured');
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('email send timed out')), MAIL_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([env.EMAIL.send(msg), timeout]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
 /**
  * Worded to look like what it is. A subject of "Sign in to ..." over a lone
  * link is the shape of a phishing mail, and filters treat it as one.
@@ -200,7 +221,7 @@ async function sendLink(env: Env, email: string, link: string, code: string, ori
   const site = new URL(origin).host;
   const t = m();
   const why = t.codeWhyWeb(site);
-  await env.EMAIL!.send({
+  await sendMail(env, {
     from: { email: env.EMAIL_FROM!, name: mailName(env) },
     to: email,
     subject: t.codeSubject(code),
@@ -694,7 +715,7 @@ export async function mailDeviceAdded(env: Env, email: string | null, name: stri
   const device = name.trim() || t.aDevice;
   const when = t.singaporeTime(new Date(nowMs + 8 * 3_600_000).toISOString().replace('T', ' ').slice(0, 16));
   const site = siteOrigin(env);
-  await env.EMAIL.send({
+  await sendMail(env, {
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: email,
     subject: t.deviceAddedSubject(device),

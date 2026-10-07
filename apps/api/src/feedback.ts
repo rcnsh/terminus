@@ -10,6 +10,7 @@
 import type { Env } from './types.ts';
 import { mailName, siteOrigin } from './site.ts';
 import { m } from './i18n.ts';
+import { sendMail } from './accounts.ts';
 
 export const FEEDBACK_LIMITS = {
   note: 1000,
@@ -100,7 +101,7 @@ export async function mailFeedback(env: Env, id: string, accountEmail: string, f
     '',
     `Report ${id}; all reports are on the dashboard at ${siteOrigin(env)}/admin.`,
   ].join('\n');
-  await env.EMAIL.send({
+  await sendMail(env, {
     from: { email: env.EMAIL_FROM, name: mailName(env) },
     to: env.ALERT_EMAIL,
     // Their words, on one line: a subject is a header. Matching control
