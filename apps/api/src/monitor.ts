@@ -25,6 +25,7 @@ import { refreshTable } from './ridetimes.ts';
 import { sgt } from './config.ts';
 import { isBeta } from './site.ts';
 import { ensureRecorder } from './timelapse.ts';
+import { logCronError } from './analytics.ts';
 
 export interface UpstreamState {
   /** Confirmed state: it takes FAILS_TO_ALERT failed checks in a row to go down. */
@@ -434,6 +435,8 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
       await fn();
     } catch (err) {
       console.error('cron', name, err instanceof Error ? err.message : String(err));
+      // On the dashboard too, where a step that fails every run shows.
+      logCronError(env, name);
     }
   };
   await step('upstream', () => checkUpstream(env, nowMs));
