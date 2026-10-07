@@ -107,7 +107,7 @@ final class LeaveNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// The trip a notification is about: the key the card's buttons carry.
-    func tripKey(_ plan: NextAnswer) -> String? {
+    private func tripKey(_ plan: NextAnswer) -> String? {
         plan.card?.actions?.first?.trip
     }
 
