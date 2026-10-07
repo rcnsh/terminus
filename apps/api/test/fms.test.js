@@ -6,9 +6,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installGlobals, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
-import { fetchActiveBuses, fetchArrivals } from '../src/fms.ts';
-import { UpstreamRejected, deviceId } from '../src/auth.ts';
+import { installGlobals, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
+import { breakerOpen, fetchActiveBuses, fetchArrivals, getArrivals } from '../src/fms.ts';
+import { UpstreamRejected, appVersion, deviceId } from '../src/auth.ts';
+import { flagged } from '../src/edgecache.ts';
 
 test('fetchArrivals and fetchActiveBuses retry a rejection once with a fresh token', async () => {
   for (const [name, call] of [
@@ -100,5 +101,34 @@ test("fetchedAt is when the call that answered went out, not when the fetch bega
     const out = await call(makeEnv());
     assert.equal(feed.counts.auth + feed.counts.shuttle, 4, name);
     assert.equal(out.fetchedAt, FROZEN_NOW + 15_000, name);
+  }
+});
+
+test('a version refused after the switch away from it does not open the breaker for the isolates sending the new one', async () => {
+  const OLD = 'univus_android_2.59.2_140';
+  const NEW = 'univus_android_2.60.0_150';
+  for (const mintRefused of [false, true]) {
+    const fetchImpl = makeFetch(mintRefused ? { mintReject: '10009' } : { reject: 99 });
+    installGlobals(fetchImpl);
+    const kv = makeKV();
+    await kv.put('config:appVersion', OLD);
+    const env = makeEnv(kv);
+    // This isolate read the old version; then another switched to the new one.
+    assert.equal(await appVersion(env, FROZEN_NOW), OLD);
+    await kv.put('config:appVersion', NEW);
+    const ctx = makeCtx();
+    await assert.rejects(getArrivals(env, ctx, 'COM3', FROZEN_NOW), (err) => err instanceof UpstreamRejected && err.outdated);
+    await ctx.settle();
+    assert.equal(await breakerOpen(), false, `mint refused: ${mintRefused}`);
+    assert.equal(await flagged('https://terminus.internal/mint-failed'), false, 'nor the mint memo');
+    // This isolate sends the new one from now on.
+    assert.equal(await appVersion(env, FROZEN_NOW), NEW);
+
+    // Refused while still the version to send, it opens the breaker as before.
+    const env2 = makeEnv(makeKV());
+    const ctx2 = makeCtx();
+    await assert.rejects(getArrivals(env2, ctx2, 'PGP', FROZEN_NOW), (err) => err instanceof UpstreamRejected && !err.outdated);
+    await ctx2.settle();
+    assert.equal(await breakerOpen(), true);
   }
 });
