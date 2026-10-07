@@ -60,6 +60,8 @@ export interface Session {
  */
 const memos = new WeakMap<object, Session>();
 const versionMemos = new WeakMap<object, { value: string; atMs: number }>();
+/** The mint under way in this isolate, if any (getSession). */
+let inflight: Promise<Session> | null = null;
 
 /**
  * The uNivUS version string to send: `config:appVersion` in KV when it holds a
@@ -209,8 +211,6 @@ export async function getSession(
   }
   return inflight;
 }
-
-let inflight: Promise<Session> | null = null;
 
 async function mint(env: Env, nowMs: number, version: string): Promise<Session> {
   const res = await timedFetch('auth', authUrl(env), {
