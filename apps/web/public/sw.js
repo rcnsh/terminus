@@ -268,6 +268,10 @@ async function shellFile(req, path, event) {
 // the trip goes on; it only buzzes when the push says it's worth it.
 
 const HOUR12 = new Intl.DateTimeFormat([], { hour: 'numeric' }).resolvedOptions().hour12 === true;
+/** How long a push waits for the card. The browser allows a push only so
+ *  long to show something, and iOS may end the subscription of one that
+ *  shows nothing: past this, the plain "Your trip has changed" instead. */
+const PUSH_CARD_MS = 8_000;
 
 self.addEventListener('push', (event) => {
   let nudge = {};
@@ -294,7 +298,7 @@ async function notifyFromCard(urgent, fetched) {
   let a = fetched ?? null;
   if (!a) {
     try {
-      const res = await fetch(`/me/next${HOUR12 ? '?h12=1' : ''}`, { credentials: 'same-origin' });
+      const res = await fetch(`/me/next${HOUR12 ? '?h12=1' : ''}`, { credentials: 'same-origin', signal: AbortSignal.timeout?.(PUSH_CARD_MS) });
       a = res.ok ? await res.json() : null;
     } catch {
       a = null;
