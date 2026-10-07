@@ -102,7 +102,7 @@ struct TimetablePane: View {
             }
             DisclosureGroup(L("Import from NUSMods"), isExpanded: $importOpen) {
                 VStack(alignment: .leading, spacing: 6) {
-                    TextField("https://nusmods.com/timetable/sem-1/share?…", text: $link)
+                    TextField(L("NUSMods share link"), text: $link, prompt: Text(verbatim: "https://nusmods.com/timetable/sem-1/share?…"))
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { Task { await setup.importTimetable(link) } }
                     HStack {
@@ -144,7 +144,7 @@ struct TimetablePane: View {
                     let weekly = usual.filter { $0.day == day }
                     if !rows.isEmpty || !weekly.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(dayLong(day)).font(.headline)
+                            Text(dayLong(day)).font(.headline).accessibilityAddTraits(.isHeader)
                             ForEach(rows) { c in
                                 HStack(alignment: .firstTextBaseline) {
                                     VStack(alignment: .leading, spacing: 1) {
@@ -166,7 +166,9 @@ struct TimetablePane: View {
                                         Text("\(clockMin(u.atMin)) · \(campus.stopName(u.to))").font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Button(L("Remove")) { setup.removeUsual(place: u.place, day: u.day, atMin: u.atMin) }.buttonStyle(.link)
+                                    Button(L("Remove")) { setup.removeUsual(place: u.place, day: u.day, atMin: u.atMin) }
+                                        .buttonStyle(.link)
+                                        .accessibilityLabel(L("Remove %@", u.label))
                                 }
                             }
                         }
@@ -299,7 +301,7 @@ struct ChoicesSection: View {
         if let r = setup.choices {
             if !r.choices.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L("Your classes")).font(.headline)
+                    Text(L("Your classes")).font(.headline).accessibilityAddTraits(.isHeader)
                     GroupBox {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(r.choices, id: \.self) { c in
@@ -321,7 +323,7 @@ struct ChoicesSection: View {
             }
             if r.history > 0 {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L("Trip history")).font(.headline)
+                    Text(L("Trip history")).font(.headline).accessibilityAddTraits(.isHeader)
                     GroupBox {
                         HStack {
                             Text(r.history == 1 ? L("1 trip recorded.") : L("%@ trips recorded.", "\(r.history)"))
@@ -426,8 +428,8 @@ struct FeedbackPane: View {
                     footer
                 }
                 .card(padding: 0)
-                if sent { Text(L("Thanks. Your feedback was sent.")).foregroundStyle(.secondary).padding(.horizontal, 4) }
-                if let result { Text(result).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4) }
+                if sent { Text(L("Thanks. Your feedback was sent.")).foregroundStyle(.secondary).padding(.horizontal, 4).announced(L("Thanks. Your feedback was sent.")) }
+                if let result { Text(result).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4).announced(result) }
             }
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.bubble")
@@ -466,7 +468,7 @@ struct FeedbackPane: View {
             .overlay(alignment: .topLeading) {
                 if note.isEmpty {
                     Text(L("Ideas, problems, anything: a place you want to go, something that confused you…"))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .padding(.leading, 5)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
@@ -482,7 +484,7 @@ struct FeedbackPane: View {
         HStack {
             Text(verbatim: "\(Self.length(note)) / \(Self.limit)")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(Self.length(note) >= 900 ? Color.orange : Color.secondary)
+                .foregroundStyle(Self.length(note) >= 900 ? Color.warn : Color.secondary)
                 .accessibilityLabel(L("%@ of %@ characters", "\(Self.length(note))", "\(Self.limit)"))
             Spacer()
             Button(L("Send")) {
@@ -533,12 +535,12 @@ struct AddEmail: View {
                 Text(L("Add an email to use terminus on your other devices too, and to keep your setup if this Mac is lost."))
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    TextField("you@u.nus.edu", text: $email).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                    TextField(L("Email"), text: $email, prompt: Text(verbatim: "you@u.nus.edu")).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
                     Button(app.signingIn ? L("Sending…") : L("Email me a code")) { app.signIn(email: email.trimmingCharacters(in: .whitespaces)) }
                         .disabled(!emailOK || app.signingIn)
                 }
             }
-            if let e = app.signInError { Text(e).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
+            if let e = app.signInError { Text(e).foregroundStyle(Color.bad).fixedSize(horizontal: false, vertical: true).announced(e) }
         }
     }
 }

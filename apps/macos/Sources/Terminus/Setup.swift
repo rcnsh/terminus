@@ -492,7 +492,7 @@ struct SetupView: View {
                 if setup.profile == nil {
                     VStack(spacing: 12) {
                         if let m = setup.message {
-                            Text(m).foregroundStyle(.red)
+                            Text(m).foregroundStyle(Color.bad).announced(m)
                             Button(L("Try again")) { Task { await setup.load() } }
                         } else {
                             ProgressView()
@@ -508,7 +508,7 @@ struct SetupView: View {
                             case 2: PaceStep(setup: setup)
                             default: PermissionsStep(app: app)
                             }
-                            if let m = setup.message { Text(m).font(.callout).foregroundStyle(.red) }
+                            if let m = setup.message { Text(m).font(.callout).foregroundStyle(Color.bad).announced(m) }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
@@ -546,7 +546,7 @@ struct StepTitle: View {
     let sub: String
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.title2.weight(.semibold))
+            Text(title).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
             Text(sub).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.bottom, 4)
@@ -636,7 +636,7 @@ struct TimetableStep: View {
 
     @ViewBuilder private var content: some View {
         StepTitle(title: L("Your timetable"), sub: L("Paste your NUSMods share link. Each class goes to the stop nearest its room."))
-        TextField("https://nusmods.com/timetable/sem-1/share?…", text: $link)
+        TextField(L("NUSMods share link"), text: $link, prompt: Text(verbatim: "https://nusmods.com/timetable/sem-1/share?…"))
             .textFieldStyle(.roundedBorder)
             .onSubmit { Task { await setup.importTimetable(link) } }
         Hint(L("In NUSMods: Timetable, then Share/Sync. Copy the link and paste it here."))
@@ -708,11 +708,11 @@ private struct PermissionsStep: View {
 
     var body: some View {
         StepTitle(title: L("Two more things"), sub: L("Both are optional. You can change them later in Settings."))
-        Text(L("Notifications")).font(.headline)
+        Text(L("Notifications")).font(.headline).accessibilityAddTraits(.isHeader)
         Text(L("A reminder 5 minutes before you need to leave for class, and another when it's time to go."))
             .fixedSize(horizontal: false, vertical: true)
         if app.leaveAlerts { Hint(L("On.")) } else { Button(L("Turn on leave-by alerts")) { app.setLeaveAlerts(true) } }
-        Text(L("Location")).font(.headline).padding(.top, 10)
+        Text(L("Location")).font(.headline).accessibilityAddTraits(.isHeader).padding(.top, 10)
         Text(L("So directions start from your nearest stop. Your location is used only for that request, rounded to about 11 m, and never stored."))
             .fixedSize(horizontal: false, vertical: true)
         if app.needsLocation {
@@ -730,25 +730,26 @@ private struct PermissionsStep: View {
 /// The devices on the account: remove one, or add one with a code and a QR code.
 struct DevicesView: View {
     @State private var setup: SetupModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(setup: SetupModel = SetupModel()) { _setup = State(initialValue: setup) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(L("Devices")).font(.title2.weight(.semibold))
+            Text(L("Devices")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
             // The code takes the list's place, so the window keeps its size.
             if let code = setup.pairCode {
                 PairCodeCard(code: code) { Task { await setup.closePairCode() } }
                     .transition(.opacity)
                     .task(id: code) { await setup.waitForNewDevice() }
                     .overlay { if let name = setup.added { AddedTick(name: name).transition(.opacity) } }
-                    .animation(.easeOut(duration: 0.2), value: setup.added)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: setup.added)
             } else {
                 deviceList.transition(.opacity)
             }
-            if let m = setup.message { Text(m).font(.callout).foregroundStyle(.red) }
+            if let m = setup.message { Text(m).font(.callout).foregroundStyle(Color.bad).announced(m) }
         }
-        .animation(.easeInOut(duration: 0.15), value: setup.pairCode)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: setup.pairCode)
         .padding(20)
         .frame(width: 440, height: 540, alignment: .top)
         .task { if setup.devices == nil { await setup.loadDevices() } }
@@ -820,6 +821,8 @@ private struct PairCodeCard: View {
         VStack(spacing: 8) {
             Text(L("On the other device, open terminus and enter:"))
             Text("\(code.prefix(3)) \(code.dropFirst(3))").font(.system(size: 30, weight: .bold, design: .monospaced)).textSelection(.enabled)
+                // A character at a time: read as a word, "K7Q" is mumbled.
+                .accessibilityLabel(L("Pairing code") + L(", ") + code.map(String.init).joined(separator: " "))
             Text(L("Or scan this with a phone's camera:")).font(.callout)
             if let qr = qrImage("\(Api.site)/pair?code=\(code)") {
                 Image(nsImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)

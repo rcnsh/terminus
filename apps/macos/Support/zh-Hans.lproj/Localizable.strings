@@ -7,7 +7,6 @@
 "%@ min walk" = "步行 %@ 分钟";
 "%@ stop" = "%@ 站";
 "%@ removed from today" = "已从今天移除 %@";
-"%@m" = "%@ 分";
 ", %@ min walk" = "，步行 %@ 分钟";
 "1 class imported." = "已导入 1 节课。";
 "400 m in about 4 min. A brisk pace." = "400 米约 4 分钟。步伐轻快。";
@@ -363,3 +362,26 @@
 "Add an email to report a wrong answer, so we can reply to you." = "添加邮箱后才能报告错误的答案，方便我们回复你。";
 "Add an email to send feedback" = "添加邮箱后才能发送反馈";
 "So we can reply to you. Your setup stays as it is." = "这样我们才能回复你。你的设置会保持不变。";
+
+/* Accessibility: spoken to VoiceOver */
+"about" = "约";
+"Leaves in %@ min" = "%@ 分钟后开";
+"Leaves in under a minute" = "不到 1 分钟后开";
+"in under a minute" = "不到 1 分钟后";
+"terminus: %@" = "terminus：%@";
+"Find a stop" = "查找车站";
+"Find a %@ bus" = "查找 %@ 巴士";
+"Next stop: %@" = "下一站：%@";
+"Zoom in" = "放大";
+"Zoom out" = "缩小";
+"Next stop: %@, where you get off." = "下一站：%@，在这里下车。";
+"Next stop: %@. %@ stops to go, getting off at %@." = "下一站：%1$@。还有 %2$@ 站，在 %3$@ 下车。";
+"Over" = "已结束";
+"Skipped" = "已跳过";
+"No matches" = "没有结果";
+"1 result" = "1 个结果";
+"%@ results" = "%@ 个结果";
+"Tab %@ of %@" = "第 %1$@ 个，共 %2$@ 个";
+"Destinations" = "目的地";
+"Email" = "邮箱";
+"NUSMods share link" = "NUSMods 分享链接";

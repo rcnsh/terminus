@@ -15,49 +15,27 @@ struct Header: View {
                 system: model.showNearby ? "location.fill" : resting ? "moon.zzz.fill" : a?.arrived == true ? "checkmark.circle.fill" : "bus.fill",
                 tint: .brand
             )
-            VStack(alignment: .leading, spacing: 3) {
-                Text(offline.map { OfflineDay.lines($0).head } ?? heading(a))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                // Ticks every second: the countdown and the dimming are
-                // computed from the departure time, never from `label`.
-                Ticking(every: 1) { now in
-                    if let p = offline.flatMap({ _ in model.offlinePick(at: now) }) {
-                        let lines = OfflineDay.lines(p)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(lines.big)
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            StatusLine(color: .gray, text: L("Offline"))
-                        }
-                    } else {
-                        let old = !model.showNearby && !resting && a?.arrived != true && model.isOld(a, at: now)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(model.showNearby ? L("Departures near you") : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)))
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .foregroundStyle(old ? .secondary : .primary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            if old {
-                                StatusLine(color: .gray, text: L("Updating times…"))
-                            } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
-                                // Once it's time, the headline says "Leave now" and this line goes, as on the phone and the web.
-                                let left = Int(at.timeIntervalSince(now))
-                                if left > 0 {
-                                    StatusLine(color: a.leaveLate ? .red : .brand, text: left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)"))
-                                }
-                            } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
-                                StatusLine(color: dotColor(a.quality), text: countdown(to: at, now: now))
-                            } else if resting {
-                                StatusLine(color: .brand, text: restStatus)
-                            } else if let text = status(a) {
-                                StatusLine(color: dotColor(model.showNearby ? nil : a?.quality), text: text)
-                            }
-                        }
-                    }
+            // Ticks every second: the countdown and the dimming are
+            // computed from the departure time, never from `label`.
+            Ticking(every: 1) { now in
+                let l = lines(a, resting: resting, offline: offline, now: now)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(l.head)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Text(l.big)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(l.dimmed ? .secondary : .primary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                    if let st = l.status { StatusLine(color: st.color, text: st.text) }
                 }
+                // One element, read as a sentence. Its words change once a
+                // minute at most, so VoiceOver isn't fed a new second each tick.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spokenTimes([l.head, l.big, l.status?.spoken].compactMap { $0 }.joined(separator: L(", "))))
+                .accessibilityAddTraits([.isHeader, .updatesFrequently])
             }
             Spacer(minLength: 0)
             Button {
@@ -72,10 +50,56 @@ struct Header: View {
                     .background(Circle().fill(.primary.opacity(0.06)))
             }
             .buttonStyle(.plain)
+            .keyboardShortcut("r")
             .help(L("Refresh"))
             .accessibilityLabel(model.loading ? L("Refreshing") : L("Refresh"))
         }
         .card()
+        // The error shows on the status line, away from the focus: say it.
+        .onChange(of: model.error) { _, e in announce(e) }
+    }
+
+    /// What the header says at `now`: the heading, the headline, and the
+    /// status line with its dot and how it's spoken (to the minute).
+    private struct Lines {
+        var head: String
+        var big: String
+        var dimmed = false
+        var status: (color: Color, text: String, spoken: String)?
+    }
+
+    private func lines(_ a: NextAnswer?, resting: Bool, offline: OfflineDay.Pick?, now: Date) -> Lines {
+        let head = offline.map { OfflineDay.lines($0).head } ?? heading(a)
+        if let p = offline.flatMap({ _ in model.offlinePick(at: now) }) {
+            let text = L("Offline")
+            return Lines(head: head, big: OfflineDay.lines(p).big, status: (.gray, text, text))
+        }
+        let old = !model.showNearby && !resting && a?.arrived != true && model.isOld(a, at: now)
+        var out = Lines(head: head, big: model.showNearby ? L("Departures near you") : (a?.isClassPlan == true ? a?.leaveHeadline(now: now) ?? big(a) : big(a)), dimmed: old)
+        // How sure the time is, worded on the server ("Timetable estimate"),
+        // beside the countdown: the "~" alone is easy to miss.
+        let sure = { (s: String) in [s, model.showNearby ? nil : a?.card?.quality].compactMap { $0 }.joined(separator: " · ") }
+        if old {
+            let text = L("Updating times…")
+            out.status = (.gray, text, text)
+        } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
+            // Once it's time, the headline says "Leave now" and this line goes, as on the phone and the web.
+            let left = Int(at.timeIntervalSince(now))
+            if left > 0 {
+                let text = left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)")
+                let spoken = left >= 60 ? L("in %@ min", "\((left + 30) / 60)") : L("in under a minute")
+                out.status = (a.leaveLate ? .red : .brand, sure(text), sure(spoken))
+            }
+        } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
+            // A guess counts down in minutes: its seconds would be false precision.
+            let guess = a.card?.quality != nil
+            out.status = (dotColor(a.quality), sure(countdown(to: at, now: now, minutes: guess)), sure(countdown(to: at, now: now, minutes: true)))
+        } else if resting {
+            out.status = (.brand, restStatus, restStatus)
+        } else if let text = status(a) {
+            out.status = (dotColor(model.showNearby ? nil : a?.quality), text, text)
+        }
+        return out
     }
 
     /// "D2 · 09:42", "A1 · ~09:11", or the label when there's no time: the
@@ -88,10 +112,13 @@ struct Header: View {
         return "\(a.service) · \(a.quality == "scheduled" ? L("~%@", campusTime(at)) : campusTime(at))"
     }
 
-    /// "Leaves in 4 min 12 s", then "Left 1 min ago" until the answer is replaced or goes stale.
-    private func countdown(to at: Date, now: Date) -> String {
+    /// "Leaves in 4 min 12 s", then "Left 1 min ago" until the answer is
+    /// replaced or goes stale. To the minute ("Leaves in 4 min") when
+    /// spoken, or for a guess.
+    private func countdown(to at: Date, now: Date, minutes: Bool = false) -> String {
         let left = Int(at.timeIntervalSince(now))
         if left <= 0 { return L("Left %@ min ago", "\((-left + 59) / 60)") }
+        if minutes { return left >= 60 ? L("Leaves in %@ min", "\((left + 30) / 60)") : L("Leaves in under a minute") }
         return left >= 60 ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)") : L("Leaves in %@ s", "\(left)")
     }
 
@@ -168,7 +195,7 @@ struct StatusLine: View {
         HStack(spacing: 5) {
             // Colour repeats what the text says; VoiceOver gets the text.
             Circle().fill(color).frame(width: 6, height: 6).accessibilityHidden(true)
-            Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(2)
         }
     }
 }

@@ -148,13 +148,15 @@ func theNextClassComesWithTheCard(name: String) throws {
 }
 
 @Test func aTimetableGuessInNearbyIsNeverShownAsLive() {
-    #expect(FlowPills.eta(etaS: 360, quality: "live") == "6m")
-    #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6m")
+    #expect(FlowPills.eta(etaS: 360, quality: "live") == "6 min")
+    #expect(FlowPills.eta(etaS: 360, quality: "scheduled") == "~6 min")
     #expect(FlowPills.eta(etaS: 20, quality: "live") == "now")
     #expect(FlowPills.eta(etaS: nil, quality: "ended") == "ended")
     let row = BoardRow(svc: "D2", etaS: 240, quality: "live", later: [.init(etaS: 900, quality: "scheduled"), .init(etaS: 1500, quality: "live"), .init(etaS: 2100, quality: "live")])
     // At most two after the next one.
-    #expect(FlowPills.later(row) == ["~15m", "25m"])
+    #expect(FlowPills.later(row) == ["~15 min", "25 min"])
+    // Spoken, the "~" is a word: VoiceOver doesn't read it.
+    #expect(FlowPills.spoken(row) == "D2: 4 min, about 15 min, 25 min")
 }
 
 @Test func theTwoWaysOfNotGoingShareOneMenu() {
@@ -401,4 +403,12 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(l.homeWalkMin == 1...45)
     let old = SetupModel.Limits(nil)
     #expect(old.homeStops == 3 && old.places == 12 && old.placeLabel == 24 && old.homeWalkMin == 0...30, "today's values without them")
+}
+
+/// VoiceOver hears where the bus is and how far is left, not every stop.
+@Test func theRideIsSpokenAsTheNextStopAndWhatsLeft() {
+    let stops = ["PGP", "Kent Ridge MRT", "LT27", "UTown"]
+    #expect(AnswerDetail.RideLine.spoken(stops, passed: 0) == "Next stop: Kent Ridge MRT. 3 stops to go, getting off at UTown.")
+    #expect(AnswerDetail.RideLine.spoken(stops, passed: 2) == "Next stop: UTown, where you get off.")
+    #expect(AnswerDetail.RideLine.spoken(stops, passed: 3) == "Next stop: UTown, where you get off.")
 }
