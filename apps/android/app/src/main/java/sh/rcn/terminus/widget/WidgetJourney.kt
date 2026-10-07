@@ -61,6 +61,14 @@ private fun fixed(argb: Long) = ColorProvider(Color(argb), Color(argb))
 /** A service's code on its colour: white or near-black, whichever reads there ([Ink]). */
 private fun inkOn(argb: Long) = fixed(Ink.on(argb))
 
+/** The big line's lines: one, or two when the phone's text is scaled up, so it wraps rather than cuts. */
+@Composable
+internal fun headLines(): Int = if (LocalContext.current.resources.configuration.fontScale > 1.15f) 2 else 1
+
+/** How much wider a column of times is with the phone's text scaled up. */
+@Composable
+private fun widen(): Float = LocalContext.current.resources.configuration.fontScale.coerceIn(1f, 1.8f)
+
 private fun headline(answer: NextAnswer): String = answer.leaveHeadline(ServerClock.now()) ?: L.s(R.string.leave_now)
 
 @Composable
@@ -69,7 +77,7 @@ private fun Headline(answer: NextAnswer, large: Boolean) {
     Text(
         headline(answer),
         style = TextStyle(color = if (answer.leaveLate) colors.error else colors.onSurface, fontWeight = FontWeight.Bold, fontSize = if (large) 24.sp else 20.sp),
-        maxLines = 1,
+        maxLines = headLines(),
     )
 }
 
@@ -157,7 +165,7 @@ private fun Point(name: String, time: String, you: Boolean, width: Dp = 56.dp) {
     Column(GlanceModifier.width(width), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(GlanceModifier.height(CAPTION))
         Box(GlanceModifier.size(DOT).cornerRadius(DOT / 2).background(if (you) colors.primary else colors.onSurface)) {}
-        Text(name, style = TextStyle(color = colors.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), maxLines = 1)
+        Text(name, style = TextStyle(color = colors.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), maxLines = headLines())
         Text(time, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 11.sp, textAlign = TextAlign.Center), maxLines = 1)
     }
 }
@@ -243,7 +251,7 @@ private fun Steps(answer: NextAnswer, journey: Journey, large: Boolean, roomy: B
 private fun StepLine(time: String, what: String, bus: JourneyBus?, late: Boolean = false) {
     val colors = GlanceTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = GlanceModifier.padding(top = 3.dp)) {
-        Text(time, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.width(64.dp))
+        Text(time, style = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp), maxLines = headLines(), modifier = GlanceModifier.width(64.dp * widen()))
         bus?.let {
             Box(GlanceModifier.cornerRadius(5.dp).background(fixed(it.color)).padding(horizontal = 5.dp, vertical = 1.dp)) {
                 Text(it.svc, style = TextStyle(color = inkOn(it.color), fontWeight = FontWeight.Bold, fontSize = 12.sp), maxLines = 1)
