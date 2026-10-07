@@ -338,14 +338,19 @@ export async function clearTrip(env: Env, userId: string): Promise<void> {
 
 /**
  * Asks the user's Trip object to wake at `atMs` (the card's nextChangeAt),
- * work out the card again and push it if it changed. Push only.
+ * work out the card again and push it if it changed. Push only. Never
+ * throws; false (logged) when the object didn't take it, so the cron can
+ * ask again.
  */
-export async function watchTrip(env: Env, userId: string, atMs: number, nowMs: number): Promise<void> {
+export async function watchTrip(env: Env, userId: string, atMs: number, nowMs: number): Promise<boolean> {
   const s = stub(env, userId);
-  if (!s) return;
+  if (!s) return true;
   try {
-    await post(s, 'watch', { userId, date: sgtDate(nowMs), at: atMs, deleteAt: endOfDayMs(nowMs) });
+    const res = await post(s, 'watch', { userId, date: sgtDate(nowMs), at: atMs, deleteAt: endOfDayMs(nowMs) });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    return true;
   } catch (err) {
     console.error('trip watch failed', err instanceof Error ? err.message : typeof err);
+    return false;
   }
 }

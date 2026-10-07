@@ -293,6 +293,7 @@ export async function checkCalendar(env: Env, nowMs: number, through = calendarT
 /** From this hour (Singapore) each day, the cron starts the day's trip watching. */
 export const ARM_FROM_HOUR = 6;
 const ARMED_KEY = 'trips:armed';
+const ARM_RETRY_KEY = 'trips:retry';
 /** Users armed per cron run (every 15 minutes), so one run never runs out
  *  of time partway: the next run carries on after the last one armed. */
 const ARM_BATCH = 400;
@@ -315,18 +316,37 @@ export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Prom
   // "2026-10-03" when today is done; "2026-10-03 <user id>" while it's under
   // way, after that user. (Before batches it was the date alone, which still reads as done.)
   const mark = (await env.KV.get(ARMED_KEY)) ?? '';
-  if (mark === today) return 0;
+  // Users whose Trip object didn't take the request, asked again each run
+  // until it does: "<date> <id> <id> ...".
+  const kept = (await env.KV.get(ARM_RETRY_KEY)) ?? '';
+  const left = kept.startsWith(`${today} `) ? kept.slice(today.length + 1).split(' ') : [];
+  const retry = left.slice(0, batch);
+  if (mark === today && !retry.length) return 0;
   const after = mark.startsWith(`${today} `) ? mark.slice(today.length + 1) : '';
-  const { results } = await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL AND user_id > ? ORDER BY user_id LIMIT ?')
-    .bind(after, batch)
-    .all<{ user_id: string }>();
-  for (let i = 0; i < results.length; i += ARM_AT_ONCE) {
-    await Promise.all(results.slice(i, i + ARM_AT_ONCE).map((r) => watchTrip(env, r.user_id, nowMs, nowMs).catch(() => {})));
+  const { results } = mark === today
+    ? { results: [] as { user_id: string }[] }
+    : await env.DB.prepare('SELECT DISTINCT user_id FROM sessions WHERE push_token IS NOT NULL AND user_id > ? ORDER BY user_id LIMIT ?')
+        .bind(after, batch)
+        .all<{ user_id: string }>();
+  const users = [...retry, ...results.map((r) => r.user_id)];
+  const failed: string[] = [];
+  for (let i = 0; i < users.length; i += ARM_AT_ONCE) {
+    const some = users.slice(i, i + ARM_AT_ONCE);
+    const took = await Promise.all(some.map((id) => watchTrip(env, id, nowMs, nowMs).catch(() => false)));
+    some.forEach((id, j) => took[j] || failed.push(id));
   }
-  // A short batch was the last one.
-  const done = results.length < batch;
-  await env.KV.put(ARMED_KEY, done ? today : `${today} ${results[results.length - 1].user_id}`, { expirationTtl: 2 * 86_400 });
-  return results.length;
+  if (mark !== today) {
+    // A short batch was the last one.
+    const done = results.length < batch;
+    await env.KV.put(ARMED_KEY, done ? today : `${today} ${results[results.length - 1].user_id}`, { expirationTtl: 2 * 86_400 });
+  }
+  if (failed.length || kept) {
+    const keep = [...new Set([...failed, ...left.slice(batch)])].slice(0, ARM_BATCH);
+    if (keep.length) await env.KV.put(ARM_RETRY_KEY, `${today} ${keep.join(' ')}`, { expirationTtl: 86_400 });
+    else await env.KV.delete(ARM_RETRY_KEY);
+    if (failed.length) console.error('trips not armed', failed.length);
+  }
+  return users.length - failed.length;
 }
 
 const REMINDED_KEY = 'term:reminded';

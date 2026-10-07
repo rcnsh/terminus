@@ -182,6 +182,32 @@ test('the morning cron arms push users in batches, each run carrying on from the
   assert.equal(await armTrips(env, Date.now(), 1), 0, 'once a day');
 });
 
+test('a Trip object that does not take the morning request is asked again on a later run, alone', async () => {
+  const { call, phone, env, TRIPS, alarm } = await setup();
+  await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
+  let asked = 0;
+  let broken = true;
+  env.TRIPS = Object.assign(Object.create(TRIPS), {
+    get: (id) => {
+      const real = TRIPS.get(id);
+      return { fetch: async (...a) => (asked++, broken ? new Response('overloaded', { status: 503 }) : real.fetch(...a)) };
+    },
+  });
+  const quiet = console.error;
+  console.error = () => {};
+  assert.equal(await armTrips(env, Date.now()), 0, 'asked, not taken');
+  console.error = quiet;
+  assert.equal(await env.KV.get('trips:armed'), (await env.KV.get('trips:retry')).split(' ')[0], 'the day is done, bar the retry');
+  assert.equal(alarm(), undefined);
+  broken = false;
+  assert.equal(await armTrips(env, Date.now()), 1, 'asked again');
+  assert.ok(alarm() !== undefined, 'the Trip object is watching');
+  assert.equal(await env.KV.get('trips:retry'), null);
+  assert.equal(asked, 2);
+  assert.equal(await armTrips(env, Date.now()), 0, 'once a day');
+  assert.equal(asked, 2);
+});
+
 test('the week before a semester, push users with an older timetable are reminded to import the new one, once', async () => {
   const { call, phone, fcm, env, clock } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
