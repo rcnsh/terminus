@@ -700,15 +700,25 @@ const BUS = '<rect x="4.5" y="3" width="15" height="15" rx="3"/><path d="M4.5 11
 /** How far up the road a bus is drawn: this many seconds away is the far end. */
 const ROAD_S = 15 * 60;
 
+/**
+ * A bus on a Nearby road, nearer the stop the sooner it's due. The next one
+ * is solid; the ones after it, faded. Drawn after them, it sits on top.
+ */
+const RoadBus = ({ bus, next }) => html`<span
+  class=${`road-bus${bus.quality === 'live' ? ' live' : ''}${next ? '' : ' later'}`}
+  style=${{ '--far': Math.min(1, Math.max(0, bus.etaS / ROAD_S)) }}
+></span>`;
+
 /** "4 min", "Arriving", "~6 min" for a timetable guess, or "–". */
 const etaText = (b) => (b.etaS == null ? '–' : b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
 
 /**
  * Nearby: the stops around you as their signs, the name plate with the walk
- * there, then a row per service, its next bus coming up a short road towards
- * the stop, nearer the sooner it's due. The nearest stop is drawn larger. A
- * timetable guess is an outline, never a filled bus, so it doesn't pass for
- * live. The name opens the stop on the map.
+ * there, then a row per service, its buses coming up a short road towards
+ * the stop, nearer the sooner they're due, the next one solid and the rest
+ * faded. The nearest stop is drawn larger. A timetable guess is an outline,
+ * never a filled bus, so it doesn't pass for live. The name opens the stop
+ * on the map.
  */
 function NearbyCard({ stops }) {
   return html`
@@ -734,11 +744,8 @@ function NearbyCard({ stops }) {
                   (b) => html`
                     <div class="nearby-row" key=${b.svc}>
                       <span class="svc-col"><span class="svc-tag" style=${b.color ? `--svc:${b.color};--svc-ink:${inkOn(b.color)}` : ''}>${b.svc}</span></span>
-                      <span
-                        class=${b.quality === 'live' ? 'road live' : 'road'}
-                        style=${{ '--svc': b.color ?? 'var(--muted)', '--far': b.etaS == null ? 1 : Math.min(1, Math.max(0, b.etaS / ROAD_S)) }}
-                        aria-hidden="true"
-                        >${b.etaS != null && html`<span class="road-bus"></span>`}</span
+                      <span class="road" style=${{ '--svc': b.color ?? 'var(--muted)' }} aria-hidden="true"
+                        >${[...(b.later ?? []), ...(b.etaS != null ? [b] : [])].map((bus, j) => html`<${RoadBus} key=${bus === b ? 'next' : j} bus=${bus} next=${bus === b} />`)}</span
                       >
                       <span class="eta">${etaText(b)}</span>
                     </div>
