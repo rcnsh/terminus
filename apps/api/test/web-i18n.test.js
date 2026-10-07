@@ -1,8 +1,9 @@
 /**
  * The website in Chinese (phase 10): every t('...') in its scripts and every
- * bit of text on its pages has a translation in assets/zh.js. The pages are
- * read roughly (text between tags); a fragment counts as covered when it's a
- * key itself or part of a key that is a whole element's HTML.
+ * bit of text on its pages has a translation in assets/zh.js, and every
+ * translation is still used. The pages are read roughly (text between tags);
+ * a fragment counts as covered when it's a key itself or part of a key that
+ * is a whole element's HTML on that page, as assets/i18n.js matches it.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,6 +23,10 @@ function zh() {
 const PAGES = ['index.html', 'account/index.html', 'app/index.html', 'pair/index.html', 'status/index.html', 'not-found/index.html'];
 const SCRIPTS = [
   'account/app.js',
+  'account/dom.js',
+  'account/daylight.js',
+  'account/livery.js',
+  'account/sky.js',
   'account/settings.js',
   'account/settings-pages.js',
   'account/onboarding.js',
@@ -33,7 +38,11 @@ const SCRIPTS = [
   'app/app.js',
   'app/buses.js',
   'app/map.js',
+  'app/offline.js',
   'assets/landing.js',
+  'assets/sky-page.js',
+  'assets/theme.js',
+  'assets/ui.js',
   'status/status.js',
   'pair/pair.js',
 ];
@@ -46,7 +55,9 @@ test('every t() string in the scripts is translated', () => {
   const dict = zh();
   const missing = [];
   for (const f of SCRIPTS) {
-    for (const [, q, s] of read(f).matchAll(/\bt\((['"])((?:\\.|(?!\1).)*)\1/g)) {
+    // Comments aside: a doc comment's example isn't a string on the page.
+    const src = read(f).replace(/^\s*(?:\/\/|\/?\*).*$/gm, '');
+    for (const [, q, s] of src.matchAll(/\bt\((['"])((?:\\.|(?!\1).)*)\1/g)) {
       const en = q === '"' ? JSON.parse(`"${s}"`) : s.replace(/\\'/g, "'");
       if (!(en in dict)) missing.push(`${f}: ${en}`);
     }
@@ -68,15 +79,25 @@ test('the leave time is inside its headline, in English and Chinese', () => {
   }
 });
 
+const norm = (s) => s.replace(/\s+/g, ' ').trim();
+/** A page as i18n.js sees it: its body, without scripts, styles and icons. */
+const pageBody = (page) =>
+  read(page)
+    .replace(/<head>[\s\S]*?<\/head>/, '')
+    .replace(/<(script|style|svg)[\s\S]*?<\/\1>/g, '');
+/** The keys with markup that are a whole element's HTML on `page` (i18n.js replaces only those). */
+const htmlKeysOn = (dict, page) => {
+  const body = norm(pageBody(page));
+  return Object.keys(dict).filter((k) => k.includes('<') && new RegExp(`> ?${norm(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ?</`).test(body));
+};
+
 test('every bit of text on the pages is translated', () => {
   const dict = zh();
-  const htmlKeys = Object.keys(dict).filter((k) => k.includes('<')).map((k) => k.replace(/<[^>]+>/g, '\u0000'));
-  const covered = (s) => s in dict || htmlKeys.some((k) => k.split('\u0000').map((x) => x.replace(/\s+/g, ' ').trim()).includes(s));
   const missing = [];
   for (const page of PAGES) {
-    const body = read(page)
-      .replace(/<head>[\s\S]*?<\/head>/, '')
-      .replace(/<(script|style|svg)[\s\S]*?<\/\1>/g, '');
+    const htmlKeys = htmlKeysOn(dict, page).map((k) => k.replace(/<[^>]+>/g, '\u0000'));
+    const covered = (s) => s in dict || htmlKeys.some((k) => k.split('\u0000').map(norm).includes(s));
+    const body = pageBody(page);
     const texts = [...body.matchAll(/>([^<>]+)</g)].map((m) => m[1].replace(/\s+/g, ' ').trim());
     const attrs = [...body.matchAll(/\s(?:placeholder|aria-label|title|alt)="([^"]+)"/g)].map((m) => m[1]);
     for (const s of [...texts, ...attrs]) {
@@ -163,6 +184,39 @@ test('the Chinese is Chinese', () => {
     if (SAME.test(en) || en === z) continue;
     assert.match(z, /[一-鿿　-〿＀-￯]/, en);
   }
+});
+
+// A key nothing asks for is a translation of old words: when the English
+// changes, its old key must go, or the two drift apart unnoticed. A key is
+// used by t() in any script, as a quoted word a script passes to t() later
+// (the days of the week), as text or an attribute on a page, as a whole
+// element's HTML there, or as a data-t the server writes into a page.
+test('every translation is still used', () => {
+  const dict = zh();
+  const scripts = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(new URL(dir, PUBLIC), { withFileTypes: true })) {
+      if (e.isDirectory() && e.name !== 'vendor') walk(`${dir}${e.name}/`);
+      else if (e.name.endsWith('.js') && `${dir}${e.name}` !== 'assets/zh.js') scripts.push(`${dir}${e.name}`);
+    }
+  };
+  walk('');
+  const used = new Set();
+  for (const f of scripts) {
+    for (const [, q, s] of read(f).matchAll(/(['"])((?:\\.|(?!\1)[^\\\n])*)\1/g)) used.add(q === '"' ? JSON.parse(`"${s}"`) : s.replace(/\\(.)/g, '$1'));
+  }
+  // The English privacy pages too: opened with ?original in Chinese, their title and links are translated.
+  for (const page of [...PAGES, 'privacy/index.html', 'privacy/policy/index.html']) {
+    const src = read(page);
+    const body = pageBody(page);
+    for (const m of body.matchAll(/>([^<>]+)</g)) used.add(norm(m[1]));
+    for (const m of body.matchAll(/\s(?:placeholder|aria-label|title|alt)="([^"]+)"/g)) used.add(m[1]);
+    for (const m of src.matchAll(/<title>([^<]+)<\/title>|<meta name="description" content="([^"]+)"/g)) used.add(norm(m[1] ?? m[2]));
+    for (const k of htmlKeysOn(dict, page)) used.add(k);
+  }
+  for (const m of fs.readFileSync(new URL('../src/landing.ts', import.meta.url), 'utf8').matchAll(/data-t="([^"]+)"/g)) used.add(m[1]);
+  const stale = Object.keys(dict).filter((k) => !used.has(k));
+  assert.deepEqual(stale, []);
 });
 
 test('the privacy summary and the full policy each have a Chinese translation that names the English as the one that counts', () => {

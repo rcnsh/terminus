@@ -3,7 +3,7 @@
 // (profile.js), so leaving halfway loses nothing.
 
 import { html, reducedMotion, useEffect, useMemo, useRef, useState, useStore } from '../assets/ui.js';
-import { api, browserHour12, clock, inkOn, t } from './dom.js';
+import { api, browserHour12, clock, inkOn, locationError, t } from './dom.js';
 import { campus, limit, profile, ResidenceOptions, residenceWalkMin, residencesByName, saveNow, stopName, stopsNear, toast } from './profile.js';
 import { CLOCKS, StopSelect } from './settings-pages.js';
 
@@ -223,7 +223,7 @@ function Home({ nav }) {
         setStop(s.code);
         setMsg(t('Picked {0}. Change it if you use a different stop.', s.name));
       },
-      (err) => setMsg(t("Couldn't get your location ({0}). Pick your stop instead.", err.message)),
+      (err) => setMsg(locationError(err)),
       { enableHighAccuracy: true, timeout: 10_000 },
     );
   };
@@ -236,7 +236,7 @@ function Home({ nav }) {
   const tile = (r) => html`<${Tile} key=${r.code} on=${mode === 'hall' && picked === r} onClick=${() => pick(r)}><strong>${r.name}</strong><//>`;
   const yours = mode === 'hall' && picked ? picked.stops : stop ? [stop] : [];
   return html`
-    <${Heading} text=${t('Where your day starts')} sub=${t('Where you catch the bus in the morning, and head back to at the end of the day. Only the stops are saved.')} />
+    <${Heading} text=${t('Where your day starts')} sub=${t('Where you catch the bus in the morning and head back to at night. Only the stops are saved.')} />
     <div role="radiogroup" aria-label=${t('Where you live')}>
       ${common.length > 0 &&
       html`<p class="eyebrow ob-label">${t('Most common')}</p>
@@ -245,7 +245,7 @@ function Home({ nav }) {
       <div class=${common.length ? 'ob-tiles ob-rest' : 'ob-tiles'}>
         ${tiles.map(tile)}
         <${Tile} on=${mode === 'more'} onClick=${() => setMode('more')}><strong>${t('All {0} halls and colleges', residences.length)}</strong><//>
-        <${Tile} on=${mode === 'off'} onClick=${() => pick(null)}><strong>${t('Off campus')}</strong><span class="hint">${t('Pick your stop')}</span><//>
+        <${Tile} on=${mode === 'off'} onClick=${() => pick(null)}><strong>${t('Off campus')}</strong><span class="hint">${t('Choose your stop')}</span><//>
       </div>
     </div>
     ${mode === 'more' &&

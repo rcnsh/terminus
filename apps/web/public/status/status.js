@@ -28,7 +28,7 @@ function duration(ms) {
 
 const CAUSE = {
   version: t('NUS released a new version of uNivUS and stopped accepting the old one'),
-  feed: t("NUS's feed didn't answer"),
+  feed: t("NUS's bus times didn't answer"),
 };
 
 /** The headline, the line under it, the chip and the bus on the road, from /status.json. */
