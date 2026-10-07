@@ -13,7 +13,9 @@ import { Livery } from './livery.js';
 const parts = store(null);
 let loading = null;
 function loadParts() {
-  loading ??= Promise.all([import('./settings.js'), import('./onboarding.js')]).then(([s, o]) => {
+  // With what those two import that the page hasn't loaded yet, asked for
+  // alongside: otherwise each level is found only once the one above arrives.
+  loading ??= Promise.all([import('./settings.js'), import('./onboarding.js'), import('./settings-pages.js'), import('./search-box.js'), import('./search.js')]).then(([s, o]) => {
     parts.set({ Settings: s.Settings, offerImport: s.offerImport, Onboarding: o.Onboarding });
   });
   return loading;
