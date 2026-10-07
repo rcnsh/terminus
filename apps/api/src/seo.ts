@@ -64,6 +64,7 @@ NUS stops come in pairs on opposite sides of the road, a few metres apart (\`KR-
 - [GET /next?lat=1.294962&lon=103.784556](${origin}/docs#/operations/getNext): the next buses at the stop nearest a position; with \`to\`, the same answer as \`/trip\`
 - [GET /arrivals?stop=COM3](${origin}/docs#/operations/getArrivals): every service's next buses at one stop
 - [GET /buses?svc=D2](${origin}/docs#/operations/getBuses): one service's live buses for a map, each at a stop or between two
+- [GET /line?svc=D1&stop=YIH](${origin}/docs#/operations/getLine): one service's stops in order, its buses on them, and its next bus at one stop
 - [GET /campus](${origin}/docs#/operations/getCampus): stops, route lines and colours, and destinations to search
 - [GET /status.json](${origin}/status.json): whether NUS's feed is working, without a key
 

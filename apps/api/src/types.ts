@@ -283,6 +283,8 @@ export interface ArriveBy {
 export interface Stop {
   code: string;
   name: string;
+  /** The full name ("Central Library" for CLB). Absent on a public-only stop. */
+  longName?: string;
   lat: number;
   lon: number;
   /** Code of the directional twin ("Opp X" <-> "X"), if any. */

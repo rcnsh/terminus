@@ -62,3 +62,14 @@ export function nearbyTwin(stop: Stop): string | null {
   const pair = oppositesJson.nearby.find((p) => p.includes(stop.code));
   return pair ? (pair[0] === stop.code ? pair[1] : pair[0]) : null;
 }
+
+/**
+ * The twin as a stop page names it: `across` when it's on the other side of
+ * the road ("Across the road"), false for a stop that's only near (PGP and
+ * PGP Foyer), which goes by its own name.
+ */
+export function twinOf(stop: Stop, byCode: Map<string, Stop>): { opposite: string | null; oppositeAcross: boolean; oppositeName: string | null } {
+  const code = nearbyTwin(stop);
+  const twin = code ? byCode.get(code) : undefined;
+  return { opposite: code, oppositeAcross: !!stop.opposite, oppositeName: code ? (twin?.longName ?? twin?.name ?? code) : null };
+}

@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SHAPES } from '../src/campus.ts';
-import { alongLine, follow, nextOf, placeBuses, sectionOf, trackedBuses } from '../src/buses.ts';
+import { alongLine, busesOnLine, follow, indexOnLine, lineStops, nextOf, placeBuses, pointAlong, sectionOf, trackedBuses } from '../src/buses.ts';
+import { GRAPH } from '../src/graph.ts';
+import { indexGraph } from '../src/resolve.ts';
 import { makeCache } from './_stubs.mjs';
 
 const M_LAT = 110_574;
@@ -313,4 +315,52 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
   assert.deepEqual(wrong, []);
   assert.deepEqual(back, []);
   assert.ok(atStops > 100 && between > 100, `shown at stops ${atStops} times, between ${between}`);
+});
+
+test('/line: D1’s stops in route order, its loop’s first stop not listed again, each with the other services there', () => {
+  const idx = indexGraph(GRAPH);
+  const stops = lineStops(idx, 'D1');
+  assert.deepEqual(stops.map((s) => s.code), ['COM3', 'HSSML-OPP', 'NUSS-OPP', 'LT13-OPP', 'IT', 'YIH-OPP', 'MUSEUM', 'UTOWN', 'YIH', 'CLB', 'LT13', 'AS5', 'BIZ2']);
+  assert.deepEqual(stops[0], { code: 'COM3', name: 'COM 3', longName: 'COM 3', services: ['D2'] });
+  // The full name too, for a list with room for it: CLB is Central Library.
+  assert.equal(stops.find((s) => s.code === 'CLB').longName, 'Central Library');
+  assert.deepEqual(stops[8].services, ['A1', 'K', 'R1'], 'YIH: the others, not D1 itself');
+  // K doesn't loop: its first and last stops are different stops, both listed.
+  const k = lineStops(idx, 'K');
+  assert.equal(k[0].code, 'PGP');
+  assert.equal(k.at(-1).code, 'PGPR');
+});
+
+test('/line: a real D1 bus between YIH and Central Library is after YIH; one at a stop is at it', async () => {
+  const shape = SHAPES.D1;
+  const route = indexGraph(GRAPH).routes.get('D1');
+  const k = shape.stops.indexOf('YIH');
+  const mid = (shape.at[k] + shape.at[k + 1]) / 2;
+  const p = pointAlong(shape, mid);
+  const q = pointAlong(shape, mid + 5);
+  const moving = { plate: 'PD1', lat: p.lat, lon: p.lon, heading: bearingOf([p.lon, p.lat], [q.lon, q.lat]), speed: 20, crowd: 'medium' };
+  const u = shape.stops.indexOf('UTOWN');
+  const s = pointAlong(shape, shape.at[u]);
+  const standing = { plate: 'PD2', lat: s.lat, lon: s.lon, heading: 0, speed: 0, crowd: null };
+  const { buses } = await placeBuses(GRAPH, 'D1', [moving, standing], 0, {});
+  const line = busesOnLine(route.seq, route.loop, buses);
+  const by = Object.fromEntries(line.map((b) => [b.plate, b]));
+  assert.deepEqual({ at: by.PD1.at, after: by.PD1.after, crowd: by.PD1.crowd }, { at: null, after: route.seq.indexOf('YIH'), crowd: 'medium' });
+  assert.deepEqual({ at: by.PD2.at, after: by.PD2.after }, { at: route.seq.indexOf('UTOWN'), after: null });
+  assert.equal(by.PD1.id, buses.find((b) => b.plate === 'PD1').id, 'the same id as on the map');
+});
+
+test('/line: after a loop’s last stop the bus is heading back to its first; a stop listed twice is the visit before its next stop', () => {
+  const name = (code) => ({ code, name: code });
+  const between = (last, next) => ({ at: null, stretch: { from: 0, to: 1, last: name(last) }, nextStop: name(next) });
+  const loop = ['COM3', 'A', 'B'];
+  assert.deepEqual(indexOnLine(loop, true, between('B', 'COM3')), { at: null, after: 2 });
+  // The end of a line that doesn't loop: nowhere further on, so at that stop.
+  assert.deepEqual(indexOnLine(['A', 'B'], false, between('B', 'A')), { at: 1, after: null });
+  const twice = ['A', 'B', 'A', 'C'];
+  assert.deepEqual(indexOnLine(twice, false, between('A', 'C')), { at: null, after: 2 });
+  assert.deepEqual(indexOnLine(twice, false, between('A', 'B')), { at: null, after: 0 });
+  assert.deepEqual(indexOnLine(twice, false, { at: name('A'), stretch: null, nextStop: name('C') }), { at: 2, after: null });
+  // A stop the list doesn't have (the route changed since the shapes were made): left off.
+  assert.equal(indexOnLine(loop, true, between('ZZ', 'A')), null);
 });

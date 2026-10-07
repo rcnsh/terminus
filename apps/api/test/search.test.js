@@ -31,3 +31,21 @@ test('score ladder: exact, starts with, word, contains', () => {
   assert.equal(score(D[4], 'eatr'), 3);
   assert.equal(score(D[4], 'zzz'), -1);
 });
+
+test('the Buses tab: a service before a stop that matches as well', () => {
+  const withServices = [...D, { code: 'AS5', label: 'AS 5', stopCode: 'AS5', kind: 'stop' }, { code: 'A1', label: 'A1', kind: 'service', detail: 'Loop from KRB' }, { code: 'A2', label: 'A2', kind: 'service', detail: 'Loop from KRB' }];
+  assert.deepEqual(rank(withServices, 'a').map((d) => d.code).slice(0, 3), ['A1', 'A2', 'AS5']);
+  assert.equal(rank(withServices, 'a2')[0].code, 'A2');
+});
+
+test('the Buses tab: stops by their long names, found by those, their short names and codes', () => {
+  // As app/buses.js lists them: the long name as the label, the short name as an alias.
+  const stops = [
+    { code: 'CLB', label: 'Central Library', stopCode: 'CLB', kind: 'stop', aliases: ['clb'] },
+    { code: 'YIH', label: 'Yusof Ishak House', stopCode: 'YIH', kind: 'stop', aliases: ['yih'] },
+    { code: 'YIH-OPP', label: 'Opp Yusof Ishak House', stopCode: 'YIH-OPP', kind: 'stop', aliases: ['opp yih'] },
+  ];
+  assert.deepEqual(rank(stops, 'library').map((d) => d.code), ['CLB']);
+  assert.deepEqual(rank(stops, 'yih').map((d) => d.code), ['YIH', 'YIH-OPP']);
+  assert.deepEqual(rank(stops, 'yusof').map((d) => d.code), ['YIH', 'YIH-OPP']);
+});

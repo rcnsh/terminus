@@ -357,6 +357,16 @@ test('profile: defaults, validated writes, and unknown stops rejected', async ()
   const saved = await (await call(env, '/me/profile', { cookie })).json();
   assert.deepEqual(saved.home.stops, ['PGP']);
   assert.equal(saved.places[0].to, 'KR-MRT');
+  assert.deepEqual(saved.pinnedStops, []);
+
+  // Pins: shuttle stops, or a public stop of its own by LTA's code.
+  const pinned = await call(env, '/me/profile', { method: 'PUT', cookie, body: { ...saved, pinnedStops: ['YIH', '16009', 'yih'] } });
+  assert.equal(pinned.status, 200);
+  assert.deepEqual((await pinned.json()).pinnedStops, ['YIH', '16009']);
+  assert.deepEqual((await (await call(env, '/me/profile', { cookie })).json()).pinnedStops, ['YIH', '16009'], 'kept, and read back whole');
+  const badPin = await call(env, '/me/profile', { method: 'PUT', cookie, body: { pinnedStops: ['NOWHERE'] } });
+  assert.equal(badPin.status, 400);
+  assert.equal((await badPin.json()).error, 'pinnedStops must be up to 8 known stop codes');
 });
 
 test('profile writes need a JSON body', async () => {

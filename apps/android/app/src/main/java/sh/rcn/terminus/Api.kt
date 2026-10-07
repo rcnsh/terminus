@@ -421,10 +421,26 @@ data class DayPlan(val items: List<DayItem>, val note: String?, val date: String
 
 /**
  * A service at a stop and its next bus. `color` (#rrggbb), the service's
- * colour, comes with /me/nearby's rows. `paid`: a public bus, with a fare.
- * `later`: the buses after the next one the feed knows, soonest first.
+ * colour. `paid`: a public bus, with a fare. `later`: the buses after the
+ * next one the feed knows, soonest first: every later time there is, so
+ * nothing else is guessed. `towards`: the next stop's name, then where the
+ * route ends (one entry when they're the same). `crowd`: the next bus's
+ * (low, medium, high). `endsAtMs`: when the service stops for the day.
+ * An older server leaves the newer fields out: empty, or null.
  */
-data class BoardRow(val svc: String, val etaS: Int?, val quality: String, val color: String? = null, val paid: Boolean = false, val later: List<LaterBus> = emptyList())
+data class BoardRow(
+    val svc: String,
+    val etaS: Int?,
+    val quality: String,
+    val color: String? = null,
+    val paid: Boolean = false,
+    val later: List<LaterBus> = emptyList(),
+    val towards: List<String> = emptyList(),
+    val crowd: String? = null,
+    val endsAtMs: Long? = null,
+    /** The route ends at this stop: the server gave `towards` and it's empty. An older server gives none. */
+    val endsHere: Boolean = false,
+)
 
 /** A bus after the next one, with its own quality: a timetabled one stays a guess. */
 data class LaterBus(val etaS: Int, val quality: String)
@@ -437,6 +453,22 @@ private fun parseLater(r: JSONObject): List<LaterBus> {
     }
 }
 
+/** One board row, wherever a board appears (/arrivals, /me/nearby, /line). */
+fun parseBoardRow(r: JSONObject): BoardRow = BoardRow(
+    svc = r.getString("svc"),
+    etaS = if (!r.has("etaS") || r.isNull("etaS")) null else r.optInt("etaS"),
+    quality = r.optString("quality"),
+    color = r.optStringOrNull("color")?.ifEmpty { null },
+    paid = r.optBoolean("paid", false),
+    later = parseLater(r),
+    towards = r.optJSONArray("towards").stringList().filter { it.isNotBlank() },
+    crowd = r.optStringOrNull("crowd")?.takeIf { it in CROWDS },
+    endsAtMs = r.optStringOrNull("endsAt")?.let(::parseInstant),
+    endsHere = r.optJSONArray("towards")?.let { a -> (0 until a.length()).none { a.optString(it).isNotBlank() } } ?: false,
+)
+
+private val CROWDS = setOf("low", "medium", "high")
+
 data class NearbyStop(
     val code: String,
     val name: String,
@@ -445,6 +477,14 @@ data class NearbyStop(
     val board: List<BoardRow>,
     /** The stop across the road, if it has one. */
     val opposite: String? = null,
+    /** Metres away as the crow flies; null from an older server. */
+    val distM: Int? = null,
+    /** The full name, where [name] is short; null from an older server. */
+    val longName: String? = null,
+    /** [opposite] is across the road; false when the two are only near each other (PGP and PGP Foyer). */
+    val oppositeAcross: Boolean = true,
+    /** [opposite]'s full name; null from an older server. */
+    val oppositeName: String? = null,
 )
 
 data class Destination(
@@ -548,6 +588,13 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     /** What's coming at one stop, for the map's stop sheet. */
     suspend fun arrivals(stop: String): StopBoard = StopBoard.parse(request("GET", "/arrivals?stop=${enc(stop)}"))
+
+    /** The same board whole, for the Buses tab: every row, the stop's name and its twin. */
+    suspend fun board(stop: String): Board = Board.parse(request("GET", "/arrivals?stop=${enc(stop)}"))
+
+    /** One service's whole line; with [stop], that stop's board row for it too. */
+    suspend fun line(svc: String, stop: String? = null): Line =
+        Line.parse(request("GET", "/line?svc=${enc(svc)}" + (stop?.let { "&stop=${enc(it)}" } ?: "")))
 
     /** Starts a sign-in approved from the email; send it with this device's anonymous token to keep its setup. */
     suspend fun signInStart(email: String, name: String): SignInRequest {
@@ -880,7 +927,7 @@ private fun parseDestination(d: JSONObject) = Destination(
     detail = d.optStringOrNull("detail"),
 )
 
-private fun parseInstant(s: String): Long? = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrNull()
+internal fun parseInstant(s: String): Long? = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrNull()
 
 /**
  * 12-hour times: the account's choice ([Clock]), else the phone's own
@@ -952,11 +999,13 @@ fun parseNearby(json: JSONObject): List<NearbyStop> {
             name = s.getJSONObject("stop").getString("name"),
             walkS = s.optInt("walkS"),
             available = s.optBoolean("available", true),
-            opposite = if (s.isNull("opposite")) null else s.optString("opposite").ifEmpty { null },
-            board = (0 until board.length()).map { j ->
-                val r = board.getJSONObject(j)
-                BoardRow(r.getString("svc"), if (r.isNull("etaS")) null else r.getInt("etaS"), r.optString("quality"), if (r.isNull("color")) null else r.optString("color").ifEmpty { null }, r.optBoolean("paid", false), parseLater(r))
-            },
+            opposite = s.optStringOrNull("opposite")?.ifEmpty { null },
+            longName = s.getJSONObject("stop").optStringOrNull("longName")?.ifEmpty { null },
+            // On the stop object, or beside it as `opposite` is; an older server has neither: across, as before.
+            oppositeAcross = (s.getJSONObject("stop").takeIf { it.has("oppositeAcross") } ?: s).optBoolean("oppositeAcross", true),
+            oppositeName = (s.getJSONObject("stop").optStringOrNull("oppositeName") ?: s.optStringOrNull("oppositeName"))?.ifEmpty { null },
+            distM = if (s.has("distM") && !s.isNull("distM")) s.optInt("distM") else null,
+            board = (0 until board.length()).map { j -> parseBoardRow(board.getJSONObject(j)) },
         )
     }
 }

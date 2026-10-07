@@ -6,7 +6,8 @@ import realGraph from '../data/stops.json' with { type: 'json' };
 import venuesJson from '../data/venues.json' with { type: 'json' };
 
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/campus.ts';
-import { boardAt, indexGraph } from '../src/resolve.ts';
+import { boardAt, indexGraph, towardsFrom } from '../src/resolve.ts';
+import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/graph.ts';
 
 const GRAPH = graphJson;
 
@@ -179,6 +180,61 @@ test('boardAt: a feed that never answered is unknown, never a fabricated time', 
   const sa = { code: 'COM3', arrivals: [], fetchedAt: nowMs, stale: false, available: false };
   const rows = boardAt(GRAPH, idx, 'COM3', sa, nowMs);
   assert.ok(rows.every((r) => r.quality === 'unknown' && r.etaS === null));
+});
+
+test('boardAt: each row has its colour, where it goes, how full the first bus is and when the service ends', () => {
+  const idx = indexGraph(REAL);
+  // Wednesday 7 October 2026, 13:00 in Singapore.
+  const nowMs = Date.parse('2026-10-07T05:00:00Z');
+  const sa = {
+    code: 'YIH',
+    arrivals: [
+      { svc: 'K', etaS: 600, crowd: 'low', plate: 'PK2', berth: null },
+      { svc: 'K', etaS: 180, crowd: 'high', plate: 'PK1', berth: null },
+      { svc: 'A1', etaS: null, crowd: null, plate: null, berth: null },
+    ],
+    fetchedAt: nowMs,
+    stale: false,
+    available: true,
+  };
+  const bySvc = new Map(boardAt(REAL, idx, 'YIH', sa, nowMs).map((r) => [r.svc, r]));
+  const k = bySvc.get('K');
+  assert.equal(k.color, '#2b9ad6');
+  // K runs YIH, CLB, ... and ends at PGP Foyer: the next stop, then the end, by their full names.
+  assert.deepEqual(k.towards, ['Central Library', "Prince George's Park Foyer"]);
+  assert.equal(k.crowd, 'high', 'the first bus’s, not the later one’s');
+  assert.equal(k.endsAt, '2026-10-07T15:04:00.000Z', 'K runs until 23:04 on a weekday');
+  const a1 = bySvc.get('A1');
+  assert.equal(a1.crowd, null, 'no bus, no crowding');
+  assert.deepEqual(a1.towards, ['Central Library', 'Kent Ridge Bus Terminal'], 'A1 is a loop: it ends where it started');
+});
+
+test('towards: a loop runs on from its last stop to its first; the end of a line goes nowhere', () => {
+  const idx = indexGraph(REAL);
+  // D1's last stop before COM3 again: the next stop is the end, so one name.
+  assert.deepEqual(towardsFrom(idx, 'D1', 'BIZ2'), ['COM 3']);
+  assert.deepEqual(towardsFrom(idx, 'D1', 'COM3'), ['Opp HSSML', 'COM 3']);
+  // K ends at PGP Foyer and does not loop.
+  assert.deepEqual(towardsFrom(idx, 'K', 'PGPR'), []);
+  assert.deepEqual(towardsFrom(idx, 'K', 'NOPE'), []);
+  assert.deepEqual(towardsFrom(idx, 'Z9', 'YIH'), []);
+  // A route calling at a stop twice goes on from its first call there.
+  const twice = indexGraph({ stops: ['A', 'B', 'C'].map((code) => ({ code, name: code })), routes: { X: ['A', 'B', 'A', 'C'] }, loops: { X: false } });
+  assert.deepEqual(towardsFrom(twice, 'X', 'A'), ['B', 'C']);
+});
+
+test('boardAt: a public bus has no colour of its own and still says where it goes', () => {
+  const idx = indexGraph(GRAPH_PUBLIC);
+  const code = REAL.stops.map((s) => s.code).find((c) => (idx.servingStop.get(c) ?? []).some((svc) => svc.includes('/')));
+  const nowMs = Date.parse('2026-10-07T05:00:00Z');
+  const sa = { code, arrivals: [], fetchedAt: nowMs, stale: false, available: true };
+  const pub = boardAt(GRAPH_PUBLIC, idx, code, sa, nowMs).filter((r) => r.paid);
+  assert.ok(pub.length, `public buses at ${code}`);
+  for (const r of pub) {
+    assert.equal(r.color, null);
+    assert.ok(r.towards.every((t) => typeof t === 'string' && t.length), JSON.stringify(r.towards));
+    assert.ok(!r.svc.includes('/'), 'shown by its number, not its route key');
+  }
 });
 
 test('food courts are in the search, each with both of its stops', () => {

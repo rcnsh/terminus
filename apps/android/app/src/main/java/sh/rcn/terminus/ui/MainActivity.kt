@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
     private val account: AccountViewModel by viewModels()
     private val map: MapViewModel by viewModels()
+    private val buses: BusesViewModel by viewModels()
 
     // Android 12 has no per-app language: the chosen one is applied here (Lang).
     override fun attachBaseContext(base: Context) = super.attachBaseContext(Lang.wrap(base))
@@ -88,7 +89,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
         sh.rcn.terminus.Push.register(this)
-        setContent { TerminusTheme { App(vm, account, map) } }
+        setContent { TerminusTheme { App(vm, account, map, buses) } }
     }
 
     /**
@@ -210,10 +211,10 @@ private fun fading(to: ColorScheme): ColorScheme {
 private enum class Screen { Main, SignIn, Pair }
 
 /** The bottom bar's tabs, once set up. */
-private enum class Tab { Now, Map, Settings }
+private enum class Tab { Now, Buses, Map, Settings }
 
 @Composable
-private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel) {
+private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel, buses: BusesViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val acct by account.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
@@ -242,9 +243,9 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
             screen = Screen.Main
         }
     }
-    // Signed in and set up: Now · Map · Settings along the bottom.
+    // Signed in and set up: Now · Buses · Map · Settings along the bottom.
     if (state.paired && !setup && screen == Screen.Main) {
-        Tabs(tab, { tab = it }, vm, account, map, acct, onAddEmail = { account.beginSignIn(); screen = Screen.SignIn }, onSignedOut = signedOut)
+        Tabs(tab, { tab = it }, vm, account, map, buses, acct, onAddEmail = { account.beginSignIn(); screen = Screen.SignIn }, onSignedOut = signedOut)
     } else if (!state.paired && screen == Screen.Main) {
         // Edge to edge for its livery: it keeps the insets itself.
         WelcomeScreen(
@@ -315,9 +316,9 @@ private fun App(vm: MainViewModel, account: AccountViewModel, map: MapViewModel)
 }
 
 /**
- * Now · Map · Settings. Settings sits inside the safe area; Now scrolls
- * under the status bar (its sky reaches the top), and the map runs under
- * it, with its pills below it.
+ * Now · Buses · Map · Settings. Settings sits inside the safe area; Now
+ * scrolls under the status bar (its sky reaches the top), and the map runs
+ * under it, with its pills below it. Buses keeps inside the safe area.
  */
 @Composable
 private fun Tabs(
@@ -326,6 +327,7 @@ private fun Tabs(
     vm: MainViewModel,
     account: AccountViewModel,
     map: MapViewModel,
+    buses: BusesViewModel,
     acct: AccountState,
     onAddEmail: () -> Unit,
     onSignedOut: () -> Unit,
@@ -341,6 +343,7 @@ private fun Tabs(
             NavigationBar {
                 for ((t, label, icon) in listOf(
                     Triple(Tab.Now, R.string.tab_now, R.drawable.ic_tab_now),
+                    Triple(Tab.Buses, R.string.tab_buses, R.drawable.ic_tab_buses),
                     Triple(Tab.Map, R.string.tab_map, R.drawable.ic_tab_map),
                     Triple(Tab.Settings, R.string.settings, R.drawable.ic_tab_settings),
                 )) {
@@ -349,6 +352,8 @@ private fun Tabs(
                         onClick = {
                             if (t == Tab.Now && tab != Tab.Now) vm.load(restart = true)
                             if (t == Tab.Settings && tab == Tab.Settings) settingsAgain.tryEmit(Unit)
+                            // Buses tapped while on it: back to its home, from a line or a stop.
+                            if (t == Tab.Buses && tab == Tab.Buses) buses.home()
                             onTab(t)
                         },
                         icon = { Icon(painterResource(icon), contentDescription = null) },
@@ -358,7 +363,7 @@ private fun Tabs(
             }
         },
     ) { inner ->
-        // Back from Map or Settings goes to Now, as from any other tab bar.
+        // Back from Buses, Map or Settings goes to Now, as from any other tab bar.
         BackHandler(enabled = tab != Tab.Now) { onTab(Tab.Now); vm.load(restart = true) }
         // Switching tabs fades through (out, then in with a slight zoom), and
         // each tab keeps its saved state while it's away: where Now and
@@ -382,6 +387,20 @@ private fun Tabs(
                                 full = { (acct.profile?.places?.size ?: 0) >= MAX_PLACES },
                                 save = { code, name -> account.edit { it.addPlace(name, code) } },
                             ),
+                        )
+                    }
+                    Tab.Buses -> Box(Modifier.fillMaxSize().consumeWindowInsets(inner).imePadding()) {
+                        // The pinned stops are the profile's.
+                        LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                        BusesScreen(
+                            buses,
+                            insets = inner,
+                            pins = acct.profile?.pinnedStops.orEmpty(),
+                            onPin = { code -> account.edit { it.pinnedStops = sh.rcn.terminus.Pins.toggle(it.pinnedStops, code) } },
+                            onShowOnMap = { svc ->
+                                map.show(svc)
+                                onTab(Tab.Map)
+                            },
                         )
                     }
                     // Edge to edge too, the insets inside, so the list's sky can reach the top.

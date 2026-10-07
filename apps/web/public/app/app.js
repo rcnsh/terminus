@@ -1,6 +1,7 @@
 // The installed web app (phase 5): the answer card and today, the way the
-// phone app shows them, the campus map (app/map.js) and Settings (the
-// account page's, account/settings.js). A bar along the bottom switches
+// phone app shows them, the buses at a stop and along a line (app/buses.js),
+// the campus map (app/map.js) and Settings (the account page's,
+// account/settings.js). A bar along the bottom switches
 // between them, fading through as the phone app does.
 //
 // What's on screen lives in stores at the top (what the card is for, the
@@ -56,8 +57,10 @@ const undo = store(null);
 const searching = store(false);
 /** /me, once fetched: who's signed in. */
 const me = store(null);
-/** Now, Map or Settings; null until the first draw. */
+/** Now, Buses, Map or Settings; null until the first draw. */
 const tab = store(null);
+/** app/buses.js, once the Buses tab has been opened. */
+const busesModule = store(null);
 /** app/map.js, once the map has been opened. */
 const mapModule = store(null);
 /** A stop to open on the map once it's on screen (a stop tapped in Nearby). */
@@ -352,7 +355,7 @@ async function removeFromToday(it, at, before) {
 
 /* ---------- tabs ---------- */
 
-const TABS = ['now', 'map', 'settings'];
+const TABS = ['now', 'buses', 'map', 'settings'];
 /** Each tab's section, set as they're drawn. */
 const views = {};
 /** Counts switches: a fade that finishes after a newer tap is left to that one. */
@@ -360,7 +363,7 @@ let switches = 0;
 /** Where Now and Settings were scrolled to, for coming back. */
 const scrolled = {};
 
-const tabInAddress = () => (location.hash === '#map' ? 'map' : location.hash.startsWith('#settings') ? 'settings' : 'now');
+const tabInAddress = () => (location.hash === '#map' ? 'map' : location.hash.startsWith('#settings') ? 'settings' : location.hash.startsWith('#buses') ? 'buses' : 'now');
 
 /**
  * Material's fade through, as on the phone: the old tab fades out quickly,
@@ -376,7 +379,8 @@ function fadeIn(node) {
 const fadeOut = (node) => node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 90, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
 
 /**
- * Now, Map or Settings, from the address (#map, #settings, #settings/trips),
+ * Now, Buses, Map or Settings, from the address (#buses, #buses/line/D1,
+ * #map, #settings, #settings/trips),
  * so Back and a reload keep the tab. The sections are shown and hidden here,
  * not by Preact, so the fade can swap them between its two halves.
  */
@@ -399,11 +403,14 @@ async function showTab() {
   tab.set(next);
   document.body.classList.toggle('on-map', next === 'map');
   document.body.classList.toggle('on-settings', next === 'settings');
+  document.body.classList.toggle('on-buses', next === 'buses');
   window.scrollTo(0, scrolled[next] ?? 0);
   if (animate) fadeIn(views[next]);
   if (next === 'map') {
     // The map's code on its first opening, after the fade: the tab shows at once.
     if (!mapModule.get()) mapModule.set(await import('/app/map.js'));
+  } else if (next === 'buses') {
+    if (!busesModule.get()) busesModule.set(await import('/app/buses.js').catch(() => ({ failed: true })));
   } else if (next === 'settings') {
     openSettings();
   } else if (from !== null) {
@@ -987,6 +994,14 @@ function Banner() {
   return html`<section class="offline" hidden=${text === null}>${text}</section>`;
 }
 
+function BusesArea() {
+  const mod = useStore(busesModule);
+  const now = useStore(tab);
+  if (mod?.failed) return html`<p class="hint">${t('Buses need a connection.')}</p>`;
+  if (!mod) return html`<p class="hint">${t('Loading…')}</p>`;
+  return html`<${mod.BusesTab} visible=${now === 'buses'} here=${here} />`;
+}
+
 function MapArea() {
   const mod = useStore(mapModule);
   const now = useStore(tab);
@@ -1009,6 +1024,7 @@ function SettingsArea() {
 
 const TABBAR = [
   { id: 'now', href: '#now', label: () => t('Now'), icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>' },
+  { id: 'buses', href: '#buses', label: () => t('Buses'), icon: '<rect x="5" y="3" width="14" height="14.5" rx="3"/><path d="M5 10.5h14M8 17.5V20M16 17.5V20"/><path d="M8.5 14h.01M15.5 14h.01"/>' },
   { id: 'map', href: '#map', label: () => t('Map'), icon: '<path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/>' },
   {
     id: 'settings',
@@ -1034,7 +1050,7 @@ function TabBar() {
   `;
 }
 
-/** The three tabs, shown and hidden by showTab() after the first draw (see there). */
+/** The four tabs, shown and hidden by showTab() after the first draw (see there). */
 function App() {
   const first = useRef(tabInAddress()).current;
   const keep = (name) => (node) => node && (views[name] = node);
@@ -1048,6 +1064,7 @@ function App() {
       <${GoLater} />
       <${Today} />
     </main>
+    <section id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><${BusesArea} /></section>
     <section id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><${MapArea} /></section>
     <section id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></section>
     <${TabBar} />

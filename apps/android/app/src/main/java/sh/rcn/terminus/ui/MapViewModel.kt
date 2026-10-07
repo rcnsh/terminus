@@ -115,6 +115,11 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** One pill at a time; the same one again turns it off. */
+    /** A service from the Buses tab: its pill on, never toggled off. */
+    fun show(svc: String) {
+        if (_state.value.selected != svc) choose(svc)
+    }
+
     fun choose(svc: String?) {
         val next = if (svc == _state.value.selected) null else svc
         _state.update { it.copy(selected = next, buses = emptyList(), busStatus = if (next == null) null else BusStatus.Finding, sheet = (it.sheet as? MapSheet.Stop)) }

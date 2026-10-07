@@ -227,7 +227,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'Arrivals at one stop',
           description:
-            'Lists the next arrivals for every service at one stop. There is no destination, so walking time and route direction are not considered. Uses the same 15-second per-stop cache as `/next` and `/trip`.',
+            'Lists the next arrivals for every service at one stop. There is no destination, so walking time and route direction are not considered. Uses the same 15-second per-stop cache as `/next` and `/trip`. `stop.opposite` is the stop across the road (or one easily mistaken for it), whose board is a second `/arrivals` call away. Each row says where the service goes from here (`towards`), how full its next bus is (`crowd`) and when the service stops running today (`endsAt`).',
           operationId: 'getArrivals',
           parameters: [
             {
@@ -247,10 +247,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 'application/json': {
                   schema: { $ref: '#/components/schemas/StopBoard' },
                   example: {
-                    stop: { code: 'COM3', name: 'COM 3' },
+                    stop: { code: 'YIH', name: 'YIH', longName: 'Yusof Ishak House', opposite: 'YIH-OPP', oppositeAcross: true, oppositeName: 'Opp Yusof Ishak House' },
                     board: [
-                      { svc: 'D1', etaS: 180, quality: 'live', ambiguousBerth: false, later: [{ etaS: 900, quality: 'live' }] },
-                      { svc: 'D2', etaS: 420, quality: 'live', ambiguousBerth: false, later: [] },
+                      { svc: 'K', etaS: 180, quality: 'live', ambiguousBerth: false, later: [{ etaS: 900, quality: 'live' }], color: '#2b9ad6', towards: ['Central Library', 'Prince George’s Park Foyer'], crowd: 'low', endsAt: '2026-09-28T15:04:00.000Z' },
+                      { svc: 'D1', etaS: 420, quality: 'live', ambiguousBerth: false, later: [], color: '#ec4fa0', towards: ['Central Library', 'COM 3'], crowd: 'high', endsAt: '2026-09-28T15:00:00.000Z' },
                     ],
                     asOf: '2026-09-28T01:14:02.000Z',
                     available: true,
@@ -290,6 +290,50 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               },
             },
             '400': errorResponse('Unknown service.', { error: 'unknown service', svc: 'Z9' }),
+          },
+        },
+      },
+      '/line': {
+        get: {
+          tags: ['Stops'],
+          summary: 'One service’s line',
+          description:
+            'A service’s whole line, for a page about it: its stops in route order (a loop’s first stop is not listed again at its end), each with the other shuttle services that call there, and its buses placed on that list, each at a stop (`at`, an index into `stops`) or between two (`after`: between `stops[after]` and the next, which on a loop’s last stop is the first again). The buses are the same ones as `/buses`, placed the same way, from the same 5-second cache. With `stop`, `stop.row` is the service’s board row at that stop, as on `/arrivals`, through the same 15-second cache. No times are worked out for the other stops: only the live feed’s own are given.',
+          operationId: 'getLine',
+          parameters: [
+            { name: 'svc', in: 'query', required: true, description: 'Service code, case-insensitive. Shuttle services only.', schema: { type: 'string' }, example: 'D1' },
+            { name: 'stop', in: 'query', description: 'A stop on the service, case-insensitive: adds `stop`, with its index in `stops` and the service’s row there.', schema: { type: 'string' }, example: 'YIH' },
+          ],
+          responses: {
+            '200': {
+              description: 'The line. `available` is false when the live feed could not be reached; `buses` is then empty, which is not the same as no buses running.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/Line' },
+                  example: {
+                    svc: 'D1',
+                    color: '#ec4fa0',
+                    endsAt: '2026-10-07T15:00:00.000Z',
+                    stops: [
+                      { code: 'COM3', name: 'COM 3', longName: 'COM 3', services: ['D2'] },
+                      { code: 'HSSML-OPP', name: 'Opp HSSML', longName: 'Opp HSSML', services: ['A2', 'R2'] },
+                    ],
+                    buses: [
+                      { id: '3f9a1c0b7e21', plate: 'PD418C', crowd: 'low', at: 6, after: null },
+                      { id: '9be0d4a1c377', plate: 'PD562E', crowd: null, at: null, after: 1 },
+                    ],
+                    stop: {
+                      code: 'YIH',
+                      index: 8,
+                      row: { svc: 'D1', etaS: 240, quality: 'live', ambiguousBerth: false, later: [], color: '#ec4fa0', towards: ['Central Library', 'COM 3'], crowd: 'low', endsAt: '2026-10-07T15:00:00.000Z' },
+                    },
+                    available: true,
+                    asOf: '2026-10-07T05:14:02.000Z',
+                  },
+                },
+              },
+            },
+            '400': errorResponse('Unknown service, or a stop the service does not call at.', { error: 'stop not on this service', svc: 'D1', stop: 'PGP' }),
           },
         },
       },
@@ -664,20 +708,14 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   items: {
                     type: 'object',
                     properties: {
-                      stop: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } },
+                      stop: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' }, longName: { type: 'string' } } },
                       opposite: { type: ['string', 'null'] },
+                      oppositeAcross: { type: 'boolean' },
+                      oppositeName: { type: ['string', 'null'] },
                       distM: { type: 'integer' },
                       walkS: { type: 'integer' },
                       available: { type: 'boolean' },
-                      board: {
-                        type: 'array',
-                        items: {
-                          allOf: [
-                            { $ref: '#/components/schemas/BoardRow' },
-                            { type: 'object', properties: { color: { type: ['string', 'null'], description: 'The colour of the service, as on the buses (#rrggbb).' } } },
-                          ],
-                        },
-                      },
+                      board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
                     },
                   },
                 },
@@ -1495,7 +1533,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         },
         BoardRow: {
           type: 'object',
-          required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later'],
+          required: ['svc', 'etaS', 'quality', 'ambiguousBerth', 'later', 'color', 'towards', 'crowd', 'endsAt'],
           properties: {
             svc: { type: 'string' },
             etaS: { type: ['integer', 'null'] },
@@ -1507,13 +1545,33 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description: 'The buses after the one in `etaS`, soonest first, as far as the feed knows them (usually one more for a shuttle, up to two for a public bus). Each has its own quality: a timetabled one is `scheduled`.',
               items: { type: 'object', required: ['etaS', 'quality'], properties: { etaS: { type: 'integer' }, quality: { $ref: '#/components/schemas/Quality' } } },
             },
+            color: { type: ['string', 'null'], description: 'The colour of the service, as on the buses (#rrggbb). Null for a public bus.' },
+            towards: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Where the service goes from this stop, by full name: the next stop, then the stop the route ends at (for a loop, the stop it started from). One name when they are the same, none at the end of the line. Place names stay English in every language.',
+              example: ['Central Library', 'Prince George’s Park Foyer'],
+            },
+            crowd: { type: ['string', 'null'], enum: ['low', 'medium', 'high', null], description: 'How full the bus in `etaS` is, from the live feed. Null when it gives none, or there is no bus.' },
+            endsAt: { type: ['string', 'null'], format: 'date-time', description: 'When the service stops running today. Null when its hours are not known.' },
           },
         },
         StopBoard: {
           type: 'object',
           required: ['stop', 'board', 'asOf', 'available'],
           properties: {
-            stop: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } },
+            stop: {
+              type: 'object',
+              required: ['code', 'name', 'longName', 'opposite', 'oppositeAcross', 'oppositeName'],
+              properties: {
+                code: { type: 'string' },
+                name: { type: 'string' },
+                longName: { type: 'string', description: 'The name in full (Yusof Ishak House for YIH), for where there is room for it.' },
+                opposite: { type: ['string', 'null'], description: 'The code of the stop across the road, or one easily mistaken for it. Null when it has none.' },
+                oppositeAcross: { type: 'boolean', description: 'True when `opposite` is across the road; false for a stop that is only near (Prince George’s Park and its Foyer), or none.' },
+                oppositeName: { type: ['string', 'null'], description: 'The full name of `opposite`, null when there is none.' },
+              },
+            },
             board: { type: 'array', items: { $ref: '#/components/schemas/BoardRow' } },
             asOf: { type: 'string', format: 'date-time' },
             available: { type: 'boolean', description: 'False when the upstream feed could not be reached.' },
@@ -1565,6 +1623,55 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 },
               },
             },
+          },
+        },
+        Line: {
+          type: 'object',
+          required: ['svc', 'color', 'endsAt', 'stops', 'buses', 'available', 'asOf'],
+          properties: {
+            svc: { type: 'string' },
+            color: { type: ['string', 'null'] },
+            endsAt: { type: ['string', 'null'], format: 'date-time', description: 'When the service stops running today. Null when its hours are not known.' },
+            stops: {
+              type: 'array',
+              description: 'The stops in route order. A loop’s first stop is not listed again at its end.',
+              items: {
+                type: 'object',
+                required: ['code', 'name', 'longName', 'services'],
+                properties: {
+                  code: { type: 'string' },
+                  name: { type: 'string' },
+                  longName: { type: 'string', description: 'The name in full (Yusof Ishak House for YIH), for where there is room for it.' },
+                  services: { type: 'array', items: { type: 'string' }, description: 'The other shuttle services that call at this stop.' },
+                },
+              },
+            },
+            buses: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['id', 'plate', 'crowd', 'at', 'after'],
+                properties: {
+                  id: { type: 'string', description: 'The same as on `/buses`.' },
+                  plate: { type: 'string' },
+                  crowd: { type: ['string', 'null'], enum: ['low', 'medium', 'high', null] },
+                  at: { type: ['integer', 'null'], description: 'The index in `stops` of the stop the bus is at; null between stops.' },
+                  after: { type: ['integer', 'null'], description: 'Between stops: the index in `stops` of the stop it passed. It is on its way to the next one (the first, after a loop’s last). Null at a stop.' },
+                },
+              },
+            },
+            stop: {
+              type: 'object',
+              description: 'Only with `?stop=`.',
+              required: ['code', 'index', 'row'],
+              properties: {
+                code: { type: 'string' },
+                index: { type: 'integer', description: 'Its place in `stops`.' },
+                row: { oneOf: [{ $ref: '#/components/schemas/BoardRow' }, { type: 'null' }], description: 'The service’s row on the stop’s board. Null when the service is not on it (it has stopped for the day).' },
+              },
+            },
+            available: { type: 'boolean', description: 'False when the live feed could not be reached.' },
+            asOf: { type: 'string', format: 'date-time' },
           },
         },
         Buses: {
@@ -1756,6 +1863,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             fullBusMargin: { type: 'boolean', default: true, description: 'Aim one bus earlier when the bus to wait for is often busy at that stop and time.' },
             publicBuses: { type: 'boolean', default: false, description: 'Count the public buses (95, 151, 96 and others) at the campus’s stops too, on `/me/next` and `/me/nearby`. They have a fare, so one is the answer only when it clearly saves time over the free shuttle, and its leg carries `paid: true`. Off until the user turns it on.' },
             seen: { type: 'array', items: { type: 'string' }, description: 'One-time screens already shown, e.g. `onboarding`.' },
+            pinnedStops: { type: 'array', maxItems: 8, uniqueItems: true, default: [], items: { type: 'string' }, description: 'Stops pinned to the Buses tab, in the order to show them: shuttle stop codes, or LTA’s five-digit code for a public stop of its own. Repeats are dropped.' },
             homeWalkMin: { type: 'integer', minimum: 0, maximum: 30, default: 5, description: 'Minutes from home to your nearest home stop. Counts when a trip starts from home without a location, and as the least walk to your home stops when the location is inside the residence they serve (the lift and the stairs count, the outline cannot tell which floor you are on).' },
             lang: { type: 'string', enum: ['auto', 'en', 'zh'], default: 'auto', description: "The language terminus writes in: answers, cards, emails and errors. `auto` follows each request's `Accept-Language` (any `zh*` is Simplified Chinese); `?lang=en|zh` on a request overrides it, and a set `lang` here overrides both." },
             clock: { type: 'string', enum: ['auto', '12', '24'], default: 'auto', description: 'Clock times in answers and cards, 12-hour ("6:36 PM") or 24-hour ("18:36"). `auto` follows each request (`?h12=1` for 12-hour); `12` or `24` here overrides it, so every device shows the same.' },

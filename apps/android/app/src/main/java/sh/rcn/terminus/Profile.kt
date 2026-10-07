@@ -19,6 +19,11 @@ class ProfileDoc(val json: JSONObject) {
         json.put("home", if (unique.isEmpty()) JSONObject.NULL else JSONObject().put("stops", JSONArray(unique)))
     }
 
+    /** The stops pinned on the Buses tab, in their order. */
+    var pinnedStops: List<String>
+        get() = json.optJSONArray("pinnedStops")?.strings().orEmpty()
+        set(v) { json.put("pinnedStops", JSONArray(v.distinct().take(Pins.MAX))) }
+
     /** The account's language (phase 10): auto, en or zh. */
     var lang: String
         get() = json.optString("lang", "auto")

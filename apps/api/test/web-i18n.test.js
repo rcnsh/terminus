@@ -31,6 +31,7 @@ const SCRIPTS = [
   'account/search.js',
   'account/search-box.js',
   'app/app.js',
+  'app/buses.js',
   'app/map.js',
   'assets/landing.js',
   'status/status.js',
