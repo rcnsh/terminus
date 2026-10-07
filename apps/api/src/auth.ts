@@ -156,13 +156,23 @@ export function extractSession(body: unknown, nowMs: number): Session | null {
  */
 export async function deviceId(env: Env): Promise<string> {
   if (env.NEXTBUS_DEVICE_ID) return env.NEXTBUS_DEVICE_ID;
-  const stored = await env.KV.get(KV_DEVICE).catch(() => null);
-  if (stored) return stored;
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  const id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-  await env.KV.put(KV_DEVICE, id).catch(() => {});
+  const known = deviceIds.get(env.KV);
+  if (known) return known;
+  // A failed read throws rather than making up an id: a new one each call
+  // would mint a token for one device and call with another, and overwrite
+  // the stored id with each.
+  let id = await env.KV.get(KV_DEVICE);
+  if (!id) {
+    const bytes = crypto.getRandomValues(new Uint8Array(8));
+    id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+    await env.KV.put(KV_DEVICE, id).catch(() => {});
+  }
+  deviceIds.set(env.KV, id);
   return id;
 }
+
+/** The device id, once read or made, per KV binding (as `memos`). */
+const deviceIds = new WeakMap<object, string>();
 
 /** Forget this isolate's remembered version, after writing a new one. */
 export function forgetAppVersion(env: Env): void {
