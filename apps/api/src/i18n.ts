@@ -89,7 +89,8 @@ const en = {
   /** An estimate: "~5 min", "~9:41". */
   approx: ((s: string) => `~${s}`) as Fn<[string]>,
   noTimes: 'no times',
-  staleLabel: ((svc: string, eta: string, ageMin: number) => `${svc} · ${eta} (${ageMin}m)`) as Fn<[string, string, number]>,
+  /** An old reading's age: "(3m)"; under a minute, "(<1m)", never "(0m)". */
+  staleLabel: ((svc: string, eta: string, ageMin: number) => `${svc} · ${eta} (${ageMin < 1 ? '<1' : ageMin}m)`) as Fn<[string, string, number]>,
 
   // The answer's detail line (format.ts)
   crossRoad: 'cross the road',
@@ -105,7 +106,7 @@ const en = {
   crowdMedium: 'crowding: medium',
   crowdHigh: 'crowding: high',
   directionUnconfirmed: 'direction unconfirmed',
-  minOld: ((n: number) => `${n} min old`) as Fn<[number]>,
+  minOld: ((n: number) => (n < 1 ? 'under a minute old' : `${n} min old`)) as Fn<[number]>,
   estimated: 'estimated',
   /** The headline bus is a public one, with a fare. */
   publicBus: 'public bus',
@@ -364,7 +365,7 @@ const zh: Msgs = {
   nMin: (n) => `${n} 分钟`,
   approx: (s) => `约 ${s}`,
   noTimes: '暂无时间',
-  staleLabel: (svc, eta, ageMin) => `${svc} · ${eta}（${ageMin} 分钟前）`,
+  staleLabel: (svc, eta, ageMin) => `${svc} · ${eta}（${ageMin < 1 ? '不到 1' : ageMin} 分钟前）`,
 
   crossRoad: '过马路',
   walkToStop: (t) => `步行 ${t}`,
@@ -379,7 +380,7 @@ const zh: Msgs = {
   crowdMedium: '拥挤程度：中',
   crowdHigh: '拥挤程度：高',
   directionUnconfirmed: '方向未确认',
-  minOld: (n) => `${n} 分钟前的数据`,
+  minOld: (n) => `${n < 1 ? '不到 1' : n} 分钟前的数据`,
   estimated: '估计',
   publicBus: '公共巴士',
   liveUnavailable: '暂无实时时间',
