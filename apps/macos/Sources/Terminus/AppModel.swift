@@ -341,7 +341,9 @@ final class AppModel {
             error = nil
             LeaveNotifier.shared.update(a)
             dayFetched = Date()
-            day = try? await api.day()
+            // A failed fetch keeps the plan there was (offline falls back to
+            // it), and the next refresh asks again.
+            if let d = try? await api.day() { day = d } else { dayFetched = nil }
             return nil
         } catch {
             let message = failureMessage(error, otherwise: L("Offline"))
@@ -435,7 +437,7 @@ final class AppModel {
             LeaveNotifier.shared.update(a)
             select(.plan)
             dayFetched = Date()
-            day = try? await Api(token: token).day()
+            if let d = try? await Api(token: token).day() { day = d } else { dayFetched = nil }
             return nil
         } catch {
             return failureMessage(error, otherwise: L("Couldn't add it. Check your connection."))
