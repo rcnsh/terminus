@@ -1394,3 +1394,23 @@ test('Turnstile down is logged, not only told to the visitor as a failed check',
     console.error = log;
   }
 });
+
+test('a last_seen update that fails is logged, and the request still answers', async () => {
+  const { env, email, db } = setup();
+  const cookie = await signIn(env, email);
+  db._db.prepare('UPDATE sessions SET last_seen = ?').run(Date.now() - 86_400_000);
+  const errors = [];
+  const log = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  const batch = db.batch;
+  db.batch = async () => {
+    throw new Error('D1_ERROR: Network connection lost.');
+  };
+  try {
+    assert.equal((await call(env, '/me', { cookie })).status, 200);
+  } finally {
+    db.batch = batch;
+    console.error = log;
+  }
+  assert.ok(errors.some((e) => e.startsWith('last_seen not updated')), errors.join('\n'));
+});
