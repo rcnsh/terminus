@@ -51,13 +51,27 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
+const warned = new Set<string>();
+
+/**
+ * Says once per isolate that a push secret is set but unusable, which
+ * otherwise turns that push off without a word. Only the secret's name:
+ * a parse error's message can quote the value.
+ */
+export function warnUnusable(secret: string): void {
+  if (warned.has(secret)) return;
+  warned.add(secret);
+  console.error(`push: ${secret} is set but unusable, so that push is off`);
+}
+
 function vapid(env: Env): Vapid | null {
   if (!env.VAPID_PRIVATE_KEY) return null;
   try {
     const jwk = JSON.parse(env.VAPID_PRIVATE_KEY) as JsonWebKey;
-    if (jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !jwk.d || !jwk.x || !jwk.y) return null;
+    if (jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !jwk.d || !jwk.x || !jwk.y) throw new Error('not a P-256 private key');
     return { jwk, publicKey: b64url(concat(new Uint8Array([4]), fromB64url(jwk.x), fromB64url(jwk.y))) };
   } catch {
+    warnUnusable('VAPID_PRIVATE_KEY');
     return null;
   }
 }
