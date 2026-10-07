@@ -16,53 +16,36 @@ struct Main: View {
             Header(model: model)
 
             if let v = model.update {
-                HStack(spacing: 10) {
-                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.orange).accessibilityHidden(true)
-                    Text(L("terminus %@ is out", v)).font(.callout)
-                    Spacer()
+                Banner(icon: "arrow.down.circle.fill", tint: .orange, text: L("terminus %@ is out", v)) {
                     // Sparkle usually gets there first; this is for when it hasn't
                     // yet, or can't (a copy outside Applications).
                     if Updater.shared.running {
-                        Button(L("Update")) { Updater.shared.checkNow() }.controlSize(.small)
+                        Button(L("Update")) { Updater.shared.checkNow() }
                     } else {
-                        Button(L("Download")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/download/mac")!) }.controlSize(.small)
+                        Button(L("Download")) { NSWorkspace.shared.open(URL(string: "\(Api.site)/download/mac")!) }
                     }
                 }
-                .card(padding: 10)
             }
 
             if model.wantsSetup {
-                HStack(spacing: 10) {
-                    Image(systemName: "house.fill").foregroundStyle(Color.brand).accessibilityHidden(true)
-                    Text(L("Add where you live and your timetable")).font(.callout)
-                    Spacer()
+                Banner(icon: "house.fill", tint: Color.brand, text: L("Add where you live and your timetable")) {
                     Button(L("Set up")) {
                         openWindow(id: "setup")
                         NSApp.activate()
                     }
-                    .controlSize(.small)
                 }
-                .card(padding: 10)
             }
 
             if model.needsLocation {
-                HStack(spacing: 10) {
-                    Image(systemName: "location.fill").foregroundStyle(.blue).accessibilityHidden(true)
-                    Text(L("Start from my nearest stop")).font(.callout)
-                    Spacer()
-                    Button(L("Allow")) { model.askLocation() }.controlSize(.small)
+                Banner(icon: "location.fill", tint: .blue, text: L("Start from my nearest stop")) {
+                    Button(L("Allow")) { model.askLocation() }
                 }
-                .card(padding: 10)
             } else if model.locationDenied {
                 // Updating from an ad-hoc build (1.3.7 or earlier, or a local
                 // one) can lose the permission; say so instead of quietly guessing.
-                HStack(spacing: 10) {
-                    Image(systemName: "location.slash").foregroundStyle(.secondary).accessibilityHidden(true)
-                    Text(L("Location is off, so times are based on your timetable")).font(.callout)
-                    Spacer()
-                    Button(L("Settings")) { model.openLocationSettings() }.controlSize(.small)
+                Banner(icon: "location.slash", tint: .secondary, text: L("Location is off, so times are based on your timetable")) {
+                    Button(L("Settings")) { model.openLocationSettings() }
                 }
-                .card(padding: 10)
             }
 
             Tabs(model: model)
@@ -107,6 +90,24 @@ struct Main: View {
 
             Search(model: model, query: $query)
         }
+    }
+}
+
+/// A line above the tabs that wants something done: an icon, what, and a small button.
+private struct Banner<Tint: ShapeStyle, Action: View>: View {
+    let icon: String
+    let tint: Tint
+    let text: String
+    @ViewBuilder let action: Action
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).foregroundStyle(tint).accessibilityHidden(true)
+            Text(text).font(.callout)
+            Spacer()
+            action.controlSize(.small)
+        }
+        .card(padding: 10)
     }
 }
 

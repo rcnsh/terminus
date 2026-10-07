@@ -88,10 +88,10 @@ struct Header: View {
         return left >= 60 ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)") : L("Leaves in %@ s", "\(left)")
     }
 
-    private var restStatus: String {
-        let when = model.updated.map { " · \(campusTime($0))" } ?? ""
-        return L("No buses until your day starts") + when
-    }
+    private var restStatus: String { L("No buses until your day starts") + updatedAt }
+
+    /// " · 09:24", when the last refresh came; nothing before one has.
+    private var updatedAt: String { model.updated.map { " · \(campusTime($0))" } ?? "" }
 
     private func heading(_ a: NextAnswer?) -> String {
         if model.showNearby { return L("Nearby") }
@@ -114,7 +114,7 @@ struct Header: View {
 
     private func status(_ a: NextAnswer?) -> String {
         if let e = model.error { return e }
-        let when = model.updated.map { " · \(campusTime($0))" } ?? ""
+        let when = updatedAt
         if model.showNearby { return L("Updated") + when }
         switch a?.quality {
         case "live": return L("Live") + when

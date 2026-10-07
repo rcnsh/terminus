@@ -1,32 +1,40 @@
 import SwiftUI
 import AppKit
 
+/// "#rrggbb" as a number (0xRRGGBB); nil for anything else.
+func hexRGB(_ hex: String) -> UInt32? {
+    guard hex.count == 7, hex.hasPrefix("#") else { return nil }
+    return UInt32(hex.dropFirst(), radix: 16)
+}
+
+extension NSColor {
+    /// An opaque colour from 0xRRGGBB.
+    convenience init(rgb v: UInt32) {
+        self.init(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+    }
+}
+
 extension Color {
     /// "#rrggbb", as the API sends a service's colour; nil for anything else.
     init?(hex: String) {
-        guard hex.count == 7, hex.hasPrefix("#"), let v = UInt32(hex.dropFirst(), radix: 16) else { return nil }
+        guard let v = hexRGB(hex) else { return nil }
         self.init(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255, blue: Double(v & 0xFF) / 255)
     }
 
     /// The site's accent (#c2410c light, #fb923c dark), so the menu bar app
     /// looks like the same product as the web and the widget.
-    static let brand = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
-            ? NSColor(red: 0xFB / 255, green: 0x92 / 255, blue: 0x3C / 255, alpha: 1)
-            : NSColor(red: 0xC2 / 255, green: 0x41 / 255, blue: 0x0C / 255, alpha: 1)
-    })
+    static let brand = themed(light: 0xC2410C, dark: 0xFB923C)
     /// "On time", matching the site's --good-ink.
-    static let good = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
-            ? NSColor(red: 0x4A / 255, green: 0xDE / 255, blue: 0x80 / 255, alpha: 1)
-            : NSColor(red: 0x16 / 255, green: 0x65 / 255, blue: 0x34 / 255, alpha: 1)
-    })
+    static let good = themed(light: 0x166534, dark: 0x4ADE80)
     /// Warning amber for "tight", matching the web's --warn.
-    static let warn = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
-            ? NSColor(red: 0xFB / 255, green: 0xBF / 255, blue: 0x24 / 255, alpha: 1)
-            : NSColor(red: 0xB4 / 255, green: 0x53 / 255, blue: 0x09 / 255, alpha: 1)
-    })
+    static let warn = themed(light: 0xB45309, dark: 0xFBBF24)
+
+    /// One colour in light mode and another in dark, following the appearance.
+    private static func themed(light: UInt32, dark: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            NSColor(rgb: appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil ? dark : light)
+        })
+    }
 }
 
 /// "termi" + "nus" in the accent, as on the site.
@@ -64,7 +72,7 @@ struct SectionLabel: View {
 /// White or near-black text on a service's colour, whichever reads better
 /// (WCAG contrast), as the web and Android pick it.
 func inkOn(_ hex: String) -> Color {
-    guard hex.count == 7, hex.hasPrefix("#"), let v = UInt32(hex.dropFirst(), radix: 16) else { return .white }
+    guard let v = hexRGB(hex) else { return .white }
     func lin(_ c: UInt32) -> Double {
         let s = Double(c & 0xFF) / 255
         return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)

@@ -120,6 +120,9 @@ struct CampusMap {
 
     func stop(_ code: String) -> MapStop? { stops.first { $0.code == code } }
 
+    /// A service's colour; grey for none, or one the map doesn't know.
+    func color(_ svc: String?) -> String { svc.flatMap { routes[$0]?.color } ?? noServiceColor }
+
     /// Of the stops `codes`, the one nearest (`lat`, `lon`): a click's slop can take in two stops a road apart.
     func nearest(_ codes: [String], lat: Double?, lon: Double?) -> String? {
         var seen = Set<String>()
@@ -162,9 +165,12 @@ struct CampusMap {
     }
 }
 
+/// A service without a colour of its own, as on the web and the phone.
+let noServiceColor = "#8a939c"
+
 /// "#E53935" -> "#e53935"; grey for anything else.
 func mapColor(_ hex: String?) -> String {
-    guard let h = hex?.lowercased(), h.count == 7, h.hasPrefix("#"), UInt32(h.dropFirst(), radix: 16) != nil else { return "#8a939c" }
+    guard let h = hex?.lowercased(), hexRGB(h) != nil else { return noServiceColor }
     return h
 }
 
