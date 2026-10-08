@@ -1514,3 +1514,33 @@ test('/line is as old as its stop row: a kept board is not "Updated 0 s ago"', a
   const line = await res.json();
   assert.equal(Date.parse(line.asOf), fetchedAt);
 });
+
+test('a page opened on the old address goes to terminus.run; the apps and the updater stay', async () => {
+  const at = async (host, path, accept, env = makeEnv(), method = 'GET') => {
+    const ctx = makeCtx();
+    const res = await worker.fetch(new Request(`https://${host}${path}`, { method, headers: accept ? { accept } : {} }), env, ctx);
+    await ctx.settle();
+    return res;
+  };
+  const html = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+  for (const path of ['/', '/account/', '/app/', '/privacy/zh/', '/docs', '/pair?code=K7QX4M', '/auth/verify?t=abc']) {
+    const res = await at('terminus.rcn.sh', path, html);
+    assert.equal(res.status, 301, path);
+    assert.equal(res.headers.get('location'), `https://terminus.run${path}`);
+    // Search engines move it for good; a browser asks again after a day, so moving back stays possible.
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=86400');
+  }
+  // What the apps, the Mac's updater and Android's link check ask for there is answered there.
+  for (const [path, accept] of [['/me/next', 'application/json'], ['/campus', 'application/json'], ['/download/appcast.xml', html], ['/.well-known/assetlinks.json', html], ['/map/style.json', html], ['/robots.txt', html], ['/download/latest.json', null]]) {
+    assert.notEqual((await at('terminus.rcn.sh', path, accept)).status, 301, path);
+  }
+  assert.notEqual((await at('terminus.rcn.sh', '/auth/code', html, makeEnv(), 'POST')).status, 301, 'only GET and HEAD');
+  // The new address itself, and an address that isn't ours, are never redirected.
+  assert.notEqual((await at('terminus.run', '/', html)).status, 301);
+  assert.notEqual((await at('bus.example.test', '/', html)).status, 301);
+  // The beta sends its own old address to itself, and never the stable one's.
+  const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.run' };
+  assert.equal((await at('beta.terminus.rcn.sh', '/account/', html, beta)).headers.get('location'), 'https://beta.terminus.run/account/');
+  assert.notEqual((await at('terminus.rcn.sh', '/', html, beta)).status, 301);
+  assert.notEqual((await at('beta.terminus.rcn.sh', '/', html)).status, 301);
+});

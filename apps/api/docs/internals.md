@@ -746,6 +746,17 @@ database, KV, bucket, rate-limit namespace, dataset, Worker or domain with
 the stable site, and that the release and map scripts upload to each site's
 bucket.
 
+Each Worker answers on two addresses: terminus.run, which people see, and
+terminus.rcn.sh, the one kept for good, which the apps call and the Mac's
+updates come from (the beta's likewise). A page a browser opens on the old
+address is sent to the same path on the new one (`movedPage` in
+`src/site.ts`): a GET or HEAD asking for HTML, outside `/download/`,
+`/.well-known/`, `/map/` and `/robots.txt`. Anything asking for JSON, the
+apps included, is answered where it is. The 301 carries `max-age=86400`, so
+search engines move the old address's pages over but a browser asks again
+after a day, and moving back is an edit to `MOVED`, not something browsers
+keep for good.
+
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and the sender's domain onboarded under Email
 Service > Email Sending in the dashboard. It is still terminus.rcn.sh, the

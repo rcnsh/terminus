@@ -13,6 +13,37 @@ export const siteOrigin = (env: Env): string => env.PUBLIC_ORIGIN || STABLE_ORIG
 
 export const isBeta = (env: Env): boolean => siteOrigin(env) !== STABLE_ORIGIN;
 
+/** The site's old addresses, and where each one's pages now live. */
+const MOVED: Record<string, string> = {
+  'terminus.rcn.sh': STABLE_ORIGIN,
+  'beta.terminus.rcn.sh': 'https://beta.terminus.run',
+};
+
+/**
+ * What keeps answering on an old address, for what calls it there rather
+ * than a person: the Mac's updates and the downloads, Android's app-link
+ * check, the map's files and crawlers' rules.
+ */
+const STAYS = ['/download/', '/.well-known/', '/map/', '/robots.txt'];
+
+/**
+ * A page opened on an old address goes to the same page on the new one.
+ * Only a browser's GET for HTML: the apps call the old address on purpose
+ * (it's the one kept for good) and ask for JSON, so they're never sent
+ * on. A 301, for search engines, that browsers keep for a day only, so
+ * moving back is a change here, not something cached for good.
+ */
+export function movedPage(req: Request, env: Env): Response | null {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return null;
+  const url = new URL(req.url);
+  const to = MOVED[url.hostname];
+  // Each Worker sends only its own old address on, to itself.
+  if (to === undefined || to !== siteOrigin(env)) return null;
+  if (!(req.headers.get('accept') ?? '').includes('text/html')) return null;
+  if (STAYS.some((p) => url.pathname === p || url.pathname.startsWith(p))) return null;
+  return new Response(null, { status: 301, headers: { location: `${to}${url.pathname}${url.search}`, 'cache-control': 'public, max-age=86400' } });
+}
+
 /** The sender's name on every email, so a beta email is never mistaken for the real one. */
 export const mailName = (env: Env): string => (isBeta(env) ? 'terminus beta' : 'terminus');
 
