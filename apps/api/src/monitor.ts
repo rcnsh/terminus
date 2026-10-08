@@ -22,8 +22,6 @@ import { ACCOUNT_TTL } from './accounts.ts';
 import { type Notice, pushEnabled, remindUser } from './push.ts';
 import { m, withLang } from './i18n.ts';
 import { clearTrip, sgtDate, watchTrip } from './trip.ts';
-import { refreshTable } from './ridetimes.ts';
-import { sgt } from './config.ts';
 import { isBeta } from './site.ts';
 import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
@@ -667,6 +665,4 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   // Starts the day's timelapse recorder in the morning (it runs itself after that).
   await step('timelapse', () => ensureRecorder(env, nowMs));
   await step('term', () => remindTerm(env, nowMs));
-  // Measured ride times: once a day, early, before the day's trips.
-  if (env.DB && sgt(nowMs).minutes >= 4 * 60) await step('ride times', () => refreshTable(env, nowMs));
 }

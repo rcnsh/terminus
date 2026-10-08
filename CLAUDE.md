@@ -204,7 +204,7 @@ apps/api/
   src/accounts.ts     Sign-in codes/links, sessions, anonymous accounts, pairing (D1)
   src/applogin.ts     App sign-in approved from the email (RFC 8628-like)
   src/trip.ts, tripdo.ts  Per-user Durable Object with today's trip signals
-  src/detect.ts, outcomes.ts, ridetimes.ts  Ride detection, measured ride times
+  src/outcomes.ts     How each trip went (taps, Not going) and what it suggests
   src/monitor.ts      15-minute cron: feed health, incidents, housekeeping
   src/calendarsync.ts The academic calendar, refreshed into KV by the cron
   src/push.ts, webpush.ts  Push: FCM to Android, Web Push to the installed web app

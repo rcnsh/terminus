@@ -11,11 +11,12 @@
 // feed reported, and a line shows no times at stops other than yours.
 
 import { Fill, Icon, MARK, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useStore } from '/assets/ui.js';
-import { clock, inkOn, send, serverNow, t } from '/account/dom.js';
+import { clock, send, serverNow, t } from '/account/dom.js';
 import { campus, edit, limit, loadCampus, profile, reloadProfile, toast } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { Celestial, Horizon } from '/account/sky.js';
 import { busesTabIndex } from '/account/search.js';
+import { Big, Chip, Crowd, Quality, Row, colorOf, stoppedWords, svcVars, thenText } from '/app/board.js';
 
 /** The page on screen refreshes this often (the API caches arrivals 15 s). */
 const REFRESH_MS = 15_000;
@@ -75,8 +76,6 @@ const stopOf = (code) => campus.get()?.stops.find((s) => s.code === code) ?? nul
 /** A stop as people say it ("Yusof Ishak House"), not its sign's short name ("YIH"). */
 const longName = (s) => s?.longName ?? s?.name;
 const stopName = (code) => longName(stopOf(code)) ?? code;
-const colorOf = (svc) => campus.get()?.routes[svc]?.color ?? '#8a939c';
-const svcVars = (color) => `--svc:${color};--svc-ink:${inkOn(color)}`;
 const pins = () => profile.get()?.pinnedStops ?? [];
 /** The stop across the road from `code`, from its board, else the campus's map. */
 const oppositeOf = (code) => boards.get().get(code)?.stop?.opposite ?? stopOf(code)?.opposite ?? null;
@@ -277,43 +276,6 @@ const BACK = '<path d="m15 5-7 7 7 7"/>';
 const NEXT = '<path d="m9 6 6 6-6 6"/>';
 const BUS = '<rect x="5" y="3.5" width="14" height="13.5" rx="3"/><path d="M5 10.5h14M8 17v2.5M16 17v2.5"/>';
 const PIN = '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/>';
-const SEAT = '<path d="M6 20v-5.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2V20M8 12.5V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v6.5"/>';
-const PEOPLE = '<circle cx="8.5" cy="7.5" r="2.8"/><circle cx="16" cy="7.5" r="2.8"/><path d="M3.5 20v-1.5a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4V20M14 14.5h3a4 4 0 0 1 4 4V20"/>';
-
-const mins = (s) => Math.max(1, Math.round(s / 60));
-
-/** How full the first bus is, as the feed says; nothing when it doesn't. */
-function Crowd({ crowd }) {
-  if (!crowd) return null;
-  const word = { low: t('Seats'), medium: t('Busy'), high: t('Packed') }[crowd];
-  if (!word) return null;
-  return html`<span class=${`bt-crowd ${crowd}`}><${Icon} paths=${crowd === 'low' ? SEAT : PEOPLE} />${word}</span>`;
-}
-
-/** Live, Scheduled, or a live time that has stopped updating. Nothing without a time. */
-function Quality({ r }) {
-  if (r.etaS == null) return null;
-  if (r.quality === 'live') return html`<span class="bt-live"><span class="dot"></span>${t('Live')}</span>`;
-  if (r.quality === 'scheduled') return html`<span class="bt-sched">${t('Scheduled')}</span>`;
-  if (r.quality === 'stale') return html`<span class="bt-stale">${t('Last known')}</span>`;
-  return null;
-}
-
-/**
- * The big time, in the server's words (`eta`: "7 min", "~7 min", "now"),
- * its numbers large and the rest small; or why there's none. An answer
- * without `eta` (an older server) is worded here as it was.
- */
-function Big({ r }) {
-  if (r.etaS == null) return html`<span class="bt-big none">${r.quality === 'unknown' ? t('No live times') : t('No time yet')}</span>`;
-  if (r.eta == null) {
-    if (r.etaS < 60) return html`<span class="bt-big now">${t('Arriving')}</span>`;
-    return html`<span class="bt-big">${mins(r.etaS)}<small>${t('min')}</small></span>`;
-  }
-  const parts = r.eta.split(/(\d+)/).filter(Boolean);
-  if (!parts.some((x) => /^\d+$/.test(x))) return html`<span class="bt-big now">${r.eta}</span>`;
-  return html`<span class="bt-big">${parts.map((x) => (/^\d+$/.test(x) ? x : html`<small>${x}</small>`))}</span>`;
-}
 
 /**
  * Row `r` from an answer as of `asOf`, as it stands at `now` (both on the
@@ -335,76 +297,6 @@ function aged(r, asOf, now) {
     laterText: null,
     later: r.later?.map((x) => ({ ...x, etaS: x.etaS - s })).filter((x) => x.etaS > 0),
   };
-}
-
-/** "then 12, ~20 min": the later buses the feed gave, a timetabled one marked, as the server words it. */
-const thenText = (r) => r.laterText ?? (r.later?.length ? t('then {0} min', r.later.map((x) => mins(x.etaS)).join(t(', '))) : '');
-
-/** "to Central Library, Kent Vale" (the server's `toText`), the next stop in bold. */
-function Towards({ r }) {
-  const to = r.towards;
-  if (r.toText != null) {
-    const at = to?.length ? r.toText.indexOf(to[0]) : -1;
-    if (at < 0) return r.toText;
-    return html`${r.toText.slice(0, at)}<b>${to[0]}</b>${r.toText.slice(at + to[0].length)}`;
-  }
-  // From an older server: worded here. The end of its line: nowhere further to say.
-  if (!to?.length) return t('Ends here');
-  const text = to.length > 1 ? t('to {0}, {1}', MARK, to[1]) : t('to {0}', MARK);
-  return html`<${Fill} text=${text} parts=${[html`<b>${to[0]}</b>`]} />`;
-}
-
-function Chip({ svc, color, paid, cls = '' }) {
-  return html`<span class=${`svc-tag ${cls}`} style=${svcVars(color ?? colorOf(svc))}>${svc}${paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span>`;
-}
-
-/** The date on campus (YYYY-MM-DD) of a moment, for "tomorrow". */
-const campusDate = (ms) => new Date(ms + 8 * 3600_000).toISOString().slice(0, 10);
-const WEEKDAYS = () => [t('Sunday'), t('Monday'), t('Tuesday'), t('Wednesday'), t('Thursday'), t('Friday'), t('Saturday')];
-
-/**
- * Why a service isn't running and when it's back, from the API's `stopped`
- * and `resumesAt`: ["Stopped for today", "Back tomorrow at 7:40 am"]. The
- * second is null when the API knows no next start.
- */
-function stoppedWords(stopped, resumesAt, now = serverNow()) {
-  const first = stopped === 'notYet' ? t('Not running yet') : stopped === 'noService' ? t('No service today') : t('Stopped for today');
-  if (!resumesAt) return [first, null];
-  const at = Date.parse(resumesAt);
-  const time = clock(resumesAt);
-  const day = campusDate(at);
-  if (day === campusDate(now)) return [first, t('Starts at {0}', time)];
-  if (day === campusDate(now + 86_400_000)) return [first, t('Back tomorrow at {0}', time)];
-  return [first, t('Back {0} at {1}', WEEKDAYS()[new Date(at + 8 * 3600_000).getUTCDay()], time)];
-}
-
-/** A service that isn't running: greyed, saying so where the minutes go, still opening its line. */
-function StoppedRow({ r, stop }) {
-  const [first, second] = stoppedWords(r.stopped, r.resumesAt, tick.get());
-  // "Ends here" says nothing about a bus that isn't coming: no line then.
-  return html`
-    <button type="button" class="bt-row stopped" onClick=${() => go(lineHash(r.svc, stop))}>
-      <${Chip} svc=${r.svc} color=${r.color} cls="bt-chip muted" />
-      <span class="bt-dir">${r.towards?.length ? html`<${Towards} r=${r} />` : ''}</span>
-      <span class="bt-big none">${first}</span>
-      <span class="bt-meta">${second}</span>
-    </button>
-  `;
-}
-
-/** A service's row on a board. Tapped, its line; a public bus has none here. */
-function Row({ r, stop }) {
-  if (r.running === false) return html`<${StoppedRow} r=${r} stop=${stop} />`;
-  const cls = `bt-row${r.etaS != null && r.etaS < 60 && r.quality === 'live' ? ' soon' : ''}${r.old ? ' old' : ''}`;
-  const body = html`
-    <${Chip} svc=${r.svc} color=${r.color} paid=${r.paid} cls="bt-chip" />
-    <span class="bt-dir"><${Towards} r=${r} /></span>
-    <${Big} r=${r} />
-    <span class="bt-meta"><${Quality} r=${r} /><${Crowd} crowd=${r.crowd} /></span>
-    <span class="bt-then">${thenText(r)}</span>
-  `;
-  if (r.paid) return html`<div class=${cls}>${body}</div>`;
-  return html`<button type="button" class=${cls} onClick=${() => go(lineHash(r.svc, stop))}>${body}</button>`;
 }
 
 /** "Updated 5 s ago": from the server's `asOf`, as old as the times are, not when this browser fetched them. */
@@ -429,7 +321,7 @@ function Board({ code }) {
   const ending = b.board.filter((r) => r.endsAt && Date.parse(r.endsAt) > now && Date.parse(r.endsAt) - now <= ENDS_SOON_MS);
   return html`
     ${b.board.length
-      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.asOf, now)} stop=${code} />`)}</div>`
+      ? html`<div class="card bt-board">${b.board.map((r) => html`<${Row} key=${r.svc} r=${aged(r, b.asOf, now)} now=${now} onPick=${(svc) => go(lineHash(svc, code))} />`)}</div>`
       : html`<p class="hint bt-empty">${b.available ? t('No buses due') : t('No times right now')}</p>`}
     <div class="bt-foot">
       <div class="bt-ends">${ending.map((r) => html`<div key=${r.svc}><${Chip} svc=${r.svc} color=${r.color} cls="small" /> ${t('Runs until {0}', clock(r.endsAt))}</div>`)}</div>

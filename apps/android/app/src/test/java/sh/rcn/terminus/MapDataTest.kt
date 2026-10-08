@@ -181,6 +181,34 @@ class MapDataTest {
         assertEquals(Stretch(812.5, 1100.0, "COM 3"), list.buses[1].stretch)
     }
 
+    @Test fun busesSayWhichStopsAreAheadAndWhereTheyreGoing() {
+        val list = BusList.parse(JSONObject("""{"svc": "D1", "available": true, "buses": [
+            {"id": "a", "lat": 1.0, "lon": 103.0, "moving": true, "crowd": "low", "at": null, "stretch": {"from": 100, "to": 400, "last": {"code": "CLB", "name": "CLB"}},
+             "nextStop": {"code": "LT13", "name": "LT 13"},
+             "upcoming": [{"code": "LT13", "name": "LT 13"}, {"code": "AS5", "name": "AS 5"}, {"code": "BIZ2", "name": "BIZ 2"}, {"code": "S", "name": "S"}, {"code": "T", "name": "T"}, {"code": "U", "name": "U"}, {"code": "V", "name": "V"}],
+             "towards": {"code": "UTOWN", "name": "UTown"}},
+            {"id": "b", "lat": 1.0, "lon": 103.0, "moving": false, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "stretch": null,
+             "nextStop": {"code": "BIZ2", "name": "BIZ 2"}, "upcoming": [{"code": "BIZ2", "name": "BIZ 2"}, {"code": "UTOWN", "name": "UTown"}], "towards": {"code": "UTOWN", "name": "UTown"}},
+            {"id": "c", "lat": 1.0, "lon": 103.0, "moving": true, "crowd": null, "nextStop": {"code": "LT13", "name": "LT 13"}},
+            {"id": "d", "lat": 1.0, "lon": 103.0, "moving": false, "crowd": null, "at": {"code": "KR-MRT", "name": "KR MRT"}, "nextStop": null, "upcoming": [], "towards": {"code": "KR-MRT", "name": "KR MRT"}}]}"""))
+        val (a, b, c, d) = list.buses
+        assertEquals(listOf("LT 13", "AS 5", "BIZ 2", "S", "T", "U", "V"), a.upcoming)
+        assertEquals("UTown", a.towards)
+        assertEquals("an older API: none listed", emptyList<String>(), c.upcoming)
+        assertNull("an older API: no end", c.towards)
+
+        // Between stops: the stop it passed, the next, four more, and a count.
+        assertEquals(BusStrip(passed = "CLB", here = null, next = "LT 13", after = listOf("AS 5", "BIZ 2", "S", "T"), more = 2), BusStrip.of(a))
+        assertTrue(BusStrip.of(a).between)
+        // At a stop: that stop, then what's ahead of it.
+        assertEquals(BusStrip(passed = null, here = "COM 3", next = "BIZ 2", after = listOf("UTown"), more = 0), BusStrip.of(b))
+        assertFalse(BusStrip.of(b).between)
+        // An older API: just its next stop.
+        assertEquals(BusStrip(passed = null, here = null, next = "LT 13", after = emptyList(), more = 0), BusStrip.of(c))
+        // Past a one-way line's end: nothing ahead to list.
+        assertFalse(BusStrip.of(d).any)
+    }
+
     @Test fun aTappedBusShowsTheStretchItIsOn() {
         // East, then north: an L with its corner at (103.001, 1.0).
         val path = RoutePath(listOf(doubleArrayOf(103.0, 1.0), doubleArrayOf(103.001, 1.0), doubleArrayOf(103.001, 1.001)))

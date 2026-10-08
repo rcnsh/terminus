@@ -35,7 +35,6 @@ ONE ANSWER, ON YOUR HOME SCREEN
 
 IT FOLLOWS YOUR TRIP
 • Once your bus leaves, terminus takes it you're on it and shows the next stop and when you'll get there.
-• Turn on "Notice when I board" and, during a trip, it uses your location to tell when you're on the bus, when you've missed it, and when you're there. On the bus, your arrival comes from that bus's live position.
 • If you miss it, it shows the next way there straight away.
 • If you're not going, swipe it off today's list, on every device.
 
@@ -57,7 +56,7 @@ ALSO
 
 YOUR PRIVACY
 • No sign-up: the app makes an account of its own. Adding an email is optional, and only needed to use terminus on another device.
-• Your location is used to find the stops near you and show where you are on the map while you use the app or tap a widget button, and during a trip only if you turn on "Notice when I board". terminus keeps only what it means (on the bus, missed it, there), and doesn't keep where you were.
+• Your location is used to find the stops near you and show where you are on the map, only while you use the app or tap a widget button. terminus doesn't keep where you were.
 • No ads, no tracking, no analytics SDK.
 • Download everything terminus keeps about you from Settings. Delete your account and everything with it from Settings (with an email added, from the account page), or clear just your trip history.
 
@@ -96,7 +95,6 @@ terminus 告诉你什么时候该出发去上下一节课，以及该搭哪一�
 
 它会跟着你的行程
 • 巴士开走后，terminus 会当作你已经上车，并显示下一站和你什么时候到。
-• 打开“上车时自动识别”后，行程中它会用你的位置判断你是否已经上车、错过了车，或已经到达。在车上时，到达时间来自那辆车的实时位置。
 • 错过了车，它会立刻给出下一种走法。
 • 不去的话，把它从今天的列表里滑掉，所有设备同步。
 
@@ -118,7 +116,7 @@ terminus 告诉你什么时候该出发去上下一节课，以及该搭哪一�
 
 你的隐私
 • 不用注册：应用会自己创建一个账户。添加邮箱是可选的，只有想在其他设备上使用 terminus 时才需要。
-• 你使用应用或点小组件按钮时，会用位置找附近的车站、在地图上显示你的位置；只有打开“上车时自动识别”后，行程中才会用到位置。terminus 只保留它代表的意思（已上车、错过了、已到达），不保存你去过哪里。
+• 只有在你使用应用或点小组件按钮时，才会用位置找附近的车站、在地图上显示你的位置。terminus 不保存你去过哪里。
 • 没有广告、没有追踪、没有分析 SDK。
 • 可以在设置里下载 terminus 保存的你的所有数据。可以在设置里删除你的账户和所有数据（添加邮箱后在账户页面删除），或只清除行程记录。
 
@@ -171,10 +169,10 @@ Play Console → App content → Foreground service permissions. Two permissions
 - Impact if deferred or stopped: "The countdown and the bus to catch would be out of date by the time the user looks, and they would miss the bus the notification is telling them to catch."
 - Video: `build/play/fgs-live-notification.mp4`.
 
-**Location** (`LiveService` with "Notice when I board", and `WidgetModeService`):
+**Location** (`WidgetModeService`):
 
-- Description: "1) With 'Notice when I board' turned on, during a trip that a tap started (opening the app, or tapping its notification or widget), the live notification reads the location to tell whether the user has boarded the bus, missed it, or arrived, and updates the plan on their other devices. 2) Tapping Nearby or a place on the home screen widget takes one location fix to show the buses near the user or the quickest way from where they are. Both start only from a user's tap, and the app never requests background location."
-- Impact if deferred or stopped: "The trip would not notice the user boarding or missing the bus, so the notification and widget would show the wrong next step; a widget tap would show buses near the user's home instead of where they are."
+- Description: "Tapping Nearby or a place on the home screen widget takes one location fix to show the buses near the user or the quickest way from where they are. It starts only from the user's tap, and the app never requests background location."
+- Impact if deferred or stopped: "A widget tap would show buses near the user's home instead of where they are."
 - Video: `build/play/fgs-location.mp4`.
 
 ## Before the first upload: app signing

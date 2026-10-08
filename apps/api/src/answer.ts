@@ -23,7 +23,6 @@ import {
 import { logAnswer } from './analytics.ts';
 import { leaveBy } from './leave.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
-import { hopSecondsFor, loadTable } from './ridetimes.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { m } from './i18n.ts';
 
@@ -94,11 +93,6 @@ export async function answerFor(
   // With public buses on, the graph that has them: more services at the same stops.
   const graph = input.publicBuses ? GRAPH_PUBLIC : GRAPH;
   const idx = indexGraph(graph);
-  // Measured seconds between stops, where enough rides have been seen (phase 8.2).
-  if (!input.hopS) {
-    const hopS = hopSecondsFor(await loadTable(env, nowMs), nowMs);
-    if (hopS) input = { ...input, hopS };
-  }
   const cands = candidateStops(graph, input);
   const originStop = input.originCode ? (idx.byCode.get(input.originCode) ?? null) : null;
   const fallbackStop = cands[0]?.stop ?? originStop;

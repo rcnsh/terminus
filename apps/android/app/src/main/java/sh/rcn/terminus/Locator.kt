@@ -41,9 +41,6 @@ object Locator {
 
     fun hasForeground(ctx: Context) = granted(ctx, Manifest.permission.ACCESS_COARSE_LOCATION)
 
-    /** Precise location: what telling a bus from the road beside it needs (TripWatch). */
-    fun hasPrecise(ctx: Context) = granted(ctx, Manifest.permission.ACCESS_FINE_LOCATION)
-
     /** For the widget and worker: a cached fix only, never a new GPS request. */
     fun lastKnown(ctx: Context, maxAgeMs: Long = MAX_AGE_MS): Location? {
         if (!hasForeground(ctx)) return null
