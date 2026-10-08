@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -93,6 +95,13 @@ data class PendingPair(val code: String, val account: String)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
+
+    /**
+     * The parent of every request made for the account (answers, Today, the
+     * card's buttons): all cancelled together on signing out ([endAccount]),
+     * so none still out lands afterwards on the welcome screen.
+     */
+    private val account = SupervisorJob(viewModelScope.coroutineContext[Job])
     private val _state: MutableStateFlow<UiState>
 
     init {
@@ -111,7 +120,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Signed out by a refused token while open (here, the widget, a push): the welcome screen, saying why.
         viewModelScope.launch {
             Session.signedOut.collect {
-                loadJob?.cancel()
+                endAccount()
                 _state.value = UiState(paired = false, pairError = Session.message(store.takeSignedOut()))
             }
         }
@@ -216,13 +225,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val token = store.token ?: return
         val target = _state.value.target
         if (target == Target.Plan) return
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             val ctx = getApplication<Application>()
             try {
                 val json = Api(token, hour12 = hour12(ctx)).once(target, atMin)
                 val now = System.currentTimeMillis()
                 // Read before it's kept: one this version can't read leaves the last good one.
-                Refresher.scheduleNext(ctx, store.saveAnswer(json, now), now)
+                // Signed out meanwhile: none of it is this phone's any more.
+                Refresher.scheduleNext(ctx, store.saveAnswer(json, now, sentWith = token) ?: return@launch, now)
                 redrawWidgets(ctx)
                 select(Target.Plan)
                 loadDay()
@@ -270,17 +280,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The account was deleted on the server, or this phone removed from it: only local state is left to clear. */
     fun signedOut() {
-        loadJob?.cancel()
+        endAccount()
         Session.clearLocal(getApplication())
         _state.value = UiState(paired = false)
     }
 
     /** Local state goes first, so the screen reacts at once even offline; the server is told when there's a network. */
     fun unpair() {
-        loadJob?.cancel()
+        endAccount()
         Session.signOut(getApplication())
         _state.value = UiState(paired = false)
     }
+
+    /**
+     * Every request still out for the account, cancelled. One past its save
+     * already is kept from the phone by [Store.saveAnswer]'s token check.
+     */
+    private fun endAccount() = account.cancelChildren()
 
     /**
      * A 401 for [token]: signed out ([Session.rejected]), and the screen
@@ -300,7 +316,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun report(reason: String?, note: String, answer: String?, appVersion: String) {
         val token = store.token ?: return
         _state.update { it.copy(reportSending = true, reportResult = null) }
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             val failure = try {
                 Api(token).report(reason, note.trim(), answer?.let { org.json.JSONObject(it) }, appVersion)
                 null
@@ -330,12 +346,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (action.id == "skipped") _state.value.day?.items?.firstOrNull { it.key == action.trip }?.let { removeFromToday(it, swiped = false); return }
         if (_state.value.signalling) return
         _state.update { it.copy(signalling = true, error = null) }
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             val ctx = getApplication<Application>()
             try {
                 val json = Api(token, hour12 = hour12(ctx)).signal(action.id, action.trip)
                 val now = System.currentTimeMillis()
-                val answer = store.saveAnswer(json, now)
+                val answer = store.saveAnswer(json, now, sentWith = token) ?: return@launch
                 Refresher.scheduleNext(ctx, answer, now)
                 redrawWidgets(ctx)
                 _state.update {
@@ -364,7 +380,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val token = store.token ?: return
         if (_state.value.signalling) return
         _state.update { it.copy(signalling = true, error = null) }
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             try {
                 Api(token).choice(if (accept) "accept" else "dismiss", id = s.id)
                 _state.update { it.copy(signalling = false) }
@@ -388,11 +404,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { s ->
             s.copy(day = s.day?.let { d -> d.copy(items = d.items.filter { it.key != item.key }) }, removed = item, removeError = null)
         }
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             val ctx = getApplication<Application>()
             try {
-                applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key))
-                if (swiped) {
+                if (applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("skipped", item.key), token) && swiped) {
                     store.swipedToday = true
                     _state.update { it.copy(swipeHint = false, swipePeek = false) }
                 }
@@ -412,9 +427,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val item = _state.value.removed ?: return
         val token = store.token ?: return
         _state.update { it.copy(removed = null) }
-        viewModelScope.launch {
+        viewModelScope.launch(account) {
             val ctx = getApplication<Application>()
-            runCatching { applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("reset", item.key)) }
+            runCatching { applyPlan(ctx, Api(token, hour12 = hour12(ctx)).signal("reset", item.key), token) }
                 .onFailure { e ->
                     if (e is CancellationException) throw e
                     if (e is ApiError && rejected(e, token)) return@launch
@@ -436,13 +451,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(swipePeek = false) }
     }
 
-    /** A new plan from /me/signal: shown, cached for the widget, and the alarms moved. */
-    private fun applyPlan(ctx: Application, json: org.json.JSONObject) {
+    /**
+     * A new plan from /me/signal, asked for with [token]: shown, cached for
+     * the widget, and the alarms moved. False, and none of it, when the phone
+     * signed out (or into another account) while it was asked for.
+     */
+    private fun applyPlan(ctx: Application, json: org.json.JSONObject, token: String): Boolean {
         val now = System.currentTimeMillis()
-        val answer = store.saveAnswer(json, now)
+        val answer = store.saveAnswer(json, now, sentWith = token) ?: return false
         Refresher.scheduleNext(ctx, answer, now)
         viewModelScope.launch { redrawWidgets(ctx) }
         _state.update { it.copy(answers = it.answers + (Target.Plan to answer), rawAnswers = it.rawAnswers + (Target.Plan to json.toString()), fetchedAt = now) }
+        return true
     }
 
     private var dayJob: Job? = null
@@ -451,13 +471,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun loadDay() {
         val token = store.token ?: return
         if (dayJob?.isActive == true) return
-        dayJob = viewModelScope.launch {
+        dayJob = viewModelScope.launch(account) {
             // Where the phone was a moment ago (no new fix): the next class from there, as the card has it.
             val loc = Locator.lastKnown(getApplication(), maxAgeMs = 60_000)
             try {
                 val json = Api(token, hour12 = hour12(getApplication())).dayJson(loc?.latitude, loc?.longitude, Locator.accOf(loc))
                 // Kept for when the phone goes offline (OfflineDay); one this version can't read isn't.
-                val day = store.saveDay(json, System.currentTimeMillis())
+                // Signed out meanwhile: the old account's day, kept nowhere.
+                val day = store.saveDay(json, System.currentTimeMillis(), sentWith = token) ?: return@launch
                 _state.update { it.copy(day = day) }
             } catch (e: CancellationException) {
                 throw e
@@ -538,7 +559,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (!restart) return
             loadJob?.cancel()
         }
-        loadJob = viewModelScope.launch {
+        loadJob = viewModelScope.launch(account) {
             _state.update { it.copy(loading = true, liveUpdates = store.liveUpdates) }
             val ctx = getApplication<Application>()
             // A fix from the last minute is as good as a new one, and costs no
@@ -554,7 +575,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val json = api.nextJson(s.target, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                     val now = System.currentTimeMillis()
                     // The planned answer is read as it's kept (only once read); another, only read.
-                    val answer = if (s.target == Target.Plan) store.saveAnswer(json, now) else NextAnswer.parse(json)
+                    // Signed out meanwhile: the screen has moved on, and the answer was the old account's.
+                    val answer = (if (s.target == Target.Plan) store.saveAnswer(json, now, sentWith = token) else NextAnswer.parse(json))
+                        ?: return@launch _state.update { it.copy(loading = false) }
                     // The planned answer is exactly what the widget shows, so
                     // keep the widget in step while the app is open.
                     if (s.target == Target.Plan) {
@@ -602,7 +625,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadDestinations() {
         if (_state.value.destinations.isNotEmpty() || destinationsJob?.isActive == true) return
-        destinationsJob = viewModelScope.launch {
+        destinationsJob = viewModelScope.launch(account) {
             runCatching { Api(store.token).destinations() }.onSuccess { d -> _state.update { it.copy(destinations = d) } }
         }
     }
