@@ -26,6 +26,10 @@
   .toc a { display: flex; justify-content: space-between; padding: 12px 18px; color: var(--ink); text-decoration: none; }
   .toc a + a { border-top: 1px solid var(--line); }
   .toc a span { color: var(--muted); }
+  /* Room between the card and the text, and a jump to a section glides
+     there rather than cutting, unless the system asks for less motion. */
+  .toc + article { margin-top: 32px; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
   article h2 { font-size: 1.25rem; margin: 40px 0 10px; scroll-margin-top: 16px; }
   article p, article li { color: var(--ink); line-height: 1.65; }
   article p + p { margin-top: 12px; }
