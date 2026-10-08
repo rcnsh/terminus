@@ -1,8 +1,10 @@
 package sh.rcn.terminus.widget
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -13,6 +15,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.net.toUri
 import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
@@ -38,7 +41,9 @@ import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.Place
 import sh.rcn.terminus.R
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Store
+import sh.rcn.terminus.setWhileIdle
 import sh.rcn.terminus.Target
 import sh.rcn.terminus.hour12
 
@@ -91,6 +96,8 @@ object WidgetModes {
     const val KEEP_MS = 30 * 60_000L
     /** A chosen place's answer is fetched again in the background at most this often. */
     private const val REFETCH_MS = 60_000L
+    /** Nearby's countdowns are guesses past this: dimmed then. */
+    const val NEARBY_OLD_MS = 180_000L
 
     val MODE = stringPreferencesKey("mode")
     val MODE_LABEL = stringPreferencesKey("mode-label")
@@ -131,9 +138,9 @@ object WidgetModes {
         return labels.size
     }
 
-    /** The buttons for a row this wide: Timetable and Nearby, then favourites and added places. None if those two don't fit. */
-    fun chips(store: Store, places: List<Place>, added: List<Destinations.Dest>, widthDp: Float, now: Long = System.currentTimeMillis()): List<Mode> {
-        val ranked = Destinations.rank(places, added, store.destinationUses(), now).map { Mode.To(it) }
+    /** The buttons for a row this wide: Timetable and Nearby, then favourites and added places ([uses]: Store.destinationUses). None if those two don't fit. */
+    fun chips(uses: Map<String, Destinations.Use>, places: List<Place>, added: List<Destinations.Dest>, widthDp: Float, now: Long = System.currentTimeMillis()): List<Mode> {
+        val ranked = Destinations.rank(places, added, uses, now).map { Mode.To(it) }
         return pick(listOf(Mode.Timetable, Mode.Nearby) + ranked, ranked.firstOrNull { it.dest.id == added.firstOrNull()?.id }, widthDp)
     }
 
@@ -178,16 +185,20 @@ object WidgetModes {
             updateAppWidgetState(ctx, id) { it.remove(MODE_ERROR) }
             Store(ctx).lastError = UPDATING
             redrawWidgets(ctx)
-            Refresher.refresh(ctx, fast = true)
+            // A tap's broadcast has seconds: the rest of a refresh follows in a job.
+            Refresher.refresh(ctx, fast = true, extras = false)
+            armChosen(ctx)
             return
         }
-        fetch(ctx, id, mode, fresh)
+        request(ctx, mode, fresh)?.let { record(ctx, id, mode, it) }
         redrawWidgets(ctx)
+        armChosen(ctx)
     }
 
-    private suspend fun fetch(ctx: Context, id: GlanceId, mode: Mode, fresh: Boolean) {
+    /** What [mode] shows, asked for once; null when there's nothing to record (signed out, or the token refused). */
+    private suspend fun request(ctx: Context, mode: Mode, fresh: Boolean): Result<JSONObject>? {
         val store = Store(ctx)
-        val token = store.token ?: return
+        val token = store.token ?: return null
         val loc = if (fresh) Locator.current(ctx) else Locator.lastKnown(ctx)
         val api = Api(token, fast = true, hour12 = hour12(ctx))
         val result = runCatching {
@@ -197,6 +208,16 @@ object WidgetModes {
                 Mode.Timetable -> JSONObject()
             }
         }
+        when (val e = result.exceptionOrNull()) {
+            // Replaced or stopped: nothing to record.
+            is kotlinx.coroutines.CancellationException -> throw e
+            // The token refused: the phone signs out (the widget says why), and this place goes with the rest.
+            is ApiError -> if (e.status == 401 && sh.rcn.terminus.Session.rejected(ctx, token)) return null
+        }
+        return result
+    }
+
+    private suspend fun record(ctx: Context, id: GlanceId, mode: Mode, result: Result<JSONObject>) {
         updateAppWidgetState(ctx, id) {
             result.onSuccess { json ->
                 it[MODE_JSON] = json.toString()
@@ -217,25 +238,79 @@ object WidgetModes {
         return Mode.of(prefs[MODE], prefs[MODE_LABEL])
     }
 
-    /**
-     * Keeps each widget showing a place or Nearby current, from the background
-     * refresh: at most once a minute, with the last known location, and only
-     * while the choice still stands.
-     */
-    suspend fun refreshChosen(ctx: Context) {
+    /** A widget showing a place or Nearby, while the choice still stands. */
+    private class Chosen(val id: GlanceId, val mode: Mode, val at: Long, val fetchedAt: Long?, val json: String?) {
+        /** A place's answer, read only when asked for. */
+        val answer: NextAnswer? by lazy { json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() } }
+    }
+
+    private suspend fun chosen(ctx: Context, now: Long): List<Chosen> {
         val mgr = GlanceAppWidgetManager(ctx)
-        val now = System.currentTimeMillis()
-        for (cls in listOf(NextBusWidget::class.java, PlacesWidget::class.java)) {
-            for (id in mgr.getGlanceIds(cls)) {
-                val prefs = getAppWidgetState(ctx, PreferencesGlanceStateDefinition, id)
+        return listOf(NextBusWidget::class.java, PlacesWidget::class.java).flatMap { cls ->
+            mgr.getGlanceIds(cls).mapNotNull { id ->
+                val prefs: Preferences = getAppWidgetState(ctx, PreferencesGlanceStateDefinition, id)
                 val mode = Mode.of(prefs[MODE], prefs[MODE_LABEL])
-                val at = prefs[MODE_AT] ?: continue
-                if (mode == Mode.Timetable || now - at > KEEP_MS) continue
-                if (now - (prefs[MODE_FETCHED] ?: 0L) < REFETCH_MS) continue
-                fetch(ctx, id, mode, fresh = false)
+                val at = prefs[MODE_AT] ?: return@mapNotNull null
+                if (mode == Mode.Timetable || now - at > KEEP_MS) null else Chosen(id, mode, at, prefs[MODE_FETCHED], prefs[MODE_JSON])
             }
         }
     }
+
+    /** Those of [all] due a fetch: at most once a minute, and with [staleOnly] only a place whose answer has gone stale. */
+    private fun due(all: List<Chosen>, now: Long, staleOnly: Boolean): List<Chosen> = all.filter { c ->
+        now - (c.fetchedAt ?: 0L) >= REFETCH_MS && (!staleOnly || c.answer?.let { isOld(it, ServerClock.fromDevice(now)) } == true)
+    }
+
+    /** Whether [refreshChosen] would ask for anything now. */
+    suspend fun anyDue(ctx: Context): Boolean {
+        val now = System.currentTimeMillis()
+        return due(chosen(ctx, now), now, staleOnly = false).isNotEmpty()
+    }
+
+    /**
+     * Keeps each widget showing a place or Nearby current, from the background
+     * refresh: at most once a minute, with the last known location, and only
+     * while the choice still stands. Widgets showing the same are asked for
+     * once between them. With [staleOnly] (the widgets' own alarm), only
+     * places whose answer has gone stale.
+     */
+    suspend fun refreshChosen(ctx: Context, staleOnly: Boolean = false) {
+        val now = System.currentTimeMillis()
+        for ((_, same) in due(chosen(ctx, now), now, staleOnly).groupBy { it.mode.id }) {
+            val result = request(ctx, same.first().mode, fresh = false) ?: return
+            for (c in same) record(ctx, c.id, c.mode, result)
+        }
+    }
+
+    /**
+     * Arms the redraw of the widgets showing a place or Nearby, at the
+     * soonest of their moments ([redrawAt]); none when no widget has one.
+     */
+    suspend fun armChosen(ctx: Context) {
+        val am = ctx.getSystemService(AlarmManager::class.java) ?: return
+        val now = System.currentTimeMillis()
+        val at = if (Store(ctx).paired) chosen(ctx, now).mapNotNull { redrawAt(it.mode, it.at, it.fetchedAt, it.answer, now) }.minOrNull() else null
+        if (at == null) am.cancel(alarmIntent(ctx)) else am.setWhileIdle(at + 1_000, alarmIntent(ctx))
+    }
+
+    /**
+     * When a widget showing [mode] (chosen at [chosenAt], its answer fetched
+     * at [fetchedAt]) next looks different with nothing new, on the phone's
+     * clock like [now]: the choice running out, Nearby's times turning old,
+     * a place's answer moving on ("Leave now", going stale). Null: never.
+     */
+    internal fun redrawAt(mode: Mode, chosenAt: Long, fetchedAt: Long?, answer: NextAnswer?, now: Long): Long? = listOfNotNull(
+        chosenAt + KEEP_MS,
+        fetchedAt?.takeIf { mode == Mode.Nearby }?.plus(NEARBY_OLD_MS),
+        answer?.let { Refresher.redrawAt(it, ServerClock.fromDevice(now)) }?.let(ServerClock::toDevice),
+    ).filter { it > now }.minOrNull()
+
+    internal fun alarmIntent(ctx: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            ctx, 2,
+            Intent(ctx, RefreshReceiver::class.java).setAction(Refresher.ACTION_REDRAW_CHOSEN),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 }
 
 /** A widget button that needs no location: Timetable (and every button without location permission). */

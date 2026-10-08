@@ -30,6 +30,7 @@
     <string name="map_saved_as">In your favourites</string>
     <string name="map_services_here">Services here</string>
     <string name="map_times_need_connection">Live times need a connection.</string>
+    <string name="map_times_failed">Couldn\'t load the times. Trying again.</string>
     <string name="map_walking_directions">Walking directions</string>
     <string name="tab_map">Map</string>
     <string name="tab_now">Now</string>
@@ -136,13 +137,14 @@
     <string name="detect_hint">During a trip, the live notification uses your location to detect when you board, miss a bus or arrive, and keeps your plan in sync across your devices. It starts when you open terminus, or tap its notification or widget, during a trip. Your location isn\'t stored, only the result.</string>
     <string name="detect_needs">terminus needs precise location and notifications for this.</string>
     <string name="device_removed">Device removed. Pair again in the app.</string>
+    <string name="device_removed_unused">Removed after a long time unused. Open terminus to start again.</string>
     <string name="directions_to">Directions to %1$s</string>
     <string name="done">Done</string>
     <string name="email_me_code">Email me a code</string>
     <string name="ends">Ends</string>
     <string name="estimated_gap">~ estimated from the usual time between buses</string>
     <string name="eta_ended">ended</string>
-    <string name="exact_off">\"Alarms &amp; reminders\" is off for terminus. Reminders may arrive a few minutes late, and the live notification may start late.</string>
+    <string name="exact_off">\"Alarms &amp; reminders\" is off for terminus. Reminders may arrive a few minutes late, and the live notification may not start until you open the app.</string>
     <string name="favourites_hint">Available in one tap from the app, the widget and the Mac\'s menu bar. To go somewhere every week, add it to your timetable.</string>
     <string name="finding_stop">Finding the nearest stop…</string>
     <string name="follow_device">Follow this phone</string>
@@ -342,7 +344,9 @@
     <string name="sign_out">Sign out</string>
     <string name="sign_out_text">The app and widget will stop showing your timetable. Your account and settings are kept; sign in again with %1$s.</string>
     <string name="sign_out_title">Sign out of this phone?</string>
+    <string name="signed_out_key_lost">This phone could no longer read its sign-in, so it was signed out. Sign in again, or start again.</string>
     <string name="signed_out_removed">This phone was signed out of your account. Sign in again with your email.</string>
+    <string name="signed_out_unused">This phone\'s setup was removed after a long time unused. Start again or sign in.</string>
     <string name="signin_cancelled">The sign-in was cancelled from the email. If that was you, send a new one.</string>
     <string name="skip_setup">Skip setup</string>
     <string name="skips_class">Skip this class</string>
@@ -386,6 +390,7 @@
     <string name="unexpected_answer">Unexpected response from terminus</string>
     <string name="update">Update</string>
     <string name="update_out">terminus %1$s is out</string>
+    <string name="update_required">Update terminus to keep using it.</string>
     <string name="update_to_continue">Update terminus to continue</string>
     <string name="updated_at">Updated %1$s</string>
     <string name="updating">Updating…</string>

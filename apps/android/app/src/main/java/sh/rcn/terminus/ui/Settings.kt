@@ -107,8 +107,10 @@ import sh.rcn.terminus.Device
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
 import sh.rcn.terminus.LeaveAlerts
+import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Store
 import sh.rcn.terminus.Theme
 import sh.rcn.terminus.Trip
 import sh.rcn.terminus.WEEKDAYS
@@ -539,7 +541,7 @@ private fun SettingsPageContent(
                 Hint(stringResource(R.string.not_signed_in_hint))
                 InkButton(stringResource(R.string.add_email), onAddEmail)
             } else {
-                Devices(state, account, onSignedOut)
+                Devices(state, account, main, onSignedOut)
             }
         }
         SettingsPage.Language -> Groups {
@@ -676,22 +678,33 @@ private fun NotificationSettings(main: MainViewModel) {
     val ui by main.state.collectAsStateWithLifecycle()
     // "Alarms & reminders" is allowed in system settings; check again on return.
     var exact by remember { mutableStateOf(LeaveAlerts.canBeExact(ctx)) }
+    // Turned on here, but off in the phone's settings (all of the app's
+    // notifications, or the one's channel): said, with the way there.
+    val blocked = {
+        val store = Store(ctx)
+        (store.leaveAlerts && !LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) || (store.liveUpdates && !LeaveAlerts.canNotify(ctx, LiveService.CHANNEL))
+    }
+    var off by remember { mutableStateOf(blocked()) }
     LaunchedEffect(Unit) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { exact = LeaveAlerts.canBeExact(ctx) }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            exact = LeaveAlerts.canBeExact(ctx)
+            off = blocked()
+        }
     }
     val openSettings = { ctx.openAppSettings() }
+    if (off) Column { Refused(stringResource(R.string.notifications_off), openSettings, inCard = false) }
     Group(stringResource(R.string.heading_before_class), stringResource(R.string.notify_leave_more)) {
         NotifyToggle(
             stringResource(R.string.notify_leave),
             stringResource(R.string.notify_leave_short),
-            ui.leaveAlerts, main::setLeaveAlerts, openSettings, inCard = true,
+            ui.leaveAlerts, main::setLeaveAlerts, openSettings, inCard = true, channel = LeaveAlerts.CHANNEL,
         )
     }
     Group(stringResource(R.string.heading_during_trip), stringResource(R.string.during_trip_hint)) {
         NotifyToggle(
             stringResource(R.string.live_notification),
             stringResource(R.string.live_notification_short),
-            ui.liveUpdates, main::setLiveUpdates, openSettings, inCard = true,
+            ui.liveUpdates, main::setLiveUpdates, openSettings, inCard = true, channel = LiveService.CHANNEL,
         )
         RowDivider()
         DetectToggle(ui.detectTrips, main::setDetectTrips, openSettings, hint = stringResource(R.string.detect_short), inCard = true)
@@ -807,7 +820,7 @@ private fun AccountSection(state: AccountState, account: AccountViewModel, main:
 
 /** Your devices, each removable (this phone signs out), then Add a device. */
 @Composable
-private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut: () -> Unit) {
+private fun Devices(state: AccountState, account: AccountViewModel, main: MainViewModel, onSignedOut: () -> Unit) {
     var removing by remember { mutableStateOf<Device?>(null) }
     val devices = state.devices
     if (devices == null) {
@@ -841,7 +854,7 @@ private fun Devices(state: AccountState, account: AccountViewModel, onSignedOut:
             onDismissRequest = { removing = null },
             title = { Text(stringResource(R.string.remove_device_title, d.name)) },
             text = { Text(if (d.current) stringResource(R.string.remove_this_phone) else stringResource(R.string.remove_other)) },
-            confirmButton = { TextButton(onClick = { removing = null; account.removeDevice(d) { onSignedOut() } }) { Text(stringResource(R.string.remove)) } },
+            confirmButton = { TextButton(onClick = { removing = null; account.removeDevice(d) { main.signedOut(); onSignedOut() } }) { Text(stringResource(R.string.remove)) } },
             dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }

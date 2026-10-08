@@ -100,8 +100,9 @@ object Spoken {
         val m = minutes(s.toLong())
         return when {
             quality == "scheduled" -> L.s(if (withQuality) R.string.a11y_eta_timetable else R.string.a11y_eta_about, m)
-            quality == "live" && withQuality -> L.s(R.string.a11y_eta_live, m)
-            else -> m
+            quality == "live" -> if (withQuality) L.s(R.string.a11y_eta_live, m) else m
+            // Any other quality is no live time either: never said as one.
+            else -> L.s(R.string.a11y_eta_about, m)
         }
     }
 

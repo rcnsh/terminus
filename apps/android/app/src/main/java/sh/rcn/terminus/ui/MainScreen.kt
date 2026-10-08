@@ -81,6 +81,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.LeaveAlerts
+import sh.rcn.terminus.LiveService
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Target
@@ -128,7 +129,8 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
             hasLocation = Locator.hasForeground(ctx)
             while (true) {
                 vm.load()
-                delay(POLL_MS)
+                // Never sooner than a 429's or a 503's Retry-After.
+                delay(maxOf(POLL_MS, sh.rcn.terminus.Quiet.waitMs()))
             }
         }
     }
@@ -156,12 +158,20 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         SkyInk(shown, light) { Column {
         TabHeader { HeaderWordmark() }
 
-        state.update?.let { v ->
+        // Refused as too old (426): the way to update, from where it was installed.
+        if (state.updateRequired) {
+            Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.update_required), modifier = Modifier.weight(1f))
+                    TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
+                }
+            }
+        } else state.update?.let { v ->
             Card(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.update_out, v), modifier = Modifier.weight(1f))
                     // The APK built for this phone's CPU (the site falls back to arm64).
-                    TextButton(onClick = { ctx.openWeb("${BuildConfig.SITE}/download/android?abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull().orEmpty()}") }) { Text(stringResource(R.string.update)) }
+                    TextButton(onClick = { ctx.openUpdate() }) { Text(stringResource(R.string.update)) }
                 }
             }
         }
@@ -315,21 +325,27 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
     } }
 }
 
-/** Asks for notification permission on the way to "on", and says so when it's refused. */
+/**
+ * Asks for notification permission on the way to "on", and says so when it's
+ * refused, or when notifications (or this one's [channel]) are off in the
+ * phone's settings, where asking can't help.
+ */
 @Composable
-internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit, inCard: Boolean = false) {
+internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit, inCard: Boolean = false, channel: String? = null) {
     val ctx = LocalContext.current
     var refused by rememberSaveable { mutableStateOf(false) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        refused = !granted
-        if (granted) onChange(true)
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        val ok = LeaveAlerts.canNotify(ctx, channel)
+        refused = !ok
+        if (ok) onChange(true)
     }
     ToggleLine(title, hint, on, inCard) { want ->
         when {
             !want -> onChange(false)
-            LeaveAlerts.canNotify(ctx) -> onChange(true)
-            // Only reached on Android 13+, where the permission exists.
-            else -> @Suppress("InlinedApi") ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+            LeaveAlerts.canNotify(ctx, channel) -> onChange(true)
+            // Android 13+, where the permission exists and isn't given yet.
+            LeaveAlerts.needsPermission(ctx) -> @Suppress("InlinedApi") ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else -> refused = true
         }
     }
     if (refused && !on) Refused(stringResource(R.string.notifications_off), openSettings, inCard)
@@ -344,14 +360,14 @@ internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings
     val ctx = LocalContext.current
     var refused by rememberSaveable { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
-        val ok = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true && LeaveAlerts.canNotify(ctx)
+        val ok = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL)
         refused = !ok
         if (ok) onChange(true)
     }
     ToggleLine(stringResource(R.string.detect), hint ?: stringResource(R.string.detect_hint), on, inCard) { want ->
         when {
             !want -> onChange(false)
-            Locator.hasPrecise(ctx) && LeaveAlerts.canNotify(ctx) -> onChange(true)
+            Locator.hasPrecise(ctx) && LeaveAlerts.canNotify(ctx, LiveService.CHANNEL) -> onChange(true)
             else -> ask.launch(
                 listOfNotNull(
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -389,7 +405,7 @@ private fun ToggleLine(title: String, hint: String, on: Boolean, inCard: Boolean
 
 /** Why a switch stayed off (a permission refused), and the app's settings page to allow it there. */
 @Composable
-private fun Refused(text: String, openSettings: () -> Unit, inCard: Boolean) {
+internal fun Refused(text: String, openSettings: () -> Unit, inCard: Boolean) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = if (inCard) 16.dp else 0.dp))
     TextButton(onClick = openSettings, modifier = Modifier.padding(horizontal = if (inCard) 4.dp else 0.dp)) { Text(stringResource(R.string.open_settings)) }
 }

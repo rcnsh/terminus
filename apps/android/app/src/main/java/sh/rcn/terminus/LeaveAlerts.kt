@@ -22,8 +22,9 @@ import sh.rcn.terminus.widget.finishAsync
  * The server says when the heads-up goes (`card.remindAt`), and for which
  * trips: none when it's null. A couple of minutes before, an exact alarm fetches a fresh answer (live times by
  * then, not the headway guess from hours ago) and that answer decides: post
- * now, or check again later. A second alarm at the leave time turns the
- * notification into "Leave now", unless it was dismissed.
+ * at its `remindAt` (one more alarm, from the answer just fetched), or check
+ * again later. A last alarm at the leave time turns the notification into
+ * "Leave now", unless it was dismissed.
  *
  * From then on (phase 3) the same notification follows the trip, updated in
  * place and never posted again once dismissed: the ride, or the next way
@@ -35,23 +36,44 @@ import sh.rcn.terminus.widget.finishAsync
  * (`card.remind`) gets none of it.
  */
 object LeaveAlerts {
-    private const val CHANNEL = "leave"
+    const val CHANNEL = "leave"
     const val NOTIFICATION_ID = 1
     /** Fetch fresh times this long before the heads-up is due: the reminder itself is the server's `remindAt`. */
     private const val CHECK_AHEAD_MS = 2 * 60_000L
+    /** An alarm this close to remindAt (or a moment late) posts at once. */
+    private const val POST_SLACK_MS = 1_000L
+    /** With nothing to say yet (no bus to catch), checked again at most this often... */
+    private const val RETRY_GAP_MS = 2 * 60_000L
+    /** ...and only this long past remindAt: then the trip counts as done, as a shown heads-up would. */
+    private const val GIVE_UP_MS = 10 * 60_000L
 
     const val ACTION_CHECK = "sh.rcn.terminus.LEAVE_CHECK"
     const val ACTION_NOW = "sh.rcn.terminus.LEAVE_NOW"
+    /** At `remindAt`: the heads-up, from the answer the check fetched. */
+    const val ACTION_POST = "sh.rcn.terminus.LEAVE_POST"
     /** On the bus: redraw the ride at the next stop, from the saved answer. */
     const val ACTION_RIDE = "sh.rcn.terminus.LEAVE_RIDE"
     /** "Not going", from the notification's button: the trip in EXTRA_TRIP. */
     const val ACTION_SKIP = "sh.rcn.terminus.LEAVE_SKIP"
     const val EXTRA_TRIP = "trip"
 
-    /** Android 12 needs no permission to notify; 13 and later ask. */
-    fun canNotify(ctx: Context): Boolean =
-        android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
-            ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    /**
+     * Notifications from this app can be seen: allowed (Android 12 needs no
+     * permission; 13 and later ask), not blocked in the phone's settings,
+     * and, given a [channel], that channel not turned off. One not made yet
+     * counts as on.
+     */
+    fun canNotify(ctx: Context, channel: String? = null): Boolean {
+        if (needsPermission(ctx)) return false
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return true
+        if (!nm.areNotificationsEnabled()) return false
+        return channel == null || nm.getNotificationChannel(channel)?.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    /** Android 13 and later, and the permission not given (yet): asking can help. Otherwise only the phone's settings can. */
+    fun needsPermission(ctx: Context): Boolean =
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
 
     /**
      * "Alarms & reminders" (SCHEDULE_EXACT_ALARM), which the user allows in
@@ -83,8 +105,9 @@ object LeaveAlerts {
             if (following || card.remind == false) cancel(ctx)
             return
         }
-        if (!store.leaveAlerts || !canNotify(ctx) || trip == null || (classAt != null && now >= classAt) || (remindAt == null && !following)) {
+        if (!store.leaveAlerts || !canNotify(ctx, CHANNEL) || trip == null || (classAt != null && now >= classAt) || (remindAt == null && !following)) {
             cancelAlarm(ctx, ACTION_CHECK)
+            cancelAlarm(ctx, ACTION_POST)
             return
         }
         // One heads-up per trip. A new plan (the next class) has a new classAt.
@@ -95,19 +118,43 @@ object LeaveAlerts {
             return
         }
         if (remindAt == null) return
-        if (remindAt <= now + CHECK_AHEAD_MS) {
-            post(ctx, answer, now)
-            store.leaveNotifiedFor = trip
-            cancelAlarm(ctx, ACTION_CHECK)
-            if (leaveAt != null && leaveAt > now) setAlarm(ctx, ACTION_NOW, leaveAt)
-        } else {
+        if (remindAt > now + CHECK_AHEAD_MS) {
             setAlarm(ctx, ACTION_CHECK, remindAt - CHECK_AHEAD_MS)
+            return
         }
+        cancelAlarm(ctx, ACTION_CHECK)
+        // Fresh times in hand, but not yet: the heads-up goes at remindAt, so
+        // "5 minutes before you need to leave" is true when it comes. Only
+        // with exact alarms: an inexact one after the inexact check could
+        // land past the leave time, so then it goes now, as the check lands.
+        if (remindAt > now + POST_SLACK_MS && canBeExact(ctx)) {
+            setAlarm(ctx, ACTION_POST, remindAt)
+            return
+        }
+        cancelAlarm(ctx, ACTION_POST)
+        // Marked once shown: with no leave time to say (no bus to catch),
+        // the card's next change tries again, every couple of minutes at
+        // most, until the reminder is well past.
+        if (post(ctx, answer, now)) {
+            store.leaveNotifiedFor = trip
+            if (leaveAt != null && leaveAt > now) setAlarm(ctx, ACTION_NOW, leaveAt)
+        } else if (now - remindAt > GIVE_UP_MS) {
+            store.leaveNotifiedFor = trip
+        } else {
+            card?.nextChangeAtMs?.takeIf { it > now }?.let { setAlarm(ctx, ACTION_CHECK, maxOf(it + 2_000, now + RETRY_GAP_MS)) }
+        }
+    }
+
+    /** At remindAt: the answer the check fetched a moment ago decides, as [arm] does. */
+    fun postDue(ctx: Context) {
+        val answer = Store(ctx).lastAnswer()?.first ?: return
+        arm(ctx, answer)
     }
 
     /** Turning alerts off, or unpairing. */
     fun cancel(ctx: Context) {
         cancelAlarm(ctx, ACTION_CHECK)
+        cancelAlarm(ctx, ACTION_POST)
         cancelAlarm(ctx, ACTION_NOW)
         cancelAlarm(ctx, ACTION_RIDE)
         ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
@@ -135,8 +182,9 @@ object LeaveAlerts {
         else setAlarm(ctx, ACTION_CHECK, next + 2_000)
     }
 
-    private fun post(ctx: Context, answer: NextAnswer, now: Long) {
-        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+    /** Posts (or updates) the notification; false when there was nothing to say. */
+    private fun post(ctx: Context, answer: NextAnswer, now: Long): Boolean {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return false
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, L.s(R.string.channel_leave), NotificationManager.IMPORTANCE_HIGH).apply {
                 description = L.s(R.string.channel_leave_desc)
@@ -149,7 +197,7 @@ object LeaveAlerts {
         val ride = card?.ride?.takeIf { card.phase == "riding" }
         val (title, said) = when {
             card?.phase == "riding" || card?.phase == "missed" -> (card.line ?: answer.label) to answer.detail
-            else -> (answer.leaveHeadline(now) ?: return) to (answer.catchLine ?: answer.destLabel.orEmpty())
+            else -> (answer.leaveHeadline(now) ?: return false) to (answer.catchLine ?: answer.destLabel.orEmpty())
         }
         val store = Store(ctx)
         // Posted from the last answer when a fresh one couldn't be had
@@ -191,6 +239,7 @@ object LeaveAlerts {
         // past it and drops the countdown rather than leaving it to run below zero.
         val redraw = ride?.let { RideStyle.nextRedrawAt(it, now) }?.plus(1_000)
         if (redraw != null) setAlarm(ctx, ACTION_RIDE, redraw) else cancelAlarm(ctx, ACTION_RIDE)
+        return true
     }
 
     /**
@@ -221,13 +270,16 @@ object LeaveAlerts {
         try {
             // Fast timeouts: a broadcast has about ten seconds in all.
             val json = Api(token, fast = true, hour12 = hour12(ctx)).signal("skipped", trip)
-            ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
             val now = System.currentTimeMillis()
-            store.saveAnswer(json, now)
-            Refresher.scheduleNext(ctx, NextAnswer.parse(json), now)
+            // Read before it's kept: one this version can't read leaves the last good one.
+            val answer = store.saveAnswer(json, now)
+            ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+            Refresher.scheduleNext(ctx, answer, now)
             sh.rcn.terminus.widget.redrawWidgets(ctx)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
+        } catch (e: ApiError) {
+            if (e.status == 401) Session.rejected(ctx, token)
         } catch (e: Exception) {
             // Left showing, button and all.
         }
@@ -251,7 +303,7 @@ object LeaveAlerts {
 
     private fun alarmIntent(ctx: Context, action: String): PendingIntent =
         PendingIntent.getBroadcast(
-            ctx, when (action) { ACTION_CHECK -> 1; ACTION_NOW -> 2; else -> 5 },
+            ctx, when (action) { ACTION_CHECK -> 1; ACTION_NOW -> 2; ACTION_POST -> 7; else -> 5 },
             Intent(ctx, LeaveReceiver::class.java).setAction(action),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -275,7 +327,13 @@ class LeaveReceiver : BroadcastReceiver() {
             // Fetched right here: the alarm's idle allowance is seconds long,
             // and a queued job could run after the heads-up was due. Only
             // /me/next here; the day plan and chosen widgets follow in a job.
-            LeaveAlerts.ACTION_CHECK -> finishAsync(Dispatchers.IO) { Refresher.refresh(context, fast = true, extras = false) }
+            // An exact alarm may start the live notification: the trip is on,
+            // and no push may come to start it (one at normal priority can't).
+            LeaveAlerts.ACTION_CHECK -> finishAsync(Dispatchers.IO) {
+                val answer = Refresher.refresh(context, fast = true, extras = false)
+                if (answer?.card?.phase in LiveService.TRIP_PHASES) LiveService.start(context)
+            }
+            LeaveAlerts.ACTION_POST -> LeaveAlerts.postDue(context)
             LeaveAlerts.ACTION_NOW -> LeaveAlerts.leaveNow(context)
             LeaveAlerts.ACTION_RIDE -> LeaveAlerts.redrawRide(context)
             LeaveAlerts.ACTION_SKIP -> {

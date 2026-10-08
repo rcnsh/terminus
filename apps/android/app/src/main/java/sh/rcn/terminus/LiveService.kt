@@ -18,9 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import sh.rcn.terminus.ui.MainActivity
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.clock
@@ -34,12 +36,22 @@ import sh.rcn.terminus.widget.redrawWidgets
  * widgets redrawn with it.
  *
  * Between trips it stops itself, and starts again when the next trip is due:
- * from a push, or an exact alarm on a phone without one. The API's 15 s
- * per-stop cache means this costs NUS nothing more than having the app open.
+ * from a high-priority push ("due", "missed"), or an exact alarm (its own, a
+ * refresh's or a leave check's). Other pushes come at normal priority, which
+ * Android doesn't let start it. The API's 15 s per-stop cache means this
+ * costs NUS nothing more than having the app open.
  */
 class LiveService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** Only touched on the main thread, as onStartCommand is. */
     private var loop: Job? = null
+    /** The latest start, and the one the loop last acted on: a start that comes as the loop ends isn't lost. */
+    @Volatile private var lastStartId = 0
+    @Volatile private var handledStartId = 0
+    /** A start while the loop runs (a push: the card changed) fetches now rather than at the next turn. */
+    private val wake = Channel<Unit>(Channel.CONFLATED)
+    /** A push said the card changed: the next turn fetches, however new the kept answer. */
+    @Volatile private var force = false
     /** Following the trip by location ("Notice when I board"), when a tap started it. */
     @Volatile private var watch: TripWatch? = null
 
@@ -56,6 +68,8 @@ class LiveService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        lastStartId = startId
+        if (intent?.getBooleanExtra(EXTRA_FORCE, false) == true) force = true
         // Must be in the foreground within seconds of starting, before any fetch.
         val store = Store(this)
         val cached = store.lastAnswer()
@@ -67,6 +81,9 @@ class LiveService : Service() {
         if (!wantWatch) stopWatching()
         // The location type only when a tap started this (the app, the
         // notification, the widget): from an alarm or a push Android refuses it.
+        // On Android 12 and 13 the plain startForeground (foreground() with no
+        // type) takes every type in the manifest, location included; started
+        // from the background it simply gets no location there.
         val watching = wantWatch && runCatching { foreground(cached?.first, location = true) }.isSuccess
         // Restarted by the system after it stopped the app (START_STICKY), Android
         // can refuse a foreground service at all: then stop, rather than crash.
@@ -74,8 +91,17 @@ class LiveService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // Notifications or this channel turned off: a notification nobody
+        // can see isn't worth a request every 30 s. (In the foreground first
+        // all the same: a started service that isn't crashes the app.)
+        if (!LeaveAlerts.canNotify(this, CHANNEL)) {
+            stopWatching()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (watching && watch == null) watch = TripWatch(this).takeIf { it.start() }
-        if (loop?.isActive != true) loop = scope.launch { run() }
+        if (loop?.isActive != true) loop = scope.launch { run() } else wake.trySend(Unit)
         return START_STICKY
     }
 
@@ -96,24 +122,43 @@ class LiveService : Service() {
     private suspend fun sendFix(store: Store): Boolean {
         val fix = watch?.fix(System.currentTimeMillis()) ?: return false
         val token = store.token ?: return false
-        return runCatching { Api(token, fast = true, hour12 = hour12(this)).signal("location", null, fix.lat, fix.lon, fix.speedMs, fix.accM) }
-            .onSuccess { json ->
-                val now = System.currentTimeMillis()
-                store.saveAnswer(json, now)
-                store.lastError = null
-                Refresher.scheduleNext(this, NextAnswer.parse(json), now)
-                redrawWidgets(this)
-            }
-            .isSuccess
+        return try {
+            val json = Api(token, fast = true, hour12 = hour12(this)).signal("location", null, fix.lat, fix.lon, fix.speedMs, fix.accM)
+            val now = System.currentTimeMillis()
+            // Read before it's kept (a ParseError lands below): the last good answer stays.
+            val answer = store.saveAnswer(json, now)
+            store.lastError = null
+            Refresher.scheduleNext(this, answer, now)
+            redrawWidgets(this)
+            true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: ApiError) {
+            if (e.status == 401) Session.rejected(this, token)
+            false
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private suspend fun run() {
         val store = Store(this)
         val nm = getSystemService(NotificationManager::class.java)
         val power = getSystemService(PowerManager::class.java)
+        // Failed refreshes in a row: the next one waits longer (offline, the server failing).
+        var failures = 0
         while (scope.isActive) {
-            if (!store.liveUpdates || !store.paired) break
-            if (!sendFix(store)) Refresher.refresh(this)
+            handledStartId = lastStartId
+            val pushed = force.also { force = false }
+            if (!store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(this, CHANNEL)) break
+            // An answer fetched a moment ago (the leave check that started this)
+            // isn't asked for again; after a push it is: the card changed since.
+            val fresh = !pushed && store.lastAnswer()?.second?.let { System.currentTimeMillis() - it in 0 until FRESH_MS } == true
+            if (!sendFix(store) && !fresh) {
+                if (Refresher.refresh(this, force = pushed) != null) failures = 0 else failures++
+            }
+            // Refused as too old: no more asking until the app is updated.
+            if (Outdated.holding() || !store.paired) break
             val answer = store.lastAnswer()?.first
             if (answer == null || answer.mode == "rest" || answer.card?.phase !in TRIP_PHASES) {
                 // Between trips: come back when the next one is due, the card changes (a
@@ -127,22 +172,35 @@ class LiveService : Service() {
             }
             nm?.notify(NOTIFICATION_ID, build(this, answer, watching = watch != null))
             // Following by location: every fix counts, screen on or off.
-            val wait = if (watch != null) WATCH_MS else if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS
+            // Never sooner than a 429's or a 503's Retry-After, nor than the back-off.
+            val every = if (watch != null) WATCH_MS else if (power?.isInteractive != false) SCREEN_ON_MS else SCREEN_OFF_MS
+            val wait = maxOf(every, liveBackoffMs(failures), Quiet.waitMs())
             // The header's countdown runs on past zero ("-1:20") until it's
             // rebuilt: rebuilt just after it ends, without a fetch.
             val end = countdownAt(answer)?.let { it - ServerClock.now() + 1_000 }?.takeIf { it in 1 until wait }
             if (end != null) {
-                delay(end)
+                if (pause(end)) continue
                 nm?.notify(NOTIFICATION_ID, build(this, store.lastAnswer()?.first ?: answer, watching = watch != null))
-                delay(wait - end)
+                pause(wait - end)
             } else {
-                delay(wait)
+                pause(wait)
             }
         }
-        stopWatching()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        // Decided on the main thread, where starts arrive: one that came
+        // after the loop last looked runs it again rather than being dropped.
+        withContext(Dispatchers.Main) {
+            if (lastStartId != handledStartId && scope.isActive) {
+                loop = scope.launch { run() }
+            } else {
+                stopWatching()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelfResult(handledStartId)
+            }
+        }
     }
+
+    /** Waits [ms], or until a new start wakes it: true when woken. */
+    private suspend fun pause(ms: Long): Boolean = withTimeoutOrNull(ms) { wake.receive() } != null
 
     override fun onDestroy() {
         stopWatching()
@@ -151,23 +209,34 @@ class LiveService : Service() {
     }
 
     companion object {
-        private const val CHANNEL = "live"
+        const val CHANNEL = "live"
         private const val NOTIFICATION_ID = 2
         private const val SCREEN_ON_MS = 30_000L
         private const val SCREEN_OFF_MS = 120_000L
         /** A location to the server this often while following a trip. */
         private const val WATCH_MS = 20_000L
+        /** An answer this new is used as it is when the loop starts. */
+        private const val FRESH_MS = 10_000L
         const val ACTION_STOP = "sh.rcn.terminus.LIVE_STOP"
         const val ACTION_START = "sh.rcn.terminus.LIVE_START"
         const val ACTION_WATCH = "sh.rcn.terminus.LIVE_WATCH"
         const val ACTION_UNWATCH = "sh.rcn.terminus.LIVE_UNWATCH"
+        /** Started by a push: the card changed, so the answer is fetched even if just kept. */
+        private const val EXTRA_FORCE = "force"
         /** From "time to go" until you're there. */
         val TRIP_PHASES = setOf("due", "heading", "waiting", "riding", "missed")
 
-        fun start(ctx: Context) {
+        /**
+         * Starts the live notification when it's on and can be seen. False when
+         * it isn't, or Android refused the start (from the background, outside
+         * the moments it allows: a high-priority push, an exact alarm, boot).
+         * [force] (a push) fetches at once, past the answer kept a moment ago.
+         */
+        fun start(ctx: Context, force: Boolean = false): Boolean {
             val store = Store(ctx)
-            if (!store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx)) return
-            runCatching { ctx.startForegroundService(Intent(ctx, LiveService::class.java)) }
+            if (!store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx, CHANNEL)) return false
+            val intent = Intent(ctx, LiveService::class.java).putExtra(EXTRA_FORCE, force)
+            return runCatching { ctx.startForegroundService(intent) }.isSuccess
         }
 
         /**
@@ -178,7 +247,7 @@ class LiveService : Service() {
          */
         fun watch(ctx: Context) {
             val store = Store(ctx)
-            if (!store.detectTrips || !store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx) || !Locator.hasPrecise(ctx)) return
+            if (!store.detectTrips || !store.liveUpdates || !store.paired || !LeaveAlerts.canNotify(ctx, CHANNEL) || !Locator.hasPrecise(ctx)) return
             if (store.lastAnswer()?.first?.card?.phase !in TRIP_PHASES) return
             runCatching { ctx.startForegroundService(Intent(ctx, LiveService::class.java).setAction(ACTION_WATCH)) }
         }
@@ -191,7 +260,9 @@ class LiveService : Service() {
         /**
          * Exact, so the service may start from the background: an app allowed
          * SCHEDULE_EXACT_ALARM may when its exact alarm fires. Without it the
-         * start can be refused; a push at the trip's next phase starts it then.
+         * start is refused; a high-priority push ("due", "missed") starts it
+         * then, or opening the app. A normal-priority one (heading, waiting,
+         * riding) can't.
          */
         private fun wakeAt(ctx: Context, at: Long) {
             ctx.getSystemService(AlarmManager::class.java)?.setWhileIdle(at, startIntent(ctx))
@@ -294,6 +365,14 @@ class LiveService : Service() {
         }
     }
 }
+
+/**
+ * How long the live notification waits at least after [failures] failed
+ * refreshes in a row (offline, the server failing): 1, 2, 4, then 8 minutes;
+ * nothing extra after a success.
+ */
+internal fun liveBackoffMs(failures: Int): Long =
+    if (failures <= 0) 0 else 60_000L shl (failures - 1).coerceAtMost(3)
 
 class LiveReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
