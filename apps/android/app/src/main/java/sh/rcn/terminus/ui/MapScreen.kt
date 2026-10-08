@@ -666,17 +666,12 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         SvcTag(r.svc, campus.routes[r.svc]?.color?.color() ?: Color.Gray)
                         Spacer(Modifier.weight(1f))
-                        // The server's words ("4 min", "~6 min", "now"); worked out here for an older server.
-                        val s = r.etaS ?: 0
-                        val min = stringResource(R.string.map_min, s / 60)
+                        // The server's words ("4 min", "~6 min", "now"); for an older
+                        // server, worded as Nearby words them, so the two never differ.
                         // Said in words: "about 6 minutes, timetable", where the screen has "~6 min".
                         val said = Spoken.eta(r.etaS, r.quality)
                         Text(
-                            r.eta ?: when {
-                                s < 60 -> stringResource(R.string.map_arriving)
-                                r.quality == "scheduled" -> stringResource(R.string.map_about, min)
-                                else -> min
-                            },
+                            r.eta ?: eta(r.etaS, r.quality),
                             fontWeight = FontWeight.SemiBold,
                             modifier = if (said == null) Modifier else Modifier.semantics { contentDescription = said },
                         )
