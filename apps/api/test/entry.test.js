@@ -116,3 +116,24 @@ test('/health?versions=1 for the operator: what the version update would find to
   assert.ok(v.wouldTry.length > 0 && v.wouldTry.every((s) => s.startsWith('univus_android_2.60.0_')), JSON.stringify(v.wouldTry));
   assert.equal((await (await call(env, '/health?versions=1')).json()).versions, undefined, 'not without the token');
 });
+
+test('opening the web app signed out goes straight to sign-in; signed in, or the service worker\'s copy, is the app', async () => {
+  installGlobals(makeFetch());
+  const env = { ...makeEnv(), ASSETS: { fetch: async (req) => new Response(`page for ${new URL(req.url).pathname}`, { headers: { 'content-type': 'text/html' } }) } };
+  const navigate = { 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document', accept: 'text/html' };
+  for (const path of ['/app/', '/app']) {
+    const out = await call(env, path, navigate);
+    assert.equal(out.status, 302, path);
+    assert.equal(out.headers.get('location'), '/account/?next=/app/');
+    assert.equal(out.headers.get('cache-control'), 'no-store');
+  }
+  const signedIn = await call(env, '/app/', { ...navigate, cookie: '__Host-tm_s=abc' });
+  assert.equal(await signedIn.text(), 'page for /app/');
+  // Passed on by the service worker, it's still a page being opened.
+  assert.equal((await call(env, '/app/', { 'sec-fetch-mode': 'same-origin', 'sec-fetch-dest': 'document' })).status, 302);
+  // The service worker keeping its copy of the app gets the app.
+  const kept = await call(env, '/app/', { 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' });
+  assert.equal(await kept.text(), 'page for /app/');
+  // Other pages are left alone.
+  assert.equal(await (await call(env, '/account/', navigate)).text(), 'page for /account/');
+});
