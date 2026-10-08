@@ -827,15 +827,15 @@ test('while another isolate fetches a stale stop, the stale answer is served wit
   const cache = installGlobals(fetchImpl);
   const old = { code: 'PGP', arrivals: [{ svc: 'D2', etaS: 240, crowd: null, plate: null }], fetchedAt: Date.now() - 20_000, stale: false };
   cache.seed(ARRIVALS_KEY('PGP'), old);
-  cache.seed(`${ARRIVALS_KEY('PGP')}#pending`, 'fetching', 20);
+  cache.seed(`${ARRIVALS_KEY('PGP')}/pending`, 'fetching', 20);
   const { res } = await call('/arrivals?stop=PGP', { fetchImpl, cache });
   assert.equal((await res.json()).available, true);
   assert.equal(fetchImpl.counts.shuttle, 0, 'the other fetch fills the cache');
   // Its marker gone, the next request fetches, and clears its own marker after.
-  await cache.delete(`${ARRIVALS_KEY('PGP')}#pending`);
+  await cache.delete(`${ARRIVALS_KEY('PGP')}/pending`);
   await call('/arrivals?stop=PGP', { fetchImpl, cache });
   assert.equal(fetchImpl.counts.shuttle, 1);
-  assert.equal(await cache.match(`${ARRIVALS_KEY('PGP')}#pending`), undefined);
+  assert.equal(await cache.match(`${ARRIVALS_KEY('PGP')}/pending`), undefined);
 });
 
 test('a code that is not a stop (a food court) is never sent to either feed', async () => {
