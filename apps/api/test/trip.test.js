@@ -1010,6 +1010,18 @@ test("seen at the destination, the trip is over for every device, without anyone
   assert.equal(onMac.leave, null, 'no trip home or next class while early for this one');
 });
 
+test('arriving early at the class, the phone says "You\'re there" straight away, not "You\'re here" first', async () => {
+  const { phone, next, clock } = await setup();
+  clock(FROZEN_NOW + 50 * 60_000); // 09:50, before GEA1000 at 10:00
+  const first = await next(phone, atStop('UTOWN'));
+  assert.equal(first.label, "You're there");
+  assert.match(first.detail, /^GEA1000 @ UTown starts /);
+  const again = await next(phone, atStop('UTOWN'));
+  assert.equal(again.label, first.label);
+  assert.equal(again.detail, first.detail);
+  assert.equal(again.card.phase, 'arrived');
+});
+
 test("polling at the stop while the bus's time moves a little keeps the plan on that bus, and the ride is on it", async () => {
   const { phone, next, clock } = await setup();
   const first = await next(phone, atStop('PGP'));
