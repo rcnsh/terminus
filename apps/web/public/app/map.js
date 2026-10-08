@@ -159,8 +159,10 @@ async function build(container) {
     style: styleUrl(),
     bounds: fit,
     fitBoundsOptions: { padding: CAMPUS_PADDING },
-    maxBounds: [[BOUNDS[0][0] - 0.02, BOUNDS[0][1] - 0.02], [BOUNDS[1][0] + 0.02, BOUNDS[1][1] + 0.02]],
-    // Not past the campus area: the map file covers only that.
+    // The screen stays on the map file, which covers only the campus area:
+    // MapLibre keeps the whole view inside, and zooms out no further than
+    // the screen full of it. (The apps work this out themselves: PanLimit.)
+    maxBounds: BOUNDS,
     minZoom: 13,
     maxZoom: 19,
     dragRotate: false,

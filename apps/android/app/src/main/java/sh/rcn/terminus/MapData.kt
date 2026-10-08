@@ -4,18 +4,59 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.PI
 import kotlin.math.asin
+import kotlin.math.atan
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.ln
+import kotlin.math.log2
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.sinh
 import kotlin.math.sqrt
+import kotlin.math.tan
 
 /**
  * The Map tab's data: stops and routes from `/campus`, live buses from
  * `/buses`, and the GeoJSON the map draws from them. Plain JSON in and out,
  * so it's tested on the JVM (MapDataTest).
  */
+
+/**
+ * How far the map pans and zooms out, so the screen stays on the street map:
+ * past the map file's edge there's nothing to draw. MapLibre Native limits
+ * only the camera's centre, so the centre's box is the map less half the
+ * screen on every side, and the map zooms out only until the screen is full
+ * of it. Sizes in dp, as the map's zoom counts them (512 a tile). The same
+ * as the Mac's PanLimit; the web's map limits the whole screen itself.
+ */
+object PanLimit {
+    /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts): west, south, east, north. */
+    val EXTENT = doubleArrayOf(103.755, 1.28, 103.83, 1.332)
+    private const val TILE = 512.0
+
+    /** The furthest out a [width] by [height] screen can zoom and still be full of map. */
+    fun minZoom(width: Double, height: Double): Double =
+        max(log2(width / (TILE * (x(EXTENT[2]) - x(EXTENT[0])))), log2(height / (TILE * (y(EXTENT[1]) - y(EXTENT[3])))))
+
+    /** West, south, east, north of where the centre may go at [zoom]; a point mid-map on a side the screen is wider than. */
+    fun centre(width: Double, height: Double, zoom: Double): DoubleArray {
+        val world = TILE * 2.0.pow(zoom)
+        val (west, east) = inset(x(EXTENT[0]), x(EXTENT[2]), width / 2 / world)
+        val (top, bottom) = inset(y(EXTENT[3]), y(EXTENT[1]), height / 2 / world)
+        return doubleArrayOf(lon(west), lat(bottom), lon(east), lat(top))
+    }
+
+    private fun inset(a: Double, b: Double, by: Double): Pair<Double, Double> =
+        if (b - a > 2 * by) a + by to b - by else ((a + b) / 2).let { it to it }
+
+    // Web Mercator, as a fraction of the world: x east, y south.
+    private fun x(lon: Double) = (lon + 180) / 360
+    private fun y(lat: Double) = (1 - ln(tan(PI / 4 + lat * PI / 360)) / PI) / 2
+    private fun lon(x: Double) = x * 360 - 180
+    private fun lat(y: Double) = atan(sinh(PI * (1 - 2 * y))) * 180 / PI
+}
 
 /** A stop on the map, with the services that call there. */
 /** [longName]: the full name ("Yusof Ishak House") where [name] is short ("YIH"); null from an older server. */

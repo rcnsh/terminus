@@ -274,4 +274,30 @@ class MapDataTest {
         assertEquals(1, plain.getJSONArray("layers").length())
         assertEquals("g", plain.getString("glyphs"))
     }
+
+    @Test fun panLimitKeepsTheScreenOnTheMap() {
+        val e = PanLimit.EXTENT
+        // A phone, 400 by 800 dp: tall, so its height fills the map first.
+        val min = PanLimit.minZoom(400.0, 800.0)
+        assertEquals(800.0, 512 * Math.pow(2.0, min) * (merc(e[1]) - merc(e[3])), 0.01)
+        // At zoom 17 the centre stays half a screen in from each edge: 200 dp
+        // across is 200 / (512 * 2^17) of the world, in degrees of longitude.
+        val c = PanLimit.centre(400.0, 800.0, 17.0)
+        val half = 200.0 / (512 * Math.pow(2.0, 17.0)) * 360
+        assertEquals(e[0] + half, c[0], 1e-9)
+        assertEquals(e[2] - half, c[2], 1e-9)
+        assertTrue(c[1] > e[1] && c[3] < e[3] && c[1] < c[3])
+        // Zoomed right out, the screen is as tall as the map: the centre can
+        // only be mid-map up and down, and still moves side to side.
+        val out = PanLimit.centre(400.0, 800.0, min)
+        assertEquals(out[1], out[3], 1e-9)
+        assertTrue(out[0] < out[2])
+        // Wider than the map both ways (a zoom it can't reach): its middle.
+        val tiny = PanLimit.centre(400.0, 800.0, 10.0)
+        assertEquals((e[0] + e[2]) / 2, tiny[0], 1e-9)
+        assertEquals(tiny[0], tiny[2], 1e-9)
+    }
+
+    /** Web Mercator's y, a fraction of the world from the top. */
+    private fun merc(lat: Double) = (1 - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / Math.PI) / 2
 }

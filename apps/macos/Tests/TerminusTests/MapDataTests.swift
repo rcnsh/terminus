@@ -315,3 +315,26 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(!MapFiles.isPMTiles(head, size: 4_000_000), "another version")
     #expect(!MapFiles.isPMTiles(Data("PMTiles".utf8), size: 4_000_000), "no version byte")
 }
+
+/// Web Mercator's y, a fraction of the world from the top.
+private func merc(_ lat: Double) -> Double { (1 - log(tan(.pi / 4 + lat * .pi / 360)) / .pi) / 2 }
+
+@Test func panLimitKeepsTheWindowOnTheMap() {
+    let e = PanLimit.extent
+    // 400 by 800 points: tall, so its height fills the map first.
+    let min = PanLimit.minZoom(width: 400, height: 800)
+    #expect(abs(512 * pow(2, min) * (merc(e[1]) - merc(e[3])) - 800) < 0.01)
+    // At zoom 17 the centre stays half a window in from each edge.
+    let c = PanLimit.centre(width: 400, height: 800, zoom: 17)
+    let half: Double = 200 / (512 * pow(2.0, 17.0)) * 360
+    #expect(abs(c[0] - (e[0] + half)) < 1e-9)
+    #expect(abs(c[2] - (e[2] - half)) < 1e-9)
+    #expect(c[1] > e[1] && c[3] < e[3] && c[1] < c[3])
+    // Zoomed right out: mid-map up and down, still free side to side.
+    let out = PanLimit.centre(width: 400, height: 800, zoom: min)
+    #expect(abs(out[1] - out[3]) < 1e-9)
+    #expect(out[0] < out[2])
+    // Wider than the map both ways (a zoom it can't reach): its middle.
+    let tiny = PanLimit.centre(width: 400, height: 800, zoom: 10)
+    #expect(abs(tiny[0] - (e[0] + e[2]) / 2) < 1e-9 && tiny[0] == tiny[2])
+}
