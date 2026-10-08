@@ -9,11 +9,12 @@ import assert from 'node:assert/strict';
 import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeFetch } from './_stubs.mjs';
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
-import { ASSUME_MS, RIDE_GRACE_MS, TRIP_TIMEOUT_MS, clearTrip, endOfDayMs, loadDay, needsWatch, phaseFor, saveSignals, sgtDate } from '../src/trip.ts';
+import { ASSUME_MS, RIDE_GRACE_MS, TRIP_TIMEOUT_MS, clearTrip, endOfDayMs, loadDay, needsWatch, phaseFor, saveSignals, seenOnBus, sgtDate } from '../src/trip.ts';
 import { Trip } from '../src/tripdo.ts';
 import { GRAPH } from '../src/graph.ts';
 import { indexGraph, rideStops, serviceEndsAt } from '../src/resolve.ts';
 import { clockAt } from '../src/clock.ts';
+import { onRide, onRideQuery, rideLength } from './_ride.mjs';
 
 const BASE = 'https://bus.example.test';
 const THU = 4;
@@ -326,6 +327,25 @@ test('phases follow the clock until a signal says otherwise', () => {
   assert.equal(phaseFor({ ...leaveAt(now), arrived: true }, undefined, now, nowhere), 'arrived');
 });
 
+test('on the bus only where a location shows it: on its road, further on than a walk since it left', () => {
+  // The A2 from PGP Foyer to Opp HSSML, as on a real trip: 894 m of road.
+  const board = FROZEN_NOW;
+  const a2 = { svc: 'A2', stop: 'PGP Foyer', stopCode: 'PGPR', alightCode: 'HSSML-OPP', board: new Date(board).toISOString(), arrive: new Date(board + 5 * 60_000).toISOString() };
+  const len = rideLength('A2', 'PGPR', 'HSSML-OPP');
+  assert.ok(len > 800, 'a ride long enough to test');
+  const at = (m) => onRide('A2', 'PGPR', 'HSSML-OPP', m);
+  const seen = (p, ms) => seenOnBus(a2, p.lat, p.lon, board + ms);
+  const pgpr = stopAt('PGPR');
+  assert.equal(seen(pgpr, 3 * 60_000), false, 'still at the stop');
+  assert.equal(seen(at(250), 3 * 60_000), false, 'on the road, but a walk away: may have missed it and set off on foot');
+  assert.equal(seen(at(len - 100), 3 * 60_000), true, 'further on than anyone walks in 3 min');
+  assert.equal(seen(at(len - 100), 8 * 60_000), false, 'but in 8 min a walk gets there too');
+  const off = at(len - 100);
+  assert.equal(seen({ lat: off.lat + 0.002, lon: off.lon }, 3 * 60_000), false, '200 m off the road');
+  assert.equal(seenOnBus({ ...a2, paid: true }, off.lat, off.lon, board + 3 * 60_000), false, 'no road line for a public bus');
+  assert.equal(seenOnBus({ ...a2, board: null }, off.lat, off.lon, board + 3 * 60_000), false);
+});
+
 test('a service with published hours ends at its window close, across midnight too', () => {
   // The real K: 07:04 to 23:04 on weekdays, but only until 19:04 on Saturdays.
   assert.deepEqual([GRAPH.serviceHours.K.weekday, GRAPH.serviceHours.K.saturday], [['07:04', '23:04'], ['07:04', '19:04']]);
@@ -356,7 +376,7 @@ test('with every class today skipped, the day is free and "next" is not a skippe
 
 /* Phase 3: the question at departure, and what silence means. */
 
-test('nothing is asked about the bus, before or after it leaves, and no answer means you are on it', async () => {
+test('nothing is asked about the bus, before or after it leaves, and with no location the card says only that it has left', async () => {
   const { phone, mac, next, signal, clock } = await setup();
   const first = await next(phone);
   const leaveAt = Date.parse(first.leave.at);
@@ -373,11 +393,14 @@ test('nothing is asked about the bus, before or after it leaves, and no answer m
   const left = await next(mac);
   assert.equal(left.card.actions.some((x) => ['boarded', 'missed', 'arrived'].includes(x.id)), false);
 
-  // A few minutes on, nobody having said otherwise: on that bus, not the next one.
+  // A few minutes on, nobody having said and no location: not taken to be on
+  // it, nor to have missed it. The next way there, true either way.
   clock(board + 4 * 60_000);
-  const assumed = await next(mac);
-  assert.equal(assumed.card.phase, 'riding');
-  assert.equal(assumed.label, `On the ${svc}`);
+  const unknown = await next(mac);
+  assert.equal(unknown.card.phase, 'heading');
+  assert.match(unknown.card.line, new RegExp(`^The ${clockAt(board, false)} has left · next `));
+  assert.equal(unknown.card.ride, null);
+  assert.equal(unknown.card.actions.some((x) => ['boarded', 'missed', 'arrived'].includes(x.id)), false, 'still nothing asked');
   // An older app's "On it" still works, about the bus that left.
   const answered = await (await signal(phone, { kind: 'boarded', trip: FIRST })).json();
   assert.equal(answered.label, `On the ${svc}`);
@@ -405,8 +428,10 @@ test('polls between the leave time and the departure keep the trip about the bus
   clock(board - 10_000);
   await next(phone);
 
-  // A few minutes after it left, nobody having said: on that bus.
+  // A few minutes after it left, the phone seen on its road: on that bus,
+  // on the Mac too.
   clock(board + 4 * 60_000);
+  await next(phone, onRideQuery(svc, due.leave.stopCode, 'UTOWN', rideLength(svc, due.leave.stopCode, 'UTOWN') - 300));
   const assumed = await next(mac);
   assert.equal(assumed.label, `On the ${svc}`);
   assert.equal(Date.parse(assumed.card.ride.board), board);
@@ -426,27 +451,37 @@ test('the widget, planning without a location, says the bus the phone planned fr
   assert.equal(blind.leave.svc, svc);
   assert.equal(blind.card.catch, due.card.catch);
 
+  // Once it has left, the widget still goes by the phone's bus: that one has gone.
   clock(board + 4 * 60_000);
-  const assumed = await next(phone);
-  assert.equal(assumed.label, `On the ${svc}`);
-  assert.equal(Date.parse(assumed.card.ride.board), board);
+  const gone = await next(phone);
+  assert.match(gone.card.line, new RegExp(`^The ${clockAt(board, false)} has left · next `));
 });
 
-test('no answer means "on it": the planned bus, a few minutes after it left', async () => {
-  const { phone, next, clock } = await setup();
+test('on the bus only when a location sees it: on its road, further on than a walk', async () => {
+  const { env, phone, mac, next, clock } = await setup();
   const first = await next(phone);
   clock(Date.parse(first.leave.at) - 60_000);
   const due = await next(phone);
   const board = Date.parse(due.leave.board);
+  const svc = due.leave.svc;
+  const from = due.leave.stopCode;
 
   clock(board + 2 * 60_000);
   assert.notEqual((await next(phone)).card.phase, 'riding', 'not straight away');
 
   clock(board + 4 * 60_000);
-  const quiet = await next(phone);
-  assert.equal(quiet.card.phase, 'riding');
-  assert.equal(quiet.label, `On the ${due.leave.svc}`);
-  assert.match(quiet.card.line, new RegExp(`^On the ${due.leave.svc}`));
+  assert.equal((await next(phone)).card.phase, 'heading', 'no location: not known');
+  assert.equal((await next(phone, onRideQuery(svc, from, 'UTOWN', 250))).card.phase, 'heading', 'a walk along the road: not known');
+  assert.equal((await next(mac)).card.phase, 'heading', 'and nothing noted for the Mac');
+  const seen = await next(phone, onRideQuery(svc, from, 'UTOWN', rideLength(svc, from, 'UTOWN') - 300));
+  assert.equal(seen.card.phase, 'riding');
+  assert.equal(seen.label, `On the ${svc}`);
+  assert.match(seen.card.line, new RegExp(`^On the ${svc}`));
+  // Noted on the plan: the Mac, with no location, follows.
+  const onMac = await next(mac);
+  assert.equal(onMac.card.phase, 'riding');
+  assert.equal(Date.parse(onMac.card.ride.board), board);
+  assert.deepEqual(outcomesToday(env), [], 'seen, not said: no outcome');
 });
 
 test('still at the stop a few minutes after the bus left: missed, without being asked', async () => {
@@ -551,7 +586,7 @@ test('silence is not an outcome: nothing was asked, so nothing is noted', async 
   clock(Date.parse(first.leave.at) - 60_000);
   const due = await next(phone);
   clock(Date.parse(due.leave.board) + 4 * 60_000);
-  assert.equal((await next(phone)).card.phase, 'riding');
+  assert.equal((await next(phone)).card.phase, 'heading');
   await next(phone);
   assert.deepEqual(outcomesToday(env), []);
 });
@@ -843,12 +878,13 @@ test('nothing asks what happened: no question, no buttons for it', async () => {
   assert.equal(quiet.card.actions.some((a) => ['boarded', 'missed', 'arrived'].includes(a.id)), false);
 });
 
-test('having been at the stop is not an answer: after the bus leaves, the phone without a location is assumed on it, not stuck at the stop', async () => {
+test('having been at the stop is not an answer: after the bus leaves, the Mac without a location is neither stuck at the stop nor on the bus', async () => {
   const t = await setup();
   const { board } = await waitingAtStop(t);
   t.clock(board + 4 * 60_000);
   const later = await t.next(t.mac);
-  assert.equal(later.card.phase, 'riding');
+  assert.equal(later.card.phase, 'heading');
+  assert.match(later.card.line, / has left · next /);
 });
 
 test('a NUSMods class ends half an hour before its timetable end: the day, "till", and the trip home go by that', async () => {
@@ -957,8 +993,9 @@ test('riding past another stop after the bus left is the bus, not "at the stop" 
   const stops = rideStops(indexGraph(GRAPH), due.leave.svc, due.leave.stopCode, due.leave.offCode ?? 'UTOWN');
   assert.ok(stops.length >= 3, 'a stop between boarding and getting off');
 
+  // Far enough on that nobody walks there in the time: the bus.
   clock(board + 4 * 60_000);
-  const passing = await next(phone, atStop(stops[1]));
+  const passing = await next(phone, atStop(stops.at(-2)));
   assert.equal(passing.card.phase, 'riding');
   assert.equal(passing.label, `On the ${due.leave.svc}`);
 });
@@ -1037,7 +1074,7 @@ test("polling at the stop while the bus's time moves a little keeps the plan on 
   // Gone, and the phone is on the road: the plan is still the bus it waited for.
   const stops = rideStops(indexGraph(GRAPH), due.leave.svc, due.leave.stopCode, due.leave.offCode ?? 'UTOWN');
   clock(board + 4 * 60_000);
-  const riding = await next(phone, atStop(stops[1]));
+  const riding = await next(phone, atStop(stops.at(-2)));
   assert.equal(riding.card.phase, 'riding');
   assert.equal(riding.card.ride.svc, due.leave.svc);
   assert.equal(Date.parse(riding.card.ride.board), board);
@@ -1079,7 +1116,7 @@ test('a plan and a watch sent together both stick (the Trip object reads the day
   assert.equal(day.watch, FROZEN_NOW + 60_000);
 });
 
-test('/me/day follows the plan once its bus has left: the same leave-by, then on the bus when the card assumes it', async () => {
+test('/me/day follows the plan once its bus has left: the same leave-by, then the next way there, or on the bus once seen on it', async () => {
   const { phone, call, next, clock } = await setup();
   // Planned from where the phone is (PGP), so it's the trip's plan.
   const planned = await next(phone, '?lat=1.291765&lon=103.780419');
@@ -1091,11 +1128,18 @@ test('/me/day follows the plan once its bus has left: the same leave-by, then on
   let day = await (await call('/me/day', { token: phone })).json();
   assert.equal(day.items[0].leave?.board, planned.leave.board);
 
-  // A few minutes on, the card takes it you're on that bus; so does Today.
+  // A few minutes on, nothing seen: not the bus that left, and not on it.
   clock(board + ASSUME_MS + 60_000);
-  assert.equal((await next(phone)).card.phase, 'riding');
+  assert.equal((await next(phone)).card.phase, 'heading');
   day = await (await call('/me/day', { token: phone })).json();
-  assert.equal(day.items[0].onBus?.svc, planned.leave.svc);
+  assert.equal(day.items[0].onBus, undefined);
+  assert.notEqual(day.items[0].leave?.board, planned.leave.board);
+
+  // Seen on its road: the card says you're on that bus; so does Today.
+  const { svc, stopCode } = planned.leave;
+  assert.equal((await next(phone, onRideQuery(svc, stopCode, 'UTOWN', rideLength(svc, stopCode, 'UTOWN') - 300))).card.phase, 'riding');
+  day = await (await call('/me/day', { token: phone })).json();
+  assert.equal(day.items[0].onBus?.svc, svc);
   assert.equal(day.items[0].leave, undefined);
 });
 

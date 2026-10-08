@@ -468,14 +468,28 @@ the account went can't store its trip again.
   or in Today: without a location, from the class before or from home.
 - **The card asks no questions.** It has none in it (the apps can still
   send `boarded`, `missed` and `arrived` signals). Three minutes
-  after the departure the phase is taken as `riding` (`TripView.assumed`),
-  unless this request's location still has you at the boarding stop, which
-  makes it `missed`. A location in your residence ends a trip home, and at
-  the destination ends the trip (`reached`, recorded as `arrived` for every
-  device). Nothing is recorded for an assumption. There is no ride
-  detection: the phone sends no location during a trip, and the `location`
-  signal older Android apps still send is answered like `/me/next` from
-  there and records nothing.
+  after the departure, only a location says what happened:
+  - at the boarding stop: `missed`, and the next way there;
+  - on the bus (`seenOnBus` in trip.ts): within 60 m of its road between
+    the boarding and alighting stops, and further from the boarding stop
+    than a brisk walk (1.5 × `WALK.speedMs`) since it left plus a rough
+    fix's error (`MAX_FIX_ACC_M`), along the road and in a straight line.
+    Where the line passes the fix more than once (a road used both ways),
+    none of those places may be within that walk. The phase is `riding`
+    (`TripView.assumed`), and the plan is saved with `seen`, so devices
+    without a location (the widget, the Mac, push) follow;
+  - anything else, including no location or a rough one: unknown. The
+    answer is the next way there, the phase `heading` (never `due`: you
+    may be on board), and the card's line says only that the plan's bus
+    has left ("The 09:06 has left · next D2 09:16"; `TripView.gone`).
+    That is true whether you caught it or not, so nothing is asked.
+
+  A short ride may never be seen: by the time the bus is beyond a walk,
+  you're nearly there, and the destination ends the trip. A location in
+  your residence ends a trip home, and at the destination ends the trip
+  (`reached`, recorded as `arrived` for every device). Nothing is recorded
+  as an outcome for a seen ride. The `location` signal older Android apps
+  still send is answered like `/me/next` from there and records nothing.
 - **The ride from the feed.** Boarding records the plate of the bus due at
   the boarding stop within five minutes; while riding, the same plate in the
   alighting stop's arrivals gives the arrival (quality `live`). Without a

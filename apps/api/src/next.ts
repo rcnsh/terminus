@@ -36,7 +36,7 @@ import { paceSpeed } from './walk.ts';
 import { coordsFrom } from './http.ts';
 import type { TripView } from './card.ts';
 import { NO_PREFS, type TripPrefs } from './outcomes.ts';
-import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, leaveOf, offStop, phaseFor, signalOf } from './trip.ts';
+import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, leaveOf, offStop, phaseFor, seenOnBus, signalOf } from './trip.ts';
 import { choosePlan, planOfLeave } from './plan.ts';
 import { m } from './i18n.ts';
 
@@ -460,15 +460,27 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
 
   if (save) out.trip.planChanged = true;
 
-  // Nobody said what happened and the bus left a while ago: the plan worked
-  // (most people catch the bus they were told to), unless a location still
-  // has you at its stop. Assumed, never recorded as a signal.
+  // Nobody said what happened and the bus left a while ago. Only where you
+  // are can say whether you caught it; never assumed without that, or
+  // someone still at the stop (with no fix, or a rough one) is told they're
+  // on a bus. Nothing is asked either.
   if (!out.trip.rec && bus && !answer.arrived && nowMs >= Date.parse(bus.board!) + ASSUME_MS) {
     // Still at the stop now (this request's location), not just earlier:
     // missed, and the answer is the next way there.
     if (phaseFor(answer, undefined, nowMs, at) === 'waiting') return { answer: fresh, trip: { ...out.trip, phase: 'missed', assumed: true, plan: bus, planChanged: false } };
-    const onBus = await riding(bus);
-    if (onBus) return { answer: onBus.answer, trip: { key, phase: 'riding', undo, assumed: true, plan: onBus.b } };
+    // Seen on it, now or by an earlier request (noted on the plan, so a
+    // device without a location follows the phone).
+    const seenNow = !bus.seen && lat !== null && lon !== null && seenOnBus(bus, lat, lon, nowMs);
+    if (bus.seen || seenNow) {
+      const onBus = await riding(bus);
+      if (onBus) return { answer: onBus.answer, trip: { key, phase: 'riding', undo, assumed: true, plan: onBus.b, ...(seenNow ? { seenOn: { ...bus, seen: true as const } } : {}) } };
+    }
+    // Not known: the next way there, which is what you need if you missed
+    // it, and says only that the bus has gone if you didn't. Under way
+    // either way: never "Time to get going" to someone who may be on board.
+    const next = withPhase(home ? { ...fresh, warning: lastBusWarning(deps.graph, fresh, nowMs) } : fresh, key);
+    const phase = next.trip.phase === 'idle' || next.trip.phase === 'due' ? 'heading' : next.trip.phase;
+    return { answer: next.answer, trip: { ...next.trip, phase, plan: bus, gone: true } };
   }
   return bus ? { ...out, trip: { ...out.trip, plan: bus } } : out;
 

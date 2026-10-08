@@ -213,8 +213,8 @@ interface Candidate extends Place {
   fits: boolean;
 }
 
-/** Each stretch of the line within ON_ROUTE_M of the fix, at its nearest point. */
-function candidates(shape: RouteShape, fix: Fix): Candidate[] {
+/** Each stretch of the line within `withinM` of the fix, at its nearest point. */
+function candidates(shape: RouteShape, fix: Fix, withinM = ON_ROUTE_M): Candidate[] {
   const { line } = shape;
   const cum = cumulative(line);
   const cosLat = Math.cos((fix.lat * Math.PI) / 180);
@@ -231,12 +231,17 @@ function candidates(shape: RouteShape, fix: Fix): Candidate[] {
     const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
     const lat = aLat + (bLat - aLat) * t, lon = aLon + (bLon - aLon) * t;
     const d = haversineM(fix.lat, fix.lon, lat, lon);
-    if (d > ON_ROUTE_M) continue;
+    if (d > withinM) continue;
     const road = seg >= 1 ? bearing(aLat, aLon, bLat, bLon) : null;
     const fits = fix.heading == null || road == null || angleBetween(fix.heading, road) <= HEADING_SLACK_DEG;
     out.push({ i, along: cum[i] + seg * t, lat, lon, bearing: fits ? road : null, d, fits });
   }
   return out;
+}
+
+/** Metres along the line at each stretch of it within `withinM` of a point (a person, not a bus). */
+export function alongNear(shape: RouteShape, lat: number, lon: number, withinM: number): number[] {
+  return candidates(shape, { lat, lon, heading: null }, withinM).map((c) => c.along);
 }
 
 /** The track after placing [fix] at [along]: the time only moves on with the position. */

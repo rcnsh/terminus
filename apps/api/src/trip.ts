@@ -16,10 +16,12 @@
 
 import type { Env, Leave, MeAnswer } from './types.ts';
 import { haversineM } from './geo.ts';
-import { sgt } from './config.ts';
+import { MAX_FIX_ACC_M, WALK, sgt } from './config.ts';
 import { sgtDate } from './calendar.ts';
 import { GRAPH } from './graph.ts';
-import { indexGraph, rideStops } from './resolve.ts';
+import { indexGraph, rideSpan, rideStops } from './resolve.ts';
+import { shapeFor } from './campus.ts';
+import { alongNear } from './buses.ts';
 import { shortStop } from './format.ts';
 
 export type Phase = 'idle' | 'due' | 'heading' | 'waiting' | 'riding' | 'missed' | 'arrived';
@@ -58,6 +60,10 @@ export interface Boarded {
    *  can't name it (`151/1`). */
   paid?: true;
   route?: string;
+  /** Seen riding it: a location on its road, further on than you could have
+   *  walked since it left (seenOnBus). Devices without a location then take
+   *  you to be on it too. */
+  seen?: true;
 }
 
 /** A trip home (after the last class, or in a long gap), by its key: it has no name of its own. */
@@ -121,6 +127,39 @@ export function rideOf(b: Boarded): Ride | null {
   };
 }
 
+/**
+ * Whether a location shows you on the bus `b`: on its road between where
+ * you board and where you get off, and further from the stop than you could
+ * have walked since it left (with a rough fix's error to spare), by road or
+ * straight there. Anywhere short of that says nothing: you may have missed
+ * it and set off on foot. Where the road runs both ways (or the line passes
+ * the same place twice), no place on the line the fix could be may be
+ * within that walk. Shuttles only: public buses have no road line here.
+ */
+export function seenOnBus(b: Boarded, lat: number, lon: number, nowMs: number): boolean {
+  if (!b.board || !b.stopCode || !b.alightCode || b.paid) return false;
+  const idx = indexGraph(GRAPH);
+  const r = idx.routes.get(b.svc);
+  const stop = idx.byCode.get(b.stopCode);
+  const span = rideSpan(idx, b.svc, b.stopCode, b.alightCode);
+  const shape = shapeFor(b.svc, GRAPH.routes?.[b.svc] ?? []);
+  if (!r || !stop || !span || span.hops === 0 || !shape) return false;
+  const walked = (WALK_MAX_MS * Math.max(0, nowMs - Date.parse(b.board))) / 1000 + MAX_FIX_ACC_M;
+  if (haversineM(lat, lon, stop.lat, stop.lon) <= walked) return false;
+  const start = shape.at[span.i];
+  // A loop's line closes at its first stop, so it can be measured round past it.
+  const lap = r.loop ? shape.at[r.seq.length] : undefined;
+  const end = span.i + span.hops;
+  const rideM = end < shape.at.length ? shape.at[end] - start : lap !== undefined ? lap - start + shape.at[end - r.seq.length] : null;
+  if (rideM === null) return false;
+  // Metres on from the stop, and back before it, to `m` along the line.
+  const ahead = (m: number) => (m >= start ? m - start : lap !== undefined ? lap - start + m : Infinity);
+  const behind = (m: number) => (m <= start ? start - m : lap !== undefined ? start + lap - m : Infinity);
+  const near = alongNear(shape, lat, lon, ON_RIDE_M);
+  if (near.some((m) => ahead(m) <= walked || behind(m) <= walked)) return false;
+  return near.some((m) => ahead(m) <= rideM);
+}
+
 /** The latest signal about one trip today. */
 export interface TripRecord {
   kind: Exclude<SignalKind, 'location' | 'reset' | 'away' | 'back'>;
@@ -180,8 +219,14 @@ export const WAIT_EARLY_MS = 15 * 60_000;
 export const AT_STOP_M = 80;
 /** After the bus you're on should have got you there, you're taken to be there. */
 export const RIDE_GRACE_MS = 10 * 60_000;
-/** Nobody said otherwise this long after the bus left: you're taken to be on it. */
+/** Nobody said otherwise this long after the bus left: where you are says
+ *  whether you're on it (seenOnBus), or the answer is the next way there. */
 export const ASSUME_MS = 3 * 60_000;
+/** A location this close to the ride's road is on it: a phone's fix on a
+ *  moving bus, plus the line's own error. */
+export const ON_RIDE_M = 60;
+/** Faster than anyone walks (WALK.speedMs is an average pace). */
+const WALK_MAX_MS = WALK.speedMs * 1.5;
 /** A plate is picked at the tap only from a bus due at the stop within this. */
 export const PLATE_WINDOW_S = 5 * 60;
 

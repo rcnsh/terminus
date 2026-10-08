@@ -147,9 +147,21 @@ export function shuttleRideS(idx: GraphIndex, stops: string[], perHop: number): 
  */
 export function rideStops(idx: GraphIndex, svc: string, from: string, to: string): string[] | null {
   const r = idx.routes.get(svc);
+  if (!r?.pos.has(from) || !r.pos.has(to)) return from === to ? [from] : null;
+  const span = rideSpan(idx, svc, from, to);
+  if (!span) return null;
+  return Array.from({ length: span.hops + 1 }, (_, k) => r.seq[(span.i + k) % r.seq.length]);
+}
+
+/**
+ * Where on `svc`'s route a ride from `from` to `to` starts (the index in its
+ * stop sequence) and how many hops it takes, as rideStops counts them.
+ */
+export function rideSpan(idx: GraphIndex, svc: string, from: string, to: string): { i: number; hops: number } | null {
+  const r = idx.routes.get(svc);
   const fromAt = r?.pos.get(from);
   const toAt = r?.pos.get(to);
-  if (!r || !fromAt || !toAt) return from === to ? [from] : null;
+  if (!r || !fromAt || !toAt) return null;
   const n = r.seq.length;
   let best: { i: number; hops: number } | null = null;
   for (const i of fromAt) {
@@ -158,8 +170,7 @@ export function rideStops(idx: GraphIndex, svc: string, from: string, to: string
       if (hops !== Infinity && (!best || hops < best.hops)) best = { i, hops };
     }
   }
-  if (!best) return null;
-  return Array.from({ length: best.hops + 1 }, (_, k) => r.seq[(best.i + k) % n]);
+  return best;
 }
 
 /** The user's walk from home to their home stops, in metres at their pace, when they've said it. */
