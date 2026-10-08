@@ -30,7 +30,7 @@ PNGs and quits, for checking layout without clicking around.
 | `Sources/Terminus/*View*.swift`, `Header`, `Tabs`, `Search`, `Footer` | The popover |
 | `Sources/Terminus/MapWindow.swift`, `MapData.swift`, `MapFiles.swift` | The map window: MapLibre, live buses, the street map kept on disk |
 | `Vendor/MapLibre.xcframework.zip` | MapLibre Native for macOS, built by [`scripts/vendor-maplibre-mac.sh`](../../scripts/vendor-maplibre-mac.sh) |
-| `Support/` | `Info.plist` and the app icon |
+| `Support/` | `Info.plist`, the app icons (stable and beta, drawn by `make-icon.swift`) and the Chinese strings (`zh-Hans.lproj`) |
 
 Releases are built, signed and packaged as a DMG on the owner's Mac by
 [`scripts/release.sh`](../../scripts/release.sh) (via
