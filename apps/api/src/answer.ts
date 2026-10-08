@@ -23,6 +23,7 @@ import {
 import { logAnswer } from './analytics.ts';
 import { leaveBy } from './leave.ts';
 import { loadCrowdRisk, recordCrowds } from './crowd.ts';
+import { planTransfers } from './transfer.ts';
 import { GRAPH, GRAPH_PUBLIC } from './graph.ts';
 import { m } from './i18n.ts';
 
@@ -125,10 +126,14 @@ export async function answerFor(
     return { ...needsSetupAnswer(nowMs), label: m().noStartPoint, detail: m().noStartPointHint };
   }
 
+  // Where no single bus goes there, the trips with a change of bus: which
+  // change stops to ask about is settled before any fetch, so it all goes
+  // in one round, at most TRANSFER.maxFetch stops more.
+  const transfers = planTransfers(graph, input, cands);
   const byStop = await collectArrivals(
     env,
     ctx,
-    cands.map((c) => c.stop.code),
+    [...cands.map((c) => c.stop.code), ...transfers.fetch],
     nowMs,
     graph,
   );
@@ -141,7 +146,10 @@ export async function answerFor(
   // food court's other stop can be further from it than its first.
   const endWalk = (o: ScoredOption) => input.endWalkByStopS?.[o.to?.code ?? input.to ?? ''] ?? input.endWalkS ?? 0;
   // For a class, a service that starts before it is a way there, not "ended".
-  const options = scoreOptions(graph, cands, byStop, nowMs, endWalk, input.arriveBy ? { openBy: input.arriveBy.atMs } : {});
+  const options = scoreOptions(graph, cands, byStop, nowMs, endWalk, {
+    ...(input.arriveBy ? { openBy: input.arriveBy.atMs } : {}),
+    ...(transfers.routes.length ? { transfers: transfers.routes } : {}),
+  });
   const alt = pickAlt(options);
   const chosen = options[0]?.stop.code ?? fallbackStop?.code ?? '';
   // As the buses are named: a two-way public route's key carries its direction.

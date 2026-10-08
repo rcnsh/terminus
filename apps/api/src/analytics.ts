@@ -37,6 +37,8 @@
  *   blob7   crowd       low | medium | high | ''
  *   blob8   trip        unused since configured trips were removed; always ''
  *   blob9   berth       raw busStopCode, arrival rows only
+ *   blob10  via         answer rows: the stop a trip changes buses at, '' on one bus
+ *   blob11  svc2        answer rows: the bus after the change, '' on one bus
  *
  *   double1  etaS            arrival rows: seconds to arrival; timelapse rows: buses seen
  *   double2  boardS          answer rows: seconds until you can board
@@ -48,6 +50,7 @@
  *   double8  ambiguousBerth  0 | 1
  *   double9  hadCoords       0 | 1
  *   double10 walkAllS        whole-way walk, -1 when unknown
+ *   double11 changeWaitS     answer rows: seconds waiting for the bus after a change, -1 on one bus
  *
  *   index1  stop code (the sampling key); 'error', 'timelapse' and 'signal' rows use their kind
  *
@@ -91,6 +94,8 @@ export function logAnswer(env: Env, input: LogInput): void {
         best?.arrival?.crowd ?? '',
         '', // was the trip key, never set; the column stays so the others don't shift
         best?.arrival?.berth ?? '',
+        best?.change?.stop.code ?? '',
+        best?.change?.svc ?? '',
       ],
       doubles: [
         0,
@@ -103,6 +108,7 @@ export function logAnswer(env: Env, input: LogInput): void {
         best?.ambiguousBerth ? 1 : 0,
         input.hadCoords ? 1 : 0,
         input.walkAllS ?? -1,
+        best?.change ? best.change.boardS - best.change.reachS - best.change.crossS : -1,
       ],
       indexes: [stop],
     });

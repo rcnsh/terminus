@@ -346,7 +346,11 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
   destination, and scores the options by arrival time. Rides are
   `RIDE.secondsPerHop` a stop, no faster than `RIDE.longHopMs` over a long
   stretch (`RIDE` in config). Walking is
-  recommended only when it beats the bus by `WALK.beatsBusByS`.
+  recommended only when it beats the bus by `WALK.beatsBusByS`. Where no
+  single bus goes there, a trip changes buses once (`src/transfer.ts`,
+  `TRANSFER` in config): at most `TRANSFER.maxFetch` change stops fetched
+  per answer, the second bus in `change`, the trip as sure as its less
+  sure bus.
   A room can have several stops (`venueStops()`, `stops` in `venues.json`):
   a trip from or to a class considers each, with the room's own walk to it.
   Where the map's nearest stop is the wrong one, fix it in

@@ -11,7 +11,7 @@
  * clock.ts; rest and timing text in profile.ts.
  */
 
-import type { Answer, Arrival, BusLeg, Quality, ScoredOption, Stop } from './types.ts';
+import type { Answer, Arrival, BusLeg, BusChange, Quality, ScoredOption, Stop } from './types.ts';
 import { LABEL_MAX, PUBLIC, WALK, isMeasured } from './config.ts';
 import { svcName } from './public.ts';
 import { m } from './i18n.ts';
@@ -144,7 +144,35 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
     ...(o.to ? { toStop: shortStop(o.to.name) } : {}),
     ...(endWalkS > 0 ? { endWalkS } : {}),
     ...(o.paid ? { paid: true as const } : {}),
+    ...(o.change ? { change: busChange(o) } : {}),
   };
+}
+
+/** An option's second bus, for its leg and its leave-by. Its times are the trip's: none when the trip has none. */
+export function busChange(o: ScoredOption): BusChange | undefined {
+  const t = o.change;
+  if (!t) return undefined;
+  const timed = o.quality !== 'unknown';
+  return {
+    svc: svcName(t.svc),
+    from: shortStop(t.at.name),
+    fromCode: t.at.code,
+    stop: shortStop(t.stop.name),
+    stopCode: t.stop.code,
+    ...(t.crossS > 0 ? { crossS: t.crossS } : {}),
+    reach: timed ? iso(o.fromMs + t.reachS * 1000) : null,
+    board: timed ? iso(o.fromMs + t.boardS * 1000) : null,
+    rideS: t.rideS,
+    estimated: t.quality === 'scheduled' || t.quality === 'stale',
+  };
+}
+
+/** Where a change of bus is, and to which: "change at KV to P". */
+export function changeWords(o: ScoredOption): string | null {
+  const t = o.change;
+  if (!t) return null;
+  const at = shortStop(t.at.name);
+  return t.crossS > 0 ? m().changeAcross(at, named(t)) : m().changeTo(at, named(t));
 }
 
 /** The bus as it's named in text: "95 ($)" for a public bus, so the fare shows wherever the badge doesn't. */
@@ -152,7 +180,7 @@ export const named = (o: { svc: string; paid?: true }): string => (o.paid ? `${s
 
 /** One option rendered standalone, for the `alt` field. */
 export function renderAlt(o: ScoredOption): string {
-  return `${named(o)} · ${etaPhrase(o)} · ${shortStop(o.stop.name)}`;
+  return `${named(o)}${o.change ? ` → ${named(o.change)}` : ''} · ${etaPhrase(o)} · ${shortStop(o.stop.name)}`;
 }
 
 function buildLabel(best: ScoredOption, nowMs: number): string {
@@ -177,6 +205,10 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
   else if (elsewhere) parts.push(m().shortWalk);
   // No nearestStop means no coordinates, so we cannot claim you are anywhere.
   else if (f.nearestStop) parts.push(m().rightHere);
+
+  // No single bus goes there: where to change, and to which bus.
+  const change = changeWords(best);
+  if (change) parts.push(change);
 
   // The bus only stops across the road from the destination: say where to
   // get off, or you ride on waiting for a stop it never calls at.
@@ -215,7 +247,8 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
     // "or A1 in 14 min": when it comes, not how long it takes.
     const raw = etaPhrase(f.alt);
     const plain = raw === m().now || raw === m().noTimes;
-    parts.push(m().orAlt(f.alt.svc === best.svc ? shortStop(f.alt.stop.name) : named(f.alt), raw, plain));
+    const altName = f.alt.change ? `${named(f.alt)} → ${named(f.alt.change)}` : named(f.alt);
+    parts.push(m().orAlt(f.alt.svc === best.svc && !f.alt.change && !best.change ? shortStop(f.alt.stop.name) : altName, raw, plain));
   }
 
   return parts.join(' · ');

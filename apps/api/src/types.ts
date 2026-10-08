@@ -176,6 +176,31 @@ export interface BusLeg {
   endWalkS?: number;
   /** A public bus, with a fare, unlike the free shuttle. Absent for a shuttle. */
   paid?: true;
+  /**
+   * A trip that changes buses: the bus after this one. The fields above are
+   * the first bus, except `arrive`, `toStop` and `off`, which are the trip's
+   * end, as for a trip on one bus. Absent on one bus.
+   */
+  change?: BusChange;
+}
+
+/** The second bus of a trip that changes buses (BusLeg.change, Leave.change). */
+export interface BusChange {
+  svc: string;
+  /** Where the first bus drops you (short name), and its code. */
+  from: string;
+  fromCode: string;
+  /** Where the second bus goes from: `from`, or across the road from it. */
+  stop: string;
+  stopCode: string;
+  /** Seconds across the road from `from` to `stop`. Absent at the same stop. */
+  crossS?: number;
+  /** ISO: the first bus at `from`, and the second leaving `stop`. Null with no time. */
+  reach: string | null;
+  board: string | null;
+  rideS: number;
+  /** The second bus's time is a guess (see BusLeg.estimated). */
+  estimated: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -279,6 +304,12 @@ export interface Leave {
   /** The graph's route for a public two-way service (`151/1`), which `svc`
    *  (`151`) can't name, so a kept plan can be followed. Absent otherwise. */
   route?: string;
+  /**
+   * A trip that changes buses: the bus after this one. `svc`, `stop`,
+   * `board`, `stopCode`, `walkS` and `rideS` are the first bus; `arrive`,
+   * `toStop`, `toCode`, `off` and `offCode` the trip's end. Absent on one bus.
+   */
+  change?: BusChange;
 }
 
 /** A time to be somewhere by, for the leave-by calculation. */
@@ -464,6 +495,33 @@ export interface ScoredOption {
   to?: Stop;
   /** A public bus, with a fare (public.ts). */
   paid?: true;
+  /**
+   * A trip that changes buses: the bus after this one. The fields above are
+   * the first bus (`rideS` its ride to the change), except `totalS`, `to`
+   * and `off`, which are the trip's end, and `quality`, the worse of the two.
+   */
+  change?: ScoredChange;
+}
+
+/** The second bus of a trip that changes buses, scored at the change stop. */
+export interface ScoredChange {
+  /** Where the first bus drops you. */
+  at: Stop;
+  /** Where the second bus goes from: `at`, or its twin across the road. */
+  stop: Stop;
+  /** Seconds to cross to `stop`; 0 at `at` itself. */
+  crossS: number;
+  svc: string;
+  hops: number;
+  /** Seconds from now, as ScoredOption's. */
+  reachS: number;
+  boardS: number;
+  rideS: number;
+  /** This bus's own quality. */
+  quality: Quality;
+  arrival: Arrival | null;
+  fetchedAt: number;
+  ambiguousBerth: boolean;
 }
 
 export interface ResolveInput {

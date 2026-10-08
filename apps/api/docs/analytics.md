@@ -56,6 +56,23 @@ arrival instant, and the difference between two of them is a segment time.
 Bucket by hour of day and you have a table to check `RIDE.secondsPerHop`
 against. Nothing in the Worker reads it.
 
+## Changing buses
+
+Answers that change buses (`TRANSFER` in `src/config.ts`): where, to
+which bus, how sure, and how long the wait at the change stop was
+reckoned. A wait that is often long says the change is in the wrong
+place; quality mostly `scheduled` says the second bus is usually past
+what the feed lists.
+
+```sql
+SELECT blob2 AS stop, blob3 AS svc, blob10 AS via, blob11 AS svc2, blob5 AS quality,
+       count() AS n, avg(double11) AS waitS
+FROM terminus
+WHERE blob1 = 'answer' AND blob10 != ''
+GROUP BY stop, svc, via, svc2, quality
+ORDER BY n DESC
+```
+
 ## Crowding
 
 `blob7` is low/medium/high, derived from a headcount against 88-seat
