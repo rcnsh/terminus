@@ -6,7 +6,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 
 /**
- * On the bus (phase 6): the notification follows the ride. "On the D2 · off at
+ * On the bus: the notification follows the ride. "On the D2 · off at
  * UTown 9:52", the next stop and how many are left, and a countdown to getting
  * off that the system ticks by itself.
  *

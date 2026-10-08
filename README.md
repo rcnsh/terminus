@@ -91,7 +91,7 @@ The same answer on your home screen, in your menu bar and on the web, in light o
   <img alt="The campus map with D2 picked: its purple line and stops over a street map of NUS, three buses on it, and the other services faded behind." src="apps/web/public/assets/shots/map-light.webp" width="100%">
 </picture>
 
-On Android and the web: every bus route in its colour, on a quiet street map. Tap a service to see its line and its buses moving live; tap a bus for where it's going and the stops ahead; tap a stop for what's coming and a way to go there. It works offline after the first look.
+On Android, the web and the Mac (in a window of its own): every bus route in its colour, on a quiet street map. Tap a service to see its line and its buses moving live; tap a bus for where it's going and the stops ahead; tap a stop for what's coming and a way to go there. It works offline after the first look.
 
 ## Set up in two minutes
 
@@ -118,6 +118,7 @@ It updates through the day and goes quiet in the evening. The app has four tabs:
 
 ```
 NUS shuttle feed ────────┐
+LTA DataMall (optional) ─┤
 NUSMods timetables ──────┤
 NUS calendar, holidays ──┼──▶ Cloudflare Worker (apps/api)
 OpenStreetMap paths ─────┤          │
@@ -136,7 +137,7 @@ down the clock itself, so no screen ever shows a stale "4 min".
 | [`apps/api`](apps/api) | Cloudflare Worker: the API, accounts (D1), the cron monitor, and the website. API docs at [/docs](https://terminus.rcn.sh/docs). |
 | [`apps/web`](apps/web) | Landing page, account page, the web app (Now, Buses, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
 | [`apps/android`](apps/android) | Home-screen widgets (compact and with places) and the app: Now, Buses, the campus map, Settings. |
-| [`apps/macos`](apps/macos) | Menu bar app. |
+| [`apps/macos`](apps/macos) | Menu bar app, with the campus map in a window. |
 
 ## Running it
 
@@ -146,8 +147,8 @@ pnpm check                            # tests and typecheck
 node apps/api/scripts/dev-stub.mjs    # local API with fake buses on :8787
 ```
 
-Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Email
-Sending) and the NUS feed configuration described in
+Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Durable
+Objects, Analytics Engine, Workers rate limiting, Email Sending) and the NUS feed configuration described in
 [apps/api/docs/internals.md](apps/api/docs/internals.md). Releases run on a
 Mac with `scripts/release.sh`: the tests, the Android build as one APK per CPU
 type, the signed Mac app and the appcast installed Macs update from, the

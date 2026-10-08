@@ -70,9 +70,12 @@ affiliated with NUS.
    Two other scheduled reads exist, small and bounded; don't grow them.
    The stable Worker's 15-minute cron health check asks NUS for one stop
    and LTA for one stop each run, past the cache on purpose
-   (`src/monitor.ts`). The beta's cron doesn't: it reads the breaker trips
-   its own traffic noted (`src/feedwatch.ts`), and calls NUS only to try a
-   new version string while NUS is refusing the beta. Each push
+   (`src/monitor.ts`). While NUS refuses our uNivUS version, the same check
+   reads Google Play and APKCombo at most hourly and tries at most three new
+   version strings on that stop per run, never one twice
+   (`src/appversion.ts`). The beta's cron makes no health check: it reads
+   the breaker trips its own traffic noted (`src/feedwatch.ts`), and runs
+   the version search only while NUS is refusing the beta. Each push
    user's Trip object (`src/tripdo.ts`) wakes at most every 30 s to
    recompute the card, asking for its stops through the cache.
 3. **`normalize()` / `normalizeBuses()` in `src/fms.ts` are the only code that
@@ -94,7 +97,7 @@ affiliated with NUS.
 ## Commands
 
 ```bash
-pnpm install                          # Node 24, pnpm from packageManager
+pnpm install                          # Node 24 as in CI (22.18 or later works), pnpm from packageManager
 pnpm test                             # API tests: Node's runner, no network, no keys
 pnpm check                            # tests + tsc --noEmit (what CI's api job runs)
 pnpm lint                             # oxlint over API, tests, scripts, website JS; warnings fail
@@ -186,11 +189,19 @@ apps/api/
   src/index.ts        Router; most endpoints live here or in me.ts
   src/me.ts           /auth, /pair, /me/* (accounts)
   src/next.ts         /me/next: the plan, free days, riding, the trip's phase
+  src/answer.ts       The answer engine: stops near you, arrivals, the best option, worded
+  src/card.ts         What every client shows, worded once (the card's lines)
+  src/plan.ts, leave.ts  Which bus a trip is about; when to set off
+  src/profile.ts      The saved setup (validated) and the planner; day.ts is /me/day
+  src/nusmods.ts      NUSMods timetable import
+  src/walk.ts         Walking times along campus paths (walks.json)
+  src/crowd.ts        Full buses, tallied as the Worker answers
   src/resolve.ts      Stop + bus choice: haversine, directional pairing, scoring
   src/format.ts       Labels/details and the degrade ladder (live → scheduled)
   src/fms.ts          NUS feed client + normalisation (see rule 3)
   src/lta.ts          LTA DataMall client: the public buses at a stop (see below)
-  src/public.ts       Public buses in the graph: GRAPH_PUBLIC, route keys, ride metres
+  src/graph.ts        The stop graph: stops.json with hand-kept hours and opposites; GRAPH_PUBLIC
+  src/public.ts       Public buses in the graph: withPublic, route keys, ride metres
   src/edgecache.ts    Fetch through the edge cache, stale on failure, breaker: both feeds
   src/auth.ts         Guest token mint, KV memo, app-version breaker
   src/appversion.ts   Tracks the uNivUS app version the feed demands
@@ -205,6 +216,14 @@ apps/api/
   src/outcomes.ts     How each trip went (taps, Not going) and what it suggests
   src/monitor.ts      15-minute cron: feed health, incidents, housekeeping
   src/feedwatch.ts    The beta's feed health, from breaker trips its traffic noted
+  src/calendarsync.ts The academic calendar, refreshed into KV by the cron
+  src/push.ts, webpush.ts  Push: FCM to Android, Web Push to the installed web app
+  src/access.ts       Who may call the keyed routes (an API key or a session)
+  src/admin.ts        /admin/stats for the dashboard; analytics.ts logs to Analytics Engine
+  src/feedback.ts     "This was wrong" reports, stored and emailed to the operator
+  src/downloads.ts    App downloads from R2 (latest.json, the APKs, the DMG, the appcast)
+  src/landing.ts, site.ts, pagesky.ts  The landing page; stable or beta; the small pages' sky
+  src/types.ts        Env (the bindings) and the shared types
   src/openapi.ts      OpenAPI 3.1 spec + docs page (a test fails if routes drift from it)
   src/http.ts         JSON helpers, CORS, security headers (CSP lives here)
   src/seo.ts          robots.txt, the sitemap, /llms.txt for AI agents (the beta asks not to be crawled)
@@ -212,13 +231,15 @@ apps/api/
   src/config.ts       TTLs and tuning constants (WALK, RIDE, ...)
   data/               Bundled JSON: stops.json (graph), shapes.json (route lines),
                       public.json (public buses), calendar.json, walks.json,
-                      venues/rooms/landmarks/residences
+                      venues/rooms/landmarks/residences; hand-kept: service-hours.json,
+                      opposites.json (stops across the road the scrape can't pair)
   migrations/         D1 schema, numbered NNNN_name.sql
   scripts/            dev-stub.mjs; predeploy.mjs (first step of a deploy); scrapers (scrape_stops.py, scrape_lta.py,
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
                       check_scraped.py);
                       probe_buses.py (feed update-rate probe); record_buses.mjs (checks /buses on a live site);
-                      render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS)
+                      render-timelapse.mjs (renders a recorded day headless, e.g. on a VPS);
+                      vapid-key.mjs (makes the Web Push key, once)
   test/               *.test.js + worker.smoke.js; _stubs.mjs, _d1.mjs (D1 on node:sqlite)
   test/fixtures/answers/   Golden answers, shared with the Android and Mac tests
   cloudflare.config.ts     Worker config (stable + beta via --mode beta)
@@ -231,14 +252,17 @@ apps/web/public/
                       card), profile.js (the profile and /campus, shared), search.js
                       (ranking, tested) + search-box.js; journey.js (the card styles,
                       as on Android); dom.js has t, api, clock; sky.js (Now's sky
-                      and horizon), livery.js (the services' stripes)
-  app/                Installed web app: app.js (Now, tabs), map.js (campus map), offline.js
+                      and horizon), daylight.js (its colours by the hour), livery.js
+                      (the services' stripes)
+  app/                Installed web app: app.js (Now, tabs), buses.js (Buses tab), map.js
+                      (Map tab), map-files.js, offline.js
   admin/, status/, pair/, privacy/ (the summary; privacy/policy/ the full policy;
                       each with zh/), not-found/ (the Worker's 404 page)
   admin/timelapse/    Replays a recorded day on the map and exports a video
                       (replay.js, shared with the API tests; Mediabunny encodes)
   assets/             ui.js (Preact, hooks, htm, stores), site.css (shared colours/type),
-                      i18n.js, zh.js (Chinese), theme.js, landing.js, shots/;
+                      i18n.js, zh.js (Chinese), theme.js, landing.js, docs.js (/docs),
+                      tabbar.css (the app's bar), fonts.css + fonts/ (self-hosted), shots/;
                       sky.css + sky-phase.js + sky-page.js: the app's sky on the site's pages
   vendor/             Preact + htm (scripts/vendor-preact.sh), MapLibre GL + PMTiles
                       (scripts/vendor-map.sh), Mediabunny (scripts/vendor-mediabunny.sh):
@@ -246,7 +270,7 @@ apps/web/public/
   sw.js               Service worker: offline app shell and map
 apps/android/app/src/main/java/sh/rcn/terminus/
   Api.kt              API client and answer types
-  MapData.kt          Map data, GeoJSON, RoutePath + Glides (bus animation); JVM-tested
+  MapData.kt          Map data, GeoJSON, RoutePath + Slides (bus animation); JVM-tested
   MapFiles.kt         Street map file kept for offline
   ui/                 Screens (MainScreen, MapScreen, Settings, Onboarding, ...)
   widget/             Glance widgets and their refresh schedule
@@ -255,7 +279,9 @@ apps/macos/
   Sources/Terminus/   Api.swift, AppModel.swift (state/refresh/pairing), views, Updater.swift,
                       MapWindow.swift + MapData.swift + MapFiles.swift (the map window)
   Vendor/             MapLibre.xcframework.zip, from scripts/vendor-maplibre-mac.sh
-  Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings
+  Support/            Info.plist (version, SUPublicEDKey), zh-Hans strings, app icons
+  Tests/              swift test, on the API's answer fixtures
+  build.sh            Builds terminus.app (CHANNEL=beta for the beta)
 scripts/              release.sh, release-beta.sh (+ release-lib.sh, their shared checks;
                       verify-sparkle.swift), github-release.sh, package-mac.sh,
                       appcast.py, release-notes.py, map-tiles.sh (+ map-tiles.lock),

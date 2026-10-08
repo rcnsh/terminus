@@ -223,6 +223,11 @@ export async function readCapped(req: Request, max: number): Promise<string | nu
   return new TextDecoder().decode(all);
 }
 
+/** The header every 429 carries, saying when to try again: [seconds], by
+ *  default the window of the per-minute limiters (RL_*) and the sign-in
+ *  cooldowns. Clients wait this long rather than guessing. */
+const retryAfter = (seconds = 60): Record<string, string> => ({ 'retry-after': String(seconds) });
+
 async function limited(env: Env, req: Request, scope: string): Promise<boolean> {
   if (!env.RL_AUTH) return false;
   const { success } = await env.RL_AUTH.limit({ key: `${scope}:${clientKey(req)}` });
@@ -503,7 +508,7 @@ export const ME_ROUTES: MeRoute[] = [
     run: async ({ env, req, nowMs, deps, db, session }) => {
       // Each import can fetch 15 modules from NUSMods: a few a minute per account, not 120.
       if (env.RL_AUTH && !(await env.RL_AUTH.limit({ key: `import:${session.user.id}` })).success) {
-        return json({ error: 'too many attempts, try again in a minute' }, 429);
+        return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
       }
       const body = await readJson(req);
       const share = typeof body?.share === 'string' ? body.share.trim() : '';
@@ -822,7 +827,11 @@ export const ME_ROUTES: MeRoute[] = [
       const parsed = parseFeedback(await readJson(req));
       if (!parsed.ok) return json({ error: parsed.error }, 400);
       const id = await saveFeedback(db, session.user.id, parsed.value, nowMs);
-      if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429);
+      // The cap counts the last 24 hours, but every client holds back all
+      // its requests until Retry-After is up (at most 5 minutes), so a day
+      // here would stall the whole app for a capped report: one minute,
+      // and the message says when to try again.
+      if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429, retryAfter());
       ctx.waitUntil(
         mailFeedback(env, id, parsed.value, nowMs).catch((e) =>
           console.error('feedback email failed', e instanceof Error ? e.name : typeof e),
@@ -882,7 +891,7 @@ export async function handleMe(
 
   // Pages and lookups that cost a D1 read but need no session.
   if ((path === '/auth/verify' || path === '/auth/config') && env.RL_PUBLIC) {
-    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
   }
 
   if (path === '/auth/config' && req.method === 'GET') {
@@ -891,7 +900,7 @@ export async function handleMe(
   }
 
   if (path === '/auth/login' && req.method === 'POST') {
-    if (await limited(env, req, 'login')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'login')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     if (!email) return json({ error: 'enter a valid email address' }, 400);
@@ -907,14 +916,14 @@ export async function handleMe(
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
     }
-    if (outcome === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    if (outcome === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
     // Same answer whether or not the address is blocked or already has an account.
     return json({ ok: true, message: m().checkEmail });
   }
 
   if (path === '/auth/code' && req.method === 'POST') {
     // The emailed code, typed on the page that asked for it.
-    if (await limited(env, req, 'code')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'code')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     const code = normalizePairCode(body?.code);
@@ -963,9 +972,9 @@ export async function handleMe(
     // An app's first launch: an account with no email, so it's useful
     // before any sign-in. Apps can't run Turnstile, so: per IP, one global
     // ceiling, and the cron deletes the ones left unused.
-    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
-      return json({ error: 'terminus is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+      return json({ error: 'terminus is busy, try again in a minute' }, 429, retryAfter());
     }
     const body = await readJson(req);
     const token = await createAnonymous(db, deviceName(body), clientWith(req, body), nowMs);
@@ -976,21 +985,21 @@ export async function handleMe(
     // "Use terminus without an email" on the website (an iPhone has no app):
     // the same account as an app's first launch, as a web session. A browser
     // can run Turnstile, so it does, on top of the app's limits.
-    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const human = await checkTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip'));
     // Turnstile itself not answering isn't the visitor's fault: say so, and when to try again.
     if (human === 'unavailable') return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
     if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
     if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
-      return json({ error: 'terminus is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+      return json({ error: 'terminus is busy, try again in a minute' }, 429, retryAfter());
     }
     const token = await createAnonymousWeb(db, nowMs);
     return json({ ok: true }, 201, { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
   }
 
   if (path === '/auth/app/start' && req.method === 'POST') {
-    if (await limited(env, req, 'appstart')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'appstart')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     if (!email) return json({ error: 'enter a valid email address' }, 400);
@@ -1005,8 +1014,8 @@ export async function handleMe(
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
     }
-    if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, { 'retry-after': '60' });
-    if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, retryAfter());
+    if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
     return json({ ...started, expires: new Date(started.expires).toISOString() }, 201);
   }
 
@@ -1014,9 +1023,9 @@ export async function handleMe(
     // Every 3 seconds while the app is waiting: a per-IP ceiling of its own.
     // A typed code is a guess, so it counts against the sign-in limit too.
     if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `poll:${clientKey(req)}` })).success) {
-      return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '10' });
+      return json({ error: 'too many requests, slow down' }, 429, retryAfter(10));
     }
-    if (path === '/auth/app/code' && (await limited(env, req, 'appcode'))) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (path === '/auth/app/code' && (await limited(env, req, 'appcode'))) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     if (typeof body?.request !== 'string' || typeof body?.poll !== 'string') return json({ error: 'send request and poll' }, 400);
     if (path === '/auth/app/code') {
@@ -1033,7 +1042,7 @@ export async function handleMe(
 
   if (path === '/auth/approve') {
     if (req.method === 'GET') {
-      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
       // Like /auth/verify: GET only shows the page (mail scanners open every
       // link); the POST decides.
       const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
@@ -1054,7 +1063,7 @@ export async function handleMe(
 <p class="hint center">${m().notMeHint}</p>`));
     }
     if (req.method === 'POST') {
-      if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+      if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
       const form = await readForm(req);
       const r = form?.get('r');
       const n = Number(form?.get('n'));
@@ -1074,8 +1083,8 @@ export async function handleMe(
   if (path === '/pair/check' && req.method === 'POST') {
     // Lets an app show whose account a code belongs to before spending it,
     // so a link someone sent you cannot quietly pair your phone to theirs.
-    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429);
-    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
+    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
     const owner = code ? await pairCodeOwner(db, code, nowMs) : null;
@@ -1084,8 +1093,8 @@ export async function handleMe(
   }
 
   if (path === '/pair' && req.method === 'POST') {
-    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429);
-    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
+    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
     // It goes into the email to the account's owner: cleaned as at /auth/app/start.
@@ -1120,14 +1129,14 @@ export async function handleMe(
   if (!session) {
     // Each bad token costs a D1 read, so guessing is capped per address.
     // No token at all is just "signed out" (the homepage asks), not a guess.
-    if (tokenFrom(req) && (await limited(env, req, 'badtoken'))) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (tokenFrom(req) && (await limited(env, req, 'badtoken'))) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ error: 'sign in first' }, 401);
   }
 
   // Per account: generous for a widget, an app and a browser tab together.
   if (env.RL_ME) {
     const { success } = await env.RL_ME.limit({ key: `me:${session.user.id}` });
-    if (!success) return json({ error: 'too many requests, slow down' }, 429);
+    if (!success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
   }
   for (const r of ME_ROUTES) {
     if (r.method !== req.method) continue;
@@ -1141,7 +1150,6 @@ export async function handleMe(
   return json({ error: 'not found' }, 404);
 }
 
-/** Today's trip signals, looked up only when there's a trip to track today. */
 /**
  * /me/day's plan, kept up to a minute per user: a phone, a Mac and a browser
  * each ask every 30 s or so, and planning the whole day is the expensive
@@ -1162,6 +1170,7 @@ async function dayCached<T>(ctx: ExecutionContext, nowMs: number, inputs: unknow
   return fresh;
 }
 
+/** Today's trip signals, looked up only when there's a trip to track today. */
 async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number): Promise<DayRecord | null> {
   if (!env.TRIPS || !classesOn(profile, nowMs).length) return null;
   return loadDay(env, userId, nowMs);

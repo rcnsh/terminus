@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Terminus
 
-/// Chinese (phase 10): every string the app writes has a translation with the
+/// Chinese: every string the app writes has a translation with the
 /// same blanks, none is left in the views, and the server's Chinese answers
 /// read like its English ones.
 private let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

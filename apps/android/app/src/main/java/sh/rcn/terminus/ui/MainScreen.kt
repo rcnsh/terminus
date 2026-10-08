@@ -28,7 +28,6 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -38,7 +37,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,6 +49,23 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -106,7 +121,7 @@ internal fun skyPhase(): Phase {
 }
 
 @Composable
-internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, signedIn: Boolean, onAddEmail: () -> Unit, onOpenStop: (String) -> Unit) {
+internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues, email: String?, onAddEmail: () -> Unit, onOpenStop: (String) -> Unit) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var hasLocation by remember { mutableStateOf(Locator.hasForeground(ctx)) }
@@ -236,7 +251,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         if (!state.showNearby && state.target == Target.Plan) state.day?.let {
             DayTimeline(it, state.swipeHint, state.swipePeek, vm::removeFromToday, vm::swipePeeked)
         }
-        // Somewhere else: going there later today, planned like a class (phase 8.3).
+        // Somewhere else: going there later today, planned like a class.
         if (!state.showNearby && state.target != Target.Plan && state.paired) {
             TimeButton(stringResource(R.string.go_later), null, vm::goLater, Modifier.padding(top = 8.dp), initial = ::soonOnCampus)
         }
@@ -246,8 +261,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
             state.fetchedAt?.let { stringResource(R.string.updated_at, clock(ctx, it)) },
         ).joinToString(" · ")
         val refreshing = stringResource(R.string.refreshing)
-        // One quiet line, as the web shows it: "Updated 9:41 · Is this wrong?",
-        // and "✓ Reported, thanks" in the link's place for a few seconds once it's sent.
+        // One quiet line, as the web shows it: "Updated 9:41 · Is this wrong?".
         val small = MaterialTheme.typography.bodySmall
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Row(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -260,53 +274,41 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
             Text(footer, style = small, color = muted, modifier = Modifier.weight(1f, fill = false).semantics { if (failed) liveRegion = LiveRegionMode.Polite })
             if (!state.showNearby && state.answer != null) {
                 if (footer.isNotEmpty()) Text(" · ", style = small, color = muted)
-                if (state.reportShown) {
-                    Text("✓ " + stringResource(R.string.reported_thanks), style = small, color = goodColor())
-                } else {
-                    var reporting by remember { mutableStateOf<String?>(null) }
-                    var reportingFor by remember { mutableStateOf<Target>(Target.Plan) }
-                    var opened by remember { mutableStateOf(false) }
-                    Text(
-                        stringResource(R.string.is_this_wrong),
-                        style = small.copy(textDecoration = TextDecoration.Underline),
-                        color = muted,
-                        modifier = Modifier
-                            .clickable(role = Role.Button) {
-                                reporting = state.rawAnswers[state.target]
-                                reportingFor = state.target
-                                opened = true
-                                vm.clearReportResult()
-                            }
-                            // A target 48 dp tall, though the words are small, for a thumb.
-                            .heightIn(min = 48.dp)
-                            .wrapContentHeight()
-                            .padding(horizontal = 4.dp),
+                var reporting by remember { mutableStateOf<String?>(null) }
+                var reportingLine by remember { mutableStateOf("") }
+                var opened by remember { mutableStateOf(false) }
+                Text(
+                    stringResource(R.string.is_this_wrong),
+                    style = small.copy(textDecoration = TextDecoration.Underline),
+                    color = muted,
+                    modifier = Modifier
+                        .clickable(role = Role.Button) {
+                            reporting = state.rawAnswers[state.target]
+                            reportingLine = state.answer?.card?.line ?: state.answer?.label ?: ""
+                            opened = true
+                            vm.reportOpened()
+                        }
+                        // A target 48 dp tall, though the words are small, for a thumb.
+                        .heightIn(min = 48.dp)
+                        .wrapContentHeight()
+                        .padding(horizontal = 4.dp),
+                )
+                if (opened) {
+                    ReportSheet(
+                        line = reportingLine,
+                        email = email,
+                        sending = state.reportSending,
+                        sent = state.reportSent,
+                        failure = state.reportResult,
+                        onSend = { reason, note -> vm.report(reason, note, reporting, BuildConfig.VERSION_NAME) },
+                        onAddEmail = {
+                            opened = false
+                            onAddEmail()
+                        },
+                        onDismiss = { opened = false },
                     )
-                    if (opened && !signedIn) {
-                        // The server takes reports only from an account with an email.
-                        AddEmailToReportDialog(
-                            onAddEmail = {
-                                opened = false
-                                onAddEmail()
-                            },
-                            onDismiss = { opened = false },
-                        )
-                    } else if (opened) {
-                        ReportDialog(
-                            sending = state.reportSending,
-                            onSend = { note ->
-                                vm.report(note, reporting, reportingFor, BuildConfig.VERSION_NAME)
-                                opened = false
-                            },
-                            onDismiss = { opened = false },
-                        )
-                    }
                 }
             }
-        }
-        // Only a failure: a report that went shows in the line above.
-        state.reportResult?.let {
-            Text(it, style = small, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
 
         Spacer(Modifier.height(24.dp))
@@ -365,47 +367,151 @@ private fun Refused(text: String, openSettings: () -> Unit, inCard: Boolean) {
     TextButton(onClick = openSettings, modifier = Modifier.padding(horizontal = if (inCard) 4.dp else 0.dp)) { Text(stringResource(R.string.open_settings)) }
 }
 
-/** "Is this wrong?": a note, sent with the answer that was on screen. Send waits for the note: the server needs one. */
+/** The reasons offered as chips, as /me/feedback takes them (REASONS in the API's feedback.ts). */
+private val REPORT_REASONS = listOf(
+    "never-came" to R.string.report_never_came,
+    "times-off" to R.string.report_times_off,
+    "wrong-stop" to R.string.report_wrong_stop,
+    "walk-longer" to R.string.report_walk_longer,
+    "wrong-class" to R.string.report_wrong_class,
+)
+
+/**
+ * "Is this wrong?", as the web's sheet: the answer it's about (`line`), the
+ * reasons as chips, a note, and who the reply goes to. A reason or a note
+ * sends it; once `sent`, the sheet says so, which is the only confirmation.
+ * Without an email the server takes no reports, so it asks for one instead.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun ReportDialog(sending: Boolean, onSend: (String) -> Unit, onDismiss: () -> Unit) {
+private fun ReportSheet(
+    line: String,
+    email: String?,
+    sending: Boolean,
+    sent: Boolean,
+    failure: String?,
+    onSend: (String?, String) -> Unit,
+    onAddEmail: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var reason by rememberSaveable { mutableStateOf<String?>(null) }
     var note by rememberSaveable { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.report_title)) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { if (it.length <= 1000) note = it },
-                    label = { Text(stringResource(R.string.report_note)) },
-                    placeholder = { Text(stringResource(R.string.report_placeholder)) },
-                    minLines = 2,
-                    maxLines = 5,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    stringResource(R.string.report_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    val colors = MaterialTheme.colorScheme
+    val wide = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 20.dp).verticalScroll(rememberScrollState())) {
+            when {
+                sent -> {
+                    val good = if (colors.surface.luminance() < 0.5f) GoodDark else GoodLight
+                    Box(
+                        Modifier.align(Alignment.CenterHorizontally).size(56.dp).clip(CircleShape).background(good.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(painterResource(R.drawable.ic_check), contentDescription = null, tint = good, modifier = Modifier.size(30.dp)) }
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        stringResource(R.string.report_sent_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                    if (email != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            withEmail(stringResource(R.string.report_sent_body, email), email, colors.onSurface),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    FilledTonalButton(onClick = onDismiss, modifier = wide) { Text(stringResource(R.string.done)) }
+                }
+                email == null -> {
+                    Text(stringResource(R.string.report_title), style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(10.dp))
+                    Text(stringResource(R.string.report_needs_email), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                    Spacer(Modifier.height(20.dp))
+                    Button(onClick = onAddEmail, modifier = wide) { Text(stringResource(R.string.add_email)) }
+                }
+                else -> {
+                    Text(stringResource(R.string.report_title), style = MaterialTheme.typography.titleLarge)
+                    if (line.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.surfaceVariant).height(IntrinsicSize.Min).padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.width(4.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(colors.primary))
+                            Spacer(Modifier.width(10.dp))
+                            Text(line, style = MaterialTheme.typography.titleSmall)
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text(stringResource(R.string.report_pick), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        REPORT_REASONS.forEach { (key, label) ->
+                            val on = reason == key
+                            FilterChip(
+                                selected = on,
+                                onClick = { reason = if (on) null else key },
+                                label = { Text(stringResource(label)) },
+                                leadingIcon = if (on) {
+                                    { Icon(painterResource(R.drawable.ic_check), contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                                } else {
+                                    null
+                                },
+                                colors = chosenChip(),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    val noteLabel = stringResource(R.string.report_note)
+                    TextField(
+                        value = note,
+                        onValueChange = { if (it.length <= 1000) note = it },
+                        placeholder = { Text(stringResource(R.string.report_placeholder)) },
+                        minLines = 3,
+                        maxLines = 6,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                        ),
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = noteLabel },
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(painterResource(R.drawable.ic_mail), contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            withEmail(stringResource(R.string.report_hint, email), email, colors.onSurface),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    failure?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = colors.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = { onSend(reason, note) },
+                        enabled = !sending && (reason != null || note.isNotBlank()),
+                        modifier = wide,
+                    ) { Text(stringResource(if (sending) R.string.sending else R.string.send)) }
+                }
             }
-        },
-        confirmButton = { TextButton(onClick = { onSend(note) }, enabled = !sending && note.isNotBlank()) { Text(stringResource(R.string.send)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
+        }
+    }
 }
 
-/** "Is this wrong?" from an account without an email: reports need one, so there's someone to reply to. */
-@Composable
-private fun AddEmailToReportDialog(onAddEmail: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.report_title)) },
-        text = { Text(stringResource(R.string.report_needs_email)) },
-        confirmButton = { TextButton(onClick = onAddEmail) { Text(stringResource(R.string.add_email)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
+/** `text` with the email address in it picked out, as the web's sheet shows it. */
+private fun withEmail(text: String, email: String, ink: Color) = buildAnnotatedString {
+    append(text)
+    val at = text.indexOf(email)
+    if (at >= 0) addStyle(SpanStyle(color = ink, fontWeight = FontWeight.SemiBold), at, at + email.length)
 }
 
 /** The chip showing, filled in the ink (the web's too), so it stands out from the rest over any sky. */

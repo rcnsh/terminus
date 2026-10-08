@@ -1089,7 +1089,7 @@ private fun ClockPills(profile: ProfileDoc?, account: AccountViewModel) {
     )
 }
 
-/** Auto (the phone's), English or 中文 (phase 10). The languages are named in themselves. */
+/** Auto (the phone's), English or 中文. The languages are named in themselves. */
 @Composable
 private fun LanguagePicker(account: AccountViewModel) {
     val ctx = LocalContext.current

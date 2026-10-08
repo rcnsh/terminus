@@ -1124,6 +1124,10 @@ test('a bus list whose values changed is a changed feed, not "no buses"', () => 
   ]) assert.match(busesProblem({ activebus: rows }), /no bus has a plate and a position it can read/, JSON.stringify(rows));
   // One readable bus among them is a board.
   assert.equal(busesProblem({ activebus: [{ vehplate: 'PD1', lat: null, lng: null }, { vehplate: 'PD2', ...at }] }), null);
+  // Every bus with no fix yet is real; one among rows it can't read is not.
+  assert.equal(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: '0', lng: '0' }] }), null);
+  assert.match(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: at.lng, lng: at.lat }] }), /no bus has a plate and a position it can read/, 'a fix-less bus beside a swapped one');
+  assert.match(busesProblem({ activebus: [{ vehplate: 'PD1', lat: 0, lng: 0 }, { vehplate: 'PD2', lat: '1,2949', lng: '103,7735' }] }), /no bus has a plate and a position it can read/);
 });
 
 test('a list under a name it does not know is only a list of rows, never the hints beside it', () => {

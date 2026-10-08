@@ -10,7 +10,7 @@ import org.junit.Test
 import sh.rcn.terminus.Destinations
 import sh.rcn.terminus.NextAnswer
 
-/** What a widget shows (phase 8.3), and when it goes back to the timetable by itself. */
+/** What a widget shows, and when it goes back to the timetable by itself. */
 class WidgetModesTest {
     init { TestStrings.install() }
 
