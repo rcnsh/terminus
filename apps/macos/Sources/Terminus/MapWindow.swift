@@ -44,17 +44,54 @@ final class MapModel {
     /// bumped each time, so choosing it again moves there again.
     var focus: Spot?
     var focusCount = 0
+
+    /// Why the API refused the map: signed out (401) or this version too
+    /// old (426). It asks nothing more until that changes: a new token, or
+    /// the 426's hold over.
+    enum Refusal: Equatable { case signedOut, outdated }
+    var refused: Refusal?
+    private var refusedToken: String?
     /// What the window opened with, for the style again after the map file failed.
     private var look = (dark: false, zh: false)
+
+    /// Whether the map may ask the API now; clears a refusal that no longer holds.
+    func mayAsk() -> Bool {
+        switch refused {
+        case .signedOut where TokenStore.read() != refusedToken, .outdated where !Outdated.active: refused = nil
+        default: break
+        }
+        return refused == nil
+    }
+
+    /// A 401 or 426: stop asking, and have the popover check at once (it
+    /// signs out, or offers the update).
+    private func refuse(_ e: ApiError, token: String?, app: AppModel) {
+        refused = e.status == 426 ? .outdated : .signedOut
+        refusedToken = token
+        app.mapRefused()
+    }
+
+    private static func refusal(_ error: Error) -> ApiError? {
+        guard let e = error as? ApiError, e.status == 401 || e.status == 426 else { return nil }
+        return e
+    }
 
     var openStop: String? { if case .stop(let c) = sheet { c } else { nil } }
     var openBus: LiveBus? { if case .bus(let id) = sheet { buses.first { $0.id == id } } else { nil } }
 
     /// The campus and the style for this theme and language, then the street
     /// map file in the background (the style again once it's here).
-    func open(dark: Bool, zh: Bool) async {
+    func open(dark: Bool, zh: Bool, app: AppModel) async {
         look = (dark, zh)
-        if campus == nil { campus = try? await MapFiles.campus(token: TokenStore.read()) }
+        // Asked first either way: back after signing in, the refusal goes.
+        if mayAsk(), campus == nil {
+            let token = TokenStore.read()
+            do {
+                campus = try await MapFiles.campus(token: token)
+            } catch {
+                if let e = Self.refusal(error) { refuse(e, token: token, app: app) }
+            }
+        }
         style = await MapFiles.style(dark: dark, zh: zh)
         failed = campus == nil || style == nil
         guard !failed else { return }
@@ -89,16 +126,19 @@ final class MapModel {
     /// A failed poll keeps the buses drawn and says so, as the web map does:
     /// "need a connection" when this Mac is offline (`online`). Once the last
     /// answer is 15 s old (three polls) they're faded, so last places don't
-    /// pass for live. A signed-out Mac (401) says nothing: the popover asks
-    /// it to sign in again.
-    func refreshBuses(online: Bool) async {
-        guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
+    /// pass for live. Refused (401, 426): it stops, and says why (`refused`).
+    func refreshBuses(app: AppModel) async {
+        guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return }
+        let online = app.online
+        let token = TokenStore.read()
         let list: BusList?
         do {
-            list = BusList.parse(try await MapFiles.get("/buses?svc=\(q)", token: TokenStore.read()))
-        } catch let e as ApiError where e.status == 401 {
-            return
+            list = BusList.parse(try await MapFiles.get("/buses?svc=\(q)", token: token))
         } catch {
+            if let e = Self.refusal(error) {
+                refuse(e, token: token, app: app)
+                return
+            }
             if !Task.isCancelled, svc == selected {
                 busStatus = online ? .unavailable : .offline
                 if let heardAt, Date().timeIntervalSince(heardAt) > 15 { busesStale = true }
@@ -134,9 +174,18 @@ final class MapModel {
         focusCount += 1
     }
 
-    func refreshBoard() async {
-        guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
-        let b = (try? await MapFiles.get("/arrivals?stop=\(q)", token: TokenStore.read())).flatMap(StopBoard.parse)
+    func refreshBoard(app: AppModel) async {
+        guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return }
+        let token = TokenStore.read()
+        var b: StopBoard?
+        do {
+            b = StopBoard.parse(try await MapFiles.get("/arrivals?stop=\(q)", token: token))
+        } catch {
+            if let e = Self.refusal(error) {
+                refuse(e, token: token, app: app)
+                return
+            }
+        }
         guard code == openStop else { return }
         if let b { board = b; boardFailed = false } else if board == nil { boardFailed = true }
     }
@@ -176,7 +225,7 @@ struct MapWindow: View {
                     drawn: .init(selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet, me: map.me, recentre: map.recentre, zoomSteps: map.zoomSteps, focusCount: map.focusCount)
                 )
             } else if map.failed {
-                Text(L("The map needs a connection the first time."))
+                Text(map.refused?.text ?? L("The map needs a connection the first time."))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -185,7 +234,9 @@ struct MapWindow: View {
             if let campus = map.campus {
                 VStack(alignment: .leading, spacing: 8) {
                     Pills(campus: campus, selected: map.selected) { map.choose($0) }
-                    if let status = map.busStatus {
+                    if let refused = map.refused {
+                        StatusChip(text: refused.text).announced(refused.text)
+                    } else if let status = map.busStatus {
                         // Said for a new service, or when its buses go to or from none;
                         // not at every bus that joins or leaves.
                         StatusChip(text: status.text(map.selected ?? ""))
@@ -226,13 +277,14 @@ struct MapWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { n in
             if let w = n.object as? NSWindow, w === window, visible { shown += 1 }
         }
-        .task(id: scheme) { await map.open(dark: scheme == .dark, zh: Lang.zh) }
+        // Again after signing in, so a map refused while signed out loads.
+        .task(id: "\(scheme)|\(app.paired)") { await map.open(dark: scheme == .dark, zh: Lang.zh, app: app) }
         // Live buses every 5 s while a pill is on (the API caches 5 s), not
         // while the window is hidden behind others or minimised.
         .task(id: "\(map.selected ?? "")|\(shown)") {
             guard map.selected != nil else { return }
             while !Task.isCancelled {
-                if visible { await map.refreshBuses(online: app.online) }
+                if visible { await map.refreshBuses(app: app) }
                 try? await Task.sleep(for: .seconds(5))
             }
         }
@@ -240,7 +292,7 @@ struct MapWindow: View {
         .task(id: "\(map.openStop ?? "")|\(shown)") {
             guard map.openStop != nil else { return }
             while !Task.isCancelled {
-                if visible { await map.refreshBoard() }
+                if visible { await map.refreshBoard(app: app) }
                 try? await Task.sleep(for: .seconds(15))
             }
         }
@@ -253,6 +305,15 @@ struct MapWindow: View {
     }
 
     private var visible: Bool { window.map { $0.occlusionState.contains(.visible) && !$0.isMiniaturized } ?? true }
+}
+
+extension MapModel.Refusal {
+    var text: String {
+        switch self {
+        case .signedOut: L("Signed out. Sign in again from terminus in the menu bar.")
+        case .outdated: L("Update terminus to keep using it.")
+        }
+    }
 }
 
 extension MapModel.BusStatus {
@@ -505,7 +566,9 @@ private struct StopCard: View {
     var body: some View {
         MapCard(title: stop.name, close: { map.sheet = nil }) {
             Group {
-                if map.boardFailed {
+                if let refused = map.refused {
+                    Text(refused.text).foregroundStyle(.secondary)
+                } else if map.boardFailed {
                     Text(L("Live times need a connection.")).foregroundStyle(.secondary)
                 } else if let board = map.board {
                     if board.rows.isEmpty {

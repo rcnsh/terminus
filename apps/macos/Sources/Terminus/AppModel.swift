@@ -898,6 +898,14 @@ final class AppModel {
 
     private func kick() { start() }
 
+    /// The map was refused (401 or 426): refresh now, so the popover's own
+    /// handling (signing out, the update banner) follows at once rather than
+    /// at the next turn of the loop, up to 10 minutes later.
+    func mapRefused() {
+        guard paired, !updateRequired else { return }
+        kick()
+    }
+
     /// When the plan was last fetched (this Mac's clock), and how long one
     /// fetched for the menu bar alone, off its tab, is kept.
     var planFetched: Date?
