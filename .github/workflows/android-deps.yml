@@ -1,0 +1,179 @@
+name: android deps
+
+# Dependabot edits only the Android build files, so CI fails on its PR
+# until the lockfiles and dependency hashes are written again. This writes
+# them (scripts/android-deps.sh) and pushes them to the PR's branch, where
+# CI then runs and the PR waits for review as usual.
+#
+# Two jobs, so none holds both new third-party code and a token that can
+# push:
+#   generate  runs Gradle, and with it the new versions' plugin code, with
+#             a read-only token and no secrets;
+#   commit    holds DEPS_TOKEN (a Dependabot secret: a fine-grained token,
+#             Contents read and write on this repository only) and runs no
+#             Gradle. It pushes only the four dependency files, only when
+#             no hash already listed changed and every new one matches its
+#             repository's own checksum, and only onto the commit that
+#             was generated from, on a dependabot/gradle/ branch.
+# The files travel between them as an artifact, checked against the hashes
+# the generate job took.
+on:
+  pull_request:
+    paths:
+      - apps/android/**
+
+permissions:
+  contents: read
+
+# A newer push to the PR (a Dependabot rebase) replaces a run in progress.
+concurrency:
+  group: android-deps-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    # Dependabot's own pushes only: Dependabot secrets reach only those
+    # runs, and the commit pushed below (as the token's owner) doesn't
+    # start this again.
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/gradle/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+      sums: ${{ steps.sums.outputs.sums }}
+    steps:
+      # The branch's own commit, not the merge with main that pull_request
+      # checks out by default: that's what the files are pushed onto.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # No setup-gradle and its cache: the script runs from empty Gradle
+      # homes on purpose, as a fresh CI runner does.
+      - name: Write the lockfiles and hashes
+        run: scripts/android-deps.sh
+
+      - name: Compare with the branch
+        id: diff
+        run: |
+          if git diff --quiet -- apps/android/app/gradle.lockfile apps/android/buildscript-gradle.lockfile apps/android/settings-gradle.lockfile apps/android/gradle/verification-metadata.xml; then
+            echo "lockfiles and hashes already up to date"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Hash the files
+        id: sums
+        working-directory: apps/android
+        run: |
+          {
+            echo "sums<<END_OF_SUMS"
+            sha256sum app/gradle.lockfile buildscript-gradle.lockfile settings-gradle.lockfile gradle/verification-metadata.xml
+            echo "END_OF_SUMS"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.diff.outputs.changed == 'true'
+        with:
+          name: android-deps
+          path: |
+            apps/android/app/gradle.lockfile
+            apps/android/buildscript-gradle.lockfile
+            apps/android/settings-gradle.lockfile
+            apps/android/gradle/verification-metadata.xml
+          if-no-files-found: error
+          retention-days: 3
+
+  commit:
+    needs: generate
+    if: needs.generate.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # Only the push step gets the token, for that one command.
+          persist-credentials: false
+
+      # The push step checks .git/config is still this, so nothing unpacked
+      # since (the artifact, say) can point the push elsewhere or add a
+      # filter to it.
+      - name: Fingerprint git config
+        id: gitconfig
+        run: echo "sum=$(sha256sum .git/config | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      # The checker as the branch had it before the artifact arrives.
+      - name: Keep the checker aside
+        run: cp scripts/android_deps.py "$RUNNER_TEMP/android_deps.py" && cp apps/android/gradle/verification-metadata.xml "$RUNNER_TEMP/before.xml"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: android-deps
+          path: apps/android
+
+      - name: Check the files are what was generated
+        working-directory: apps/android
+        env:
+          SUMS: ${{ needs.generate.outputs.sums }}
+        run: printf '%s\n' "$SUMS" | sha256sum --strict -c -
+
+      # Here, apart from the job that ran Gradle: no hash already listed
+      # changed, every new file matches what its repository publishes, and
+      # no aapt2 jar is missing (the checker would add it, so the copy
+      # would differ).
+      - name: Check the hashes against the repositories
+        run: |
+          cp apps/android/gradle/verification-metadata.xml "$RUNNER_TEMP/after.xml"
+          python3 -I "$RUNNER_TEMP/android_deps.py" "$RUNNER_TEMP/before.xml" "$RUNNER_TEMP/after.xml"
+          cmp -s "$RUNNER_TEMP/after.xml" apps/android/gradle/verification-metadata.xml || { echo "::error::the hashes leave out an aapt2 jar"; exit 1; }
+
+      # git runs with no hooks, none of the runner's global or system config,
+      # and .git/config as it was after checkout. Only the four files may
+      # differ, and the commit goes straight onto the branch's commit; the
+      # push is a fast-forward, so a newer Dependabot push wins.
+      - name: Commit and push
+        env:
+          PUSH_TOKEN: ${{ secrets.DEPS_TOKEN }}
+          CONFIG_SUM: ${{ steps.gitconfig.outputs.sum }}
+          BASE: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_NOSYSTEM: "1"
+        run: |
+          FILES="apps/android/app/gradle.lockfile apps/android/buildscript-gradle.lockfile apps/android/settings-gradle.lockfile apps/android/gradle/verification-metadata.xml"
+          only_deps() { for f in $1; do case " $FILES " in *" $f "*) ;; *) return 1 ;; esac; done; }
+          g() { git -c core.hooksPath=/dev/null -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" "$@"; }
+          [ -n "$PUSH_TOKEN" ] || { echo "::error::the DEPS_TOKEN Dependabot secret is missing"; exit 1; }
+          case $BRANCH in dependabot/gradle/*) ;; *) echo "::error::not a Dependabot Gradle branch"; exit 1 ;; esac
+          [ "$(sha256sum .git/config | cut -d' ' -f1)" = "$CONFIG_SUM" ] || { echo "::error::.git/config changed since checkout"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "$BASE" ] || { echo "::error::checked out something other than the branch's commit"; exit 1; }
+          only_deps "$(git status --porcelain --untracked-files=all | cut -c4-)" || { echo "::error::files other than the lockfiles and hashes changed"; exit 1; }
+          g add $FILES
+          g commit -q -m "build(deps): lock and verify the android group's new versions"
+          sha=$(git rev-parse HEAD)
+          [ "$(git rev-parse "$sha^")" = "$BASE" ] || { echo "::error::the commit's parent isn't the branch's commit"; exit 1; }
+          only_deps "$(git diff --name-only "$BASE" "$sha")" || { echo "::error::the commit changes more than the lockfiles and hashes"; exit 1; }
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
+          # By hash, and a fast-forward only (no force): if Dependabot
+          # pushed since, GitHub refuses and its new push runs this again.
+          if ! g -c http.https://github.com/.extraheader="$auth" push -q origin "$sha:refs/heads/$BRANCH"; then
+            if [ "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" != "$BASE" ]; then
+              echo "::warning title=not pushed::$BRANCH moved since this run started; the run for its newer commit writes the files"
+              exit 0
+            fi
+            echo "::error::push to $BRANCH failed (has DEPS_TOKEN expired?)"
+            exit 1
+          fi
+          echo "pushed $sha to $BRANCH"

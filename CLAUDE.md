@@ -114,6 +114,12 @@ node apps/api/scripts/dev-stub.mjs    # local Worker on :8787 with a fake feed a
   then `:app:assembleStableRelease :app:assembleBetaRelease` (R8 and
   resource shrinking, debug-signed without the keystore) in `apps/android`
   (Java 21).
+- Android dependencies are locked and hash-checked. On a Dependabot Gradle
+  PR, the `android deps` workflow writes the lockfiles and hashes and
+  pushes them to its branch. After changing a version by hand, run
+  `scripts/android-deps.sh` (or `scripts/android-deps.sh <pr>` for a PR
+  the workflow didn't finish) and review the diff. Don't write hashes from
+  a warm Gradle cache: CI's cold runners fetch files it leaves out.
 - Mac (CI, macOS runner): `swift build && swift test`, then
   `swift build -c release --arch arm64` in `apps/macos`.
 - In a Linux cloud container without the Android SDK or Xcode, you can't

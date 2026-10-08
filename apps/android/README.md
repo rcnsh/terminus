@@ -41,18 +41,26 @@ and every downloaded file's SHA-256 is in `gradle/verification-metadata.xml`:
 a build fails on an artefact whose bytes or version changed. Each group comes
 only from the repository that publishes it (`settings.gradle.kts`), and the
 wrapper checks Gradle's own download (`distributionSha256Sum`). After changing
-a version in `gradle/libs.versions.toml` (or merging a Dependabot PR), write
-both again and review the diff:
+a version in `gradle/libs.versions.toml`, write them again from the
+repository's root. Dependabot edits only the build files, so on its PRs the
+`android deps` workflow (`.github/workflows/android-deps.yml`) runs the same
+script and pushes the result to the PR's branch; run it by hand for a PR the
+workflow didn't finish:
 
 ```bash
-./gradlew :app:resolveAll buildEnvironment --write-locks
-./gradlew :app:resolveAll buildEnvironment :app:lintStableDebug --write-verification-metadata sha256
+scripts/android-deps.sh 42   # PR #42, in its own worktree under build/
+scripts/android-deps.sh      # this checkout, after a hand edit
 ```
 
-Gradle only records what the machine it runs on downloads, and `aapt2` comes
-as one jar per system: after an Android Gradle Plugin bump, add the `-linux`
-(CI) and `-windows` jars' SHA-256 by hand, checked against the `.sha1` Google
-Maven publishes beside each, or CI fails verification.
+It writes the lockfiles and the hashes from an empty Gradle home, as a fresh
+CI runner starts: Gradle only records what it downloads, and a warm cache
+leaves out files a cold runner fetches, so CI then fails now and then. It
+checks each new hash against the SHA-1 its repository publishes, stops on a
+hash that changed for a version already listed, and adds the `-linux`,
+`-osx` and `-windows` jars of `aapt2` (one per system; Gradle records only
+this machine's). Then it builds as CI does from another empty home and
+leaves the changes for you to review, printing the commands that commit and
+push them.
 
 A release build without the `TERMINUS_*` key properties comes out unsigned,
 never signed with the debug key.
