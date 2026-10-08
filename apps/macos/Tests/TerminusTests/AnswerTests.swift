@@ -265,6 +265,21 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(number.card?.kind == "trip")
 }
 
+/// A newer server's phase and quality: the answer shows, no trip is
+/// followed for it, and its times aren't shown as live.
+@Test func anUnknownPhaseAndQualityAreNeitherATripNorLive() throws {
+    let a = try goldenEdited("class-bus") { o in
+        o["quality"] = "predicted"
+        editCard(&o) { $0["phase"] = "boarding" }
+    }
+    #expect(a.card?.phase == "boarding")
+    #expect(a.quality == "predicted")
+    #expect(!a.tripUnderWay)
+    #expect(a.leaveHeadline(now: .distantPast) == "Leave by ~09:36")
+    #expect(Header.dotColor(a.quality, error: false, nearby: false) == .gray)
+    #expect(Header.dotColor("live", error: false, nearby: false) == .green)
+}
+
 @Test func theDestinationNeedsNoCode() throws {
     let a = try goldenEdited("class-bus") { o in
         var d = o["dest"] as? [String: Any] ?? [:]
