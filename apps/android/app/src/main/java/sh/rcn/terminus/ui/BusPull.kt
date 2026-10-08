@@ -8,6 +8,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -56,6 +58,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -202,7 +206,8 @@ internal fun BusPull(
                 }
 
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                    // Down, with the content already at its top: the sky stretches with the finger.
+                    // Down, with the content at its top since the finger went down: the sky stretches with the finger.
+                    if (source == NestedScrollSource.UserInput && consumed.y != 0f) motion.contentScrolled()
                     if (!on || source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
                     if (!motion.canGrab && motion.phase != PullMotion.Phase.Drag) return Offset.Zero
                     if (motion.phase == PullMotion.Phase.Idle) motion.scene = sceneOf(width)
@@ -233,7 +238,18 @@ internal fun BusPull(
             }
         }
         CompositionLocalProvider(LocalPull provides pv) {
-            Box(Modifier.fillMaxSize().nestedScroll(connection)) { content(pv) }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    // Each touch starts afresh: seen before the content takes it, and left for it.
+                    .pointerInput(motion) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            motion.touch()
+                        }
+                    }
+                    .nestedScroll(connection),
+            ) { content(pv) }
         }
     }
 }
