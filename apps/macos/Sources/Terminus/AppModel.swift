@@ -631,14 +631,22 @@ final class AppModel {
     private func checkForUpdate() {
         let d = UserDefaults.standard
         let current = Api.version ?? "0"
-        if let v = d.string(forKey: "latestVersion"), isNewer(v, than: current) { update = v }
-        guard Date().timeIntervalSince1970 - d.double(forKey: "updateCheckedAt") > 86_400 else { return }
+        let check = Self.updateCheck(cached: d.string(forKey: "latestVersion"), checkedAt: d.double(forKey: "updateCheckedAt"), current: current, now: Date().timeIntervalSince1970)
+        update = check.update
+        guard check.fetch else { return }
         Task {
             guard let v = try? await Api(token: nil).latestVersion() else { return }
             d.set(Date().timeIntervalSince1970, forKey: "updateCheckedAt")
             d.set(v, forKey: "latestVersion")
             update = isNewer(v, than: current) ? v : nil
         }
+    }
+
+    /// What the last check said (`cached`, a version newer than the running
+    /// one, else none), and whether to ask again: a day after the last
+    /// answer (`checkedAt`, seconds since 1970, as `now` is).
+    nonisolated static func updateCheck(cached: String?, checkedAt: Double, current: String, now: Double) -> (update: String?, fetch: Bool) {
+        (cached.flatMap { isNewer($0, than: current) ? $0 : nil }, now - checkedAt > 86_400)
     }
 
     func askLocation() { locator.ask() }
