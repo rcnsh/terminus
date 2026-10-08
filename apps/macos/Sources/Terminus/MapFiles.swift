@@ -203,7 +203,7 @@ enum MapFiles {
     /// a 426 (Outdated): the map polls every few seconds, and asking through
     /// a 429 only keeps it tripped.
     static func get(_ path: String, token: String?) async throws -> Data {
-        if token != nil, Outdated.active { throw ApiError(status: 426, message: "HTTP 426") }
+        if token != nil, Outdated.gated("GET", path), Outdated.active { throw ApiError(status: 426, message: "HTTP 426") }
         if Date() < Quiet.until(.app) { throw ApiError(status: 429, message: "HTTP 429") }
         var req = URLRequest(url: URL(string: Api.base + path)!, timeoutInterval: 10)
         req.setValue(Api.client, forHTTPHeaderField: "x-terminus-client")

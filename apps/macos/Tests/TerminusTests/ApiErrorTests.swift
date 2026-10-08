@@ -37,6 +37,22 @@ import Testing
     #expect(Quiet.until(.signIn) < Date())
 }
 
+/// As the server: signing in or out and leaving still go to an outdated app.
+@Test func anOutdatedAppCanStillSignOutAndLeave() {
+    #expect(Outdated.gated("GET", "/me/next"))
+    #expect(Outdated.gated("GET", "/me"))
+    #expect(Outdated.gated("POST", "/me/history"))
+    #expect(!Outdated.gated("DELETE", "/me"))
+    #expect(!Outdated.gated("DELETE", "/me/push"))
+    #expect(!Outdated.gated("POST", "/auth/logout"))
+    #expect(!Outdated.gated("POST", "/pair"))
+    #expect(!Outdated.gated("POST", "/pair/check"))
+    #expect(!Outdated.gated("GET", "/download/latest.json"))
+    #expect(Outdated.gated("GET", "/campus"))
+    #expect(Outdated.gated("GET", "/buses?svc=A1"))
+    #expect(Outdated.gated("POST", "/me/pair-code"))
+}
+
 @Test func aReplyThisVersionCantReadIsntCalledOffline() {
     let bad = DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "x"))
     #expect(failureMessage(bad) == L("terminus sent something this version can't read."))

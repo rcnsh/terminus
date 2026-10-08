@@ -930,8 +930,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         seen: ((HttpURLConnection) -> Unit)? = null,
     ): JSONObject =
         withContext(Dispatchers.IO) {
-            // Refused as too old: nothing goes out until the hold is up (or the app is updated).
-            if (Outdated.holding()) throw UpdateRequired(L.s(R.string.update_required))
+            // Refused as too old: nothing the server would refuse goes out until
+            // the hold is up (or the app is updated). Signing in or out and
+            // leaving (pushes off, the account deleted) still go, as it serves them.
+            if (Outdated.gated(method, path) && Outdated.holding()) throw UpdateRequired(L.s(R.string.update_required))
             // Asked to slow down: nothing goes out until Retry-After is up.
             if (Quiet.blocked(path)) throw ApiError(429, L.s(R.string.busy_try_again))
             val conn = URL(BuildConfig.API_BASE + path).openConnection() as HttpURLConnection
@@ -1004,7 +1006,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         // of the Worker), a plain sentence rather than "HTTP 502".
         if (status !in 200..299) throw ApiError(status, json?.optStringOrNull("error") ?: L.s(R.string.server_not_answering))
         // Only an account's routes are refused as too old, so only they say it's over.
-        if (token != null) Outdated.served()
+        if (token != null && Outdated.gated(method, path)) Outdated.served()
         // A 200 that isn't JSON is not "offline": the server said something this version can't read.
         return json ?: throw ParseError("not JSON")
     }
@@ -1128,6 +1130,23 @@ object Outdated {
     val required: Boolean get() = at != 0L
 
     fun holding(): Boolean = at != 0L && wall() - at in 0 until HOLD_MS
+
+    /**
+     * Whether the server refuses this request to an outdated app, as
+     * apps/api checks it: an account's routes (`/me…`) and the answers it
+     * asks with its token (KEYED in index.ts). Not signing in or out
+     * (`/auth/…`, `/pair…`), the released version (`/download/…`), nor
+     * taking the device off pushes or deleting the account
+     * (`DELETE /me/push`, `DELETE /me`).
+     */
+    fun gated(method: String, path: String): Boolean {
+        val p = path.substringBefore('?')
+        if (method == "DELETE" && (p == "/me" || p == "/me/push")) return false
+        return p == "/me" || p.startsWith("/me/") || p in ANSWERS
+    }
+
+    /** The bus answers the server refuses an outdated app (KEYED in apps/api/src/index.ts). */
+    private val ANSWERS = setOf("/next", "/trip", "/arrivals", "/buses", "/line", "/campus", "/stops/pairs")
 
     fun refused() {
         at = wall()

@@ -765,7 +765,7 @@ func retryAfterS(_ header: String?, now: Date = Date()) -> TimeInterval? {
 /// the same way until it's updated, so none goes out for half an hour:
 /// Sparkle's update is what fixes it, and a relaunch into it starts afresh.
 /// Then one asks again, in case the minimum was lowered meanwhile; a reply
-/// that isn't a 426 ends it. Signing in and out (`/auth/…`) still go.
+/// that isn't a 426 ends it. What the server still serves (`gated`) goes.
 enum Outdated {
     static let holdS: TimeInterval = 30 * 60
 
@@ -775,6 +775,21 @@ enum Outdated {
     static var active: Bool { lock.withLock { Date() < untilDate } }
 
     static func mark() { lock.withLock { untilDate = Date().addingTimeInterval(holdS) } }
+
+    /// Whether the server refuses this request to an outdated app, as
+    /// apps/api checks it: an account's routes (`/me…`) and the answers it
+    /// asks with its token (KEYED in index.ts). Not signing in or out
+    /// (`/auth/…`, `/pair…`), the released version (`/download/…`), nor
+    /// deleting the account or taking the device off pushes
+    /// (`DELETE /me`, `DELETE /me/push`).
+    static func gated(_ method: String, _ path: String) -> Bool {
+        let p = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        if method == "DELETE" && (p == "/me" || p == "/me/push") { return false }
+        return p == "/me" || p.hasPrefix("/me/") || answers.contains(p)
+    }
+
+    /// The bus answers the server refuses an outdated app (KEYED in apps/api/src/index.ts).
+    private static let answers: Set<String> = ["/next", "/trip", "/arrivals", "/buses", "/line", "/campus", "/stops/pairs"]
 }
 
 struct ApiError: LocalizedError {
@@ -1059,7 +1074,7 @@ struct Api {
     private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], json: Data? = nil) async throws -> Data {
         // Too old for the server: nothing with a token goes out until an update.
         let scope = Quiet.scope(path)
-        if token != nil, scope == .app, Outdated.active { throw ApiError(status: 426, message: L("Update terminus to keep using it.")) }
+        if token != nil, Outdated.gated(method, path), Outdated.active { throw ApiError(status: 426, message: L("Update terminus to keep using it.")) }
         // Asked to slow down: nothing goes out until Retry-After is up.
         let quietUntil = Quiet.until(scope)
         if Date() < quietUntil { throw ApiError(status: 429, message: L("terminus is busy. Try again in a minute."), retryAfter: quietUntil.timeIntervalSinceNow) }
