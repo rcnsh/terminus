@@ -335,35 +335,6 @@ internal fun NotifyToggle(title: String, hint: String, on: Boolean, onChange: (B
     if (refused && !on) Refused(stringResource(R.string.notifications_off), openSettings, inCard)
 }
 
-/**
- * "Notice when I board" (phase 8.1): the live notification follows the trip by
- * location. Needs notifications and precise location, asked for on the way to on.
- */
-@Composable
-internal fun DetectToggle(on: Boolean, onChange: (Boolean) -> Unit, openSettings: () -> Unit, hint: String? = null, inCard: Boolean = false) {
-    val ctx = LocalContext.current
-    var refused by rememberSaveable { mutableStateOf(false) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
-        val ok = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true && LeaveAlerts.canNotify(ctx)
-        refused = !ok
-        if (ok) onChange(true)
-    }
-    ToggleLine(stringResource(R.string.detect), hint ?: stringResource(R.string.detect_hint), on, inCard) { want ->
-        when {
-            !want -> onChange(false)
-            Locator.hasPrecise(ctx) && LeaveAlerts.canNotify(ctx) -> onChange(true)
-            else -> ask.launch(
-                listOfNotNull(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    if (android.os.Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null,
-                ).toTypedArray(),
-            )
-        }
-    }
-    if (refused && !on) Refused(stringResource(R.string.detect_needs), openSettings, inCard)
-}
-
 /** A setting's switch: its name and a line under it, the whole row the target. [inCard]: padded as a row of a group. */
 @Composable
 private fun ToggleLine(title: String, hint: String, on: Boolean, inCard: Boolean, onValueChange: (Boolean) -> Unit) {

@@ -132,9 +132,6 @@
     <string name="delete_account">删除这个账户</string>
     <string name="delete_account_text">你的课表和设置将被立即删除，应用会重置。由于账户未绑定邮箱，删除后无法恢复。</string>
     <string name="delete_account_title">删除这个账户？</string>
-    <string name="detect">自动检测上车</string>
-    <string name="detect_hint">行程中，实时通知会使用你的位置判断你是否已上车、错过巴士或已到达，并在你的所有设备上同步行程。它会在行程中你打开 terminus，或点按其通知或小组件时开始。不会保存你的位置，只保存判断结果。</string>
-    <string name="detect_needs">这需要 terminus 获得精确位置和通知权限。</string>
     <string name="device_removed">设备已移除。请在应用里重新配对。</string>
     <string name="directions_to">到 %1$s 的路线</string>
     <string name="done">完成</string>
@@ -146,7 +143,6 @@
     <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。每周都去的地方，可以加到课表里。</string>
     <string name="finding_stop">正在找最近的车站…</string>
     <string name="follow_device">跟随手机设置</string>
-    <string name="follow_trip">跟踪这次行程</string>
     <string name="free_hint_none">点按“附近”查看你周围的巴士。</string>
     <string name="friday">星期五</string>
     <string name="friday_short">周五</string>
@@ -330,7 +326,6 @@
     <string name="send_pair_code">发送配对代码</string>
     <string name="sending">正在发送…</string>
     <string name="settings">设置</string>
-    <string name="short_detect">上车识别</string>
     <string name="short_leave_alerts">出发提醒</string>
     <string name="short_live">实时通知</string>
     <string name="shortcut_bus_to">去 %1$s 的巴士</string>
@@ -353,7 +348,6 @@
     <string name="starts_at">%1$s 开始</string>
     <string name="step_of">第 %1$d 步，共 %2$d 步</string>
     <string name="stop_departures">%1$s：%2$s</string>
-    <string name="stop_following">停止跟踪</string>
     <string name="stop_suffix">%1$s 站</string>
     <string name="sunday">星期日</string>
     <string name="sunday_short">周日</string>
@@ -527,8 +521,7 @@
     <string name="notify_leave_short">在需要出发前 5 分钟提醒你</string>
     <string name="notify_leave_more">之后更新你的乘车情况或下一种到达方式。</string>
     <string name="live_notification_short">下一班巴士和倒计时，直到你到达</string>
-    <string name="detect_short">在你的所有设备上同步行程</string>
-    <string name="during_trip_hint">实时通知每 30 秒检查一次新时间，会更耗电。自动检测上车会在行程中使用你的位置，从你打开 terminus，或点按其通知或小组件时开始。不会保存你的位置，只保存判断结果。</string>
+    <string name="during_trip_hint">实时通知每 30 秒检查一次新时间，会更耗电。</string>
     <string name="heading_your_devices">你的设备</string>
     <string name="this_phone_tag">这部手机</string>
     <string name="auto">自动</string>
