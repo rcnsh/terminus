@@ -1,7 +1,8 @@
 #!/bin/sh
 # Renders banner.html to the site's link preview image
-# (apps/web/public/assets/og.png). The README's banner and pictures come from
-# the real site instead: node .github/readme/shots.mjs
+# (apps/web/public/assets/og.png). The README's pictures come from the real
+# site instead (node .github/readme/shots.mjs), and its banner from hero.html
+# (node .github/readme/hero.mjs).
 # Needs a headless Chromium (Playwright's, or set CHROME).
 set -eu
 cd "$(dirname "$0")"
