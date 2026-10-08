@@ -353,6 +353,9 @@ def main():
         venues[code].update(stop=first, m=serving[first])
         if len(serving) > 1:
             venues[code]["stops"] = serving
+        else:
+            # Read back from the last run: a building down to one stop drops the list.
+            venues[code].pop("stops", None)
 
     # Rooms uNivUS lists on their own (COM1-0208): served by their building's
     # stops, walked from the room where NUSMods places it. A room uNivUS puts
@@ -360,7 +363,11 @@ def main():
     room_stops = 0
     for code, v in venues.items():
         b = code.split("-")[0]
-        if "-" not in code or b not in venues or (b not in VENUE_STOPS and "stops" not in venues[b]):
+        if "-" not in code:
+            continue
+        # Whatever the last run gave it, unless its building still has stops.
+        v.pop("stops", None)
+        if b not in venues or (b not in VENUE_STOPS and "stops" not in venues[b]):
             continue
         listed = VENUE_STOPS[b]["stops"] if b in VENUE_STOPS else list(venues[b]["stops"])
         if b not in VENUE_STOPS and v["stop"] not in listed:
@@ -371,9 +378,9 @@ def main():
             continue
         order = listed if b in VENUE_STOPS else [v["stop"]] + [s for s in listed if s != v["stop"]]
         serving = {s: round(routed(s, pt) or haversine(pt, stop_pt[s])) for s in order}
-        v.update(stop=order[0], m=serving[order[0]], stops=serving)
-        if len(serving) == 1:
-            del v["stops"]
+        v.update(stop=order[0], m=serving[order[0]])
+        if len(serving) > 1:
+            v["stops"] = serving
         room_stops += 1
     print(f"{room_stops} rooms listed on their own take their building's stops")
 
