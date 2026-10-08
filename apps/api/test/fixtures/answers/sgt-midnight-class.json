@@ -103,6 +103,7 @@
       "live": false,
       "backup": null,
       "why": "Services ended for the night",
+      "change": null,
       "title": "To CS2030 @ COM1 · starts 00:30",
       "place": "CS2030",
       "byText": null,

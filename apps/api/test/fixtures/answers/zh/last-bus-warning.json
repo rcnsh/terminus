@@ -136,6 +136,7 @@
       "live": true,
       "backup": null,
       "why": null,
+      "change": null,
       "title": "回家",
       "place": "家",
       "byText": null,

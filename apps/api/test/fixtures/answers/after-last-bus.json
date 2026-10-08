@@ -81,6 +81,7 @@
       "live": false,
       "backup": null,
       "why": "Services ended for the night",
+      "change": null,
       "title": "To Home",
       "place": "Home",
       "byText": null,

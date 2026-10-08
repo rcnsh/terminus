@@ -127,8 +127,7 @@ export const TRANSFER: {
   maxFetch: 2,
   changeBufferS: 60,
   worthS: 240,
-  // Off until a trip can be followed onto its second bus (trip.ts).
-  mode: 'off',
+  mode: 'noDirect',
 };
 
 /**

@@ -30,15 +30,15 @@ import { GRAPH } from './graph.ts';
 import { haversineM } from './geo.ts';
 import { clockAt, clockMin, slackText } from './clock.ts';
 import { sgt } from './config.ts';
-import { isoSeconds, shortStop } from './format.ts';
+import { isoSeconds, mins, shortStop } from './format.ts';
 import { landmark, targetStops } from './landmarks.ts';
 import { atHome } from './residences.ts';
 import { paceSpeed } from './walk.ts';
 import { coordsFrom } from './http.ts';
 import type { TripView } from './card.ts';
 import { NO_PREFS, type TripPrefs } from './outcomes.ts';
-import { ASSUME_MS, type Boarded, type DayRecord, RIDE_GRACE_MS, dayState, leaveOf, offStop, phaseFor, seenOnBus, signalOf } from './trip.ts';
-import { choosePlan, planOfLeave } from './plan.ts';
+import { ASSUME_MS, AT_STOP_M, type Boarded, CHANGE_GRACE_MS, type DayRecord, type Phase, RIDE_GRACE_MS, dayState, leaveOf, offStop, phaseFor, rideStage, seenOnBus, signalOf, tripEnd } from './trip.ts';
+import { SAME_BUS_MS, choosePlan, planOfLeave } from './plan.ts';
 import { m } from './i18n.ts';
 
 /**
@@ -253,11 +253,16 @@ function onCampus(graph: Graph, lat: number, lon: number): boolean {
 
 /** "Last D2 from UTown in 18 min", when the bus home is about to stop running. */
 function lastBusWarning(graph: Graph, a: MeAnswer, nowMs: number): string | null {
-  const svc = a.leave?.svc;
-  if (!svc || !a.leave?.stop) return null;
-  const ends = serviceEndsAt(graph, svc, nowMs);
-  if (ends === null || ends <= nowMs || ends - nowMs > LAST_BUS_WARN_MS) return null;
-  return m().lastBus(svc, a.leave.stop, Math.max(1, Math.round((ends - nowMs) / 60_000)));
+  const l = a.leave;
+  if (!l?.svc || !l.stop) return null;
+  // The bus to change to as well: the trip ends with whichever stops first.
+  const buses = [{ svc: l.svc, stop: l.stop }, ...(l.change ? [{ svc: l.change.svc, stop: l.change.stop }] : [])];
+  for (const b of buses) {
+    const ends = serviceEndsAt(graph, b.svc, nowMs);
+    if (ends === null || ends <= nowMs || ends - nowMs > LAST_BUS_WARN_MS) continue;
+    return m().lastBus(b.svc, b.stop, Math.max(1, Math.round((ends - nowMs) / 60_000)));
+  }
+  return null;
 }
 
 /** A trip skipped a moment ago, offered back as "Undo". */
@@ -324,28 +329,100 @@ export async function nextArrival(env: Env, ctx: ExecutionContext, deps: MeDeps,
   return due.length ? isoSeconds(Math.min(...due)) : null;
 }
 
-/** On the bus you said you'd caught: where it gets you, not the next bus. */
+/** "~9:41" unless the time is live. */
+const roughClock = (ms: number, live: boolean, h12: boolean) => (live ? clockAt(ms, h12) : m().approx(clockAt(ms, h12)));
+
+/** For a class, whether you'll make it arriving at `end`, and the words for the detail line. */
+function classTiming(dest: Dest, end: string | null, live: boolean, nowMs: number, h12: boolean, profile: Profile): { timing: MeAnswer['timing']; words: string | null } {
+  if (!dest.trip || !end) return { timing: null, words: null };
+  const venueM = dest.trip.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
+  const walkS = Math.round(venueM / paceSpeed(profile.walkPace));
+  const timing = timingFor(end, dest.trip, walkS, nowMs, h12, !live);
+  // Late: "~3 min late"; otherwise only the spare time, as the arrival is already said.
+  const words = timing ? (timing.status === 'late' ? timing.text : slackText((Date.parse(timing.classAt) - Date.parse(timing.reachAt!)) / 1000)) : null;
+  return { timing, words };
+}
+
+/**
+ * On the bus you said you'd caught: where it gets you, not the next bus. On
+ * the first bus of a trip that changes buses, where to change; the trip's
+ * end then rests on the second bus, which is still a plan.
+ */
 function ridingAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
-  const off = offStop(b) ?? dest.label;
-  const arrive = b.arrive ? Date.parse(b.arrive) : null;
-  let detail = arrive !== null ? `${m().offAtCap(off)} · ${m().arriveAt(live ? clockAt(arrive, h12) : m().approx(clockAt(arrive, h12)))}` : m().offAtCap(off);
-  let timing = null;
-  if (dest.trip && b.arrive) {
-    const venueM = dest.trip.venue ? (venueToStop(dest.trip.venue)?.m ?? 0) : 0;
-    const walkS = Math.round(venueM / paceSpeed(profile.walkPace));
-    timing = timingFor(b.arrive, dest.trip, walkS, nowMs, h12, !live);
-    // Late: "~3 min late"; otherwise only the spare time, as the arrival is already said.
-    if (timing) detail += ` · ${timing.status === 'late' ? timing.text : slackText((Date.parse(timing.classAt) - Date.parse(timing.reachAt!)) / 1000)}`;
+  const end = tripEnd(b);
+  const endMs = end ? Date.parse(end) : null;
+  const c = b.change;
+  const endLive = live && !c;
+  const parts: string[] = [];
+  if (c) {
+    const from = offStop(b) ?? c.stop;
+    const reach = b.arrive ? Date.parse(b.arrive) : null;
+    parts.push(reach !== null ? m().changeCapAt(from, roughClock(reach, live, h12), c.svc) : m().changeCapTo(from, c.svc));
+    if (endMs !== null) parts.push(m().arriveAt(roughClock(endMs, false, h12)));
+  } else {
+    parts.push(m().offAtCap(offStop(b) ?? dest.label));
+    if (endMs !== null) parts.push(m().arriveAt(roughClock(endMs, live, h12)));
   }
+  const { timing, words } = classTiming(dest, end, endLive, nowMs, h12, profile);
+  if (words) parts.push(words);
   return {
-    ...base(nowMs, m().onThe(b.svc), detail),
+    ...base(nowMs, m().onThe(b.svc), parts.join(' · ')),
     quality: live ? 'live' : 'scheduled',
-    arriveAt: b.arrive ?? undefined,
+    arriveAt: end ?? undefined,
     mode: 'trip',
     dest: destOf(dest),
     timing,
     places,
   };
+}
+
+/**
+ * Off the first bus of a trip that changes buses, at the change stop: the
+ * second bus is the one to catch now, as a leave-by for it (so every client
+ * shows it as the bus at your stop), and the trip's end where it gets you.
+ */
+function changeAnswer(nowMs: number, dest: Dest, b: Boarded, live: boolean, places: PlaceChip[], h12: boolean, profile: Profile): MeAnswer {
+  const c = b.change!;
+  const boardMs = c.board ? Date.parse(c.board) : nowMs;
+  const wait = mins(Math.max(0, (boardMs - nowMs) / 1000));
+  const end = c.arrive;
+  const parts = [m().changeCap(offStop(b) ?? c.stop)];
+  if (end) parts.push(m().arriveAt(roughClock(Date.parse(end), live && !c.estimated, h12)));
+  const { timing, words } = classTiming(dest, end, live, nowMs, h12, profile);
+  if (words) parts.push(words);
+  const stop = indexGraph(GRAPH).byCode.get(c.stopCode ?? '');
+  return {
+    ...base(nowMs, `${c.svc} · ${live ? wait : m().approx(wait)}`, parts.join(' · ')),
+    stop: { code: c.stopCode ?? '', name: stop?.name ?? c.stop, confidence: 0.9 },
+    quality: live ? 'live' : 'scheduled',
+    departsAt: c.board,
+    arriveAt: end ?? undefined,
+    leave: { ...leaveOf(c), at: isoSeconds(boardMs), estimated: !live, walkS: 0 },
+    mode: 'trip',
+    dest: destOf(dest),
+    timing,
+    places,
+  };
+}
+
+/**
+ * The second bus of a trip that changes buses, from the feed at its stop:
+ * the same bus as planned (within SAME_BUS_MS), its time as the feed has it
+ * now, and the trip's end moved with it. The plan's times when the feed has
+ * no such bus, which are not live.
+ */
+async function secondBus(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<{ change: Boarded; live: boolean }> {
+  const c = b.change!;
+  if (!c.board || !c.stopCode) return { change: c, live: false };
+  const sa = (await deps.collectArrivals(env, ctx, [c.stopCode], nowMs, deps.graph)).get(c.stopCode);
+  const feed = rideFeed(sa, c);
+  const planned = Date.parse(c.board);
+  const times = feed && sa ? sa.arrivals.filter((x) => x.svc === c.svc && x.etaS !== null).map((x) => feed.fetchedAt + x.etaS! * 1000) : [];
+  const same = times.filter((t) => Math.abs(t - planned) <= SAME_BUS_MS).sort((x, y) => Math.abs(x - planned) - Math.abs(y - planned))[0];
+  if (same === undefined) return { change: c, live: false };
+  const shift = same - planned;
+  const { estimated: _guess, ...rest } = c;
+  return { change: { ...rest, board: isoSeconds(same), ...(c.arrive ? { arrive: isoSeconds(Date.parse(c.arrive) + shift) } : {}) }, live: true };
 }
 
 /** Reached by now, by the bus you were on: the next thing, and where you are. */
@@ -464,7 +541,10 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
   const rec = signalOf(day, key);
   if (rec?.kind === 'boarded' && rec.boarded) {
     const onBus = await riding(rec.boarded);
-    if (onBus) return { answer: onBus.answer, trip: { key, phase: 'riding', rec: { ...rec, boarded: onBus.b }, undo } };
+    // Still at the change stop after the second bus left: missed it, and the
+    // answer is the next way there from where you are.
+    if (onBus === 'missed') return { answer: await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12), trip: { key, phase: 'missed', rec, undo } };
+    if (onBus) return { answer: onBus.answer, trip: { key, phase: onBus.phase, rec: { ...rec, boarded: onBus.b }, undo } };
     // The bus you were on should have got you there by now.
     return { answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped), trip: { key, phase: 'arrived', rec, undo } };
   }
@@ -511,10 +591,12 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     if (phaseFor(answer, undefined, nowMs, at) === 'waiting') return { answer: fresh, trip: { ...out.trip, phase: 'missed', assumed: true, plan: bus, planChanged: false } };
     // Seen on it, now or by an earlier request (noted on the plan, so a
     // device without a location follows the phone).
-    const seenNow = !bus.seen && lat !== null && lon !== null && seenOnBus(bus, lat, lon, nowMs);
+    // On a trip that changes buses, on the second bus's road once it has left.
+    const onSecond = (b: Boarded) => Boolean(b.change?.board && nowMs >= Date.parse(b.change.board) && seenOnBus(b.change, lat!, lon!, nowMs));
+    const seenNow = !bus.seen && lat !== null && lon !== null && (seenOnBus(bus, lat, lon, nowMs) || onSecond(bus));
     if (bus.seen || seenNow) {
       const onBus = await riding(bus);
-      if (onBus) return { answer: onBus.answer, trip: { key, phase: 'riding', undo, assumed: true, plan: onBus.b, ...(seenNow ? { seenOn: { ...bus, seen: true as const } } : {}) } };
+      if (onBus && onBus !== 'missed') return { answer: onBus.answer, trip: { key, phase: onBus.phase, undo, assumed: true, plan: onBus.b, ...(seenNow ? { seenOn: { ...bus, seen: true as const } } : {}) } };
     }
     // Not known: the next way there, which is what you need if you missed
     // it, and says only that the bus has gone if you didn't. Under way
@@ -530,12 +612,36 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     return { answer, trip: { key: tripKey, phase: phaseFor(answer, r, nowMs, at), rec: r, undo } };
   }
 
-  /** The riding answer while the bus should still be on its way, with the feed's arrival when there is one. */
-  async function riding(b: Boarded): Promise<{ answer: MeAnswer; b: Boarded } | null> {
+  /**
+   * The riding answer while the bus should still be on its way, with the
+   * feed's arrival when there is one. On a trip that changes buses, the
+   * first bus, then the change stop (`waiting`), then the second; `missed`
+   * when you're still at the change stop once the second bus has left.
+   */
+  async function riding(b: Boarded): Promise<{ answer: MeAnswer; b: Boarded; phase: Phase } | 'missed' | null> {
+    const c = b.change;
+    if (c) {
+      // Before the second bus leaves, the feed can say the first is still on its way.
+      const before = !c.board || nowMs < Date.parse(c.board) + CHANGE_GRACE_MS;
+      const live = before ? await liveArrival(env, ctx, deps, b, nowMs) : null;
+      const stage = rideStage(b, nowMs, live !== null);
+      if (stage === 'first') {
+        const cur = live ? { ...b, arrive: live } : b;
+        return { answer: ridingAnswer(nowMs, dest, cur, live !== null, places, h12, profile), b: cur, phase: 'riding' };
+      }
+      if (stage === 'change') {
+        const second = await secondBus(env, ctx, deps, b, nowMs);
+        const cur = { ...b, change: second.change };
+        return { answer: changeAnswer(nowMs, dest, cur, second.live, places, h12, profile), b: cur, phase: 'waiting' };
+      }
+      const s = c.stopCode ? indexGraph(GRAPH).byCode.get(c.stopCode) : undefined;
+      if (s && lat !== null && lon !== null && haversineM(lat, lon, s.lat, s.lon) <= AT_STOP_M && nowMs >= Date.parse(c.board!) + ASSUME_MS) return 'missed';
+      return riding(c);
+    }
     const live = await liveArrival(env, ctx, deps, b, nowMs);
     const cur = live ? { ...b, arrive: live } : b;
     const arrive = cur.arrive ? Date.parse(cur.arrive) : null;
-    if (arrive === null || nowMs < arrive) return { answer: ridingAnswer(nowMs, dest, cur, live !== null, places, h12, profile), b: cur };
+    if (arrive === null || nowMs < arrive) return { answer: ridingAnswer(nowMs, dest, cur, live !== null, places, h12, profile), b: cur, phase: 'riding' };
     if (nowMs >= arrive + RIDE_GRACE_MS) return null;
     // That arrival has passed and nothing says you're there: you caught the
     // bus after it, or it's running late. A time in the past is no answer,
@@ -543,7 +649,7 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
     // as one; with nothing due, the card says only where to get off.
     const later = await nextArrival(env, ctx, deps, b, nowMs);
     const guess = { ...b, arrive: later };
-    return { answer: ridingAnswer(nowMs, dest, guess, false, places, h12, profile), b: guess };
+    return { answer: ridingAnswer(nowMs, dest, guess, false, places, h12, profile), b: guess, phase: 'riding' };
   }
 }
 

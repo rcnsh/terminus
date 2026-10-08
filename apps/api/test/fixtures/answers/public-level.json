@@ -148,6 +148,7 @@
         "paid": true
       },
       "why": null,
+      "change": null,
       "title": "To Opp KR MRT",
       "place": "Opp KR MRT",
       "byText": "by 09:05",

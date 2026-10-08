@@ -64,6 +64,15 @@ export interface Boarded {
    *  walked since it left (seenOnBus). Devices without a location then take
    *  you to be on it too. */
   seen?: true;
+  /**
+   * A trip that changes buses: the second bus, its `stopCode` where it goes
+   * from (`alightCode` above, or the stop across the road from it, `crossS`
+   * further) and its `arrive` the end of the trip. The fields above are then
+   * the first bus alone, `arrive` and `alightCode` at the change.
+   */
+  change?: Boarded;
+  /** On a trip's second bus: seconds across the road to its stop from where the first drops you. */
+  crossS?: number;
 }
 
 /** A trip home (after the last class, or in a long gap), by its key: it has no name of its own. */
@@ -76,6 +85,30 @@ export function isHomeKey(key: string): boolean {
  * is the trip's (see next.ts), instead of each working out its own bus.
  */
 export function leaveOf(b: Boarded): Leave {
+  const c = b.change;
+  if (c) {
+    // The first bus to catch, the trip's end where the second gets you.
+    const end = leaveOf(c);
+    return {
+      ...leaveOf({ ...b, change: undefined }),
+      arrive: c.arrive,
+      ...(end.off ? { off: end.off } : {}),
+      ...(end.offCode ? { offCode: end.offCode } : {}),
+      ...(end.toStop ? { toStop: end.toStop } : {}),
+      change: {
+        svc: c.svc,
+        from: offStop(b) ?? b.stop,
+        fromCode: b.alightCode ?? '',
+        stop: c.stop,
+        stopCode: c.stopCode ?? '',
+        ...(c.crossS ? { crossS: c.crossS } : {}),
+        reach: b.arrive,
+        board: c.board,
+        rideS: c.rideS ?? 0,
+        estimated: c.estimated === true,
+      },
+    };
+  }
   return {
     at: b.leave ?? b.board ?? new Date(0).toISOString(),
     estimated: b.estimated === true,
@@ -105,12 +138,56 @@ export function offStop(b: Boarded): string | null {
   return s ? shortStop(s.name) : null;
 }
 
+/** When the trip ends, the second bus's arrival on a trip that changes buses. */
+export const tripEnd = (b: Boarded): string | null => (b.change ? b.change.arrive : b.arrive);
+
+/**
+ * The bus a leave-by's change of buses goes on to, as a plan's second bus
+ * (Boarded.change): to `alightCode`, the trip's end, unless the leave-by
+ * names where it gets you off.
+ */
+export function secondBusOf(l: Pick<Leave, 'change' | 'arrive' | 'off' | 'offCode' | 'toCode'>, alightCode: string): Boarded | undefined {
+  const c = l.change;
+  if (!c) return undefined;
+  return {
+    svc: c.svc,
+    stop: c.stop,
+    board: c.board,
+    arrive: l.arrive,
+    ...(c.estimated ? { estimated: true } : {}),
+    ...(l.off ? { off: l.off } : {}),
+    stopCode: c.stopCode,
+    rideS: c.rideS,
+    alightCode: l.offCode ?? l.toCode ?? alightCode,
+    ...(c.crossS ? { crossS: c.crossS } : {}),
+  };
+}
+
+/** How long after the second bus's time it's taken to have left with you on it. */
+export const CHANGE_GRACE_MS = 30_000;
+
+/**
+ * Where a trip that changes buses is: on the first bus until it gets to the
+ * change (`first`), at the change stop until the second bus has left
+ * (`change`), then on the second. A trip on one bus is always `first`.
+ * `firstLate`: the feed still has the first bus on its way to the change.
+ */
+export function rideStage(b: Boarded, nowMs: number, firstLate = false): 'first' | 'change' | 'second' {
+  if (!b.change) return 'first';
+  if (firstLate || !b.arrive || nowMs < Date.parse(b.arrive)) return 'first';
+  if (!b.change.board || nowMs < Date.parse(b.change.board) + CHANGE_GRACE_MS) return 'change';
+  return 'second';
+}
+
 /** The ride for a progress bar: the stops from boarding to getting off, and the times. */
 export interface Ride {
   svc: string;
   stops: Array<{ code: string; name: string }>;
   board: string;
   arrive: string;
+  /** On the first bus of a trip that changes buses: the bus to change to,
+   *  and "Then P at 9:15 from Kent Vale". The stops above end at the change. */
+  change?: { svc: string; color: string; stop: string; board: string | null; text: string };
 }
 
 /** The ride on the bus you're on, when its stops are known. */

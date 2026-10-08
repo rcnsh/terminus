@@ -152,6 +152,7 @@
       "live": true,
       "backup": null,
       "why": null,
+      "change": null,
       "title": "To COM 3",
       "place": "COM 3",
       "byText": "by 09:04",

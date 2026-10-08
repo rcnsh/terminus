@@ -49,7 +49,7 @@ import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, profileLimi
 import { hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { unlogged } from './answer.ts';
-import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, type TripUpdate, clearTrip, isHomeKey, loadDay, needsWatch, saveSignals, sgtDate, updateTrip } from './trip.ts';
+import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, type TripUpdate, clearTrip, isHomeKey, leaveOf, loadDay, needsWatch, saveSignals, secondBusOf, sgtDate, updateTrip } from './trip.ts';
 import { nudgeUser, pushEnabled, setPushToken } from './push.ts';
 import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from './webpush.ts';
 import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
@@ -680,7 +680,9 @@ export const ME_ROUTES: MeRoute[] = [
       const gone = p?.board ? Date.parse(p.board) <= nowMs + 60_000 : false;
       const l = current
         ? gone && p
-          ? { ...now.answer.leave, svc: p.svc, stop: p.stop, board: p.board, arrive: p.arrive, off: p.off, stopCode: p.stopCode, offCode: p.alightCode }
+          ? p.change
+            ? { ...now.answer.leave, ...leaveOf(p) }
+            : { ...now.answer.leave, svc: p.svc, stop: p.stop, board: p.board, arrive: p.arrive, off: p.off, stopCode: p.stopCode, offCode: p.alightCode }
           : now.answer.leave
         : null;
       const label = current ? (now.answer.dest?.label ?? undefined) : classesOn(profile, nowMs).find((c) => classKey(c) === key)?.label;
@@ -690,6 +692,13 @@ export const ME_ROUTES: MeRoute[] = [
           rec = null;
           break;
         case 'boarded': {
+          // Already on the first bus of a trip that changes buses: that's
+          // still the bus you're on, not a new one.
+          const was = day?.trips[key];
+          if (current && was?.kind === 'boarded' && was.boarded?.change && now.trip.phase === 'riding' && now.trip.rec?.boarded?.change) {
+            rec = was;
+            break;
+          }
           // No bus to be on (a walk, or an old card): you've set off.
           if (!l?.svc) {
             rec = { kind: 'left', at: nowMs, label };
@@ -703,16 +712,29 @@ export const ME_ROUTES: MeRoute[] = [
             kind,
             at: nowMs,
             label,
-            boarded: {
-              svc: l.svc,
-              stop: l.stop ?? '',
-              board: boardAt ?? l.board,
-              arrive: l.arrive && shift ? isoSeconds(Date.parse(l.arrive) + shift) : l.arrive,
-              ...(l.off ? { off: l.off } : {}),
-              ...(l.stopCode ? { stopCode: l.stopCode } : {}),
-              ...(now.answer.dest?.to ? { alightCode: l.offCode ?? l.toCode ?? now.answer.dest.to } : {}),
-              ...(plate ? { plate } : {}),
-            },
+            boarded: l.change
+              ? {
+                  // A trip that changes buses: this bus to the change, its
+                  // time there moved with it; the second bus as planned.
+                  svc: l.svc,
+                  stop: l.stop ?? '',
+                  board: boardAt ?? l.board,
+                  arrive: l.change.reach && shift ? isoSeconds(Date.parse(l.change.reach) + shift) : l.change.reach,
+                  ...(l.stopCode ? { stopCode: l.stopCode } : {}),
+                  alightCode: l.change.fromCode,
+                  ...(plate ? { plate } : {}),
+                  ...(now.answer.dest?.to ? { change: secondBusOf(l, now.answer.dest.to) } : {}),
+                }
+              : {
+                  svc: l.svc,
+                  stop: l.stop ?? '',
+                  board: boardAt ?? l.board,
+                  arrive: l.arrive && shift ? isoSeconds(Date.parse(l.arrive) + shift) : l.arrive,
+                  ...(l.off ? { off: l.off } : {}),
+                  ...(l.stopCode ? { stopCode: l.stopCode } : {}),
+                  ...(now.answer.dest?.to ? { alightCode: l.offCode ?? l.toCode ?? now.answer.dest.to } : {}),
+                  ...(plate ? { plate } : {}),
+                },
           };
           break;
         }

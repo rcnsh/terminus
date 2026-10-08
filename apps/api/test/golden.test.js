@@ -20,7 +20,7 @@ import { FROZEN_NOW, installGlobals, makeCtx, makeDurableObjects, makeEnv, makeF
 import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
-import { ASSUME_MS, RIDE_GRACE_MS } from '../src/trip.ts';
+import { ASSUME_MS, CHANGE_GRACE_MS, RIDE_GRACE_MS } from '../src/trip.ts';
 import { onRideQuery, rideLength } from './_ride.mjs';
 
 const DIR = new URL('./fixtures/answers/', import.meta.url);
@@ -137,6 +137,23 @@ const PLATE_FEED = {
   UTOWN: [{ name: 'D2', arrivalTime: '14', arrivalTime_veh_plate: 'SBS1234A', nextArrivalTime: '24', nextArrivalTime_veh_plate: 'SBS5678B' }],
 };
 
+/**
+ * For a class at College Green (CG), which only P goes to, from home at
+ * PGP: K or R2 to Kent Vale and P from there, or A1 or D2 to KR MRT and P
+ * from there. The rest of the stops list nothing.
+ */
+const CHANGE_FEED = {
+  PGP: [
+    { name: 'R2', arrivalTime: '6', nextArrivalTime: '18' },
+    { name: 'K', arrivalTime: '8', nextArrivalTime: '23' },
+    { name: 'A1', arrivalTime: '9', nextArrivalTime: '19' },
+    { name: 'D2', arrivalTime: '4', nextArrivalTime: '14' },
+  ],
+  KV: [{ name: 'P', arrivalTime: '22', nextArrivalTime: '42' }],
+  'KR-MRT': [{ name: 'P', arrivalTime: '15', nextArrivalTime: '35' }],
+};
+const toCG = { home: { stops: ['PGP'] }, manual: [cls(600, 'CG', 'GEH1001 @ CG')], places };
+
 /** LTA DataMall's key, fake, so the public buses are asked for. */
 const LTA = { env: { LTA_ACCOUNT_KEY: 'test-account-key' } };
 
@@ -176,6 +193,30 @@ const CASES = {
   'no-timetable': [{}, '/me/next'],
   // On the bus to a class: the ride, with its stops, in place of the journey.
   'riding': [{ home: { stops: ['PGP'] }, manual: [cls(600, 'UTOWN', 'GEA1000 @ UTown')], places }, '/me/next', { trips: true, before: (get) => get.post('/me/signal', { kind: 'boarded' }) }],
+  // No single bus goes from PGP to College Green: the trip changes to P.
+  'change-class': [toCG, '/me/next', { feed: CHANGE_FEED }],
+  // At 09:20, "On it" for the K: on it to Kent Vale, where you change to P.
+  'change-riding': [toCG, '/me/next', { trips: true, at: sgtAt(THU_DATE, '09:20'), feed: CHANGE_FEED, before: (get) => get.post('/me/signal', { kind: 'boarded' }) }],
+  // Off the K at Kent Vale, a minute after it got there: at the stop for the P.
+  'change-at-stop': [toCG, '/me/next', {
+    trips: true,
+    at: sgtAt(THU_DATE, '09:20'),
+    feed: CHANGE_FEED,
+    before: async (get) => {
+      const { card } = await get.post('/me/signal', { kind: 'boarded' });
+      get.at(Date.parse(card.ride.arrive) + MIN);
+    },
+  }],
+  // Once the P has left: on it to College Green.
+  'change-riding-second': [toCG, '/me/next', {
+    trips: true,
+    at: sgtAt(THU_DATE, '09:20'),
+    feed: CHANGE_FEED,
+    before: async (get) => {
+      const { card } = await get.post('/me/signal', { kind: 'boarded' });
+      get.at(Date.parse(card.ride.change.board) + CHANGE_GRACE_MS + MIN);
+    },
+  }],
   // The feed answers with no buses at all: every time is a timetable estimate, marked "~".
   'scheduled': [{ home: { stops: ['PGP'] }, places }, '/me/next?place=mrt', { feed: {} }],
   'nearby-list': [{ home: { stops: ['PGP'] } }, `/me/nearby?${DORM}`],

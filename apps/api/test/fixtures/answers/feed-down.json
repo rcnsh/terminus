@@ -131,6 +131,7 @@
       "live": false,
       "backup": null,
       "why": null,
+      "change": null,
       "title": "To GEA1000 @ UTown",
       "place": "GEA1000",
       "byText": "by ~09:30",

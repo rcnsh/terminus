@@ -259,3 +259,63 @@ test('late whatever you do: the first bus you can catch, then the first second b
   assert.ok(Date.parse(leave.arrive) > arriveBy.atMs);
   assert.ok(Date.parse(leave.at) <= NOW + 1000, 'leave now');
 });
+
+/* Following a trip that changes buses (trip.ts, plan.ts). */
+
+import { CHANGE_GRACE_MS, leaveOf, rideStage, secondBusOf, tripEnd } from '../src/trip.ts';
+import { planOfLeave, sameBus } from '../src/plan.ts';
+
+/** A leave-by for K at PGP to Kent Vale, then P to College Green. */
+const TWO_BUS_LEAVE = {
+  at: '2026-08-27T01:17:40Z',
+  estimated: false,
+  svc: 'K',
+  stop: 'PGP',
+  stopCode: 'PGP',
+  board: '2026-08-27T01:23:00Z',
+  arrive: '2026-08-27T01:55:38Z',
+  note: null,
+  walkS: 300,
+  rideS: 855,
+  toStop: 'College Gr',
+  toCode: 'CG',
+  change: { svc: 'P', from: 'Kent Vale', fromCode: 'KV', stop: 'Kent Vale', stopCode: 'KV', reach: '2026-08-27T01:37:15Z', board: '2026-08-27T01:42:00Z', rideS: 818, estimated: false },
+};
+
+test('a plan that changes buses: the first bus to the change, the second to the end, and back to the same leave-by', () => {
+  const plan = planOfLeave(TWO_BUS_LEAVE, true, 'CG');
+  assert.equal(plan.svc, 'K');
+  assert.equal(plan.alightCode, 'KV');
+  assert.equal(plan.arrive, TWO_BUS_LEAVE.change.reach);
+  assert.equal(plan.change.svc, 'P');
+  assert.equal(plan.change.stopCode, 'KV');
+  assert.equal(plan.change.alightCode, 'CG');
+  assert.equal(tripEnd(plan), TWO_BUS_LEAVE.arrive);
+  const back = leaveOf(plan);
+  assert.equal(back.arrive, TWO_BUS_LEAVE.arrive);
+  assert.equal(back.offCode, 'CG');
+  assert.deepEqual(back.change, TWO_BUS_LEAVE.change);
+  assert.deepEqual(secondBusOf(TWO_BUS_LEAVE, 'CG'), plan.change);
+});
+
+test('the same first bus with another change is another plan', () => {
+  const a = planOfLeave(TWO_BUS_LEAVE, true, 'CG');
+  assert.ok(sameBus(a, planOfLeave(TWO_BUS_LEAVE, true, 'CG')));
+  const other = planOfLeave({ ...TWO_BUS_LEAVE, change: { ...TWO_BUS_LEAVE.change, stop: 'KR MRT', stopCode: 'KR-MRT', fromCode: 'KR-MRT' } }, true, 'CG');
+  assert.ok(!sameBus(a, other));
+  const { change: _c, ...single } = TWO_BUS_LEAVE;
+  assert.ok(!sameBus(a, planOfLeave({ ...single }, true, 'CG')));
+});
+
+test('a trip that changes buses is on the first bus, at the change, then on the second', () => {
+  const plan = planOfLeave(TWO_BUS_LEAVE, true, 'CG');
+  const reach = Date.parse(TWO_BUS_LEAVE.change.reach);
+  const board = Date.parse(TWO_BUS_LEAVE.change.board);
+  assert.equal(rideStage(plan, reach - 1), 'first');
+  assert.equal(rideStage(plan, reach), 'change');
+  assert.equal(rideStage(plan, reach + 60_000, true), 'first', 'the feed still has the first bus on its way');
+  assert.equal(rideStage(plan, board + CHANGE_GRACE_MS - 1), 'change');
+  assert.equal(rideStage(plan, board + CHANGE_GRACE_MS), 'second');
+  const { change: _c, ...single } = plan;
+  assert.equal(rideStage(single, board * 2), 'first');
+});

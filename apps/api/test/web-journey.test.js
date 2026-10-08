@@ -190,6 +190,8 @@ test("an answer from before the server sent its lines is worded here as the serv
   for (const [, name, a] of answers().filter(([l]) => l === 'en')) {
     useLang('en');
     const j = a.card.journey;
+    // A change of bus came after the lines: no answer without them has one.
+    if (j.change) continue;
     const old = Object.fromEntries(Object.entries(j).filter(([k]) => !(k in LINES) && k !== 'byText'));
     for (const [key, show] of Object.entries(LINES)) {
       if (j[key] === undefined) continue;

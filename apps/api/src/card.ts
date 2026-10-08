@@ -11,7 +11,7 @@
 
 import type { BusLeg, Crowd, Dest, Leave, MeAnswer, Quality } from './types.ts';
 import { clockAt, slackText } from './clock.ts';
-import { ASSUME_MS, type Boarded, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, isHomeKey, offStop, rideOf } from './trip.ts';
+import { ASSUME_MS, type Boarded, CHANGE_GRACE_MS, DUE_MS, type Phase, RIDE_GRACE_MS, type Ride, type TripRecord, isHomeKey, offStop, rideOf, tripEnd } from './trip.ts';
 import { LATE_GRACE_MIN } from './profile.ts';
 import type { Suggestion } from './outcomes.ts';
 import { GRAPH } from './graph.ts';
@@ -75,6 +75,36 @@ export interface JourneyBus {
 }
 
 /**
+ * The change of bus on a trip that needs two (Journey.change): off the first
+ * at `from`, across the road to `stop` when it isn't the same stop, and on
+ * to the second bus.
+ */
+export interface JourneyChange {
+  /** Where the first bus drops you, and where the second goes from: the same stop, or across the road. */
+  from: string;
+  stop: string;
+  /** When the first bus gets to `from` ("9:12", "~9:12"). */
+  reach: string;
+  /** The walk across the road ("1 min"); null at the same stop. */
+  walk: string | null;
+  /** The wait there for the second bus ("3 min"); null when it's under a minute. */
+  wait: string | null;
+  /** The second bus, and when it leaves (ISO, to count down to). */
+  bus: JourneyBus;
+  boardAt: string;
+  /** Time on the second bus, and on the first ("6 min", "8 min"): the
+   *  journey's own `ride` names both, for the clients that draw one bus. */
+  ride: string;
+  firstRide: string;
+  /** "8 min ride · off at Kent Vale": the first bus's line, in place of `rideText`. */
+  firstRideText: string;
+  /** "Change at Kent Vale · cross the road · 3 min wait". */
+  changeText: string;
+  /** "6 min ride", or "6 min ride · off at Opp NUSS": the second bus's line. */
+  rideText: string;
+}
+
+/**
  * The trip as steps, for the card styles that draw it (a line from you to
  * the destination, a ticket, a list of steps): walk to the stop, take the
  * bus, get there. On foot the whole way it's the walk alone, with no bus.
@@ -114,6 +144,14 @@ export interface Journey {
   backup: JourneyBus | null;
   /** On foot: why not a bus ("D1 would be 16 min"). Null with a bus. */
   why: string | null;
+  /**
+   * A trip that changes buses: the change, and the second bus. `bus` is then
+   * the first bus, and `ride` and `rideText` name the change too ("8 min,
+   * then P"), for the clients that draw only one bus; a client that draws
+   * both uses `change.firstRide` and `change.firstRideText` for the first.
+   * Null on one bus, and on foot.
+   */
+  change: JourneyChange | null;
 
   /* The lines the card styles put together, worded here so every client says the same. */
   /** "To GEA1000 @ UTown · starts 10:00": the class's start only for a class. */
@@ -369,6 +407,7 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase, now
           ...(l.toStop ? { toStop: l.toStop } : {}),
           ...(l.endWalkS ? { endWalkS: l.endWalkS } : {}),
           ...(l.paid ? { paid: true as const } : {}),
+          ...(l.change ? { change: l.change } : {}),
         }
       : null;
   // On foot the whole way, unless a kept plan still has a bus to catch.
@@ -389,6 +428,20 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase, now
   const thereMs = stopMs != null ? stopMs + endS * 1000 : null;
   const walkEnd = endS >= 45 ? mins(endS) : null;
   const arrive = thereMs != null ? approx(leg.estimated, clockAt(thereMs, h12)) : null;
+  const ch = leg.change?.board && leg.change.reach ? leg.change : null;
+  const change: ChangeSteps | null = ch
+    ? {
+        from: ch.from,
+        stop: ch.stop,
+        reach: at(ch.reach!, leg.estimated),
+        walk: ch.crossS ? mins(ch.crossS) : null,
+        wait: waitOf((Date.parse(ch.board!) - Date.parse(ch.reach!)) / 1000 - (ch.crossS ?? 0)),
+        bus: { svc: ch.svc, color: routeColor(ch.svc), stop: ch.stop, board: at(ch.board!, ch.estimated) },
+        boardAt: ch.board!,
+        ride: mins(ch.rideS),
+        firstRide: mins(leg.rideS),
+      }
+    : null;
   return worded(a, card, h12, phase, {
     leave: l && Date.parse(l.at) > nowMs ? at(l.at, l.estimated) : null,
     // At the stop, or close enough that the walk is nothing.
@@ -405,14 +458,21 @@ export function journeyOf(a: MeAnswer, card: V1, h12: boolean, phase: Phase, now
     arriveStop: walkEnd && stopMs != null ? approx(leg.estimated, clockAt(stopMs, h12)) : arrive,
     slack: card.kind === 'class' && classAt != null && thereMs != null ? slackText((classAt - thereMs) / 1000) : null,
     // Not a kept plan's or a stale feed's time: exact, but an older reading.
-    live: a.quality === 'live' && !leg.estimated && !(leg === planned && l?.stale),
+    live: a.quality === 'live' && !leg.estimated && !(leg === planned && l?.stale) && !ch?.estimated,
     backup: other ? busOf(other) : null,
     why: null,
+    change,
   });
 }
 
+/** A change of bus before it's worded (see worded). */
+type ChangeSteps = Omit<JourneyChange, 'firstRideText' | 'changeText' | 'rideText'>;
+
+/** The wait at a change, in words; none worth saying under a minute. */
+const waitOf = (s: number): string | null => (s >= 60 ? mins(s) : null);
+
 /** The journey's own facts, before they're worded. */
-type Steps = Omit<Journey, 'title' | 'place' | 'byText' | 'walkText' | 'rideText' | 'walkEndText' | 'arriveText' | 'arriveWhere' | 'backupText' | 'summary'>;
+type Steps = Omit<Journey, 'title' | 'place' | 'byText' | 'walkText' | 'rideText' | 'walkEndText' | 'arriveText' | 'arriveWhere' | 'backupText' | 'summary' | 'change'> & { change: ChangeSteps | null };
 
 /** The service in running text: "95 ($)" for a public bus, so the fare shows where no badge does. */
 const busName = (b: JourneyBus) => named({ svc: b.svc, paid: b.paid });
@@ -431,13 +491,30 @@ function worded(a: MeAnswer, card: V1, h12: boolean, phase: Phase, j: Steps): Jo
     : j.backup
       ? (isClass ? m().orGoNowFrom : m().orBusFrom)(busName(j.backup), j.backup.board, j.backup.stop)
       : null;
+  const c = j.change;
+  const offText = j.off ? m().offAt(j.off) : null;
+  const change: JourneyChange | null = c
+    ? {
+        ...c,
+        firstRideText: [m().rideFor(c.firstRide), m().offAt(c.from)].join(' · '),
+        changeText: [m().changeCap(c.from), c.walk ? m().crossRoad : null, c.wait ? m().waitFor(c.wait) : null].filter(Boolean).join(' · '),
+        rideText: [m().rideFor(c.ride), offText].filter(Boolean).join(' · '),
+      }
+    : null;
   return {
     ...j,
+    // A client that draws one bus reads the change from these.
+    ...(c ? { ride: m().rideThen(c.firstRide, busName(c.bus)) } : {}),
+    change,
     title: [m().journeyTo(j.to), starts].filter(Boolean).join(' · '),
     place: j.to.split(' @ ')[0],
     byText: phase !== 'waiting' && j.leave ? m().byTime(j.leave) : null,
     walkText: j.walk ? m().walkToStop(j.walk) : null,
-    rideText: j.ride ? [m().rideFor(j.ride), j.off ? m().offAt(j.off) : null].filter(Boolean).join(' · ') : null,
+    rideText: c
+      ? [m().rideFor(c.firstRide), m().changeLine(c.from, busName(c.bus), c.bus.board), m().rideFor(c.ride), offText].filter(Boolean).join(' · ')
+      : j.ride
+        ? [m().rideFor(j.ride), offText].filter(Boolean).join(' · ')
+        : null,
     walkEndText: j.walkEnd ? m().walkToStop(j.walkEnd) : null,
     arriveText,
     arriveWhere: j.walkEnd ? m().walkFrom(j.walkEnd, j.toStop) : m().atStop(j.toStop),
@@ -454,9 +531,11 @@ function worded(a: MeAnswer, card: V1, h12: boolean, phase: Phase, j: Steps): Jo
 function summaryOf(j: Steps, isClass: boolean): string {
   const b = j.bus;
   if (!b) return [isClass && j.arrive ? m().arriveAt(j.arrive) : null, j.walk ? m().walkToStop(j.walk) : null, j.why].filter(Boolean).join(' · ');
-  if (isClass && j.arrive) return `${m().arriveAt(j.arrive)} · ${m().svcAtStop(busName(b), b.board, b.stop)}`;
-  if (j.walk) return `${m().walkToPlace(b.stop)} · ${m().busTime(busName(b), b.board)}`;
-  return m().svcAtStop(busName(b), b.board, b.stop);
+  // A change of bus last: the first bus is what to do now.
+  const change = j.change ? ` · ${m().changeTo(j.change.from, busName(j.change.bus))}` : '';
+  if (isClass && j.arrive) return `${m().arriveAt(j.arrive)} · ${m().svcAtStop(busName(b), b.board, b.stop)}${change}`;
+  if (j.walk) return `${m().walkToPlace(b.stop)} · ${m().busTime(busName(b), b.board)}${change}`;
+  return `${m().svcAtStop(busName(b), b.board, b.stop)}${change}`;
 }
 
 /**
@@ -486,6 +565,7 @@ function footJourney(a: MeAnswer, dest: Dest, foot: NonNullable<MeAnswer['foot']
     live: false,
     backup: null,
     why: foot.why,
+    change: null,
   });
 }
 
@@ -506,7 +586,7 @@ function v1(a: MeAnswer, h12: boolean): V1 {
     quality: QUALITY[a.quality]?.() ?? null,
     leaveBy: l ? m().leaveBy(est(l.at)) : null,
     // "95 ($)": the fare shows in the words, for the clients that show only them (the Mac, notifications).
-    leaveVia: l?.svc && l.stop ? m().leaveVia(l.board ? est(l.board) : null, named({ svc: l.svc, paid: l.paid }), l.stop, l.off ?? null) : null,
+    leaveVia: l?.svc && l.stop ? m().leaveVia(l.board ? est(l.board) : null, named({ svc: l.svc, paid: l.paid }), l.stop, l.off ?? null) + andChange(l) : null,
     catch: null,
     arrive: null,
     catchLine: null,
@@ -519,7 +599,7 @@ function v1(a: MeAnswer, h12: boolean): V1 {
 
   const classAt = Date.parse(a.timing.classAt);
   // The bus stops across the road from the class's stop: say where to get off.
-  card.catch = l.svc ? m().catchBus(l.board ? est(l.board) : null, named({ svc: l.svc, paid: l.paid }), l.stop ?? '', l.off ?? null) : m().walkThere;
+  card.catch = l.svc ? m().catchBus(l.board ? est(l.board) : null, named({ svc: l.svc, paid: l.paid }), l.stop ?? '', l.off ?? null) + andChange(l) : m().walkThere;
   if (l.arrive) {
     const arrive = Date.parse(l.arrive);
     const slack = slackText((classAt - arrive) / 1000);
@@ -540,6 +620,9 @@ function v1(a: MeAnswer, h12: boolean): V1 {
   card.estimate = l.estimated ? m().estimateNote : null;
   return card;
 }
+
+/** ", change at Kent Vale to P", after the bus to catch, on a trip that changes buses. */
+const andChange = (l: Leave): string => (l.change ? m().andChange(l.change.from, l.change.svc) : '');
 
 const PHASE_TEXT: Record<Phase, (() => string) | null> = {
   idle: null,
@@ -575,6 +658,16 @@ export function nextPhaseAt(a: MeAnswer, trip: TripView, nowMs: number, leaveGap
   const l = a.leave ?? null;
   const plan = trip.plan ?? null;
   if (plan?.board && !trip.rec) marks.push(Date.parse(plan.board), Date.parse(plan.board) + ASSUME_MS);
+  // A trip that changes buses: at the change, once the second bus has left
+  // (with you on it, or still at the stop: missed), and the trip's end.
+  const twoBus = trip.rec?.boarded ?? plan;
+  const c = twoBus?.change;
+  if (twoBus && c) {
+    if (twoBus.arrive) marks.push(Date.parse(twoBus.arrive));
+    if (c.board) marks.push(Date.parse(c.board) + CHANGE_GRACE_MS, Date.parse(c.board) + ASSUME_MS);
+    const end = tripEnd(twoBus);
+    if (end) marks.push(Date.parse(end) + RIDE_GRACE_MS);
+  }
   // The leave-by's marks, no sooner than `leaveGapMs` from now (see LEAVE_GAP_MS).
   if (l?.at) for (const t of [Date.parse(l.at) - DUE_MS, Date.parse(l.at)]) if (t > nowMs) marks.push(Math.max(t, nowMs + leaveGapMs));
   if (a.timing?.classAt) marks.push(Date.parse(a.timing.classAt) + LATE_GRACE_MIN * 60_000);
@@ -608,6 +701,15 @@ function walkToOf(a: MeAnswer, kind: CardKind, phase: Phase): Card['walkTo'] {
   const s = code ? indexGraph(GRAPH).byCode.get(code) : undefined;
   if (!s) return null;
   return { name: l?.svc && l.stop ? l.stop : shortStop(s.name), lat: s.lat, lon: s.lon };
+}
+
+/** The ride on the bus you're on, and on the first of two, the bus to change to (Ride.change). */
+function rideWithChange(b: Boarded, h12: boolean): Ride | null {
+  const r = rideOf(b);
+  const c = b.change;
+  if (!r || !c) return r;
+  const board = c.board ? approx(c.estimated, clockAt(Date.parse(c.board), h12)) : null;
+  return { ...r, change: { svc: c.svc, color: routeColor(c.svc), stop: c.stop, board: c.board, text: board ? m().thenAt(c.svc, board, c.stop) : m().thenFrom(c.svc, c.stop) } };
 }
 
 /** "9:38" or "9:38p": clocks short enough for a glance. */
@@ -655,6 +757,7 @@ function v2(
       glance = m().leaveGlance(shortClock(Date.parse(l.at), h12));
     } else if (phase === 'heading' || phase === 'waiting') {
       line = svc ? m().svcAtStop(svc, l.board ? est(l.board) : null, l.stop ?? '') : m().walkThereNow;
+      if (l.change) line += ` · ${m().changeTo(l.change.from, l.change.svc)}`;
       if (card.arrive && l.arrive && a.timing) line += ` · ${m().arriveLower(est(l.arrive), slackText((Date.parse(a.timing.classAt) - Date.parse(l.arrive)) / 1000))}`;
       glance = busGlance(l);
     } else if (phase === 'missed') {
@@ -672,7 +775,9 @@ function v2(
   }
   const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);
   if (phase === 'riding' && onBus) {
-    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${m().offAtTime(offStop(onBus) ?? a.dest?.label ?? m().yourStop, approx(roughly(a), at(onBus.arrive)))}` : ''}`;
+    const c = onBus.change;
+    const where = offStop(onBus) ?? (c ? c.stop : (a.dest?.label ?? m().yourStop));
+    line = `${m().onThe(onBus.svc)}${onBus.arrive ? ` · ${c ? m().changeAtTime(where, approx(roughly(a), at(onBus.arrive)), c.svc) : m().offAtTime(where, approx(roughly(a), at(onBus.arrive)))}` : ''}`;
     glance = onBus.arrive ? m().offGlance(short(onBus.arrive)) : m().onThe(onBus.svc);
   }
   glance = glance.slice(0, 12);
@@ -683,7 +788,8 @@ function v2(
   if (key) {
     // Nothing asks what happened (on the bus, missed it, there): the trip
     // follows the plan and, when the phone says, where you are. Only plans.
-    if (a.dest?.why === 'class' && phase !== 'arrived' && phase !== 'riding') actions.push({ id: 'skipped', label: m().notGoing, trip: key });
+    // Not at a change of buses either: you're on your way.
+    if (a.dest?.why === 'class' && phase !== 'arrived' && phase !== 'riding' && trip.rec?.kind !== 'boarded') actions.push({ id: 'skipped', label: m().notGoing, trip: key });
     // Before the trip starts: the whole day off campus, every trip at once (phase 8.3).
     if (a.dest?.why === 'class' && phase === 'idle') actions.push({ id: 'away', label: m().notOnCampus, trip: key });
   }
@@ -700,7 +806,8 @@ function v2(
   return {
     phase,
     // Gone: the headline is the next bus, which is only for you if you missed it.
-    phaseText: goneAt ? m().phaseGone : (PHASE_TEXT[phase]?.() ?? null),
+    // At the stop of a change of buses: what you're there for.
+    phaseText: goneAt ? m().phaseGone : phase === 'waiting' && trip.rec?.boarded?.change ? m().phaseChange : (PHASE_TEXT[phase]?.() ?? null),
     glance,
     line,
     actions,
@@ -708,7 +815,7 @@ function v2(
     nextChangeAt: next === undefined ? null : iso(next),
     remind: trip.remind !== false,
     suggestion: trip.suggestion ?? null,
-    ride: phase === 'riding' && onBus ? rideOf(onBus) : null,
+    ride: phase === 'riding' && onBus ? rideWithChange(onBus, h12) : null,
     gone: goneAt !== null,
     walkTo: walkToOf(a, card.kind, phase),
   };
