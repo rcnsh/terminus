@@ -155,11 +155,19 @@ object TermReminder {
         return runCatching { Api(token, fast = true).notice() }.getOrNull()
     }
 
+    /**
+     * The title and body in the app's language, from the push (an older
+     * server) or /me/notice; null with no title to show, rather than a
+     * blank notification.
+     */
+    fun words(data: Map<String, String>, zh: Boolean): Pair<String, String>? {
+        val title = (if (zh) data["zhTitle"] else data["title"])?.takeIf { it.isNotBlank() } ?: return null
+        return title to (if (zh) data["zhBody"] else data["body"]).orEmpty()
+    }
+
     fun post(ctx: Context, data: Map<String, String>) {
         if (!LeaveAlerts.canNotify(ctx)) return
-        val zh = Lang.current(ctx) == Lang.ZH
-        val title = (if (zh) data["zhTitle"] else data["title"]) ?: return
-        val body = (if (zh) data["zhBody"] else data["body"]).orEmpty()
+        val (title, body) = words(data, Lang.current(ctx) == Lang.ZH) ?: return
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, L.s(R.string.channel_term), NotificationManager.IMPORTANCE_DEFAULT).apply {
