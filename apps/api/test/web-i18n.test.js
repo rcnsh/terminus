@@ -39,6 +39,7 @@ const SCRIPTS = [
   'app/buses.js',
   'app/map.js',
   'app/offline.js',
+  'app/timing.js',
   'assets/landing.js',
   'assets/sky-page.js',
   'assets/theme.js',
