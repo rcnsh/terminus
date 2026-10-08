@@ -759,8 +759,8 @@ keep for good.
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
 needs the Workers Paid plan and the sender's domain onboarded under Email
-Service > Email Sending in the dashboard. It is still terminus.rcn.sh, the
-site's old address, until terminus.run is onboarded there.
+Service > Email Sending in the dashboard: terminus.run is, and the old
+address, login@terminus.rcn.sh, stays an allowed sender.
 
 ### The web app
 

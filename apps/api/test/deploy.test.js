@@ -66,6 +66,14 @@ test('each site answers on its address and its old one, which installed apps sti
   assert.deepEqual(BETA.domains, ['beta.terminus.run', 'beta.terminus.rcn.sh']);
 });
 
+test('sign-in email comes from an address the email binding may send from', () => {
+  // Outside the list, every send fails, and nobody can sign in by email.
+  for (const w of [STABLE, BETA]) {
+    assert.equal(w.env.EMAIL_FROM.value, 'login@terminus.run');
+    assert.ok(w.env.EMAIL.allowedSenderAddresses.includes(w.env.EMAIL_FROM.value));
+  }
+});
+
 test('the beta knows it is the beta, and writes its analytics to its own dataset', () => {
   // site.ts isBeta reads PUBLIC_ORIGIN; admin.ts queries AE_DATASET.
   assert.equal(STABLE.env.PUBLIC_ORIGIN, undefined);

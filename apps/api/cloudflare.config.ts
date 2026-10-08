@@ -105,7 +105,7 @@ export default defineConfig(({ mode }) => {
 				}),
 			],
 			env: {
-				EMAIL_FROM: bindings.text("login@terminus.rcn.sh"),
+				EMAIL_FROM: bindings.text("login@terminus.run"),
 				TURNSTILE_SITE_KEY: bindings.text("0x4AAAAAAFHR71tKL907Buou"),
 				// For the dashboard's Analytics Engine queries (with the optional ANALYTICS_TOKEN secret).
 				CF_ACCOUNT_ID: bindings.text("31e51704ff7169c03d7014c3a1e5f110"),
@@ -128,7 +128,10 @@ export default defineConfig(({ mode }) => {
 					name: s.downloads,
 				}),
 				EMAIL: bindings.sendEmail({
+					// The old address stays allowed, so sending from it again is
+					// only EMAIL_FROM.
 					allowedSenderAddresses: [
+						"login@terminus.run",
 						"login@terminus.rcn.sh",
 					],
 				}),
