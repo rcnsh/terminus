@@ -280,9 +280,13 @@ enum MapGeoJson {
     }
 
     static func buses(svc: String, color: String, _ buses: [LiveBus]) -> Data {
-        collection(buses.map { b in
-            point(b.lon, b.lat, ["id": b.id, "svc": svc, "color": color, "heading": b.heading ?? 0, "offset": [b.ox, b.oy]])
-        })
+        collection(buses.map { b in point(b.lon, b.lat, busProperties(svc: svc, color: color, b)) })
+    }
+
+    /// A bus's properties, which its icon layers read: the map window sets
+    /// them on features directly while a bus slides.
+    static func busProperties(svc: String, color: String, _ b: LiveBus) -> [String: Any] {
+        ["id": b.id, "svc": svc, "color": color, "heading": b.heading ?? 0, "offset": [b.ox, b.oy]]
     }
 
     /// A clicked bus's `stretch` of `path`, in the service's `color`; empty when there's none.

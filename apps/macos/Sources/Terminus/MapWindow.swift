@@ -643,6 +643,13 @@ private struct CampusMapView: NSViewRepresentable {
         c.apply()
     }
 
+    /// The window closed: the slide's display link stops with it, and the
+    /// view no longer calls back into a coordinator that's going.
+    static func dismantleNSView(_ view: MLNMapView, coordinator: Coordinator) {
+        coordinator.stopAnimating()
+        view.delegate = nil
+    }
+
     @MainActor final class Coordinator: NSObject, @preconcurrency MLNMapViewDelegate {
         let map: MapModel
         var campus: CampusMap
@@ -655,7 +662,10 @@ private struct CampusMapView: NSViewRepresentable {
         private var slides = Slides()
         private var slidesFor: String?
         private var lastAnswer = 0
-        private var timer: Timer?
+        private var link: CADisplayLink?
+        /// What the stretch and your dot were last set to: set again only when they change.
+        private var drawnStretch: Data?
+        private var drawnMe: Data?
         private var applied: (selected: String?, dark: Bool, stretch: Bool, bus: String?, stale: Bool)?
         private var recentred = 0
         private var zoomedSteps = 0
@@ -678,6 +688,8 @@ private struct CampusMapView: NSViewRepresentable {
             build(style)
             loaded = true
             applied = nil
+            drawnStretch = nil
+            drawnMe = nil
             apply()
         }
 
@@ -824,9 +836,15 @@ private struct CampusMapView: NSViewRepresentable {
                     (style.layer(withIdentifier: id) as? MLNSymbolStyleLayer)?.iconOpacity = NSExpression(forConstantValue: stale ? 0.4 : 1)
                 }
             }
-            (style.source(withIdentifier: "stretch") as? MLNShapeSource)?.shape = shape(stretchData)
+            if stretchData != drawnStretch {
+                drawnStretch = stretchData
+                (style.source(withIdentifier: "stretch") as? MLNShapeSource)?.shape = shape(stretchData)
+            }
             let meData = map.me.map { MapGeoJson.me(lat: $0.lat, lon: $0.lon) } ?? MapGeoJson.empty
-            (style.source(withIdentifier: "me") as? MLNShapeSource)?.shape = shape(meData)
+            if meData != drawnMe {
+                drawnMe = meData
+                (style.source(withIdentifier: "me") as? MLNShapeSource)?.shape = shape(meData)
+            }
 
             // Buses slide to each new place along their line (see Slides).
             // Every answer, even one the same as the last: a bus only jumps
@@ -841,20 +859,41 @@ private struct CampusMapView: NSViewRepresentable {
             camera()
         }
 
+        /// Features made here, not GeoJSON written and read again: a slide
+        /// sets them every frame.
         private func drawBuses() {
             guard let src = view?.style?.source(withIdentifier: "buses") as? MLNShapeSource else { return }
-            let data = MapGeoJson.buses(svc: map.selected ?? "", color: color, slides.at(Slides.clock))
-            src.shape = shape(data)
+            let svc = map.selected ?? "", color = color
+            let features = slides.at(Slides.clock).map { b in
+                let f = MLNPointFeature()
+                f.coordinate = CLLocationCoordinate2D(latitude: b.lat, longitude: b.lon)
+                f.attributes = MapGeoJson.busProperties(svc: svc, color: color, b)
+                return f
+            }
+            src.shape = MLNShapeCollectionFeature(shapes: features)
         }
 
-        /// Redraws the buses each frame while one is on its way.
+        /// Redraws the buses with the screen while one is on its way, at up
+        /// to 30 frames a second: enough for a bus crossing a few pixels.
         private func animate() {
-            guard timer == nil else { return }
-            let t = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.frame() }
-            }
-            RunLoop.main.add(t, forMode: .common)
-            timer = t
+            guard link == nil, let view, isShown(view) else { return }
+            let l = view.displayLink(target: LinkTarget(self), selector: #selector(LinkTarget.tick))
+            l.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
+            l.add(to: .main, forMode: .common)
+            link = l
+        }
+
+        func stopAnimating() {
+            link?.invalidate()
+            link = nil
+        }
+
+        /// Hidden, minimised or covered, there's nothing to draw for: the
+        /// buses are drawn where they are once it's back (the polls start
+        /// again then, and each answer plans the slides again).
+        private func isShown(_ view: NSView) -> Bool {
+            guard let w = view.window else { return false }
+            return w.isVisible && !w.isMiniaturized && w.occlusionState.contains(.visible)
         }
 
         /// First view: the whole campus, once the view has a size to fit it in.
@@ -869,12 +908,10 @@ private struct CampusMapView: NSViewRepresentable {
             MLNCoordinateBounds(sw: CLLocationCoordinate2D(latitude: b[1], longitude: b[0]), ne: CLLocationCoordinate2D(latitude: b[3], longitude: b[2]))
         }
 
-        private func frame() {
+        fileprivate func frame() {
+            guard let view, isShown(view) else { return stopAnimating() }
             drawBuses()
-            if !slides.moving(Slides.clock) {
-                timer?.invalidate()
-                timer = nil
-            }
+            if !slides.moving(Slides.clock) { stopAnimating() }
         }
 
         private func camera() {
@@ -973,6 +1010,20 @@ private struct CampusMapView: NSViewRepresentable {
                 return true
             }
         }
+    }
+}
+
+/// The display link's target. The link holds its target strongly, so this
+/// holds the coordinator weakly: once that's gone, the link stops itself
+/// rather than firing for ever.
+@MainActor private final class LinkTarget: NSObject {
+    weak var coordinator: CampusMapView.Coordinator?
+
+    init(_ coordinator: CampusMapView.Coordinator) { self.coordinator = coordinator }
+
+    @objc func tick(_ link: CADisplayLink) {
+        guard let coordinator else { return link.invalidate() }
+        coordinator.frame()
     }
 }
 
