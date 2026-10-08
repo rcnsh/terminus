@@ -43,20 +43,28 @@ export function makeD1() {
     },
   });
 
+  // D1 runs each batch whole, one at a time: two in flight at once (a
+  // session's touch left to waitUntil, and the request's own) queue here
+  // rather than nest their transactions.
+  let batches = Promise.resolve();
   return {
     _db: db,
     prepare: (sql) => statement(sql),
-    async batch(stmts) {
-      db.exec('BEGIN');
-      try {
-        const out = [];
-        for (const s of stmts) out.push(await s.run());
-        db.exec('COMMIT');
-        return out;
-      } catch (err) {
-        db.exec('ROLLBACK');
-        throw err;
-      }
+    batch(stmts) {
+      const run = batches.then(async () => {
+        db.exec('BEGIN');
+        try {
+          const out = [];
+          for (const s of stmts) out.push(await s.run());
+          db.exec('COMMIT');
+          return out;
+        } catch (err) {
+          db.exec('ROLLBACK');
+          throw err;
+        }
+      });
+      batches = run.catch(() => {});
+      return run;
     },
     /** Test helper: run SQL directly. */
     exec: (sql) => db.exec(sql),

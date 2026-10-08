@@ -247,6 +247,9 @@ export class Trip {
     const changed = last ? last.key !== now.key || last.phase !== now.phase : now.phase !== 'idle';
     if (changed) {
       // Wake the phone for what the user should see: time to go, a missed bus.
+      // With reminders off too: these are what start the live notification on
+      // Android, which may start it from the background only for a
+      // high-priority message.
       const urgent = now.phase === 'due' || now.phase === 'missed';
       const out = await nudgeUser(env, userId, { phase: now.phase, urgent, remind: card.remind }, nowMs);
       // Pushed once a device has it, or when none could be sent to (a quiet

@@ -2286,7 +2286,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         Error: {
           type: 'object',
           required: ['error'],
-          properties: { error: { type: 'string' } },
+          properties: {
+            error: { type: 'string' },
+            update: { type: 'boolean', description: 'True with a 426: the app must be updated before it is served again.' },
+          },
           additionalProperties: true,
         },
       },
@@ -2396,6 +2399,34 @@ function withAccountsDown(spec: Record<string, unknown>): Record<string, unknown
       if (!op || typeof op !== 'object' || !op.responses) continue;
       if (Array.isArray(op.security) && op.security.length === 0) continue;
       op.responses['503'] ??= ACCOUNTS_DOWN_503;
+    }
+  }
+  return withUpdateRequired(spec);
+}
+
+const UPDATE_REQUIRED_426 = errorResponse(
+  'The app is older than the oldest version still served (`x-terminus-client` names it). It should ask the user to update, and stop asking until then. ' +
+    'A request without that header (the website, API keys) is never refused this way.',
+  { error: 'Update terminus to keep using it.', update: true },
+);
+
+/**
+ * Lists the 426 on every operation an app reaches with its device token:
+ * the bus answers and /me, but not sign-in, pairing or sign-out, which
+ * answer before the version is checked, nor DELETE /me/push and DELETE /me,
+ * which an outdated app may still do.
+ */
+function withUpdateRequired(spec: Record<string, unknown>): Record<string, unknown> {
+  const paths = spec.paths as Record<string, Record<string, { security?: { bearer?: unknown }[]; responses?: Record<string, unknown> }>>;
+  for (const [path, ops] of Object.entries(paths)) {
+    const me = path === '/me' || path.startsWith('/me/');
+    if (!me && (path.startsWith('/auth/') || path.startsWith('/pair'))) continue;
+    for (const [method, op] of Object.entries(ops)) {
+      if (!op || typeof op !== 'object' || !op.responses) continue;
+      if (method === 'delete' && (path === '/me' || path === '/me/push')) continue;
+      // The overview's default security takes a bearer token; an operation's own must list one.
+      const bearer = op.security === undefined ? !me : op.security.some((s) => s && 'bearer' in s);
+      if (bearer) op.responses['426'] ??= UPDATE_REQUIRED_426;
     }
   }
   return spec;
