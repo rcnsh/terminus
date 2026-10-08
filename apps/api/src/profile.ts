@@ -5,7 +5,7 @@
  * so the planner can trust what it reads back.
  */
 
-import type { ImportedTrip } from './nusmods.ts';
+import { type ImportedTrip, venueToStop } from './nusmods.ts';
 import { sgt } from './config.ts';
 import type { Timing, Why } from './types.ts';
 import type { Upcoming } from './card.ts';
@@ -632,8 +632,9 @@ export function upcomingClass(profile: Profile, nowMs: number, h12: boolean, sto
           : shortDate(day);
   // "CS2030 @ COM1": the module, without the room the line under it gives.
   const name = n.trip.label.split(' @ ')[0];
-  const stop = stopName(n.trip.to);
   const venue = n.trip.venue?.trim();
+  // The room's stop as it is now, not as it was when the timetable was saved.
+  const stop = stopName((venue && venueToStop(venue)?.stop) || n.trip.to);
   return {
     when,
     title: m().classAt(name, clockMin(n.trip.arriveByMin, h12)),

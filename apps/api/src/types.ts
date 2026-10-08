@@ -287,6 +287,8 @@ export interface ArriveBy {
   atMs: number;
   /** Walk from the destination stop to the venue. */
   venueWalkS: number;
+  /** A venue several stops serve: the walk from each, by stop code. */
+  walkByStopS?: Record<string, number>;
   /** Aim one bus earlier when the one to wait for is often busy. */
   fullBusMargin?: boolean;
   /** Leave one bus earlier for this class: a suggestion the user accepted (outcomes.ts). */
@@ -480,6 +482,14 @@ export interface ResolveInput {
   preferStops?: string[];
   /** Walk to `originCode` when there are no coordinates (home to home stop). */
   originWalkS?: number;
+  /**
+   * More stops to start from without coordinates: the others serving the
+   * room you're in. Each is walked to from the room (`originWalkByStopS`),
+   * so the planner takes whichever bus is quicker counting the walk.
+   */
+  originAlso?: string[];
+  /** The walk from the room to each origin stop, by code; else `originWalkS`. */
+  originWalkByStopS?: Record<string, number>;
   /**
    * The user's own walk from home to their nearest home stop. Counts over
    * the residence's outline when the location is inside the residence

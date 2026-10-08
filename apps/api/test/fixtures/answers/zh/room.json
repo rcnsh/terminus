@@ -86,13 +86,13 @@
     "stop": "PGP",
     "stopCode": "PGP",
     "walkS": 300,
-    "rideS": 628,
+    "rideS": 497,
     "board": "2026-08-27T01:09:00Z",
-    "arrive": "2026-08-27T01:19:28Z",
+    "arrive": "2026-08-27T01:17:17Z",
     "estimated": false,
-    "off": "CLB",
-    "toStop": "CLB",
-    "endWalkS": 86
+    "off": "YIH",
+    "toStop": "YIH",
+    "endWalkS": 137
   },
   "leave": null,
   "mode": "trip",

@@ -142,8 +142,10 @@ const PROJECT_MS = 86_400_000;
 function forLeg(leg: Leg, sa: StopArrivals | undefined, graph: Graph, arriveBy: ArriveBy, nowMs: number, risk?: CrowdRisk): LegLeave | null {
   const headway = Math.max(60, headwayFor(graph, leg.svc)) * 1000;
   const walk = leg.walkS * 1000 + BUFFER_MS;
-  const latestBoard = arriveBy.atMs - (ON_TIME_SLACK_S + arriveBy.venueWalkS + leg.rideS) * 1000;
-  const arriveAfter = (boardMs: number) => boardMs + (leg.rideS + arriveBy.venueWalkS) * 1000;
+  // On to the room from the stop this bus gets you to: a room two stops serve is further from one.
+  const venueWalkS = arriveBy.walkByStopS?.[leg.to?.code ?? ''] ?? arriveBy.venueWalkS;
+  const latestBoard = arriveBy.atMs - (ON_TIME_SLACK_S + venueWalkS + leg.rideS) * 1000;
+  const arriveAfter = (boardMs: number) => boardMs + (leg.rideS + venueWalkS) * 1000;
   // A guessed bus only while the service runs, by its published hours.
   const runs = (ms: number) => inService(graph, leg.svc, ms);
 

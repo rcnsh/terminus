@@ -260,7 +260,9 @@ apps/api/
   data/               Bundled JSON: stops.json (graph), shapes.json (route lines),
                       public.json (public buses), calendar.json, walks.json,
                       venues/rooms/landmarks/residences; hand-kept: service-hours.json,
-                      opposites.json (stops across the road the scrape can't pair)
+                      opposites.json (stops across the road the scrape can't pair),
+                      src/venue-stops.json (the stops students use for a building,
+                      where the map's nearest is wrong; then run walk_routes.py)
   migrations/         D1 schema, numbered NNNN_name.sql
   scripts/            dev-stub.mjs; predeploy.mjs (first step of a deploy); scrapers (scrape_stops.py, scrape_lta.py,
                       route_shapes.py, fetch_calendar.py, walk_routes.py,
@@ -345,6 +347,10 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
   `RIDE.secondsPerHop` a stop, no faster than `RIDE.longHopMs` over a long
   stretch (`RIDE` in config). Walking is
   recommended only when it beats the bus by `WALK.beatsBusByS`.
+  A room can have several stops (`venueStops()`, `stops` in `venues.json`):
+  a trip from or to a class considers each, with the room's own walk to it.
+  Where the map's nearest stop is the wrong one, fix it in
+  `data/src/venue-stops.json` and run `scripts/walk_routes.py`.
 - **Quality ladder.** Each answer says how sure it is: `live`, `scheduled` (a
   headway guess inside operating hours, labelled as such), and so on. Never
   label a guess as live.

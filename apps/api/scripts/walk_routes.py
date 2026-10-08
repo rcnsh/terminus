@@ -20,6 +20,8 @@ Hand-maintained inputs, never written by this script (data/src/):
   - venues-base.json: which stop each building maps to (uNivUS's table, plus
     buildings added over time). Edit this, not data/venues.json.
   - landmarks.json, residences.json: food courts and halls, as named by students.
+  - venue-stops.json: the stops students actually use for a building, where
+    the nearest by path is the wrong one (LT21: S17, not University Hall).
 
 Writes:
   - data/walks.json: routed metres between every pair of stops, and per stop
@@ -31,7 +33,9 @@ Writes:
   - data/residences.json: each residence's outline and the stops that serve it.
   - data/venues.json: each building's walk to its stop, routed. The stop a
     building maps to is kept as it was (saved timetables point at it); only
-    buildings new to the file get the stop nearest by path.
+    buildings new to the file get the stop nearest by path, and only one in
+    venue-stops.json gets that file's first stop. `stops`, when a building
+    has more than one, is every stop serving it with the walk from each.
 """
 
 import heapq
@@ -68,6 +72,17 @@ LANDMARKS = {k: {**v, "at": tuple(v["at"])} for k, v in json.loads((ROOT / "data
 # that serve each are worked out by path distance below.
 RESIDENCES = json.loads((ROOT / "data/src/residences.json").read_text())["residences"]
 RES_FILE = CACHE / "osm-residences.json"
+
+# Stops students use for a building where the map's nearest is wrong, and
+# the stops paired across the road (each brings its twin to the resolver).
+VENUE_STOPS = json.loads((ROOT / "data/src/venue-stops.json").read_text())["venues"]
+OPPOSITES = json.loads((ROOT / "data/opposites.json").read_text())["pairs"]
+# A building is served by a second stop when the walk to it is at most this
+# much longer than to the nearest: about a minute and a quarter, close enough
+# that the bus from either can be the quicker. Two at most (four with the
+# stops across the road), so leaving a class never fans out into many fetches.
+VENUE_EXTRA_M = 100
+MAX_VENUE_STOPS = 2
 
 WALKABLE = "footway|path|pedestrian|steps|corridor|living_street|residential|service|unclassified|tertiary|secondary|primary|cycleway|track|crossing"
 # Stairs take longer than their length suggests.
@@ -265,6 +280,32 @@ def main():
             if m is not None:
                 pairs[f"{a}>{b}"] = round(m)
 
+    # The stop across the road: the resolver adds it to any stop it starts
+    # from or heads for, so a building never needs to list both.
+    twin = {s["code"]: s["opposite"] for s in stops if s.get("opposite")}
+    for a, b in OPPOSITES:
+        twin[a], twin[b] = b, a
+    for code in VENUE_STOPS:
+        unknown = [s for s in VENUE_STOPS[code]["stops"] if s not in stop_pt]
+        if unknown:
+            sys.exit(f"data/src/venue-stops.json: {code} lists unknown stops {unknown}")
+
+    def serving_stops(code, stop, m, pt):
+        """The stops a building is left from and arrived at, the usual one
+        first, with the routed walk from each: the hand-kept list when there
+        is one, else its own stop and one more barely further on foot."""
+        if code in VENUE_STOPS:
+            return {s: round(routed(s, pt) or haversine(pt, stop_pt[s])) for s in VENUE_STOPS[code]["stops"]}
+        out = {stop: round(m)}
+        walks = sorted((w, s) for s in stop_pt if (w := routed(s, pt)) is not None)
+        nearest = min([m] + [w for w, _ in walks])
+        for w, s in walks:
+            if len(out) >= MAX_VENUE_STOPS or w > nearest + VENUE_EXTRA_M:
+                break
+            if s not in out and twin.get(s) not in out:
+                out[s] = round(w)
+        return out
+
     # Buildings: routed walk to their stop; a detour ratio sample per stop.
     coords = buildings(rooms)
     ratios = {}
@@ -307,6 +348,34 @@ def main():
         else:
             venues[code] = {"stop": stop, "m": round(m), **at}
             added += 1
+        serving = serving_stops(code, stop, m, pt)
+        first = next(iter(serving))
+        venues[code].update(stop=first, m=serving[first])
+        if len(serving) > 1:
+            venues[code]["stops"] = serving
+
+    # Rooms uNivUS lists on their own (COM1-0208): served by their building's
+    # stops, walked from the room where NUSMods places it. A room uNivUS puts
+    # at a stop its building doesn't use keeps that stop alone, as it was.
+    room_stops = 0
+    for code, v in venues.items():
+        b = code.split("-")[0]
+        if "-" not in code or b not in venues or (b not in VENUE_STOPS and "stops" not in venues[b]):
+            continue
+        listed = VENUE_STOPS[b]["stops"] if b in VENUE_STOPS else list(venues[b]["stops"])
+        if b not in VENUE_STOPS and v["stop"] not in listed:
+            continue
+        loc = (rooms.get(code) or {}).get("location") or {}
+        pt = (loc["y"], loc["x"]) if isinstance(loc.get("x"), (int, float)) else coords.get(b)
+        if pt is None:
+            continue
+        order = listed if b in VENUE_STOPS else [v["stop"]] + [s for s in listed if s != v["stop"]]
+        serving = {s: round(routed(s, pt) or haversine(pt, stop_pt[s])) for s in order}
+        v.update(stop=order[0], m=serving[order[0]], stops=serving)
+        if len(serving) == 1:
+            del v["stops"]
+        room_stops += 1
+    print(f"{room_stops} rooms listed on their own take their building's stops")
 
     if suspect:
         print(f"kept {len(suspect)} straight-line figures that routed implausibly long: {', '.join(suspect)}")
