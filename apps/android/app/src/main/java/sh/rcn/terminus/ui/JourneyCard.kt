@@ -469,16 +469,20 @@ internal fun badgeText(svc: String, paid: Boolean): String = if (paid) "$svc \$"
 
 /** A service as it's painted on the bus: its code on its colour, in the ink that reads there ([inkOn]). */
 @Composable
-internal fun BusBadge(svc: String, color: Long, size: TextUnit, pad: Dp = 6.dp, paid: Boolean = false) {
+internal fun BusBadge(svc: String, color: Long, size: TextUnit, pad: Dp = 6.dp, paid: Boolean = false, even: Boolean = false) {
     // "Bus D2", so it isn't read as a code on its own.
     val said = stringResource(if (paid) R.string.a11y_bus_paid else R.string.a11y_bus, svc)
+    // `even`: wide enough for two characters, so in a row of them P and R2 are the same size.
+    val least = if (even) with(LocalDensity.current) { (size * 2.4f).toDp() } else 0.dp
     Text(
         badgeText(svc, paid),
         color = inkOn(Color(color)),
         fontWeight = FontWeight.ExtraBold,
         fontSize = size,
         maxLines = 1,
+        textAlign = TextAlign.Center,
         modifier = Modifier
+            .widthIn(min = least)
             .background(Color(color), RoundedCornerShape(6.dp))
             .padding(horizontal = pad, vertical = 1.dp)
             .semantics { contentDescription = said },

@@ -364,7 +364,7 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
                         Text(hit.name, fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
                             Text(hit.code, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            for (svc in hit.services) BusBadge(svc, colors[svc] ?: GREY, 11.sp, pad = 5.dp)
+                            for (svc in hit.services) BusBadge(svc, colors[svc] ?: GREY, 11.sp, pad = 5.dp, even = true)
                         }
                     }
                 }
@@ -1028,7 +1028,7 @@ private fun LineList(line: Line, color: Color, colors: Map<String, Long>, onHere
                                 if (item.stop.services.isNotEmpty()) {
                                     @OptIn(ExperimentalLayoutApi::class)
                                     FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        for (svc in item.stop.services) BusBadge(svc, colors[svc] ?: GREY, 10.sp, pad = 4.dp)
+                                        for (svc in item.stop.services) BusBadge(svc, colors[svc] ?: GREY, 10.sp, pad = 4.dp, even = true)
                                     }
                                 }
                             }
