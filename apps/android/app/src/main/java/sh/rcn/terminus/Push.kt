@@ -68,9 +68,17 @@ object Push {
     /** Push is relied on alone only with a token sent and a push heard within this. */
     private const val TRUST_MS = 24 * 60 * 60_000L
 
+    /** What push's timing reads from [Store]: the token sent, when the server took it, and when a push last arrived. */
+    data class State(val token: String?, val sentAt: Long, val heardAt: Long) {
+        companion object {
+            fun of(store: Store) = State(store.pushToken, store.pushSentAt, store.pushHeardAt)
+        }
+    }
+
     /** No token sent for this session yet, or not for [RESEND_MS]. */
-    fun due(store: Store, now: Long = System.currentTimeMillis()): Boolean =
-        store.pushToken == null || now - store.pushSentAt >= RESEND_MS
+    fun due(store: Store, now: Long = System.currentTimeMillis()): Boolean = due(State.of(store), now)
+
+    fun due(state: State, now: Long): Boolean = state.token == null || now - state.sentAt >= RESEND_MS
 
     /** Sends this phone's token to the server when it's new or [due]. Call once paired, at start, and from refreshes. */
     fun register(ctx: Context) {
@@ -101,11 +109,12 @@ object Push {
      * the trip in step too (LeaveAlerts.followUp), in case the server has
      * dropped the token.
      */
-    fun active(ctx: Context): Boolean {
-        val store = Store(ctx)
-        val now = System.currentTimeMillis()
-        return store.pushToken != null && now - store.pushSentAt < TRUST_MS && now - store.pushHeardAt < TRUST_MS && available(ctx)
-    }
+    fun active(ctx: Context): Boolean = active(State.of(Store(ctx)), System.currentTimeMillis()) && available(ctx)
+
+    /** [active], apart from whether this phone can have push at all. */
+    fun active(state: State, now: Long): Boolean =
+        state.token != null && now - state.sentAt < TRUST_MS && now - state.heardAt < TRUST_MS
+
 }
 
 /** Firebase is ready before anything else runs, including a push that starts the process. */
