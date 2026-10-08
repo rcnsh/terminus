@@ -430,6 +430,13 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
 
   const fresh = await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12, prefs.earlier.has(key));
 
+  // Seen at the class's stop before it starts: the same answer the next
+  // request gives once this one has noted it reached (reachedEarly), not the
+  // bare "You're here" that would flip to it a moment later.
+  if (fresh.arrived && dest.why === 'class' && dest.trip && sgt(nowMs).minutes < dest.trip.arriveByMin) {
+    return { answer: thereAnswer(profile, nowMs, dest, places, h12, state.skipped), trip: { key, phase: 'arrived', rec, undo } };
+  }
+
   // Which bus the trip is about, the same on every device (plan.ts).
   const located = lat !== null && lon !== null;
   const stored = day?.plans?.[key];
