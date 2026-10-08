@@ -450,7 +450,8 @@ the account went can't store its trip again.
   sooner, by any amount (`needsWatch`), so a push is never late: the
   leave-by moves by seconds with each refresh, and a later one needs
   nothing, since the object plans its next wake afresh each time it wakes. A nudge is a data message, `{kind: 'card', phase}`, high
-  priority for due and missed; the app fetches /me/next
+  priority for missed, and for due unless the trip's reminders are off
+  (then normal: there's no notification to show); the app fetches /me/next
   itself. A tap nudges the user's other devices at once. The object's single
   alarm is the sooner of the next wake and midnight (`deleteAt`).
   - A phase counts as pushed once a device got it (or none could be sent

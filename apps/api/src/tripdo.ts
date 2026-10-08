@@ -247,7 +247,10 @@ export class Trip {
     const changed = last ? last.key !== now.key || last.phase !== now.phase : now.phase !== 'idle';
     if (changed) {
       // Wake the phone for what the user should see: time to go, a missed bus.
-      const urgent = now.phase === 'due' || now.phase === 'missed';
+      // Time to go for a trip with reminders off has nothing to show, so it
+      // waits for the phone's own time rather than waking it (and spending
+      // the app's allowance of high-priority messages).
+      const urgent = (now.phase === 'due' && card.remind) || now.phase === 'missed';
       const out = await nudgeUser(env, userId, { phase: now.phase, urgent, remind: card.remind }, nowMs);
       // Pushed once a device has it, or when none could be sent to (a quiet
       // card for a browser): not when every send failed, so a later wake tries again.
