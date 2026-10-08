@@ -371,7 +371,9 @@ async function plannedTrip(url: URL, env: Env, ctx: ExecutionContext, nowMs: num
       if (r) dest = { ...r, why: 'place', from: homeStop };
     }
     if (dest) return idle(await tripAnswer(env, ctx, nowMs, deps, profile, dest, at, places, h12));
-    return idle(freeAnswer(deps.graph, profile, nowMs, places, h12));
+    // Not a stop, room or saved place (a favourite since removed, say): the
+    // day's own answer, as if none had been asked for. A free day's "No more
+    // classes today" would be untrue with a class still to come.
   }
 
   const homeHere = atHome(lat, lon, profile.home?.stops ?? []);

@@ -719,7 +719,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           parameters: [
             ...coordParams,
             { name: 'place', in: 'query', description: 'Key of a favourite (one of `places`).', schema: { type: 'string' }, example: 'mrt' },
-            { name: 'to', in: 'query', description: 'Any stop code or NUSMods venue code.', schema: { type: 'string' }, example: 'COM3' },
+            { name: 'to', in: 'query', description: 'Any stop code or NUSMods venue code. One that names nothing known is ignored, as an unknown `place` is.', schema: { type: 'string' }, example: 'COM3' },
           ],
           responses: { '200': ok({ $ref: '#/components/schemas/MeAnswer' }), '401': errorResponse('No valid session.') },
         },
