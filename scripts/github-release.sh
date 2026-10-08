@@ -29,10 +29,17 @@ git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "no tag $TAG"; e
 [ -f "$APK" ] && [ -f "$MAC" ] || { echo "missing $APK or $MAC"; exit 1; }
 
 # A release lists the commits since the previous release, past its betas.
-case "$VERSION" in
-  *-*) PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true) ;;
-  *) PREV=$(git describe --tags --abbrev=0 --exclude '*-*' "$TAG^" 2>/dev/null || true) ;;
-esac
+# No previous tag only for the very first: otherwise a failed lookup would
+# publish the first release's notes instead of the changes.
+EXCLUDE='*-*'
+case "$VERSION" in *-*) EXCLUDE='' ;; esac
+EARLIER=$(git tag -l 'v*' --merged "$TAG^")
+if [ -n "$EXCLUDE" ]; then EARLIER=$(printf '%s\n' "$EARLIER" | grep -v -- - || true); fi
+PREV=""
+if [ -n "$EARLIER" ]; then
+  PREV=$(git describe --tags --abbrev=0 --match 'v*' ${EXCLUDE:+--exclude "$EXCLUDE"} "$TAG^") ||
+    { echo "couldn't find the tag before $TAG"; exit 1; }
+fi
 NOTES="$DIR/notes.md"
 python3 scripts/release-notes.py "$VERSION" "$TAG" "$PREV" "$APK" "$MAC" "$CHANNEL" > "$NOTES"
 
