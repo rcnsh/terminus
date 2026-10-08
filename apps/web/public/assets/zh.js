@@ -386,7 +386,6 @@ window.TERMINUS_ZH = {
  "Back to campus": "回到校园",
  "Your trips": "你的行程",
  "Notifications": "通知",
- "No home stop yet": "尚未设置家附近的车站",
  "{0} pace": "步速：{0}",
  "Re-import needed": "需要重新导入",
  "No classes yet": "还没有课",

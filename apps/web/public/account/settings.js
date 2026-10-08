@@ -1,21 +1,22 @@
 // Settings: the signed-in part of the account page (/account/), and the web
-// app's Settings tab (/app/#settings). Your account, your day as a route
-// down a card (home stop, classes, hours, pace), each stop a row, then the
-// rest as tiles, each opening its page (settings-pages.js): one at a time
+// app's Settings tab (/app/#settings). Your account, then everything else as
+// tiles, each opening its page (settings-pages.js): one at a time
 // on a phone, sliding in from the side; side by side on a wide screen. The
 // address names the page (#trips, or #settings/trips in the web app), so
 // Back and a reload keep it.
 
 import { Icon, focusSoon, html, reducedMotion, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clockOpts, forgetAccountHere, locale, spaced, t } from './dom.js';
+import { api, forgetAccountHere, t } from './dom.js';
 import { edit, profile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 import { cardStyle, styleName } from './journey.js';
 import { Celestial, Horizon } from './sky.js';
 
 /** The pages shown as tiles, two to a row, with their icons. */
-const TILES = ['favourites', 'notifications', 'language', 'appearance', 'devices', 'feedback'];
+const TILES = ['trips', 'timetable', 'favourites', 'notifications', 'language', 'appearance', 'devices', 'feedback'];
 const ICONS = {
+  trips: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+  timetable: '<rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
   favourites: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>',
   notifications: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 21h4"/>',
   language: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.6 3.5 5.4 3.5 8.5s-1.1 5.9-3.5 8.5c-2.4-2.6-3.5-5.4-3.5-8.5s1.1-5.9 3.5-8.5z"/>',
@@ -53,9 +54,6 @@ export function offerImport(link) {
   importOffer.set(link);
 }
 
-/** Minutes past midnight as a time of day, in the clock the person chose. */
-const hm = (min) => spaced(new Date(2000, 0, 1, Math.floor(min / 60), min % 60).toLocaleTimeString(locale() ?? [], clockOpts()));
-
 /** The walking pace chosen, in words: Normal until one is. */
 const paceName = (p) => ({ slow: t('Slow'), normal: t('Normal'), fast: t('Fast') })[p.walkPace ?? 'normal'] ?? t('Normal');
 
@@ -65,8 +63,8 @@ function summaries({ p, me, notifyOn, devices, imported }) {
   const home = p.home?.stops?.[0];
   const classes = p.trips.length + p.manual.length;
   return {
-    trips: `${home ? stopName(home) : t('No home stop yet')} · ${t('{0} pace', pace)}`,
-    timetable: me.needsReimport && !imported ? t('Re-import needed') : classes === 0 ? t('No classes yet') : classes === 1 ? t('1 class') : t('{0} classes', classes),
+    trips: home ? `${stopName(home)} · ${t('{0} pace', pace)}` : t('Choose your stop'),
+    timetable: me.needsReimport && !imported ? t('Re-import needed') : classes === 0 ? t('Import from NUSMods') : classes === 1 ? t('1 class') : t('{0} classes', classes),
     favourites: p.places.map((x) => x.label).join(', ') || t('None yet'),
     notifications: notifyOn ? t('On for this device') : t('Off'),
     devices: me.anonymous ? t('Add an email to use other devices') : devices === null ? '' : devices === 1 ? t('1 device') : t('{0} devices', devices),
@@ -260,9 +258,12 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
     return () => document.body.classList.remove('set-sky');
   }, [skyHere]);
   const sum = summaries({ p, me, notifyOn, devices, imported });
-  // Nothing imported, or a link for a semester that's over: Timetable asks, in the accent.
-  const reimport = me.needsReimport && !imported;
-  const noClasses = p.trips.length + p.manual.length === 0;
+  // What isn't set yet says what to do, in the accent: no home stop, no classes,
+  // or a link for a semester that's over.
+  const todo = {
+    trips: !p.home?.stops?.length,
+    timetable: (me.needsReimport && !imported) || p.trips.length + p.manual.length === 0,
+  };
   const page = (id, body) => html`
     <${Page} id=${id} title=${TITLES[id]} nodes=${nodes} onBack=${closePage} shown=${shown === id} leaving=${leaving?.node === id ? leaving : null} sky=${skyHere}>${body}<//>
   `;
@@ -291,26 +292,6 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
           : html`<h1 class="settings-title">${t('Settings')}</h1>`}
         <nav class="settings-groups" aria-label=${t('Settings')}>
           ${account}
-          <section class="set-day" aria-labelledby="set-day-title">
-            <h2 class="eyebrow" id="set-day-title">${t('Your day')}</h2>
-            <div class="day-route">
-              ${[
-                ['trips', t('Home stop'), stopName(p.home?.stops?.[0] ?? '') || t('Choose your stop'), !p.home?.stops?.length],
-                ['timetable', t('Timetable'), noClasses && !reimport ? t('Import from NUSMods') : sum.timetable, noClasses || reimport],
-                ['trips', t('Show buses between'), `${hm(p.dayStartMin ?? 360)} – ${hm(p.dayEndMin ?? 1080)}`, false],
-                ['trips', t('Walking pace'), paceName(p), false],
-              ].map(
-                ([id, label, value, todo], i) => html`<button
-                  type="button"
-                  class="settings-row day-stop"
-                  key=${i}
-                  ref=${i < 2 ? (n) => (rows[id] = n) : undefined}
-                  aria-current=${shown === id ? 'page' : undefined}
-                  onClick=${() => (shown === id ? null : openPage(id))}
-                ><span class="day-dot" aria-hidden="true"></span><span class="row-text"><span class="row-sum">${label}</span><strong class=${todo ? 'todo' : undefined}>${value}</strong></span><${Icon} paths=${CHEVRON} class="chev" /></button>`,
-              )}
-            </div>
-          </section>
           <div class="set-tiles">
             ${tiles.map(
               (id) => html`<button
@@ -324,7 +305,7 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
               >
                 <${Icon} paths=${ICONS[id]} />
                 <span class="row-title">${TITLES[id]}</span>
-                <span class=${id === 'notifications' && !notifyOn ? 'row-sum off' : 'row-sum'}>${sum[id]}</span>
+                <span class=${id === 'notifications' && !notifyOn ? 'row-sum off' : todo[id] ? 'row-sum todo' : 'row-sum'}>${sum[id]}</span>
               </button>`,
             )}
           </div>

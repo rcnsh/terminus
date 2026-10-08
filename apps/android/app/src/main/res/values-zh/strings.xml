@@ -234,7 +234,6 @@
     <string name="no_classes_yet">还没有课</string>
     <string name="choose_your_stop">选择你的车站</string>
     <string name="import_from_nusmods">从 NUSMods 导入</string>
-    <string name="no_home_stop">尚未设置家附近的车站</string>
     <string name="no_live_data">没有实时数据</string>
     <string name="no_location">无法获取你的位置。请自己选择车站。</string>
     <string name="no_reminders">不提醒</string>
