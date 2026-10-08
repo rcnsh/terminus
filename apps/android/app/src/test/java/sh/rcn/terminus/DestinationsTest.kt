@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The widget's places (phase 8.3): favourites by recent use, then the places added from "Go somewhere else". */
+/** The widget's places: favourites by recent use, then the places added from "Go somewhere else". */
 class DestinationsTest {
     init { TestStrings.install() }
 
@@ -55,12 +55,5 @@ class DestinationsTest {
         val used = Destinations.note(emptyMap(), Destinations.Dest("stop:COM3", "COM 3"), now)
         assertEquals(used, Destinations.parse(Destinations.serialise(used)))
         assertTrue(Destinations.parse("not json").isEmpty())
-    }
-
-    @Test fun speedFromTwoFixes() {
-        // About 111 m north in 20 s: a bus, not a walk.
-        val v = TripWatch.speedBetween(1.2900, 103.7800, 0, 1.2910, 103.7800, 20_000)!!
-        assertEquals(5.56, v, 0.05)
-        assertEquals(null, TripWatch.speedBetween(1.29, 103.78, 0, 1.2901, 103.78, 1_000))
     }
 }

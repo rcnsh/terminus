@@ -10,7 +10,7 @@ import androidx.core.content.edit
 import java.util.Locale
 
 /**
- * Which language terminus speaks (phase 10): English or Simplified Chinese.
+ * Which language terminus speaks: English or Simplified Chinese.
  *
  * "auto" follows the phone. A choice made in Settings (or on the first setup
  * screen) is the app's own language: on Android 13+ the system's per-app

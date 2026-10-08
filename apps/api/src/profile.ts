@@ -597,9 +597,10 @@ export function restDetail(profile: Profile, nowMs: number, h12 = false, skipped
     return m().timetableFor(termName(profile.term));
   }
   const n = nextClass(profile, nowMs, skipped);
-  if (!n) return profile.trips.length || profile.manual.length ? m().noClassesComing : m().nothingOnTimetable;
-  // Recess, exams, a public holiday: say why today is empty.
+  // Recess, exams, a public holiday: say why today is empty, next class or not
+  // (in reading week and the exams, the semester's classes are all behind you).
   const off = classesOn(profile, nowMs).length ? null : dayOffReason(nowMs);
+  if (!n) return profile.trips.length || profile.manual.length ? (off ? `${off} · ${m().noClassesComing}` : m().noClassesComing) : m().nothingOnTimetable;
   const when =
     n.daysAhead === 0
       ? m().today

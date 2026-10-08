@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Terminus
 
-/// Chinese (phase 10): every string the app writes has a translation with the
+/// Chinese: every string the app writes has a translation with the
 /// same blanks, none is left in the views, and the server's Chinese answers
 /// read like its English ones.
 private let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -60,13 +60,19 @@ private func literals(_ pattern: String, in text: String) throws -> [String] {
     #expect(found == [])
 }
 
-/// The API's Chinese goldens (apps/api/test/fixtures/answers/zh) decode, with their card.
-@Test(arguments: ["class-bus", "class-walk", "free", "rest", "home", "setup"])
-func chineseAnswersDecode(name: String) throws {
-    let url = root.appendingPathComponent("../api/test/fixtures/answers/zh/\(name).json").standardized
-    let a = try JSONDecoder().decode(NextAnswer.self, from: Data(contentsOf: url))
+/// The API's Chinese answers (apps/api/test/fixtures/answers/zh, every
+/// /me/next one) are in Chinese. Some headlines are only a bus and a time,
+/// so the line under it counts too.
+@Test(arguments: goldenNames().filter { $0.hasPrefix("zh/") })
+func chineseAnswersAreInChinese(name: String) throws {
+    let url = root.appendingPathComponent("../api/test/fixtures/answers/\(name).json").standardized
+    let data = try Data(contentsOf: url)
+    let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    guard json["label"] != nil else { return }
+    let a = try JSONDecoder().decode(NextAnswer.self, from: data)
     #expect(a.card != nil)
-    #expect(a.label.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) } || a.label.contains("分钟"))
+    let cjk = { (s: String) in s.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) } }
+    #expect(cjk(a.label) || cjk(a.detail), "\(a.label)")
 }
 
 @Test func chineseErrorsEndWithAFullWidthStop() {

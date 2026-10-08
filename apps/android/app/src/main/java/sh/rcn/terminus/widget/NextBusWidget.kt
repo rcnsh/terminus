@@ -56,6 +56,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import org.json.JSONObject
 import sh.rcn.terminus.CardStyle
+import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.Destinations
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Locator
@@ -97,7 +98,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
             // read once outside the composition would stay stale.
             val version = currentState(VERSION) ?: 0L
             val snap = remember(version) { Snap(store.paired, store.lastAnswer(), store.lastError, store.liveUpdates, store.addedPlaces) }
-            // This widget's own choice (phase 8.3): the timetable, Nearby or a place.
+            // This widget's own choice: the timetable, Nearby or a place.
             val chosen = ModeState(
                 Mode.of(currentState(WidgetModes.MODE), currentState(WidgetModes.MODE_LABEL)),
                 currentState(WidgetModes.MODE_AT),
@@ -155,24 +156,18 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         }
         val fetchedAt = if (onTimetable) planAt else chosen.fetchedAt
         val error = if (onTimetable) planError else chosen.error
-        // Offline (the last refresh failed) with the plan gone stale, or none
-        // kept: the next thing on the day plan kept for it.
-        val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, ServerClock.now()))) {
-            OfflineDay.next(store.lastDay()?.first, ServerClock.now())
-        } else {
-            null
-        }
-        // The live notification keeps the plan current, so no refresh button then.
-        val refreshButton = paired && (!live || !onTimetable)
+        val frame = frame(paired, mode, answer, error, live, ServerClock.now()) { store.lastDay()?.first }
+        val offline = frame.offline
+        val refreshButton = frame.refreshButton
         // ↻ refreshes what it shows (a place with a new location fix); a tap
         // anywhere else on the widget opens the app on the same view.
         val refresh = if (onTimetable) actionRunCallback<RefreshAction>() else chipAction(ctx, mode, appWidgetId)
         val tap = actionStartActivity(
-            when (mode) {
-                Mode.Timetable -> MainActivity.intentFor(ctx)
-                Mode.Nearby -> MainActivity.intentFor(ctx, nearby = true)
-                is Mode.To -> (mode.target as? Target.SavedPlace)?.let { MainActivity.intentFor(ctx, place = it.key) }
-                    ?: MainActivity.intentFor(ctx, to = mode.dest.id.removePrefix("stop:"), label = mode.label)
+            when (val t = frame.tap) {
+                Tap.Plan -> MainActivity.intentFor(ctx)
+                Tap.Nearby -> MainActivity.intentFor(ctx, nearby = true)
+                is Tap.Place -> MainActivity.intentFor(ctx, place = t.key)
+                is Tap.Stop -> MainActivity.intentFor(ctx, to = t.code, label = t.label)
             },
         )
 
@@ -249,7 +244,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                         Footer(ctx, fetchedAt, error, roomy)
                     }
                     answer.card?.phase == "riding" && answer.card.ride != null -> {
-                        // On the bus (phase 6): where you get off and when, the
+                        // On the bus: where you get off and when, the
                         // next stop, and how far along the ride the bus is.
                         val ride = answer.card.ride
                         val now = ServerClock.now()
@@ -410,9 +405,9 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     }
 
     /**
-     * The bottom of a large widget: the row that switches what it shows
-     * (phase 8.3), pushed to the foot, then (with [gap]) a little room above
-     * the footer. Nothing here asks what happened on the trip. None on a
+     * The bottom of a large widget: the row that switches what it shows,
+     * pushed to the foot, then (with [gap]) a little room above the footer.
+     * Nothing here asks what happened on the trip. None on a
      * compact widget.
      */
     @Composable
@@ -434,7 +429,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     private fun ModeChips(ctx: Context, b: Bottom) {
         val colors = GlanceTheme.colors
         // Gaps as padding, not Spacers: a Glance Row holds at most 10 children,
-        // and a wide widget fits six buttons.
+        // and a wide widget fits up to WidgetModes.MAX_BUTTONS of them.
         Row(modifier = GlanceModifier.fillMaxWidth()) {
             b.chips.forEachIndexed { i, m ->
                 val on = m.id == b.mode.id
@@ -520,7 +515,41 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         }
     }
 
+    /** Where a tap on the widget opens the app: the view it shows. */
+    sealed interface Tap {
+        data object Plan : Tap
+        data object Nearby : Tap
+        data class Place(val key: String) : Tap
+        data class Stop(val code: String, val label: String) : Tap
+    }
+
+    /**
+     * The widget's frame, whatever its body: [offline] (the day plan's next
+     * thing, shown instead of the answer), whether there's a refresh
+     * button, and where a tap goes.
+     */
+    data class Frame(val offline: OfflineDay.Pick?, val refreshButton: Boolean, val tap: Tap)
+
     companion object {
+        /**
+         * [Frame] for the [mode] shown, with its [answer] and last [error];
+         * [day] is read only when it's needed. [now] is on the server's clock.
+         */
+        fun frame(paired: Boolean, mode: Mode, answer: NextAnswer?, error: String?, live: Boolean, now: Long, day: () -> DayPlan?): Frame {
+            val onTimetable = mode == Mode.Timetable
+            // Offline (the last refresh failed) with the plan gone stale, or none
+            // kept: the next thing on the day plan kept for it.
+            val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, now))) OfflineDay.next(day(), now) else null
+            // The live notification keeps the plan current, so no refresh button then.
+            val refreshButton = paired && (!live || !onTimetable)
+            val tap = when (mode) {
+                Mode.Timetable -> Tap.Plan
+                Mode.Nearby -> Tap.Nearby
+                is Mode.To -> (mode.target as? Target.SavedPlace)?.let { Tap.Place(it.key) } ?: Tap.Stop(mode.dest.id.removePrefix("stop:"), mode.label)
+            }
+            return Frame(offline, refreshButton, tap)
+        }
+
         /** Nearby's countdowns are guesses past this. */
         private const val NEARBY_OLD_S = 180L
 

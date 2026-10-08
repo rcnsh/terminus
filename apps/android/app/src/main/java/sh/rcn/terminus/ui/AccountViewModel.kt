@@ -54,7 +54,7 @@ data class AccountState(
     val imported: ImportResult? = null,
     /** A NUSMods link shared into the app, waiting to be imported. */
     val sharedLink: String? = null,
-    /** Classes with a bus earlier or no reminders (phase 3). */
+    /** Classes with a bus earlier or no reminders. */
     val choices: List<sh.rcn.terminus.TripChoice> = emptyList(),
     /** Trips remembered (the last 35 days), which "Clear trip history" forgets. */
     val history: Int = 0,
@@ -378,7 +378,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /* ---------- trip choices (phase 3) ---------- */
+    /* ---------- trip choices ---------- */
 
     fun loadChoices() {
         viewModelScope.launch {

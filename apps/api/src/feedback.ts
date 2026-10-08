@@ -6,7 +6,9 @@
  * dashboard: an inbox keeps mail after the account is deleted. Only accounts
  * with an email can send one, and every report needs a note: an anonymous
  * answer with nothing said can't be acted on or replied to, and anonymous
- * accounts cost nothing to make. Reports are kept FEEDBACK_KEEP_DAYS.
+ * accounts cost nothing to make. A wrong answer says what was wrong with a
+ * reason picked from a few (REASONS), a note, or both. Reports are kept
+ * FEEDBACK_KEEP_DAYS.
  */
 
 import type { Env } from './types.ts';
@@ -29,8 +31,21 @@ export const FEEDBACK_KEEP_DAYS = 365;
 const PLATFORMS = ['android', 'mac', 'web'] as const;
 type Platform = (typeof PLATFORMS)[number];
 
+/** What was wrong with an answer, as the apps' chips offer it; the email and the dashboard say it in words. */
+export const REASONS = {
+  'never-came': 'The bus never came',
+  'times-off': 'The times were off',
+  'wrong-stop': 'Wrong stop',
+  'walk-longer': 'The walk is longer',
+  'wrong-class': 'Wrong class',
+} as const;
+export type Reason = keyof typeof REASONS;
+
 export interface FeedbackInput {
   kind: 'wrong' | 'other';
+  /** Only on a wrong answer. */
+  reason: Reason | null;
+  /** Empty only when there's a reason. */
   note: string;
   platform: Platform;
   appVersion: string | null;
@@ -43,7 +58,12 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
   if (!kind) return { ok: false, error: "kind is 'wrong' or 'other'" };
   const note = typeof b.note === 'string' ? b.note.trim() : '';
   if (note.length > FEEDBACK_LIMITS.note) return { ok: false, error: m().noteTooLong(FEEDBACK_LIMITS.note) };
-  if (!note) return { ok: false, error: 'say what went wrong' };
+  let reason: Reason | null = null;
+  if (b.reason !== undefined && b.reason !== null) {
+    if (kind !== 'wrong' || typeof b.reason !== 'string' || !Object.hasOwn(REASONS, b.reason)) return { ok: false, error: 'reason is not one of the choices' };
+    reason = b.reason as Reason;
+  }
+  if (!note && !reason) return { ok: false, error: 'say what went wrong' };
   const platform = PLATFORMS.find((p) => p === b.platform);
   if (!platform) return { ok: false, error: "platform is 'android', 'mac' or 'web'" };
   const appVersion = typeof b.appVersion === 'string' ? b.appVersion.trim().slice(0, FEEDBACK_LIMITS.appVersion) || null : null;
@@ -53,7 +73,7 @@ export function parseFeedback(body: unknown): { ok: true; value: FeedbackInput }
     context = JSON.stringify(b.context);
     if (new TextEncoder().encode(context).length > FEEDBACK_LIMITS.contextBytes) return { ok: false, error: 'context is too large' };
   }
-  return { ok: true, value: { kind, note, platform, appVersion, context } };
+  return { ok: true, value: { kind, reason, note, platform, appVersion, context } };
 }
 
 /** Stores the report and returns its id; null when the account has sent its day's worth. */
@@ -63,10 +83,10 @@ export async function saveFeedback(db: D1Database, userId: string, f: FeedbackIn
   // see the count from before the others.
   const saved = await db
     .prepare(
-      `INSERT INTO feedback (id, user_id, created, kind, note, platform, app_version, context)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM feedback WHERE user_id = ? AND created > ?) < ? RETURNING id`,
+      `INSERT INTO feedback (id, user_id, created, kind, reason, note, platform, app_version, context)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM feedback WHERE user_id = ? AND created > ?) < ? RETURNING id`,
     )
-    .bind(id, userId, nowMs, f.kind, f.note, f.platform, f.appVersion, f.context, userId, nowMs - 86_400_000, FEEDBACK_LIMITS.perDay)
+    .bind(id, userId, nowMs, f.kind, f.reason, f.note, f.platform, f.appVersion, f.context, userId, nowMs - 86_400_000, FEEDBACK_LIMITS.perDay)
     .first<{ id: string }>();
   return saved ? id : null;
 }
@@ -102,7 +122,8 @@ export async function mailFeedback(env: Env, id: string, f: FeedbackInput, nowMs
   const text = [
     `${f.kind === 'wrong' ? 'A wrong answer' : 'Feedback'} on ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}, ${new Date(nowMs).toISOString()}.`,
     '',
-    `They said: ${f.note}`,
+    ...(f.reason ? [`What was wrong: ${REASONS[f.reason]}`] : []),
+    ...(f.note ? [`They said: ${f.note}`] : []),
     '',
     `Report ${id}. Who sent it${f.context ? ' and the answer they saw' : ''}: the dashboard at ${siteOrigin(env)}/admin.`,
   ].join('\n');
@@ -112,7 +133,7 @@ export async function mailFeedback(env: Env, id: string, f: FeedbackInput, nowMs
     // Their words, on one line: a subject is a header. Matching control
     // characters is the point here.
     // oxlint-disable-next-line no-control-regex
-    subject: `terminus ${f.kind === 'wrong' ? 'wrong answer' : 'feedback'}: ${f.note.slice(0, 60)}`.replace(/[\x00-\x1f\x7f]+/g, ' '),
+    subject: `terminus ${f.kind === 'wrong' ? 'wrong answer' : 'feedback'}: ${(f.note || (f.reason ? REASONS[f.reason] : '')).slice(0, 60)}`.replace(/[\x00-\x1f\x7f]+/g, ' '),
     text,
   });
 }

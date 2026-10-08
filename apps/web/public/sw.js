@@ -20,7 +20,7 @@
 //   the pieces MapLibre asks for. So the campus map works offline after the
 //   first look. Live buses and arrivals are never kept.
 
-const SHELL = 'shell-v17';
+const SHELL = 'shell-v19';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -31,8 +31,10 @@ const SHELL_FILES = [
   '/app/app.js',
   '/app/offline.js',
   '/app/map-files.js',
+  '/app/timing.js',
   // The Buses tab too, so it opens offline and says it needs a connection.
   '/app/buses.js',
+  '/app/board.js',
   '/app/app.css',
   '/assets/tabbar.css',
   '/assets/ui.js',
@@ -198,7 +200,7 @@ let tilesFetching = null;
 
 /**
  * The campus map file, in the byte ranges MapLibre asks for. The first time,
- * from the network as asked, while the whole file (about 4 MB) is kept in
+ * from the network as asked, while the whole file (about 3 MB) is kept in
  * the background; after that, from the kept copy, checked weekly for a newer
  * one. The Cache API can't keep partial (206) replies, hence the whole file.
  */

@@ -52,16 +52,22 @@ test('a 200 whose body stops part way is a failure, not an empty answer', async 
 });
 
 test('a write waits longer than a read before giving up', async () => {
-  const waits = [];
-  globalThis.fetch = (_, init) => {
-    waits.push(init.signal);
-    return Promise.resolve(new Response('{}', { status: 200 }));
-  };
-  await api('/me/import', { method: 'POST', body: {} });
-  await api('/me/profile', { timeoutMs: 5 });
-  await new Promise((r) => setTimeout(r, 50));
-  assert.equal(waits[0].aborted, false, 'the write is still allowed to run');
-  assert.equal(waits[1].aborted, true);
+  // The time each call is given, by default: a write must still be running
+  // at 25 s, past a read's 20 s.
+  const asked = [];
+  const real = AbortSignal.timeout;
+  AbortSignal.timeout = (ms) => (asked.push(ms), new AbortController().signal);
+  globalThis.fetch = () => Promise.resolve(new Response('{}', { status: 200 }));
+  try {
+    await api('/me/import', { method: 'POST', body: {} });
+    await api('/me/profile', { method: 'PUT', body: {} });
+    await api('/me/profile');
+  } finally {
+    AbortSignal.timeout = real;
+  }
+  assert.equal(asked.length, 3);
+  assert.ok(asked[0] > 25_000 && asked[1] > 25_000, `writes get ${asked[0]} ms and ${asked[1]} ms`);
+  assert.equal(asked[2], 20_000, 'a read gives up at 20 s');
 });
 
 test('no connection at all reads as a sentence, not the browser words', async () => {

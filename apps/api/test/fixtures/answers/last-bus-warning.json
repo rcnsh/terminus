@@ -1,0 +1,153 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.97
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T14:40:00.000Z",
+  "arrivals": [
+    {
+      "svc": "D2",
+      "etaS": 240,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "D2",
+      "etaS": 840,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 540,
+      "crowd": "low",
+      "plate": null,
+      "berth": null
+    },
+    {
+      "svc": "A1",
+      "etaS": 1140,
+      "crowd": null,
+      "plate": null,
+      "berth": null
+    }
+  ],
+  "label": "D2 · 4 min",
+  "detail": "PGP · 1 min walk · Home in ~14 min · crowding: low",
+  "alt": null,
+  "departsAt": "2026-08-27T14:44:00Z",
+  "arriveAt": "2026-08-27T14:53:30Z",
+  "bus": {
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 89,
+    "rideS": 570,
+    "board": "2026-08-27T14:44:00Z",
+    "arrive": "2026-08-27T14:53:30Z",
+    "estimated": false,
+    "toStop": "UTown"
+  },
+  "altBus": null,
+  "leave": {
+    "at": "2026-08-27T14:42:11Z",
+    "estimated": false,
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "board": "2026-08-27T14:44:00Z",
+    "arrive": "2026-08-27T14:53:30Z",
+    "note": null,
+    "walkS": 89,
+    "rideS": 570,
+    "toStop": "UTown"
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "Home",
+    "why": "home"
+  },
+  "timing": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "warning": "Last D2 from PGP in 20 min",
+  "refreshAt": "2026-08-27T16:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "trip",
+    "staleAt": "2026-08-27T14:44:30Z",
+    "crowd": "Crowding: low",
+    "quality": null,
+    "leaveBy": "D2 at 22:44",
+    "leaveVia": "catch the 22:44 D2 at PGP",
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "waiting",
+    "phaseText": "At the stop",
+    "glance": "D2 22:44",
+    "line": "D2 22:44 at PGP",
+    "actions": [],
+    "warning": "Last D2 from PGP in 20 min",
+    "nextChangeAt": "2026-08-27T14:42:11Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": "22:42",
+      "walk": null,
+      "bus": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP",
+        "board": "22:44"
+      },
+      "boardAt": "2026-08-27T14:44:00Z",
+      "ride": "10 min",
+      "off": null,
+      "to": "Home",
+      "toStop": "UTown",
+      "arrive": "22:53",
+      "walkEnd": null,
+      "arriveStop": "22:53",
+      "slack": null,
+      "live": true,
+      "backup": null,
+      "why": null,
+      "title": "To Home",
+      "place": "Home",
+      "byText": null,
+      "walkText": null,
+      "rideText": "10 min ride",
+      "walkEndText": null,
+      "arriveText": "Arrive 22:53",
+      "arriveWhere": "at UTown",
+      "backupText": null,
+      "summary": "D2 22:44 at PGP"
+    },
+    "upcoming": null,
+    "title": "D2 · 22:44",
+    "heading": "Heading home",
+    "remindAt": null
+  }
+}

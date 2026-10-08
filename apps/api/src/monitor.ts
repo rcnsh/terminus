@@ -27,8 +27,6 @@ import { ACCOUNT_TTL } from './accounts.ts';
 import { type Notice, pushEnabled, remindUser } from './push.ts';
 import { m, withLang } from './i18n.ts';
 import { clearTrip, sgtDate, watchTrip } from './trip.ts';
-import { refreshTable } from './ridetimes.ts';
-import { sgt } from './config.ts';
 import { isBeta } from './site.ts';
 import { ensureRecorder } from './timelapse.ts';
 import { logCronError } from './analytics.ts';
@@ -432,7 +430,7 @@ const ARM_AT_ONCE = 20;
  * A Trip object only wakes (and pushes) after a request asks it to, and a
  * web app on the Home Screen makes none unless it's opened; the Android app
  * does from its background refresh. Asked here each morning, it works out
- * the card, wakes at the next change (time to go, the question), and keeps
+ * the card, wakes at the next change (time to go, the bus leaving), and keeps
  * going for the day; on a day without classes it just stops.
  */
 export async function armTrips(env: Env, nowMs: number, batch = ARM_BATCH): Promise<number> {
@@ -716,6 +714,4 @@ export async function runCron(env: Env, nowMs: number): Promise<void> {
   // Starts the day's timelapse recorder in the morning (it runs itself after that).
   await step('timelapse', () => ensureRecorder(env, nowMs));
   await step('term', () => remindTerm(env, nowMs));
-  // Measured ride times: once a day, early, before the day's trips.
-  if (env.DB && sgt(nowMs).minutes >= 4 * 60) await step('ride times', () => refreshTable(env, nowMs));
 }

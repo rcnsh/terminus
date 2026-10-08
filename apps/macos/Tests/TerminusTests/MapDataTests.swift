@@ -158,6 +158,33 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(path.ahead(from: between, to: far) == nil)
 }
 
+@Test func aLoopWhoseEndsDoNotMeetStillSlidesOnPastItsStart() throws {
+    // Like A1 at KRB: out east about 1.1 km, then back west on the other
+    // side of the road, ending some 40 m from where it started. The loop
+    // comes from /campus, not from where the line ends.
+    let campus = try #require(CampusMap.parse(Data("""
+    {"stops": [{"code": "KRB", "name": "KRB", "lat": 1.0, "lon": 103.0}], "routes": {
+      "A1": {"seq": ["KRB"], "loop": true, "line": [[103.0, 1.0], [103.01, 1.0], [103.01, 1.0004], [103.0, 1.0004]]},
+      "K": {"seq": ["PGP"], "loop": false, "line": [[103.0, 1.0], [103.01, 1.0], [103.01, 1.0004], [103.0, 1.0004]]}}}
+    """.utf8)))
+    let loop = try #require(campus.routes["A1"]?.path)
+    let a = loop.point(at: 0)
+    let z = loop.point(at: loop.total - 1e-9)
+    #expect(RoutePath.haversine(a.lat, a.lon, z.lat, z.lon) > 40, "the ends are apart")
+    #expect(loop.closed)
+    let (end, start) = (bus(loop, loop.total - 20), bus(loop, 30))
+    #expect(near(loop.ahead(from: end, to: start), 50, 1e-6), "on round past the start, not back")
+    var s = Slides(duration: { _ in 1 })
+    s.update([end], path: loop, now: 0)
+    s.update([start], path: loop, now: 5)
+    #expect(s.moving(5.5))
+    #expect(near(s.at(5.5)[0].along, 5, 1e-6), "half way, at its start")
+    // A line that doesn't loop: back at the start, it jumps.
+    let oneWay = try #require(campus.routes["K"]?.path)
+    #expect(!oneWay.closed)
+    #expect(oneWay.ahead(from: bus(oneWay, oneWay.total - 20), to: bus(oneWay, 30)) == nil)
+}
+
 @Test func aLongerSlideTakesLonger() {
     #expect(Slides.slideS(30) == 1)
     #expect(Slides.slideS(210) == 2.1)
@@ -173,7 +200,7 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 @Test func busesSayWhichStopTheyAreAt() throws {
     let list = try #require(BusList.parse(Data("""
     {"svc": "D2", "available": true, "buses": [
-      {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "stretch": null, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}},
+      {"id": "a", "plate": "PD726D", "lat": 1.0, "lon": 103.0, "along": 812.5, "heading": 90, "moving": true, "crowd": null, "at": {"code": "COM3", "name": "COM 3"}, "slot": 1, "stretch": null, "nextStop": {"code": "BIZ2", "name": "BIZ 2"}, "upcoming": [{"code": "BIZ2", "name": "BIZ 2"}, {"code": "", "name": ""}, {"code": "PGP", "name": "Prince George's Park"}], "towards": {"code": "PGP", "name": "Prince George's Park"}},
       {"id": "b", "lat": 1.0, "lon": 103.0, "along": 900, "heading": 90, "moving": true, "crowd": null, "at": null, "slot": 0, "stretch": {"from": 812.5, "to": 1100, "last": {"code": "COM3", "name": "COM 3"}}, "nextStop": null}]}
     """.utf8)))
     #expect(list.buses[0].at == "COM 3")
@@ -183,6 +210,13 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(list.buses[1].plate == nil, "an older API: no plate")
     #expect(list.buses[0].stretch == nil, "at a stop: no stretch")
     #expect(list.buses[1].stretch == Stretch(from: 812.5, to: 1100, last: "COM 3"))
+    #expect(list.buses[0].upcoming == ["BIZ 2", "Prince George's Park"], "the stops ahead, next first; a nameless one dropped")
+    #expect(list.buses[0].towards == "Prince George's Park")
+    #expect(list.buses[1].upcoming == [], "an older API: no stops ahead")
+    #expect(list.buses[1].towards == nil)
+    let end = try #require(BusList.parse(Data(#"{"svc": "A1", "available": true, "buses": [{"id": "c", "lat": 1.0, "lon": 103.0, "upcoming": [], "towards": {"code": "KR-MRT", "name": "KR MRT"}}]}"#.utf8)))
+    #expect(end.buses[0].upcoming == [], "past a one-way line's end")
+    #expect(end.buses[0].towards == "KR MRT")
 }
 
 @Test func aClickedBusShowsTheStretchItIsOn() throws {

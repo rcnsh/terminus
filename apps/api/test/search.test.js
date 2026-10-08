@@ -70,9 +70,14 @@ test('fixtures/search.json: the Buses tab, its index from /campus and its result
   const built = busesTabIndex(campus);
   assert.deepEqual(ids(built), index);
   const services = built.filter((d) => d.kind === 'service');
+  // Both kinds are in the fixture: an empty box, and a query cut at the limit.
+  assert.ok(queries.some(({ q }) => !q.trim()));
+  assert.ok(queries.some(({ expect }) => expect.length === limit));
   for (const { q, expect } of queries) {
     const got = ids(results(q, { source: () => built, suggestions: () => services }));
+    // Typed: at most `limit`. Empty: the suggestions, every service, however many.
     if (q.trim()) assert.ok(got.length <= limit, `"${q}": at most ${limit}`);
+    else assert.deepEqual(got, ids(services), `"${q}": every service`);
     assert.deepEqual(got, expect, `"${q}"`);
   }
 });

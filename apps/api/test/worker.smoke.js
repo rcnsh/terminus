@@ -465,8 +465,10 @@ test('/line: a service’s stops in order, its buses on them, and with a stop th
   assert.equal(bus.crowd, 'low');
   const map = (await (await call('/buses?svc=D1', { fetchImpl, cache })).res.json()).buses[0];
   assert.equal(bus.id, map.id);
-  if (map.at) assert.equal(body.stops[bus.at].code, map.at.code);
-  else assert.deepEqual([bus.at, body.stops[bus.after].code], [null, map.stretch.last.code]);
+  // A third of the way along a stretch of road: between two stops, after Opp YIH.
+  assert.equal(map.at, null, 'between stops on the map');
+  assert.equal(map.stretch.last.code, 'YIH-OPP');
+  assert.deepEqual([bus.at, body.stops[bus.after].code], [null, 'YIH-OPP']);
   assert.equal(fetchImpl.counts.shuttle, 2, 'one buses read (cached for /buses after) and one arrivals read');
 
   // Without a stop: no `stop`, and no arrivals read.
@@ -1436,6 +1438,17 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   assert.match(robots, /^User-agent: \*$/m);
   assert.match(robots, /^Sitemap: https:\/\/terminus\.rcn\.sh\/sitemap\.xml$/m);
   assert.doesNotMatch(robots, /^Disallow: \/$/m, 'the stable site is open to search');
+  // The answers (keyed: no `security` of their own in the spec) are not for
+  // search; the docs that describe them are.
+  const { openApiSpec } = await import('../src/openapi.ts');
+  const keyed = Object.entries(openApiSpec(BASE).paths).filter(([, item]) => item.get && item.get.security === undefined).map(([p]) => p);
+  assert.ok(keyed.includes('/next') && keyed.includes('/stops/pairs'));
+  const disallowed = [...robots.matchAll(/^Disallow: (\S+)$/gm)].map((m) => m[1]);
+  for (const p of keyed) assert.ok(disallowed.includes(p), `robots.txt disallows ${p}`);
+  assert.ok(disallowed.includes('/timelapse/'));
+  for (const p of ['/docs', '/openapi.json', '/llms.txt', '/status/', '/status.json']) {
+    assert.ok(!disallowed.some((d) => p.startsWith(d)), `${p} stays open to search`);
+  }
   const { res } = await call('/sitemap.xml');
   assert.equal(res.status, 200);
   const locs = [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);
@@ -1471,11 +1484,16 @@ test('AI agents get /llms.txt: a short guide whose endpoints and links are real'
   const ops = new Set(Object.values(spec.paths).flatMap((item) => Object.values(item).map((op) => op.operationId)));
   const links = [...text.matchAll(/\]\(([^)]+)\)/g)].map((m) => new URL(m[1]));
   assert.ok(links.length >= 8);
+  let opLinks = 0;
   for (const link of links) {
     assert.equal(link.origin, BASE, `${link} is on the site serving it`);
     const op = link.hash.match(/^#\/operations\/(\w+)$/)?.[1];
-    if (op) assert.ok(ops.has(op), `${link.hash} is an operation in the spec`);
+    if (op) {
+      opLinks++;
+      assert.ok(ops.has(op), `${link.hash} is an operation in the spec`);
+    }
   }
+  assert.ok(opLinks > 0, 'some links point at operations, so the check above ran');
   // Each endpoint it shows, with its example query, answers.
   for (const [, path] of text.matchAll(/^- \[GET ([^\]]+)\]/gm)) {
     const { res: r } = await call(path, { fetchImpl });

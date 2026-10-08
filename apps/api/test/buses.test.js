@@ -285,9 +285,11 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
   // test/fixtures/bus-trace.jsonl: A1, A2, D1 and D2 on Saturday 3 October
   // 2026 at 1 pm, every 5 s (the probe workflow with `trace`). Before
   // tracks, the same readings switched a bus between sides 6 times on one
-  // instance, and 12 times spread over four as in production.
+  // instance, and 12 times spread over four as in production. Replayed
+  // against the routes as they were then (bus-trace-routes.json), so a
+  // weekly scrape that changes a route doesn't fail it.
   const { readFileSync } = await import('node:fs');
-  const graph = (await import('../data/stops.json', { with: { type: 'json' } })).default;
+  const graph = (await import('./fixtures/bus-trace-routes.json', { with: { type: 'json' } })).default;
   const rows = readFileSync(new URL('./fixtures/bus-trace.jsonl', import.meta.url), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const polls = new Map();
   for (const r of rows) {
@@ -302,7 +304,7 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
   let between = 0;
   const outside = [];
   for (const p of [...polls.values()].sort((a, b) => a.t - b.t)) {
-    const placed = await placeBuses(graph, p.svc, p.raw, p.t * 1000, tracks[p.svc] ?? {});
+    const placed = await placeBuses(graph, p.svc, p.raw, p.t * 1000, tracks[p.svc] ?? {}, graph.shapes[p.svc]);
     tracks[p.svc] = placed.tracks;
     const shown = new Map(placed.buses.map((b) => [b.plate, b]));
     for (const r of p.raw) {
@@ -324,7 +326,7 @@ test('replaying 15 minutes of the real feed: no bus changes side, and none is sh
   const wrong = [];
   const back = [];
   for (const [key, list] of seen) {
-    const total = SHAPES[key.split(' ')[0]].at.at(-1);
+    const total = graph.shapes[key.split(' ')[0]].at.at(-1);
     const wrap = (d) => (d < -total / 2 ? d + total : d > total / 2 ? d - total : d);
     // Each new reading's place, with when it was first given.
     const readings = list.filter((x, i) => i === 0 || x.fix !== list[i - 1].fix || (x.reading == null) !== (list[i - 1].reading == null));
@@ -391,4 +393,76 @@ test('/line: after a loop’s last stop the bus is heading back to its first; a 
   assert.deepEqual(indexOnLine(twice, false, { at: name('A'), stretch: null, nextStop: name('C') }), { at: 2, after: null });
   // A stop the list doesn't have (the route changed since the shapes were made): left off.
   assert.equal(indexOnLine(loop, true, between('ZZ', 'A')), null);
+});
+
+/** A real bus [m] metres along [svc]'s line, driving its way, placed on its own. */
+async function placedAt(svc, m) {
+  const shape = SHAPES[svc];
+  const p = pointAlong(shape, m);
+  const q = pointAlong(shape, Math.min(m + 5, shape.at.at(-1)));
+  const heading = p.lat === q.lat && p.lon === q.lon ? null : bearingOf([p.lon, p.lat], [q.lon, q.lat]);
+  const { buses } = await placeBuses(GRAPH, svc, [{ plate: `P${svc}`, lat: p.lat, lon: p.lon, heading, speed: heading == null ? 0 : 20, crowd: null }], 0, {});
+  assert.equal(buses.length, 1, `${svc} at ${m} m is on its line`);
+  return buses[0];
+}
+
+test('K ends at PGP Foyer: a bus there has no next stop, and one coming in is heading there', async () => {
+  const shape = SHAPES.K;
+  assert.equal(GRAPH.loops.K, false);
+  const last = shape.stops.length - 1;
+  assert.equal(shape.stops[last], 'PGPR');
+  const end = shape.at[last];
+  assert.deepEqual(sectionOf(shape, end, false), { at: last, from: last, to: null });
+  assert.equal(nextOf(shape, sectionOf(shape, end, false), false), null, 'the end of the line');
+  const there = await placedAt('K', end);
+  assert.equal(there.at?.code, 'PGPR');
+  assert.equal(there.nextStop, null);
+  // Half way along the last stretch, from Opp KR MRT.
+  const coming = await placedAt('K', (shape.at[last - 1] + end) / 2);
+  assert.equal(coming.at, null);
+  assert.equal(coming.stretch.last.code, 'KR-MRT-OPP');
+  assert.equal(coming.nextStop.code, 'PGPR');
+  // At PGP, its first stop, it's on its way to KR MRT, not round from the end.
+  assert.equal((await placedAt('K', 0)).nextStop.code, shape.stops[1]);
+});
+
+test('P’s long legs off campus: a bus on the way to College Green is between Kent Vale and it', async () => {
+  const shape = SHAPES.P;
+  assert.equal(GRAPH.loops.P, true);
+  const [kv, cg, oth, bg, kr] = ['KV', 'CG', 'OTH', 'BG-MRT', 'KR-MRT'].map((c) => shape.stops.indexOf(c));
+  assert.deepEqual([kv, cg, oth, bg, kr], [0, 1, 2, 3, 4], `P calls at ${shape.stops.join(' ')}`);
+  assert.ok(shape.at[cg] - shape.at[kv] > 5_000, 'a leg of several km');
+  const out = await placedAt('P', (shape.at[kv] + shape.at[cg]) / 2);
+  assert.equal(out.at, null);
+  assert.deepEqual([out.stretch.last.code, out.nextStop.code], ['KV', 'CG']);
+  assert.deepEqual([out.stretch.from, out.stretch.to], [shape.at[kv], shape.at[cg]].map((m) => Math.round(m * 10) / 10));
+  assert.equal((await placedAt('P', shape.at[cg])).nextStop.code, 'OTH');
+  // Back from Botanic Gardens MRT to KR MRT, the other long leg.
+  const back = await placedAt('P', (shape.at[bg] + shape.at[kr]) / 2);
+  assert.deepEqual([back.stretch.last.code, back.nextStop.code], ['BG-MRT', 'KR-MRT']);
+  // Round the loop at Kent Vale: on to College Green again.
+  const home = await placedAt('P', shape.at.at(-1));
+  assert.equal(home.at?.code, 'KV');
+  assert.equal(home.nextStop.code, 'CG');
+});
+
+test('a real D1 bus lists the stops still ahead, to COM 3 where its loop ends; a K bus at its last stop has none', async () => {
+  const shape = SHAPES.D1;
+  const k = shape.stops.indexOf('CLB');
+  const mid = (shape.at[k] + shape.at[k + 1]) / 2;
+  const p = pointAlong(shape, mid);
+  const q = pointAlong(shape, mid + 5);
+  const bus = { plate: 'PD539C', lat: p.lat, lon: p.lon, heading: bearingOf([p.lon, p.lat], [q.lon, q.lat]), speed: 20, crowd: 'low' };
+  const [b] = (await placeBuses(GRAPH, 'D1', [bus], 0, {})).buses;
+  assert.equal(b.nextStop.code, 'LT13');
+  assert.deepEqual(b.upcoming.map((s) => s.code), ['LT13', 'AS5', 'BIZ2', 'COM3']);
+  assert.deepEqual(b.upcoming[0], b.nextStop, 'nextStop first');
+  assert.deepEqual(b.towards, { code: 'COM3', name: 'COM 3' });
+
+  const ks = SHAPES.K;
+  const end = pointAlong(ks, ks.at.at(-1));
+  const [last] = (await placeBuses(GRAPH, 'K', [{ plate: 'PK1', lat: end.lat, lon: end.lon, heading: 0, speed: 0, crowd: null }], 0, {})).buses;
+  assert.equal(last.at.code, 'PGPR');
+  assert.deepEqual(last.upcoming, []);
+  assert.equal(last.towards.code, 'PGPR');
 });

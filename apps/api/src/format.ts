@@ -1,9 +1,9 @@
 /**
  * The server returns a pre-rendered string and clients render it without
- * computing anything. An Android QS tile, a push notification, a web page and
- * (later) an MCP tool all consume the same `label` and `detail`. The moment a
- * client starts formatting for itself, four interfaces begin to drift apart
- * and there are four places to fix every bug.
+ * computing anything. The Android app and its widgets, the Mac menu bar app,
+ * the web app and push notifications all show the same `label` and `detail`.
+ * The moment a client starts formatting for itself, the clients begin to
+ * drift apart and there are four places to fix every bug.
  *
  * So: user-visible strings are produced on the server, never in a client.
  * The answer's `label`, `detail` and `alt` are built here; the class card and
@@ -17,13 +17,13 @@ import { svcName } from './public.ts';
 import { m } from './i18n.ts';
 
 /**
- * The contract caps `label` at 40 chars, but a Quick Settings tile truncates
- * far shorter than that -- roughly 12-16 glyphs are actually visible on most
- * launchers. 40 is the hard limit; this is the one that matters.
+ * The contract caps `label` at 40 chars, but a small home-screen widget cuts
+ * it far shorter than that -- roughly 12-16 glyphs are actually visible on
+ * most launchers. 40 is the hard limit; this is the one that matters.
  */
 export const LABEL_TARGET = 16;
 
-/** Does this label survive a real tile, not just the contract? */
+/** Does this label survive a small widget, not just the contract? */
 export function fitsTile(label: string): boolean {
   return label.length <= LABEL_TARGET;
 }
@@ -138,7 +138,8 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
     rideS: o.rideS,
     board: timed ? iso(o.fromMs + o.boardS * 1000) : null,
     arrive: timed ? iso(o.fromMs + o.totalS * 1000) : null,
-    estimated: o.quality === 'scheduled',
+    // An old reading counted down to now is no more exact than a guess (etaPhrase).
+    estimated: o.quality === 'scheduled' || o.quality === 'stale',
     ...(o.off ? { off: shortStop(o.off.name) } : {}),
     ...(o.to ? { toStop: shortStop(o.to.name) } : {}),
     ...(endWalkS > 0 ? { endWalkS } : {}),
@@ -221,10 +222,14 @@ function buildDetail(f: FormatInput, best: ScoredOption, verdict: WalkVerdict): 
 }
 
 /**
- * The degrade ladder: live -> scheduled -> unknown -> stale -> ended.
+ * The degrade ladder. Measured times (live, or stale: a real arrival aged
+ * to now) rank above guesses (scheduled: a timetable or headway; unknown:
+ * the feed wasn't reached, so no time is printed), whatever the times
+ * (isMeasured, scoreOptions). Within a tier the sooner arrival wins. With
+ * no option left, the answer is ended.
  *
  * A three-minute-old answer honestly labelled beats a spinner, and beats an
- * empty tile that reads as "no buses".
+ * empty card that reads as "no buses".
  */
 export function buildAnswer(f: FormatInput): Answer {
   const best = f.options[0];

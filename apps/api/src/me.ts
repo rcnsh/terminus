@@ -44,7 +44,7 @@ import {
   PLATFORMS,
 } from './accounts.ts';
 import { CLOCK_PREFS, DEFAULT_PROFILE, PROFILE_LIMITS, type Profile, profileLimits, classKey, classesOn, parseProfile, planChangesAt, reimportReason } from './profile.ts';
-import { type Planned, hour12, planned, resolveTo } from './next.ts';
+import { hour12, planned, resolveTo } from './next.ts';
 import { dayPlan } from './day.ts';
 import { unlogged } from './answer.ts';
 import { type Boarded, type DayRecord, PLATE_WINDOW_S, SIGNALS, type TripRecord, type TripUpdate, clearTrip, isHomeKey, loadDay, needsWatch, saveSignals, sgtDate, updateTrip } from './trip.ts';
@@ -53,14 +53,12 @@ import { WEB_PREFIX, parseSubscription, vapidPublicKey, webPushEnabled } from '.
 import { NO_PREFS, type PrefKind, type TripPrefs, clearHistory, clearOutcome, historySize, listPrefs, recordOutcome, setPref, tripPrefs } from './outcomes.ts';
 import { ImportInputError, parseShareUrl, resolveTrips } from './nusmods.ts';
 import { termName } from './calendar.ts';
-import { boardAsOf, boardAt, displayName, indexGraph, rideStops } from './resolve.ts';
-import { CORRIDOR_M, type Fix, atStopOf, departedAt, detect, fixOf, mayDetect, onRoute } from './detect.ts';
-import { mayRecordRide, recordRide } from './ridetimes.ts';
+import { boardAsOf, boardAt, displayName, indexGraph } from './resolve.ts';
 import { haversineM } from './geo.ts';
 import { isoSeconds } from './format.ts';
 import { cardFor, nextPhaseAt } from './card.ts';
 import { feedDownSince, termNoticeFor } from './monitor.ts';
-import { RIDE, WALK, sgt } from './config.ts';
+import { WALK, sgt } from './config.ts';
 import { landmark } from './landmarks.ts';
 import { GRAPH_PUBLIC, nearbyTwin, twinOf } from './graph.ts';
 import { residenceStops } from './residences.ts';
@@ -225,6 +223,11 @@ export async function readCapped(req: Request, max: number): Promise<string | nu
   return new TextDecoder().decode(all);
 }
 
+/** The header every 429 carries, saying when to try again: [seconds], by
+ *  default the window of the per-minute limiters (RL_*) and the sign-in
+ *  cooldowns. Clients wait this long rather than guessing. */
+const retryAfter = (seconds = 60): Record<string, string> => ({ 'retry-after': String(seconds) });
+
 async function limited(env: Env, req: Request, scope: string): Promise<boolean> {
   if (!env.RL_AUTH) return false;
   const { success } = await env.RL_AUTH.limit({ key: `${scope}:${clientKey(req)}` });
@@ -363,110 +366,21 @@ interface MeRoute {
 
 /**
  * The plate of the `svc` bus at `stopCode` right now: the one due soonest,
- * within a few minutes (at the tap it's pulling in or just leaving). Empty
- * when the feed has no plates or no such bus is near, so the ride falls back
- * to the estimate.
+ * within a few minutes (at the tap it's pulling in or just leaving), and
+ * when it's due there (`at`, ISO). Empty when the feed has no plates or no
+ * such bus is near, so the ride falls back to the estimate.
  */
-async function plateAt(env: Env, ctx: ExecutionContext, deps: MeDeps, stopCode: string | undefined, svc: string, nowMs: number): Promise<{ plate?: string }> {
+async function plateAt(env: Env, ctx: ExecutionContext, deps: MeDeps, stopCode: string | undefined, svc: string, nowMs: number): Promise<{ plate?: string; at?: string }> {
   if (!stopCode) return {};
   try {
     const sa = (await deps.collectArrivals(env, ctx, [stopCode], nowMs)).get(stopCode);
     const near = (sa?.arrivals ?? [])
       .filter((x) => x.svc === svc && x.plate && x.etaS !== null && x.etaS <= PLATE_WINDOW_S)
       .sort((x, y) => x.etaS! - y.etaS!)[0];
-    return near?.plate ? { plate: near.plate } : {};
+    return near?.plate && sa ? { plate: near.plate, at: isoSeconds(sa.fetchedAt + near.etaS! * 1000) } : {};
   } catch {
     return {};
   }
-}
-
-/** A `waiting` record is written again after this, while fixes keep saying you're at the stop. */
-const WAITING_REFRESH_MS = 10 * 60_000;
-
-/**
- * After a miss at the stop, the bus a fix at speed is on: any service from
- * that stop to where the missed one went, whose road the fix is on. Its
- * departure is now and its arrival the usual time per stop from here.
- */
-function nextBusFrom(graph: Graph, missed: Boarded | null, fix: Fix, nowMs: number): Boarded | null {
-  if (!missed?.stopCode || !missed.alightCode) return null;
-  const idx = indexGraph(graph);
-  for (const svc of idx.servingStop.get(missed.stopCode) ?? []) {
-    const stops = rideStops(idx, svc, missed.stopCode, missed.alightCode);
-    if (!stops || stops.length < 2) continue;
-    const bus: Boarded = { svc, stop: missed.stop, board: new Date(nowMs).toISOString(), arrive: new Date(nowMs + (stops.length - 1) * RIDE.secondsPerHop * 1000).toISOString(), stopCode: missed.stopCode, alightCode: missed.alightCode, ...(missed.off && svc === missed.svc ? { off: missed.off } : {}) };
-    if (onRoute(graph, bus, fix, CORRIDOR_M + Math.min(fix.accM ?? 0, 60))) return bus;
-  }
-  return null;
-}
-
-/**
- * The plate of a bus detection just saw you board: it has left the boarding
- * stop, so it's the service's first bus due at the next stop on the ride.
- */
-async function plateOnBoard(env: Env, ctx: ExecutionContext, deps: MeDeps, b: Boarded, nowMs: number): Promise<{ plate?: string }> {
-  if (!b.stopCode || !b.alightCode) return {};
-  const stops = rideStops(indexGraph(deps.graph), b.svc, b.stopCode, b.alightCode);
-  return plateAt(env, ctx, deps, stops?.[1], b.svc, nowMs);
-}
-
-/**
- * What a location means for the trip in progress, as a record to save, or
- * undefined when it says nothing new (detect.ts decides; this builds the
- * record). A ride seen from start to end is measured on the way.
- */
-async function recordFromFix(x: {
-  env: Env;
-  ctx: ExecutionContext;
-  deps: MeDeps;
-  userId: string;
-  now: Planned;
-  prev: TripRecord | undefined;
-  label: string | undefined;
-  fix: Fix;
-  homeStops: string[];
-  nowMs: number;
-}): Promise<TripRecord | undefined> {
-  const { env, ctx, deps, now, prev, label, fix, nowMs } = x;
-  // The bus it's about: the plan; after a miss at the stop, whichever
-  // bus from that stop to the same place this fix is on the road of.
-  const bus: Boarded | null = prev?.kind === 'missed' && prev.atStop ? nextBusFrom(deps.graph, now.trip.plan ?? null, fix, nowMs) : (now.trip.plan ?? null);
-  // A public bus's route is only in the public graph.
-  const graph = bus?.paid ? (deps.publicGraph ?? deps.graph) : deps.graph;
-  const seen = detect({ phase: now.trip.phase, rec: prev, bus, arrivedHere: Boolean(now.answer.arrived), fix, homeStops: x.homeStops, graph, nowMs });
-  if (seen === 'arrived') {
-    const onBus = prev?.kind === 'boarded' ? prev.boarded : now.trip.phase === 'riding' ? (now.trip.plan ?? undefined) : undefined;
-    // A ride seen from start to end: how long it really took (phase 8.2).
-    if (onBus?.departed && env.DB) {
-      const rides = env.DB;
-      ctx.waitUntil(mayRecordRide(env, rides, x.userId, onBus.svc, nowMs).then((ok) => (ok ? recordRide(rides, deps.graph, onBus, nowMs) : null)).catch(() => null));
-    }
-    return { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) };
-  }
-  if (seen === 'boarded' && bus) {
-    return {
-      kind: 'boarded',
-      at: nowMs,
-      label,
-      detected: true,
-      boarded: { ...bus, departed: new Date(departedAt(deps.graph, bus, fix, nowMs)).toISOString(), ...(await plateOnBoard(env, ctx, deps, bus, nowMs)) },
-    };
-  }
-  if (seen === 'missed' && (bus || prev?.boarded)) {
-    // The bus it's about: the plan, or the one you were taken to be on.
-    const about = prev?.kind === 'boarded' && prev.boarded ? prev.boarded : bus!;
-    return { kind: 'missed', at: nowMs, label, detected: true, missed: about.board, ...(atStopOf(deps.graph, about, fix) ? { atStop: true } : {}) };
-  }
-  if (prev?.kind === 'missed' && prev.detected && !prev.atStop && atStopOf(deps.graph, now.trip.plan ?? null, fix)) {
-    // Missed it at home, and now at the stop: the next bus can be noticed too.
-    return { ...prev, atStop: true };
-  }
-  if (now.trip.phase === 'waiting' && mayDetect(prev) && prev?.kind !== 'boarded' && !(prev?.kind === 'waiting' && nowMs - prev.at < WAITING_REFRESH_MS)) {
-    // At the stop: what makes a fast fix later count as the bus.
-    // Written again only now and then: the phone sends a fix every 20 s.
-    return { kind: 'waiting', at: nowMs, label };
-  }
-  return undefined;
 }
 
 /** Everything that needs a session, by method and path. */
@@ -594,7 +508,7 @@ export const ME_ROUTES: MeRoute[] = [
     run: async ({ env, req, nowMs, deps, db, session }) => {
       // Each import can fetch 15 modules from NUSMods: a few a minute per account, not 120.
       if (env.RL_AUTH && !(await env.RL_AUTH.limit({ key: `import:${session.user.id}` })).success) {
-        return json({ error: 'too many attempts, try again in a minute' }, 429);
+        return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
       }
       const body = await readJson(req);
       const share = typeof body?.share === 'string' ? body.share.trim() : '';
@@ -713,7 +627,7 @@ export const ME_ROUTES: MeRoute[] = [
     method: 'POST',
     path: '/me/signal',
     run: async ({ req, url, env, ctx, nowMs, deps, db, session }) => {
-      // "On the D2", "Missed it", "Not going", "I'm there", a location: what
+      // "On the D2", "Missed it", "Not going", "I'm there": what
       // actually happened, for every device. Answers with the new /me/next.
       if (!env.TRIPS) return json({ error: 'trip tracking is not available' }, 503);
       const body = await readJson(req);
@@ -727,6 +641,13 @@ export const ME_ROUTES: MeRoute[] = [
         here.searchParams.set('lon', String(body.lon));
       }
       const day = await loadDay(env, session.user.id, nowMs);
+      // Older Android apps send a location every 20 seconds or so during a
+      // trip. Nothing is worked out from it any more: it's answered like
+      // /me/next from there, and nothing is kept.
+      if (kind === 'location') {
+        const prefs = await prefsFor(db, session.user.id, profile, nowMs);
+        return json(await nextBody(here, env, ctx, nowMs, deps, profile, day, session.user.id, prefs));
+      }
       if (kind === 'away' || kind === 'back') {
         // "Not on campus today" skips every trip left today (not the ones
         // already answered); "Back on campus" brings them all back. Neither is
@@ -734,7 +655,7 @@ export const ME_ROUTES: MeRoute[] = [
         const items: { key: string; rec: TripRecord | null }[] =
           kind === 'away'
             ? classesOn(profile, nowMs)
-                .filter((c) => (day?.trips[classKey(c)]?.kind ?? 'waiting') === 'waiting')
+                .filter((c) => !day?.trips[classKey(c)])
                 .map((c) => ({ key: classKey(c), rec: { kind: 'skipped', at: nowMs, label: c.label, away: true } }))
             : Object.entries(day?.trips ?? {}).filter(([, r]) => r.away).map(([key]) => ({ key, rec: null }));
         // One call to the Trip object, however many classes.
@@ -750,8 +671,6 @@ export const ME_ROUTES: MeRoute[] = [
       if (!key) return json({ error: 'no trip in progress to say that about' }, 409);
       if (key !== now.trip.key && !knownTrip(profile, key, nowMs)) return json({ error: 'no such trip today' }, 400);
       const current = key === now.trip.key;
-      // Being followed: the card stops asking what happened (see DayRecord.followed).
-      let followed: number | undefined;
       // After the planned bus has left, "On it" and "Missed it" are about that
       // bus (the plan), not the next one the answer has moved on to.
       const p = current ? now.trip.plan : null;
@@ -762,25 +681,21 @@ export const ME_ROUTES: MeRoute[] = [
           : now.answer.leave
         : null;
       const label = current ? (now.answer.dest?.label ?? undefined) : classesOn(profile, nowMs).find((c) => classKey(c) === key)?.label;
-      let rec: TripRecord | null | undefined;
+      let rec: TripRecord | null;
       switch (kind) {
         case 'reset':
           rec = null;
           break;
-        case 'location': {
-          // Only what the location means is kept, never the location (detect.ts).
-          const fix = fixOf(body);
-          // Noted once a minute at most, with the signal when there is one.
-          if (fix && current && !(day?.followed && nowMs - day.followed < 60_000)) followed = nowMs;
-          rec = current && fix ? await recordFromFix({ env, ctx, deps, userId: session.user.id, now, prev: day?.trips[key], label, fix, homeStops: profile.home?.stops ?? [], nowMs }) : undefined;
-          break;
-        }
-        case 'boarded':
+        case 'boarded': {
           // No bus to be on (a walk, or an old card): you've set off.
           if (!l?.svc) {
             rec = { kind: 'left', at: nowMs, label };
             break;
           }
+          // The bus pulling in now, which may be one before or after the
+          // plan's: its times are the plan's moved to when it's due here.
+          const { plate, at: boardAt } = await plateAt(env, ctx, deps, l.stopCode, l.svc, nowMs);
+          const shift = boardAt && l.board ? Date.parse(boardAt) - Date.parse(l.board) : 0;
           rec = {
             kind,
             at: nowMs,
@@ -788,30 +703,24 @@ export const ME_ROUTES: MeRoute[] = [
             boarded: {
               svc: l.svc,
               stop: l.stop ?? '',
-              board: l.board,
-              arrive: l.arrive,
+              board: boardAt ?? l.board,
+              arrive: l.arrive && shift ? isoSeconds(Date.parse(l.arrive) + shift) : l.arrive,
               ...(l.off ? { off: l.off } : {}),
               ...(l.stopCode ? { stopCode: l.stopCode } : {}),
               ...(now.answer.dest?.to ? { alightCode: l.offCode ?? now.answer.dest.to } : {}),
-              ...(await plateAt(env, ctx, deps, l.stopCode, l.svc, nowMs)),
+              ...(plate ? { plate } : {}),
             },
           };
           break;
+        }
         case 'missed':
           rec = { kind, at: nowMs, label, missed: l?.board ?? null };
           break;
         default:
           rec = { kind, at: nowMs, label };
       }
-      // One request to the Trip object for the signal and being followed.
-      // Only the signal must be kept: being followed alone is let go on a failure.
-      const next =
-        rec !== undefined
-          ? await updateTrip(env, session.user.id, { items: [{ key, rec }], followed }, nowMs)
-          : followed !== undefined
-            ? ((await updateTrip(env, session.user.id, { followed }, nowMs).catch(() => null)) ?? day)
-            : day;
-      logSignal(env, rec?.detected ? `detected:${rec.kind}` : kind);
+      const next = await updateTrip(env, session.user.id, { items: [{ key, rec }] }, nowMs);
+      logSignal(env, kind);
       // What happened to the trip, for what terminus learns (outcomes.ts).
       const outcome = rec ? OUTCOME_OF[rec.kind] : undefined;
       if (rec === null) await clearOutcome(db, session.user.id, key, nowMs);
@@ -820,10 +729,7 @@ export const ME_ROUTES: MeRoute[] = [
       const prefs = await prefsFor(db, session.user.id, profile, nowMs);
       const out = await nextBody(url, env, ctx, nowMs, deps, profile, next, session.user.id, prefs);
       // A tap here changes the other phones' cards now, not at their next refresh.
-      // Being at the stop isn't worth waking them for.
-      if (rec !== undefined && rec?.kind !== 'waiting') {
-        ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
-      }
+      ctx.waitUntil(nudgeUser(env, session.user.id, { phase: out.card.phase, urgent: false, remind: out.card.remind !== false }, nowMs, session.tokenHash));
       return json(out);
     },
   },
@@ -921,7 +827,11 @@ export const ME_ROUTES: MeRoute[] = [
       const parsed = parseFeedback(await readJson(req));
       if (!parsed.ok) return json({ error: parsed.error }, 400);
       const id = await saveFeedback(db, session.user.id, parsed.value, nowMs);
-      if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429);
+      // The cap counts the last 24 hours, but every client holds back all
+      // its requests until Retry-After is up (at most 5 minutes), so a day
+      // here would stall the whole app for a capped report: one minute,
+      // and the message says when to try again.
+      if (!id) return json({ error: "that's a lot of reports for one day; thanks, try again tomorrow" }, 429, retryAfter());
       ctx.waitUntil(
         mailFeedback(env, id, parsed.value, nowMs).catch((e) =>
           console.error('feedback email failed', e instanceof Error ? e.name : typeof e),
@@ -981,7 +891,7 @@ export async function handleMe(
 
   // Pages and lookups that cost a D1 read but need no session.
   if ((path === '/auth/verify' || path === '/auth/config') && env.RL_PUBLIC) {
-    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429);
+    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
   }
 
   if (path === '/auth/config' && req.method === 'GET') {
@@ -990,7 +900,7 @@ export async function handleMe(
   }
 
   if (path === '/auth/login' && req.method === 'POST') {
-    if (await limited(env, req, 'login')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'login')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     if (!email) return json({ error: 'enter a valid email address' }, 400);
@@ -1006,14 +916,14 @@ export async function handleMe(
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
     }
-    if (outcome === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    if (outcome === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
     // Same answer whether or not the address is blocked or already has an account.
     return json({ ok: true, message: m().checkEmail });
   }
 
   if (path === '/auth/code' && req.method === 'POST') {
     // The emailed code, typed on the page that asked for it.
-    if (await limited(env, req, 'code')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'code')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     const code = normalizePairCode(body?.code);
@@ -1062,9 +972,9 @@ export async function handleMe(
     // An app's first launch: an account with no email, so it's useful
     // before any sign-in. Apps can't run Turnstile, so: per IP, one global
     // ceiling, and the cron deletes the ones left unused.
-    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
-      return json({ error: 'terminus is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+      return json({ error: 'terminus is busy, try again in a minute' }, 429, retryAfter());
     }
     const body = await readJson(req);
     const token = await createAnonymous(db, deviceName(body), clientWith(req, body), nowMs);
@@ -1075,21 +985,21 @@ export async function handleMe(
     // "Use terminus without an email" on the website (an iPhone has no app):
     // the same account as an app's first launch, as a web session. A browser
     // can run Turnstile, so it does, on top of the app's limits.
-    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'anon')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const human = await checkTurnstile(env, body?.turnstile, req.headers.get('cf-connecting-ip'));
     // Turnstile itself not answering isn't the visitor's fault: say so, and when to try again.
     if (human === 'unavailable') return json({ error: 'the human check is not answering, try again in a minute' }, 503, { 'retry-after': '60' });
     if (human === 'failed') return json({ error: 'the human check failed, try again' }, 400);
     if (env.RL_ANON && !(await env.RL_ANON.limit({ key: 'anon:global' })).success) {
-      return json({ error: 'terminus is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+      return json({ error: 'terminus is busy, try again in a minute' }, 429, retryAfter());
     }
     const token = await createAnonymousWeb(db, nowMs);
     return json({ ok: true }, 201, { 'set-cookie': sessionCookie(token, ACCOUNT_TTL.webSessionMs / 1000), 'cache-control': 'no-store' });
   }
 
   if (path === '/auth/app/start' && req.method === 'POST') {
-    if (await limited(env, req, 'appstart')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (await limited(env, req, 'appstart')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const email = normalizeEmail(body?.email);
     if (!email) return json({ error: 'enter a valid email address' }, 400);
@@ -1104,8 +1014,8 @@ export async function handleMe(
       console.error('sign-in email failed', err instanceof Error ? err.name : typeof err);
       return json({ error: 'could not send the email, try again later' }, 502);
     }
-    if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, { 'retry-after': '60' });
-    if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    if (started === 'cooldown') return json({ error: 'an email was sent to that address a moment ago; wait a minute and try again' }, 429, retryAfter());
+    if (started === 'busy') return json({ error: 'sign-in is busy, try again in a minute' }, 429, retryAfter());
     return json({ ...started, expires: new Date(started.expires).toISOString() }, 201);
   }
 
@@ -1113,9 +1023,9 @@ export async function handleMe(
     // Every 3 seconds while the app is waiting: a per-IP ceiling of its own.
     // A typed code is a guess, so it counts against the sign-in limit too.
     if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `poll:${clientKey(req)}` })).success) {
-      return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '10' });
+      return json({ error: 'too many requests, slow down' }, 429, retryAfter(10));
     }
-    if (path === '/auth/app/code' && (await limited(env, req, 'appcode'))) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (path === '/auth/app/code' && (await limited(env, req, 'appcode'))) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     if (typeof body?.request !== 'string' || typeof body?.poll !== 'string') return json({ error: 'send request and poll' }, 400);
     if (path === '/auth/app/code') {
@@ -1132,7 +1042,7 @@ export async function handleMe(
 
   if (path === '/auth/approve') {
     if (req.method === 'GET') {
-      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429);
+      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
       // Like /auth/verify: GET only shows the page (mail scanners open every
       // link); the POST decides.
       const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
@@ -1153,7 +1063,7 @@ export async function handleMe(
 <p class="hint center">${m().notMeHint}</p>`));
     }
     if (req.method === 'POST') {
-      if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429);
+      if (await limited(env, req, 'approve')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
       const form = await readForm(req);
       const r = form?.get('r');
       const n = Number(form?.get('n'));
@@ -1173,8 +1083,8 @@ export async function handleMe(
   if (path === '/pair/check' && req.method === 'POST') {
     // Lets an app show whose account a code belongs to before spending it,
     // so a link someone sent you cannot quietly pair your phone to theirs.
-    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429);
-    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
+    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
     const owner = code ? await pairCodeOwner(db, code, nowMs) : null;
@@ -1183,8 +1093,8 @@ export async function handleMe(
   }
 
   if (path === '/pair' && req.method === 'POST') {
-    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429);
-    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, { 'retry-after': '60' });
+    if (await limited(env, req, 'pair')) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
+    if (await pairBusy(env)) return json({ error: 'pairing is busy, try again in a minute' }, 429, retryAfter());
     const body = await readJson(req);
     const code = normalizePairCode(body?.code);
     // It goes into the email to the account's owner: cleaned as at /auth/app/start.
@@ -1219,14 +1129,14 @@ export async function handleMe(
   if (!session) {
     // Each bad token costs a D1 read, so guessing is capped per address.
     // No token at all is just "signed out" (the homepage asks), not a guess.
-    if (tokenFrom(req) && (await limited(env, req, 'badtoken'))) return json({ error: 'too many attempts, try again in a minute' }, 429);
+    if (tokenFrom(req) && (await limited(env, req, 'badtoken'))) return json({ error: 'too many attempts, try again in a minute' }, 429, retryAfter());
     return json({ error: 'sign in first' }, 401);
   }
 
   // Per account: generous for a widget, an app and a browser tab together.
   if (env.RL_ME) {
     const { success } = await env.RL_ME.limit({ key: `me:${session.user.id}` });
-    if (!success) return json({ error: 'too many requests, slow down' }, 429);
+    if (!success) return json({ error: 'too many requests, slow down' }, 429, retryAfter());
   }
   for (const r of ME_ROUTES) {
     if (r.method !== req.method) continue;
@@ -1240,7 +1150,6 @@ export async function handleMe(
   return json({ error: 'not found' }, 404);
 }
 
-/** Today's trip signals, looked up only when there's a trip to track today. */
 /**
  * /me/day's plan, kept up to a minute per user: a phone, a Mac and a browser
  * each ask every 30 s or so, and planning the whole day is the expensive
@@ -1261,6 +1170,7 @@ async function dayCached<T>(ctx: ExecutionContext, nowMs: number, inputs: unknow
   return fresh;
 }
 
+/** Today's trip signals, looked up only when there's a trip to track today. */
 async function tripDay(env: Env, userId: string, profile: Profile, nowMs: number): Promise<DayRecord | null> {
   if (!env.TRIPS || !classesOn(profile, nowMs).length) return null;
   return loadDay(env, userId, nowMs);
@@ -1291,7 +1201,7 @@ async function nextWithTrip(
   if (trip.reached && !local) {
     const label = isHomeKey(trip.reached) ? 'Home' : (answer.dest?.label ?? undefined);
     const onBus = day?.trips[trip.reached]?.kind === 'boarded' ? day.trips[trip.reached].boarded : undefined;
-    update.items = [{ key: trip.reached, rec: { kind: 'arrived', at: nowMs, label, detected: true, ...(onBus ? { boarded: onBus } : {}) } }];
+    update.items = [{ key: trip.reached, rec: { kind: 'arrived', at: nowMs, label, ...(onBus ? { boarded: onBus } : {}) } }];
   }
   // Remember which bus the trip is for, so every device says it and detection
   // watches it: from when it's due, or before then when it was planned from
