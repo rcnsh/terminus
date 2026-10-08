@@ -28,7 +28,7 @@ enum MapFiles {
     }
 
     /// `/campus`: from the network, kept; the kept copy without a connection.
-    /// A refusal (signed out) isn't hidden by the kept copy.
+    /// A refusal (signed out, or this version too old) isn't hidden by the kept copy.
     static func campus(token: String?) async throws -> CampusMap? {
         let file = dir.appendingPathComponent("campus.json")
         do {
@@ -37,7 +37,7 @@ enum MapFiles {
                 try? data.write(to: file)
                 return map
             }
-        } catch let e as ApiError where e.status == 401 {
+        } catch let e as ApiError where e.status == 401 || e.status == 426 {
             throw e
         } catch {}
         return (try? Data(contentsOf: file)).flatMap(CampusMap.parse)
