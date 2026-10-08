@@ -301,13 +301,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * A 401 for [token]: signed out ([Session.rejected]), and the screen
-     * follows through [Session.signedOut]. True when [e] was that.
+     * follows through [Session.signedOut]. True when [e] was that; false
+     * for a token replaced meanwhile (signed in again), which the caller
+     * treats as any failed request, so its state is reset.
      */
-    private suspend fun rejected(e: ApiError, token: String): Boolean {
-        if (e.status != 401) return false
-        Session.rejected(getApplication(), token)
-        return true
-    }
+    private suspend fun rejected(e: ApiError, token: String): Boolean =
+        e.status == 401 && Session.rejected(getApplication(), token)
 
     /**
      * "Is this wrong?": sends `answer` (the raw answer that was on screen when
@@ -609,12 +608,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: UpdateRequired) {
-                _state.update { it.copy(loading = false, error = e.message, updateRequired = true) }
+                // The banner says it, and the way to update: not the footer
+                // too, nor the offline day plan in the card's place.
+                _state.update { it.copy(loading = false, error = null, updateRequired = true) }
             } catch (e: ApiError) {
                 // A 401 for a token replaced meanwhile (signed in again) says
-                // nothing about the new one: Session.rejected leaves it.
-                if (!rejected(e, token)) _state.update { it.copy(loading = false, error = e.message) }
-                else _state.update { it.copy(loading = false) }
+                // nothing about the new one: Session.rejected leaves it, and
+                // the screen says nothing of it either.
+                if (rejected(e, token) || e.status == 401) _state.update { it.copy(loading = false) }
+                else _state.update { it.copy(loading = false, error = e.message) }
             } catch (e: ParseError) {
                 // Not the network: the server said something this version can't read.
                 _state.update { it.copy(loading = false, error = if (it.update != null) L.s(R.string.update_to_continue) else L.s(R.string.unexpected_answer)) }
