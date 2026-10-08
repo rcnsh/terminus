@@ -416,4 +416,26 @@ class AnswerTest {
         val p = golden("place")
         assertEquals("To KR MRT", JourneyText.to(p, p.card!!.journey!!) { "10:00" })
     }
+
+    /**
+     * A newer server's phase and quality this version doesn't know: the
+     * answer still shows, no trip is followed for it, and its times are
+     * never called live.
+     */
+    @Test fun anUnknownPhaseAndQualityAreNeitherATripNorLive() {
+        val json = goldenJson("class-bus").put("quality", "predicted")
+        json.getJSONObject("card").put("phase", "boarding")
+        val a = NextAnswer.parse(json)
+        assertEquals("boarding", a.card?.phase)
+        assertEquals("predicted", a.quality)
+        assertEquals("Leave by ~09:36", a.leaveHeadline(0))
+        assertFalse(a.card?.phase in LiveService.TRIP_PHASES)
+        // A place chosen on a widget isn't taken back for it.
+        val utown = sh.rcn.terminus.widget.Mode.To(Destinations.Dest("place:utown", "UTown"))
+        val now = a.leaveAtMs!!
+        assertEquals(utown, sh.rcn.terminus.widget.WidgetModes.effective(utown, now - 10 * 60_000, a, rowShown = true, now = now))
+        // Said as a plain time, not "live".
+        assertEquals(Spoken.eta(300, "unknown"), Spoken.eta(300, a.quality))
+        assertFalse(Spoken.eta(300, a.quality)!!.contains("live"))
+    }
 }
