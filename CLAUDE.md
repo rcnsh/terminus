@@ -312,8 +312,9 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
   doesn't run out when nobody deploys.
 - **Answering.** `resolve.ts` picks candidate stops near the user, pairs each
   stop with its twin across the road, checks the bus goes downstream to the
-  destination, and scores the options by arrival time. Rides use a per-hop
-  guess until measured ride times exist (`RIDE` in config). Walking is
+  destination, and scores the options by arrival time. Rides are
+  `RIDE.secondsPerHop` a stop, no faster than `RIDE.longHopMs` over a long
+  stretch (`RIDE` in config). Walking is
   recommended only when it beats the bus by `WALK.beatsBusByS`.
 - **Quality ladder.** Each answer says how sure it is: `live`, `scheduled` (a
   headway guess inside operating hours, labelled as such), and so on. Never
