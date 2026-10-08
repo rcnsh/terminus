@@ -6,6 +6,12 @@ import { t } from '/account/dom.js';
 
 /** The answer refreshes this often while the app is on screen (the API caches 15 s). */
 export const REFRESH_MS = 30_000;
+/**
+ * Pulled down to refresh (pull.js), a tab whose times came less than this
+ * long ago isn't fetched again: the API caches arrivals 15 s, so it would
+ * only send the same ones back.
+ */
+export const PULL_FRESH_MS = 15_000;
 /** Sooner than that at the card's own marks (nextChangeAt, refreshAt), but never sooner than this from now. */
 export const MARK_MIN_MS = 5_000;
 /** Nor sooner than this after the last refresh a mark brought: a leave-by

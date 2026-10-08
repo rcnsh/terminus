@@ -20,7 +20,8 @@ import { Toast, campus, lists, loadCampus, loadProfile, profile, reloadProfile, 
 import { SearchBox } from '/account/search-box.js';
 import { offlineNext } from '/app/offline.js';
 import { preloadMap } from '/app/map-files.js';
-import { REFRESH_MS, markWaitMs, slowRetryMs, staleText } from '/app/timing.js';
+import { PULL_FRESH_MS, REFRESH_MS, markWaitMs, slowRetryMs, staleText } from '/app/timing.js';
+import { PullToRefresh } from '/app/pull.js';
 
 /** How often the timed refresh asks for Today too: it moves slowly, and
  *  each one is an answer per class on the server. */
@@ -219,6 +220,9 @@ let planAt = 0;
 /** Refreshes on their way: a timed one waits for them rather than piling another on a slow connection. */
 let pending = 0;
 
+/** When the card (or Nearby) last came live from the server, by this device's clock. */
+let fetchedAt = 0;
+
 /**
  * The card and Today. [timed]: by the clock, not something the user did, so
  * Today is asked for at most every DAY_MS. [back]: the page shown again,
@@ -276,7 +280,10 @@ async function refreshNow(timed) {
     seen.set(seenKey(to), next.data);
     stale(next.cached);
     // A kept card is old already: its marks have passed, and the slow retry asks again.
-    if (next.cached === null) atMarks(next.data);
+    if (next.cached === null) {
+      fetchedAt = Date.now();
+      atMarks(next.data);
+    }
     updated.set(t('Updated {0}', clock(new Date(next.cached === null ? serverNow() : onServerClock(next.cached)).toISOString())));
     if (JSON.stringify(next.data.places ?? []) !== JSON.stringify(places.get())) places.set(next.data.places ?? []);
   } catch (err) {
@@ -368,12 +375,33 @@ async function refreshNearby(mine) {
     const { data } = await get(`/me/nearby${query(at)}`);
     if (mine !== generation) return;
     stale(null);
+    fetchedAt = Date.now();
     updated.set(t('Updated {0}', clock(new Date(serverNow()).toISOString())));
     card.set(data.stops?.length ? { nearby: data.stops } : { text: t('No campus bus stops near you.') });
   } catch (err) {
     if (err.message !== 'signed out' && mine === generation) card.set({ text: t('Nearby needs a connection.') });
   }
 }
+
+/**
+ * Now pulled down to refresh (pull.js): fetched again, unless the card came
+ * under PULL_FRESH_MS ago. How it went: 'updated', 'fresh' or 'failed'.
+ */
+async function pullNow() {
+  if (Date.now() - fetchedAt < PULL_FRESH_MS) return 'fresh';
+  const asked = Date.now();
+  await refresh();
+  return fetchedAt >= asked ? 'updated' : 'failed';
+}
+
+/** Pulled down on the tab on screen: Now, or Buses once it has loaded. */
+function pullTab() {
+  if (tab.get() === 'now') return pullNow();
+  return busesModule.get()?.pullRefresh?.() ?? Promise.resolve('failed');
+}
+const pullable = () => tab.get() === 'now' || (tab.get() === 'buses' && Boolean(busesModule.get()?.pullRefresh));
+/** The services' colours, for the buses that loop past a pull. */
+const serviceColours = () => Object.values(campus.get()?.routes ?? {}).map((r) => r.color).filter(Boolean);
 
 /** An answer from a card's button or Undo: shown, then everything fetched again so Today and its offline copy follow. */
 function answered(a) {
@@ -1216,6 +1244,7 @@ function App() {
     <main id="tab-buses" class="wrap buses-tab" hidden=${first !== 'buses'} ref=${keep('buses')}><h1 class="sr-only">${t('Buses')}</h1><${BusesArea} /></main>
     <main id="tab-map" class="map-tab" hidden=${first !== 'map'} ref=${keep('map')}><h1 class="sr-only">${t('Map')}</h1><${MapArea} /></main>
     <main id="tab-settings" class="wrap settings-tab" hidden=${first !== 'settings'} ref=${keep('settings')}><${SettingsArea} /></main>
+    <${PullToRefresh} enabled=${pullable} refresh=${pullTab} colours=${serviceColours} />
     <${TabBar} />
     <${Toast} />
   `;

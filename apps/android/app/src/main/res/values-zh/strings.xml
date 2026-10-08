@@ -601,4 +601,10 @@
     <string name="buses_back_tomorrow">明天 %1$s 恢复</string>
     <string name="buses_back_on">%1$s %2$s 恢复</string>
     <string name="buses_starts_at">%1$s 开始</string>
+    <!-- Pull to refresh (Now and Buses): the words over the road, and how it went. -->
+    <string name="pull_to_refresh">下拉刷新</string>
+    <string name="pull_let_go">松开刷新</string>
+    <string name="pull_updated">刚刚更新</string>
+    <string name="pull_up_to_date">已是最新</string>
+    <string name="pull_failed">无法更新</string>
 </resources>

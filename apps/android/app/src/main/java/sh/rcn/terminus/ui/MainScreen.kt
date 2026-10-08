@@ -161,7 +161,8 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
     val light = sky.palette.lightInk
     NightStatusBar(shown && light)
     CompositionLocalProvider(LocalSky provides sky) { Box(Modifier.fillMaxSize()) {
-    Column(
+    // Pulled down at the top, what's shown (the card or Nearby) is asked for again, the bus in its service's colour.
+    BusPull(sky.road.bus?.color, insets.calculateTopPadding(), sky.phase, onRefresh = vm::pull) { Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(scroll)
@@ -323,7 +324,7 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
         }
 
         Spacer(Modifier.height(24.dp))
-    }
+    } }
     StatusStrip(sky, insets.calculateTopPadding(), scroll)
     } }
 }
