@@ -450,8 +450,10 @@ test('/line: a service’s stops in order, its buses on them, and with a stop th
   assert.equal(bus.crowd, 'low');
   const map = (await (await call('/buses?svc=D1', { fetchImpl, cache })).res.json()).buses[0];
   assert.equal(bus.id, map.id);
-  if (map.at) assert.equal(body.stops[bus.at].code, map.at.code);
-  else assert.deepEqual([bus.at, body.stops[bus.after].code], [null, map.stretch.last.code]);
+  // A third of the way along a stretch of road: between two stops, after Opp YIH.
+  assert.equal(map.at, null, 'between stops on the map');
+  assert.equal(map.stretch.last.code, 'YIH-OPP');
+  assert.deepEqual([bus.at, body.stops[bus.after].code], [null, 'YIH-OPP']);
   assert.equal(fetchImpl.counts.shuttle, 2, 'one buses read (cached for /buses after) and one arrivals read');
 
   // Without a stop: no `stop`, and no arrivals read.
@@ -1456,11 +1458,16 @@ test('AI agents get /llms.txt: a short guide whose endpoints and links are real'
   const ops = new Set(Object.values(spec.paths).flatMap((item) => Object.values(item).map((op) => op.operationId)));
   const links = [...text.matchAll(/\]\(([^)]+)\)/g)].map((m) => new URL(m[1]));
   assert.ok(links.length >= 8);
+  let opLinks = 0;
   for (const link of links) {
     assert.equal(link.origin, BASE, `${link} is on the site serving it`);
     const op = link.hash.match(/^#\/operations\/(\w+)$/)?.[1];
-    if (op) assert.ok(ops.has(op), `${link.hash} is an operation in the spec`);
+    if (op) {
+      opLinks++;
+      assert.ok(ops.has(op), `${link.hash} is an operation in the spec`);
+    }
   }
+  assert.ok(opLinks > 0, 'some links point at operations, so the check above ran');
   // Each endpoint it shows, with its example query, answers.
   for (const [, path] of text.matchAll(/^- \[GET ([^\]]+)\]/gm)) {
     const { res: r } = await call(path, { fetchImpl });
