@@ -27,12 +27,24 @@ async function logged(fn) {
 }
 
 test("Turnstile's own internal error, even in a 200, is 'unavailable', not the visitor failing", async () => {
-  const env = { TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  const env = { TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site', TURNSTILE_HOSTNAMES: 'terminus.run' };
   const { value, lines } = await logged(() => checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false, 'error-codes': ['internal-error'] })));
   assert.equal(value, 'unavailable');
   assert.equal(lines.length, 1);
   assert.match(lines[0], /^Turnstile siteverify failed: 200 internal-error/);
   assert.ok(!lines[0].includes('visitor-token-7'));
+});
+
+test("a wrong secret is ours, so 'unavailable' and logged; hostnames unset refuse every pass", async () => {
+  const env = { TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site', TURNSTILE_HOSTNAMES: 'terminus.run' };
+  const wrong = await logged(() => checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false, 'error-codes': ['invalid-input-secret'] })));
+  assert.equal(wrong.value, 'unavailable');
+  assert.match(wrong.lines[0], /^Turnstile siteverify failed: 200 invalid-input-secret/);
+  const pass = async () => Response.json({ success: true, action: 'signin', hostname: 'terminus.run' });
+  assert.equal(await checkTurnstile(env, 'visitor-token-7', null, pass), 'ok');
+  const unset = await logged(() => checkTurnstile({ ...env, TURNSTILE_HOSTNAMES: '' }, 'visitor-token-7', null, pass));
+  assert.equal(unset.value, 'failed');
+  assert.match(unset.lines[0], /TURNSTILE_HOSTNAMES is not/);
 });
 
 test('the export shows a web push address it cannot parse as it is, rather than failing', async () => {

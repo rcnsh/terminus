@@ -76,6 +76,8 @@ function useTurnstile(box) {
       if (gone || !window.turnstile || !box.current) return;
       widget.current = window.turnstile.render(box.current, {
         sitekey: turnstileSiteKey,
+        // The server accepts a pass only for this action (TURNSTILE_ACTION).
+        action: 'signin',
         callback: (v) => (token.current = v),
         'expired-callback': () => (token.current = null),
       });

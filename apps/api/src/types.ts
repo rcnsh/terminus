@@ -35,6 +35,8 @@ export interface Env {
   /** Turnstile on sign-in. The site key is public; without the secret the check is skipped. */
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET?: string;
+  /** Hostnames, comma-separated, a Turnstile pass must come from (this Worker's own). */
+  TURNSTILE_HOSTNAMES?: string;
   /** Per-IP limit on the public answer routes. */
   RL_PUBLIC?: RateLimit;
   /** Per-account limit on /me. */

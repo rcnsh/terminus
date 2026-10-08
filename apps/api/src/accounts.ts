@@ -986,9 +986,16 @@ export async function verifyTurnstile(env: Env, token: unknown, ip: string | nul
   return (await checkTurnstile(env, token, ip, fetchImpl)) === 'ok';
 }
 
+/** The action the sign-in form's widget sends (`action` in account/app.js). */
+export const TURNSTILE_ACTION = 'signin';
+
 /**
  * verifyTurnstile, telling a failed check ('failed', the visitor's) from
  * Turnstile itself not answering ('unavailable', worth trying again).
+ *
+ * A pass counts only for the sign-in form's action, solved on one of this
+ * Worker's own hostnames (TURNSTILE_HOSTNAMES): the widget is shared by the
+ * stable site and the beta, so a token from one mustn't open the other.
  */
 export async function checkTurnstile(env: Env, token: unknown, ip: string | null, fetchImpl: typeof fetch = fetch): Promise<'ok' | 'failed' | 'unavailable'> {
   if (!env.TURNSTILE_SECRET) {
@@ -997,19 +1004,26 @@ export async function checkTurnstile(env: Env, token: unknown, ip: string | null
     if (env.TURNSTILE_SITE_KEY) console.error('TURNSTILE_SITE_KEY is set but TURNSTILE_SECRET is not; refusing sign-ins');
     return env.TURNSTILE_SITE_KEY ? 'failed' : 'ok';
   }
-  if (typeof token !== 'string' || !token) return 'failed';
+  const hostnames = turnstileHostnames(env);
+  if (!hostnames.size) {
+    console.error('TURNSTILE_SECRET is set but TURNSTILE_HOSTNAMES is not; refusing sign-ins');
+    return 'failed';
+  }
+  if (typeof token !== 'string' || !token || token.length > 2048) return 'failed';
   const body = new FormData();
   body.set('secret', env.TURNSTILE_SECRET);
   body.set('response', token);
   if (ip) body.set('remoteip', ip);
   try {
     const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body, signal: AbortSignal.timeout(5000) });
-    const out = (await res.json()) as { success?: boolean; 'error-codes'?: string[] };
-    if (out.success === true) return 'ok';
-    // A failed check is the visitor's; Turnstile's own fault is logged, or
-    // sign-in would quietly stop for everyone with nobody knowing why.
-    if (!res.ok || out['error-codes']?.includes('internal-error')) {
-      console.error('Turnstile siteverify failed:', res.status, (out['error-codes'] ?? []).join(','));
+    const out = (await res.json()) as { success?: boolean; action?: string; hostname?: string; 'error-codes'?: string[] };
+    if (out.success === true) return out.action === TURNSTILE_ACTION && hostnames.has(out.hostname ?? '') ? 'ok' : 'failed';
+    // A failed check is the visitor's; Turnstile's own fault, or a wrong
+    // secret (ours), is logged, or sign-in would quietly stop for everyone
+    // with nobody knowing why.
+    const codes = out['error-codes'] ?? [];
+    if (!res.ok || codes.some((c) => c === 'internal-error' || c.endsWith('-input-secret'))) {
+      console.error('Turnstile siteverify failed:', res.status, codes.join(','));
       return 'unavailable';
     }
     return 'failed';
@@ -1017,4 +1031,9 @@ export async function checkTurnstile(env: Env, token: unknown, ip: string | null
     console.error('Turnstile siteverify failed:', err instanceof Error ? err.message : String(err));
     return 'unavailable';
   }
+}
+
+/** TURNSTILE_HOSTNAMES, comma-separated: where this Worker's sign-in form is served. */
+function turnstileHostnames(env: Env): Set<string> {
+  return new Set((env.TURNSTILE_HOSTNAMES ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean));
 }

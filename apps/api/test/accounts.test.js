@@ -72,13 +72,17 @@ test('Turnstile: enforced once a secret is set', async () => {
   globalThis.fetch = async (url, init) => {
     verify.push(String(url));
     const token = init.body.get('response');
-    return Response.json({ success: token === 'good' });
+    if (token === 'beta') return Response.json({ success: true, action: 'signin', hostname: 'beta.terminus.run' });
+    if (token === 'other') return Response.json({ success: true, action: 'other', hostname: 'terminus.run' });
+    return Response.json({ success: token === 'good', action: 'signin', hostname: 'terminus.run' });
   };
-  const e = { ...env, TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  const e = { ...env, TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site', TURNSTILE_HOSTNAMES: 'terminus.run,terminus.rcn.sh' };
   const cfg = await (await call(e, '/auth/config')).json();
   assert.equal(cfg.turnstileSiteKey, 'site');
   assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED } })).status, 400, 'no token');
   assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'bad' } })).status, 400);
+  assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'beta' } })).status, 400, "the beta's pass");
+  assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'other' } })).status, 400, 'another action');
   assert.equal((await call(e, '/auth/login', { method: 'POST', body: { email: INVITED, turnstile: 'good' } })).status, 200);
   assert.equal(email.sent.length, 1);
   assert.ok(verify.every((u) => u.includes('challenges.cloudflare.com')));
@@ -87,7 +91,7 @@ test('Turnstile: enforced once a secret is set', async () => {
 test('Turnstile not answering: sign-in says try again later (503), not that the check failed', async () => {
   const { env, email } = setup();
   globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
-  const e = { ...env, TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  const e = { ...env, TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site', TURNSTILE_HOSTNAMES: 'terminus.run' };
   for (const path of ['/auth/login', '/auth/anon/web']) {
     const res = await call(e, path, { method: 'POST', body: { email: INVITED, turnstile: 'good' } });
     assert.equal(res.status, 503, path);
@@ -1565,7 +1569,7 @@ test('D1 down: the answers and /me say 503 with Retry-After; one dropped query i
 });
 
 test('Turnstile down is logged, not only told to the visitor as a failed check', async () => {
-  const env = { TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site' };
+  const env = { TURNSTILE_SECRET: 's', TURNSTILE_SITE_KEY: 'site', TURNSTILE_HOSTNAMES: 'terminus.run' };
   const errors = [];
   const log = console.error;
   console.error = (...a) => errors.push(a.join(' '));
@@ -1580,7 +1584,9 @@ test('Turnstile down is logged, not only told to the visitor as a failed check',
     // Told apart, for a caller that would say "try again" rather than "failed".
     assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => { throw new Error('timed out'); }), 'unavailable');
     assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: false })), 'failed');
-    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: true })), 'ok');
+    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: true, action: 'signin', hostname: 'terminus.run' })), 'ok');
+    // A pass for another action, or from another site, isn't one.
+    assert.equal(await checkTurnstile(env, 'visitor-token-7', null, async () => Response.json({ success: true })), 'failed');
   } finally {
     console.error = log;
   }

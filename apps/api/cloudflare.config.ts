@@ -119,6 +119,8 @@ export default defineConfig(({ mode }) => {
 			env: {
 				EMAIL_FROM: bindings.text("login@terminus.run"),
 				TURNSTILE_SITE_KEY: bindings.text("0x4AAAAAAFHR71tKL907Buou"),
+				// One widget for both sites; a pass counts only on this one's own addresses.
+				TURNSTILE_HOSTNAMES: bindings.text(`${s.domain},${s.oldDomain}`),
 				// For the dashboard's Analytics Engine queries (with the optional ANALYTICS_TOKEN secret).
 				CF_ACCOUNT_ID: bindings.text("31e51704ff7169c03d7014c3a1e5f110"),
 				TRIPS: bindings.durableObject({

@@ -107,7 +107,9 @@ pnpm run deploy
 The other secrets are set the same way. Declared with `bindings.secret()` in
 cloudflare.config.ts, besides the six above: `ALERT_EMAIL` (where outage
 alerts and feedback go), `HEALTH_TOKEN` (the operator's `x-health-token`),
-`TURNSTILE_SECRET` (Turnstile on sign-in; unset, the check is skipped),
+`TURNSTILE_SECRET` (Turnstile on sign-in; unset, the check is skipped; a
+pass counts only for the `signin` action on the Worker's own
+`TURNSTILE_HOSTNAMES`),
 `FCM_SERVICE_ACCOUNT` (push to Android) and `VAPID_PRIVATE_KEY` (Web Push).
 Not declared, so a site deploys without them: `LTA_ACCOUNT_KEY` (public
 buses), `ANALYTICS_TOKEN` (the dashboard's Analytics Engine charts, with
