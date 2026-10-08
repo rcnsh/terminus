@@ -31,7 +31,7 @@ The same answer on your phone, your Mac and the web, in light or dark.
     <td width="56%" valign="top">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/assets/shots/widget-dark.webp">
-        <img alt="The Android home-screen widget: leave by 6:00 PM for CS2030, with buttons for saved places." src="apps/web/public/assets/shots/widget-light.webp" width="100%">
+        <img alt="The Android home-screen widget: leave by 9:39 AM for GEA1000, with the trip drawn as a line from you to PGP to UTown, and buttons for favourites." src="apps/web/public/assets/shots/widget-light.webp" width="100%">
       </picture>
       <h3>On your home screen</h3>
       A widget that keeps itself up to date, with your saved places one tap away, or a live notification, and a heads-up before you need to leave.
@@ -46,13 +46,15 @@ The same answer on your phone, your Mac and the web, in light or dark.
     </td>
   </tr>
   <tr>
-    <td colspan="2" valign="top">
+    <td width="56%" valign="top">
+      <h3>In the app, and on the web</h3>
+      Now has the card for your next class, the trip drawn as a line, and the rest of today below it. The same in any browser, with your timetable and settings: add it to your home screen for the app, with notifications when it's time to leave.
+    </td>
+    <td width="44%" valign="top">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/assets/shots/web-dark.webp">
-        <img alt="The account page on the web: a timetable of three classes beside the card, which says leave by 9:28 AM, in 8 minutes, and catch the 9:30 AM D2 at PGP, arriving 5 minutes early." src="apps/web/public/assets/shots/web-light.webp" width="100%">
+        <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/assets/shots/app-dark.webp">
+        <img alt="Now in the Android app: leave in 12 minutes, by 9:39 AM, for GEA1000 @ UTown at 10:00 AM, walking 3 minutes to PGP for the R2 and arriving 9:52 AM, with today's classes below." src="apps/web/public/assets/shots/app-light.webp" width="100%">
       </picture>
-      <h3>On the web</h3>
-      The same card in any browser, with your timetable and settings beside it. Add it to your home screen for the app, with notifications when it's time to leave.
     </td>
   </tr>
 </table>
@@ -83,7 +85,7 @@ The same answer on your phone, your Mac and the web, in light or dark.
   <img alt="The campus map with D2 picked: its purple line, its stops and three buses on it, over a street map of NUS." src="apps/web/public/assets/shots/map-light.webp" width="100%">
 </picture>
 
-On Android and the web: every bus route in its colour, on a quiet street map. Tap a service to see its line and its buses moving live; tap a stop for what's coming, the services that call there, and a way to go there. It works offline after the first look.
+On Android, the web and the Mac (in a window of its own): every bus route in its colour, on a quiet street map. Tap a service to see its line and its buses moving live; tap a stop for what's coming, the services that call there, and a way to go there. It works offline after the first look.
 
 ## Set up in two minutes
 
@@ -95,7 +97,7 @@ On Android and the web: every bus route in its colour, on a quiet street map. Ta
 2. **Import** your NUSMods share link and pick your home stop.
 3. **Install** the Mac menu bar app and sign in with the same email: approve it from the link we email you, on any device, by choosing the number the Mac shows. Or pair it with a code from the account page or the Android app's Settings.
 
-It updates through the day and goes quiet in the evening. The app has three tabs: **Now** (the card and your places), **Map** and **Settings**.
+It updates through the day and goes quiet in the evening. The app has four tabs: **Now** (the card and your places), **Buses** (what's coming at the stop nearest you and the ones you pin, and where a service's buses are along its line), **Map** and **Settings**.
 
 <details>
 <summary><b>Installing outside the app stores</b></summary>
@@ -110,6 +112,7 @@ It updates through the day and goes quiet in the evening. The app has three tabs
 
 ```
 NUS shuttle feed ────────┐
+LTA DataMall (optional) ─┤
 NUSMods timetables ──────┤
 NUS calendar, holidays ──┼──▶ Cloudflare Worker (apps/api)
 OpenStreetMap paths ─────┤          │
@@ -126,9 +129,9 @@ down the clock itself, so no screen ever shows a stale "4 min".
 | Path | What |
 | --- | --- |
 | [`apps/api`](apps/api) | Cloudflare Worker: the API, accounts (D1), the cron monitor, and the website. API docs at [/docs](https://terminus.rcn.sh/docs). |
-| [`apps/web`](apps/web) | Landing page, account page, the web app (Now, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
-| [`apps/android`](apps/android) | Home-screen widgets (compact and with places) and the app: Now, the campus map, Settings. |
-| [`apps/macos`](apps/macos) | Menu bar app. |
+| [`apps/web`](apps/web) | Landing page, account page, the web app (Now, Buses, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
+| [`apps/android`](apps/android) | Home-screen widgets (compact and with places) and the app: Now, Buses, the campus map, Settings. |
+| [`apps/macos`](apps/macos) | Menu bar app, with the campus map in a window. |
 
 ## Running it
 
@@ -138,8 +141,8 @@ pnpm check                            # tests and typecheck
 node apps/api/scripts/dev-stub.mjs    # local API with fake buses on :8787
 ```
 
-Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Email
-Sending) and the NUS feed configuration described in
+Self-hosting needs your own Cloudflare account (Workers, D1, KV, R2, Durable
+Objects, Analytics Engine, Workers rate limiting, Email Sending) and the NUS feed configuration described in
 [apps/api/docs/internals.md](apps/api/docs/internals.md). Releases run on a
 Mac with `scripts/release.sh`: the tests, the Android build as one APK per CPU
 type, the signed Mac app and the appcast installed Macs update from, the

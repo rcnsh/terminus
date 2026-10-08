@@ -5,8 +5,9 @@ Android 12 or later.
 
 - **Widgets:** a compact one that says when to leave, and one with buttons for
   your saved places. They refresh themselves through the day.
-- **App:** Now · Map · Settings along the bottom. Now has the same answer,
-  nearby stops and search. Optional heads-up notifications before you need
+- **App:** Now · Buses · Map · Settings along the bottom. Now has the same
+  answer, nearby stops and search; Buses has what's coming at a stop and
+  where a service's buses are along its line. Optional heads-up notifications before you need
   to leave, and a live notification.
 - **Map:** the campus with every route in its colour (maplibre-compose), live
   buses for the service picked, and a sheet for each stop. The street map
@@ -22,7 +23,7 @@ Android 12 or later.
 ./gradlew :app:installBetaDebug                                     # against beta.terminus.rcn.sh
 ./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub
 adb reverse tcp:8787 tcp:8787                                       # so the phone can reach it
-./gradlew :app:lintStableDebug :app:testStableDebugUnitTest         # what CI runs
+./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin   # what CI runs
 ```
 
 There are two apps from the same code (product flavors). **stable** is
