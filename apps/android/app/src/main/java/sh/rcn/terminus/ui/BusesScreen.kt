@@ -82,6 +82,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -552,34 +553,54 @@ private fun BoardCard(board: Board?, failed: Boolean, colors: Map<String, Long>,
             )
             else -> {
                 if (!board.available) Text(stringResource(R.string.buses_feed_down), color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
-                // The services not running come after the ones that are, as the API sorts them.
-                val rows = board.rows.filter { it.running } + board.rows.filter { !it.running }
-                val now = ticking()
-                for ((i, row) in rows.withIndex()) {
-                    if (i > 0 || !board.available) HorizontalDivider(color = c.outlineVariant)
-                    val color = row.color?.let(::parseColor) ?: colors[row.svc] ?: GREY
-                    // A public bus has no line page: /line is the shuttles'.
-                    val open = if (row.paid) null else ({ onRow(row) })
-                    val stopped = Stopped.of(row.running, row.stopped, row.resumesAtMs, now)
-                    if (stopped != null) StoppedRowView(row, color, stopped, open) else BoardRowView(row, color, open)
-                }
+                BoardRows(runningFirst(board.rows), colors, dividerFirst = !board.available, onRow = onRow)
             }
         }
     }
 }
 
+/** The services not running come after the ones that are, as the API sorts them. */
+internal fun runningFirst(rows: List<BoardRow>): List<BoardRow> = rows.filter { it.running } + rows.filter { !it.running }
+
+/**
+ * A board's rows with lines between them: the Buses tab's card, and smaller
+ * ([compact]) the map's stop sheet, so a stop reads the same in both. A row
+ * tapped is [onRow], said as [clickLabel] (its line, by default).
+ */
 @Composable
-private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
+internal fun BoardRows(
+    rows: List<BoardRow>,
+    colors: Map<String, Long>,
+    compact: Boolean = false,
+    dividerFirst: Boolean = false,
+    clickLabel: @Composable (String) -> String = { stringResource(R.string.a11y_open_line, it) },
+    onRow: (BoardRow) -> Unit,
+) {
+    val c = MaterialTheme.colorScheme
+    val now = ticking()
+    for ((i, row) in rows.withIndex()) {
+        if (i > 0 || dividerFirst) HorizontalDivider(color = c.outlineVariant)
+        val color = row.color?.let(::parseColor) ?: colors[row.svc] ?: GREY
+        // A public bus has no line page: /line is the shuttles'.
+        val open = if (row.paid) null else ({ onRow(row) })
+        val label = clickLabel(row.svc)
+        val stopped = Stopped.of(row.running, row.stopped, row.resumesAtMs, now)
+        if (stopped != null) StoppedRowView(row, color, stopped, open, label, compact) else BoardRowView(row, color, open, label, compact)
+    }
+}
+
+@Composable
+private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean) {
     val c = MaterialTheme.colorScheme
     val arriving = row.etaS != null && row.etaS < BusTimes.ARRIVING_S
     Row(
         Modifier.fillMaxWidth()
             .background(if (arriving) c.primaryContainer else Color.Transparent)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc), onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp, vertical = 14.dp),
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = clickLabel, onClick = onClick) else Modifier)
+            .padding(horizontal = if (compact) 16.dp else 14.dp, vertical = if (compact) 10.dp else 14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SvcChip(row.svc, color, paid = row.paid)
+        SvcChip(row.svc, color, paid = row.paid, small = compact)
         Column(Modifier.weight(1f)) {
             // Where it goes, as the server words it ("to Central Library, Kent Vale", "Ends here").
             if (row.toText != null) Text(towards(row.toText, row.towards.firstOrNull(), row.towards.isEmpty()), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -598,8 +619,8 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
             }
         }
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(min = 72.dp)) {
-            BigTime(row.etaS, row.quality, arriving, row.eta)
-            thenText(row)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.End, modifier = Modifier.padding(top = 4.dp)) }
+            BigTime(row.etaS, row.quality, arriving, row.eta, size = if (compact) 26.sp else 34.sp)
+            thenText(row)?.let { Text(it, style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.End, modifier = Modifier.padding(top = 4.dp)) }
         }
     }
 }
@@ -609,18 +630,18 @@ private fun BoardRowView(row: BoardRow, color: Long, onClick: (() -> Unit)?) {
  * where the minutes go, why and when it's back. No time, no Live, no crowd.
  */
 @Composable
-private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick: (() -> Unit)?) {
+private fun StoppedRowView(row: BoardRow, color: Long, stopped: Stopped, onClick: (() -> Unit)?, clickLabel: String, compact: Boolean) {
     val c = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val (why, back) = stopped.lines(remember { hour12(ctx) })
     Row(
         Modifier.fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.a11y_open_line, row.svc), onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = clickLabel, onClick = onClick) else Modifier)
+            .padding(horizontal = if (compact) 16.dp else 14.dp, vertical = if (compact) 8.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.alpha(0.35f)) { SvcChip(row.svc, color, paid = row.paid) }
+        Box(Modifier.alpha(0.35f)) { SvcChip(row.svc, color, paid = row.paid, small = compact) }
         Column(Modifier.weight(1f)) {
             if (row.towards.isNotEmpty()) {
                 Text(row.toText ?: stringResource(R.string.buses_towards, row.towards.joinToString(stringResource(R.string.list_sep))), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -706,12 +727,12 @@ private fun crowdWord(crowd: String?): String? = when (crowd) {
 }
 
 /**
- * "4 min" with the number large, or "Arriving"; nothing without a time (the
+ * "4 min" with the number large ([size]), or "Arriving"; nothing without a time (the
  * tag says why). The words are the server's ([eta]: "4 min", "~6 min", "约 6
  * 分钟", "now"), with its number drawn large; worked out here for an older server.
  */
 @Composable
-private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String? = null) {
+private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String? = null, size: TextUnit = 34.sp) {
     val c = MaterialTheme.colorScheme
     val number = eta?.let { Regex("\\d+").find(it) }
     when {
@@ -722,7 +743,7 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
                     withStyle(SpanStyle(fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)) { append(eta) }
                 } else {
                     withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(eta.substring(0, number.range.first)) }
-                    withStyle(SpanStyle(fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)) { append(number.value) }
+                    withStyle(SpanStyle(fontSize = size, fontWeight = FontWeight.ExtraBold)) { append(number.value) }
                     withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(eta.substring(number.range.last + 1)) }
                 }
             },
@@ -736,7 +757,7 @@ private fun BigTime(etaS: Int?, quality: String, arriving: Boolean, eta: String?
             val unit = stringResource(R.string.buses_min)
             Text(
                 buildAnnotatedString {
-                    withStyle(SpanStyle(fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)) { append("${BusTimes.minutes(etaS)}") }
+                    withStyle(SpanStyle(fontSize = size, fontWeight = FontWeight.ExtraBold)) { append("${BusTimes.minutes(etaS)}") }
                     withStyle(SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)) { append(" $unit") }
                 },
                 // A timetabled time isn't drawn as boldly as a bus seen.
@@ -816,13 +837,18 @@ private fun SwipeFor(name: String, onClick: () -> Unit) {
 
 /** A service as it's painted on the bus, larger, for the board's rows and the line's heading. */
 @Composable
-private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolean = false) {
+private fun SvcChip(svc: String, color: Long, paid: Boolean = false, big: Boolean = false, small: Boolean = false) {
     val said = stringResource(if (paid) R.string.a11y_bus_paid else R.string.a11y_bus, svc)
+    val (w, h, r) = when {
+        big -> Triple(64.dp, 44.dp, 12.dp)
+        small -> Triple(40.dp, 26.dp, 7.dp)
+        else -> Triple(46.dp, 32.dp, 9.dp)
+    }
     Box(
-        Modifier.semantics(mergeDescendants = true) { contentDescription = said }.widthIn(min = if (big) 64.dp else 46.dp).heightIn(min = if (big) 44.dp else 32.dp).background(Color(color), RoundedCornerShape(if (big) 12.dp else 9.dp)).padding(horizontal = 8.dp),
+        Modifier.semantics(mergeDescendants = true) { contentDescription = said }.widthIn(min = w).heightIn(min = h).background(Color(color), RoundedCornerShape(r)).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(badgeText(svc, paid), color = inkOn(Color(color)), fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else 15.sp, maxLines = 1)
+        Text(badgeText(svc, paid), color = inkOn(Color(color)), fontWeight = FontWeight.ExtraBold, fontSize = if (big) 20.sp else if (small) 13.sp else 15.sp, maxLines = 1)
     }
 }
 

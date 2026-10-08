@@ -1,0 +1,66 @@
+{
+  "label": "In GEA1000 @ UTown",
+  "detail": "till 10:15 · Next: GEA1000 @ UTown, Thu 3 Sep 09:15",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:26:00.000Z",
+  "arrivals": [],
+  "arrived": true,
+  "leave": null,
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "GEA1000 @ UTown",
+    "why": "class"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T01:30:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "arrived",
+    "staleAt": "2026-08-27T01:30:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "arrived",
+    "phaseText": null,
+    "glance": "You're there",
+    "line": "In GEA1000 @ UTown · till 10:15",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:30:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": null,
+    "upcoming": null,
+    "title": "In GEA1000 @ UTown",
+    "heading": "Next class · GEA1000 @ UTown",
+    "remindAt": null
+  }
+}

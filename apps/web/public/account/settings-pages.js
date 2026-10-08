@@ -38,17 +38,17 @@ export const importOffer = store(null);
 
 /* ---------- helpers ---------- */
 
-const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+export const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 /** A time of day in the account's clock style ("9:00 AM" or "09:00"), for showing; hhmm is for time inputs. */
-const clockMin = (min) => spaced(new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { ...clockOpts(), timeZone: 'UTC' }));
+export const clockMin = (min) => spaced(new Date(Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60)).toLocaleTimeString(locale(), { ...clockOpts(), timeZone: 'UTC' }));
 /** "9:00–11:00 AM": the start's AM or PM left off when the end has the same. */
-function clockSpan(from, to) {
+export function clockSpan(from, to) {
   const a = clockMin(from);
   const b = clockMin(to);
   const suffix = (x) => x.match(/\s?[^\d\s:]+$/)?.[0] ?? '';
   return suffix(a) && suffix(a) === suffix(b) ? `${a.slice(0, -suffix(a).length)}–${b}` : `${a}–${b}`;
 }
-const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : null);
+export const toMin = (v) => (v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : null);
 const shortDate = (ms) => new Date(ms).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
 
 /** A page of Settings: its heading with Back, then what's on it. */

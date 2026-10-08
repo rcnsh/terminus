@@ -763,6 +763,21 @@ test('import: bad module codes and oversized links are rejected up front', async
   assert.match((await big.json()).error, /limit is 15/);
 });
 
+test('import: a link that is not a NUSMods share link, or has no modules, is a 400', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  withNusmods({});
+  for (const share of ['', 'not a link', 'https://example.com/timetable/sem-1/share?CS2030=LAB:B1', 'http://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1', `https://nusmods.com/?${'x'.repeat(2000)}`]) {
+    const r = await call(env, '/me/import', { method: 'POST', cookie, body: { share } });
+    assert.equal(r.status, 400, share.slice(0, 60));
+    assert.equal((await r.json()).error, 'not a valid NUSMods share link');
+  }
+  const none = await call(env, '/me/import', { method: 'POST', cookie, body: { share: 'https://nusmods.com/timetable/sem-1/share?hidden=CS2030' } });
+  assert.equal(none.status, 400);
+  assert.equal((await none.json()).error, 'no modules found in that link');
+  assert.equal((await call(env, '/me/import', { method: 'POST', cookie, body: {} })).status, 400);
+});
+
 test('/me/next: a class but no home stop and no location asks for a home stop', async () => {
   const { env, email } = setup();
   const cookie = await signIn(env, email);

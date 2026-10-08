@@ -26,7 +26,7 @@
  *
  * POST /__stub/freeze and /__stub/thaw stop and restart the clock, for
  * light and dark screenshots of the same moment. POST /__stub/skip?min=N
- * moves it ahead, to walk through a trip (ride detection on the emulator).
+ * moves it ahead, to walk through a trip.
  * STUB_NOW=<ISO time> starts the clock there, and POST /__stub/at?t=<ISO time>
  * moves it there (it runs on from it): STUB_NOW=2026-10-07T13:30:00Z is a
  * Wednesday 21:30 in Singapore, when R1 and R2 have stopped.
@@ -300,12 +300,6 @@ async function serve(req, res) {
     }));
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(out, null, 1));
-    return;
-  }
-  if (req.method === 'GET' && req.url === '/__stub/rides') {
-    // Measured ride times, as detection recorded them.
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(db._db.prepare('SELECT * FROM ride_times').all(), null, 1));
     return;
   }
   if (req.method === 'GET' && req.url === '/__stub/push') {

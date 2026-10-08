@@ -1,0 +1,66 @@
+{
+  "label": "正在上 GEA1000 @ UTown",
+  "detail": "到 10:15 · 下一节：GEA1000 @ UTown，9月3日（周四）09:15",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "live",
+  "asOf": "2026-08-27T01:26:00.000Z",
+  "arrivals": [],
+  "arrived": true,
+  "leave": null,
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "GEA1000 @ UTown",
+    "why": "class"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T01:30:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "arrived",
+    "staleAt": "2026-08-27T01:30:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "arrived",
+    "phaseText": null,
+    "glance": "已到达",
+    "line": "正在上 GEA1000 @ UTown · 到 10:15",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T01:30:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": null,
+    "upcoming": null,
+    "title": "正在上 GEA1000 @ UTown",
+    "heading": "下一节课 · GEA1000 @ UTown",
+    "remindAt": null
+  }
+}
