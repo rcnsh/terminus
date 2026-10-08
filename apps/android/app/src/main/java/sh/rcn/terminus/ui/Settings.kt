@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -66,6 +68,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -1075,7 +1078,14 @@ private fun AddClass(destinations: List<Destination>, account: AccountViewModel,
     var end by rememberSaveable { mutableStateOf<Int?>(null) }
     var label by rememberSaveable { mutableStateOf("") }
     var where by remember { mutableStateOf<Destination?>(null) }
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // It opens below the list, often off the screen: scroll just far enough to
+    // show all of it, so opening it visibly does something. After a frame, once it's laid out.
+    val reveal = remember { BringIntoViewRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos {}
+        reveal.bringIntoView()
+    }
+    Column(Modifier.bringIntoViewRequester(reveal).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Choice(stringResource(R.string.day), WEEKDAYS, day, { day = it ?: 1 })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TimeButton(stringResource(R.string.starts), start, { start = it }, Modifier.weight(1f))

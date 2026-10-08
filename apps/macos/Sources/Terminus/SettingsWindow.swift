@@ -80,12 +80,15 @@ struct SettingsWindow: View {
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
         } detail: {
-            ScrollView {
-                SettingsPaneView(pane: pane ?? .trips, app: app, setup: setup)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(24)
-                    .id(pane)
-                    .transition(.opacity)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    SettingsPaneView(pane: pane ?? .trips, app: app, setup: setup)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(24)
+                        .id(pane)
+                        .transition(.opacity)
+                }
+                .environment(\.settingsScroll, proxy)
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: pane)
             .navigationTitle((pane ?? .trips).title)
@@ -119,6 +122,15 @@ struct SettingsWindow: View {
         guard let last = visited.popLast() else { return }
         going = true
         pane = last
+    }
+}
+
+/// The settings window's scroll view, for a pane to show something it opened.
+struct SettingsScrollKey: EnvironmentKey { static var defaultValue: ScrollViewProxy? { nil } }
+extension EnvironmentValues {
+    var settingsScroll: ScrollViewProxy? {
+        get { self[SettingsScrollKey.self] }
+        set { self[SettingsScrollKey.self] = newValue }
     }
 }
 

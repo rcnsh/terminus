@@ -145,6 +145,9 @@ a.settings-row { text-decoration: none; }
 .add-row:hover { background: var(--surface-2); }
 .add-row[aria-expanded="true"] { border-bottom: 1px solid var(--line); }
 .add-form { padding-top: 0; padding-bottom: 14px; }
+/* Scrolled into view on opening: clear of the app's tab bar, with a little room. */
+.add-form { scroll-margin-bottom: 16px; }
+body.app .add-form { scroll-margin-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px); }
 /* Delete account: the only red on any page, alone in its card at the foot. */
 .settings-row.danger-row .row-title { color: var(--bad); }
 .unit { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
