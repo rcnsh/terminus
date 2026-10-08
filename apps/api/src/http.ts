@@ -3,10 +3,17 @@
 import { MAX_FIX_ACC_M, TTL } from './config.ts';
 import { errorText } from './i18n.ts';
 
+/**
+ * Open to any origin, with the headers the API reads: an API key (x-api-key)
+ * or a token, and if-match on PUT /me/profile. A page on another origin
+ * sees only safelisted response headers unless they are exposed: the
+ * profile's etag (sent back as if-match) and a 429's retry-after.
+ */
 export const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'content-type, authorization, x-terminus-client',
+  'access-control-allow-headers': 'content-type, authorization, x-api-key, if-match, x-terminus-client',
   'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
+  'access-control-expose-headers': 'etag, retry-after',
 };
 
 export function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
@@ -37,7 +44,7 @@ export function jsonCached(body: unknown, maxAge: number, scope: 'public' | 'pri
 /**
  * LANDMINE: Number(null) === 0 and Number('') === 0, not NaN. A missing lat
  * silently resolves to the Gulf of Guinea and reports "no stop nearby"
- * instead of falling back to the configured origin.
+ * instead of falling back to `?from=` or the profile's home stop.
  */
 export function numParam(url: URL, key: string): number | null {
   const raw = url.searchParams.get(key);

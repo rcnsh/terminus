@@ -1,4 +1,5 @@
 import test from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 import { FROZEN_NOW, installGlobals, makeCtx, makeEnv, makeFetch } from './_stubs.mjs';
@@ -678,6 +679,52 @@ test('rate limits answer 429', async () => {
   assert.equal(pub.headers.get('retry-after'), '60');
 });
 
+test('every limit that refuses says when to try again', async () => {
+  const { env, email } = setup();
+  const cookie = await signIn(env, email);
+  const never = { limit: async () => ({ success: false }) };
+  const share = 'https://nusmods.com/timetable/sem-1/share?CS2030=LAB:B1';
+  // Each limiter refused on its own, on every route it guards.
+  const cases = [
+    ['RL_PUBLIC', 'GET', '/auth/config'],
+    ['RL_PUBLIC', 'POST', '/auth/verify', { form: { t: 'x' } }],
+    ['RL_PUBLIC', 'GET', '/auth/approve?r=x'],
+    ['RL_PUBLIC', 'POST', '/auth/app/poll', { body: { request: 'r', poll: 'p' } }, '10'],
+    ['RL_AUTH', 'POST', '/auth/login', { body: { email: INVITED } }],
+    ['RL_AUTH', 'POST', '/auth/code', { body: { email: INVITED, code: 'ABC123' } }],
+    ['RL_AUTH', 'POST', '/auth/anon', { body: {} }],
+    ['RL_AUTH', 'POST', '/auth/anon/web', { body: {} }],
+    ['RL_AUTH', 'POST', '/auth/app/start', { body: { email: INVITED } }],
+    ['RL_AUTH', 'POST', '/auth/app/code', { body: { request: 'r', poll: 'p', code: 'ABC123' } }],
+    ['RL_AUTH', 'POST', '/auth/approve', { form: { r: 'x', n: '1' } }],
+    ['RL_AUTH', 'POST', '/pair/check', { body: { code: 'ABC123' } }],
+    ['RL_AUTH', 'POST', '/pair', { body: { code: 'ABC123' } }],
+    ['RL_AUTH', 'GET', '/me', { token: 'nonsense' }],
+    ['RL_AUTH', 'POST', '/me/import', { cookie, body: { share } }],
+    ['RL_ANON', 'POST', '/auth/anon', { body: {} }],
+    ['RL_PAIR', 'POST', '/pair/check', { body: { code: 'ABC123' } }],
+    ['RL_PAIR', 'POST', '/pair', { body: { code: 'ABC123' } }],
+    ['RL_ME', 'GET', '/me', { cookie }],
+  ];
+  for (const [binding, method, path, opts = {}, after = '60'] of cases) {
+    const res = await call({ ...env, [binding]: never }, path, { method, ...opts });
+    assert.equal(res.status, 429, `${binding} ${method} ${path}`);
+    assert.equal(res.headers.get('retry-after'), after, `${binding} ${method} ${path}`);
+  }
+});
+
+test('no 429 in the API goes out without a retry-after', () => {
+  const dir = new URL('../src/', import.meta.url);
+  const bare = [];
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.ts') || f === 'openapi.ts') continue;
+    for (const [n, line] of fs.readFileSync(new URL(f, dir), 'utf8').split('\n').entries()) {
+      if (/,\s*429\s*\)/.test(line)) bare.push(`${f}:${n + 1}`);
+    }
+  }
+  assert.deepEqual(bare, []);
+});
+
 test('signed in, the map and answers are limited per account, not per IP', async () => {
   const { env, email } = setup();
   delete env[Symbol.for('terminus.testOpen')]; // locked, as in production
@@ -1204,7 +1251,9 @@ test('feedback: validated, and capped at ten a day per account', async () => {
   assert.equal((await post({ note: 'x', platform: 'web', context: 'D2' })).status, 400, 'context is an object');
   assert.equal((await post({ note: 'x', platform: 'web', context: { pad: 'x'.repeat(17_000) } })).status, 400);
   for (let i = 0; i < 10; i++) assert.equal((await post({ note: `report ${i}`, platform: 'web' })).status, 201);
-  assert.equal((await post({ note: 'one more', platform: 'web' })).status, 429);
+  const capped = await post({ note: 'one more', platform: 'web' });
+  assert.equal(capped.status, 429);
+  assert.equal(capped.headers.get('retry-after'), '60', 'clients hold back every request until then, so not a day');
 });
 
 test('/admin/stats: operator only; counts accounts, devices by platform and reports', async () => {

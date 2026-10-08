@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { UpstreamUnreachable, clientKey, coordsFrom, timedFetch, withSecurityHeaders } from '../src/http.ts';
+import { CORS, UpstreamUnreachable, clientKey, coordsFrom, json, timedFetch, withSecurityHeaders } from '../src/http.ts';
 import { fixOf } from '../src/detect.ts';
 import { landmark, targetStops } from '../src/landmarks.ts';
 import { termDay } from '../src/calendar.ts';
@@ -24,6 +24,16 @@ test('coordsFrom and fixOf: a location is rounded to about 11 metres, whoever se
   assert.deepEqual(at('lat=-1.29556&lon=-103.77146'), { lat: -1.2956, lon: -103.7715 });
   const fix = fixOf({ lat: 1.295512345, lon: 103.771450001, speed: 6.25, acc: 12 });
   assert.deepEqual(fix, { lat: 1.2955, lon: 103.7715, speedMs: 6.25, accM: 12 });
+});
+
+test('CORS: another origin may send the headers the API reads, and read the ones it answers with', () => {
+  const list = (v) => v.split(',').map((h) => h.trim());
+  const allowed = list(CORS['access-control-allow-headers']);
+  // x-api-key: how the docs say to call the API from a page; if-match: PUT /me/profile.
+  for (const h of ['content-type', 'authorization', 'x-api-key', 'if-match', 'x-terminus-client']) assert.ok(allowed.includes(h), h);
+  // Neither is safelisted, so a page could not read them without this.
+  const res = json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
+  assert.deepEqual(list(res.headers.get('access-control-expose-headers')), ['etag', 'retry-after']);
 });
 
 test('rate-limit keys: IPv4 as is, IPv6 by its /64', () => {
