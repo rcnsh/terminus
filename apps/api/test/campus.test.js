@@ -428,3 +428,24 @@ test('code-unit order lists the same buildings and residences as localeCompare d
   const locale = [...list].sort((a, b) => Number(b.common) - Number(a.common) || a.name.localeCompare(b.name));
   assert.deepEqual(list.map((r) => r.code), locale.map((r) => r.code));
 });
+
+test('boardAt: a service whose rows the feed garbled has no data; the rest of the stop is live', () => {
+  const idx = indexGraph(GRAPH);
+  const nowMs = Date.parse('2026-03-02T05:00:00Z');
+  const sa = {
+    code: 'COM3',
+    arrivals: [{ svc: 'D1', etaS: 120, crowd: null, plate: 'PB1', berth: null }],
+    fetchedAt: nowMs,
+    stale: false,
+    available: true,
+    unread: ['D2'],
+  };
+  const bySvc = new Map(boardAt(GRAPH, idx, 'COM3', sa, nowMs).map((r) => [r.svc, r]));
+  assert.equal(bySvc.get('D1').quality, 'live');
+  assert.equal(bySvc.get('D1').etaS, 120);
+  assert.equal(bySvc.get('D2').quality, 'unknown', 'no data, not a headway guess');
+  assert.equal(bySvc.get('D2').etaS, null);
+  // Without the mark, a service with no rows is the feed's "no bus": a guess.
+  const { unread: _u, ...read } = sa;
+  assert.equal(new Map(boardAt(GRAPH, idx, 'COM3', read, nowMs).map((r) => [r.svc, r])).get('D2').quality, 'scheduled');
+});

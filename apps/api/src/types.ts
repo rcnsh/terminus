@@ -409,6 +409,12 @@ export interface StopArrivals {
    * when either is, stale when either is).
    */
   feeds?: { shuttle?: FeedState; public?: FeedState };
+  /**
+   * Services the feed listed here whose times couldn't be read
+   * (arrivalsUnread() in fms.ts): no data for those alone, never "no bus".
+   * The rest of the board is as good as ever. Absent when every row read.
+   */
+  unread?: string[];
 }
 
 /** One feed's answer for a stop, without the arrivals. */

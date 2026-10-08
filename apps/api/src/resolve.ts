@@ -599,7 +599,7 @@ export function boardAt(
   for (const svc of services) {
     const pub = isPublic(graph, svc);
     const feed = feedFor(sa, pub);
-    const available = feed !== undefined && feed.available !== false;
+    const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(svc);
     const forSvc = (sa?.arrivals ?? []).filter((a) => a.svc === svc);
     const { usable, ambiguousBerth } = resolveBerths(forSvc);
     // The feed's times count from its fetch, and a cached or stale answer is
@@ -735,7 +735,8 @@ export function scoreOptions(
       const earliest = c.walkS + WALK.boardBufferS + ageS;
       // A missing entry means we never reached the feed -- not that no bus is
       // coming. Those are different answers and must not collapse into one.
-      const available = feed !== undefined && feed.available !== false;
+      // A service whose rows didn't read has no data, though the rest of the board does.
+      const available = feed !== undefined && feed.available !== false && !sa?.unread?.includes(leg.svc);
       let boardS: number;
       let quality: ScoredOption['quality'];
       let arrival = null;

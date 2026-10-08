@@ -1226,12 +1226,16 @@ A reply the feed calls OK but that can't be read is a failure, never an
 empty board. With no list at all (`hasList`), or a list whose rows lost
 what `normalize()` reads, the fetch throws. That is checked by value, row
 by row (`arrivalsProblem`): no row names a service, or none names a service
-we know; or a row's first time is missing (renamed, null) or isn't one it
-can read (a clock time, a word, more than a week away). The feed's own "no
-bus" ("-", or an empty `_etas`) passes. One service is enough: with the
-rest of the board fine, a service that silently lost its times would hand
-the headline to another, labelled live, while the bus that's really next
-is missing. `busesProblem` throws when no row has a plate or a position,
+we know, or not one row reads. A row reads when its first time is there
+and is one it can read, or is the feed's own "no bus" ("-", or an empty
+`_etas`); a missing time (renamed, null) or one it can't (a clock time, a
+word, more than a week away) doesn't. When only some rows don't read,
+those services alone are no data (`arrivalsUnread`, `StopArrivals.unread`):
+`unknown` on the card, never the "no bus" headway guess, which would hand
+the headline to another service while the bus that's really next is
+missing. The rest of the board stays live, so one odd value doesn't take a
+stop down, or, at the probe's stop, put the feed-down notice on every
+card. The Worker logs which services didn't read. `busesProblem` throws when no row has a plate or a position,
 or when there are rows and not one bus can be read from them (positions
 null, swapped or in another format; plates blank), unless they're all at
 0, 0, the feed's "no fix yet". Read as it was, every

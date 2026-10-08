@@ -79,6 +79,7 @@ export function mergeFeeds(code: string, nowMs: number, shuttle: StopArrivals | 
     stale: up.some((sa) => sa.stale),
     available: up.length > 0,
     feeds: { shuttle: state(shuttle), public: state(pub) },
+    ...(shuttle?.unread ? { unread: shuttle.unread } : {}),
   };
 }
 

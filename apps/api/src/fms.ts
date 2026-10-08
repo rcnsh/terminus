@@ -325,22 +325,32 @@ function rowTimes(item: Record<string, unknown>): { read: boolean; garbled: bool
   return { read, garbled };
 }
 
+/** Each named row's service and how its times read. */
+function rowsRead(raw: unknown): { svc: string; read: boolean; garbled: boolean }[] {
+  return objects(pickList(raw, ARRIVAL_LIST_KEYS))
+    .map((r) => ({ svc: serviceOf(field(r, ...ROW_NAME)), row: r }))
+    .filter((t): t is { svc: string; row: Record<string, unknown> } => Boolean(t.svc))
+    .map((t) => ({ svc: t.svc, ...rowTimes(t.row) }));
+}
+
 /**
- * Why an arrivals payload that has rows can't be read as a board, or null.
+ * Why an arrivals payload that has rows can't be read as a board at all, or
+ * null.
  *
  * hasList() catches a reply with no list at all. This catches the subtler
  * changes: the list is still there but its rows aren't what normalize()
  * reads, or their values aren't. Taken as it is, such a board says "no bus"
- * for a service (or every one), so its card turns into headway guesses, or
- * leads with another service while the one that's really next is missing,
- * and the monitor's probe sees a healthy feed and never says anything.
- * Thrown instead, it reads as the feed being down: stale or "No live data"
- * on the card, the monitor's email, the feed-down notice.
+ * for every service, so its card turns into headway guesses and the
+ * monitor's probe sees a healthy feed and never says anything. Thrown
+ * instead, it reads as the feed being down: stale or "No live data" on the
+ * card, the monitor's email, the feed-down notice.
  *
- * Checked row by row, by value: each row needs a time or the feed's "no
- * bus" ("-" passes; a time renamed, null, or in a format it can't read
- * doesn't). One service that changed shape is enough, because the rest of
- * the board then hides it.
+ * Checked row by row, by value: a row reads when it has a time or the
+ * feed's "no bus" ("-" passes; a time renamed, null, or in a format it
+ * can't read doesn't). Not one row reading is a changed feed. Some rows
+ * not reading is arrivalsUnread(): those services alone have no data, and
+ * the rest of the board stands, so one odd value doesn't take a whole stop
+ * (or, at the probe's stop, every card) down.
  */
 export function arrivalsProblem(raw: unknown, arrivals: Arrival[] = normalize(raw), known: ReadonlySet<string> = KNOWN_SERVICES): string | null {
   const rows = objects(pickList(raw, ARRIVAL_LIST_KEYS));
@@ -349,16 +359,22 @@ export function arrivalsProblem(raw: unknown, arrivals: Arrival[] = normalize(ra
   if (!arrivals.some((a) => known.has(a.svc))) return `no service it names is known (${[...new Set(arrivals.map((a) => a.svc))].slice(0, 4).join(', ')})`;
   // Not checked: how far away the times are, up to MAX_ETA_S. After midnight
   // every real arrival is the next morning's, hours away (fixtures/connectx-*.json).
-  const times = rows
-    .map((r) => ({ svc: serviceOf(field(r, ...ROW_NAME)), row: r }))
-    .filter((t) => t.svc)
-    .map((t) => ({ svc: t.svc, ...rowTimes(t.row) }));
+  const times = rowsRead(raw);
+  if (times.some((t) => t.read && !t.garbled)) return null;
   const garbled = times.filter((t) => t.garbled).map((t) => t.svc);
   if (garbled.length) return `a time it cannot read (${[...new Set(garbled)].slice(0, 4).join(', ')})`;
-  if (!times.some((t) => t.read)) return 'no row has an arrival time';
-  const missing = times.filter((t) => !t.read).map((t) => t.svc);
-  if (missing.length) return `no arrival time for ${[...new Set(missing)].slice(0, 4).join(', ')}`;
-  return null;
+  return 'no row has an arrival time';
+}
+
+/**
+ * The services on a board that arrivalsProblem() passed whose own rows
+ * don't read: a time it can't read, or none at all. Read as "no bus", one
+ * would hand the headline to another service while the one really next is
+ * missing, so they're no data instead (StopArrivals.unread). A row whose
+ * first time is gone counts too: its next bus would pass for the soonest.
+ */
+export function arrivalsUnread(raw: unknown): string[] {
+  return [...new Set(rowsRead(raw).filter((t) => t.garbled || !t.read).map((t) => t.svc))];
 }
 
 /** A bus the feed lists with no fix yet: 0, 0. A real bus without a place.
@@ -498,7 +514,10 @@ export async function fetchArrivals(
   const arrivals = normalize(body.data);
   const problem = arrivalsProblem(body.data, arrivals);
   if (problem) throw new Error(`shuttle-service answered in an unknown shape (${problem})`);
-  return { code, arrivals, fetchedAt: sentAtMs, stale: false, available: true };
+  const unread = arrivalsUnread(body.data);
+  if (!unread.length) return { code, arrivals, fetchedAt: sentAtMs, stale: false, available: true };
+  console.warn(`shuttle-service at ${code}: times it cannot read for ${unread.slice(0, 4).join(', ')}`);
+  return { code, arrivals: arrivals.filter((a) => !unread.includes(a.svc)), fetchedAt: sentAtMs, stale: false, available: true, unread };
 }
 
 /**

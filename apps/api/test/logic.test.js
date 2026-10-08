@@ -24,7 +24,7 @@ import {
   nearestStop,
   walkAllTheWayS,
 } from '../src/resolve.ts';
-import { arrivalsProblem, busesProblem, crowdFromLoad, hasList, normalize, normalizeBuses, parseCrowd, parseEtaS, parseSeconds, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
+import { arrivalsProblem, arrivalsUnread, busesProblem, crowdFromLoad, hasList, normalize, normalizeBuses, parseCrowd, parseEtaS, parseSeconds, pickList, proxyOk, proxyUrl, unwrap } from '../src/fms.ts';
 import { buildAnswer, clampLabel, fitsTile, mins, shortStop, walkVerdict } from '../src/format.ts';
 import { LABEL_MAX, WALK } from '../src/config.ts';
 import { apiKeyHeaders, authUrl, extractSession, jwtExpMs, proxyHeaders } from '../src/auth.ts';
@@ -115,6 +115,16 @@ test('when every listed bus leaves too soon, the guess is a bus you can still re
   assert.equal(best.svc, 'A1');
   assert.equal(best.quality, 'scheduled');
   assert.ok(best.boardS >= 1200, `boards at ${best.boardS}s, before the walk is done`);
+});
+
+test('a service whose times the feed garbled is no data, never the "no bus" headway guess', () => {
+  const cands = candidateStops(GRAPH, TO_CLB).map((c) => ({ ...c, walkS: 60 }));
+  const [code, board] = sa('KR-MRT', []);
+  const [best] = scoreOptions(GRAPH, cands, arrivalsFor({ [code]: { ...board, unread: ['A1'] } }), NOW);
+  assert.equal(best.svc, 'A1');
+  assert.equal(best.quality, 'unknown');
+  const [guess] = scoreOptions(GRAPH, cands, arrivalsFor({ [code]: board }), NOW);
+  assert.equal(guess.quality, 'scheduled', 'with the rows read, an empty board is the feed saying no bus');
 });
 
 test('a bus that left while the answer aged is not offered as catchable', () => {
@@ -1148,7 +1158,7 @@ test('a list under a name it does not know is only a list of rows, never the hin
   assert.equal(hasList({ ShuttleServiceResult: { ...rest, shuttles: [] } }), true);
 });
 
-test('every row needs a time it can read, so one changed service cannot hide behind the rest', () => {
+test('a row needs a time it can read: none reading is a changed feed, one is that service with no data', () => {
   const result = CONNECTX_FIXTURE.ShuttleServiceResult;
   const etas = (f) => ({ ShuttleServiceResult: { ...result, shuttles: result.shuttles.map((s) => ({ ...s, _etas: s._etas.map(f) })) } });
   // The fields inside `_etas` renamed: every time gone.
@@ -1157,11 +1167,21 @@ test('every row needs a time it can read, so one changed service cannot hide beh
   assert.match(arrivalsProblem(etas(({ eta: _m, eta_s: _s, ...e }) => ({ ...e, eta: '07:15' }))), /a time it cannot read/);
   // Null everywhere is not "-".
   assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: null }] }), /no row has an arrival time/);
-  // One service changed among good ones.
-  assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: '09:04' }, { name: 'D1', arrivalTime: '3' }] }), /a time it cannot read \(D2\)/);
-  assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrival_min: '4' }, { name: 'D1', arrivalTime: '3' }] }), /no arrival time for D2/);
-  // The first time gone, the next would pass for the soonest bus.
-  assert.match(arrivalsProblem({ timings: [{ name: 'D2', nextArrivalTime: '9' }, { name: 'D1', arrivalTime: '3' }] }), /no arrival time for D2/);
+  // One service changed among good ones: that service has no data, the
+  // rest of the board stands.
+  const oneOff = [
+    { timings: [{ name: 'D2', arrivalTime: '09:04' }, { name: 'D1', arrivalTime: '3' }] },
+    { timings: [{ name: 'D2', arrival_min: '4' }, { name: 'D1', arrivalTime: '3' }] },
+    // The first time gone, the next would pass for the soonest bus.
+    { timings: [{ name: 'D2', nextArrivalTime: '9' }, { name: 'D1', arrivalTime: '3' }] },
+    { timings: [{ name: 'D2', arrivalTime: '3', nextArrivalTime: 'N/A Today' }, { name: 'D1', arrivalTime: '3' }] },
+  ];
+  for (const raw of oneOff) {
+    assert.equal(arrivalsProblem(raw), null);
+    assert.deepEqual(arrivalsUnread(raw), ['D2']);
+  }
+  assert.deepEqual(arrivalsUnread(COM3_FIXTURE), []);
+  assert.deepEqual(arrivalsUnread(CONNECTX_FIXTURE), []);
   // A time past a week is a changed unit or an absolute time.
   assert.match(arrivalsProblem({ timings: [{ name: 'D2', arrivalTime: 1_756_336_500 }] }), /a time it cannot read/);
   // The feed's own "no bus" passes, in each shape.
