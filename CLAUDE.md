@@ -498,14 +498,21 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
 - **User-facing copy** is short, plain and concrete, in British spelling
   (colour, metres), with no jargon. It names what the user sees ("the map",
   "your stop"), not internals.
-- **Controls that act on one item** sit inside that item's own shape, so
-  it's plain what they act on. A × that removes a tab or a chip goes
-  inside its outline or pill, never loose beside it, where it reads as
-  closing the whole row or the search. The four clients show the same
-  thing the same way: when you build or change a control in one, look at
-  how the others draw it (Android `AddedChip`, the web's `.chip-added`,
-  the Mac's `Tabs`) and match them. Check it in a screenshot of each state
-  (chosen and not).
+- **The interface explains itself.** Someone glancing at the screen for
+  the first time should know what each thing is and what each control
+  will do, from how it looks and where it sits alone: not from a tooltip,
+  a hover, an accessibility label or having used it before. If a control
+  could be read two ways, it's a bug, even when it works.
+  - Placement and grouping say what something belongs to: a control sits
+    with the thing it acts on, and things that look alike behave alike.
+  - Use the look each platform's users already know for that job, rather
+    than a new one.
+  - The four clients show the same thing the same way. Before building
+    or changing something in one, look at how the others already do it
+    and match them, or improve all of them together.
+  - Judge it from a screenshot of every state (chosen and not, empty and
+    full, light and dark) with fresh eyes, as a new user would, not from
+    the code.
 - **TypeScript:** ES modules, `.ts` import specifiers, single quotes,
   numeric separators (`15_000`), small pure functions exported for tests.
 - **Website:** Preact components with htm templates, imported from
