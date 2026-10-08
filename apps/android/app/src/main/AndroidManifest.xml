@@ -101,6 +101,10 @@
                 <action android:name="android.intent.action.LOCALE_CHANGED" />
                 <!-- "Alarms & reminders" allowed: re-arm the alarms as exact ones. -->
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+                <!-- Notifications blocked or allowed in the phone's settings: the
+                     alerts, the live notification and push follow. -->
+                <action android:name="android.app.action.APP_BLOCK_STATE_CHANGED" />
+                <action android:name="android.app.action.NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED" />
             </intent-filter>
         </receiver>
         <!-- Leave-alert alarms. Only this app's own PendingIntents reach it. -->

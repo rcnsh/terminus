@@ -836,6 +836,11 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         request("POST", "/me/push", JSONObject().put("token", token))
     }
 
+    /** No more pushes to this session: nothing on the phone would show them. */
+    suspend fun unregisterPush() {
+        request("DELETE", "/me/push")
+    }
+
     /** A suggestion accepted or turned down (`id`), or a choice undone (`trip` and `pref`). */
     suspend fun choice(choice: String, id: String? = null, trip: String? = null, pref: String? = null): List<TripChoice> {
         val body = JSONObject().put("choice", choice)
