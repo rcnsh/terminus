@@ -33,7 +33,8 @@ updates:
     cooldown:
       default-days: 5
   # The version catalog (gradle/libs.versions.toml), the build scripts and
-  # the Gradle wrapper.
+  # the Gradle wrapper. It doesn't write the lockfiles or the dependency
+  # hashes: the android deps workflow writes them and pushes them to its PR.
   - package-ecosystem: gradle
     directory: /apps/android
     schedule:
