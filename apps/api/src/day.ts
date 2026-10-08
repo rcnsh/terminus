@@ -140,10 +140,11 @@ export async function dayPlan(
     // The next class's bus, once a device has planned it from where the
     // phone is (or it's due): the same bus the card and the notifications say.
     const plan = status === 'next' && rec?.kind !== 'missed' ? day?.plans?.[key] : undefined;
-    // Its bus gone and nobody saying otherwise: the card takes it you're on
-    // it a few minutes on (next.ts), and so does this, until it gets there.
+    // Its bus gone and a location having seen you on it: the card says you're
+    // on it a few minutes on (next.ts), and so does this, until it gets
+    // there. Not seen: the next way there, as below.
     const unsaid = !rec;
-    const assumed = plan?.board && unsaid && nowMs >= Date.parse(plan.board) + ASSUME_MS && plan.arrive && Date.parse(plan.arrive) > nowMs;
+    const assumed = plan?.board && plan.seen && unsaid && nowMs >= Date.parse(plan.board) + ASSUME_MS && plan.arrive && Date.parse(plan.arrive) > nowMs;
     if (boarded) item.onBus = { svc: boarded.svc, off: offStop(boarded), arrive: boarded.arrive };
     else if (assumed) item.onBus = { svc: plan.svc, off: offStop(plan), arrive: plan.arrive };
     // The plan's leave-by until then, even once its bus has left (the card still says it).

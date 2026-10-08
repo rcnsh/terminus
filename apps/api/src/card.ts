@@ -41,8 +41,15 @@ export interface TripView {
   undo?: { key: string; label: string | null } | null;
   /** The bus the plan says to catch, kept once the answer has moved on to riding. */
   plan?: Boarded | null;
-  /** The phase is the plan's, not something detection saw (nothing said otherwise once its bus left). */
+  /** The phase is the plan's, not something a signal said: on the bus a
+   *  location saw you on, or missed it at the stop. */
   assumed?: boolean;
+  /** The plan's bus has left and nothing says whether you're on it: the
+   *  answer is the next way there, and the card says the bus has gone. */
+  gone?: boolean;
+  /** The plan's bus, just seen ridden by this request's location (the
+   *  caller saves it, so devices without a location follow). */
+  seenOn?: Boarded;
   /** The plan's bus differs from the one remembered for this trip (the caller saves it). */
   planChanged?: boolean;
   /** False when the user turned reminders off for this trip. */
@@ -648,6 +655,12 @@ function v2(
       const next = svc ? `${svc}${l.board ? ` ${est(l.board)}` : ''}` : m().walk;
       line = m().missedLine(missed, next, a.timing?.status === 'late' ? a.timing.text : null);
       glance = busGlance(l);
+    }
+    // The plan's bus gone and nothing saying whether you're on it: the next
+    // way there, worded so it's true either way.
+    if (trip.gone && trip.plan?.board && phase === 'heading') {
+      const next = svc ? `${svc}${l.board ? ` ${est(l.board)}` : ''}` : m().walk;
+      line = m().missedLine(m().busLeft(at(trip.plan.board)), next, a.timing?.status === 'late' ? a.timing.text : null);
     }
   }
   const onBus = trip.rec?.boarded ?? (trip.assumed ? trip.plan : null);

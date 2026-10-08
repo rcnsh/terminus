@@ -21,6 +21,7 @@ import { makeD1, makeEmail } from './_d1.mjs';
 import worker from '../src/index.ts';
 import { Trip } from '../src/tripdo.ts';
 import { ASSUME_MS, RIDE_GRACE_MS } from '../src/trip.ts';
+import { onRideQuery, rideLength } from './_ride.mjs';
 
 const DIR = new URL('./fixtures/answers/', import.meta.url);
 const ZH_DIR = new URL('./zh/', DIR);
@@ -209,9 +210,21 @@ const CASES = {
       await get.post('/me/signal', { kind: 'missed' });
     },
   }],
-  // The phone planned the 09:06 D2 from home; nobody said anything, and three
-  // minutes after it left the Mac (no location) takes you to be on it.
+  // The phone planned the 09:06 D2 from home; nobody said anything, and
+  // three minutes after it left the phone is on the D2's road, further on
+  // than a walk: the Mac (no location) takes you to be on it too.
   'assumed-riding': [soon, '/me/next', {
+    trips: true,
+    feed: PLATE_FEED,
+    before: async (get) => {
+      await get(`/me/next?${DORM}`);
+      get.at(sgtAt(THU_DATE, '09:06') + ASSUME_MS + MIN);
+      await get(`/me/next${onRideQuery('D2', 'PGP', 'UTOWN', rideLength('D2', 'PGP', 'UTOWN') - 400)}`);
+    },
+  }],
+  // The same, with no location since: the card can't know whether you're on
+  // it. The 09:06 has left, and the next way there.
+  'bus-gone': [soon, '/me/next', {
     trips: true,
     feed: PLATE_FEED,
     before: async (get) => {

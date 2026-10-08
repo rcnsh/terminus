@@ -148,7 +148,7 @@ test('time to go wakes the phone with reminders off too: Android starts the live
   assert.equal(fcm.sent.find((m) => m.data.phase === 'due').android.priority, 'HIGH');
 });
 
-test('nothing is pushed to ask about the bus: after the departure the trip moves on by itself, quietly', async () => {
+test('nothing is pushed to ask about the bus, and nothing says you are on it unless seen', async () => {
   const { call, phone, tablet, next, fcm, TRIPS, clock, wakeUntil } = await setup();
   await call('/me/push', { method: 'POST', token: phone, body: { token: 'fcm-phone' } });
   await next(phone);
@@ -158,10 +158,10 @@ test('nothing is pushed to ask about the bus: after the departure the trip moves
   clock(Date.parse(plan.board) + 30_000);
   await TRIPS.fireAlarms();
   assert.ok(fcm.sent.every((m) => !('ask' in m.data)), 'never a question');
-  // No answer means on it: the ride, pushed without waking anyone.
+  // No answer, and the object has no location: not taken to be on it.
   clock(Date.parse(plan.board) + 4 * 60_000);
-  await wakeUntil(() => fcm.sent.at(-1).data.phase === 'riding');
-  assert.equal(fcm.sent.at(-1).android.priority, 'NORMAL');
+  await TRIPS.fireAlarms();
+  assert.ok(fcm.sent.every((m) => m.data.phase !== 'riding'), 'never on the bus without a location seeing it');
   // An older app's tap still reaches the user's other phones (quietly); this one doesn't need telling.
   await call('/me/push', { method: 'POST', token: tablet, body: { token: 'fcm-tablet' } });
   const before = fcm.sent.length;

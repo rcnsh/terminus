@@ -1214,10 +1214,12 @@ async function nextWithTrip(
   // Remember which bus the trip is for, so every device says it and detection
   // watches it: from when it's due, or before then when it was planned from
   // where the phone is (the widget and the Mac would otherwise each plan
-  // from where the timetable puts you). Written only when the plan changes.
-  if (trip.planChanged && trip.key && trip.plan && (trip.phase !== 'idle' || trip.plan.located)) {
-    if (local) ctx.waitUntil(local.savePlan(trip.key, trip.plan));
-    else update.plans = { [trip.key]: trip.plan };
+  // from where the timetable puts you). Written only when the plan changes,
+  // or once its bus is seen ridden.
+  const plan = trip.seenOn ?? (trip.planChanged ? trip.plan : null);
+  if (plan && trip.key && (trip.phase !== 'idle' || plan.located)) {
+    if (local) ctx.waitUntil(local.savePlan(trip.key, plan));
+    else update.plans = { [trip.key]: plan };
   }
   // When the plan itself moves on (class starts, day ends). Only the planned
   // answer has one; a place or a stop never changes by itself.
