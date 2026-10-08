@@ -342,7 +342,6 @@
     <string name="sign_out">Sign out</string>
     <string name="sign_out_text">The app and widget will stop showing your timetable. Your account and settings are kept; sign in again with %1$s.</string>
     <string name="sign_out_title">Sign out of this phone?</string>
-    <string name="signed_in_as">Signed in as %1$s</string>
     <string name="signed_out_removed">This phone was signed out of your account. Sign in again with your email.</string>
     <string name="signin_cancelled">The sign-in was cancelled from the email. If that was you, send a new one.</string>
     <string name="skip_setup">Skip setup</string>

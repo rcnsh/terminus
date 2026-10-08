@@ -272,8 +272,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
             if (p.status == "approved" && p.token != null && p.email != null) {
                 pollJob?.cancel()
                 approved(p.token, p.email, p.outcome, onSignedIn)
-            }
-            _state.update { it.copy(busy = false) }
+            } else _state.update { it.copy(busy = false) }
         }
     }
 
@@ -366,11 +365,14 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         store.email = email
         approvedToken = null
         anonToken = null
-        _state.update { it.copy(signIn = null, busy = false, email = email, message = L.s(R.string.signed_in_as, email)) }
+        // The page stays as it is, busy, until the app moves on: cleared
+        // first, it fell back to the email step for a moment.
+        _state.update { it.copy(busy = true, message = null) }
         viewModelScope.launch {
             // A new account, or one that was never set up, goes through setup.
             val me = runCatching { Api(token).me() }.getOrNull()
             store.needsSetup = me?.needsSetup == true
+            _state.update { it.copy(signIn = null, busy = false, email = email) }
             refresh()
             onSignedIn()
         }
