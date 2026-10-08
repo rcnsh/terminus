@@ -44,6 +44,8 @@ final class MapModel {
     /// bumped each time, so choosing it again moves there again.
     var focus: Spot?
     var focusCount = 0
+    /// What the window opened with, for the style again after the map file failed.
+    private var look = (dark: false, zh: false)
 
     var openStop: String? { if case .stop(let c) = sheet { c } else { nil } }
     var openBus: LiveBus? { if case .bus(let id) = sheet { buses.first { $0.id == id } } else { nil } }
@@ -51,6 +53,7 @@ final class MapModel {
     /// The campus and the style for this theme and language, then the street
     /// map file in the background (the style again once it's here).
     func open(dark: Bool, zh: Bool) async {
+        look = (dark, zh)
         if campus == nil { campus = try? await MapFiles.campus(token: TokenStore.read()) }
         style = await MapFiles.style(dark: dark, zh: zh)
         failed = campus == nil || style == nil
@@ -63,6 +66,14 @@ final class MapModel {
             downloadFailed = !MapFiles.hasTiles
         }
         downloading = false
+    }
+
+    /// MapLibre couldn't load a style reading the map file: the file goes
+    /// (the next look downloads it again) and the map is plain meanwhile.
+    func tilesFailed(_ shown: URL) async {
+        guard MapFiles.readsTiles(shown) else { return }
+        MapFiles.dropTiles()
+        style = await MapFiles.style(dark: look.dark, zh: look.zh)
     }
 
     /// A pill: that service's line and buses, or off again.
@@ -691,6 +702,13 @@ private struct CampusMapView: NSViewRepresentable {
             drawnStretch = nil
             drawnMe = nil
             apply()
+            if let styleURL { MapFiles.styleLoaded(styleURL) }
+        }
+
+        /// A map file MapLibre can't read: dropped, and the plain map instead.
+        func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: any Error) {
+            guard let styleURL else { return }
+            Task { await map.tilesFailed(styleURL) }
         }
 
         /// Never far off campus: the map file ends a little way out.
