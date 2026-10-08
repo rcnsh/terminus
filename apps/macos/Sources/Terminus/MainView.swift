@@ -121,16 +121,19 @@ struct GoLater: View {
     @State private var sending = false
 
     /// Campus time, which the picker shows and the trip is planned in.
-    private static var calendar: Calendar {
+    private nonisolated static var calendar: Calendar {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = .campus
         return cal
     }
 
-    /// Half an hour from now on campus, on a five-minute mark.
-    private static func soon() -> Date {
+    /// Half an hour from `now` on campus, on a five-minute mark; 23:55 at
+    /// the latest, as the trip is later today. `now` is on the server's clock.
+    nonisolated static func soon(now: Date) -> Date {
         let cal = calendar
-        let d = Date().addingTimeInterval(30 * 60)
+        let d = now.addingTimeInterval(30 * 60)
+        // Half an hour on is tomorrow: the last mark today, not 00:10 (which is today's, long gone).
+        guard cal.isDate(d, inSameDayAs: now) else { return cal.date(bySettingHour: 23, minute: 55, second: 0, of: now) ?? now }
         let c = cal.dateComponents([.hour, .minute], from: d)
         let m = min(((c.hour ?? 0) * 60 + (c.minute ?? 0) + 4) / 5 * 5, 23 * 60 + 55)
         return cal.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: d) ?? d
@@ -139,7 +142,7 @@ struct GoLater: View {
     var body: some View {
         if !open {
             Button(L("Go later today at…")) {
-                at = Self.soon()
+                at = Self.soon(now: ServerClock.now)
                 message = nil
                 open = true
             }
