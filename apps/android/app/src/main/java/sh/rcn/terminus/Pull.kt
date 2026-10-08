@@ -41,8 +41,8 @@ object Pull {
     /** How far the sky stretches (dp) before letting go asks again: the bus is at the stop. */
     const val ARM = 84f
 
-    /** Where it waits while it asks. */
-    const val HOLD = 84f
+    /** Where it waits while it asks: room for the pill and no more, less than [ARM]. */
+    const val HOLD = 40f
 
     /** The most it ever stretches, however far the finger goes. */
     const val MAX = 170f
