@@ -674,7 +674,7 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
                         Text(
                             r.eta ?: when {
                                 s < 60 -> stringResource(R.string.map_arriving)
-                                r.quality == "scheduled" -> stringResource(R.string.map_about, min)
+                                r.quality != "live" -> stringResource(R.string.map_about, min)
                                 else -> min
                             },
                             fontWeight = FontWeight.SemiBold,
