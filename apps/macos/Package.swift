@@ -6,7 +6,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         // Updates: checks the appcast, downloads and installs in the background.
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+        // No older than 2.10.0, past the fixes for CVE-2025-10015 and -10016.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
     ],
     targets: [
         .executableTarget(

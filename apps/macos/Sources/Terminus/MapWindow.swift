@@ -45,13 +45,53 @@ final class MapModel {
     var focus: Spot?
     var focusCount = 0
 
+    /// Why the API refused the map: signed out (401) or this version too
+    /// old (426). It asks nothing more until that changes: a new token, or
+    /// the 426's hold over.
+    enum Refusal: Equatable { case signedOut, outdated }
+    var refused: Refusal?
+    private var refusedToken: String?
+    /// What the window opened with, for the style again after the map file failed.
+    private var look = (dark: false, zh: false)
+
+    /// Whether the map may ask the API now; clears a refusal that no longer holds.
+    func mayAsk() -> Bool {
+        switch refused {
+        case .signedOut where TokenStore.read() != refusedToken, .outdated where !Outdated.active: refused = nil
+        default: break
+        }
+        return refused == nil
+    }
+
+    /// A 401 or 426: stop asking, and have the popover check at once (it
+    /// signs out, or offers the update).
+    private func refuse(_ e: ApiError, token: String?, app: AppModel) {
+        refused = e.status == 426 ? .outdated : .signedOut
+        refusedToken = token
+        app.mapRefused()
+    }
+
+    private static func refusal(_ error: Error) -> ApiError? {
+        guard let e = error as? ApiError, e.status == 401 || e.status == 426 else { return nil }
+        return e
+    }
+
     var openStop: String? { if case .stop(let c) = sheet { c } else { nil } }
     var openBus: LiveBus? { if case .bus(let id) = sheet { buses.first { $0.id == id } } else { nil } }
 
     /// The campus and the style for this theme and language, then the street
     /// map file in the background (the style again once it's here).
-    func open(dark: Bool, zh: Bool) async {
-        if campus == nil { campus = try? await MapFiles.campus(token: TokenStore.read()) }
+    func open(dark: Bool, zh: Bool, app: AppModel) async {
+        look = (dark, zh)
+        // Asked first either way: back after signing in, the refusal goes.
+        if mayAsk(), campus == nil {
+            let token = TokenStore.read()
+            do {
+                campus = try await MapFiles.campus(token: token)
+            } catch {
+                if let e = Self.refusal(error) { refuse(e, token: token, app: app) }
+            }
+        }
         style = await MapFiles.style(dark: dark, zh: zh)
         failed = campus == nil || style == nil
         guard !failed else { return }
@@ -63,6 +103,17 @@ final class MapModel {
             downloadFailed = !MapFiles.hasTiles
         }
         downloading = false
+    }
+
+    /// MapLibre couldn't load a style reading the map file: the file goes
+    /// (the next look downloads it again) and the map is plain meanwhile.
+    /// Only when the file itself fails the check: a load can fail for other
+    /// reasons (its style file replaced meanwhile), and a good file kept is
+    /// one the Mac needn't download again, offline perhaps.
+    func tilesFailed(_ shown: URL) async {
+        guard MapFiles.readsTiles(shown), let file = MapFiles.current, !MapFiles.looksLikeTiles(file) else { return }
+        MapFiles.dropTiles()
+        style = await MapFiles.style(dark: look.dark, zh: look.zh)
     }
 
     /// A pill: that service's line and buses, or off again.
@@ -78,16 +129,19 @@ final class MapModel {
     /// A failed poll keeps the buses drawn and says so, as the web map does:
     /// "need a connection" when this Mac is offline (`online`). Once the last
     /// answer is 15 s old (three polls) they're faded, so last places don't
-    /// pass for live. A signed-out Mac (401) says nothing: the popover asks
-    /// it to sign in again.
-    func refreshBuses(online: Bool) async {
-        guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
+    /// pass for live. Refused (401, 426): it stops, and says why (`refused`).
+    func refreshBuses(app: AppModel) async {
+        guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return }
+        let online = app.online
+        let token = TokenStore.read()
         let list: BusList?
         do {
-            list = BusList.parse(try await MapFiles.get("/buses?svc=\(q)", token: TokenStore.read()))
-        } catch let e as ApiError where e.status == 401 {
-            return
+            list = BusList.parse(try await MapFiles.get("/buses?svc=\(q)", token: token))
         } catch {
+            if let e = Self.refusal(error) {
+                refuse(e, token: token, app: app)
+                return
+            }
             if !Task.isCancelled, svc == selected {
                 busStatus = online ? .unavailable : .offline
                 if let heardAt, Date().timeIntervalSince(heardAt) > 15 { busesStale = true }
@@ -123,9 +177,18 @@ final class MapModel {
         focusCount += 1
     }
 
-    func refreshBoard() async {
-        guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
-        let b = (try? await MapFiles.get("/arrivals?stop=\(q)", token: TokenStore.read())).flatMap(StopBoard.parse)
+    func refreshBoard(app: AppModel) async {
+        guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return }
+        let token = TokenStore.read()
+        var b: StopBoard?
+        do {
+            b = StopBoard.parse(try await MapFiles.get("/arrivals?stop=\(q)", token: token))
+        } catch {
+            if let e = Self.refusal(error) {
+                refuse(e, token: token, app: app)
+                return
+            }
+        }
         guard code == openStop else { return }
         if let b { board = b; boardFailed = false } else if board == nil { boardFailed = true }
     }
@@ -165,7 +228,7 @@ struct MapWindow: View {
                     drawn: .init(selected: map.selected, buses: map.buses, answers: map.busAnswers, stale: map.busesStale, sheet: map.sheet, me: map.me, recentre: map.recentre, zoomSteps: map.zoomSteps, focusCount: map.focusCount)
                 )
             } else if map.failed {
-                Text(L("The map needs a connection the first time."))
+                Text(map.refused?.text ?? L("The map needs a connection the first time."))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -174,7 +237,9 @@ struct MapWindow: View {
             if let campus = map.campus {
                 VStack(alignment: .leading, spacing: 8) {
                     Pills(campus: campus, selected: map.selected) { map.choose($0) }
-                    if let status = map.busStatus {
+                    if let refused = map.refused {
+                        StatusChip(text: refused.text).announced(refused.text)
+                    } else if let status = map.busStatus {
                         // Said for a new service, or when its buses go to or from none;
                         // not at every bus that joins or leaves.
                         StatusChip(text: status.text(map.selected ?? ""))
@@ -215,13 +280,14 @@ struct MapWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { n in
             if let w = n.object as? NSWindow, w === window, visible { shown += 1 }
         }
-        .task(id: scheme) { await map.open(dark: scheme == .dark, zh: Lang.zh) }
+        // Again after signing in, so a map refused while signed out loads.
+        .task(id: "\(scheme)|\(app.paired)") { await map.open(dark: scheme == .dark, zh: Lang.zh, app: app) }
         // Live buses every 5 s while a pill is on (the API caches 5 s), not
         // while the window is hidden behind others or minimised.
         .task(id: "\(map.selected ?? "")|\(shown)") {
             guard map.selected != nil else { return }
             while !Task.isCancelled {
-                if visible { await map.refreshBuses(online: app.online) }
+                if visible { await map.refreshBuses(app: app) }
                 try? await Task.sleep(for: .seconds(5))
             }
         }
@@ -229,7 +295,7 @@ struct MapWindow: View {
         .task(id: "\(map.openStop ?? "")|\(shown)") {
             guard map.openStop != nil else { return }
             while !Task.isCancelled {
-                if visible { await map.refreshBoard() }
+                if visible { await map.refreshBoard(app: app) }
                 try? await Task.sleep(for: .seconds(15))
             }
         }
@@ -242,6 +308,15 @@ struct MapWindow: View {
     }
 
     private var visible: Bool { window.map { $0.occlusionState.contains(.visible) && !$0.isMiniaturized } ?? true }
+}
+
+extension MapModel.Refusal {
+    var text: String {
+        switch self {
+        case .signedOut: L("Signed out. Sign in again from terminus in the menu bar.")
+        case .outdated: L("Update terminus to keep using it.")
+        }
+    }
 }
 
 extension MapModel.BusStatus {
@@ -494,7 +569,9 @@ private struct StopCard: View {
     var body: some View {
         MapCard(title: stop.name, close: { map.sheet = nil }) {
             Group {
-                if map.boardFailed {
+                if let refused = map.refused {
+                    Text(refused.text).foregroundStyle(.secondary)
+                } else if map.boardFailed {
                     Text(L("Live times need a connection.")).foregroundStyle(.secondary)
                 } else if let board = map.board {
                     if board.rows.isEmpty {
@@ -643,6 +720,13 @@ private struct CampusMapView: NSViewRepresentable {
         c.apply()
     }
 
+    /// The window closed: the slide's display link stops with it, and the
+    /// view no longer calls back into a coordinator that's going.
+    static func dismantleNSView(_ view: MLNMapView, coordinator: Coordinator) {
+        coordinator.stopAnimating()
+        view.delegate = nil
+    }
+
     @MainActor final class Coordinator: NSObject, @preconcurrency MLNMapViewDelegate {
         let map: MapModel
         var campus: CampusMap
@@ -655,7 +739,10 @@ private struct CampusMapView: NSViewRepresentable {
         private var slides = Slides()
         private var slidesFor: String?
         private var lastAnswer = 0
-        private var timer: Timer?
+        private var link: CADisplayLink?
+        /// What the stretch and your dot were last set to: set again only when they change.
+        private var drawnStretch: Data?
+        private var drawnMe: Data?
         private var applied: (selected: String?, dark: Bool, stretch: Bool, bus: String?, stale: Bool)?
         private var recentred = 0
         private var zoomedSteps = 0
@@ -678,7 +765,17 @@ private struct CampusMapView: NSViewRepresentable {
             build(style)
             loaded = true
             applied = nil
+            drawnStretch = nil
+            drawnMe = nil
             apply()
+            if let styleURL { MapFiles.styleLoaded(styleURL) }
+        }
+
+        /// A map file MapLibre can't read: dropped, and the plain map instead.
+        func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: any Error) {
+            // A style already replaced (the look changed) failing is no news.
+            guard let failed = mapView.styleURL, failed == styleURL else { return }
+            Task { await map.tilesFailed(failed) }
         }
 
         /// Never far off campus: the map file ends a little way out.
@@ -824,9 +921,15 @@ private struct CampusMapView: NSViewRepresentable {
                     (style.layer(withIdentifier: id) as? MLNSymbolStyleLayer)?.iconOpacity = NSExpression(forConstantValue: stale ? 0.4 : 1)
                 }
             }
-            (style.source(withIdentifier: "stretch") as? MLNShapeSource)?.shape = shape(stretchData)
+            if stretchData != drawnStretch {
+                drawnStretch = stretchData
+                (style.source(withIdentifier: "stretch") as? MLNShapeSource)?.shape = shape(stretchData)
+            }
             let meData = map.me.map { MapGeoJson.me(lat: $0.lat, lon: $0.lon) } ?? MapGeoJson.empty
-            (style.source(withIdentifier: "me") as? MLNShapeSource)?.shape = shape(meData)
+            if meData != drawnMe {
+                drawnMe = meData
+                (style.source(withIdentifier: "me") as? MLNShapeSource)?.shape = shape(meData)
+            }
 
             // Buses slide to each new place along their line (see Slides).
             // Every answer, even one the same as the last: a bus only jumps
@@ -841,20 +944,41 @@ private struct CampusMapView: NSViewRepresentable {
             camera()
         }
 
+        /// Features made here, not GeoJSON written and read again: a slide
+        /// sets them every frame.
         private func drawBuses() {
             guard let src = view?.style?.source(withIdentifier: "buses") as? MLNShapeSource else { return }
-            let data = MapGeoJson.buses(svc: map.selected ?? "", color: color, slides.at(Slides.clock))
-            src.shape = shape(data)
+            let svc = map.selected ?? "", color = color
+            let features = slides.at(Slides.clock).map { b in
+                let f = MLNPointFeature()
+                f.coordinate = CLLocationCoordinate2D(latitude: b.lat, longitude: b.lon)
+                f.attributes = MapGeoJson.busProperties(svc: svc, color: color, b)
+                return f
+            }
+            src.shape = MLNShapeCollectionFeature(shapes: features)
         }
 
-        /// Redraws the buses each frame while one is on its way.
+        /// Redraws the buses with the screen while one is on its way, at up
+        /// to 30 frames a second: enough for a bus crossing a few pixels.
         private func animate() {
-            guard timer == nil else { return }
-            let t = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.frame() }
-            }
-            RunLoop.main.add(t, forMode: .common)
-            timer = t
+            guard link == nil, let view, isShown(view) else { return }
+            let l = view.displayLink(target: LinkTarget(self), selector: #selector(LinkTarget.tick))
+            l.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
+            l.add(to: .main, forMode: .common)
+            link = l
+        }
+
+        func stopAnimating() {
+            link?.invalidate()
+            link = nil
+        }
+
+        /// Hidden, minimised or covered, there's nothing to draw for: the
+        /// buses are drawn where they are once it's back (the polls start
+        /// again then, and each answer plans the slides again).
+        private func isShown(_ view: NSView) -> Bool {
+            guard let w = view.window else { return false }
+            return w.isVisible && !w.isMiniaturized && w.occlusionState.contains(.visible)
         }
 
         /// First view: the whole campus, once the view has a size to fit it in.
@@ -869,12 +993,10 @@ private struct CampusMapView: NSViewRepresentable {
             MLNCoordinateBounds(sw: CLLocationCoordinate2D(latitude: b[1], longitude: b[0]), ne: CLLocationCoordinate2D(latitude: b[3], longitude: b[2]))
         }
 
-        private func frame() {
+        fileprivate func frame() {
+            guard let view, isShown(view) else { return stopAnimating() }
             drawBuses()
-            if !slides.moving(Slides.clock) {
-                timer?.invalidate()
-                timer = nil
-            }
+            if !slides.moving(Slides.clock) { stopAnimating() }
         }
 
         private func camera() {
@@ -973,6 +1095,20 @@ private struct CampusMapView: NSViewRepresentable {
                 return true
             }
         }
+    }
+}
+
+/// The display link's target. The link holds its target strongly, so this
+/// holds the coordinator weakly: once that's gone, the link stops itself
+/// rather than firing for ever.
+@MainActor private final class LinkTarget: NSObject {
+    weak var coordinator: CampusMapView.Coordinator?
+
+    init(_ coordinator: CampusMapView.Coordinator) { self.coordinator = coordinator }
+
+    @objc func tick(_ link: CADisplayLink) {
+        guard let coordinator else { return link.invalidate() }
+        coordinator.frame()
     }
 }
 

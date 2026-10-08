@@ -9,9 +9,12 @@
 # their downloads, appcast and latest.json, in the beta's own R2 bucket.
 #
 # A beta version is the next stable version's pre-release (after 2.0.0:
-# 2.0.1-beta.1, 2.0.1-beta.2, ...). The build number is the commit count, so
-# it only goes up. A release's own version (2.0.0) can go out on the beta
-# too, so the beta apps move onto it from their betas. Nothing touches the
+# 2.0.1-beta.1, 2.0.1-beta.2, ...). The build number is the commit count,
+# which goes up along main; the script refuses one that isn't above the live
+# appcast's (a branch behind the last beta), and uploads nothing until the
+# beta Worker answers with this commit's API. A release's own version
+# (2.0.0) can go out on the beta too, so the beta apps move onto it from
+# their betas. Nothing touches the
 # stable site, its data or its downloads. It runs on this Mac and signs with
 # the same keys as stable (the Android release key in ~/.gradle, and the Mac
 # certificate and the Sparkle key in ~/.terminus), with no CI.
@@ -33,6 +36,10 @@ BUILD=$(git rev-list --count HEAD)
 BETA_D1=$(sed -n '/^const BETA = {/,/^};/s/.*d1: "\(.*\)".*/\1/p' apps/api/cloudflare.config.ts)
 [ -n "$BETA_D1" ] || [ $DRY -eq 1 ] || { echo "the beta's D1 id isn't in apps/api/cloudflare.config.ts yet"; exit 1; }
 grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || { echo "Android release key not configured (TERMINUS_KEYSTORE)"; exit 1; }
+# The terminus certificate, as scripts/release.sh: build.sh would otherwise
+# sign ad-hoc without it, and the beta app would lose its permissions.
+export SIGN_IDENTITY=C4EE234DA75ED3CD7699A31394C276801F93C4A9
+security find-identity -p codesigning | grep -q "$SIGN_IDENTITY" || { echo "the terminus certificate isn't in the keychain: import ~/.terminus/mac-signing.p12"; exit 1; }
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || { echo "no Sparkle key at $SPARKLE_KEY"; exit 1; }
 # What's released must be what's committed (untracked files don't count).
@@ -49,11 +56,22 @@ if [ $DRY -eq 0 ]; then
   [ "$CURRENT" != "$VERSION" ] || { echo "$VERSION is already the beta; pick the next number"; exit 1; }
 fi
 
+# What the live beta says (scripts/release-check.py): Sparkle only installs
+# a build above its appcast's, and the commit count goes down from a branch
+# behind the last beta's. A dry run reports and carries on.
+live_check() {
+  python3 scripts/release-check.py "$@" && return 0
+  [ $DRY -eq 1 ] && { echo "   (a release would stop here)"; return 0; }
+  exit 1
+}
+
 mkdir -p build
 OUT="$ROOT/build/release/beta/$VERSION"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 echo "== terminus beta $VERSION (build $BUILD, $(git rev-parse --short HEAD))"
+echo "== live beta"
+live_check build "$SITE" "$BUILD"
 
 echo "== tests"
 if ! pnpm --silent check >"$ROOT/build/test.log" 2>&1; then
@@ -72,7 +90,7 @@ cp "$APKS/app-beta-armeabi-v7a-release.apk" "$OUT/terminus-$VERSION-armv7.apk"
 cp "$APKS/app-beta-x86_64-release.apk" "$OUT/terminus-$VERSION-x86_64.apk"
 
 echo "== mac"
-CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" scripts/package-mac.sh
+CHANNEL=beta BETA_VERSION="$VERSION" BETA_BUILD="$BUILD" PUBLISH=true scripts/package-mac.sh
 DMG="$OUT/terminus-$VERSION.dmg"
 SIG=$("$ROOT/apps/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update" --ed-key-file "$SPARKLE_KEY" -p "$DMG")
 printf '%s' "$SIG" | grep -q . || { echo "sign_update gave no signature"; exit 1; }
@@ -95,7 +113,13 @@ print(json.dumps({
 EOF
 cat "$OUT/latest.json"
 
+# The beta's apps expect this commit's API (API_VERSION, apps/api/src/openapi.ts).
+API_VERSION=$(sed -n "s/^export const API_VERSION = '\(.*\)';/\1/p" apps/api/src/openapi.ts)
+[ -n "$API_VERSION" ] || { echo "no API_VERSION in apps/api/src/openapi.ts"; exit 1; }
+
 if [ $DRY -eq 1 ]; then
+  echo "== live beta (before this run's deploy)"
+  live_check api "$SITE" "$API_VERSION"
   echo "== dry run: nothing deployed or uploaded (files in $OUT)"
   exit 0
 fi
@@ -103,6 +127,15 @@ fi
 echo "== beta Worker"
 # deploy:beta applies the beta D1's pending migrations first.
 (cd apps/api && pnpm run deploy:beta)
+# Before the appcast: the deploy landed, and nothing went up since the
+# first check. A new deploy can take a few seconds to answer everywhere.
+echo "== live beta"
+live_check build "$SITE" "$BUILD"
+for try in 1 2 3 4 5 6; do
+  python3 scripts/release-check.py api "$SITE" "$API_VERSION" && break
+  [ "$try" = 6 ] && exit 1
+  sleep 10
+done
 
 echo "== upload"
 # Wrangler, not `cf r2 objects put`: cf percent-encodes the slashes in the key.

@@ -18,6 +18,9 @@ final class SetupModel {
     private(set) var imported: ImportResult?
     private(set) var devices: [Device]?
     private(set) var pairCode: String?
+    /// When the code was made: it works for 10 minutes (accounts.ts `pairCodeMs`).
+    private var pairCodeAt = Date()
+    static let pairCodeS: TimeInterval = 10 * 60
     private(set) var busy = false
     /// Imported classes whose room couldn't be placed, until each gets a stop or is skipped.
     private(set) var unplaced: [Unplaced] = []
@@ -417,6 +420,7 @@ final class SetupModel {
         defer { busy = false }
         do {
             pairCode = try await api.pairCode()
+            pairCodeAt = Date()
             message = nil
         } catch let e as ApiError {
             // 403: an account without an email can't add devices.
@@ -431,11 +435,19 @@ final class SetupModel {
 
     /// While the code is showing, checks every few seconds for a device
     /// that wasn't there before, and goes back to the list once one is.
-    /// Cancelled with the card (Done, or the window closing).
+    /// Cancelled with the card (Done, or the window closing). Once the code
+    /// has expired nothing can use it: back to the list, saying so.
     func waitForNewDevice() async {
         let known = Set((devices ?? []).map(\.id))
         let code = pairCode
+        let until = pairCodeAt.addingTimeInterval(Self.pairCodeS)
         while !Task.isCancelled, pairCode == code {
+            guard Date() < until else {
+                pairCode = nil
+                message = L("That code expired. Choose Add a device for a new one.")
+                await loadDevices()
+                return
+            }
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled, pairCode == code, let now = try? await api.devices() else { continue }
             if let added = now.first(where: { !known.contains($0.id) }) {

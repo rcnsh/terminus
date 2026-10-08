@@ -424,3 +424,13 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(AnswerDetail.RideLine.spoken(stops, passed: 2) == "Next stop: UTown, where you get off.")
     #expect(AnswerDetail.RideLine.spoken(stops, passed: 3) == "Next stop: UTown, where you get off.")
 }
+
+@MainActor @Test func restingTheMacIsLocatedOnlyOnceTheRestEnds() throws {
+    let m = AppModel(snapshot: true)
+    let a = try golden("rest")
+    let ends = try #require(a.planChanges)
+    #expect(m.wantsFix(at: ends), "no plan yet")
+    m.answers[.plan] = a
+    #expect(!m.wantsFix(at: ends.addingTimeInterval(-60)), "resting, popover closed")
+    #expect(m.wantsFix(at: ends), "the rest's end has come")
+}

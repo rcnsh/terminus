@@ -4,7 +4,9 @@
     scripts/appcast.py <version> <build> <min-os> <ed-signature> <dmg> <site>
 
 Sparkle compares <build> (CFBundleVersion). The DMG is named by its path
-under <site>/download/, as /download/releases/<version>/ serves it.
+under <site>/download/, as /download/releases/<version>/ serves it. A
+release's item links to its tag's page on GitHub: scripts/release.sh pushes
+the tag before it uploads this, so the link never leads nowhere.
 """
 import email.utils, os, sys
 from xml.sax.saxutils import escape, quoteattr

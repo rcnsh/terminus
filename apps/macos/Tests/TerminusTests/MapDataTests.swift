@@ -271,3 +271,13 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
     #expect(b.rows[0].eta == "4 min")
     #expect(b.rows[1].eta == nil, "an older server's row is worded here")
 }
+
+@Test func onlyAPMTilesFileReplacesTheMap() {
+    var head = Data("PMTiles".utf8) + Data([3])
+    #expect(MapFiles.isPMTiles(head, size: 4_000_000))
+    #expect(!MapFiles.isPMTiles(head, size: 2_000), "too small to be the campus")
+    #expect(!MapFiles.isPMTiles(Data("<!DOCTYPE html>".utf8), size: 4_000_000), "a Wi-Fi sign-in page")
+    head[7] = 2
+    #expect(!MapFiles.isPMTiles(head, size: 4_000_000), "another version")
+    #expect(!MapFiles.isPMTiles(Data("PMTiles".utf8), size: 4_000_000), "no version byte")
+}
