@@ -447,6 +447,20 @@ cron deleting an idle one. An emptied object keeps only a `gone` mark until
 midnight and refuses every write, so a `/me/next` already under way when
 the account went can't store its trip again.
 
+A trip that changes buses goes `riding` (the first bus, its ride ending at
+the change), `waiting` (at the change stop, `phaseText` "Change buses",
+the second bus as the leave-by to catch), then `riding` again on the
+second, with no phase of its own, so an app that knows nothing of changes
+still shows each part right. The plan and the `boarded` record are the
+first bus with the second in `change` (`Boarded.change`); `rideStage()`
+says which part you're on, from the clock, and from the feed while it still
+has the first bus on its way to the change. At the change stop the second
+bus's time is read from the feed there, the same bus only (within
+`SAME_BUS_MS`), so a later one never keeps the trip waiting. Still at the
+change stop `ASSUME_MS` after the second bus left: missed, and the answer
+is the next way there from where you are. `nextPhaseAt` wakes the Trip
+object at the change and once the second bus has gone.
+
 ### One plan, and push
 
 - **One plan, everywhere** ([src/plan.ts](../src/plan.ts)). The Worker saves the bus a trip is for in the

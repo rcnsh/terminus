@@ -81,6 +81,7 @@
       "live": false,
       "backup": null,
       "why": "今晚已停运",
+      "change": null,
       "title": "回家",
       "place": "家",
       "byText": null,

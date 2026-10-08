@@ -103,6 +103,7 @@
       "live": false,
       "backup": null,
       "why": "今晚已停运",
+      "change": null,
       "title": "去 CS2030 @ COM1 · 00:30 开始",
       "place": "CS2030",
       "byText": null,

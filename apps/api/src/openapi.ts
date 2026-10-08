@@ -2472,6 +2472,18 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         stops: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, name: { type: 'string' } } } },
                         board: { type: 'string', format: 'date-time' },
                         arrive: { type: 'string', format: 'date-time' },
+                        change: {
+                          type: 'object',
+                          description: 'On the first bus of a trip that changes buses: the bus to change to. `stops` then end where you change. Absent otherwise.',
+                          required: ['svc', 'color', 'stop', 'board', 'text'],
+                          properties: {
+                            svc: { type: 'string', example: 'P' },
+                            color: { type: 'string', description: 'The service’s colour, `#rrggbb`.' },
+                            stop: { type: 'string', example: 'Kent Vale', description: 'Where it goes from.' },
+                            board: { type: ['string', 'null'], format: 'date-time', description: 'When it leaves. Null with no time.' },
+                            text: { type: 'string', example: 'Then P at 09:42 from Kent Vale', description: 'Show under the progress bar, as it is.' },
+                          },
+                        },
                       },
                     },
                     gone: { type: 'boolean', description: 'The planned bus has left and nothing says whether you are on it: `line` says it has gone and gives the next way there. Notify with that line, quietly, never "Leave now".' },
@@ -2489,7 +2501,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         'On foot the whole way it is the walk alone: `bus`, `boardAt` and `ride` are null, `walk` is the whole walk and `why` says why not a bus. ' +
                         'Null on the bus, once there, and with no time to give. Count down to `leave.at` and `boardAt` yourself; show the strings as they are.',
                       required: [
-                        'leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'walkEnd', 'arriveStop', 'slack', 'live', 'backup', 'why',
+                        'leave', 'walk', 'bus', 'boardAt', 'ride', 'off', 'to', 'toStop', 'arrive', 'walkEnd', 'arriveStop', 'slack', 'live', 'backup', 'why', 'change',
                         'title', 'place', 'byText', 'walkText', 'rideText', 'walkEndText', 'arriveText', 'arriveWhere', 'backupText', 'summary',
                       ],
                       properties: {
@@ -2514,6 +2526,27 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                           description: 'Another bus: the next one for a trip, or for a class the sooner bus to go now on.',
                         },
                         why: { type: ['string', 'null'], description: 'On foot: why not a bus ("D1 would be 16 min"). Null with a bus.' },
+                        change: {
+                          type: ['object', 'null'],
+                          description:
+                            'A trip that changes buses: off `bus` at `from`, across the road to `stop` when it is not the same stop, and on to the second bus. ' +
+                            '`bus` is then the first bus, and `ride` and `rideText` name the change too ("14 min, then P"), for an app that draws one bus; one that draws both uses `firstRide` and `firstRideText` for the first. Null on one bus and on foot.',
+                          required: ['from', 'stop', 'reach', 'walk', 'wait', 'bus', 'boardAt', 'ride', 'firstRide', 'firstRideText', 'changeText', 'rideText'],
+                          properties: {
+                            from: { type: 'string', example: 'Kent Vale', description: 'Where the first bus drops you.' },
+                            stop: { type: 'string', description: 'Where the second bus goes from: `from`, or the stop across the road.' },
+                            reach: { type: 'string', example: '09:37', description: 'When the first bus gets to `from` ("~09:37" for an estimate).' },
+                            walk: { type: ['string', 'null'], description: 'The walk across the road ("1 min"). Null at the same stop.' },
+                            wait: { type: ['string', 'null'], example: '5 min', description: 'The wait there for the second bus. Null under a minute.' },
+                            bus: { $ref: '#/components/schemas/JourneyBus' },
+                            boardAt: { type: 'string', format: 'date-time', description: 'When the second bus leaves, to count down to.' },
+                            ride: { type: 'string', example: '14 min', description: 'Time on the second bus.' },
+                            firstRide: { type: 'string', example: '14 min', description: 'Time on the first bus.' },
+                            firstRideText: { type: 'string', example: '14 min ride · off at Kent Vale', description: 'The first bus’s step, in place of `rideText`.' },
+                            changeText: { type: 'string', example: 'Change at Kent Vale · 5 min wait', description: 'The change as a step.' },
+                            rideText: { type: 'string', example: '14 min ride', description: 'The second bus’s step, with where to get off when that is across the road.' },
+                          },
+                        },
                         title: { type: 'string', example: 'To GEA1000 @ UTown · starts 10:00', description: 'Where to, with a class’s start ("To X · starts 10:00"; Chinese "去 X · 10:00 开始", "回家" for home).' },
                         place: { type: 'string', example: 'GEA1000', description: 'Where you are going, short enough for the end of a line: `to` without its " @ " part.' },
                         byText: { type: ['string', 'null'], example: 'by ~09:36', description: 'Under the leave countdown, until it is time to go. Null when `leave` is, and at the stop.' },

@@ -27,7 +27,7 @@
  */
 
 import type { Leave } from './types.ts';
-import { type Boarded, WAIT_EARLY_MS } from './trip.ts';
+import { type Boarded, WAIT_EARLY_MS, secondBusOf, tripEnd } from './trip.ts';
 
 /** Live times move this much from one answer to the next, and it's still the same bus. */
 export const SAME_BUS_MS = 3 * 60_000;
@@ -35,6 +35,12 @@ export const SAME_BUS_MS = 3 * 60_000;
 /** The bus a leave-by is for, as a plan; null when it's a walk. */
 export function planOfLeave(l: Leave | null | undefined, located: boolean, alightCode: string): Boarded | null {
   if (!l?.svc || !l.board) return null;
+  const change = secondBusOf(l, alightCode);
+  if (change) {
+    // The first bus to the change; the second (and the trip's end) after it.
+    const first = planOfLeave({ ...l, change: undefined, arrive: l.change!.reach, off: undefined, offCode: l.change!.fromCode }, located, l.change!.fromCode)!;
+    return { ...first, change };
+  }
   return {
     svc: l.svc,
     stop: l.stop ?? '',
@@ -57,6 +63,8 @@ export function planOfLeave(l: Leave | null | undefined, located: boolean, aligh
 /** The same service from the same stop, its time moved a little by the feed. */
 export function sameBus(a: Boarded | null | undefined, b: Boarded | null | undefined): boolean {
   if (!a?.board || !b?.board || a.svc !== b.svc || (a.stopCode ?? a.stop) !== (b.stopCode ?? b.stop)) return false;
+  // A trip that changes buses is the same only with the same change.
+  if (a.change?.svc !== b.change?.svc || a.change?.stopCode !== b.change?.stopCode) return false;
   return Math.abs(Date.parse(a.board) - Date.parse(b.board)) <= SAME_BUS_MS;
 }
 
@@ -90,8 +98,8 @@ export function choosePlan({ stored, made, located, classAtMs, nowMs }: PlanInpu
   if (!located && stored?.located && ahead) return { bus: sameBus(stored, made) ? made : stored, save: false };
 
   const told =
-    located && stored?.located && ahead && stored.leave && stored.arrive && classAtMs !== null &&
-    nowMs >= at(stored.leave) - WAIT_EARLY_MS && at(stored.arrive) <= classAtMs;
+    located && stored?.located && ahead && stored.leave && tripEnd(stored) && classAtMs !== null &&
+    nowMs >= at(stored.leave) - WAIT_EARLY_MS && at(tripEnd(stored) ?? undefined) <= classAtMs;
   // The same bus with newer times is still that bus: shown as the answer has it.
   if (told && !sameBus(stored, made)) return { bus: stored, save: false };
 
