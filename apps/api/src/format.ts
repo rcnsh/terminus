@@ -138,7 +138,8 @@ export function legOf(o: ScoredOption, endWalkS = 0): BusLeg {
     rideS: o.rideS,
     board: timed ? iso(o.fromMs + o.boardS * 1000) : null,
     arrive: timed ? iso(o.fromMs + o.totalS * 1000) : null,
-    estimated: o.quality === 'scheduled',
+    // An old reading counted down to now is no more exact than a guess (etaPhrase).
+    estimated: o.quality === 'scheduled' || o.quality === 'stale',
     ...(o.off ? { off: shortStop(o.off.name) } : {}),
     ...(o.to ? { toStop: shortStop(o.to.name) } : {}),
     ...(endWalkS > 0 ? { endWalkS } : {}),

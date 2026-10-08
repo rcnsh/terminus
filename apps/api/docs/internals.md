@@ -1084,7 +1084,8 @@ from LTA DataMall accessed via the Singapore Open Data Licence.
 ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-
 old answer labelled as such beats a spinner, and beats an empty tile that
 reads as "no buses". Only a real arrival becomes `stale`; a headway guess
-from an old answer stays `scheduled`. Arrival times count from when they were
+from an old answer stays `scheduled`. A stale bus's leg (`bus`, `altBus`) is
+`estimated`, as a guess's is, so its times are drawn with a `~`. Arrival times count from when they were
 fetched, so a bus that has left since then (by the walk to it) is never
 offered as catchable.
 
