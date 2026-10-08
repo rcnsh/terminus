@@ -1,34 +1,61 @@
 import AppKit
 import Foundation
+import Observation
 import Sparkle
 import os
 
 /// Updates through Sparkle: checks the appcast every few hours, downloads a
-/// new version in the background and installs it when the popover, Settings
-/// and Setup are closed, relaunching straight into it. Each update is checked
-/// against the EdDSA key in Info.plist (SUPublicEDKey) and against this app's
-/// code signature, so only a release signed with both the update key and the
-/// terminus certificate installs.
+/// new version in the background and installs it once the popover and every
+/// window (Settings, Setup, the map) are closed, relaunching straight into
+/// it. What lets an update install is its EdDSA signature, checked against
+/// the key in Info.plist (SUPublicEDKey): with a valid one, Sparkle accepts a
+/// changed code signature too, so that key alone vouches for a release.
+/// Stable and beta share it; each app only reads its own feed (SUFeedURL).
 ///
 /// Only runs from a built app in Applications: `swift run` has no bundle to
 /// replace, and a translocated copy (opened from Downloads or the DMG) can't
 /// be written.
 @MainActor
+@Observable
 final class Updater: NSObject, SPUUpdaterDelegate {
     static let shared = Updater()
 
-    private let log = Logger(subsystem: "sh.rcn.terminus", category: "update")
+    @ObservationIgnored private let log = Logger(subsystem: "sh.rcn.terminus", category: "update")
     private var controller: SPUStandardUpdaterController?
     /// Sparkle's "install now" for a downloaded update, held while the
     /// popover is open so it doesn't vanish from under the user.
-    private var installNow: (() -> Void)?
-    private var closeWatch: NSObjectProtocol?
+    @ObservationIgnored private var installNow: (() -> Void)?
+    @ObservationIgnored private var closeWatch: NSObjectProtocol?
+    /// The popover's own window, which `popoverOpen` covers.
+    @ObservationIgnored weak var popoverWindow: NSWindow?
+    /// Settings' switches. Sparkle keeps the choice in its own defaults, over
+    /// Info.plist's (both on).
+    private(set) var checksAutomatically = false
+    private(set) var installsAutomatically = false
 
     var running: Bool { controller != nil }
 
     func start(misplaced: Bool) {
         guard controller == nil, !misplaced, Bundle.main.bundleURL.pathExtension == "app" else { return }
-        controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+        let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+        self.controller = controller
+        checksAutomatically = controller.updater.automaticallyChecksForUpdates
+        installsAutomatically = controller.updater.automaticallyDownloadsUpdates
+    }
+
+    /// Off, nothing is fetched until "Check for updates"; the popover still
+    /// says when a new version is out (from latest.json).
+    func setChecksAutomatically(_ on: Bool) {
+        guard let controller else { return }
+        controller.updater.automaticallyChecksForUpdates = on
+        checksAutomatically = controller.updater.automaticallyChecksForUpdates
+    }
+
+    /// Off, Sparkle asks in its own window before downloading an update.
+    func setInstallsAutomatically(_ on: Bool) {
+        guard let controller else { return }
+        controller.updater.automaticallyDownloadsUpdates = on
+        installsAutomatically = controller.updater.automaticallyDownloadsUpdates
     }
 
     /// From Settings or the "terminus x is out" card: check now, with
@@ -40,13 +67,22 @@ final class Updater: NSObject, SPUUpdaterDelegate {
         controller?.checkForUpdates(nil)
     }
 
-    /// Settings or Setup is open: relaunching would close it mid-edit.
-    /// (SwiftUI names each window after its scene's id.)
+    /// A window is open (Settings, Setup, the map, Sparkle's own): relaunching
+    /// would close it from under the user.
     private var windowOpen: Bool {
         NSApp.windows.contains { w in
-            let id = w.identifier?.rawValue ?? ""
-            return w.isVisible && (id.hasPrefix("settings") || id.hasPrefix("setup"))
+            w !== popoverWindow
+                && Self.blocksInstall(id: w.identifier?.rawValue ?? "", shown: w.isVisible || w.isMiniaturized, level: w.level)
         }
+    }
+
+    /// Whether a window holds back an install: any ordinary one, on screen
+    /// or in the Dock, whatever its scene, so a window added later counts
+    /// without a list to keep. The menu bar item's window sits above the
+    /// normal level; the debug window "popover" is the popover. (SwiftUI
+    /// names each window after its scene's id.)
+    nonisolated static func blocksInstall(id: String, shown: Bool, level: NSWindow.Level) -> Bool {
+        shown && level == .normal && !id.hasPrefix("popover")
     }
 
     /// The popover or a window closed: a waiting update can go in now, if
