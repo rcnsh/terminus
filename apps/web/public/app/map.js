@@ -14,7 +14,7 @@
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
 import { Icon, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
-import { inkOn, send, t } from '/account/dom.js';
+import { inkOn, send, signedOut, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
 import { Row } from '/app/board.js';
@@ -120,10 +120,7 @@ const svcVars = (svc) => `--svc:${colorOf(svc)};--svc-ink:${inkOn(colorOf(svc))}
 
 async function getJSON(path, timeoutMs) {
   const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' }, timeoutMs });
-  if (res.status === 401) {
-    location.replace('/account/?next=/app/');
-    throw new Error('signed out');
-  }
+  if (res.status === 401) await signedOut();
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
   return res.json();
 }

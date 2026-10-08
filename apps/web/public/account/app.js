@@ -361,6 +361,8 @@ async function start() {
     me = await api('/me');
   } catch (err) {
     if (err.status === 401) {
+      // Signed out, or deleted, elsewhere: what this browser kept of it goes.
+      forgetAccountHere();
       set({ view: 'signin' });
       // Ready by the time they've signed in, without holding up the card.
       if (document.readyState === 'complete') loadParts();

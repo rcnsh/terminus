@@ -11,7 +11,7 @@
 // feed reported, and a line shows no times at stops other than yours.
 
 import { Fill, Icon, MARK, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useStore } from '/assets/ui.js';
-import { clock, send, serverNow, t } from '/account/dom.js';
+import { clock, send, serverNow, signedOut, t } from '/account/dom.js';
 import { campus, edit, limit, loadCampus, profile, reloadProfile, toast } from '/account/profile.js';
 import { SearchBox } from '/account/search-box.js';
 import { Celestial, Horizon } from '/account/sky.js';
@@ -64,10 +64,7 @@ let locate = async () => null;
 
 async function getJSON(path) {
   const res = await send(path, { credentials: 'same-origin', headers: { 'accept-language': window.i18n?.header ?? 'en' } });
-  if (res.status === 401) {
-    location.replace('/account/?next=/app/');
-    throw new Error('signed out');
-  }
+  if (res.status === 401) await signedOut();
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
   return res.json();
 }

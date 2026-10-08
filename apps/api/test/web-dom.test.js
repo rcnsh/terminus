@@ -86,3 +86,34 @@ test('what a screen reader says is stopped as the page writes it: ". " in Englis
     globalThis.window.i18n = was;
   }
 });
+
+test("signed out elsewhere: the account's things go, the browser's look stays, and it's off to sign in", async () => {
+  const { memoryStorage } = await import('./_web.mjs');
+  const realStorage = globalThis.localStorage;
+  const realLocation = globalThis.location;
+  const kept = { 'terminus-lang': 'zh', 'terminus-theme': 'dark', 'terminus.clock': '24', 'terminus-card-style': 'compact' };
+  const store = memoryStorage({ ...kept, 'added-places': '[{"to":"COM3"}]', 'terminus-lang-applied': 'zh' });
+  const went = [];
+  Object.defineProperty(globalThis, 'localStorage', { value: store, configurable: true, writable: true });
+  Object.defineProperty(globalThis, 'location', { value: { replace: (u) => went.push(u) }, configurable: true, writable: true });
+  try {
+    const { signedOut } = await import('../../web/public/account/dom.js');
+    await assert.rejects(signedOut(), { message: 'signed out' });
+    assert.equal(store.getItem('added-places'), null);
+    assert.equal(store.getItem('terminus-lang-applied'), null);
+    for (const [k, v] of Object.entries(kept)) assert.equal(store.getItem(k), v, k);
+    assert.deepEqual(went, ['/account/?next=/app/']);
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { value: realStorage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'location', { value: realLocation, configurable: true, writable: true });
+  }
+});
+
+test('every 401 in the web app goes through signedOut, so none skips forgetting the account', async () => {
+  const fs = await import('node:fs');
+  for (const f of ['app/app.js', 'app/buses.js', 'app/map.js']) {
+    const src = fs.readFileSync(new URL(`../../web/public/${f}`, import.meta.url), 'utf8');
+    assert.match(src, /status === 401\) await signedOut\(\);/, f);
+    assert.doesNotMatch(src, /location\.replace\('\/account\//, f);
+  }
+});
