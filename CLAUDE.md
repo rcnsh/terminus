@@ -498,6 +498,14 @@ scripts/              release.sh, release-beta.sh (+ release-lib.sh, their share
 - **User-facing copy** is short, plain and concrete, in British spelling
   (colour, metres), with no jargon. It names what the user sees ("the map",
   "your stop"), not internals.
+- **Controls that act on one item** sit inside that item's own shape, so
+  it's plain what they act on. A × that removes a tab or a chip goes
+  inside its outline or pill, never loose beside it, where it reads as
+  closing the whole row or the search. The four clients show the same
+  thing the same way: when you build or change a control in one, look at
+  how the others draw it (Android `AddedChip`, the web's `.chip-added`,
+  the Mac's `Tabs`) and match them. Check it in a screenshot of each state
+  (chosen and not).
 - **TypeScript:** ES modules, `.ts` import specifiers, single quotes,
   numeric separators (`15_000`), small pure functions exported for tests.
 - **Website:** Preact components with htm templates, imported from
