@@ -84,16 +84,14 @@ struct Header: View {
             out.status = (.gray, text, text)
         } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
             // Once it's time, the headline says "Leave now" and this line goes, as on the phone and the web.
-            let left = Int(at.timeIntervalSince(now))
-            if left > 0 {
-                let text = left >= 120 ? L("in %@ min", "\((left + 30) / 60)") : L("in %@ min %@ s", "\(left / 60)", "\(left % 60)")
+            if let left = Self.secondsLeft(to: at, now: now) {
                 let spoken = left >= 60 ? L("in %@ min", "\((left + 30) / 60)") : L("in under a minute")
-                out.status = (a.leaveLate ? .red : .brand, sure(text), sure(spoken))
+                out.status = (a.leaveLate ? .red : .brand, sure(Self.leaveIn(left)), sure(spoken))
             }
         } else if !model.showNearby, !resting, let a, a.hasLiveTime, let at = a.departure {
             // A guess counts down in minutes: its seconds would be false precision.
             let guess = a.card?.quality != nil
-            out.status = (dotColor(a.quality), sure(countdown(to: at, now: now, minutes: guess)), sure(countdown(to: at, now: now, minutes: true)))
+            out.status = (dotColor(a.quality), sure(Self.countdown(to: at, now: now, minutes: guess)), sure(Self.countdown(to: at, now: now, minutes: true)))
         } else if resting {
             out.status = (.brand, restStatus, restStatus)
         } else if let text = status(a) {
@@ -115,11 +113,27 @@ struct Header: View {
     /// "Leaves in 4 min 12 s", then "Left 1 min ago" until the answer is
     /// replaced or goes stale. To the minute ("Leaves in 4 min") when
     /// spoken, or for a guess.
-    private func countdown(to at: Date, now: Date, minutes: Bool = false) -> String {
-        let left = Int(at.timeIntervalSince(now))
-        if left <= 0 { return L("Left %@ min ago", "\((-left + 59) / 60)") }
+    static func countdown(to at: Date, now: Date, minutes: Bool = false) -> String {
+        guard let left = secondsLeft(to: at, now: now) else {
+            // Gone: a minute ago from the moment it left, never "0 min ago".
+            return L("Left %@ min ago", "\(max(1, Int((now.timeIntervalSince(at) / 60).rounded(.up))))")
+        }
         if minutes { return left >= 60 ? L("Leaves in %@ min", "\((left + 30) / 60)") : L("Leaves in under a minute") }
         return left >= 60 ? L("Leaves in %@ min %@ s", "\(left / 60)", "\(left % 60)") : L("Leaves in %@ s", "\(left)")
+    }
+
+    /// Whole seconds until `at`, at least 1 while it's still ahead (the last
+    /// part of a second is "1 s", not "0 s"); nil once it has come, as the phone does.
+    static func secondsLeft(to at: Date, now: Date) -> Int? {
+        let left = at.timeIntervalSince(now)
+        return left > 0 ? max(1, Int(left)) : nil
+    }
+
+    /// The class's leave-by, beside the headline: "in 4 min" (rounded) from
+    /// two minutes, then "in 1 min 5 s", then "in 45 s", as the phone counts down.
+    static func leaveIn(_ left: Int) -> String {
+        if left >= 120 { return L("in %@ min", "\((left + 30) / 60)") }
+        return left >= 60 ? L("in %@ min %@ s", "\(left / 60)", "\(left % 60)") : L("in %@ s", "\(left)")
     }
 
     private var restStatus: String { L("No buses until your day starts") + updatedAt }
