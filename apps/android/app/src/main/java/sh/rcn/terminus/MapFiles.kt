@@ -3,8 +3,8 @@ package sh.rcn.terminus
 import android.content.Context
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -152,74 +152,94 @@ object MapFiles {
      * where the map file is now, if one is.
      */
     suspend fun keepTiles(ctx: Context): String? = withContext(Dispatchers.IO) {
+        val job = currentCoroutineContext()[Job]
         tilesLock.withLock {
             val dir = dir(ctx)
-            val tiles = checked(dir)
-            tidy(dir, tiles)
-            val meta = readMeta(dir)
-            val now = System.currentTimeMillis()
-            val due = tiles == null || meta == null || now - meta.optLong("checked") !in 0 until CHECK_MS
-            // A newer map (twice a year) can wait for Wi-Fi; the first one can't, or there's no map.
-            if (due && !(tiles != null && metered(ctx))) {
-                try {
-                    download(ctx, dir, tiles, meta, now)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // Quiet: tried again next time.
-                }
-            }
-            current(dir, readMeta(dir))?.absolutePath
+            keepTiles(dir, System.currentTimeMillis(), { metered(ctx) }) { etag, into -> fetchTiles(ctx, dir, job, etag, into) }
         }
     }
 
-    private suspend fun download(ctx: Context, dir: File, tiles: File?, meta: JSONObject?, now: Long) {
-        val conn = URL("${BuildConfig.API_BASE}/map/$TILES").openConnection() as HttpURLConnection
+    /** What the map file's URL answered: its status, ETag and Content-Length. */
+    data class Fetched(val code: Int, val etag: String?, val length: Long?)
+
+    /**
+     * [keepTiles] in [dir] at [now], under [tilesLock]. [fetch] asks for the
+     * map file (with the kept ETag, if any) and, on a 200, writes the body to
+     * its second argument. Returns where the map file is now, if one is.
+     */
+    internal fun keepTiles(dir: File, now: Long, metered: () -> Boolean, fetch: (etag: String?, into: File) -> Fetched): String? {
+        val tiles = checked(dir)
+        tidy(dir, tiles)
+        val meta = readMeta(dir)
+        val due = tiles == null || meta == null || now - meta.optLong("checked") !in 0 until CHECK_MS
+        // A newer map (twice a year) can wait for Wi-Fi; the first one can't, or there's no map.
+        if (due && !(tiles != null && metered())) {
+            try {
+                download(dir, tiles, meta, now, fetch)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Quiet: tried again next time.
+            }
+        }
+        return current(dir, readMeta(dir))?.absolutePath
+    }
+
+    private fun download(dir: File, tiles: File?, meta: JSONObject?, now: Long, fetch: (String?, File) -> Fetched) {
+        val keptTag = meta?.optString("etag")?.takeIf { it.isNotEmpty() }
+        // A file of its own for each try: nothing else writes to it.
+        val part = File.createTempFile("campus", ".part", dir)
+        var kept = false
         try {
-            conn.connectTimeout = 8_000
-            conn.readTimeout = 30_000
-            conn.setRequestProperty("x-terminus-client", CLIENT)
-            val keptTag = meta?.optString("etag")?.takeIf { it.isNotEmpty() }
             // Only with a whole file here: a 304 then means that file is current.
-            if (tiles != null && keptTag != null) conn.setRequestProperty("if-none-match", keptTag)
-            when (conn.responseCode) {
+            val got = fetch(if (tiles != null) keptTag else null, part)
+            when (got.code) {
                 304 -> {
                     if (tiles == null || meta == null) error("not modified, with nothing kept")
                     // A file kept before versions had names gets its name and size written down.
                     writeMeta(dir, meta.put("file", tiles.name).put("size", tiles.length()).put("checked", now))
                 }
                 200 -> {
-                    val length = conn.getHeaderField("content-length")?.toLongOrNull()
-                    if (room(ctx, dir) < (length ?: 0) + SPARE_BYTES) error("no room for the map file")
-                    val etag = conn.getHeaderField("etag")
-                    // A file of its own for each try: nothing else writes to it.
-                    val part = File.createTempFile("campus", ".part", dir)
-                    var kept = false
-                    try {
-                        conn.inputStream.use { input -> part.outputStream().use { copy(input, it) } }
-                        // A cut-off download, or something that isn't the map, must not replace a good file.
-                        if (length != null && part.length() != length) error("short download")
-                        if (!isPmTiles(head(part), part.length())) error("not a map file")
-                        val target = File(dir, tilesName(etag, now))
-                        if (!part.renameTo(target)) error("couldn't keep the map file")
-                        kept = true
-                        writeMeta(dir, JSONObject().put("file", target.name).put("size", target.length()).put("etag", etag.orEmpty()).put("checked", now))
-                    } finally {
-                        if (!kept) part.delete()
-                    }
+                    // A cut-off download, or something that isn't the map, must not replace a good file.
+                    if (got.length != null && part.length() != got.length) error("short download")
+                    if (!isPmTiles(head(part), part.length())) error("not a map file")
+                    val target = File(dir, tilesName(got.etag, now))
+                    if (!part.renameTo(target)) error("couldn't keep the map file")
+                    kept = true
+                    writeMeta(dir, JSONObject().put("file", target.name).put("size", target.length()).put("etag", got.etag.orEmpty()).put("checked", now))
                 }
-                else -> error("HTTP ${conn.responseCode}")
+                else -> error("HTTP ${got.code}")
             }
+        } finally {
+            if (!kept) part.delete()
+        }
+    }
+
+    /** Asks for the map file; on a 200 with room for it, copies it into [into], stopping if [job] is cancelled. */
+    private fun fetchTiles(ctx: Context, dir: File, job: Job?, etag: String?, into: File): Fetched {
+        val conn = URL("${BuildConfig.API_BASE}/map/$TILES").openConnection() as HttpURLConnection
+        try {
+            conn.connectTimeout = 8_000
+            conn.readTimeout = 30_000
+            conn.setRequestProperty("x-terminus-client", CLIENT)
+            etag?.let { conn.setRequestProperty("if-none-match", it) }
+            val code = conn.responseCode
+            val length = conn.getHeaderField("content-length")?.toLongOrNull()
+            if (code == 200) {
+                if (room(ctx, dir) < (length ?: 0) + SPARE_BYTES) error("no room for the map file")
+                conn.inputStream.use { input -> into.outputStream().use { copy(input, it, job) } }
+            }
+            return Fetched(code, conn.getHeaderField("etag"), length)
         } finally {
             conn.disconnect()
         }
     }
 
     /** Copies in pieces, stopping when the caller is cancelled (the app closed) rather than at the end. */
-    private suspend fun copy(input: InputStream, output: OutputStream) {
+    private fun copy(input: InputStream, output: OutputStream, job: Job?) {
         val buf = ByteArray(64 * 1024)
         while (true) {
-            currentCoroutineContext().ensureActive()
+            if (job?.isActive == false) throw CancellationException("map download cancelled")
             val n = input.read(buf)
             if (n < 0) break
             output.write(buf, 0, n)

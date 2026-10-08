@@ -1,0 +1,121 @@
+{
+  "label": "No bus · walk 15 min",
+  "detail": "Services ended · 15 min walk to CS2030 @ COM1",
+  "alt": null,
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0
+  },
+  "quality": "ended",
+  "asOf": "2026-08-27T16:20:00.000Z",
+  "arrivals": [],
+  "departsAt": null,
+  "arriveAt": "2026-08-27T16:34:52Z",
+  "foot": {
+    "s": 892,
+    "why": "Services ended for the night"
+  },
+  "leave": {
+    "at": "2026-08-27T16:20:00Z",
+    "estimated": false,
+    "svc": null,
+    "stop": null,
+    "board": null,
+    "arrive": "2026-08-27T16:34:52Z",
+    "note": null
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "COM3",
+    "label": "CS2030 @ COM1",
+    "why": "class"
+  },
+  "timing": {
+    "status": "late",
+    "text": "~5 min late",
+    "classAt": "2026-08-27T16:30:00Z",
+    "reachAt": "2026-08-27T16:34:52Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T16:30:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-08-27T16:30:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": "Leave by 00:20",
+    "leaveVia": null,
+    "catch": "Walk there",
+    "arrive": "Arrive 00:34 · ~5 min late",
+    "catchLine": "Walk there · arrive 00:34, ~5 min late",
+    "late": true,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "heading",
+    "phaseText": "On your way",
+    "glance": "Walk now",
+    "line": "Walk there now · arrive 00:34 · ~5 min late",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "Not going",
+        "trip": "5:30:COM3"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T16:30:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "walkTo": {
+      "name": "COM 3",
+      "lat": 1.294431,
+      "lon": 103.775217
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": null,
+      "walk": "15 min",
+      "bus": null,
+      "boardAt": null,
+      "ride": null,
+      "off": null,
+      "to": "CS2030 @ COM1",
+      "toStop": "COM 3",
+      "arrive": "00:34",
+      "walkEnd": null,
+      "arriveStop": "00:34",
+      "slack": "~5 min late",
+      "live": false,
+      "backup": null,
+      "why": "Services ended for the night",
+      "title": "To CS2030 @ COM1 · starts 00:30",
+      "place": "CS2030",
+      "byText": null,
+      "walkText": "15 min walk",
+      "rideText": null,
+      "walkEndText": null,
+      "arriveText": "Arrive 00:34 · ~5 min late",
+      "arriveWhere": "at COM 3",
+      "backupText": "Services ended for the night",
+      "summary": "arrive 00:34 · 15 min walk · Services ended for the night"
+    },
+    "upcoming": null,
+    "title": "No bus · walk 15 min",
+    "heading": "Next class · CS2030 @ COM1",
+    "remindAt": null
+  }
+}

@@ -34,9 +34,8 @@ GROUP BY stop, svc ORDER BY n DESC
 
 ## Is `RIDE.secondsPerHop` any good?
 
-It is 95, a guess, and it is what the ranking uses wherever measured ride
-times don't cover a service and hour yet (detected rides, `src/ridetimes.ts`;
-see internals.md, "Measured ride times"). The walk comparison fires more often than
+It is 95, a guess, and it is what the ranking uses for every shuttle ride.
+The walk comparison fires more often than
 expected on the real graph, which is either correct (this campus is walkable)
 or a sign the constant is too high.
 
@@ -54,7 +53,7 @@ ORDER BY plate, timestamp
 For a plate seen at stop A then stop B, the travel time A→B is roughly
 `(timestamp_B + eta_B) - (timestamp_A + eta_A)`: each row predicts an absolute
 arrival instant, and the difference between two of them is a segment time.
-Bucket by hour of day and you have a table to check the measured ride times
+Bucket by hour of day and you have a table to check `RIDE.secondsPerHop`
 against. Nothing in the Worker reads it.
 
 ## Crowding

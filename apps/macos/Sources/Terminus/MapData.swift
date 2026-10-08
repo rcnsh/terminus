@@ -14,19 +14,21 @@ struct MapStop: Hashable {
     let services: [String]
 }
 
-/// A service: its colour ("#e53935") and its path along the roads, as [lon, lat] pairs.
+/// A service: its colour ("#e53935"), its path along the roads as [lon, lat] pairs, and whether it's a loop.
 struct MapRoute {
     let svc: String
     let color: String
     let line: [[Double]]
+    let loop: Bool
     /// The line measured for sliding buses along it.
     let path: RoutePath
 
-    init(svc: String, color: String, line: [[Double]]) {
+    init(svc: String, color: String, line: [[Double]], loop: Bool = false) {
         self.svc = svc
         self.color = color
         self.line = line
-        path = RoutePath(line)
+        self.loop = loop
+        path = RoutePath(line, loop: loop)
     }
 
     /// [west, south, east, north] of the line.
@@ -36,24 +38,26 @@ struct MapRoute {
 }
 
 /// A route line measured as the API measures it (haversine, metres from its
-/// start at each point), so a bus's `along` is a place on it.
+/// start at each point), so a bus's `along` is a place on it. `closed` is the
+/// service's `loop` from /campus, as the API places buses: a loop's line
+/// needn't end exactly where it starts (A1's ends are some 40 m apart at KRB).
 struct RoutePath {
     private let line: [[Double]]
     private let cum: [Double]
     let total: Double
-    /// Ends where it starts: a bus can slide on past the start.
+    /// A loop: a bus can slide on past the start.
     let closed: Bool
 
     /// Further than this in one answer (back from sleep), a bus jumps.
     static let slideMaxM = 1_500.0
 
-    init(_ line: [[Double]]) {
+    init(_ line: [[Double]], loop: Bool = false) {
         self.line = line
         var c = [Double](repeating: 0, count: line.count)
         for i in line.indices.dropFirst() { c[i] = c[i - 1] + Self.haversine(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]) }
         cum = c
         total = c.last ?? 0
-        closed = line.count >= 2 && Self.haversine(line[0][1], line[0][0], line[line.count - 1][1], line[line.count - 1][0]) < 5
+        closed = loop && line.count >= 2
     }
 
     /// The point `m` metres along, as (lat, lon, the road's bearing there).
@@ -158,7 +162,7 @@ struct CampusMap {
                 guard p.count >= 2, let lon = (p[0] as? NSNumber)?.doubleValue, let lat = (p[1] as? NSNumber)?.doubleValue else { return nil }
                 return [lon, lat]
             }
-            if line.count >= 2 { routes[svc] = MapRoute(svc: svc, color: mapColor(x["color"] as? String), line: line) }
+            if line.count >= 2 { routes[svc] = MapRoute(svc: svc, color: mapColor(x["color"] as? String), line: line, loop: x["loop"] as? Bool ?? false) }
         }
         guard !stops.isEmpty else { return nil }
         return CampusMap(stops: stops, routes: routes, core: core)
@@ -203,6 +207,11 @@ struct LiveBus: Hashable {
     var slot = 0
     /// Between stops, the stretch of its line it's somewhere on.
     var stretch: Stretch? = nil
+    /// The stops still ahead, the next first, to where its line ends, as the
+    /// server walks them; empty past a one-way line's end (or from an older API).
+    var upcoming: [String] = []
+    /// Where its line ends; nil from an older API.
+    var towards: String? = nil
     var ox = 0.0
     var oy = 0.0
 
@@ -242,7 +251,8 @@ struct BusList {
                 id: id, lat: lat, lon: lon, heading: num(b["heading"]), moving: b["moving"] as? Bool ?? false,
                 crowd: (b["crowd"] as? String).flatMap { $0.isEmpty ? nil : $0 }, nextStop: name(b["nextStop"]),
                 along: num(b["along"]), plate: (b["plate"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-                at: name(b["at"]), slot: (b["slot"] as? Int) ?? 0, stretch: stretch
+                at: name(b["at"]), slot: (b["slot"] as? Int) ?? 0, stretch: stretch,
+                upcoming: (b["upcoming"] as? [Any] ?? []).compactMap(name), towards: name(b["towards"])
             )
         }
         return BusList(svc: svc, available: o["available"] as? Bool ?? false, stale: o["stale"] as? Bool ?? false, buses: buses)

@@ -89,6 +89,85 @@ object LeaveAlerts {
     /** Called with every planned answer, from the app and from the background refresh. [now] is on the server's clock. */
     fun arm(ctx: Context, answer: NextAnswer, now: Long = ServerClock.now()) {
         val store = Store(ctx)
+        val state = State(
+            alertsOn = store.leaveAlerts && canNotify(ctx, CHANNEL),
+            notifiedFor = store.leaveNotifiedFor,
+            exact = canBeExact(ctx),
+        )
+        when (val step = decide(answer, state, showing(ctx), Push.active(ctx), now)) {
+            Step.Keep -> Unit
+            Step.Cancel -> cancel(ctx)
+            Step.StopChecking -> {
+                cancelAlarm(ctx, ACTION_CHECK)
+                cancelAlarm(ctx, ACTION_POST)
+            }
+            is Step.Follow -> {
+                if (step.post) post(ctx, answer, now)
+                if (step.checkAt != null) setAlarm(ctx, ACTION_CHECK, step.checkAt) else cancelAlarm(ctx, ACTION_CHECK)
+            }
+            is Step.HeadsUp -> {
+                cancelAlarm(ctx, ACTION_CHECK)
+                cancelAlarm(ctx, ACTION_POST)
+                // Marked once shown: decide() only asks with something to say.
+                if (post(ctx, answer, now)) {
+                    store.leaveNotifiedFor = step.trip
+                    if (step.leaveNowAt != null) setAlarm(ctx, ACTION_NOW, step.leaveNowAt)
+                }
+            }
+            is Step.PostAt -> {
+                cancelAlarm(ctx, ACTION_CHECK)
+                setAlarm(ctx, ACTION_POST, step.at)
+            }
+            is Step.GiveUp -> {
+                cancelAlarm(ctx, ACTION_CHECK)
+                cancelAlarm(ctx, ACTION_POST)
+                store.leaveNotifiedFor = step.trip
+            }
+            is Step.CheckAt -> {
+                cancelAlarm(ctx, ACTION_POST)
+                setAlarm(ctx, ACTION_CHECK, step.at)
+            }
+        }
+    }
+
+    /** At remindAt: the answer the check fetched a moment ago decides, as [arm] does. */
+    fun postDue(ctx: Context) {
+        val answer = Store(ctx).lastAnswer()?.first ?: return
+        arm(ctx, answer)
+    }
+
+    /**
+     * What [arm] reads from the phone: alerts on (and allowed), the trip the
+     * last heads-up was for, and whether exact alarms are allowed.
+     */
+    data class State(val alertsOn: Boolean, val notifiedFor: Long, val exact: Boolean = false)
+
+    /** What [arm] does with an answer. */
+    sealed interface Step {
+        /** Nothing to change. */
+        data object Keep : Step
+        /** The notification and every alarm go. */
+        data object Cancel : Step
+        /** No heads-up to come: only the pending check (and post) go. */
+        data object StopChecking : Step
+        /** The heads-up was posted for this trip: redraw it if [post] (it's showing), then check again at [checkAt], or stop checking. */
+        data class Follow(val post: Boolean, val checkAt: Long?) : Step
+        /** Post the heads-up now, for [trip], and turn it into "Leave now" at [leaveNowAt]. */
+        data class HeadsUp(val trip: Long, val leaveNowAt: Long?) : Step
+        /** Fresh times in hand, but not yet: post at [at] (remindAt), from the answer kept. */
+        data class PostAt(val at: Long) : Step
+        /** Nothing to say for [trip] and its reminder long past: counted as done, nothing posted. */
+        data class GiveUp(val trip: Long) : Step
+        /** Fetch fresh times at [at] and decide again. */
+        data class CheckAt(val at: Long) : Step
+    }
+
+    /**
+     * The choice [arm] makes, apart from the phone so it can be tested.
+     * [showing] is whether the notification is up; [pushActive] whether
+     * pushes bring the card's changes (then no follow-up alarm is needed).
+     */
+    fun decide(answer: NextAnswer, state: State, showing: Boolean, pushActive: Boolean, now: Long): Step {
         val leaveAt = answer.leaveAtMs
         val classAt = answer.classAtMs
         val card = answer.card
@@ -99,56 +178,33 @@ object LeaveAlerts {
         // "On it", "Missed it" or "Not going" was just answered for the trip on
         // screen: its notification follows, even though the plan (and its
         // leave time) has moved on.
-        val following = trip != null && store.leaveNotifiedFor != 0L && store.leaveNotifiedFor == trip && showing(ctx)
+        val following = trip != null && state.notifiedFor != 0L && state.notifiedFor == trip && showing
         if (card?.remind == false || card?.phase == "arrived") {
             // Reminders off for this trip, or you're there: nothing more to say.
-            if (following || card.remind == false) cancel(ctx)
-            return
+            return if (following || card.remind == false) Step.Cancel else Step.Keep
         }
-        if (!store.leaveAlerts || !canNotify(ctx, CHANNEL) || trip == null || (classAt != null && now >= classAt) || (remindAt == null && !following)) {
-            cancelAlarm(ctx, ACTION_CHECK)
-            cancelAlarm(ctx, ACTION_POST)
-            return
-        }
+        if (!state.alertsOn || trip == null || (classAt != null && now >= classAt) || (remindAt == null && !following)) return Step.StopChecking
         // One heads-up per trip. A new plan (the next class) has a new classAt.
         // After it, the same notification follows the trip, but only while it's showing.
-        if (store.leaveNotifiedFor == trip) {
-            if (showing(ctx)) post(ctx, answer, now)
-            followUp(ctx, answer, now)
-            return
-        }
-        if (remindAt == null) return
-        if (remindAt > now + CHECK_AHEAD_MS) {
-            setAlarm(ctx, ACTION_CHECK, remindAt - CHECK_AHEAD_MS)
-            return
-        }
-        cancelAlarm(ctx, ACTION_CHECK)
+        if (state.notifiedFor == trip) return Step.Follow(post = showing, checkAt = followUpAt(answer, pushActive, now))
+        if (remindAt == null) return Step.Keep
+        if (remindAt > now + CHECK_AHEAD_MS) return Step.CheckAt(remindAt - CHECK_AHEAD_MS)
         // Fresh times in hand, but not yet: the heads-up goes at remindAt, so
         // "5 minutes before you need to leave" is true when it comes. Only
         // with exact alarms: an inexact one after the inexact check could
         // land past the leave time, so then it goes now, as the check lands.
-        if (remindAt > now + POST_SLACK_MS && canBeExact(ctx)) {
-            setAlarm(ctx, ACTION_POST, remindAt)
-            return
-        }
-        cancelAlarm(ctx, ACTION_POST)
-        // Marked once shown: with no leave time to say (no bus to catch),
-        // the card's next change tries again, every couple of minutes at
-        // most, until the reminder is well past.
-        if (post(ctx, answer, now)) {
-            store.leaveNotifiedFor = trip
-            if (leaveAt != null && leaveAt > now) setAlarm(ctx, ACTION_NOW, leaveAt)
-        } else if (now - remindAt > GIVE_UP_MS) {
-            store.leaveNotifiedFor = trip
-        } else {
-            card?.nextChangeAtMs?.takeIf { it > now }?.let { setAlarm(ctx, ACTION_CHECK, maxOf(it + 2_000, now + RETRY_GAP_MS)) }
-        }
+        if (remindAt > now + POST_SLACK_MS && state.exact) return Step.PostAt(remindAt)
+        if (sayable(answer, now)) return Step.HeadsUp(trip, leaveAt?.takeIf { it > now })
+        // Nothing to say yet (no bus to catch): the card's next change tries
+        // again, every couple of minutes at most, until the reminder is well past.
+        if (now - remindAt > GIVE_UP_MS) return Step.GiveUp(trip)
+        return card.nextChangeAtMs?.takeIf { it > now }?.let { Step.CheckAt(maxOf(it + 2_000, now + RETRY_GAP_MS)) } ?: Step.StopChecking
     }
 
-    /** At remindAt: the answer the check fetched a moment ago decides, as [arm] does. */
-    fun postDue(ctx: Context) {
-        val answer = Store(ctx).lastAnswer()?.first ?: return
-        arm(ctx, answer)
+    /** Whether [post] has something to say for this answer: a heads-up without a leave time is left unsaid. */
+    private fun sayable(answer: NextAnswer, now: Long): Boolean {
+        val phase = answer.card?.phase
+        return phase == "riding" || phase == "missed" || answer.leaveHeadline(now) != null
     }
 
     /** Turning alerts off, or unpairing. */
@@ -173,13 +229,12 @@ object LeaveAlerts {
     /**
      * Without push, a check at the card's next change (the bus leaving, then
      * "no answer means on it") keeps the notification in step. With push the
-     * server says when, so no alarm is needed.
+     * server says when, so no alarm is needed: null.
      */
-    private fun followUp(ctx: Context, answer: NextAnswer, now: Long) {
+    private fun followUpAt(answer: NextAnswer, pushActive: Boolean, now: Long): Long? {
         val next = answer.card?.nextChangeAtMs
         val until = answer.classAtMs ?: Long.MAX_VALUE
-        if (Push.active(ctx) || next == null || next <= now || next >= until) cancelAlarm(ctx, ACTION_CHECK)
-        else setAlarm(ctx, ACTION_CHECK, next + 2_000)
+        return if (pushActive || next == null || next <= now || next >= until) null else next + 2_000
     }
 
     /** Posts (or updates) the notification; false when there was nothing to say. */

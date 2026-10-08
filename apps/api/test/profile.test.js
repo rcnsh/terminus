@@ -111,9 +111,11 @@ test('pinnedStops: known stops in the user’s order, repeats dropped, at most 8
     assert.equal(b.ok, false, JSON.stringify(bad));
     assert.equal(b.error, 'pinnedStops must be up to 8 known stop codes');
   }
-  // Nine pins of which one repeats are eight.
+  // Nine pins with repeats: the limit counts the stops left once they're dropped.
   const nine = ['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27', '16009', 'PGP', 'COM3', 'UTOWN'];
-  assert.ok(parseProfile({ pinnedStops: nine }, isStop, isStop, pinnable).ok);
+  const deduped = parseProfile({ pinnedStops: nine }, isStop, isStop, pinnable);
+  assert.ok(deduped.ok);
+  assert.deepEqual(deduped.profile.pinnedStops, ['PGP', 'COM3', 'UTOWN', 'KR-MRT', 'LT27', '16009']);
   const tooMany = parseProfile({ pinnedStops: Array.from({ length: 9 }, (_, i) => `S${i}`) }, isStop, isStop, () => true);
   assert.equal(tooMany.ok, false, 'nine different stops are too many');
 });

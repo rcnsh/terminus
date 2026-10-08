@@ -116,8 +116,6 @@ class MainActivity : ComponentActivity() {
         // Notifications blocked or allowed in the phone's settings meanwhile;
         // push asked for, or sent again when due (Push.sync).
         vm.recheckNotifications()
-        // In the front during a trip: the live notification can follow it by location from here on.
-        sh.rcn.terminus.LiveService.watch(this)
     }
 
     override fun onNewIntent(intent: Intent) {

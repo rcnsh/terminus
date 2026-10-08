@@ -55,6 +55,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import org.json.JSONObject
 import sh.rcn.terminus.CardStyle
+import sh.rcn.terminus.DayPlan
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NearbyStop
@@ -183,24 +184,19 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         }
         val fetchedAt = if (onTimetable) planAt else chosen.fetchedAt
         val error = if (onTimetable) planError else chosen.error
-        // Offline (the last refresh failed) with the plan gone stale, or none
-        // kept: the next thing on the day plan kept for it.
-        val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, ServerClock.now()))) {
-            OfflineDay.next(snap.day, ServerClock.now())
-        } else {
-            null
-        }
-        // The live notification keeps the plan current, so no refresh button then.
-        val refreshButton = paired && (!live || !onTimetable)
+        // The day plan read once with the rest of this redraw (snap), only used offline.
+        val frame = frame(paired, mode, answer, error, live, ServerClock.now()) { snap.day }
+        val offline = frame.offline
+        val refreshButton = frame.refreshButton
         // ↻ refreshes what it shows (a place with a new location fix); a tap
         // anywhere else on the widget opens the app on the same view.
         val refresh = if (onTimetable) actionRunCallback<RefreshAction>() else chipAction(ctx, mode, appWidgetId)
         val tap = actionStartActivity(
-            when (mode) {
-                Mode.Timetable -> MainActivity.intentFor(ctx)
-                Mode.Nearby -> MainActivity.intentFor(ctx, nearby = true)
-                is Mode.To -> (mode.target as? Target.SavedPlace)?.let { MainActivity.intentFor(ctx, place = it.key) }
-                    ?: MainActivity.intentFor(ctx, to = mode.dest.id.removePrefix("stop:"), label = mode.label)
+            when (val t = frame.tap) {
+                Tap.Plan -> MainActivity.intentFor(ctx)
+                Tap.Nearby -> MainActivity.intentFor(ctx, nearby = true)
+                is Tap.Place -> MainActivity.intentFor(ctx, place = t.key)
+                is Tap.Stop -> MainActivity.intentFor(ctx, to = t.code, label = t.label)
             },
         )
 
@@ -548,7 +544,41 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         }
     }
 
+    /** Where a tap on the widget opens the app: the view it shows. */
+    sealed interface Tap {
+        data object Plan : Tap
+        data object Nearby : Tap
+        data class Place(val key: String) : Tap
+        data class Stop(val code: String, val label: String) : Tap
+    }
+
+    /**
+     * The widget's frame, whatever its body: [offline] (the day plan's next
+     * thing, shown instead of the answer), whether there's a refresh
+     * button, and where a tap goes.
+     */
+    data class Frame(val offline: OfflineDay.Pick?, val refreshButton: Boolean, val tap: Tap)
+
     companion object {
+        /**
+         * [Frame] for the [mode] shown, with its [answer] and last [error];
+         * [day] is read only when it's needed. [now] is on the server's clock.
+         */
+        fun frame(paired: Boolean, mode: Mode, answer: NextAnswer?, error: String?, live: Boolean, now: Long, day: () -> DayPlan?): Frame {
+            val onTimetable = mode == Mode.Timetable
+            // Offline (the last refresh failed) with the plan gone stale, or none
+            // kept: the next thing on the day plan kept for it.
+            val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, now))) OfflineDay.next(day(), now) else null
+            // The live notification keeps the plan current, so no refresh button then.
+            val refreshButton = paired && (!live || !onTimetable)
+            val tap = when (mode) {
+                Mode.Timetable -> Tap.Plan
+                Mode.Nearby -> Tap.Nearby
+                is Mode.To -> (mode.target as? Target.SavedPlace)?.let { Tap.Place(it.key) } ?: Tap.Stop(mode.dest.id.removePrefix("stop:"), mode.label)
+            }
+            return Frame(offline, refreshButton, tap)
+        }
+
         /** The server's own words for a time are kept while they're this fresh; then the widget counts down itself. */
         private const val SERVER_ETA_S = 30L
 

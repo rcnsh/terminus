@@ -13,10 +13,11 @@
 // icons (/map/*), routes and stops (/campus), buses (/buses), arrivals
 // (/arrivals). The service worker keeps all but the live ones for offline.
 
-import { focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
+import { Icon, focusSoon, html, reducedMotion, store, useEffect, useLayoutEffect, useMemo, useRef, useState, useStore } from '/assets/ui.js';
 import { inkOn, send, t } from '/account/dom.js';
 import { haversineM, loadCampus, profile, reloadProfile, saveNow, withPlace } from '/account/profile.js';
 import { MAPLIBRE, PMTILES } from '/app/map-files.js';
+import { Row } from '/app/board.js';
 
 /** Live buses refresh this often while a pill is on (the API caches 5 s). */
 const BUSES_MS = 5_000;
@@ -25,7 +26,7 @@ const ARRIVALS_MS = 15_000;
 /** How long a bus takes to slide [m] metres along the road: a steady 100 m
  *  a second, so a longer stretch takes longer, from 1 s for a short hop to
  *  4 s, done before the next answer (every 5 s). As the Android app. */
-const slideMs = (m) => Math.max(1_000, Math.min(4_000, (m / 100) * 1_000));
+export const slideMs = (m) => Math.max(1_000, Math.min(4_000, (m / 100) * 1_000));
 /** Further than this along its line in one answer (back from a hidden tab),
  *  a bus jumps instead of sliding. */
 const SLIDE_MAX_M = 1_500;
@@ -485,7 +486,8 @@ function moveTo(buses) {
   const stale = wall - lastAnswer > STALE_MS;
   lastAnswer = wall;
   const reduce = reducedMotion();
-  const path = pathOf(campusData.get()?.routes[selected.get()]?.line);
+  const route = campusData.get()?.routes[selected.get()];
+  const path = pathOf(route?.line, route?.loop);
   shown.set(new Map(buses.map((b) => [b.id, b])));
   const next = new Map();
   for (const raw of buses) {
@@ -514,7 +516,7 @@ function frameAt(now) {
  * line (a stop's dot, and beside it), so it moves from one to the other as
  * it goes.
  */
-function positionAt(g, now) {
+export function positionAt(g, now) {
   if (!g.from) return g.to;
   const k = Math.max(0, Math.min(1, (now - g.start) / g.ms));
   if (k === 1) return g.to;
@@ -524,7 +526,7 @@ function positionAt(g, now) {
   const [a, b] = [pointAt(path, from.along), pointAt(path, to.along)];
   return {
     ...to,
-    along: path.closed ? (((from.along + d * e) % path.total) + path.total) % path.total : from.along + d * e,
+    along: path.loop ? (((from.along + d * e) % path.total) + path.total) % path.total : from.along + d * e,
     lat: at.lat + (from.lat - a.lat) * (1 - e) + (to.lat - b.lat) * e,
     lon: at.lon + (from.lon - a.lon) * (1 - e) + (to.lon - b.lon) * e,
     heading: at.bearing,
@@ -533,19 +535,19 @@ function positionAt(g, now) {
 }
 
 /* A route line measured as the API measures it (haversine, metres from its
-   start at each point), so a bus's `along` is a place on it. */
+   start at each point), so a bus's `along` is a place on it. Whether it's a
+   loop comes from /campus, as the API places buses: a loop's line needn't end
+   exactly where it starts (A1's ends are some 40 m apart at KRB). */
 
 const paths = new WeakMap();
 
-function pathOf(line) {
+export function pathOf(line, loop) {
   if (!line || line.length < 2) return null;
   let p = paths.get(line);
   if (!p) {
     const cum = [0];
     for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + haversineM(line[i - 1][1], line[i - 1][0], line[i][1], line[i][0]));
-    const total = cum[cum.length - 1];
-    const [a, z] = [line[0], line[line.length - 1]];
-    p = { line, cum, total, closed: haversineM(a[1], a[0], z[1], z[0]) < 5 };
+    p = { line, cum, total: cum[cum.length - 1], loop: Boolean(loop) };
     paths.set(line, p);
   }
   return p;
@@ -554,17 +556,17 @@ function pathOf(line) {
 /** Metres on along [path] from bus [f] to bus [b], round a loop past its
  *  start; null when it isn't on ahead (the same place, behind, a long way,
  *  or a line kept from before the route changed). */
-function aheadBy(path, f, b) {
+export function aheadBy(path, f, b) {
   if (f.along == null || b.along == null || path.total <= 0 || f.along > path.total + 1 || b.along > path.total + 1) return null;
   let d = b.along - f.along;
-  if (path.closed && d < -path.total / 2) d += path.total;
+  if (path.loop && d < -path.total / 2) d += path.total;
   return d > 0 && d <= SLIDE_MAX_M ? d : null;
 }
 
 /** The point [m] metres along [path], and the road's direction there. */
-function pointAt(path, m) {
+export function pointAt(path, m) {
   const { line, cum, total } = path;
-  m = path.closed ? ((m % total) + total) % total : Math.max(0, Math.min(total, m));
+  m = path.loop ? ((m % total) + total) % total : Math.max(0, Math.min(total, m));
   let lo = 0,
     hi = cum.length - 1;
   while (hi - lo > 1) {
@@ -599,7 +601,8 @@ function markOpen(b) {
   openBus = b;
   if (!map?.getSource('stretch')) return;
   map.setFilter('bus-on', ['==', ['get', 'id'], b?.id ?? '']);
-  const path = b?.stretch && pathOf(campusData.get()?.routes[b.svc]?.line);
+  const route = campusData.get()?.routes[b?.svc];
+  const path = b?.stretch && pathOf(route?.line, route?.loop);
   const line = path ? sliceOf(path, b.stretch.from, b.stretch.to) : null;
   map.getSource('stretch').setData(line ? { type: 'Feature', properties: { color: b.color }, geometry: { type: 'LineString', coordinates: line } } : empty);
   map.setPaintProperty('route-on', 'line-opacity', line ? 0.2 : 1);
@@ -674,19 +677,8 @@ function directions(s) {
 
 /* ---------- drawing ---------- */
 
-/** How crowded a bus is, as the feed says: low, medium or high. */
-const crowdWord = (c) => ({ low: t('Low'), medium: t('Medium'), high: t('High') })[c] ?? null;
-const mins = (s) => Math.round(s / 60);
-/** The server's words for when ("4 min", "~6 min", "now"); worded here only for an older server's answer. */
-const when = (b) => b.eta ?? (b.etaS < 60 ? t('Arriving') : b.quality === 'scheduled' ? t('~{0}', t('{0} min', mins(b.etaS))) : t('{0} min', mins(b.etaS)));
-
-/** A public bus (`paid`) has its own colour from the board, and a $ for its fare. */
-function SvcTag({ svc, onClick, color, paid }) {
-  const style = color ? `--svc:${color};--svc-ink:${inkOn(color)}` : svcVars(svc);
-  return onClick
-    ? html`<button type="button" class="svc-tag" style=${style} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`
-    : html`<span class="svc-tag" style=${style}>${svc}${paid && html`<span class="fare" role="img" aria-label=${t('Public bus, fare applies')}>$</span>`}</span>`;
-}
+/** A service here, when there are no times to list it by: tapped, its line on the map. */
+const SvcTag = ({ svc, onClick }) => html`<button type="button" class="svc-tag" style=${svcVars(svc)} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`;
 
 function Pills() {
   const campus = useStore(campusData);
@@ -757,7 +749,7 @@ function Status() {
  * The sheet's frame: the title, a line under it, and Close. Opened, the focus
  * is on its title (`id` changes with what it's about); Escape closes it.
  */
-function Frame({ id, title, sub, children, box }) {
+function Frame({ id, title, sub, lead, top, children, box }) {
   const head = useRef(null);
   useEffect(() => {
     head.current?.focus({ preventScroll: true });
@@ -785,8 +777,10 @@ function Frame({ id, title, sub, children, box }) {
         openSheet(null);
       }}
     >
+      ${top}
       <div class="sheet-head">
-        <div><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
+        ${lead}
+        <div class="sheet-titles"><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
         <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => openSheet(null)}>×</button>
       </div>
       ${children}
@@ -794,10 +788,64 @@ function Frame({ id, title, sub, children, box }) {
   `;
 }
 
-/** A bus: where it's going next and how full it is, following its updates while open. */
+/** How full a bus is, as three rising bars (as many filled as it's full) and a word. */
+function CrowdMeter({ crowd }) {
+  const word = { low: t('Seats free'), medium: t('Busy'), high: t('Packed') }[crowd];
+  if (!word) return null;
+  return html`<span class=${`bus-crowd ${crowd}`}><span class="bars" aria-hidden="true"><i></i><i></i><i></i></span>${word}</span>`;
+}
+
+/** Stops after the next one shown in the bus's list before "+N more". */
+const AHEAD_SHOWN = 4;
+const CHEVRON_DOWN = '<path d="m6 9 6 6 6-6" />';
+
+/**
+ * The bus's line from the stop it passed (or the one it's at) on through the
+ * stops ahead, as the server lists them (`upcoming`): the client never walks
+ * the route itself. An older server without `upcoming` gives its next stop only.
+ */
+function StopStrip({ b }) {
+  let ahead = b.upcoming ?? (b.nextStop ? [b.nextStop] : []);
+  if (b.at && ahead[0]?.code === b.at.code) ahead = ahead.slice(1);
+  const rows = [];
+  if (b.at) rows.push({ key: `at-${b.at.code}`, name: b.at.name, kind: 'here', tag: t('here') });
+  else if (b.stretch) {
+    rows.push({ key: `last-${b.stretch.last.code}`, name: b.stretch.last.name, kind: 'passed', tag: t('passed') });
+    rows.push({ key: 'bus', name: t('On its way'), kind: 'bus' });
+  }
+  ahead.slice(0, AHEAD_SHOWN + 1).forEach((s, i) => rows.push({ key: `${i}-${s.code}`, name: s.name, kind: i === 0 ? 'next' : 'stop', tag: i === 0 ? t('next') : null }));
+  const more = ahead.length - (AHEAD_SHOWN + 1);
+  if (more > 0) rows.push({ key: 'more', name: t('+{0} more', more), kind: 'more' });
+  // The rail's colour above and below each row's dot: grey up to the bus, the route's colour after it.
+  const grey = 'var(--line-strong)';
+  const svc = 'var(--svc)';
+  return html`
+    <ol class="bus-strip" id="bus-strip" style=${svcVars(b.svc)}>
+      ${rows.map((r, i) => {
+        const top = i === 0 ? 'transparent' : rows[i - 1].kind === 'passed' ? grey : svc;
+        const bottom = i === rows.length - 1 ? 'transparent' : r.kind === 'passed' ? grey : svc;
+        return html`
+          <li key=${r.key} class=${`bus-stop ${r.kind}`} style=${`--top:${top};--bottom:${bottom}`}>
+            <span class="rail" aria-hidden="true">${r.kind === 'more' ? null : r.kind === 'bus' || r.kind === 'here' ? html`<span class="marker"><${Icon} paths=${CHEVRON_DOWN} /></span>` : html`<span class="dot"></span>`}</span>
+            <span class="name">${r.name}</span>
+            ${r.tag && html`<span class="tag">${r.tag}</span>`}
+          </li>
+        `;
+      })}
+    </ol>
+  `;
+}
+
+/**
+ * A bus: its service, where it is and where it's heading, its plate, whether
+ * it's moving and how full it is; opened up (a tap, or the handle dragged
+ * up), the stops still ahead. Follows its updates while open.
+ */
 function BusSheet({ id, box }) {
   const buses = useStore(shown);
   const b = buses.get(id);
+  const [open, setOpen] = useState(false);
+  const drag = useRef(null);
   useEffect(() => {
     if (!b) openSheet(null);
   }, [b]);
@@ -805,23 +853,61 @@ function BusSheet({ id, box }) {
     markOpen(b ?? null);
   }, [b?.id, b?.stretch?.from, b?.stretch?.to, b?.svc]);
   useEffect(() => () => markOpen(null), []);
+  useEffect(() => setOpen(false), [id]);
   if (!b) return null;
+  // The handle: dragged up opens the list, down closes it; a tap toggles it.
+  const handle = html`
+    <div
+      class="sheet-grab"
+      aria-hidden="true"
+      onPointerDown=${(e) => {
+        drag.current = e.clientY;
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerUp=${(e) => {
+        if (drag.current == null) return;
+        const dy = e.clientY - drag.current;
+        drag.current = null;
+        setOpen(Math.abs(dy) < 12 ? !open : dy < 0);
+      }}
+      onPointerCancel=${() => (drag.current = null)}
+    ></div>
+  `;
+  const pill = html`<span class="svc-tag bus-svc" style=${svcVars(b.svc)} aria-hidden="true">${b.svc}</span>`;
+  // The pill is the service to the eye; a screen reader hears it in the title.
+  const where = b.at ? t('At {0}', b.at.name) : b.nextStop ? t('Next: {0}', b.nextStop.name) : null;
+  const title = where ? html`<span class="sr-only">${t('{0} bus', b.svc)} </span>${where}` : t('{0} bus', b.svc);
   return html`
-    <${Frame} id=${`bus-${id}`} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.at ? t('At {0}', b.at.name) : b.stretch && b.nextStop ? t('Between {0} and {1}', b.stretch.last.name, b.nextStop.name) : null} box=${box}>
-      <div class="sheet-rows">
-        ${b.nextStop && html`<div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop.name}</span></div>`}
-        ${b.crowd && html`<div class="sheet-row"><span>${t('Crowding')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}
+    <${Frame} id=${`bus-${id}`} title=${title} sub=${b.towards && t('Towards {0}', b.towards.name)} lead=${pill} top=${handle} box=${box}>
+      <div class="bus-info">
+        ${b.plate && html`<span class="plate">${b.plate}</span>`}
+        ${b.moving != null && html`<span class="bus-moving"><span class="dot" aria-hidden="true"></span>${b.moving ? t('Moving') : t('Stopped')}</span>`}
+        <${CrowdMeter} crowd=${b.crowd} />
       </div>
+      <button type="button" class="bus-ahead" aria-expanded=${String(open)} aria-controls=${open ? 'bus-strip' : undefined} onClick=${() => setOpen(!open)}>
+        ${t('Stops ahead')}<${Icon} paths=${CHEVRON_DOWN} class="chev" />
+      </button>
+      ${open && html`<${StopStrip} b=${b} />`}
     <//>
   `;
 }
 
-/** A stop: what's coming (refreshed while open), its services, and ways to go there. */
+/** The rows a stop's sheet shows before "Show more", so the map stays in view. */
+const PEEK_ROWS = 3;
+const WALKER = '<circle cx="13" cy="4" r="2" fill="currentColor"/><path d="M12 8l-2 6-3 7M10 14l3 3v4M7 12l2-4h3l2 3 3 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+const STAR = '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>';
+
+/**
+ * A stop: its board as the Buses tab has it (refreshed while open), the first
+ * few rows until asked for the rest, and ways to go there. A row tapped shows
+ * its service on the map.
+ */
 function StopSheet({ code, box, onGoTo, onSaved, active }) {
   const campus = useStore(campusData);
   const p = useStore(profile);
   const stop = campus?.stops.find((s) => s.code === code);
   const [board, setBoard] = useState(null);
+  const [all, setAll] = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);
   const [saving, setSaving] = useState(false);
   // The profile has been asked for (it may still fail): until then, which buses to ask for isn't known.
@@ -830,6 +916,7 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
   // Fresh each time: a favourite may have been added or removed elsewhere since.
   useEffect(() => {
     setSaveMsg(null);
+    setAll(false);
     reloadProfile()
       .catch(() => {})
       .finally(() => setAsked(true));
@@ -854,9 +941,10 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
     };
     const load = async () => {
       try {
-        const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub ? '&public=1' : ''}`);
+        // stopped=1: the services not running now too, greyed, so every service here has its row.
+        const data = await getJSON(`/arrivals?stop=${encodeURIComponent(code)}${pub ? '&public=1' : ''}&stopped=1`);
         if (gone) return;
-        const list = data.available ? data.board.filter((b) => b.etaS !== null) : [];
+        const list = data.available ? data.board : [];
         setBoard(list.length ? { list } : { text: data.available ? t('No buses due') : t('No times right now') });
       } catch (err) {
         if (gone || err.message === 'signed out') return;
@@ -895,27 +983,27 @@ function StopSheet({ code, box, onGoTo, onSaved, active }) {
       setSaving(false);
     }
   };
+  const rows = board?.list ?? [];
+  const more = rows.length - PEEK_ROWS;
+  const sub = stop.longName && stop.longName !== stop.name ? stop.longName : null;
   return html`
-    <${Frame} id=${`stop-${code}`} title=${stop.name} box=${box}>
-      <div class="sheet-rows">
-        ${!board && html`<div class="hint">${t('Checking…')}</div>`}
-        ${board?.text && html`<div class="hint">${board.text}</div>`}
-        ${board?.list?.map(
-          (b) => html`
-            <div class="sheet-row" key=${`${b.svc}-${b.etaS}`}>
-              <${SvcTag} svc=${b.svc} color=${b.paid ? b.color : null} paid=${b.paid} />
-              <span class="when">${when(b)}${b.crowd && html`<span class="crowd">${t('Crowding: {0}', crowdWord(b.crowd).toLowerCase())}</span>`}</span>
-            </div>
-          `,
-        )}
-      </div>
-      <p class="sheet-label">${t('Services here')}</p>
-      <div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>
+    <${Frame} id=${`stop-${code}`} title=${stop.name} sub=${sub} box=${box}>
+      ${!board && html`<div class="hint">${t('Checking…')}</div>`}
+      ${board?.text && html`<div class="hint">${board.text}</div>`}
+      ${rows.length > 0 &&
+      html`
+        <div class="sheet-board" id="sheet-board">
+          ${(all || more <= 1 ? rows : rows.slice(0, PEEK_ROWS)).map((r) => html`<${Row} key=${r.svc} r=${r} onPick=${choose} />`)}
+        </div>
+        ${more > 1 && html`<button type="button" class="sheet-more" aria-expanded=${String(all)} aria-controls="sheet-board" onClick=${() => setAll(!all)}>${all ? t('Show fewer') : t('Show {0} more', more)}</button>`}
+      `}
+      ${board?.text && html`<div class="svc-tags">${stop.services.map((svc) => html`<${SvcTag} svc=${svc} key=${svc} onClick=${() => choose(svc)} />`)}</div>`}
       <div class="sheet-actions">
         <button type="button" class="btn small accent" onClick=${() => onGoTo({ code: stop.code, name: stop.name, place: same?.key ?? null })}>${t('Go there')}</button>
-        <a class="btn small ghost" href=${directions(stop)} target="_blank" rel="noopener">${t('Walking directions')}</a>
-        <button type="button" class="btn small ghost" disabled=${Boolean(same) || saving} onClick=${save}>${same ? t('In your favourites') : (saveMsg ?? t('Add to favourites'))}</button>
+        <a class="btn small ghost icon" href=${directions(stop)} target="_blank" rel="noopener" aria-label=${t('Walking directions')} title=${t('Walking directions')}><${Icon} paths=${WALKER} /></a>
+        <button type="button" class=${`btn small ghost icon${same ? ' on' : ''}`} disabled=${Boolean(same) || saving} onClick=${save} aria-label=${same ? t('In your favourites') : t('Add to favourites')} title=${same ? t('In your favourites') : t('Add to favourites')}><${Icon} paths=${STAR} /></button>
       </div>
+      ${saveMsg && html`<p class="hint" role="alert">${saveMsg}</p>`}
     <//>
   `;
 }

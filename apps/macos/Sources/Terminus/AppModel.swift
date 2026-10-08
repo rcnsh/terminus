@@ -729,14 +729,22 @@ final class AppModel {
     private func checkForUpdate() {
         let d = UserDefaults.standard
         let current = Api.version ?? "0"
-        if let v = d.string(forKey: "latestVersion"), isNewer(v, than: current) { update = v }
-        guard Date().timeIntervalSince1970 - d.double(forKey: "updateCheckedAt") > 86_400 else { return }
+        let check = Self.updateCheck(cached: d.string(forKey: "latestVersion"), checkedAt: d.double(forKey: "updateCheckedAt"), current: current, now: Date().timeIntervalSince1970)
+        update = check.update
+        guard check.fetch else { return }
         Task {
             guard let v = try? await Api(token: nil).latestVersion() else { return }
             d.set(Date().timeIntervalSince1970, forKey: "updateCheckedAt")
             d.set(v, forKey: "latestVersion")
             update = isNewer(v, than: current) ? v : nil
         }
+    }
+
+    /// What the last check said (`cached`, a version newer than the running
+    /// one, else none), and whether to ask again: a day after the last
+    /// answer (`checkedAt`, seconds since 1970, as `now` is).
+    nonisolated static func updateCheck(cached: String?, checkedAt: Double, current: String, now: Double) -> (update: String?, fetch: Bool) {
+        (cached.flatMap { isNewer($0, than: current) ? $0 : nil }, now - checkedAt > 86_400)
     }
 
     func askLocation() { locator.ask() }
@@ -888,15 +896,27 @@ final class AppModel {
 
     private func nextDelay(failed: Bool) -> TimeInterval {
         failures = failed ? failures + 1 : 0
+        return Self.nextDelay(
+            failures: failures, popoverOpen: popoverOpen, resting: resting, plan: plan, now: ServerClock.now,
+            updateRequired: updateRequired, serverWait: serverWait, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled
+        )
+    }
+
+    /// How long the refresh loop waits, after `failures` failed refreshes
+    /// in a row (0: the last one answered). `now` is on the server's clock.
+    /// `serverWait` is the last failure's Retry-After; `lowPower`, Low Power
+    /// Mode, which doubles the usual waits.
+    nonisolated static func nextDelay(
+        failures: Int, popoverOpen: Bool, resting: Bool, plan: NextAnswer?, now: Date,
+        updateRequired: Bool = false, serverWait: TimeInterval? = nil, lowPower: Bool = false
+    ) -> TimeInterval {
         // Too old for the server: every ask would be refused until an update.
         if updateRequired { return Outdated.holdS }
         // Never sooner than the server asked, up to an hour.
-        let floor = failed ? min(serverWait ?? 0, 3600) : 0
+        let floor = failures > 0 ? min(serverWait ?? 0, 3600) : 0
         // Wi-Fi is often not up yet right after a wake: retry soon, then back off.
-        if failed && failures <= 3 { return max([5, 15, 45][failures - 1], floor) }
-        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        if failures > 0 && failures <= 3 { return max([5, 15, 45][failures - 1], floor) }
         var d: TimeInterval = (popoverOpen ? 30 : resting ? 600 : 300) * (lowPower ? 2 : 1)
-        let now = ServerClock.now
         // nextChange: when the card's phase moves on by itself (the leave-by, a class start).
         for mark in [plan?.departure?.addingTimeInterval(31), plan?.planChanges, plan?.nextChange].compactMap({ $0 }) where mark > now {
             d = min(d, mark.timeIntervalSince(now))

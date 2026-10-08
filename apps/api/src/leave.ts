@@ -78,7 +78,10 @@ export function leaveBy(f: LeaveInput): Leave | null {
     if (!f.arriveBy) return null;
     const walkS = f.walkAllS + (f.walkEndS ?? f.arriveBy.venueWalkS);
     const at = f.arriveBy.atMs - (ON_TIME_SLACK_S + walkS) * 1000;
-    return { at: isoSeconds(at), estimated: false, svc: null, stop: null, board: null, arrive: isoSeconds(at + walkS * 1000), note: null };
+    // Past that already: leave now, and get there when a walk started now
+    // does, not when one started then would have (as for a bus, below).
+    const from = Math.max(at, f.nowMs);
+    return { at: isoSeconds(from), estimated: false, svc: null, stop: null, board: null, arrive: isoSeconds(from + walkS * 1000), note: null };
   }
 
   if (!f.arriveBy) {
@@ -94,7 +97,7 @@ export function leaveBy(f: LeaveInput): Leave | null {
     ? f.options.map((o) => ({ svc: o.svc, stop: o.stop, walkS: o.walkS, rideS: o.rideS, off: o.off, to: o.to, ...paidOf(o) }))
     : fallbackLegs(f.candidates, f.graph);
   let onTime: Ranked | null = null;
-  let late: Ranked | null = null;
+  let late: (Ranked & { reach: number }) | null = null;
   for (const leg of legs) {
     const r = forLeg(leg, f.byStop.get(leg.stop.code), f.graph, f.arriveBy, f.nowMs, f.crowdRisk);
     // No bus of this service you can catch while it runs.
@@ -105,14 +108,19 @@ export function leaveBy(f: LeaveInput): Leave | null {
     const out: Ranked = { at: isoSeconds(r.ms), estimated: r.estimated, ...(r.stale ? { stale: true as const } : {}), svc: svcName(leg.svc), stop: shortStop(leg.stop.name), stopCode: leg.stop.code, board: isoSeconds(r.board), arrive: isoSeconds(r.arrive), note: r.note, walkS: leg.walkS, rideS: leg.rideS, ...offOf(leg), ...paidOf(leg), ms: r.ms, worth, opens: r.opens === true };
     // The latest on-time departure wins; if nothing is on time, the soonest.
     if (!r.late && (!onTime || worth > onTime.worth || (worth === onTime.worth && onTime.estimated && !r.estimated))) onTime = out;
-    if (r.late && (!late || r.ms < late.ms)) late = out;
+    // Late whatever you do: the bus that gets you there first (a fare counted
+    // as for the on-time ones), not the first to leave, which on a loop can
+    // be the one going the long way round.
+    const reach = r.arrive + fareMs(leg);
+    if (r.late && (!late || reach < late.reach || (reach === late.reach && r.ms < late.ms))) late = { ...out, reach };
   }
   if (onTime) return unranked(onTime);
   if (!late) return null;
   // You'll be late whatever you do: the answer is to go now, for the first
   // bus you can catch. Clients show "Leave now" once `at` has passed. Not
   // when that bus waits for the service to start: leave for it then.
-  return { ...unranked(late), at: isoSeconds(late.opens ? late.ms : Math.min(late.ms, f.nowMs)) };
+  const { reach: _reach, ...first } = late;
+  return { ...unranked(first), at: isoSeconds(first.opens ? first.ms : Math.min(first.ms, f.nowMs)) };
 }
 
 interface LegLeave {
