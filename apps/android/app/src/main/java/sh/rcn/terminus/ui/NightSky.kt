@@ -237,12 +237,20 @@ internal fun Modifier.skyBehind(sky: SkyState, page: Color, pull: PullView? = nu
     horizon(end - HORIZON.toPx(), page, p, sky.phase, sky.road, sky.depth(1.dp.toPx()).far * 1.dp.toPx(), ROAD_SCALE, pull = pull)
 }
 
-/** The scene for a pull on Now's horizon, [width] dp across: your stop's sign, and where the card has your bus. */
+/**
+ * The scene for a pull on Now's horizon, [width] dp across: your stop's
+ * sign, and the bus already on the road, the card's or the shuttle going
+ * by, which then drives on to the stop rather than another coming in.
+ */
 internal fun roadScene(width: Float, road: Road): PullScene {
     val w = width / ROAD_SCALE
     val sign = Pull.roadSign(w)
-    return PullScene(w, sign, road.bus?.takeIf { road.stop }?.let { Pull.roadBus(sign, it.far) })
+    val card = road.bus?.takeIf { road.stop }
+    return PullScene(w, sign, card?.let { Pull.roadBus(sign, it.far) } ?: shuttleX(w).takeIf { road.shuttle })
 }
+
+/** Where the shuttle going by stands on a road [w] units across. */
+internal fun shuttleX(w: Float): Float = (w * 0.58f).roundToInt().toFloat() - 19f
 
 /**
  * The top of what Now shows, up in the sky in the sky's ink, with a short
@@ -416,7 +424,7 @@ private fun DrawScope.horizon(top: Float, page: Color, p: Palette, phase: Phase,
         bus(x, colour, if (bus.live) Color.White.copy(alpha = 0.85f) else null)
     } else if (road.shuttle) {
         // A shuttle going by, heading right, its headlights on after dark: A1's red along the bottom.
-        val x = across(0.58f) - 19f
+        val x = shuttleX(w)
         if (lights) {
             val beam = listOf(at(x + 38, 66f), at(x + 60, 63f), at(x + 60, 70f))
             drawPath(Path().apply { moveTo(beam[0].x, beam[0].y); beam.drop(1).forEach { lineTo(it.x, it.y) }; close() }, MOON.copy(alpha = 0.12f))

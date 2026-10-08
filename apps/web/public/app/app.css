@@ -680,9 +680,9 @@ body.pulled .sky-head { padding-top: calc(var(--room) + var(--stretch, 0px)); }
 body.pulled .celestial { height: calc(var(--room) + var(--stretch, 0px)); }
 body.pulled > .nav, body.pulled .app-chips:not(.map-pills), body.pulled .bt-sky-top > * { translate: 0 var(--lead, 0px); }
 /* While a pull's bus drives, the horizon's own buses step aside; they're back where the answer puts them once it closes. */
-.horizon :is(.coming, .parked, .driving) { transition: opacity 0.3s; }
-body.pull-drive .horizon :is(.coming, .parked, .driving) { opacity: 0; transition: none; }
-@media (prefers-reduced-motion: reduce) { .horizon :is(.coming, .parked, .driving) { transition: none; } }
+.horizon :is(.coming, .parked, .driving, .shuttle) { transition: opacity 0.3s; }
+body.pull-drive .horizon :is(.coming, .parked, .driving, .shuttle) { opacity: 0; transition: none; }
+@media (prefers-reduced-motion: reduce) { .horizon :is(.coming, .parked, .driving, .shuttle) { transition: none; } }
 .pull { position: fixed; z-index: 1; inset: 0; pointer-events: none; visibility: hidden; }
 body.pulled .pull { visibility: visible; }
 /* Over the horizon on screen, in its own numbers (pull.js sets where). */
