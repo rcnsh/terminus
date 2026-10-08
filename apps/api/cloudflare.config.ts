@@ -7,7 +7,7 @@ import { bindings, defineConfig, exports, triggers } from "cf/config";
 // The website directory (../web/public) is in wrangler.config.ts.
 //
 // Two Workers from one config. `cf deploy` is the stable site; `cf deploy
-// --mode beta` (pnpm run deploy:beta) is the beta at beta.terminus.rcn.sh,
+// --mode beta` (pnpm run deploy:beta) is the beta at beta.terminus.run,
 // with its own database, KV, trips, downloads and analytics, so beta accounts
 // and migrations never touch the stable ones (ids in BETA).
 
@@ -20,7 +20,10 @@ function site(mode: string | undefined) {
 	if (mode === undefined || mode === "production") {
 		return {
 			name: "terminus",
-			domain: "terminus.rcn.sh",
+			domain: "terminus.run",
+			// The old address keeps answering: installed apps and the Mac's
+			// update checks still use it.
+			oldDomain: "terminus.rcn.sh",
 			d1: { name: "terminus", id: "27067356-8691-458f-bc69-fa5ca5bbc374" },
 			kv: "1f88f570f6e04f78aa2888ee7aa78e6a",
 			downloads: "terminus-downloads",
@@ -38,14 +41,15 @@ function site(mode: string | undefined) {
 	if (!BETA.d1 || !BETA.kv) throw new Error("the beta's D1 and KV ids aren't in cloudflare.config.ts yet");
 	return {
 		name: "terminus-beta",
-		domain: "beta.terminus.rcn.sh",
+		domain: "beta.terminus.run",
+		oldDomain: "beta.terminus.rcn.sh",
 		d1: { name: "terminus-beta", id: BETA.d1 },
 		kv: BETA.kv,
 		downloads: "terminus-beta-downloads",
 		dataset: "terminus_beta",
 		rl: { auth: "2001", public: "2002", me: "2003", mail: "2004", anon: "2005", map: "2006", pair: "2007" },
 		env: {
-			PUBLIC_ORIGIN: bindings.text("https://beta.terminus.rcn.sh"),
+			PUBLIC_ORIGIN: bindings.text("https://beta.terminus.run"),
 			AE_DATASET: bindings.text("terminus_beta"),
 			TIMELAPSE_ENABLED: bindings.text("off"),
 		},

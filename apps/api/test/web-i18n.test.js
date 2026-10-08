@@ -51,7 +51,7 @@ const SCRIPTS = [
 
 // Names and codes that read the same in Chinese: places and module codes too,
 // as on the signs (the landing page's pictures of the app).
-const SAME = /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|PGP|UTown|Kent Ridge MRT|[A-Z]{2,3}\d{4}[A-Z]?|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.rcn\.sh\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;
+const SAME = /^(terminus|termi|nus|API|Android|Mac|English|中文|Apple|iPhone|PGP|UTown|Kent Ridge MRT|[A-Z]{2,3}\d{4}[A-Z]?|K7QX4M|x-api-key|you@u\.nus\.edu|terminus\.run\/account|------|https:\/\/nusmods\.com\/\S*|[-–·…×↻→\d\s:&;©]+)$/;
 
 test('every t() string in the scripts is translated', () => {
   const dict = zh();

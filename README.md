@@ -1,4 +1,4 @@
-<a href="https://terminus.rcn.sh">
+<a href="https://terminus.run">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/readme/banner-dark.webp">
     <img alt="terminus: know when to run. Your NUS timetable in, one answer out: which shuttle, from which stop, and when to leave. Every client stands on the live campus map, with the D2 line and its buses running back to the horizon under the sky: the Android widget on your home screen (leave by 9:39 AM, walk to PGP, R2 to UTown), the Mac menu bar app (leave by 9:41, catch the 9:45 D2 at PGP) and the web app on a phone (leave in 19 minutes, live)." src=".github/readme/banner-light.webp" width="100%">
@@ -6,13 +6,13 @@
 </a>
 
 <p align="center">
-  <a href="https://terminus.rcn.sh/download/android"><img alt="Get it for Android" src="https://img.shields.io/badge/Get_it_for-Android-fb923c?style=for-the-badge&logo=android&logoColor=white&labelColor=1c1917"></a>
-  <a href="https://terminus.rcn.sh/download/mac"><img alt="Download for Mac" src="https://img.shields.io/badge/Download_for-Mac-fb923c?style=for-the-badge&logo=apple&logoColor=white&labelColor=1c1917"></a>
-  <a href="https://terminus.rcn.sh/account"><img alt="Open on the web" src="https://img.shields.io/badge/Open_on_the-web-fb923c?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=1c1917"></a>
+  <a href="https://terminus.run/download/android"><img alt="Get it for Android" src="https://img.shields.io/badge/Get_it_for-Android-fb923c?style=for-the-badge&logo=android&logoColor=white&labelColor=1c1917"></a>
+  <a href="https://terminus.run/download/mac"><img alt="Download for Mac" src="https://img.shields.io/badge/Download_for-Mac-fb923c?style=for-the-badge&logo=apple&logoColor=white&labelColor=1c1917"></a>
+  <a href="https://terminus.run/account"><img alt="Open on the web" src="https://img.shields.io/badge/Open_on_the-web-fb923c?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=1c1917"></a>
 </p>
 
 <p align="center">
-  <sub>Free · Android 12+ · macOS 14+ on Apple silicon · <a href="https://terminus.rcn.sh">terminus.rcn.sh</a> · <a href="https://terminus.rcn.sh/docs">API docs</a></sub>
+  <sub>Free · Android 12+ · macOS 14+ on Apple silicon · <a href="https://terminus.run">terminus.run</a> · <a href="https://terminus.run/docs">API docs</a></sub>
 </p>
 
 <br>
@@ -99,7 +99,7 @@ On Android, the web and the Mac (in a window of its own): every bus route in its
 
 **On the web or a Mac:**
 
-1. **Sign in** at [terminus.rcn.sh/account](https://terminus.rcn.sh/account) with a code or link sent to your email. No password.
+1. **Sign in** at [terminus.run/account](https://terminus.run/account) with a code or link sent to your email. No password.
 2. **Import** your NUSMods share link and pick your home stop.
 3. **Install** the Mac menu bar app and sign in with the same email: approve it from the link we email you, on any device, by choosing the number the Mac shows. Or pair it with a code from the account page or the Android app's Settings.
 
@@ -127,7 +127,7 @@ down the clock itself, so no screen ever shows a stale "4 min".
 
 | Path | What |
 | --- | --- |
-| [`apps/api`](apps/api) | Cloudflare Worker: the API, accounts (D1), the cron monitor, and the website. API docs at [/docs](https://terminus.rcn.sh/docs). |
+| [`apps/api`](apps/api) | Cloudflare Worker: the API, accounts (D1), the cron monitor, and the website. API docs at [/docs](https://terminus.run/docs). |
 | [`apps/web`](apps/web) | Landing page, account page, the web app (Now, Buses, the campus map, Settings), privacy and pairing pages. HTML and Preact components with no build step, served by the Worker. |
 | [`apps/android`](apps/android) | Home-screen widgets (compact and with places) and the app: Now, Buses, the campus map, Settings. |
 | [`apps/macos`](apps/macos) | Menu bar app, with the campus map in a window. |

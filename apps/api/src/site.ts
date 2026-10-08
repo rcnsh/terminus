@@ -1,13 +1,13 @@
 /**
  * Which terminus this Worker is: the stable site, or the beta at
- * beta.terminus.rcn.sh, which sets PUBLIC_ORIGIN (cloudflare.config.ts,
+ * beta.terminus.run, which sets PUBLIC_ORIGIN (cloudflare.config.ts,
  * `--mode beta`). Links in email and messages point at this origin, so a beta
  * account is never sent to the stable site, where it doesn't exist.
  */
 
 import type { Env } from './types.ts';
 
-export const STABLE_ORIGIN = 'https://terminus.rcn.sh';
+export const STABLE_ORIGIN = 'https://terminus.run';
 
 export const siteOrigin = (env: Env): string => env.PUBLIC_ORIGIN || STABLE_ORIGIN;
 

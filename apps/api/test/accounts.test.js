@@ -162,7 +162,7 @@ test('another site cannot post a sign-in link or a sign-out', async () => {
 });
 
 test('a page on a sibling subdomain cannot change the account with the session cookie', async () => {
-  // The beta and any other *.rcn.sh host are the same site, so the Lax
+  // The beta and any other *.terminus.run host are the same site, so the Lax
   // cookie goes with their POSTs. A type that only mentions JSON needs no
   // preflight, so it's refused as JSON too.
   const { env, email } = setup();
@@ -304,15 +304,15 @@ test('tokens are stored hashed, never raw', async () => {
 
 test('on the beta, emails come from "terminus beta" and link to the beta site', async () => {
   const { env, email } = setup();
-  env.PUBLIC_ORIGIN = 'https://beta.terminus.rcn.sh';
+  env.PUBLIC_ORIGIN = 'https://beta.terminus.run';
   const cookie = await signIn(env, email);
   assert.equal(email.sent[0].from.name, 'terminus beta');
 
   const { code } = await (await call(env, '/me/pair-code', { method: 'POST', cookie })).json();
   await call(env, '/pair', { method: 'POST', body: { code, name: 'Pixel' } });
   assert.equal(email.sent.at(-1).from.name, 'terminus beta');
-  assert.match(email.sent.at(-1).text, /https:\/\/beta\.terminus\.rcn\.sh\/account/);
-  assert.doesNotMatch(email.sent.at(-1).text, /https:\/\/terminus\.rcn\.sh/);
+  assert.match(email.sent.at(-1).text, /https:\/\/beta\.terminus\.run\/account/);
+  assert.doesNotMatch(email.sent.at(-1).text, /https:\/\/terminus\.run/);
 });
 
 test('/me needs a session', async () => {

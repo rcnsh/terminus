@@ -15,7 +15,7 @@ import type { Env } from './types.ts';
 
 export const WEB_PREFIX = 'web:';
 /** The contact push services see with each push. */
-const SUBJECT = 'https://terminus.rcn.sh';
+const SUBJECT = 'https://terminus.run';
 
 export interface WebSubscription {
   endpoint: string;

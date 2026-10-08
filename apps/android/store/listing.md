@@ -139,8 +139,8 @@ How they were taken: the dev stub started with a class at 10:00 (the `dev-stub-s
 
 - Category: Maps & Navigation. Tags: public transport, commute.
 - Email: the developer address on the Play account.
-- Website: https://terminus.rcn.sh
-- Privacy policy: https://terminus.rcn.sh/privacy
+- Website: https://terminus.run
+- Privacy policy: https://terminus.run/privacy
 
 ## Content and policy answers
 
@@ -151,7 +151,7 @@ How they were taken: the dev stub started with a class at 10:00 (the `dev-stub-s
 - **Target audience:** 18 and over (university students). Not designed for children.
 - **Exact alarms:** `SCHEDULE_EXACT_ALARM` needs no declaration. The user allows it under "Alarms & reminders".
 - **Location:** `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` only, never `ACCESS_BACKGROUND_LOCATION`. Every use starts from something the user does (the app open, a tap on the widget or the live notification), so it's while-in-use access, and the location foreground service runs only after such a tap. No background location declaration is needed; the foreground service one below is.
-- **Account deletion URL:** https://terminus.rcn.sh/privacy (section "Your controls"): an account with an email is deleted from https://terminus.rcn.sh/account; one without is deleted in the app (Settings → Delete this account), and is deleted anyway 60 days after it was last used.
+- **Account deletion URL:** https://terminus.run/privacy (section "Your controls"): an account with an email is deleted from https://terminus.run/account; one without is deleted in the app (Settings → Delete this account), and is deleted anyway 60 days after it was last used.
 - **Data safety:** as given in Play Console:
   - Location: precise, collected, ephemeral, optional, App functionality.
   - Email: optional; Account management and App functionality.

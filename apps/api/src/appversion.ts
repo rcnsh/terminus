@@ -19,7 +19,7 @@ import { timedFetch } from './http.ts';
 
 export const PLAY_URL = 'https://play.google.com/store/apps/details?id=sg.edu.nus.univus&hl=en&gl=SG';
 export const APKCOMBO_URL = 'https://apkcombo.com/univus/sg.edu.nus.univus/';
-const USER_AGENT = 'terminus (+https://terminus.rcn.sh)';
+const USER_AGENT = 'terminus (+https://terminus.run)';
 const KV_AUTO = 'monitor:autoversion';
 /** Candidates tried with NUS per lookup (each costs a mint and one call). */
 const MAX_TRIES = 3;

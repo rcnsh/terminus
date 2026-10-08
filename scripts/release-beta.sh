@@ -1,5 +1,5 @@
 #!/bin/bash
-# Release a beta: everything at beta.terminus.rcn.sh, from this commit.
+# Release a beta: everything at beta.terminus.run, from this commit.
 #
 #   scripts/release-beta.sh 2.0.1-beta.1 --dry-run   # tests and builds, nothing uploaded
 #   scripts/release-beta.sh 2.0.1-beta.1             # also deploys and uploads
@@ -38,7 +38,7 @@ VERSION="${1:?usage: scripts/release-beta.sh <version, e.g. 2.0.1-beta.1> [--dry
 DRY=0
 [ "${2:-}" = "--dry-run" ] && DRY=1
 . scripts/release-lib.sh
-SITE=https://beta.terminus.rcn.sh
+SITE=https://beta.terminus.run
 BUCKET=terminus-beta-downloads
 
 # Not `echo | grep`: grep passes a version with a newline in it if any one

@@ -106,7 +106,7 @@ export function stopPairs(graph: Graph): StopPairs {
 
   return {
     version: graph.generated,
-    attribution: "Stop names, positions and routes from NUS's internal shuttle feed, via terminus (https://terminus.rcn.sh). Unofficial, not affiliated with NUS.",
+    attribution: "Stop names, positions and routes from NUS's internal shuttle feed, via terminus (https://terminus.run). Unofficial, not affiliated with NUS.",
     places,
   };
 }

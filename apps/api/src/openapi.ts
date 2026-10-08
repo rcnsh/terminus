@@ -112,7 +112,7 @@ const h12Param = {
 const KEYED_ERRORS = {
   '401': {
     ...errorResponse('No API key, a key that is not (or no longer) one, and no signed-in session or device token. Create a key on the account page.', {
-      error: 'this needs an API key: create one at https://terminus.rcn.sh/account and send it as x-api-key',
+      error: 'this needs an API key: create one at https://terminus.run/account and send it as x-api-key',
     }),
     headers: { 'WWW-Authenticate': { description: '`Bearer realm="terminus"`.', schema: { type: 'string' } } },
   },
@@ -485,7 +485,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   schema: { $ref: '#/components/schemas/StopPairs' },
                   example: {
                     version: '2026-09-28T13:26:23.237956+00:00',
-                    attribution: "Stop names, positions and routes from NUS's internal shuttle feed, via terminus (https://terminus.rcn.sh). Unofficial, not affiliated with NUS.",
+                    attribution: "Stop names, positions and routes from NUS's internal shuttle feed, via terminus (https://terminus.run). Unofficial, not affiliated with NUS.",
                     places: [
                       {
                         id: 'KR-MRT',
@@ -2647,7 +2647,7 @@ export function docsPage(phase: Phase): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>API · terminus</title>
   <meta name="description" content="The terminus API: NUS shuttle bus arrivals, live buses and the campus map, as ready-to-show answers. Free with an API key.">
-  <link rel="canonical" href="https://terminus.rcn.sh/docs">
+  <link rel="canonical" href="https://terminus.run/docs">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script src="${ELEMENTS}/web-components.min.js" integrity="sha384-X5kH2B8aH81JEl8IfSBwwnr8FYcCqMzdxpqjmmlRbhIl7SsQ9Zn0xk+csQmU37zN" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="${ELEMENTS}/styles.min.css" integrity="sha384-NzdOiocfnINlXfuCXi4OpL/xvdbgLiKaLHQ07Z+IwhVaxHqLShn5rVD5OHt/LYgz" crossorigin="anonymous">

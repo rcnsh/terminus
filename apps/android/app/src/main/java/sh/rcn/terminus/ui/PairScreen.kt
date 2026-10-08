@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.sp
 import sh.rcn.terminus.BuildConfig
 import sh.rcn.terminus.R
 
-/** The site as people type it: terminus.rcn.sh, or the beta's. */
+/** The site as people type it: terminus.run, or the beta's. */
 private val SITE_HOST = BuildConfig.SITE.removePrefix("https://")
 
 private const val CODE_LENGTH = 6

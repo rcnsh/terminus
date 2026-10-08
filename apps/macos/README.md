@@ -7,12 +7,12 @@ silicon.
 ## Run it
 
 ```bash
-swift run                                            # against terminus.rcn.sh
+swift run                                            # against terminus.run
 TERMINUS_API_BASE=http://localhost:8787 swift run    # against the dev stub
 swift test                                           # tests on the API's answer fixtures
 ./build.sh                                           # build/terminus.app
 ./build.sh install                                   # also copy to /Applications and open it
-CHANNEL=beta ./build.sh                              # build/terminus beta.app, for beta.terminus.rcn.sh
+CHANNEL=beta ./build.sh                              # build/terminus beta.app, for beta.terminus.run
 ```
 
 The map window needs the built app (`./build.sh`): MapLibre keeps its cache

@@ -10,8 +10,8 @@ on:
       site:
         description: "Which site"
         type: choice
-        options: [https://terminus.rcn.sh, https://beta.terminus.rcn.sh]
-        default: https://terminus.rcn.sh
+        options: [https://terminus.run, https://beta.terminus.run]
+        default: https://terminus.run
       minutes:
         description: "How long to record"
         default: "10"
