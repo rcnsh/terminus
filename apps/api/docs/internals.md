@@ -23,8 +23,14 @@ places to fix every bug.
 This document is about the API. The clients (Android, Mac, the website) are
 the other folders in `apps/`; the Worker serves the website too, so `GET /` is
 the landing page and `GET /docs` the API documentation. The OpenAPI spec lives
-in [src/openapi.ts](../src/openapi.ts) and a test fails if a route and the spec
-drift apart.
+in [src/openapi.ts](../src/openapi.ts). worker.smoke.js fails if a route and
+the spec drift apart; [test/openapi.test.js](../test/openapi.test.js) calls
+every operation, its success and its error cases, and fails when a status
+isn't listed in its `responses`, a body doesn't fit its schema or carries a
+key the schema doesn't name, an example or a golden answer doesn't fit, a
+route's `security` says something other than whether it answers 401, or a
+schema goes unused. Its schema checker (`test/_schema.mjs`) knows only the
+parts of JSON Schema the spec uses.
 
 The website's own pages (the landing page, `/status/`, `/privacy/` and the
 full policy at `/privacy/policy/`, `/pair/`, and the not-found page) wear
@@ -109,7 +115,7 @@ pnpm run deploy
 | `GET /map/fonts/…`, `/map/sprites/…` | The map's label glyphs and icons, from R2. |
 | `GET /download/android`, `/download/mac` | The current app downloads from R2, as `latest.json` there names them. `?abi=` picks an Android APK by CPU type; `/download/appcast.xml` is the Mac app's Sparkle feed, `/download/latest.json` the version list, `/download/releases/<version>/<file>` a versioned file. `latest.json` and the appcast are read from R2 on every request, so a release is live the moment it's uploaded. |
 | `GET /stops/pairs` | Each stop with its twin across the road, and where the buses on each side go next. Cached hard. |
-| `GET /health` | Graph age and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). `?probe=1` tests auth. |
+| `GET /health` | Graph age, how long the calendar lasts, the feed as the cron last saw it (`upstream`) and which config is present, never values (`config.pushAndroid` and `config.pushWeb`: push set up with a usable key). 503, with the same body, when the feed is confirmed down, the cron has stopped or the calendar has run out. With the operator's `x-health-token`, `?probe=1` tests auth and `?versions=1` reads the uNivUS version from the app stores; without it both are ignored. |
 | `GET /status.json` | Whether NUS's feed is up, as the 15-minute check saw it, and the last 20 outages, read from KV at most once a minute per isolate. Two failed checks in a row confirm an outage and two good ones end it, so a feed that answers every other time stays down; the outage ends at the first of the two. The [status page](../../web/public/status) shows it. |
 | `GET /admin/stats` | The operator dashboard's data (accounts, devices by app, sign-ups, reports, feed; answers and errors per day from Analytics Engine when `ANALYTICS_TOKEN` is set, and the timelapse recorder's polls by what they cost NUS). Needs `x-health-token`; anything else gets a 404. |
 | `GET /timelapse/days` | The days the timelapse recorder has kept (closed ones from R2, today's while it records) and what it's doing today. Needs `x-health-token`: the operator's, or `TIMELAPSE_TOKEN`, which opens `/timelapse/*` and nothing else. |
@@ -118,7 +124,9 @@ pnpm run deploy
 | `POST /auth/login`, `/auth/code`, `/pair`, `/me/*` | Accounts. See below. `POST /me/feedback` is "Is this wrong?": the answer the user saw and a note, kept with the account for a year (`FEEDBACK_KEEP_DAYS`, the cron) and its note emailed to `ALERT_EMAIL`, without the address or the answer (they'd outlive the account in an inbox; the dashboard has both). It needs a note, and an account with an email: an anonymous one gets 403. |
 
 `/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and `/stops/pairs` need an API key
-(made on the account page, sent as `x-api-key`) or a signed-in session. They're
+(made on the account page, sent as `x-api-key`, or as a bearer token) or a signed-in
+session or device; without one they answer 401 with `WWW-Authenticate`. A key opens
+these routes only: on `/me/*` it is not a session, and gets 401. They're
 limited by who's asking: a signed-in account by account (`RL_ME`, `acct:`),
 an API key by key (`RL_PUBLIC`, `key:`), and a request with neither by IP.
 On campus Wi-Fi hundreds of students share one IP, and the map alone asks
