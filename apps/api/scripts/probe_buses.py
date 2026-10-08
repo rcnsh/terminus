@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 How often does the live-bus feed move a bus? Polls active-bus every 5 s per
-service (never more often: the map's own cache, TTL.busesMs) for a few
-minutes, at most MAX_MINUTES, and reports, per service, how long a moving
+service (never more often: the map's own cache, TTL.busesMs), for at most
+MAX_SERVICES services, for a few minutes, at most MAX_MINUTES, and reports, per service, how long a moving
 bus's position stays the same between changes. That says how often the map
 can usefully poll (/buses caches TTL.busesMs).
 
@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import statistics
 import sys
 import time
@@ -34,6 +35,11 @@ from scrape_stops import REQUIRED, get_session, load_dev_vars, pick_list, proxy
 # would (TTL.busesMs) nor for long. CLAUDE.md, rule 2.
 MIN_EVERY_S = 5.0
 MAX_MINUTES = 10.0
+# And the cap on services in one run: each is its own call every --every
+# seconds, so more services is more load on NUS, outside any cache.
+MAX_SERVICES = 6
+# What a service name looks like (A1, D2, K, BTC); anything else is refused.
+SERVICE_NAME = re.compile(r"[A-Za-z0-9]{1,8}")
 
 
 def percentile(xs: list, p: float) -> float:
@@ -48,6 +54,12 @@ def main() -> int:
     ap.add_argument("--every", type=float, default=MIN_EVERY_S, help=f"seconds between polls of each service, at least {MIN_EVERY_S:g}")
     ap.add_argument("--trace", help="also write every reading to this file, as JSON lines")
     args = ap.parse_args()
+    bad = [s for s in args.services if not SERVICE_NAME.fullmatch(s)]
+    if bad:
+        ap.error(f"not a service name: {' '.join(bad)}")
+    args.services = list(dict.fromkeys(args.services))
+    if len(args.services) > MAX_SERVICES:
+        ap.error(f"{len(args.services)} services; at most {MAX_SERVICES} in one run")
     # NaN fails both comparisons, so it is caught here too.
     if not args.every >= MIN_EVERY_S:
         print(f"--every {args.every:g} is below the floor; using {MIN_EVERY_S:g} s", file=sys.stderr)

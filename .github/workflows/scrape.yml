@@ -10,17 +10,31 @@ on:
 permissions:
   contents: write
 
+# One refresh at a time; a second waits rather than cancelling one that may
+# be mid-push.
+concurrency:
+  group: scrape
+  cancel-in-progress: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No token left in .git/config: the scrapers, the parsers of what
           # they fetch and the test suite's dependencies all run before the
           # commit, and none of them should be able to push to main. Only the
-          # last step gets the token.
+          # steps that commit and push get the token.
           persist-credentials: false
+
+      # Before anything else runs: the steps that get the token check
+      # .git/config is still this, so a scraper or a dependency can't point
+      # the push elsewhere (a proxy, an insteadOf) or add a filter to it.
+      - name: Fingerprint git config
+        id: gitconfig
+        run: echo "sum=$(sha256sum .git/config | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
@@ -48,6 +62,7 @@ jobs:
       # often busy: on failure the committed shapes stay, and the API draws a
       # route whose stops changed as straight lines until next week.
       - name: Route shapes
+        id: shapes
         continue-on-error: true
         run: python3 apps/api/scripts/route_shapes.py
 
@@ -55,14 +70,41 @@ jobs:
       # key, the LTA_ACCOUNT_KEY secret). Without the key, or with DataMall
       # down, the committed public.json stays.
       - name: Public buses
+        id: lta
         continue-on-error: true
         env:
           LTA_ACCOUNT_KEY: ${{ secrets.LTA_ACCOUNT_KEY }}
         run: python3 apps/api/scripts/scrape_lta.py
 
       # Semester dates (NUSMods) and public holidays (MOM). No credentials.
+      # On failure the committed calendar stays: the Worker's cron also
+      # fetches it into KV weekly (src/calendarsync.ts), so it needn't hold
+      # up the stop graph.
       - name: Refresh calendar
+        id: calendar
+        continue-on-error: true
         run: python3 apps/api/scripts/fetch_calendar.py
+
+      # The three steps above fail quietly; say so on the run's page.
+      - name: Note what wasn't refreshed
+        if: steps.shapes.outcome == 'failure' || steps.lta.outcome == 'failure' || steps.calendar.outcome == 'failure'
+        env:
+          SHAPES: ${{ steps.shapes.outcome }}
+          LTA: ${{ steps.lta.outcome }}
+          CALENDAR: ${{ steps.calendar.outcome }}
+          HAS_LTA_KEY: ${{ secrets.LTA_ACCOUNT_KEY != '' }}
+        run: |
+          if [ "$SHAPES" = failure ]; then
+            echo "::warning title=route shapes::not refreshed (Overpass busy?); shapes.json stays as committed"
+          fi
+          if [ "$LTA" = failure ] && [ "$HAS_LTA_KEY" != true ]; then
+            echo "::warning title=public buses::not refreshed: the LTA_ACCOUNT_KEY secret is missing; public.json stays as committed"
+          elif [ "$LTA" = failure ]; then
+            echo "::warning title=public buses::not refreshed (DataMall down?); public.json stays as committed"
+          fi
+          if [ "$CALENDAR" = failure ]; then
+            echo "::warning title=calendar::not refreshed; calendar.json stays as committed (the cron still fetches it into KV)"
+          fi
 
       # A bad graph is worse than a stale one, so the suite gates the commit.
       - name: Test against the new graph
@@ -73,22 +115,70 @@ jobs:
       - name: Sanity-check against what's committed
         run: python3 apps/api/scripts/check_scraped.py
 
-      - name: Commit if changed
+      # Earlier steps ran third-party code, and this one sees the token: git
+      # runs with no hooks, none of the runner's global or system config,
+      # and .git/config as it was after checkout. Only the data files may be
+      # in the commit.
+      - name: Commit and rebase onto main
+        id: commit
         env:
           PUSH_TOKEN: ${{ github.token }}
+          CONFIG_SUM: ${{ steps.gitconfig.outputs.sum }}
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_NOSYSTEM: "1"
         run: |
-          if git diff --quiet -- apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json; then
+          DATA="apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json"
+          if git diff --quiet -- $DATA; then
             echo "stop graph, shapes, public buses and calendar unchanged"
             exit 0
           fi
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json
-          git commit -m "chore(data): refresh stop graph, shapes, public buses and calendar"
+          [ "$(sha256sum .git/config | cut -d' ' -f1)" = "$CONFIG_SUM" ] || { echo "::error::.git/config changed since checkout"; exit 1; }
+          # The identity goes on every command: the rebase re-commits when main moved.
+          g() { git -c core.hooksPath=/dev/null -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" "$@"; }
+          only_data() { for f in $1; do case " $DATA " in *" $f "*) ;; *) return 1 ;; esac; done; }
+          g reset -q
+          g add $DATA
+          only_data "$(git diff --cached --name-only)" || { echo "::error::files other than the data are staged"; exit 1; }
+          g commit -q -m "chore(data): refresh stop graph, shapes, public buses and calendar"
           # main may have moved during the scrape; the data files are only
-          # changed here, so this rebases cleanly.
-          # The same header actions/checkout would have stored, for these two
-          # commands only.
+          # changed here, so this rebases cleanly. The same header
+          # actions/checkout would have stored, for this command only.
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
-          git -c http.https://github.com/.extraheader="$auth" pull --rebase origin main
-          git -c http.https://github.com/.extraheader="$auth" push
+          g -c http.https://github.com/.extraheader="$auth" pull -q --rebase origin main
+          sha=$(git rev-parse HEAD)
+          base=$(git rev-parse HEAD~1)
+          only_data "$(git diff --name-only "$base" "$sha")" || { echo "::error::the rebased commit changes more than the data"; exit 1; }
+          { echo "changed=true"; echo "sha=$sha"; echo "base=$base"; } >> "$GITHUB_OUTPUT"
+
+      # The rebase may have brought in new code from main, so the tree to be
+      # pushed is tested again, without the token. check_scraped.py compares
+      # with HEAD, so HEAD points at the new main for it, the files staying
+      # as they are.
+      - name: Test the rebased tree
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
+          BASE: ${{ steps.commit.outputs.base }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          git reset -q --soft "$BASE"
+          python3 apps/api/scripts/check_scraped.py
+          git reset -q --soft "$SHA"
+
+      # Pushes the commit made above by its hash, so nothing the tests ran
+      # can change what lands on main.
+      - name: Push
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          PUSH_TOKEN: ${{ github.token }}
+          CONFIG_SUM: ${{ steps.gitconfig.outputs.sum }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          BASE: ${{ steps.commit.outputs.base }}
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_NOSYSTEM: "1"
+        run: |
+          [ "$(sha256sum .git/config | cut -d' ' -f1)" = "$CONFIG_SUM" ] || { echo "::error::.git/config changed since checkout"; exit 1; }
+          [ "$(git rev-parse "$SHA^")" = "$BASE" ] || { echo "::error::the commit's parent isn't the main it was rebased onto"; exit 1; }
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
+          git -c core.hooksPath=/dev/null -c http.https://github.com/.extraheader="$auth" push -q origin "$SHA:refs/heads/main"
