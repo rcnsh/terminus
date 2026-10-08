@@ -1,0 +1,23 @@
+{
+  "_help": [
+    "HAND-MAINTAINED. scripts/walk_routes.py reads this file and never writes it.",
+    "",
+    "The stops students actually use for a building, where the map gets it",
+    "wrong. Without an entry a building is served by its own stop (uNivUS's",
+    "table, venues-base.json) and one more stop when the walk to it is barely",
+    "longer, both by path distance on OpenStreetMap. Path distance can't see a",
+    "climb, a road with no crossing or a door on the far side, so a stop that",
+    "is nearer on the map can be the one nobody uses.",
+    "",
+    "Each entry lists stop codes, the usual one first: it becomes the",
+    "building's stop for imports and search, and the planner leaves from and",
+    "arrives at whichever listed stop is quicker at the time. A stop's twin",
+    "across the road comes with it; don't list both. Say why in 'why'."
+  ],
+  "venues": {
+    "LT21": {
+      "stops": ["S17"],
+      "why": "A path runs straight from LT21 to S17 and LT27. University Hall is nearer on the map but much harder to reach."
+    }
+  }
+}

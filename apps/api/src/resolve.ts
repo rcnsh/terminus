@@ -206,7 +206,8 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
   const reaches = (stop: Stop) =>
     !to || (!targetCodes.has(stop.code) && (idx.servingStop.get(stop.code) ?? []).some((svc) => targets.some((t) => reach(idx, svc, stop.code, t.code))));
 
-  let base: Array<{ stop: Stop; distM: number; footM: number }>;
+  // `startS`: without coordinates, the walk to where `footM` starts from.
+  let base: Array<{ stop: Stop; distM: number; footM: number; startS?: number }>;
   const home = input.lat != null && input.lon != null ? residenceStops(input.lat, input.lon, idx.byCode, homeWalk(input)) : null;
   if (home) {
     base = home;
@@ -238,11 +239,20 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
     const stop = input.originCode ? idx.byCode.get(input.originCode) : undefined;
     if (!stop) return [];
     // Starting from home: the walk to the stop decides which bus is catchable.
-    base = [{ stop, distM: 0, footM: 0 }];
+    // From a room more than one stop serves, each of them, with its own walk
+    // from the room: the nearer stop's bus isn't always the one to take.
+    const startS = (code: string) => input.originWalkByStopS?.[code] ?? input.originWalkS ?? 0;
+    const origins = [stop, ...(input.originAlso ?? []).flatMap((code) => idx.byCode.get(code) ?? [])];
+    base = [];
+    for (const s of origins) if (!base.some((b) => b.stop.code === s.code)) base.push({ stop: s, distM: 0, footM: 0, startS: startS(s.code) });
     // The far side of the road, a crossing further: the bus you want may
     // only call there, and nothing says which side you'll come out on.
-    const twin = stop.opposite ? idx.byCode.get(stop.opposite) : undefined;
-    if (twin) base.push({ stop: twin, distM: haversineM(stop.lat, stop.lon, twin.lat, twin.lon), footM: stopFootM(stop, twin) });
+    for (const s of origins) {
+      const twin = s.opposite ? idx.byCode.get(s.opposite) : undefined;
+      if (twin && !base.some((b) => b.stop.code === twin.code)) {
+        base.push({ stop: twin, distM: haversineM(s.lat, s.lon, twin.lat, twin.lon), footM: stopFootM(s, twin), startS: startS(s.code) });
+      }
+    }
     // From home, every home stop: the walk from home (originWalkS) is to each.
     if (input.preferStops?.includes(stop.code)) {
       for (const code of input.preferStops) {
@@ -252,7 +262,7 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
     }
   }
 
-  const out: Candidate[] = base.map(({ stop, distM, footM: foot }) => {
+  const out: Candidate[] = base.map(({ stop, distM, footM: foot, startS }) => {
     const legs = [];
     // Standing at the destination is not a boarding option. reach() returns
     // 0 hops for from === to, which would otherwise rank first every time.
@@ -283,7 +293,7 @@ export function candidateStops(graph: Graph, input: ResolveInput): Candidate[] {
     }
     // Starting from home or a room without coordinates: that walk comes
     // first, and a crossing to the far side's stop after it.
-    const walkS = input.lat != null ? Math.round(foot / speed) : (input.originWalkS ?? 0) + Math.round(foot / speed);
+    const walkS = input.lat != null ? Math.round(foot / speed) : (startS ?? input.originWalkS ?? 0) + Math.round(foot / speed);
     return { stop, distM, walkS, legs };
   });
 
@@ -974,8 +984,10 @@ export function walkAllTheWayS(
     return Math.round(Math.min(...via, ...direct) / speed);
   }
   if (!fallbackFrom) return null;
-  // From the origin stop, the walk to it (from home) comes first, same as for the bus.
-  return Math.round(stopFootM(fallbackFrom, dest) / speed) + (input.originWalkS ?? 0);
+  // From the origin stop, the walk to it (from home) comes first, same as for
+  // the bus; from a room several stops serve, out by whichever is shortest.
+  const from = [fallbackFrom, ...(input.originAlso ?? []).flatMap((code) => idx.byCode.get(code) ?? [])];
+  return Math.min(...from.map((s) => Math.round(stopFootM(s, dest) / speed) + (input.originWalkByStopS?.[s.code] ?? input.originWalkS ?? 0)));
 }
 
 /**

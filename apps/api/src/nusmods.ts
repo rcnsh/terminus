@@ -21,8 +21,12 @@ import roomsJson from '../data/rooms.json' with { type: 'json' };
 import { type LessonWeeks, type Term, termsForImport } from './calendar.ts';
 import { m } from './i18n.ts';
 
-/** Stop, routed walk and, from the NUSMods room map, where the building is (its rooms' mean point). */
-type VenueEntry = { stop: string; m: number; lat?: number; lon?: number };
+/**
+ * Stop, routed walk and, from the NUSMods room map, where the building is
+ * (its rooms' mean point). `stops`, when more than one serves it: each with
+ * its routed walk, `stop` first (scripts/walk_routes.py, data/src/venue-stops.json).
+ */
+type VenueEntry = { stop: string; m: number; lat?: number; lon?: number; stops?: Record<string, number> };
 const VENUES = venuesJson as { venues: Record<string, VenueEntry> };
 const ROOMS = roomsJson as { rooms: Record<string, VenueEntry & { name: string }> };
 
@@ -108,6 +112,21 @@ interface TimetableRow {
 export function venueToStop(venue: string): { stop: string; m: number } | null {
   const v = venueEntry(venue);
   return v ? { stop: v.stop, m: v.m } : null;
+}
+
+/**
+ * Every stop a building is left from and arrived at, its usual one first,
+ * with the walk from each in metres. A lecture theatre between two stops is
+ * served by both, and the router takes whichever bus is quicker, as it does
+ * for a food court. A saved timetable keeps the stop it was imported with,
+ * so a trip reads its stops from here, not from that.
+ */
+export function venueStops(venue: string): { to: string; also: string[]; walkM: Record<string, number> } | null {
+  const v = venueEntry(venue);
+  if (!v) return null;
+  const walkM = v.stops ?? { [v.stop]: v.m };
+  const [to, ...also] = Object.keys(walkM);
+  return { to, also, walkM };
 }
 
 function venueEntry(venue: string): VenueEntry | null {

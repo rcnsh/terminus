@@ -103,8 +103,9 @@ export async function answerFor(
   // Without this the degrade ladder says "Walk · now" and marks it ended.
   const dest = input.to ? idx.byCode.get(input.to) : undefined;
   // Either side of the road counts as there, same as for routing, and so does
-  // any other stop serving the same place.
-  const destSides = [input.to, ...(input.toAlso ?? [])]
+  // any other stop serving the same place: a food court's. A room's other
+  // stops don't: one can be 300 m from it, and in the room itself is there.
+  const destSides = [input.to, ...(input.destAt ? [] : (input.toAlso ?? []))]
     .map((c) => (c ? idx.byCode.get(c) : undefined))
     .filter((s): s is Stop => Boolean(s))
     .flatMap((s) => {

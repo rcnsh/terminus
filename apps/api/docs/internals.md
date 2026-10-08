@@ -1053,6 +1053,29 @@ home stops serve, the walk to the nearest of them is your own `homeWalkMin`
 its other stops are as much further as the paths say. The same walk counts on
 the card, in walking the whole way, and on the Nearby tab.
 
+**A room can have more than one stop.** A building between two stops is
+served by both (`stops` in `venues.json`, from `scripts/walk_routes.py`): its
+own stop, and one more when the walk to it is at most `VENUE_EXTRA_M` (100 m)
+longer than to the nearest, never a stop and its twin across the road (the
+resolver adds that itself). Where the map's nearest stop is the wrong one,
+`data/src/venue-stops.json` lists the stops students use instead, by hand:
+path length can't see a climb or a road with no crossing (LT21 is left from
+S17 and LT27, not University Hall, though the hall is 70 m nearer by path).
+The listed stops replace the map's choice entirely, and the first becomes the
+building's stop for imports and search. A room uNivUS lists on its own
+(`COM1-0208`) takes its building's stops, walked from the room where NUSMods
+places it; one uNivUS puts at a stop its building doesn't use keeps that
+stop alone. To fix a building: add it to `venue-stops.json` with a `why`, run
+`python3 scripts/walk_routes.py`, and commit both (`venue-stops.test.js`
+fails while `venues.json` is stale). A trip reads its room's stops from `venueStops()` each time, not from the stop
+its timetable was saved with. Leaving a class without a location starts from
+every one of them (`originAlso`), each with the room's own walk to it
+(`originWalkByStopS`), so the planner takes whichever bus is quicker counting
+the walk; going to a class arrives at whichever is quicker, with the walk on
+from the stop the bus gets you to (`endWalkByStopS`, `ArriveBy.walkByStopS`),
+as for a food court. Standing at a room's other stop is not "You're there":
+it can be 300 m from the room.
+
 **Fetch-on-demand with a 15-second edge cache; no poll loop.** Workers has no
 long-lived process and Cron Triggers bottom out at one-minute granularity. The
 cache entry is keyed on the **resolved stop code**, not the request URL:
@@ -1439,6 +1462,15 @@ step with `cloudflare.config.ts` by a test), and each run while its feed is
 down is counted on its dashboard as the error `cron feed down`.
 
 ## Known weaknesses
+
+- **A room's other stops are used by the account's trips only** (`/me/next`,
+  `/me/day`). The public `/next?to=` and `/trip?to=` keep one stop per
+  building: they count no walk from the stop to the room, so a second stop
+  would look as near as the first. On the bus, the arrival line counts the
+  walk from the room's usual stop, not the one you get off at. And path
+  length can't tell an easy walk from a hard one: a stop the map wrongly
+  prefers needs an entry in `data/src/venue-stops.json`, found by someone
+  who walks it.
 
 - `RIDE.secondsPerHop` is a **guessed constant** and the ranking inherits its
   error. It separates a 2-hop ride from a 14-hop ride, which is the case that

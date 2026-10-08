@@ -1,72 +1,15 @@
 {
   "stop": {
-    "code": "CLB",
-    "name": "CLB",
-    "confidence": 0.97
+    "code": "LT13-OPP",
+    "name": "Ventus",
+    "confidence": 0.77
   },
-  "quality": "live",
+  "quality": "scheduled",
   "asOf": "2026-08-27T01:00:00.000Z",
-  "arrivals": [
-    {
-      "svc": "D2",
-      "etaS": 240,
-      "crowd": "low",
-      "plate": null,
-      "berth": null
-    },
-    {
-      "svc": "D2",
-      "etaS": 840,
-      "crowd": null,
-      "plate": null,
-      "berth": null
-    },
-    {
-      "svc": "A1",
-      "etaS": 540,
-      "crowd": "high",
-      "plate": null,
-      "berth": null
-    },
-    {
-      "svc": "A1",
-      "etaS": 1140,
-      "crowd": null,
-      "plate": null,
-      "berth": null
-    },
-    {
-      "svc": "R2",
-      "etaS": 360,
-      "crowd": "medium",
-      "plate": null,
-      "berth": null
-    },
-    {
-      "svc": "R2",
-      "etaS": 1080,
-      "crowd": null,
-      "plate": null,
-      "berth": null
-    },
-    {
-      "svc": "D1",
-      "etaS": 420,
-      "crowd": "low",
-      "plate": null,
-      "berth": null
-    },
-    {
-      "svc": "D1",
-      "etaS": 1020,
-      "crowd": null,
-      "plate": null,
-      "berth": null
-    }
-  ],
+  "arrivals": [],
   "label": "步行 · 3 分钟",
-  "detail": "步行去 CS2030 @ COM1 · 搭 D1 要 16 分钟 · 从 CLB 出发",
-  "alt": "D1 · 7 分钟 · CLB",
+  "detail": "步行去 CS2030 @ COM1 · 搭 D1 要 16 分钟 · 从 Ventus 出发",
+  "alt": "D1 · 约 10 分钟 · Ventus",
   "departsAt": null,
   "arriveAt": "2026-08-27T01:03:28Z",
   "foot": {
@@ -110,7 +53,7 @@
     "kind": "class",
     "staleAt": "2026-08-27T01:15:00Z",
     "crowd": null,
-    "quality": null,
+    "quality": "按时刻表估计",
     "leaveBy": "09:53 前出发",
     "leaveVia": null,
     "catch": "走过去",
