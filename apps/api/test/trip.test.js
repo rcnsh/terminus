@@ -327,13 +327,19 @@ test('phases follow the clock until a signal says otherwise', () => {
 });
 
 test('a service with published hours ends at its window close, across midnight too', () => {
-  const graph = { ...GRAPH, serviceHours: { D2: { weekday: ['07:00', '23:00'] }, N: { weekday: ['19:00', '01:00'] } } };
+  // The real K: 07:04 to 23:04 on weekdays, but only until 19:04 on Saturdays.
+  assert.deepEqual([GRAPH.serviceHours.K.weekday, GRAPH.serviceHours.K.saturday], [['07:04', '23:04'], ['07:04', '19:04']]);
   // Thursday 22:30 SGT.
   const at2230 = Date.UTC(2026, 7, 27, 14, 30);
-  assert.equal(serviceEndsAt(graph, 'D2', at2230), Date.UTC(2026, 7, 27, 15, 0));
-  assert.equal(serviceEndsAt(graph, 'N', at2230), Date.UTC(2026, 7, 27, 17, 0), '01:00 tomorrow');
-  assert.equal(serviceEndsAt(graph, 'D2', Date.UTC(2026, 7, 27, 15, 30)), null, 'not running');
-  assert.equal(serviceEndsAt(graph, 'X', at2230), null, 'hours unknown');
+  assert.equal(serviceEndsAt(GRAPH, 'K', at2230), Date.UTC(2026, 7, 27, 15, 4));
+  assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 27, 15, 30)), null, 'not running');
+  // Saturday 18:30, and 19:30 when it has stopped.
+  assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 29, 10, 30)), Date.UTC(2026, 7, 29, 11, 4));
+  assert.equal(serviceEndsAt(GRAPH, 'K', Date.UTC(2026, 7, 29, 11, 30)), null, 'Saturday: ended at 19:04');
+  // No real service runs past midnight; one that did ends tomorrow.
+  const late = { ...GRAPH, serviceHours: { D2: { weekday: ['19:00', '01:00'] } } };
+  assert.equal(serviceEndsAt(late, 'D2', at2230), Date.UTC(2026, 7, 27, 17, 0), '01:00 tomorrow');
+  assert.equal(serviceEndsAt(late, 'X', at2230), null, 'hours unknown');
 });
 
 test('with every class today skipped, the day is free and "next" is not a skipped class', async () => {

@@ -8,6 +8,7 @@ import venuesJson from '../data/venues.json' with { type: 'json' };
 import { buildCampusMap, buildDestinations, friendlyLabel, ROUTE_COLORS, shapeFor } from '../src/campus.ts';
 import { boardAsOf, boardAt, indexGraph, serviceResumesAt, stoppedReason, towardsFrom } from '../src/resolve.ts';
 import { GRAPH as REAL, GRAPH_PUBLIC } from '../src/graph.ts';
+import { haversineM } from '../src/geo.ts';
 
 const GRAPH = graphJson;
 
@@ -23,18 +24,21 @@ test('buildCampusMap projects every core stop inside its own viewBox', () => {
 });
 
 test('buildCampusMap flags the real off-campus outliers, not the dense cluster', () => {
-  // Real distances from the campus centroid (computed once from data/stops.json):
-  // 30 stops sit within ~1.1km; BG-MRT, OTH and CG sit at ~5.3km+ on P's
-  // excursion to Botanic Gardens MRT. A wrong classification here would
-  // either shrink the whole map to fit 3 far stops, or silently drop real
-  // campus stops from the map.
+  // The campus's stops sit within ~1.1 km of its centre; BG-MRT, OTH and CG
+  // at ~5.3 km+ on P's excursion to Botanic Gardens MRT. A wrong
+  // classification here would either shrink the whole map to fit the far
+  // stops, or silently drop real campus stops from the map. A new stop on
+  // campus, or another far one, changes neither.
   const map = buildCampusMap(realGraph);
   const byCode = new Map(map.stops.map((s) => [s.code, s]));
   for (const code of ['BG-MRT', 'OTH', 'CG']) {
     assert.equal(byCode.get(code)?.core, false, `${code} should be classified as an off-campus outlier`);
   }
-  const coreCount = map.stops.filter((s) => s.core).length;
-  assert.equal(coreCount, realGraph.stops.length - 3, 'exactly the 3 known outliers are excluded from the core');
+  const mid = (xs) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const centre = { lat: mid(realGraph.stops.map((s) => s.lat)), lon: mid(realGraph.stops.map((s) => s.lon)) };
+  const near = map.stops.filter((s) => haversineM(centre.lat, centre.lon, s.lat, s.lon) < 2_000);
+  assert.ok(near.length >= 20, `only ${near.length} stops within 2 km of ${centre.lat}, ${centre.lon}`);
+  for (const s of near) assert.equal(s.core, true, `${s.code} is on campus`);
 });
 
 test('buildCampusMap keeps real relative geography: two stops far apart in lat/lon project far apart', () => {
@@ -50,6 +54,7 @@ test('buildCampusMap keeps real relative geography: two stops far apart in lat/l
 
 test('buildCampusMap drops the closing repeat of a loop route so the polyline has no zero-length segment', () => {
   const map = buildCampusMap(realGraph);
+  assert.ok(Object.values(map.routes).some((r) => r.loop), 'no loop to check');
   for (const [svc, seq] of Object.entries(realGraph.routes)) {
     if (map.routes[svc].loop) {
       assert.notEqual(seq[0], map.routes[svc].seq.at(-1), `${svc}: loop-closing repeat was not dropped`);
@@ -99,6 +104,7 @@ test('buildDestinations covers every stop and resolves every known venue to a re
 
 test('the search list has no junk: no internal ids, bare room numbers or unnamed codes', () => {
   const dest = buildDestinations(realGraph);
+  assert.ok(dest.filter((d) => d.kind === 'building').length > 20, 'buildings are listed');
   for (const d of dest) {
     assert.ok(!/^\d+$/.test(d.code), `bare number ${d.code}`);
     if (d.kind === 'building') assert.notEqual(d.label, d.code, `${d.code} has no name`);
