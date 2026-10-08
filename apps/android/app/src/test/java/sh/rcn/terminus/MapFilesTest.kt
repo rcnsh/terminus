@@ -44,7 +44,7 @@ class MapFilesTest {
     }
 
     @Test fun theStyleReadsTheKeptFile() {
-        val style = """{"version": 8, "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://terminus.rcn.sh/map/campus.pmtiles"}}, "layers": [{"id": "bg", "type": "background"}, {"id": "roads", "type": "line", "source": "protomaps"}]}"""
+        val style = """{"version": 8, "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://terminus.run/map/campus.pmtiles"}}, "layers": [{"id": "bg", "type": "background"}, {"id": "roads", "type": "line", "source": "protomaps"}]}"""
         val local = MapFiles.localTiles(style, "/data/map/campus-0123456789ab.pmtiles")
         assertEquals("pmtiles://file:///data/map/campus-0123456789ab.pmtiles", JSONObject(local).getJSONObject("sources").getJSONObject("protomaps").getString("url"))
         val plain = MapFiles.withoutBaseMap(style)

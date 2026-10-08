@@ -249,7 +249,7 @@ private func bus(_ path: RoutePath, _ m: Double, id: String = "b1", heading: Dou
 }
 
 @Test func theStyleReadsTheMapFileFromDisk() throws {
-    let style = try json(Data(#"{"version": 8, "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://terminus.rcn.sh/map/campus.pmtiles"}}, "layers": []}"#.utf8))
+    let style = try json(Data(#"{"version": 8, "sources": {"protomaps": {"type": "vector", "url": "pmtiles://https://terminus.run/map/campus.pmtiles"}}, "layers": []}"#.utf8))
     let local = MapFiles.localTiles(style, path: "/Users/me/Library/Application Support/sh.rcn.terminus/map/campus.pmtiles")
     let src = (local["sources"] as? [String: Any])?["protomaps"] as? [String: Any]
     #expect(src?["url"] as? String == "pmtiles://file:///Users/me/Library/Application%20Support/sh.rcn.terminus/map/campus.pmtiles")

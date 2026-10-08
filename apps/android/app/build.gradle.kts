@@ -16,18 +16,18 @@ android {
     }
 
     // Two apps from one source: stable (sh.rcn.terminus, Google Play and the
-    // website) and beta (sh.rcn.terminus.beta, beta.terminus.rcn.sh). They
+    // website) and beta (sh.rcn.terminus.beta, beta.terminus.run). They
     // install side by side; each talks to its own site, with its own accounts.
     flavorDimensions += "channel"
     productFlavors {
         create("stable") {
             dimension = "channel"
-            site("https://terminus.rcn.sh", "sh.rcn.terminus", "terminus")
+            site("https://terminus.run", "sh.rcn.terminus", "terminus", "terminus.rcn.sh")
         }
         create("beta") {
             dimension = "channel"
             applicationIdSuffix = ".beta"
-            site("https://beta.terminus.rcn.sh", "sh.rcn.terminus.beta", "terminus beta")
+            site("https://beta.terminus.run", "sh.rcn.terminus.beta", "terminus beta", "beta.terminus.rcn.sh")
             // Its own version line, from scripts/release-beta.sh: the next
             // stable version's pre-release (2.0.1-beta.3), numbered by commit.
             providers.gradleProperty("betaVersion").orNull?.let { versionName = it }
@@ -113,10 +113,12 @@ androidComponents {
  * pairing QR codes); API_BASE is the same, except in a debug build given
  * `-PapiBase` (above).
  */
-fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String) {
+fun com.android.build.api.dsl.ApplicationProductFlavor.site(site: String, packageName: String, name: String, oldHost: String) {
     buildConfigField("String", "SITE", "\"$site\"")
     buildConfigField("String", "API_BASE", "\"$site\"")
     manifestPlaceholders["siteHost"] = site.removePrefix("https://")
+    // The site's old address, whose pairing links still open the app.
+    manifestPlaceholders["oldSiteHost"] = oldHost
     resValue("string", "app_name", name)
     // Push: this package's Firebase app from google-services.json (not in
     // git; see apps/android/README.md). Without it the fields are empty and

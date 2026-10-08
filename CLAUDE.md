@@ -20,9 +20,10 @@ Clients are thin:
 | Android app + widgets | `apps/android` | Kotlin, Jetpack Compose, Glance, maplibre-compose |
 | Mac menu bar app | `apps/macos` | SwiftUI, Sparkle updates, MapLibre Native (map window) |
 
-Live at https://terminus.rcn.sh (API docs at `/docs`); beta at
-https://beta.terminus.rcn.sh. It's an independent student project, not
-affiliated with NUS.
+Live at https://terminus.run (API docs at `/docs`); beta at
+https://beta.terminus.run. The old addresses (terminus.rcn.sh and the beta's)
+still answer, for apps installed before the move. It's an independent
+student project, not affiliated with NUS.
 
 ## The rules that matter most
 
@@ -165,7 +166,7 @@ stops still draw.
   requests say "sent" but print nothing, as the real server does). Sign in
   once, keep the session cookie (`context.cookies()`) and reuse it, or
   restart the stub.
-- Against the live sites (terminus.rcn.sh, the beta), Chromium's own
+- Against the live sites (terminus.run, the beta), Chromium's own
   connections through the container's proxy fail at random
   (`ERR_TOO_MANY_RETRIES`) and its trust store may predate the proxy's
   certificate. Route the page's requests through Node instead

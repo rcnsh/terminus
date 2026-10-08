@@ -8,7 +8,7 @@ highlights: write over it for the next one.
 
     python3 scripts/release-notes.py <version> <tag> <previous tag> <apk> <dmg> [beta]
 
-With `beta`, the notes are for terminus beta (beta.terminus.rcn.sh), which
+With `beta`, the notes are for terminus beta (beta.terminus.run), which
 installs beside terminus.
     python3 scripts/release-notes.py --title 2.0.0-beta   # -> 2.0 beta
 """
@@ -56,14 +56,14 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
     if beta:
         out.append(
             '> [!NOTE]\n'
-            '> **This is terminus beta**, from [beta.terminus.rcn.sh](https://beta.terminus.rcn.sh): the next version early, '
+            '> **This is terminus beta**, from [beta.terminus.run](https://beta.terminus.run): the next version early, '
             'with its own account. It installs beside terminus as **terminus beta**. Expect rough edges, and tap '
             '**Is this wrong?** under any answer to tell us.\n'
         )
     elif '-' in version:
         out.append(
             '> [!NOTE]\n'
-            "> **This is a beta.** It's what everyone gets from terminus.rcn.sh, but expect rough edges. "
+            "> **This is a beta.** It's what everyone gets from terminus.run, but expect rough edges. "
             'Tap **Is this wrong?** under any answer to tell us.\n'
         )
     out.append(f'<sub>Released {date}</sub>\n')

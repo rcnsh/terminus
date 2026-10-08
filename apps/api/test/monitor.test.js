@@ -283,7 +283,7 @@ function oneWritePerKey(e) {
 
 test('each alert goes once, with KV taking one write a second to a key', async () => {
   for (const beta of [false, true]) {
-    const e = beta ? { ...env(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' } : env();
+    const e = beta ? { ...env(), PUBLIC_ORIGIN: 'https://beta.terminus.run' } : env();
     const nextRun = oneWritePerKey(e);
     const quiet = console.error;
     const errors = [];
@@ -354,7 +354,7 @@ test('no alert address configured: records state, sends nothing', async () => {
 });
 
 test('the beta records state but leaves the alerts to the stable site, logging its own', async () => {
-  const e = { ...env(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' };
+  const e = { ...env(), PUBLIC_ORIGIN: 'https://beta.terminus.run' };
   const logged = [];
   const orig = console.error;
   console.error = (...a) => logged.push(a.join(' '));

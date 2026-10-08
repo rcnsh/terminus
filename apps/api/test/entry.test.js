@@ -12,7 +12,7 @@ import worker from '../src/index.ts';
 import { APKCOMBO_URL, PLAY_URL } from '../src/appversion.ts';
 
 const BASE = 'https://bus.example.test';
-const BETA = 'https://beta.terminus.rcn.sh';
+const BETA = 'https://beta.terminus.run';
 
 /** Just enough of HTMLRewriter: remembers the selectors, passes the body through. */
 class HTMLRewriterStub {

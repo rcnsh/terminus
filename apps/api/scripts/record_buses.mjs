@@ -12,7 +12,7 @@
  * The load is one person watching the map: one /buses call per service
  * every 5 s, which the Worker caches 5 s per service anyway.
  *
- *   node scripts/record_buses.mjs [--site https://terminus.rcn.sh] [--minutes 10] [--out trace.json] [A1 A2 D1 D2]
+ *   node scripts/record_buses.mjs [--site https://terminus.run] [--minutes 10] [--out trace.json] [A1 A2 D1 D2]
  */
 
 import { writeFileSync } from 'node:fs';
@@ -22,7 +22,7 @@ const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i < 0 ? fallback : args.splice(i, 2)[1];
 };
-const SITE = opt('site', 'https://terminus.rcn.sh').replace(/\/+$/, '');
+const SITE = opt('site', 'https://terminus.run').replace(/\/+$/, '');
 const MINUTES = Number(opt('minutes', '10'));
 const OUT = opt('out', null);
 const SERVICES = args.length ? args : ['A1', 'A2', 'D1', 'D2'];

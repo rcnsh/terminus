@@ -14,13 +14,13 @@ Android 12 or later.
   file is downloaded once to the phone and read from there; until it's
   there, routes and stops show on a plain map.
 - **Pairing:** scan the QR code on the account page, or type the code. The app
-  handles `https://terminus.rcn.sh/pair` links.
+  handles `https://terminus.run/pair` links.
 
 ## Run it
 
 ```bash
-./gradlew :app:installStableDebug                                   # against terminus.rcn.sh
-./gradlew :app:installBetaDebug                                     # against beta.terminus.rcn.sh
+./gradlew :app:installStableDebug                                   # against terminus.run
+./gradlew :app:installBetaDebug                                     # against beta.terminus.run
 ./gradlew :app:installStableDebug -PapiBase=http://localhost:8787   # against the dev stub (debug builds only)
 adb reverse tcp:8787 tcp:8787                                       # so the phone can reach it
 ./gradlew :app:lintStableDebug :app:testStableDebugUnitTest :app:compileBetaDebugKotlin   # what CI runs, with the
@@ -30,7 +30,7 @@ adb reverse tcp:8787 tcp:8787                                       # so the pho
 There are two apps from the same code (product flavors). **stable** is
 `sh.rcn.terminus`, on Google Play and the website. **beta** is
 `sh.rcn.terminus.beta`, "terminus beta", with the icon inverted and BETA by
-the name. It uses `beta.terminus.rcn.sh` and its own accounts, and installs
+the name. It uses `beta.terminus.run` and its own accounts, and installs
 beside the stable app.
 
 ### Dependencies are locked and checked

@@ -3,7 +3,7 @@
 #   ./build.sh                    -> build/terminus.app
 #   ./build.sh install            -> also copy to /Applications and open it
 #   CHANNEL=beta ./build.sh       -> build/terminus beta.app: sh.rcn.terminus.beta,
-#                                    for beta.terminus.rcn.sh, updating from its appcast
+#                                    for beta.terminus.run, updating from its appcast
 #
 # Signed with SIGN_IDENTITY (and SIGN_KEYCHAIN, optionally, the keychain
 # holding it); without it, with the terminus self-signed certificate if it's in
@@ -45,8 +45,8 @@ if [ "$CHANNEL" = beta ]; then
   PB "Set :CFBundleIdentifier $ID"
   PB "Set :CFBundleName $NAME"
   PB "Set :CFBundleDisplayName $NAME"
-  PB "Set :SUFeedURL https://beta.terminus.rcn.sh/download/appcast.xml"
-  PB "Add :TerminusSite string https://beta.terminus.rcn.sh"
+  PB "Set :SUFeedURL https://beta.terminus.run/download/appcast.xml"
+  PB "Add :TerminusSite string https://beta.terminus.run"
   # Its own version line, from scripts/release-beta.sh. Sparkle compares the build.
   if [ -n "${BETA_VERSION:-}" ]; then PB "Set :CFBundleShortVersionString $BETA_VERSION"; fi
   if [ -n "${BETA_BUILD:-}" ]; then PB "Set :CFBundleVersion $BETA_BUILD"; fi

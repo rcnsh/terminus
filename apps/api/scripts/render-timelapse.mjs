@@ -13,7 +13,7 @@
  *
  *   TIMELAPSE_TOKEN=... node render-timelapse.mjs --date 2026-10-08 \
  *     [--preset story|wide] [--theme dark|light] [--seconds 60] \
- *     [--from 07:00] [--to 00:00] [--out ./videos] [--base https://terminus.rcn.sh]
+ *     [--from 07:00] [--to 00:00] [--out ./videos] [--base https://terminus.run]
  *
  * The token is TIMELAPSE_TOKEN (it opens /timelapse/* and nothing else), or
  * a file named by TIMELAPSE_TOKEN_FILE. It is never printed, and only sent
@@ -37,7 +37,7 @@ const { values: o } = parseArgs({
     from: { type: 'string', default: '' },
     to: { type: 'string', default: '' },
     out: { type: 'string', default: '.' },
-    base: { type: 'string', default: 'https://terminus.rcn.sh' },
+    base: { type: 'string', default: 'https://terminus.run' },
     'wait-min': { type: 'string', default: '30' },
   },
 });

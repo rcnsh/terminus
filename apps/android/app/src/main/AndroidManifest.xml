@@ -56,6 +56,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="${siteHost}" android:pathPrefix="/pair" />
+                <data android:scheme="https" android:host="${oldSiteHost}" android:pathPrefix="/pair" />
             </intent-filter>
             <!-- Share in NUSMods, then terminus: imports the timetable link. -->
             <intent-filter>

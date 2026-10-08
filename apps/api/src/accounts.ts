@@ -36,7 +36,7 @@ export const ACCOUNT_TTL = {
 
 /**
  * `__Host-` pins the cookie to this exact host over HTTPS: a sibling
- * *.rcn.sh site cannot set or shadow it.
+ * *.terminus.run or *.rcn.sh site cannot set or shadow it.
  */
 export const SESSION_COOKIE = '__Host-tm_s';
 

@@ -6,7 +6,7 @@ serves the website in [`apps/web`](../web).
 
 - **Answers:** `/me/next` (the widget's one call) and `/me/nearby`, plus the
   keyed routes `/next`, `/trip`, `/arrivals`, `/buses`, `/line`, `/campus` and
-  `/stops/pairs` (an API key or a signed-in session). Docs at [terminus.rcn.sh/docs](https://terminus.rcn.sh/docs).
+  `/stops/pairs` (an API key or a signed-in session). Docs at [terminus.run/docs](https://terminus.run/docs).
 - **The campus map:** `/campus` (stops, and routes along the roads), `/buses`
   (a service's live buses) and `/map/*` (the street map, its style, fonts and
   icons from R2).
@@ -33,7 +33,7 @@ the terminal.
 
 ```bash
 pnpm run deploy                    # D1 migrations, then cf deploy (not `pnpm deploy`, a pnpm built-in)
-pnpm run deploy:beta               # the same for beta.terminus.rcn.sh, with its own D1, KV and R2
+pnpm run deploy:beta               # the same for beta.terminus.run, with its own D1, KV and R2
 ```
 
 The config is [`cloudflare.config.ts`](cloudflare.config.ts). The website

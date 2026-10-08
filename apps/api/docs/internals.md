@@ -679,7 +679,7 @@ route moves it from the answer into the card (`profile.ts` `upcomingClass`).
   `/auth/anon/web`, and any other change sent with the session cookie and no
   bearer token, are refused when `Sec-Fetch-Site` says another site sent
   them. So no page elsewhere can sign a visitor in to an account it holds a
-  link or code for, or out of theirs. Another subdomain of rcn.sh (the beta)
+  link or code for, or out of theirs. Another subdomain of terminus.run (the beta)
   counts as the same site, so the Lax cookie goes with its POSTs; this check
   is what stops those. JSON bodies need exactly `application/json`: a type
   that only mentions it (`text/plain; x=application/json`) needs no preflight
@@ -747,8 +747,9 @@ the stable site, and that the release and map scripts upload to each site's
 bucket.
 
 Email goes out through Cloudflare Email Sending from `EMAIL_FROM`. That
-needs the Workers Paid plan and terminus.rcn.sh onboarded under Email Service >
-Email Sending in the dashboard.
+needs the Workers Paid plan and the sender's domain onboarded under Email
+Service > Email Sending in the dashboard. It is still terminus.rcn.sh, the
+site's old address, until terminus.run is onboarded there.
 
 ### The web app
 

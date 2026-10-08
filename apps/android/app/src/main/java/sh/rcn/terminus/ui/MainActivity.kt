@@ -131,7 +131,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         val data = intent?.data ?: return
-        // https://terminus.rcn.sh/pair?code=… (or the beta's) from the account page's QR code.
+        // https://terminus.run/pair?code=… (or the beta's) from the account page's QR code.
         if (data.scheme == "https" && data.host == BuildConfig.SITE.toUri().host && data.path?.startsWith("/pair") == true) {
             val code = data.getQueryParameter("code")?.filter { it.isLetterOrDigit() }?.uppercase()
             if (code != null && code.length == 6 && !vm.state.value.paired) vm.checkPairLink(code)

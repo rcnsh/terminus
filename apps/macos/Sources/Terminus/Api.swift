@@ -857,8 +857,8 @@ func sentence(_ text: String) -> String {
 }
 
 struct Api {
-    static let stableSite = "https://terminus.rcn.sh"
-    /// The site this app belongs to: terminus.rcn.sh, or the beta's
+    static let stableSite = "https://terminus.run"
+    /// The site this app belongs to: terminus.run, or the beta's
     /// (TerminusSite in the beta build's Info.plist; see build.sh).
     static let site = Bundle.main.object(forInfoDictionaryKey: "TerminusSite") as? String ?? stableSite
     /// The site as people type it, for text.

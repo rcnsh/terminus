@@ -15,7 +15,7 @@ import { GRAPH_PUBLIC } from '../src/graph.ts';
 import { UpstreamRejected } from '../src/auth.ts';
 import { makeEmail } from './_d1.mjs';
 
-const BETA_ORIGIN = 'https://beta.terminus.rcn.sh';
+const BETA_ORIGIN = 'https://beta.terminus.run';
 const VERSION = 'univus_android_3.1.0_310';
 
 function site(beta, ae = []) {

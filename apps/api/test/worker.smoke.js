@@ -852,7 +852,7 @@ test('a code that is not a stop (a food court) is never sent to either feed', as
 
 test("the beta's cache keys are its own: the stable site's breaker doesn't quiet it, nor its answers feed it", async () => {
   const { scopeCache } = await import('../src/edgecache.ts');
-  const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' };
+  const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.run' };
   const fetchImpl = makeFetch({ byStop: { PGP: D2_IN_4 } });
   const cache = installGlobals(fetchImpl);
   cache.seed('https://terminus.internal/breaker', 'refused', 60);
@@ -1436,7 +1436,7 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   const { readFileSync, existsSync } = await import('node:fs');
   const robots = await (await call('/robots.txt')).res.text();
   assert.match(robots, /^User-agent: \*$/m);
-  assert.match(robots, /^Sitemap: https:\/\/terminus\.rcn\.sh\/sitemap\.xml$/m);
+  assert.match(robots, /^Sitemap: https:\/\/terminus\.run\/sitemap\.xml$/m);
   assert.doesNotMatch(robots, /^Disallow: \/$/m, 'the stable site is open to search');
   // The answers (keyed: no `security` of their own in the spec) are not for
   // search; the docs that describe them are.
@@ -1462,10 +1462,10 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   }
   // The link preview image the landing page names is there.
   const landing = readFileSync(new URL('../../web/public/index.html', import.meta.url), 'utf8');
-  const og = landing.match(/property="og:image" content="https:\/\/terminus\.rcn\.sh(\/[^"]+)"/)?.[1];
+  const og = landing.match(/property="og:image" content="https:\/\/terminus\.run(\/[^"]+)"/)?.[1];
   assert.ok(og && existsSync(new URL(`../../web/public${og}`, import.meta.url)), `og:image ${og} exists`);
 
-  const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.rcn.sh' };
+  const beta = { ...makeEnv(), PUBLIC_ORIGIN: 'https://beta.terminus.run' };
   assert.match(await (await call('/robots.txt', { env: beta })).res.text(), /^Disallow: \/$/m);
   assert.equal((await call('/sitemap.xml', { env: beta })).res.status, 404);
   assert.equal((await call('/docs', { env: beta })).res.headers.get('x-robots-tag'), 'noindex');

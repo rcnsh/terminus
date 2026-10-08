@@ -16,7 +16,7 @@
 #   scripts/map-tiles.sh              # build, check against the lock, upload
 #   scripts/map-tiles.sh --upload     # upload ./build/map as it is, once it
 #                                     # matches the lock (no downloads)
-#   CHANNEL=beta scripts/map-tiles.sh # the same for beta.terminus.rcn.sh
+#   CHANNEL=beta scripts/map-tiles.sh # the same for beta.terminus.run
 #   CHANNEL=both scripts/map-tiles.sh # both
 #
 # To refresh the map: --update, commit the lock, then upload (here or from

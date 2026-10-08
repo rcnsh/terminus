@@ -63,7 +63,7 @@ has_sign_identity
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || die "no Sparkle key at $SPARKLE_KEY"
 
-SITE=https://terminus.rcn.sh
+SITE=https://terminus.run
 BUCKET=terminus-downloads
 # A dry run builds apart, so it never wipes the files a stopped release
 # needs to finish (github-release.sh reads build/release/<version>).

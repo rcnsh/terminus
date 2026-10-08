@@ -360,7 +360,7 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(ServerClock.skew(server: local.addingTimeInterval(-2.9), local: local) == 0)
     #expect(ServerClock.skew(server: local.addingTimeInterval(90), local: local) == 90, "this Mac is 90 s slow")
     #expect(ServerClock.skew(server: local.addingTimeInterval(-45), local: local) == -45, "this Mac is 45 s fast")
-    let url = URL(string: "https://terminus.rcn.sh/me/next")!
+    let url = URL(string: "https://terminus.run/me/next")!
     let fresh = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Date": "Wed, 07 Oct 2026 01:15:32 GMT", "Cache-Control": "no-store"]))
     #expect(ServerClock.skew(from: fresh, at: local) == 90)
     let cached = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Date": "Wed, 07 Oct 2026 01:15:32 GMT", "Cache-Control": "private, max-age=5"]))

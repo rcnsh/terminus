@@ -62,7 +62,7 @@ export interface Env {
   RL_ANON?: RateLimit;
   /** One global ceiling on pairing-code guesses: a code is guessed against every live one at once. */
   RL_PAIR?: RateLimit;
-  /** The site's own origin, set on the beta (site.ts). Unset: https://terminus.rcn.sh. */
+  /** The site's own origin, set on the beta (site.ts). Unset: https://terminus.run. */
   PUBLIC_ORIGIN?: string;
   /** The Analytics Engine dataset the dashboard queries. Unset: terminus. */
   AE_DATASET?: string;
