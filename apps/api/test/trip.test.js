@@ -1364,7 +1364,7 @@ test('a profile change that keeps losing to another device gives up with 409 aft
   const prepare = env.DB.prepare;
   let tries = 0;
   env.DB.prepare = (sql) => {
-    if (/^UPDATE profiles SET json = \?, updated = \? WHERE user_id = \? AND updated = \?/.test(sql)) {
+    if (sql.startsWith('UPDATE profiles SET json = ?, updated = ? WHERE user_id = ? AND updated = ?')) {
       tries++;
       env.DB._db.prepare('UPDATE profiles SET updated = updated + 1').run();
     }
