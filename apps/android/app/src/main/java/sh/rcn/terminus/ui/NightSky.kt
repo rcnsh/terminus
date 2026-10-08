@@ -627,12 +627,28 @@ internal fun rememberSky(scroll: ScrollState, phase: Phase): SkyState {
 @Composable
 internal fun StatusStrip(sky: SkyState?, top: Dp, scroll: ScrollState) {
     val page = MaterialTheme.colorScheme.background
+    StatusStrip(if (sky?.end != null) sky.palette.sky[0] else page, top, scroll)
+}
+
+/**
+ * The status bar's strip over a page whose [SkyBand] scrolls away with it,
+ * as Now's sky does: filled with the top of the band's sky as the page goes
+ * under, so the status bar's icons stay on the colour they were set for.
+ */
+@Composable
+internal fun StatusStrip(phase: Phase, top: Dp, scroll: ScrollState) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    StatusStrip(palette(phase, dark).sky[0], top, scroll)
+}
+
+@Composable
+private fun StatusStrip(color: Color, top: Dp, scroll: ScrollState) {
     Box(
         Modifier
             .fillMaxWidth()
             .height(top)
             .graphicsLayer { alpha = if (top.toPx() > 0f) (scroll.value / top.toPx()).coerceIn(0f, 1f) else 0f }
-            .background(if (sky?.end != null) sky.palette.sky[0] else page),
+            .background(color),
     )
 }
 
@@ -659,7 +675,9 @@ private val LOW_STARS = listOf(
  * pages, in [phase]: from the top of the screen, [top] for the status bar,
  * then [content] (the title, with the back arrow on a page) in the sky's ink with the moon on the right at
  * night, ending on the low horizon (just the hills, no road). The page's
- * controls stay on the plain page under it. As the web's (.page-band).
+ * controls stay on the plain page under it. It's the top of the page's
+ * scroll, not pinned over it, so the page is one piece that scrolls away
+ * under a [StatusStrip], as Now's sky does. As the web's (.page-band).
  *
  * A taller band (the Buses tab's search and stop) puts the moon low on
  * the right, just over the hills, with the stars beside it, clear of a

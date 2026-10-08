@@ -66,6 +66,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -202,8 +203,12 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
     // Pulled down, the page in view asks again, as its 15 s refresh does; not while searching.
     // The sky stretches over the stop's name, and its first service's bus drives to a sign on the hill.
     val inView = pages.getOrNull(boards.settledPage)
+    // The band, then the board or the search's results, scroll as one, so the
+    // sky goes up with the page rather than staying over it.
+    val scroll = rememberScrollState()
     BusPull(boardLivery(state, inView), ::hillScene, enabled = query.isBlank(), onRefresh = { vm.pullPage(inView) }) { pull ->
-    Column(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
         // The dots' line has room for the moon on the right.
         // Searching, just the field over the hills, so the results start right under it.
         SkyBand(phase, top, moonLow = true, moonLine = query.isBlank() && pages.size <= 1, padded = false, moon = query.isBlank()) {
@@ -236,15 +241,17 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
         // nearest stop's twin comes with it, so across the road costs nothing more.
         val first = boards.settledPage == 0
         Refreshing(if (first) null else shown, first, state.across) { vm.refreshPage(if (first) null else shown) }
-        HorizontalPager(boards, Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.Top, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
+        HorizontalPager(boards, Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, key = { pages.getOrNull(it) ?: "nearest" }) { i ->
             val code = pages.getOrNull(i)
             val next = pages.getOrNull(i + 1)?.let { stopName(state, it) }
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                 if (i == 0 && code == null) NoNearest(state, vm)
                 else if (code != null) StopBody(state, vm, code)
                 if (next != null) SwipeFor(next) { scope.launch { boards.animateScrollToPage(i + 1) } }
             }
         }
+    }
+    StatusStrip(phase, top, scroll)
     }
     }
 }
@@ -323,7 +330,8 @@ private fun SearchResults(state: BusesUi, query: String, onPick: (BusHit) -> Uni
     val index = remember(campus) { campus?.let(::busesTabIndex).orEmpty() }
     val hits = remember(index, query) { searchBuses(query, index) }
     val colors = campus?.routes?.mapValues { it.value.color }.orEmpty()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+    // In the tab's own scroll, under the field.
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
         if (hits.isEmpty() && campus != null) {
             Text(stringResource(R.string.buses_search_none), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
         }
@@ -397,9 +405,11 @@ private fun NoNearest(state: BusesUi, vm: BusesViewModel) {
 private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: List<String>, onPin: (String) -> Unit, top: Dp) {
     Refreshing(code, state.across) { vm.refreshPage(code) }
     val phase = skyPhase()
+    val scroll = rememberScrollState()
     BusPull(boardLivery(state, code), ::hillScene, onRefresh = { vm.pullPage(code) }) { pull ->
-    Column(Modifier.fillMaxSize()) {
-        // Back, and the stop, in the sky, as on the tab's own pages.
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+        // Back, and the stop, in the sky, as on the tab's own pages; it scrolls away with the board.
         SkyBand(phase, top, moonLow = true) {
             Column {
                 BackRow(stringResource(R.string.back), Modifier.pullLead(pull)) { vm.back() }
@@ -408,9 +418,11 @@ private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: Li
                 StopHeader(state, vm, code, label, label, nearest = false, pins = pins, onPin = onPin)
             }
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
             StopBody(state, vm, code)
         }
+    }
+    StatusStrip(phase, top, scroll)
     }
     }
 }
@@ -902,7 +914,9 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
     val color = line?.color ?: state.campus?.routes?.get(route.svc)?.color ?: GREY
     val scroll = rememberScrollState()
     // Opened from a stop: scrolled to it once, so your stop is in view with the buses coming to it.
+    // Its place is on the page under the band, which scrolls too: the band's height comes first.
     var hereY by remember { mutableStateOf<Int?>(null) }
+    var band by remember { mutableStateOf(0) }
     var scrolled by rememberSaveable(key) { mutableStateOf(false) }
     val gap = with(LocalDensity.current) { 160.dp.roundToPx() }
     // Not running, the banner at the top says it all: no scrolling past it.
@@ -911,15 +925,16 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
         val y = hereY ?: return@LaunchedEffect
         if (!scrolled && running) {
             scrolled = true
-            scroll.animateScrollTo((y - gap).coerceAtLeast(0))
+            scroll.animateScrollTo((band + y - gap).coerceAtLeast(0))
         }
     }
     val phase = skyPhase()
     // Pulled down, the line asks again, its bus in the service's colour.
     BusPull(color, ::hillScene, onRefresh = { vm.pullLine(route.svc, route.from) }) { pull ->
-    Column(Modifier.fillMaxSize()) {
-    // Back, the service and how many buses it has out, in the sky; the line on the page.
-    SkyBand(phase, top, moonLow = true) { Column {
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+    // Back, the service and how many buses it has out, in the sky, scrolling away with the line.
+    Box(Modifier.onSizeChanged { band = it.height }) { SkyBand(phase, top, moonLow = true) { Column {
         BackRow(
             route.from?.let { stopName(state, it) } ?: stringResource(R.string.back),
             Modifier.pullLead(pull),
@@ -950,8 +965,8 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                 }
             }
         }
-    } }
-    Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+    } } }
+    Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
         // Not running: why and when it's back, over the stops (it has no buses to show).
         line?.let { Stopped.of(it.running, it.stopped, it.resumesAtMs, now) }?.let { st ->
             val (why, back) = st.lines(h12)
@@ -974,6 +989,8 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
             }
         }
     }
+    }
+    StatusStrip(phase, top, scroll)
     }
     }
 }

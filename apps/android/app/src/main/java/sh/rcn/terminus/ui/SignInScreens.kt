@@ -220,14 +220,16 @@ internal fun SignInScreen(
         else -> if (adding) R.string.add_email else R.string.sign_in
     }
     // Edge to edge, so the band reaches the top; the keyboard pushes the page up.
-    Column(Modifier.fillMaxSize().imePadding()) {
-        SkyBand(phase, WindowInsets.statusBars.asPaddingValues().calculateTopPadding()) {
+    // The band scrolls away with the page, as Settings' pages do.
+    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val scroll = rememberScrollState()
+    Box(Modifier.fillMaxSize().imePadding()) {
+    Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+        SkyBand(phase, top) {
             BackHeader(stringResource(title), onCancel)
         }
         Column(
             Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                 .padding(horizontal = 16.dp),
         ) {
@@ -241,6 +243,8 @@ internal fun SignInScreen(
             }
             Spacer(Modifier.height(32.dp))
         }
+    }
+    StatusStrip(phase, top, scroll)
     }
 }
 
