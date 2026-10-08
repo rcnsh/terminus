@@ -12,8 +12,9 @@
 # macOS keeps its permissions across updates.
 set -eu
 cd "$(dirname "$0")"
-swift build -c release --arch arm64
-OUT="$(swift build -c release --arch arm64 --show-bin-path)"
+# Exactly the versions in Package.resolved: a newer Sparkle never slips in unreviewed.
+swift build -c release --arch arm64 --force-resolved-versions
+OUT="$(swift build -c release --arch arm64 --force-resolved-versions --show-bin-path)"
 CHANNEL=${CHANNEL:-stable}
 case "$CHANNEL" in
   stable) NAME=terminus; ID=sh.rcn.terminus; ICON=Support/AppIcon.icns ;;
@@ -26,6 +27,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks"
 cp "$OUT/Terminus" "$APP/Contents/MacOS/Terminus"
 install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Terminus"
 # Sparkle, for updates. Its XPC services are only for sandboxed apps.
+# SwiftPM checks the download's checksum; Sparkle's own signature, checked
+# before it's re-signed below, shows nothing in it changed since.
+codesign --verify --strict --deep "$OUT/Sparkle.framework"
 ditto "$OUT/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
 # MapLibre, for the map (Vendor/, from scripts/vendor-maplibre-mac.sh). It's
@@ -55,14 +59,25 @@ TERMINUS_CERT=C4EE234DA75ED3CD7699A31394C276801F93C4A9
 if [ -z "${SIGN_IDENTITY:-}" ] && security find-identity -p codesigning | grep -q "$TERMINUS_CERT"; then
   SIGN_IDENTITY=$TERMINUS_CERT
 fi
-sign() { codesign --force --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$@"; }
+# The hardened runtime: no injected libraries, no unsigned executable
+# memory, no debugger attaching. The app alone gets two exceptions, in
+# Support/Terminus.entitlements: library validation off (the self-signed
+# certificate has no Team ID, so it would refuse even our own frameworks)
+# and location.
+# A release (PUBLISH=true, from scripts/package-mac.sh) is also timestamped
+# by Apple's server, which stamps the self-signed certificate too: the
+# signature then outlives the certificate (it expires in 2036). Local builds
+# skip it so they work offline; an ad-hoc signature can't have one.
+TS=--timestamp=none
+if [ "${PUBLISH:-}" = true ] && [ -n "${SIGN_IDENTITY:-}" ]; then TS=--timestamp; fi
+sign() { codesign --force --options runtime "$TS" --sign "${SIGN_IDENTITY:--}" ${SIGN_KEYCHAIN:+--keychain "$SIGN_KEYCHAIN"} "$@"; }
 # Inside out: Sparkle's helpers, the frameworks, then the app.
 FW="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
 sign "$FW/Autoupdate"
 sign "$FW/Updater.app"
 sign "$APP/Contents/Frameworks/Sparkle.framework"
 sign "$APP/Contents/Frameworks/MapLibre.framework"
-sign --identifier "$ID" "$APP"
+sign --identifier "$ID" --entitlements Support/Terminus.entitlements "$APP"
 echo "built $APP"
 if [ "${1:-}" = install ]; then
   # Both channels' executables are named Terminus: quit only this one.

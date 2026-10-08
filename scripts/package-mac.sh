@@ -43,7 +43,15 @@ fi
 echo "== mac $VERSION ($CHANNEL)"
 (cd apps/macos && ./build.sh >/dev/null)
 APP="apps/macos/build/$NAME.app"
-codesign --verify --strict "$APP"
+codesign --verify --deep --strict "$APP"
+# The hardened runtime on the app and everything inside it that runs (build.sh).
+for code in "$APP" "$APP/Contents/Frameworks/Sparkle.framework" "$APP/Contents/Frameworks/MapLibre.framework" \
+  "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"; do
+  if ! codesign -dv "$code" 2>&1 | grep -q '^CodeDirectory .*flags=.*runtime'; then
+    echo "$code isn't signed with the hardened runtime" >&2
+    exit 1
+  fi
+done
 if [ "${PUBLISH:-}" = true ] && codesign -dv "$APP" 2>&1 | grep -q '^Signature=adhoc'; then
   echo "$APP is signed ad-hoc; refusing to package a release to publish" >&2
   exit 1
