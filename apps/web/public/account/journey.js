@@ -45,6 +45,8 @@ export const styleHint = (s) =>
 
 /** Whole seconds until it's time to leave, or null once it is (or with no time to leave by). */
 export function secondsToLeave(a, j, now) {
+  // At the stop there's nothing left to leave for, as on Android.
+  if (a.card.phase === 'waiting') return null;
   const at = a.leave ? Date.parse(a.leave.at) : null;
   if (at == null || j.leave == null || now >= at) return null;
   return Math.floor((at - now) / 1000);
