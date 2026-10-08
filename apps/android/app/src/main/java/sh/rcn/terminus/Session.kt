@@ -110,7 +110,11 @@ class LogoutWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         }
     }
 
-    /** Ten tries at most, over some hours: the session expires on the server by itself. */
+    /**
+     * Ten tries at most, over some hours. A device session has no expiry: one
+     * never ended stays in the account's devices (where it can be removed)
+     * until the server's daily clean-up drops it, 90 days after its last use.
+     */
     private fun again() = if (runAttemptCount < MAX_TRIES) Result.retry() else Result.success()
 
     companion object {
