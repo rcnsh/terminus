@@ -244,6 +244,11 @@ test('the OpenAPI spec documents exactly the routes that exist', async () => {
   assert.equal(spec.info.version, API_VERSION);
   assert.equal(API_VERSION, android, 'API_VERSION in src/openapi.ts matches versionName in apps/android/app/build.gradle.kts');
   assert.equal(API_VERSION, mac, 'API_VERSION in src/openapi.ts matches CFBundleShortVersionString in apps/macos/Support/Info.plist');
+  // And the build numbers, which release.sh also checks: Sparkle compares the Mac's.
+  const androidCode = gradle.match(/versionCode = (\d+)/)?.[1];
+  const macBuild = plist.match(/<key>CFBundleVersion<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+  assert.ok(androidCode, 'versionCode found in build.gradle.kts');
+  assert.equal(macBuild, androidCode, 'CFBundleVersion in apps/macos/Support/Info.plist matches versionCode in apps/android/app/build.gradle.kts');
   assert.equal(spec.servers[0].url, BASE, 'try-it requests go to whoever serves the docs');
 
   // Every method on every path, with path parameters as `*`: the account
