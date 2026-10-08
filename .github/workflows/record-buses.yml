@@ -36,8 +36,16 @@ jobs:
           SITE: ${{ inputs.site }}
           MINUTES: ${{ inputs.minutes }}
           SERVICES: ${{ inputs.services }}
-        # SERVICES unquoted on purpose: one argument per service.
+        # SERVICES unquoted on purpose: one argument per service. Each must
+        # be a plain service name (capitals and digits, as A1 or K), so the
+        # input can't pass an option or a glob.
         run: |
+          set -f
+          for s in $SERVICES; do
+            case "$s" in
+              *[!A-Z0-9]*) echo "::error::not a service name (capitals and digits only, as A1 or K): $s"; exit 1 ;;
+            esac
+          done
           node apps/api/scripts/record_buses.mjs --site "$SITE" --minutes "$MINUTES" $SERVICES > report.md
           cat report.md >> "$GITHUB_STEP_SUMMARY"
           python3 -c 'import sys; t = sys.stdin.read().replace("%", "%25").replace("\r", "").replace("\n", "%0A"); print("::notice title=buses::" + t)' < report.md
