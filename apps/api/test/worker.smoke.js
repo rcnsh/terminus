@@ -1421,6 +1421,17 @@ test('search engines get robots.txt and a sitemap of real pages; the beta asks n
   assert.match(robots, /^User-agent: \*$/m);
   assert.match(robots, /^Sitemap: https:\/\/terminus\.rcn\.sh\/sitemap\.xml$/m);
   assert.doesNotMatch(robots, /^Disallow: \/$/m, 'the stable site is open to search');
+  // The answers (keyed: no `security` of their own in the spec) are not for
+  // search; the docs that describe them are.
+  const { openApiSpec } = await import('../src/openapi.ts');
+  const keyed = Object.entries(openApiSpec(BASE).paths).filter(([, item]) => item.get && item.get.security === undefined).map(([p]) => p);
+  assert.ok(keyed.includes('/next') && keyed.includes('/stops/pairs'));
+  const disallowed = [...robots.matchAll(/^Disallow: (\S+)$/gm)].map((m) => m[1]);
+  for (const p of keyed) assert.ok(disallowed.includes(p), `robots.txt disallows ${p}`);
+  assert.ok(disallowed.includes('/timelapse/'));
+  for (const p of ['/docs', '/openapi.json', '/llms.txt', '/status/', '/status.json']) {
+    assert.ok(!disallowed.some((d) => p.startsWith(d)), `${p} stays open to search`);
+  }
   const { res } = await call('/sitemap.xml');
   assert.equal(res.status, 200);
   const locs = [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);
