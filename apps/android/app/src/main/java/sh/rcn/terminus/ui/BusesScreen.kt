@@ -856,9 +856,14 @@ private fun Foot(board: Board) {
     if (board.rows.any { !it.paid }) Text(stringResource(R.string.buses_tap_hint), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 10.dp, start = 4.dp))
 }
 
+/** "Updated just now" for the first few seconds, as the web app says, never "0 s ago". */
 private fun updated(asOfMs: Long, now: Long): String {
     val s = BusTimes.ageS(asOfMs, now)
-    return if (s < 60) L.s(R.string.buses_updated_s, s.toInt()) else L.s(R.string.buses_updated_min, (s / 60).toInt())
+    return when {
+        s < 5 -> L.s(R.string.pull_updated)
+        s < 60 -> L.s(R.string.buses_updated_s, s.toInt())
+        else -> L.s(R.string.buses_updated_min, (s / 60).toInt())
+    }
 }
 
 /** An instant as the clock on campus shows it, 12- or 24-hour as the account chose. */
