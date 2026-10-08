@@ -78,7 +78,8 @@
     "note": null,
     "walkS": 23,
     "rideS": 285,
-    "toStop": "COM 3"
+    "toStop": "COM 3",
+    "toCode": "COM3"
   },
   "mode": "trip",
   "dest": {

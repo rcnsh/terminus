@@ -264,6 +264,9 @@ export interface Leave {
   walkS?: number;
   rideS?: number;
   toStop?: string;
+  /** Stop code of `toStop`: of several destination stops (a food court's, your
+   *  home stops), the one this bus calls at. */
+  toCode?: string;
   /** Without an arrive-by (whose `arrive` is at the venue): the walk on from
    *  where you get off to the place itself, which `arrive` doesn't count. */
   endWalkS?: number;

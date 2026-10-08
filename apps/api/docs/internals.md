@@ -974,9 +974,12 @@ count rather than on a special case.
 bus to the destination (`WALK.maxCandidates`), so a closer stop nothing there
 calls at can't push out one that does. Without one, the stop the trip starts
 from, the stop across the road from it (a crossing further), and, from home,
-every home stop. The alternative is another service, or the same one from
-another stop only when it gets you there within `WALK.mentionWithinS` of the
-best: across the road it's usually the same bus the wrong way round the loop.
+every home stop. Going home, any home stop is home: a bus to PGP gets you
+there as well as one to PGP Foyer, and the leave-by's `toCode` says which
+it calls at, so the ride is followed to that stop. The alternative is
+another service, or the same one from another stop only when it gets you
+there within `WALK.mentionWithinS` of the best: across the road it's usually
+the same bus the wrong way round the loop.
 
 **A loop's run ends at its terminal.** The shuttle loops start and end at
 theirs (KRB, COM3, Kent Vale), where the feed lists the run that ends under an

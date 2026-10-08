@@ -68,7 +68,8 @@
     "note": null,
     "walkS": 2,
     "rideS": 570,
-    "toStop": "Opp KR MRT"
+    "toStop": "Opp KR MRT",
+    "toCode": "KR-MRT-OPP"
   },
   "mode": "trip",
   "dest": {

@@ -62,7 +62,8 @@
     "note": null,
     "walkS": 3,
     "rideS": 760,
-    "toStop": "UTown"
+    "toStop": "UTown",
+    "toCode": "UTOWN"
   },
   "mode": "trip",
   "dest": {

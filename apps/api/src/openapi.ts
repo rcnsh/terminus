@@ -1858,6 +1858,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             stopCode: { type: 'string', description: 'Stop code of `stop`. Absent when walking.' },
             offCode: { type: 'string', description: 'Stop code of `off`. Absent without a crossing.' },
             toStop: { type: 'string', example: 'UTown', description: 'Where you get off, short name: the destination stop this bus calls at (for a place with several stops, the one it calls at), or `off`. Absent when walking.' },
+            toCode: { type: 'string', description: 'Stop code of `toStop`. Absent when walking.' },
             paid: { type: 'boolean', enum: [true], description: 'The bus is a public one, with a fare. Absent for a shuttle.' },
             route: { type: 'string', description: 'For a public two-way service, its route in the graph (`151/1`), which `svc` (`151`) cannot name. Absent otherwise.' },
             estimated: { type: 'boolean', description: 'Based on the usual gap between buses, or on a timetable, rather than a live time. Show it with a `~`.' },
