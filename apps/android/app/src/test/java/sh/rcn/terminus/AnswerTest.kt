@@ -8,6 +8,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import sh.rcn.terminus.ui.withoutLocalUndo
 import sh.rcn.terminus.widget.Refresher
 import sh.rcn.terminus.widget.isOld
 import java.io.File
@@ -479,5 +480,19 @@ class AnswerTest {
         // Said as a plain time, not "live".
         assertEquals(Spoken.eta(300, "unknown"), Spoken.eta(300, a.quality))
         assertFalse(Spoken.eta(300, a.quality)!!.contains("live"))
+    }
+
+    /**
+     * The server's undo stays on the card unless this phone's Undo bar is
+     * up for that same trip: a skip from another device, or from the leave
+     * notification, has no other undo.
+     */
+    @Test fun theCardsUndoHidesOnlyForTheTripInTheUndoBar() {
+        val a = golden("skipped-undo")
+        val trip = a.card!!.actions.single { it.id == "reset" }.trip
+        assertEquals(listOf("reset"), withoutLocalUndo(a, null)!!.card!!.actions.map { it.id })
+        assertEquals(listOf("reset"), withoutLocalUndo(a, "another:trip")!!.card!!.actions.map { it.id })
+        assertTrue(withoutLocalUndo(a, trip)!!.card!!.actions.isEmpty())
+        assertNull(withoutLocalUndo(null, trip))
     }
 }
