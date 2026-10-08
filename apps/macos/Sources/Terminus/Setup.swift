@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import Observation
 import SwiftUI
 
-/// The account's setup, edited from the Mac (phase 7): the same four steps as
+/// The account's setup, edited from the Mac: the same four steps as
 /// the phone's onboarding, and the devices on the account. Everything goes
 /// through the routes the account page uses, with this Mac's token.
 @MainActor
@@ -309,7 +309,7 @@ final class SetupModel {
 
     func skip(_ u: Unplaced) { unplaced.removeAll { $0 == u } }
 
-    // MARK: trip choices and history (phase 3)
+    // MARK: trip choices and history
 
     func loadChoices() async { choices = try? await api.choices() }
 

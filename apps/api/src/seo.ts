@@ -19,18 +19,24 @@ ${SITEMAP_PAGES.map((p) => `  <url><loc>${STABLE_ORIGIN}${p}</loc></url>`).join(
 </urlset>
 `;
 
+/** The answers, which need an API key (KEYED in index.ts): nothing there for search. */
+const KEYED_ROUTES = ['/next', '/trip', '/arrivals', '/buses', '/line', '/campus', '/stops/pairs'];
+
 /** robots.txt: everything public on the stable site, with its sitemap; nothing on the beta. */
 export function robotsTxt(env: Env): string {
   if (isBeta(env)) return 'User-agent: *\nDisallow: /\n';
   return [
     'User-agent: *',
     'Allow: /',
-    // The API and account routes answer people and apps, not search.
+    // The API and account routes answer people and apps, not search. The
+    // docs (/docs, /openapi.json, /llms.txt) and the status page stay open.
     'Disallow: /me',
     'Disallow: /auth/',
     'Disallow: /admin',
     'Disallow: /pair',
     'Disallow: /download/',
+    'Disallow: /timelapse/',
+    ...KEYED_ROUTES.map((p) => `Disallow: ${p}`),
     '',
     `Sitemap: ${STABLE_ORIGIN}/sitemap.xml`,
     '',
@@ -48,7 +54,7 @@ export function llmsTxt(origin: string): string {
 
 > terminus tells NUS students which internal shuttle bus to catch, from which stop, and when to leave for their next class (or whether walking is faster). It reads their NUSMods timetable and NUS's live shuttle feed. It's a free, independent student project, not affiliated with NUS.
 
-The answers are ready-made text: \`/next\` and \`/trip\` return a \`label\` (such as \`D2 · 4 min\`) and a one-line \`detail\` to show as they are. Every answer has a \`quality\`: \`live\` from NUS's feed, \`scheduled\` (an estimate from the timetable, when the feed is down) and so on. Don't present an estimate as live.
+The answers are ready-made text: \`/next\` and \`/trip\` return a \`label\` (such as \`D2 · 4 min\`) and a one-line \`detail\` to show as they are. Every answer has a \`quality\`: \`live\` from NUS's feed, \`scheduled\` (an estimate from how often the bus runs, when the feed has no live time) and so on. Don't present an estimate as live.
 
 NUS stops come in pairs on opposite sides of the road, a few metres apart (\`KR-MRT\` and \`KR-MRT-OPP\`). The API picks the side from the route order and says when to cross the road.
 
@@ -66,6 +72,7 @@ NUS stops come in pairs on opposite sides of the road, a few metres apart (\`KR-
 - [GET /buses?svc=D2](${origin}/docs#/operations/getBuses): one service's live buses for a map, each at a stop or between two
 - [GET /line?svc=D1&stop=YIH](${origin}/docs#/operations/getLine): one service's stops in order, its buses on them, and its next bus at one stop
 - [GET /campus](${origin}/docs#/operations/getCampus): stops, route lines and colours, and destinations to search
+- [GET /stops/pairs](${origin}/docs#/operations/getStopPairs): every stop with its twin across the road, and where each side's buses go next
 - [GET /status.json](${origin}/status.json): whether NUS's feed is working, without a key
 
 ## Reference

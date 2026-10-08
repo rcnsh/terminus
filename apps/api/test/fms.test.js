@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { installGlobals, makeCtx, makeEnv, makeFetch, makeKV, FROZEN_NOW } from './_stubs.mjs';
-import { breakerOpen, fetchActiveBuses, fetchArrivals, getArrivals } from '../src/fms.ts';
+import { breakerOpen, fetchActiveBuses, fetchArrivals, getArrivals, getBuses } from '../src/fms.ts';
 import { UpstreamRejected, appVersion, deviceId } from '../src/auth.ts';
 import { flagged } from '../src/edgecache.ts';
 
@@ -23,6 +23,38 @@ test('fetchArrivals and fetchActiveBuses retry a rejection once with a fresh tok
     assert.equal(fetch.counts.shuttle, 2, `${name}: one retry`);
     assert.equal(fetch.counts.auth, 2, `${name}: the retry minted a token`);
   }
+});
+
+test('each request a bus fetch makes to NUS is reported, the first mint on a cold token included', async () => {
+  const sent = (f) => f.counts.auth + f.counts.shuttle;
+  // A cold token: a mint, then the call.
+  let fetch = makeFetch({ buses: { D2: [] } });
+  installGlobals(fetch);
+  const env = makeEnv();
+  let calls = 0;
+  await getBuses(env, makeCtx(), 'D2', FROZEN_NOW, () => void calls++);
+  assert.equal(fetch.counts.auth, 1);
+  assert.equal(calls, sent(fetch), 'the mint and the call');
+  // The token kept: the call alone.
+  calls = 0;
+  await fetchActiveBuses(env, 'D2', FROZEN_NOW, () => void calls++);
+  assert.equal(calls, 1);
+  assert.equal(sent(fetch), 3);
+  // Cold, then refused: a mint, the call, a re-mint and the call again.
+  fetch = makeFetch({ reject: 1, rejectCode: '10008' });
+  installGlobals(fetch);
+  calls = 0;
+  await fetchActiveBuses(makeEnv(), 'D2', FROZEN_NOW, () => void calls++);
+  assert.equal(sent(fetch), 4);
+  assert.equal(calls, 4);
+  // Two at once on a cold token share one mint: each reports only what it sent.
+  fetch = makeFetch({});
+  installGlobals(fetch);
+  const shared = makeEnv();
+  const each = [0, 0];
+  await Promise.all(each.map((_, i) => fetchActiveBuses(shared, 'D2', FROZEN_NOW, () => void each[i]++)));
+  assert.equal(fetch.counts.auth, 1);
+  assert.equal(each[0] + each[1], sent(fetch), `${each}`);
 });
 
 test('a proxy that keeps rejecting throws UpstreamRejected naming the endpoint', async () => {

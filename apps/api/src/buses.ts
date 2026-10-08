@@ -36,8 +36,9 @@
  *   behind (leaving a terminus by the road it came in on) holds it there
  *   for a while.
  * - A tracked bus that strays off its line for a moment (a GPS jump) stays
- *   at its last place; off it for longer (the depot, a detour), it's drawn
- *   where the feed puts it.
+ *   at its last place; off it for HOLD_OFF_MS or more (the depot, a
+ *   detour), its track is dropped and it isn't shown until it's back on
+ *   its line.
  *
  * Tracks live in the edge cache with the placed buses (trackedBuses), so
  * every Worker instance in a data centre draws a bus the same way and picks

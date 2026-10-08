@@ -77,6 +77,11 @@ export function indexGraph(graph: Graph): GraphIndex {
   return idx;
 }
 
+/** Riding, plus the walk back across the road when the bus stops on the far side. */
+export function legRideS(leg: Leg): number {
+  return (leg.rideS ?? leg.hops * RIDE.secondsPerHop) + (leg.crossS ?? 0);
+}
+
 /**
  * Is `to` genuinely downstream of `from` on `svc`?
  *
@@ -84,13 +89,7 @@ export function indexGraph(graph: Graph): GraphIndex {
  * by wrapping -- but the hop count blows up, and the scorer converts hops to
  * seconds, so riding the wrong way round loses on cost rather than on a
  * special case. Returns null when unreachable.
- */
-/** Riding, plus the walk back across the road when the bus stops on the far side. */
-export function legRideS(leg: Leg): number {
-  return (leg.rideS ?? leg.hops * RIDE.secondsPerHop) + (leg.crossS ?? 0);
-}
-
-/**
+ *
  * `through` when the ride goes on past the loop's terminal: the run ends
  * there (the feed lists a shuttle's under an -E berth, and a public loop
  * ends at its interchange), so it's the next run on from there, not the
@@ -502,7 +501,7 @@ export interface BoardRow {
   toText: string;
 }
 
-/** How many later buses a row's `then` names: more is noise on a phone. */
+/** How many later buses a row's `laterText` names: more is noise on a phone. */
 export const THEN_MAX = 3;
 
 /**
@@ -716,7 +715,8 @@ export function scoreOptions(
       // is the run STARTING here, COM3-D2-E is a run ENDING here. Only the
       // first is boardable. Nothing orders them: whenever no bus is waiting
       // to depart, the -E arrival is the sooner of the two, and the earliest
-      // ETA hands you a bus that terminates on arrival. Prefer -S always.
+      // ETA hands you a bus that terminates on arrival. resolveBerths drops
+      // the -E run (route P starts at a bare KV, with no -S to prefer).
       const { usable, ambiguousBerth } = resolveBerths(forSvc);
 
       const etas = usable

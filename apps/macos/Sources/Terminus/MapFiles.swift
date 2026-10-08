@@ -2,7 +2,7 @@ import Foundation
 
 /// What the map keeps on the Mac so it works offline after the first look:
 /// the stops and routes (`/campus`), the map's style in each theme and
-/// language used, and the whole campus map file (about 4 MB). MapLibre
+/// language used, and the whole campus map file (about 3 MB). MapLibre
 /// doesn't cache PMTiles it streams, so the file is downloaded once, checked
 /// weekly for a newer one, and read from disk (`pmtiles://file://…`); until
 /// then the map is plain. Fonts and icons go through MapLibre's own cache.

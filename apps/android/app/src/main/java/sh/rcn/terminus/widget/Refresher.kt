@@ -128,7 +128,7 @@ object Refresher {
             armOfflineRedraw(ctx, store)
             retryLater(ctx, store)
         }
-        // Widgets showing a place or Nearby (phase 8.3) keep counting down too.
+        // Widgets showing a place or Nearby keep counting down too.
         if (extras) runCatching { WidgetModes.refreshChosen(ctx) } else queueExtras(ctx)
         redrawWidgets(ctx)
     }

@@ -116,8 +116,11 @@ const KEYED_ERRORS = {
     }),
     headers: { 'WWW-Authenticate': { description: '`Bearer realm="terminus"`.', schema: { type: 'string' } } },
   },
-  '429': slowDown('Too many requests: over 60 a minute for an API key, the account’s own limit for a session or device, or the address’s for a request with neither. Wait for `Retry-After`.'),
+  '429': slowDown('Too many requests: over 60 a minute for an API key, over 120 a minute for a signed-in account (a session or device), or over 60 a minute from the IP address for a request with neither. Wait for `Retry-After`.'),
 };
+
+/** Every /download/* route, on a server with no downloads bucket. */
+const DOWNLOADS_OFF = errorResponse('Downloads are not set up on this server.', { error: 'downloads are not configured' });
 
 const answerExample = {
   label: 'D2 · 4 min',
@@ -159,16 +162,19 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           'answer with its original `asOf` time, or says that live times are unavailable.',
         '',
         'The answers need an API key: sign in at /account, create one under API keys, and send it in the ' +
-          '`x-api-key` header (or as a bearer token). A signed-in session or a paired device works too. Each key ' +
-          'is limited to 60 requests a minute. Arrivals are cached for 15 seconds per stop, so repeated requests ' +
+          '`x-api-key` header (or as a bearer token). A signed-in session or a paired device works too. Without one they answer 401. Each key ' +
+          'is limited to 60 requests a minute, and a request with no valid key to 60 a minute from its IP address. Arrivals are cached for 15 seconds per stop, so repeated requests ' +
           'for the same stop do not reach the NUS feed. Please do not poll many stops in bulk.',
+        '',
+        'A signed-in account (a browser session or a device token) may make 120 requests a minute to the answers, and another 120 to the `/me` routes, ' +
+          'shared by all its devices. Over a limit, the answer is 429 with `Retry-After`. A device token that is not valid answers 401, and too many of those from one IP address 429.',
         '',
         'When the account database cannot be reached for a moment, any call that needs a key or a session answers 503 with ' +
           '`Retry-After`: wait that long and try again.',
       ].join('\n'),
     },
     servers: [{ url: origin }],
-    // An API key, or a signed-in session or device. /health and /openapi.json opt out.
+    // An API key, or a signed-in session or device. Open routes (/health, sign-in, pairing, the map, ...) opt out with `security: []`.
     security: [{ apiKey: [] }, { bearer: [] }, { cookie: [] }],
     tags: [
       { name: 'Answers', description: 'Next-bus answers as ready-to-display text.' },
@@ -185,16 +191,19 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Next bus',
           description:
             'Returns the next bus. The destination depends on which parameters you send:\n\n' +
-            '- `to`: a stop code or NUSMods venue code.\n' +
+            '- `to`: a stop, place or NUSMods venue code, from your location or from the stop in `from`.\n' +
             '- `lat` and `lon` only: the next buses at your nearest stop, without a destination.\n' +
-            '- none of these: a "Set up" answer that tells the client what to send, instead of guessing a destination.',
+            '- none of these: a "Set up" answer that tells the client what to send, instead of guessing a destination.\n\n' +
+            'A `to` that matches nothing is ignored rather than an error: with a location, the answer is the next buses at your nearest stop; without one, "Set up". ' +
+            'Use `/trip` to be told about an unknown destination.',
           operationId: 'getNext',
           parameters: [
             ...coordParams,
             {
               name: 'to',
               in: 'query',
-              description: 'A stop code such as `UTOWN`, or a NUSMods venue code such as `COM1-0212`.',
+              description:
+                'A stop code such as `UTOWN`, a place such as a food court (a `landmark` code from `/campus`, served by its quickest stop), or a NUSMods venue code such as `COM1-0212`. Case-insensitive.',
               schema: { type: 'string' },
               example: 'UTOWN',
             },
@@ -257,14 +266,15 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               name: 'to',
               in: 'query',
               required: true,
-              description: 'A stop code such as `UTOWN`, or a NUSMods venue code such as `COM1-0212`.',
+              description:
+                'A stop code such as `UTOWN`, a place such as a food court (a `landmark` code from `/campus`, served by its quickest stop), or a NUSMods venue code such as `COM1-0212`. Case-insensitive.',
               schema: { type: 'string' },
               example: 'UTOWN',
             },
             {
               name: 'from',
               in: 'query',
-              description: 'Stop code to start from. Required when no `lat`/`lon` is sent.',
+              description: 'Stop code to start from. Required when no `lat`/`lon` is sent; ignored when they are.',
               schema: { type: 'string' },
               example: 'PGP',
             },
@@ -276,7 +286,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               description: 'The answer.',
               content: { 'application/json': { schema: { $ref: '#/components/schemas/Answer' }, example: answerExample } },
             },
-            '400': errorResponse('Unknown destination, or neither a location nor `from` was sent.', {
+            '400': errorResponse('Unknown destination, or neither a location nor a known `from` stop was sent.', {
               error: 'unknown destination: pass ?to= a stop or venue code',
             }),
             ...KEYED_ERRORS,
@@ -377,7 +387,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Stops'],
           summary: 'One service’s line',
           description:
-            'A service’s whole line, for a page about it: its stops in route order (a loop’s first stop is not listed again at its end), each with the other shuttle services that call there, and its buses placed on that list, each at a stop (`at`, an index into `stops`) or between two (`after`: between `stops[after]` and the next, which on a loop’s last stop is the first again). The buses are the same ones as `/buses`, placed the same way, from the same 5-second cache. With `stop`, `stop.row` is the service’s board row at that stop, as on `/arrivals?stopped=1`, through the same 15-second cache. `running`, `stopped` and `resumesAt` say whether the service is inside its hours now, and if not, why and when it starts again. No times are worked out for the other stops: only the live feed’s own are given.',
+            'A service’s whole line, for a page about it: its stops in route order (a loop’s first stop is not listed again at its end), each with the other shuttle services that call there, and its buses placed on that list, each at a stop (`at`, an index into `stops`) or between two (`after`: between `stops[after]` and the next, which on a loop’s last stop is the first again). The buses are the same ones as `/buses`, placed the same way, from the same 5-second cache. With `stop`, `stop.row` is the service’s board row at that stop, as on `/arrivals?stopped=1`, through the same 15-second cache. `running`, `stopped` and `resumesAt` say whether the service is running now, and if not, why and when it starts again: it runs inside its hours, and whenever one of its buses is out on the line. No times are worked out for the other stops: only the live feed’s own are given.',
           operationId: 'getLine',
           parameters: [
             { name: 'svc', in: 'query', required: true, description: 'Service code, case-insensitive. Shuttle services only.', schema: { type: 'string' }, example: 'D1' },
@@ -561,7 +571,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ],
           responses: {
             '200': {
-              description: 'Service status.',
+              description: 'Service status: healthy.',
               content: {
                 'application/json': {
                   schema: { $ref: '#/components/schemas/Health' },
@@ -608,9 +618,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, message: { type: 'string' } } }),
             '400': errorResponse('Not an email address, or the human check failed.'),
-            '429': errorResponse('Too many attempts from this IP, or too many sign-in emails for everyone this minute (with `Retry-After`).'),
-            '502': errorResponse('The email could not be sent. Try again later.'),
-            '503': errorResponse('The human check (Turnstile) is not answering, or the account database could not be reached. Try again after `Retry-After` seconds.'),
+            '429': { ...errorResponse('Too many attempts from this IP, or too many sign-in emails for everyone this minute.'), headers: RETRY_AFTER },
+            '502': errorResponse('The email could not be sent. Try again later.', { error: 'could not send the email, try again later' }),
+            '503': { ...errorResponse('The human check (Turnstile) is not answering, or the account database could not be reached. Try again after `Retry-After` seconds.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -629,7 +639,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ),
           responses: {
             '201': ok({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
-            '429': errorResponse('Too many new accounts, from this IP or overall.'),
+            '429': { ...errorResponse('Too many new accounts, from this IP or overall.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -647,8 +657,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '201': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
             '400': errorResponse('The human check failed.'),
             '403': errorResponse('The request came from another site.'),
-            '429': errorResponse('Too many new accounts, from this IP or overall.'),
-            '503': errorResponse('The human check (Turnstile) is not answering, or the account database could not be reached. Try again after `Retry-After` seconds.'),
+            '429': { ...errorResponse('Too many new accounts, from this IP or overall.'), headers: RETRY_AFTER },
+            '503': { ...errorResponse('The human check (Turnstile) is not answering, or the account database could not be reached. Try again after `Retry-After` seconds.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -678,8 +688,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             }),
             '400': errorResponse('Not an email address.'),
             '409': errorResponse('This device is already signed in.'),
-            '429': errorResponse('An email went to this address in the last minute, too many attempts, or too many sign-in emails for everyone this minute.'),
-            '502': errorResponse('The email could not be sent. Try again later.'),
+            '429': { ...errorResponse('An email went to this address in the last minute, too many attempts, or too many sign-in emails for everyone this minute.'), headers: RETRY_AFTER },
+            '502': errorResponse('The email could not be sent. Try again later.', { error: 'could not send the email, try again later' }),
           },
         },
       },
@@ -704,8 +714,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 outcome: { type: 'string', enum: ['created', 'added-email', 'signed-in', 'moved-setup', 'choose'] },
               },
             }),
-            '400': errorResponse('No `request` or `poll`.'),
-            '429': { ...slowDown('Polled too often from this IP. Wait for `Retry-After` (10 seconds).'), headers: { 'Retry-After': { ...RETRY_AFTER['Retry-After'], schema: { type: 'integer', example: 10 } } } },
+            '400': errorResponse('No `request` or `poll`.', { error: 'send request and poll' }),
+            '429': { ...slowDown('Polled too often from this IP: over 60 polls and codes a minute. Wait for `Retry-After` (10 seconds).'), headers: { 'Retry-After': { ...RETRY_AFTER['Retry-After'], schema: { type: 'integer', example: 10 } } } },
           },
         },
       },
@@ -732,7 +742,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               },
             }),
             '400': errorResponse('No `request` or `poll`, a wrong code (`status: pending`), too many wrong codes (`denied`), or an old request (`expired`).'),
-            '429': errorResponse('Too many codes tried from this IP, or polled too often (then with `Retry-After`).'),
+            '429': { ...errorResponse('Too many codes tried from this IP (over 10 a minute), or over 60 polls and codes a minute from it (then `Retry-After` is 10).'), headers: RETRY_AFTER },
           },
         },
       },
@@ -770,7 +780,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' } } }),
             '400': errorResponse('Wrong or expired code.'),
             '403': errorResponse('The request came from another site.'),
-            '429': errorResponse('Too many attempts from this IP.'),
+            '429': { ...errorResponse('Too many attempts from this IP.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -780,7 +790,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: 'Pair a device',
           description:
             'Exchanges the 6-character code shown on the account page for a device token. Send the token as ' +
-            '`Authorization: Bearer <token>` on `/me` routes. It lasts until it is revoked on the account page. Codes work once, for 10 minutes. The account’s owner is emailed to say a device was added.',
+            '`Authorization: Bearer <token>` on `/me` routes. It lasts until it is revoked on the account page, or until it goes 90 days unused. Codes work once, for 10 minutes. The account’s owner is emailed to say a device was added.',
           operationId: 'pair',
           security: [],
           requestBody: jsonBody(
@@ -790,7 +800,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': ok({ type: 'object', required: ['token'], properties: { token: { type: 'string' } } }),
             '400': errorResponse('Wrong or expired code.'),
-            '429': errorResponse('Too many attempts from this IP, or too many pairing attempts for everyone this minute.'),
+            '429': { ...errorResponse('Too many attempts from this IP, or too many pairing attempts for everyone this minute.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -805,7 +815,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': ok({ type: 'object', required: ['account'], properties: { account: { type: 'string', example: 'j•••@u.nus.edu' } } }),
             '400': errorResponse('Wrong or expired code.'),
-            '429': errorResponse('Too many attempts from this IP, or too many pairing attempts for everyone this minute.'),
+            '429': { ...errorResponse('Too many attempts from this IP, or too many pairing attempts for everyone this minute.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -827,7 +837,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           parameters: [
             ...coordParams,
             { name: 'place', in: 'query', description: 'Key of a favourite (one of `places`).', schema: { type: 'string' }, example: 'mrt' },
-            { name: 'to', in: 'query', description: 'Any stop code or NUSMods venue code. One that names nothing known is ignored, as an unknown `place` is.', schema: { type: 'string' }, example: 'COM3' },
+            { name: 'to', in: 'query', description: 'Any stop code, place (a `landmark` code from `/campus`, such as a food court) or NUSMods venue code, case-insensitive. One that names nothing known is ignored, as an unknown `place` is.', schema: { type: 'string' }, example: 'COM3' },
             h12Param,
             langParam,
           ],
@@ -878,7 +888,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           summary: "Today's timeline",
           description:
             'Each of today\'s classes with where you set off from and its leave-by (an estimate hours ahead), the trips home in long gaps and after the ' +
-            'last class, and where each stands: `done`, `now`, `next`, `later` or `skipped`. A class you are on the bus to has `onBus` (`svc`, `off`, `arrive`) ' +
+            'last class, and where each stands: `done`, `next` (the first not done) or `later`, and for a trip home whose time has come, `now`. A class you are on the bus to has `onBus` (`svc`, `off`, `arrive`) ' +
             'in place of a leave-by. Anything not done yet is `removable`: POST /me/signal `{kind: "skipped", trip: key}` takes it off today (a class, ' +
             'a usual time, a one-off, or a trip home, which then means staying), `reset` puts it back; entries taken off are not listed. ' +
             'With `lat` and `lon`, the next class is planned from there, as GET /me/next plans it, so the two give the same leave-by; later ' +
@@ -907,9 +917,9 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                         type: ['string', 'null'],
                         example: 'Leave by ~09:38 · D2 from PGP',
                         description:
-                          'The row’s second line: the leave-by and how ("Leave by ~09:38 · D2 from PGP", "Leave by 13:39 · walk", with "~5 min late" when it will be), the bus you are on ("On the D2 · off at UTown · arrive 09:52"), or "Not going". Null once done, and with nothing to say yet. Show it as it is.',
+                          'The row’s second line: the leave-by and how ("Leave by ~09:38 · D2 from PGP", "Leave by 13:39 · walk", with "~5 min late" when it will be), or the bus you are on ("On the D2 · off at UTown · arrive 09:52"). Null once done, and with nothing to say yet. Show it as it is.',
                       },
-                      status: { type: 'string', enum: ['done', 'now', 'next', 'later', 'skipped'] },
+                      status: { type: 'string', enum: ['done', 'now', 'next', 'later'], description: '`now` only on a trip home, once the class before it has ended. Entries taken off today are left out rather than listed.' },
                       from: { type: ['string', 'null'] },
                       fromName: { type: ['string', 'null'] },
                       to: { type: 'string' },
@@ -960,7 +970,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ),
           responses: {
             '200': ok({ $ref: '#/components/schemas/MeAnswer' }),
-            '400': errorResponse('Unknown kind, or a `trip` that is not one of today’s.'),
+            '400': errorResponse('Unknown kind, or a `trip` that is not one of today’s.', { error: 'no such trip today' }),
             '409': errorResponse('No trip in progress to say that about.'),
             '503': errorResponse('Trip tracking is not available.'),
           },
@@ -974,7 +984,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             "An app sends its Firebase Cloud Messaging token; the web app its Web Push subscription (`PushSubscription.toJSON()`, subscribed with the key from GET /me/push/key). " +
             "When the trip's phase changes, an app gets a data message `{kind: 'card', phase}` and should fetch `/me/next`. " +
             'The web app gets the same as an encrypted payload `{kind, phase, urgent}`, only when there is something to show. ' +
-            "The week before a semester starts, a device whose account imported an older semester's timetable gets `{kind: 'term', title, body, zhTitle, zhBody}`, a notification to show as it is. " +
+            "The week before a semester starts, a device whose account imported an older semester's timetable is sent the reminder to import the new one. " +
+            "The Android app from 2.5.0 (by its `x-terminus-client` header) gets only `{kind: 'term'}` and fetches the words from GET /me/notice; older Android apps and the web app get `{kind: 'term', title, body, zhTitle, zhBody}`, a notification to show as it is. " +
             'A push address lives on one session; one the push service no longer knows is dropped.',
           operationId: 'mePushRegister',
           security: [{ bearer: [] }, { cookie: [] }],
@@ -1036,7 +1047,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           ),
           responses: {
             '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, choices: { type: 'array', items: { $ref: '#/components/schemas/Choice' }, description: 'As in GET /me/choices.' } } }),
-            '400': errorResponse('No such suggestion or choice, or no such trip today.'),
+            '400': errorResponse('No such suggestion or choice, or no such trip today.', { error: 'no such trip today' }),
           },
         },
       },
@@ -1069,7 +1080,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         get: {
           tags: ['Account'],
           summary: 'Trip choices',
-          description: 'Classes you leave one bus earlier for, or get no reminders for, and whether the question is muted.',
+          description: 'Classes you leave one bus earlier for, or get no reminders for, and how many trips are in the history.',
           operationId: 'meChoices',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: {
@@ -1088,7 +1099,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Clear trip history',
           description:
-            'Forgets what happened on each trip (caught, missed, skipped or no answer; kept 35 days otherwise). Nothing is suggested from the old trips, and a muted question is asked again. Choices already made stay; undo those with POST /me/choice.',
+            'Forgets what happened on each trip (caught, missed, skipped or no answer; kept 35 days otherwise). Suggestions (`card.suggestion`) come from this history, so none is made from the trips forgotten. Choices already made stay; undo those with POST /me/choice.',
           operationId: 'meClearHistory',
           security: [{ bearer: [] }, { cookie: [] }],
           responses: { '200': ok({ type: 'object', properties: { ok: { type: 'boolean' }, cleared: { type: 'integer', description: 'Trips forgotten.' } } }) },
@@ -1099,29 +1110,34 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Account'],
           summary: 'Report a wrong answer',
           description:
-            'Sends the answer you were looking at, with a note saying what was wrong, for checking against what the buses did. Only for an account with an email (signed in), so the operator can reply. Kept with your account for a year (in the export, deleted with it); the note alone is emailed to the operator, without your address or the answer. Up to ten a day.',
+            'Sends the answer you were looking at, with what was wrong (a reason from the list, a note, or both), for checking against what the buses did. Only for an account with an email (signed in), so the operator can reply. Kept with your account for a year (in the export, deleted with it); the note alone is emailed to the operator, without your address or the answer. Up to ten a day.',
           operationId: 'sendFeedback',
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody(
             {
               type: 'object',
-              required: ['platform', 'note'],
+              required: ['platform'],
               properties: {
                 kind: { type: 'string', enum: ['wrong', 'other'], default: 'wrong' },
-                note: { type: 'string', minLength: 1, maxLength: 1000, description: 'What was wrong, or what you would like. Required.' },
+                reason: {
+                  type: 'string',
+                  enum: ['never-came', 'times-off', 'wrong-stop', 'walk-longer', 'wrong-class'],
+                  description: 'What was wrong with the answer, as the apps offer it: the bus never came, the times were off, the wrong stop, a longer walk, the wrong class. Only with kind wrong.',
+                },
+                note: { type: 'string', maxLength: 1000, description: 'What was wrong, or what you would like. Required unless there is a reason.' },
                 platform: { type: 'string', enum: ['android', 'mac', 'web'] },
                 appVersion: { type: 'string', maxLength: 20 },
                 context: { type: 'object', description: 'The answer as shown (a /me/next response), up to 16 KB.' },
               },
             },
-            { kind: 'wrong', note: 'The D2 never came', platform: 'web', context: { label: 'D2 · 4 min' } },
+            { kind: 'wrong', reason: 'never-came', note: 'Waited 20 min at COM3', platform: 'web', context: { label: 'D2 · 4 min' } },
           ),
           responses: {
             '201': ok({ type: 'object', properties: { ok: { type: 'boolean' }, id: { type: 'string' } } }),
-            '400': errorResponse('Missing or invalid field (an empty note, too); the message names it.'),
+            '400': errorResponse('Missing or invalid field (no reason and an empty note, too); the message names it.'),
             '401': errorResponse('No valid session.'),
             '403': errorResponse('An anonymous account: sign in with an email first.'),
-            '429': errorResponse('Ten reports already today, or too many requests from this account.'),
+            '429': { ...errorResponse('Ten reports already today, or too many requests from this account.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -1220,24 +1236,27 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           security: [{ bearer: [] }, { cookie: [] }],
           requestBody: jsonBody({ type: 'object', required: ['share'], properties: { share: { type: 'string', format: 'uri' } } }, { share: 'https://nusmods.com/timetable/sem-1/share?CS2030=LEC:1,LAB:08' }),
           responses: {
-            '200': ok({
-              type: 'object',
-              required: ['profile', 'unresolved', 'missing', 'online', 'term'],
-              properties: {
-                profile: { $ref: '#/components/schemas/Profile' },
-                unresolved: { type: 'array', description: 'Classes whose venue could not be matched to a stop, to place by hand.', items: { $ref: '#/components/schemas/Unresolved' } },
-                missing: { type: 'array', items: { type: 'string' }, example: ['CS9999'], description: 'Modules NUSMods has no timetable for in that semester (a typo, or not offered then).' },
-                online: { type: 'integer', minimum: 0, description: 'Online or TBA lessons, which have no stop and are left out.' },
-                term: { type: 'string', example: 'Sem 1 2026/27', description: 'The semester the classes were read for, in words.' },
-              },
-            }),
+            '200': {
+              ...ok({
+                type: 'object',
+                required: ['profile', 'unresolved', 'missing', 'online', 'term'],
+                properties: {
+                  profile: { $ref: '#/components/schemas/Profile' },
+                  unresolved: { type: 'array', description: 'Classes whose venue could not be matched to a stop, to place by hand.', items: { $ref: '#/components/schemas/Unresolved' } },
+                  missing: { type: 'array', items: { type: 'string' }, example: ['CS9999'], description: 'Modules NUSMods has no timetable for in that semester (a typo, or not offered then).' },
+                  online: { type: 'integer', minimum: 0, description: 'Online or TBA lessons, which have no stop and are left out.' },
+                  term: { type: 'string', example: 'Sem 1 2026/27', description: 'The semester the classes were read for, in words.' },
+                },
+              }),
+              headers: { ETag: { description: 'The profile’s new version, for `If-Match` on PUT /me/profile.', schema: { type: 'string' } } },
+            },
             '400': errorResponse('Not a NUSMods share link, no modules in it, more than 15, or a code that is not a module.'),
             '409': errorResponse('Other devices kept saving the profile meanwhile; try again.'),
             '422': errorResponse('Nothing to import: no classes in the link for that semester. `missing` lists the modules NUSMods has none for.', {
               error: 'Nothing imported: CS9999 has no classes in Sem 1 2026/27. Your timetable was not changed.',
               missing: ['CS9999'],
             }),
-            '429': errorResponse('Too many imports from this account this minute (each can ask NUSMods for 15 modules), or too many requests.'),
+            '429': { ...errorResponse('Too many imports from this account this minute (each can ask NUSMods for 15 modules), or too many requests.'), headers: RETRY_AFTER },
             '502': errorResponse('NUSMods did not answer for some modules (`failed`), so nothing was changed. Try again in a minute.', {
               error: 'NUSMods didn’t respond for CS2030. Nothing was changed. Try again in a minute.',
               failed: ['CS2030'],
@@ -1336,6 +1355,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     properties: {
                       created: { type: 'string', format: 'date-time' },
                       kind: { type: 'string' },
+                      reason: { type: ['string', 'null'], description: 'What was wrong, from the list in POST /me/feedback.' },
                       note: { type: 'string' },
                       platform: { type: 'string' },
                       appVersion: { type: ['string', 'null'] },
@@ -1382,7 +1402,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
         delete: {
           tags: ['Account'],
           summary: 'Revoke an API key',
-          description: 'From the account page only. The key stops working at once.',
+          description: 'From the account page only. The key stops working at once, except on `/buses`, which remembers who is asking for up to 30 seconds and may let it through until then.',
           operationId: 'revokeKey',
           security: [{ cookie: [] }],
           parameters: [{ name: 'id', in: 'path', required: true, description: 'The `id` from `GET /me/keys`.', schema: { type: 'string' } }],
@@ -1446,7 +1466,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description: 'The Turnstile site key when the human check is on, or null.',
           operationId: 'authConfig',
           security: [],
-          responses: { '200': ok({ type: 'object', properties: { turnstileSiteKey: { type: ['string', 'null'] } } }), '429': errorResponse('Too many requests from this IP.') },
+          responses: { '200': ok({ type: 'object', properties: { turnstileSiteKey: { type: ['string', 'null'] } } }), '429': slowDown('Too many requests from this IP. Wait for `Retry-After`.') },
         },
       },
       '/auth/verify': {
@@ -1461,7 +1481,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': { description: 'The sign-in page.', content: { 'text/html': {} } },
             '400': { description: 'The link has expired or was used.', content: { 'text/html': {} } },
-            '429': errorResponse('Too many requests from this IP.'),
+            '429': slowDown('Too many requests from this IP. Wait for `Retry-After`.'),
           },
         },
         post: {
@@ -1489,7 +1509,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': { description: 'The approval page.', content: { 'text/html': {} } },
             '400': { description: 'The request has expired.', content: { 'text/html': {} } },
-            '429': errorResponse('Too many requests from this IP.'),
+            '429': slowDown('Too many requests from this IP. Wait for `Retry-After`.'),
           },
         },
         post: {
@@ -1503,7 +1523,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             '200': { description: 'Approved, or cancelled with `none`.', content: { 'text/html': {} } },
             '400': { description: 'The wrong number (the sign-in is cancelled), or the request has expired.', content: { 'text/html': {} } },
             '403': errorResponse('The form was posted from another site.'),
-            '429': errorResponse('Too many attempts from this IP.'),
+            '429': { ...errorResponse('Too many attempts from this IP.'), headers: RETRY_AFTER },
           },
         },
       },
@@ -1571,7 +1591,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           tags: ['Service'],
           summary: 'Recorded days of shuttles, for the timelapse',
           description:
-            'The days the timelapse recorder has kept, newest first: closed days from storage, and today’s while it records. `recording` says whether the recorder is switched on and what it is doing today. Needs the operator token, or the timelapse token (which opens these two routes and nothing else), in `x-health-token`: answers 404 without one.',
+            'The days the timelapse recorder has kept, newest first: closed days from storage, today’s while it records, and any of the few days before whose recorder has not yet managed to write it to storage (also `closed: false`). `recording` says whether the recorder is switched on and what it is doing today. Needs the operator token, or the timelapse token (which opens these two routes and nothing else), in `x-health-token`: answers 404 without one.',
           operationId: 'timelapseDays',
           security: [{ operator: [] }],
           responses: {
@@ -1587,7 +1607,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                       required: ['date', 'closed'],
                       properties: {
                         date: { type: 'string', format: 'date', description: 'The Singapore date the day’s window opened on.' },
-                        closed: { type: 'boolean', description: 'true once the window closed and the day was written to storage; false for today, still recording.' },
+                        closed: { type: 'boolean', description: 'true once the window closed and the day was written to storage; false for today, still recording, and for an earlier day not yet written.' },
                         bytes: { type: ['integer', 'null'], description: 'The stored file’s size; null while recording.' },
                         samples: { type: ['integer', 'null'], description: 'Readings so far, while recording; null once closed.' },
                       },
@@ -1608,6 +1628,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               { days: [{ date: '2026-10-07', closed: false, bytes: null, samples: 1520 }, { date: '2026-10-06', closed: true, bytes: 412_903, samples: null }], recording: { date: '2026-10-07', enabled: true, state: 'polling', samples: 1520 } },
             ),
             '404': errorResponse('No operator token, or the wrong one.'),
+            '503': errorResponse('Timelapse storage is not set up on this server.', { error: 'timelapse storage is not configured' }),
           },
         },
       },
@@ -1623,7 +1644,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           responses: {
             '200': { description: 'The day file, gzipped JSON.', content: { 'application/gzip': {} } },
             '404': errorResponse('No operator token, or no recording for that day.'),
-            '503': errorResponse('The recorder holding the day did not answer within 10 s. Wait for `Retry-After`.'),
+            '503': errorResponse('The recorder holding the day did not answer within 10 s (wait for `Retry-After`), or timelapse storage is not set up on this server.'),
           },
         },
       },
@@ -1703,7 +1724,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description: 'The version, and the file and SHA-256 of each app, as the apps’ update checks read it.',
           operationId: 'latest',
           security: [],
-          responses: { '200': ok({ type: 'object' }), '404': errorResponse('No release yet.'), '503': errorResponse('Downloads are not set up.') },
+          responses: { '200': ok({ type: 'object' }), '404': errorResponse('No release yet.'), '503': DOWNLOADS_OFF },
         },
       },
       '/download/android': {
@@ -1714,7 +1735,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           operationId: 'downloadAndroid',
           security: [],
           parameters: [{ name: 'abi', in: 'query', description: 'A CPU type other than arm64.', schema: { type: 'string', enum: ['armeabi-v7a', 'x86_64'] } }],
-          responses: { '200': { description: 'The APK.', content: { 'application/vnd.android.package-archive': {} } }, '404': errorResponse('No release yet.') },
+          responses: { '200': { description: 'The APK.', content: { 'application/vnd.android.package-archive': {} } }, '404': errorResponse('No release yet.'), '503': DOWNLOADS_OFF },
         },
       },
       '/download/mac': {
@@ -1724,7 +1745,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description: 'The latest disk image. The SHA-256 is in the `x-sha256` header.',
           operationId: 'downloadMac',
           security: [],
-          responses: { '200': { description: 'The disk image.', content: { 'application/x-apple-diskimage': {} } }, '404': errorResponse('No release yet.') },
+          responses: { '200': { description: 'The disk image.', content: { 'application/x-apple-diskimage': {} } }, '404': errorResponse('No release yet.'), '503': DOWNLOADS_OFF },
         },
       },
       '/download/appcast.xml': {
@@ -1734,7 +1755,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           description: 'The Sparkle appcast the Mac app checks for updates.',
           operationId: 'appcast',
           security: [],
-          responses: { '200': { description: 'The feed.', content: { 'application/xml': {} } }, '404': errorResponse('No release yet.') },
+          responses: { '200': { description: 'The feed.', content: { 'application/xml': {} } }, '404': errorResponse('No release yet.'), '503': DOWNLOADS_OFF },
         },
       },
       '/download/releases/{version}/{file}': {
@@ -1748,7 +1769,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             { name: 'version', in: 'path', required: true, schema: { type: 'string' }, example: '2.0.4' },
             { name: 'file', in: 'path', required: true, schema: { type: 'string' }, example: 'terminus-2.0.4.apk' },
           ],
-          responses: { '200': { description: 'The file.' }, '404': errorResponse('No such file.') },
+          responses: { '200': { description: 'The file.' }, '404': errorResponse('No such file.'), '503': DOWNLOADS_OFF },
         },
       },
     },
@@ -2028,7 +2049,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             svc: { type: 'string' },
             color: { type: ['string', 'null'] },
             endsAt: { type: ['string', 'null'], format: 'date-time', description: 'When the service stops running today. Null when its hours are not known.' },
-            running: { type: 'boolean', description: 'Whether the service is inside its hours now, as a board row’s `running` (unknown hours count as running).' },
+            running: { type: 'boolean', description: 'Whether the service is running now: inside its hours, as a board row’s `running` (unknown hours count as running), or with a bus out on the line whatever the hours say.' },
             stopped: { type: ['string', 'null'], enum: ['ended', 'notYet', 'noService', null], description: 'Why it is not running, as on a board row. Null while it runs.' },
             resumesAt: { type: ['string', 'null'], format: 'date-time', description: 'When it next starts, as on a board row. Null while it runs, or when no start is found in 8 days.' },
             stops: {
@@ -2222,15 +2243,17 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           required: ['day', 'arriveByMin', 'to', 'label'],
           properties: {
             day: { type: 'integer', minimum: 0, maximum: 6, description: '0 = Sunday.' },
-            arriveByMin: { type: 'integer', description: 'Class start, minutes past midnight SGT.' },
-            endMin: { type: 'integer', description: 'Class end, minutes past midnight SGT.' },
-            to: { type: 'string', description: 'Destination stop code.' },
-            label: { type: 'string', maxLength: 60 },
-            venue: { type: 'string' },
+            arriveByMin: { type: 'integer', minimum: 0, maximum: 1439, description: 'Class start, minutes past midnight SGT.' },
+            endMin: { type: 'integer', maximum: 1440, description: 'Class end, minutes past midnight SGT. After `arriveByMin`.' },
+            to: { type: 'string', description: 'Destination: a stop code, or a place code (a `landmark` in `/campus`).' },
+            label: { type: 'string', minLength: 1, maxLength: 60 },
+            venue: { type: 'string', maxLength: 40, description: 'The NUSMods room, such as `COM1-0212`. Longer is cut to 40 characters.' },
             weeks: {
-              description: 'From NUSMods: the teaching weeks the class runs in, or the dates it runs between. Absent on classes entered by hand, which run every week.',
+              description:
+                'From NUSMods: the teaching weeks the class runs in, or the dates it runs between (every `weekInterval` weeks, or only the `weeks` of the range counted from `start`). ' +
+                'Absent: every teaching week of the semester in `term`. A class in `manual`, entered by hand, runs every week whatever this says.',
               oneOf: [
-                { type: 'array', items: { type: 'integer', minimum: 1, maximum: 20 } },
+                { type: 'array', maxItems: 20, items: { type: 'integer', minimum: 1, maximum: 20 } },
                 {
                   type: 'object',
                   required: ['start', 'end'],
@@ -2238,7 +2261,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     start: { type: 'string', format: 'date' },
                     end: { type: 'string', format: 'date' },
                     weekInterval: { type: 'integer', minimum: 1, maximum: 10 },
-                    weeks: { type: 'array', items: { type: 'integer', minimum: 1, maximum: 30 } },
+                    weeks: { type: 'array', maxItems: 30, items: { type: 'integer', minimum: 1, maximum: 30 } },
                   },
                 },
               ],
@@ -2250,19 +2273,20 @@ export function openApiSpec(origin: string): Record<string, unknown> {
           properties: {
             home: {
               type: ['object', 'null'],
+              description: 'Null when no home is set (an empty `stops` is saved as null).',
               properties: {
-                lat: { type: 'number' },
-                lon: { type: 'number' },
-                stops: { type: 'array', maxItems: 3, items: { type: 'string' }, description: 'Usual boarding stops near home, best first.' },
+                stops: { type: 'array', maxItems: 3, items: { type: 'string' }, description: 'Usual boarding stops near home, best first. Repeats are dropped.' },
+                lat: { type: 'number', deprecated: true, writeOnly: true, description: 'Accepted from older clients and ignored: never kept or returned.' },
+                lon: { type: 'number', deprecated: true, writeOnly: true, description: 'As `lat`: ignored.' },
               },
             },
             gapHours: { type: 'number', minimum: 0.5, maximum: 12, default: 2, description: 'A gap between classes longer than this means going home in between.' },
-            dayStartMin: { type: 'integer', default: 360, description: 'Start of your day, minutes past midnight SGT. Earlier, `/me/next` rests.' },
-            dayEndMin: { type: 'integer', default: 1080, description: 'End of your day. Later, `/me/next` rests, unless a class runs late.' },
+            dayStartMin: { type: 'integer', minimum: 0, maximum: 1439, default: 360, description: 'Start of your day, minutes past midnight SGT; before `dayEndMin`. Earlier, `/me/next` rests.' },
+            dayEndMin: { type: 'integer', minimum: 0, maximum: 1439, default: 1080, description: 'End of your day; after `dayStartMin`. Later, `/me/next` rests, unless a class runs late.' },
             walkPace: { type: 'string', enum: ['slow', 'normal', 'fast'], default: 'normal', description: 'How fast you walk: 1.1, 1.3 or 1.5 m/s. Scales every walk except `homeWalkMin`.' },
             fullBusMargin: { type: 'boolean', default: true, description: 'Aim one bus earlier when the bus to wait for is often busy at that stop and time.' },
             publicBuses: { type: 'boolean', default: false, description: 'Count the public buses (95, 151, 96 and others) at the campus’s stops too, on `/me/next` and `/me/nearby`. They have a fare, so one is the answer only when it clearly saves time over the free shuttle, and its leg carries `paid: true`. Off until the user turns it on.' },
-            seen: { type: 'array', items: { type: 'string' }, description: 'One-time screens already shown, e.g. `onboarding`.' },
+            seen: { type: 'array', maxItems: 20, items: { type: 'string', pattern: '^[a-z0-9-]{1,32}$' }, description: 'One-time screens already shown, e.g. `onboarding`. Repeats are dropped.' },
             pinnedStops: { type: 'array', maxItems: 8, uniqueItems: true, default: [], items: { type: 'string' }, description: 'Stops pinned to the Buses tab, in the order to show them: shuttle stop codes, or LTA’s five-digit code for a public stop of its own. Repeats are dropped.' },
             homeWalkMin: { type: 'integer', minimum: 0, maximum: 30, default: 5, description: 'Minutes from home to your nearest home stop. Counts when a trip starts from home without a location, and as the least walk to your home stops when the location is inside the residence they serve (the lift and the stairs count, the outline cannot tell which floor you are on).' },
             lang: { type: 'string', enum: ['auto', 'en', 'zh'], default: 'auto', description: "The language terminus writes in: answers, cards, emails and errors. `auto` follows each request's `Accept-Language` (any `zh*` is Simplified Chinese); `?lang=en|zh` on a request overrides it, and a set `lang` here overrides both." },
@@ -2299,12 +2323,14 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 properties: { date: { type: 'string', format: 'date' }, arriveByMin: { type: 'integer', minimum: 0, maximum: 1439 }, to: { type: 'string' }, label: { type: 'string', maxLength: 60 } },
               },
             },
-            share: { type: ['string', 'null'], description: 'The NUSMods share link last imported.' },
+            share: { type: ['string', 'null'], maxLength: 2000, description: 'The NUSMods share link last imported.' },
             term: {
               type: ['object', 'null'],
-              description: 'The semester `trips` were imported for, set by the import. Null before the first. Imported classes run only in its teaching weeks.',
+              description:
+                'The semester `trips` were imported for, set by the import. Null before the first. Imported classes run only in its teaching weeks, and it is how terminus knows the timetable is out of date. ' +
+                'Send it back as it came: a PUT without it clears it.',
               required: ['acadYear', 'semester'],
-              properties: { acadYear: { type: 'string', example: '2026/2027' }, semester: { type: 'integer', minimum: 1, maximum: 4, description: '3 and 4 are the special terms.' } },
+              properties: { acadYear: { type: 'string', pattern: '^\\d{4}/\\d{4}$', example: '2026/2027' }, semester: { type: 'integer', minimum: 1, maximum: 4, description: '3 and 4 are the special terms.' } },
             },
             limits: {
               type: 'object',
@@ -2334,7 +2360,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               properties: {
                 mode: {
                   type: 'string',
-                  enum: ['trip', 'nearby', 'rest', 'free'],
+                  enum: ['trip', 'rest', 'free'],
                   description:
                     '`rest` outside your day hours: no bus, and `detail` names your next class. Show a rest state, not a bus. ' +
                     '`free` on a day with no classes, or none left to plan (and for a new account with no timetable yet): nothing to catch, so no bus in the headline; `card.upcoming` has the next class.',
@@ -2352,8 +2378,8 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                   properties: {
                     kind: {
                       type: 'string',
-                      enum: ['class', 'trip', 'nearby', 'rest', 'arrived', 'setup', 'free'],
-                      description: 'What the card is: a class with a leave-by, any other trip, what is near you, resting outside your day, there already, nothing to start from (`setup`), or a day with nothing to catch (`free`).',
+                      enum: ['class', 'trip', 'rest', 'arrived', 'setup', 'free'],
+                      description: 'What the card is: a class with a leave-by, any other trip, resting outside your day, there already, nothing to start from (`setup`), or a day with nothing to catch (`free`).',
                     },
                     title: {
                       type: 'string',
@@ -2363,7 +2389,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                     heading: {
                       type: ['string', 'null'],
                       example: 'Next class · CS2030 @ COM1',
-                      description: 'The small line above the card, from `dest.why`: "Next class · X", "Long gap · Home", "Heading home" or "Going to X" (Chinese "下一节课 · X", "空档较长 · 回家", "回家", "去 X"). Null with no destination (`nearby`, `rest`, `free`).',
+                      description: 'The small line above the card, from `dest.why`: "Next class · X", "Long gap · Home", "Heading home" or "Going to X" (Chinese "下一节课 · X", "空档较长 · 回家", "回家", "去 X"). Null with no destination (`rest`, `free`).',
                     },
                     remindAt: {
                       type: ['string', 'null'],
@@ -2548,9 +2574,24 @@ export function openApiSpec(origin: string): Record<string, unknown> {
             calendar: {
               type: 'object',
               description: 'The academic calendar: the last day it covers, and whether it is the copy bundled at deploy or one the weekly check fetched since.',
-              properties: { through: { type: 'string', format: 'date' }, daysLeft: { type: 'integer' }, source: { type: 'string', enum: ['bundled', 'fetched'] } },
+              properties: { through: { type: 'string', format: 'date' }, daysLeft: { type: 'integer', description: 'Whole days until then; 0 or less is unhealthy.' }, source: { type: 'string', enum: ['bundled', 'fetched'] } },
             },
-            config: { type: 'object', additionalProperties: { type: 'boolean' }, description: 'Whether each setting is configured, never its value.' },
+            config: {
+              type: 'object',
+              description: 'Whether each setting is configured, never its value.',
+              properties: {
+                auth: { type: 'boolean', description: 'The NUS feed’s guest sign-in.' },
+                proxy: { type: 'boolean', description: 'The NUS feed itself.' },
+                publicBuses: { type: 'boolean', description: 'LTA DataMall, for the public buses.' },
+                analytics: { type: 'boolean' },
+                accounts: { type: 'boolean', description: 'The account database.' },
+                email: { type: 'boolean', description: 'Sign-in and other emails can be sent.' },
+                alerts: { type: 'boolean', description: 'Feed alerts are emailed to the operator.' },
+                pushAndroid: { type: 'boolean' },
+                pushWeb: { type: 'boolean' },
+              },
+              additionalProperties: { type: 'boolean' },
+            },
             upstream: {
               type: ['object', 'null'],
               description: 'The NUS feed as the 15-minute check last saw it. Null before its first run. `cronStale`: the checks have stopped.',
@@ -2673,9 +2714,14 @@ export function docsPage(phase: Phase): string {
 </html>`;
 }
 
-const ACCOUNTS_DOWN_503 = errorResponse('The account database could not be reached just now. Wait for `Retry-After` and try again.');
+const ACCOUNTS_DOWN_503 = { ...errorResponse('The account database could not be reached just now. Wait for `Retry-After` and try again.'), headers: RETRY_AFTER };
 const NO_SESSION_401 = errorResponse('No valid session: sign in first.', { error: 'sign in first' });
-const ACCOUNT_429 = errorResponse('Too many requests from this account; or, with a token that is no session, too many tries from this IP. Try again in a minute.');
+const ACCOUNT_429 = {
+  ...errorResponse('Too many requests from this account (over 120 a minute, across its devices); or, with a token that is no session, too many tries from this IP. Wait for `Retry-After`.'),
+  headers: RETRY_AFTER,
+};
+/** /auth/app/merge comes before the account's limit: only a token that is no session counts. */
+const BAD_TOKEN_429 = { ...errorResponse('A token that is no session, sent too often from this IP. Wait for `Retry-After`.', { error: 'too many attempts, try again in a minute' }), headers: RETRY_AFTER };
 const CROSS_SITE = 'The request came from another site with this browser’s session cookie.';
 
 type Operation = { security?: Record<string, unknown>[]; responses?: Record<string, { description: string }> };
@@ -2703,7 +2749,7 @@ function withCommonErrors(spec: Record<string, unknown>): Record<string, unknown
       if (needs || path.startsWith('/auth/') || path.startsWith('/pair')) r['503'] ??= ACCOUNTS_DOWN_503;
       if (session) {
         r['401'] ??= NO_SESSION_401;
-        r['429'] ??= ACCOUNT_429;
+        r['429'] ??= path === '/auth/app/merge' ? BAD_TOKEN_429 : ACCOUNT_429;
         if (method !== 'get' && op.security?.some((s) => 'cookie' in s)) {
           r['403'] = r['403'] ? { ...r['403'], description: `${r['403'].description} Or: ${CROSS_SITE}` } : errorResponse(CROSS_SITE);
         }

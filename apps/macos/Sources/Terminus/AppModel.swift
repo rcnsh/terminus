@@ -81,7 +81,7 @@ final class AppModel {
     var removeFailed: (key: String, message: String)?
     private var removeFailedTask: Task<Void, Never>?
 
-    /// "Notify me when to leave for class" (phase 7), mirrored from LeaveNotifier.
+    /// "Notify me when to leave for class", mirrored from LeaveNotifier.
     private(set) var leaveAlerts = LeaveNotifier.shared.enabled
 
     /// The pane Settings is asked to show, when it opens or now; it clears it
@@ -145,7 +145,7 @@ final class AppModel {
 
     func refreshLoginItem() { loginItem = SMAppService.mainApp.status }
 
-    // MARK: leave notifications (phase 7)
+    // MARK: leave notifications
 
     func setLeaveAlerts(_ on: Bool) {
         guard on else {
@@ -372,7 +372,8 @@ final class AppModel {
         }
     }
 
-    /// A card button: "On the D2", "Missed it", "Not going". Recorded for every
+    /// A card button: "Not going", "Not on campus today", "Back on campus" or
+    /// "Undo" (skipped, away, back, reset). Recorded for every
     /// device; the answer that comes back replaces the planned one.
     func signal(_ action: CardAction) {
         // "Not going" is the × on Today by another name: the same way off the
@@ -444,7 +445,7 @@ final class AppModel {
         if case .code(let c, _) = target, c == p.code { select(.plan) }
     }
 
-    // MARK: going later (phase 8.3)
+    // MARK: going later
 
     /// "Go later today at…": a one-off trip to what's on screen, planned like a class.
     func goLater(atMin: Int) async -> String? {
@@ -731,7 +732,7 @@ final class AppModel {
         Task { destinations = (try? await Api(token: TokenStore.read()).destinations()) ?? [] }
     }
 
-    // MARK: language (phase 10)
+    // MARK: language
 
     /// The account's language once per launch: one chosen on another device
     /// shows from the next launch; one chosen here first goes to the account.

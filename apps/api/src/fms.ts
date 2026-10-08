@@ -379,7 +379,9 @@ export function busesProblem(raw: unknown, buses: RawBus[] = normalizeBuses(raw)
   if (!rows.length) return null;
   if (!rows.some((r) => hasKey(r, ...BUS_PLATE_KEYS))) return 'no row has a plate';
   if (!rows.some((r) => hasKey(r, 'lat', 'latitude') && hasKey(r, 'lng', 'lon', 'longitude'))) return 'no row has a position';
-  if (!buses.length && !rows.some(noFixYet)) return 'no bus has a plate and a position it can read';
+  // Every row, not some: one bus without a fix yet among rows it can't read
+  // would otherwise pass the whole list off as "no buses".
+  if (!buses.length && !rows.every(noFixYet)) return 'no bus has a plate and a position it can read';
   return null;
 }
 
@@ -433,7 +435,6 @@ async function proxyCall(
 export const NO_REMINT_CODES = new Set(['10009', '10000']);
 
 /**
-/**
  * After a refused call: the session to try once more with, or null for no
  * retry. Only a refusal a token might fix gets one, and only with a token
  * other than the refused one (renewSession), so a code that keeps coming
@@ -447,8 +448,9 @@ async function retryable(env: Env, nowMs: number, session: Session, body: unknow
 /**
  * One call to the bus proxy, accepted. A rejection gets at most one retry
  * with a fresher token (retryable), unless its code says a token cannot
- * help; a second rejection THROWS. [onCall] is told of each request to NUS
- * (a re-mint included), so the timelapse recorder counts what a poll cost.
+ * help; a second rejection THROWS. [onCall] is told of each request this
+ * call makes to NUS, its token mints included (the first, on a cold token,
+ * and a re-mint), so the timelapse recorder counts what a poll cost.
  *
  * `sentAtMs` is when the call that answered went out, on nowMs's clock: the
  * feed's times are relative to then. After a mint, a refusal and a re-mint
@@ -459,7 +461,7 @@ async function acceptedCall(env: Env, endpoint: string, params: Record<string, s
   if (!fmsConfigured(env)) throw new Error('bus proxy not configured');
   const startMs = Date.now();
   const sinceNow = () => nowMs + Math.max(0, Date.now() - startMs);
-  const session = await getSession(env, nowMs);
+  const session = await getSession(env, nowMs, { onMint: onCall });
   onCall?.();
   let sentAtMs = sinceNow();
   let body = await proxyCall(env, session, endpoint, params);
@@ -529,12 +531,12 @@ export function hasList(data: unknown, keys: string[] = ARRIVAL_LIST_KEYS): bool
 /**
  * One stop's arrivals, fetched on demand through the edge cache (edgecache.ts).
  *
- * Keyed on the STOP CODE, not the request URL. The tile sends
- * getLastKnownLocation, whose coordinates jitter on every call, so a cache
- * keyed on the raw URL would never hit. Keying on the resolved stop is what
- * makes "one upstream call per stop per 15 seconds however hard the tile
- * refreshes" true per location, and it shares the entry between /next and
- * /trip. A refused version or key (NO_REMINT_CODES) trips the feed's
+ * Keyed on the STOP CODE, not the request URL. The apps and widgets send
+ * the phone's location, whose coordinates jitter from one call to the next,
+ * so a cache keyed on the raw URL would rarely hit. Keying on the resolved
+ * stop is what makes "one upstream call per stop per 15 seconds however
+ * often the clients refresh" true, and it shares the entry between /next
+ * and /trip. A refused version or key (NO_REMINT_CODES) trips the feed's
  * breaker, which stops every stop for breakerS: a fresh token can't fix it.
  */
 export async function getArrivals(
@@ -666,11 +668,12 @@ export async function fetchActiveBuses(env: Env, svc: string, nowMs: number = Da
 /**
  * One service's buses through the edge cache: one upstream call per service
  * per TTL.busesMs however many people watch it. The same quiet-under-failure
- * rules as getArrivals: a failed service waits failMemoS, the version
- * breaker stops everything, and a stale answer beats none. [onUpstream] is
- * called for each request this call itself makes to NUS (not a cache hit,
- * not a fetch another request started; a retry and its token are more), so
- * the timelapse recorder can count its real load.
+ * rules as getArrivals: a failed service waits failMemoS, the feed's
+ * breaker (a refused version or key, a 429 or 5xx, no answer at all) stops
+ * every service for breakerS, and a stale answer beats none. [onUpstream]
+ * is called for each request this call itself makes to NUS (not a cache
+ * hit, not a fetch or a mint another request started): the call, any token
+ * it mints, and a retry. So the timelapse recorder can count its real load.
  */
 export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, nowMs: number = Date.now(), onUpstream?: () => void): Promise<ActiveBuses> {
   // No stale race: the map polls every few seconds and would rather wait

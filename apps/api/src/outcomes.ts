@@ -156,8 +156,7 @@ export async function historySize(db: D1Database, userId: string): Promise<numbe
 
 /**
  * "Clear trip history": forgets every trip's outcome, so nothing is suggested
- * from them and a muted question is asked again. Choices already made
- * (trip_prefs) stay; each has its own Undo.
+ * from them. Choices already made (trip_prefs) stay; each has its own Undo.
  */
 export async function clearHistory(db: D1Database, userId: string): Promise<number> {
   const r = await db.prepare('DELETE FROM trip_outcomes WHERE user_id = ?').bind(userId).run();

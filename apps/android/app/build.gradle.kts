@@ -60,7 +60,7 @@ android {
             signingConfig = signingConfigs.findByName("release")
         }
     }
-    // Chinese can be chosen in the app (phase 10), whatever the phone's language,
+    // Chinese can be chosen in the app, whatever the phone's language,
     // so Play must not leave it out of an English phone's download.
     bundle {
         language { enableSplit = false }

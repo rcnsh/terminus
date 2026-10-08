@@ -914,7 +914,7 @@ function CardArea() {
       ${body}
       <div class="card-foot">
         <div class="updated hint">${when}</div>
-        ${to.kind !== 'nearby' && html`<${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} />`}
+        ${to.kind !== 'nearby' && html`<${Report} key=${JSON.stringify(to)} answer=${c.a ?? null} anonymous=${who?.anonymous === true} email=${who?.email ?? null} />`}
       </div>
     </section>
   `;

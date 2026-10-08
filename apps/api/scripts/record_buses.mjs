@@ -3,8 +3,9 @@
  * Records what the map is shown: /buses on a live site, every 5 s per
  * service, for a few minutes, with a throwaway anonymous account (deleted at
  * the end). Then checks each bus's `along` (metres along its route line):
- * between two readings on its line it may go back at most 60 m (GPS error)
- * and forward at most 100 m + 20 m/s since, as src/buses.ts tracks it. A
+ * between two readings on its line it may go back at most 60 m (GPS error:
+ * src/buses.ts's TRACK_BACK_M of 50 m, plus 10 m of slack) and forward at
+ * most 100 m + 20 m/s since, as src/buses.ts tracks it. A
  * jump outside that is a bus switching to the other side of the road, or
  * being drawn backwards. Prints a Markdown report.
  *
