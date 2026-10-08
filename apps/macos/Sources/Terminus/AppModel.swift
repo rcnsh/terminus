@@ -773,10 +773,15 @@ final class AppModel {
 
     private func nextDelay(failed: Bool) -> TimeInterval {
         failures = failed ? failures + 1 : 0
+        return Self.nextDelay(failures: failures, popoverOpen: popoverOpen, resting: resting, plan: plan, now: ServerClock.now)
+    }
+
+    /// How long the refresh loop waits, after `failures` failed refreshes
+    /// in a row (0: the last one answered). `now` is on the server's clock.
+    nonisolated static func nextDelay(failures: Int, popoverOpen: Bool, resting: Bool, plan: NextAnswer?, now: Date) -> TimeInterval {
         // Wi-Fi is often not up yet right after a wake: retry soon, then back off.
-        if failed && failures <= 3 { return [5, 15, 45][failures - 1] }
+        if failures > 0 && failures <= 3 { return [5, 15, 45][failures - 1] }
         var d: TimeInterval = popoverOpen ? 30 : resting ? 600 : 300
-        let now = ServerClock.now
         // nextChange: when the card's phase moves on by itself (the leave-by, a class start).
         for mark in [plan?.departure?.addingTimeInterval(31), plan?.planChanges, plan?.nextChange].compactMap({ $0 }) where mark > now {
             d = min(d, mark.timeIntervalSince(now))
