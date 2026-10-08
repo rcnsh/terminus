@@ -981,7 +981,7 @@ export async function handleMe(
 
   // Pages and lookups that cost a D1 read but need no session.
   if ((path === '/auth/verify' || path === '/auth/config') && env.RL_PUBLIC) {
-    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429);
+    if (!(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
   }
 
   if (path === '/auth/config' && req.method === 'GET') {
@@ -1132,7 +1132,7 @@ export async function handleMe(
 
   if (path === '/auth/approve') {
     if (req.method === 'GET') {
-      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429);
+      if (env.RL_PUBLIC && !(await env.RL_PUBLIC.limit({ key: `pub:${clientKey(req)}` })).success) return json({ error: 'too many requests, slow down' }, 429, { 'retry-after': '60' });
       // Like /auth/verify: GET only shows the page (mail scanners open every
       // link); the POST decides.
       const link = (url.searchParams.get('r') ?? '').replace(/[^A-Za-z0-9_-]/g, '');
