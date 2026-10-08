@@ -26,7 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.L
@@ -89,8 +89,18 @@ object Refresher {
     private const val DAY_MAX_AGE_MS = 60 * 60_000L
     private const val EXTRAS = "terminus-refresh-extras"
 
-    /** One refresh at a time in this process: a second waits, then finds the first's answer fresh. */
+    /**
+     * One request for the answer at a time in this process: a second waits,
+     * then finds the first's answer fresh. Held only for /me/next, not for
+     * the day plan or the chosen widgets that follow it.
+     */
     private val running = Mutex()
+    /**
+     * How long a [refresh] with seconds to spare (a push, an alarm, a tap)
+     * waits for one in flight before asking itself, so its own deadline
+     * still bounds it.
+     */
+    private const val FAST_WAIT_MS = 1_000L
 
     /**
      * Fetch the planned answer, cache it, and redraw every widget. With
@@ -101,16 +111,29 @@ object Refresher {
      * [force] (a push: the card changed since). Returns the fresh answer,
      * or null when there's none (signed out, offline, refused).
      */
-    suspend fun refresh(ctx: Context, fast: Boolean = false, extras: Boolean = true, force: Boolean = false): NextAnswer? =
-        running.withLock { refreshNow(ctx, fast, extras, force) }
+    suspend fun refresh(ctx: Context, fast: Boolean = false, extras: Boolean = true, force: Boolean = false): NextAnswer? {
+        // Set inside the block: a timeout just after lock() returns still unlocks below.
+        var locked = false
+        if (fast) withTimeoutOrNull(FAST_WAIT_MS) { running.lock(); locked = true } else { running.lock(); locked = true }
+        val (answer, more) = try {
+            refreshNow(ctx, fast, extras, force)
+        } finally {
+            if (locked) running.unlock()
+        }
+        // The day plan and the chosen widgets, once the lock is free: their
+        // requests don't hold up a push or an alarm waiting for the answer.
+        if (more) extras(ctx)
+        return answer
+    }
 
-    private suspend fun refreshNow(ctx: Context, fast: Boolean, extras: Boolean, force: Boolean): NextAnswer? {
+    /** The answer (null when there's none), and whether [extras] is to run now. */
+    private suspend fun refreshNow(ctx: Context, fast: Boolean, extras: Boolean, force: Boolean): Pair<NextAnswer?, Boolean> {
         val store = Store(ctx)
         val token = store.token
         if (token == null) {
             store.lastError = null
             redrawWidgets(ctx)
-            return null
+            return null to false
         }
         if (!force) {
             val error = store.lastError
@@ -120,7 +143,7 @@ object Refresher {
                 // As a fresh answer would: a leave check that lands here still posts or re-arms.
                 scheduleNext(ctx, recent.first, recent.second)
                 redrawWidgets(ctx)
-                return recent.first
+                return recent.first to false
             }
         }
         var fresh: NextAnswer? = null
@@ -137,7 +160,6 @@ object Refresher {
             // good one, and one overtaken by a newer answer gives way to it.
             val answer = store.saveAnswer(json, now, asked)
             fresh = answer
-            if (extras) keepDay(api, store, loc, now)
             store.lastError = null
             scheduleNext(ctx, answer, now)
             // No push address sent for this session yet (a new session, or a
@@ -153,7 +175,7 @@ object Refresher {
             if (e.status == 401) {
                 // Signed out everywhere on this phone, the widget saying why;
                 // unless the token was replaced meanwhile (signed in again).
-                if (!Session.rejected(ctx, token)) return null
+                if (!Session.rejected(ctx, token)) return null to false
             } else {
                 store.lastError = e.message
                 failed(ctx, store)
@@ -169,13 +191,13 @@ object Refresher {
             failed(ctx, store)
         }
         // Widgets showing a place or Nearby (phase 8.3) keep counting down too;
-        // not after a failure, which they would only repeat once each.
-        if (fresh != null) {
-            if (extras) chosen(ctx) else if (extrasDue(ctx, store)) queueExtras(ctx)
-        }
+        // not after a failure, which they would only repeat once each. With
+        // [extras], the caller runs them (and redraws) once the lock is free.
+        if (fresh != null && extras) return fresh to true
+        if (fresh != null && extrasDue(ctx, store)) queueExtras(ctx)
         WidgetModes.armChosen(ctx)
         redrawWidgets(ctx)
-        return fresh
+        return fresh to false
     }
 
     /** A failed refresh: the cached answer's heads-up, a redraw at its moments, and a retry. */
