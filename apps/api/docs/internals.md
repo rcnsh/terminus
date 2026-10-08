@@ -1461,6 +1461,28 @@ there.
 For local work, `node scripts/dev-stub.mjs` runs this Worker with a fake bus
 feed and a seeded test account.
 
+The apps call terminus.rcn.sh (the beta's: beta.terminus.rcn.sh), not
+terminus.run, which they show in links and text: the old address is the one
+kept for good, so an app never updated keeps working if the site moves.
+Android has the two as `API_BASE` and `SITE` in BuildConfig; the Mac as
+`Api.base` and `Api.site`, with `TerminusAPI` and `TerminusSite` in the
+beta's Info.plist. The Mac's Sparkle feed is on the old address too.
+
+Settings, About has a Developer group that picks the server from those built
+in (`Servers.kt`, `Servers` in `Api.swift`): the site's two addresses and,
+in a debug build, the dev stub (Android: `localhost:8787` through `adb
+reverse`, or `10.0.2.2:8787` from the emulator; Mac: `localhost:8787`). It's
+always there in debug and beta builds, and in a stable release after seven
+taps on the version. Nothing can add a server: a saved choice that isn't
+built in (dropped by a later version, or written by another app into the
+Mac's preferences) is ignored on every read, and the default used. The
+stub keeps its own sign-in, so a real token never goes to it over plain
+HTTP: Android sets the session aside (`Store.swapSession`, `token-site` and
+`token-local`) and restarts the app; the Mac keeps a token per folder
+(`terminus`, `terminus-beta`, `terminus-dev`) and relaunches. The site's two
+addresses are one server with one token, so switching between them keeps
+you signed in.
+
 ### Live buses on the map
 
 `/buses` shows each bus at a stop or between two (`src/buses.ts`). The feed
