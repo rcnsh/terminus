@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Release a version, from this Mac: the tests, the Android APKs, the signed
 # Mac DMG and its Sparkle appcast, all onto R2 with latest.json, then the tag
 # and the GitHub release with every file.
@@ -18,10 +18,13 @@
 # update would refuse to install over the real app, so each is checked
 # against what the apps trust before anything is uploaded.
 #
+# Each run starts from the lockfiles: node_modules and apps/macos/.build are
+# deleted and installed again, so nothing left in them is trusted.
+#
 # A dry run builds into build/dry-run/<version>; a release into
 # build/release/<version>. If a release stops after its first upload, it
 # says what's live and the commands that finish it.
-set -eu
+set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 DRY=0
@@ -41,6 +44,9 @@ CODE_RE='^[[:space:]]*versionCode = ([0-9]+)[[:space:]]*$'
 VERSION=$(sed -nE "s/$NAME_RE/\\1/p" "$GRADLE")
 ANDROID_BUILD=$(sed -nE "s/$CODE_RE/\\1/p" "$GRADLE")
 case "$VERSION" in *-*) die "$VERSION is a beta: release it with scripts/release-beta.sh" ;; esac
+# It names a directory that's deleted, R2 keys and the tag: digits only.
+VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+$'
+[[ $VERSION =~ $VERSION_RE ]] || die "versionName \"$VERSION\" in $GRADLE isn't a version like 2.1.0"
 PLIST=apps/macos/Support/Info.plist
 MAC_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")
 [ "$MAC_VERSION" = "$VERSION" ] || die "Android is $VERSION but the Mac app is $MAC_VERSION; bump both"
@@ -49,10 +55,9 @@ BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")
 
 grep -q "^TERMINUS_KEYSTORE=" "$HOME/.gradle/gradle.properties" 2>/dev/null || die "Android release key not configured (TERMINUS_KEYSTORE)"
 no_api_base
-# The terminus self-signed certificate, by its SHA-1: every version must carry
-# the same code identity, or macOS forgets the app's permissions and login item.
+# The terminus self-signed certificate (see has_sign_identity).
 export SIGN_IDENTITY=C4EE234DA75ED3CD7699A31394C276801F93C4A9
-security find-identity -p codesigning | grep -q "$SIGN_IDENTITY" || die "the terminus certificate isn't in the keychain: import ~/.terminus/mac-signing.p12"
+has_sign_identity
 SPARKLE_KEY="$HOME/.terminus/sparkle-ed25519.key"
 [ -f "$SPARKLE_KEY" ] || die "no Sparkle key at $SPARKLE_KEY"
 
@@ -86,6 +91,7 @@ build_goes_up "bump versionCode and CFBundleVersion"
 
 mkdir -p build
 echo "== terminus $VERSION (build $BUILD)"
+fresh_deps
 echo "== tests"
 # Not `pnpm test && echo`: under set -e a failure on the left of && does not
 # stop the script, so a failing suite would still build, upload and tag.
@@ -143,13 +149,16 @@ echo "Play bundle: $OUT/terminus-$VERSION.aab"
 echo "== mac"
 RELEASES="$RELEASES" PUBLISH=true scripts/package-mac.sh
 DMG="$OUT/terminus-$VERSION.dmg"
-# Installed Macs only take an update whose DMG this key signed.
-SIG=$("$ROOT/apps/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update" --ed-key-file "$SPARKLE_KEY" -p "$DMG")
-printf '%s' "$SIG" | grep -q . || die "sign_update gave no signature"
+# Installed Macs only take an update whose DMG this key signed. The tool is
+# checked again just before it gets the key: the builds since ran code too.
+sign_update_tool
+SIG=$("$SIGN_UPDATE" --ed-key-file "$SPARKLE_KEY" -p "$DMG")
+[ -n "$SIG" ] || die "sign_update gave no signature"
 sparkle_signed apps/macos/build/terminus.app "$SIG" "$DMG"
 MIN_OS=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$PLIST")
 # The appcast: one item, the new version. Sparkle compares CFBundleVersion.
 python3 scripts/appcast.py "$VERSION" "$BUILD" "$MIN_OS" "$SIG" "$DMG" "$SITE" stable > "$OUT/appcast.xml"
+sign_appcast "$OUT/appcast.xml"
 
 # latest.json names every current file. Its top-level version is what the
 # apps compare to offer an update, so it moves with both downloads at once.

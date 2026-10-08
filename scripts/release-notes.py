@@ -33,10 +33,16 @@ def git(*args: str) -> str:
     return subprocess.run(['git', *args], capture_output=True, text=True, check=True).stdout
 
 
-def escape_html(s: str) -> str:
-    """'<', '>' and '&' as text, outside `code`, where GitHub shows them as typed."""
+def escape_text(s: str) -> str:
+    """A commit subject shown as typed: HTML ('<', '>', '&') and Markdown's
+    links and images ('[', ']', with '\\' so an escape can't be undone)
+    escaped outside `code`, where GitHub already shows them as typed. A
+    subject can't add a link, an image or a tag to the release page."""
+    def plain(p: str) -> str:
+        p = p.replace('\\', '\\\\').replace('[', '\\[').replace(']', '\\]')
+        return p.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     parts = re.split(r'(`[^`]*`)', s)
-    return ''.join(p if p.startswith('`') else p.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') for p in parts)
+    return ''.join(p if p.startswith('`') else plain(p) for p in parts)
 
 
 def sha(path: str) -> str:
@@ -89,13 +95,13 @@ def notes(version: str, tag: str, prev: str, apk: str, mac: str, channel: str = 
                 continue  # the version bump itself
             if s.startswith('[ImgBot]') or s == 'optimize images':
                 continue  # image compression, nothing to see
-            s = escape_html(s[:1].upper() + s[1:])
+            s = escape_text(s[:1].upper() + s[1:])
             # The first sentence of each commit subject.
             changes.append('- ' + re.split(r'(?<=[a-z0-9)`"])\. (?=[A-Z`])', s, maxsplit=1)[0].rstrip('.'))
         if changes:
             body = '\n'.join(changes)
             if has_highlights:
-                out.append(f'<details>\n<summary><b>Every change since {prev}</b></summary>\n\n{body}\n\n</details>\n')
+                out.append(f'<details>\n<summary><b>Every change since {escape_text(prev)}</b></summary>\n\n{body}\n\n</details>\n')
             else:
                 out.append(f'## What changed\n\n{body}\n')
 
