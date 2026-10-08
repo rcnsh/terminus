@@ -253,7 +253,8 @@ internal fun MainScreen(state: UiState, vm: MainViewModel, insets: PaddingValues
                 // The last refresh failed: offline, the day plan kept for it stands in for a stale answer.
                 val offline = state.target == Target.Plan && state.paired && state.error != null && !state.loading
                 OfflinePlanOr(offline, state.answer, state.day) {
-                    AnswerCard(state.answer, state.loading, vm::signal, state.signalling, vm::choose, onPlace = { vm.select(Target.SavedPlace(it)) })
+                    // Undo once: in the bar while it's there for this trip, not on the card as well.
+                    AnswerCard(withoutLocalUndo(state.answer, state.removed?.key), state.loading, vm::signal, state.signalling, vm::choose, onPlace = { vm.select(Target.SavedPlace(it)) })
                 }
             }
         }

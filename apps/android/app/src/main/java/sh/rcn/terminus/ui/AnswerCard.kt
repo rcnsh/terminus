@@ -219,8 +219,21 @@ private fun stale(answer: NextAnswer): Boolean {
 }
 
 /**
+ * [answer] without the server's "Undo: going to UTown" for [undoing], the
+ * trip whose Undo bar is at the foot of the screen (a swipe off Today, or
+ * "Not going" on this phone): Undo once, in the bar. A skip made anywhere
+ * else (another device, the leave notification) keeps the card's undo, the
+ * only one there is.
+ */
+internal fun withoutLocalUndo(answer: NextAnswer?, undoing: String?): NextAnswer? {
+    val card = answer?.card ?: return answer
+    if (undoing == null || card.actions.none { it.id == "reset" && it.trip == undoing }) return answer
+    return answer.copy(card = card.copy(actions = card.actions.filterNot { it.id == "reset" && it.trip == undoing }))
+}
+
+/**
  * The server's buttons (plans only: "Not going", "Not on campus today",
- * "Back on campus"), in its order: the first one filled, the rest outlined. Then
+ * "Back on campus", undo), in its order: the first one filled, the rest outlined. Then
  * anything terminus has to suggest.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -229,9 +242,7 @@ internal fun Actions(answer: NextAnswer, onAction: (CardAction) -> Unit, busy: B
     // "Catch the D2 at Museum", and you don't know where Museum is: walking
     // directions there, as the one filled button; the server's go beside it.
     val walkTo = answer.card?.walkTo
-    // The server's "Undo: going to UTown" isn't shown: "Not going" offers
-    // Undo in the bar at the foot of the screen, as a swipe off Today does.
-    val all = answer.card?.actions.orEmpty().filter { it.id != "reset" }
+    val all = answer.card?.actions.orEmpty()
     // "Not going" and "Not on campus today" are the same no for this class
     // and for the whole day. With both on the card they share one menu, so
     // they don't crowd out what the card is for.
