@@ -58,6 +58,9 @@ func everyGoldenAnswerDecodes(name: String) throws {
     if present("ride") { #expect(card.ride != nil, "card.ride") }
     if present("upcoming") { #expect(card.upcoming != nil, "card.upcoming") }
     if present("suggestion") { #expect(card.suggestion != nil, "card.suggestion") }
+    // So does a change of bus, read leniently inside them.
+    if (sent["journey"] as? [String: Any])?["change"] is [String: Any] { #expect(card.journey?.change != nil, "journey.change") }
+    if (sent["ride"] as? [String: Any])?["change"] is [String: Any] { #expect(card.ride?.change != nil, "ride.change") }
     #expect(card.actions?.count ?? 0 == (sent["actions"] as? [Any])?.count ?? 0, "card.actions")
 }
 
@@ -401,6 +404,21 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     } }
     #expect(odd.card?.journey?.walkText == nil)
     #expect(odd.card?.journey?.title == j.title)
+}
+
+@Test func aTripThatChangesBusesCarriesTheSecondBus() throws {
+    let j = try #require(try golden("change-class").card?.journey)
+    #expect(j.bus?.svc == "K")
+    // A version that draws one bus still reads the change in its words.
+    #expect(j.rideText == "14 min ride · change at Kent Vale to the 09:42 P · 14 min ride")
+    let c = try #require(j.change)
+    #expect(c.bus.svc == "P")
+    #expect(c.firstRideText == "14 min ride · off at Kent Vale")
+    #expect(c.changeText == "Change at Kent Vale · 5 min wait")
+    #expect(try golden("class-bus").card?.journey?.change == nil)
+    let r = try #require(try golden("change-riding").card?.ride)
+    #expect(r.stops.last?.name == "Kent Vale")
+    #expect(r.change?.text == "Then P at 09:42 from Kent Vale")
 }
 
 @Test func theRideGoesFromBoardingToGettingOff() throws {
