@@ -7,7 +7,7 @@
 
 import { Icon, focusSoon, html, reducedMotion, useEffect, useHash, useLayoutEffect, useMedia, useRef, useState, useStore } from '../assets/ui.js';
 import { api, forgetAccountHere, t } from './dom.js';
-import { edit, profile, stopName } from './profile.js';
+import { edit, lists, profile, reloadProfile, stopName } from './profile.js';
 import { About, Account, Appearance, Devices, Feedback, Favourites, Language, Page, Timetable, Trips, deviceCount, importDone, importOffer, theme } from './settings-pages.js';
 import { cardStyle, styleName } from './journey.js';
 import { Celestial, Horizon } from './sky.js';
@@ -113,6 +113,20 @@ export function Settings({ me, inApp = false, Notify = null, notifyOn = false, s
   // Somewhere else in the web app (Now, Map): Settings stays as it is.
   const elsewhere = Boolean(listHash) && !hash.startsWith(listHash);
   const want = inAddress ?? (wide ? 'trips' : null);
+
+  // Back on this page while Settings is on screen: the account again, so a
+  // device added or a change made on another one shows here.
+  const away = useRef(false);
+  away.current = elsewhere;
+  useEffect(() => {
+    const back = () => {
+      if (document.visibilityState !== 'visible' || away.current) return;
+      reloadProfile().catch(() => {});
+      lists.set((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', back);
+    return () => document.removeEventListener('visibilitychange', back);
+  }, []);
 
   const root = useRef(null);
   const side_ = useRef(null);

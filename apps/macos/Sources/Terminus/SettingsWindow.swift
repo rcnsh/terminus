@@ -59,6 +59,9 @@ struct SettingsWindow: View {
     @State private var visited: [SettingsPane] = []
     /// Set while the back arrow changes the pane, so that isn't recorded as a visit.
     @State private var going = false
+    /// This window, and whether its first load is done, to load again when it's come back to.
+    @State private var window: NSWindow?
+    @State private var loaded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(app: AppModel, setup: SetupModel = SetupModel(), pane: SettingsPane = .trips) {
@@ -115,6 +118,17 @@ struct SettingsWindow: View {
             setup.onSaved = { Task { _ = await app.refresh() } }
             await setup.load()
             await setup.loadDevices()
+            loaded = true
+        }
+        // Come back to while open: the account again, so a device added or a
+        // change made on another one shows here.
+        .background { WindowReader { if window !== $0 { window = $0 } } }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { n in
+            guard loaded, let window, n.object as? NSWindow === window else { return }
+            Task {
+                await setup.load()
+                await setup.loadDevices()
+            }
         }
     }
 
