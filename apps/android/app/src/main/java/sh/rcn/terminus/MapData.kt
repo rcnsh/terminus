@@ -297,17 +297,6 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
     }
 }
 
-/** A stop's board from `/arrivals`. [available] false: no times from the feed. */
-data class StopBoard(val available: Boolean, val rows: List<BoardRow>) {
-    companion object {
-        fun parse(o: JSONObject): StopBoard {
-            val b = o.optJSONArray("board") ?: JSONArray()
-            val rows = (0 until b.length()).map { i -> parseBoardRow(b.getJSONObject(i)) }
-            return StopBoard(o.optBoolean("available"), rows.filter { it.etaS != null })
-        }
-    }
-}
-
 /** GeoJSON for the map's sources. */
 object MapGeoJson {
     fun routes(campus: CampusMap): String = collection(

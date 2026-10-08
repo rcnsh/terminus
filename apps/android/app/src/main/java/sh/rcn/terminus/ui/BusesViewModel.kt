@@ -17,6 +17,7 @@ import sh.rcn.terminus.CampusMap
 import sh.rcn.terminus.Line
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapFiles
+import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Session
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.parseInstant
@@ -39,7 +40,10 @@ data class BusesUi(
     val nearestState: Nearest = Nearest.Loading,
     /** The nearest stop is from a location; false: from the home stop. */
     val located: Boolean = false,
-    /** Boards by stop code: pinned stops, opened ones, the twins across the road. */
+    /**
+     * Boards by stop code: pinned stops, opened ones, the twins across the road.
+     * A failed refresh keeps the last one; the screen shows it [Board.aged].
+     */
     val boards: Map<String, Board> = emptyMap(),
     /** Stops whose board couldn't be fetched (offline), until one is. */
     val failed: Set<String> = emptySet(),
@@ -127,7 +131,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val json = api(token).nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
             val asOf = json.optString("asOf").takeIf { it.isNotEmpty() }?.let(::parseInstant)
-            val stops = parseNearby(json).map { Board.of(it, asOf) }
+            val got = ServerClock.now()
+            val stops = parseNearby(json).map { Board.of(it, asOf).copy(gotMs = got) }
             val first = stops.firstOrNull()
             _state.update { s ->
                 s.copy(
@@ -155,7 +160,8 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         mark(code)
         try {
             val board = api(token).board(code, publicBuses)
-            _state.update { it.copy(boards = it.boards + (code to board.copy(code = board.code.ifEmpty { code })), failed = it.failed - code) }
+            val got = board.copy(code = board.code.ifEmpty { code }, gotMs = ServerClock.now())
+            _state.update { it.copy(boards = it.boards + (code to got), failed = it.failed - code) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -186,7 +192,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         val token = store.token ?: return
         mark("line:$key")
         try {
-            val line = api(token).line(svc, from)
+            val line = api(token).line(svc, from).copy(gotMs = ServerClock.now())
             _state.update { it.copy(lines = it.lines + (key to line), lineFailed = it.lineFailed - key) }
         } catch (e: CancellationException) {
             throw e
@@ -195,7 +201,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
             // The stop isn't on this service (or an older server without /line): the line without it.
             if (from != null && e.status == 400) {
                 try {
-                    val line = api(token).line(svc)
+                    val line = api(token).line(svc).copy(gotMs = ServerClock.now())
                     _state.update { it.copy(lines = it.lines + (key to line), lineFailed = it.lineFailed - key) }
                     return
                 } catch (e: CancellationException) {

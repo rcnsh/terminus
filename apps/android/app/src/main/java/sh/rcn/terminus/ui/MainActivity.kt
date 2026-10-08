@@ -376,6 +376,8 @@ private fun Tabs(
                     Tab.Map -> Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
                         // The account's places, for "Save as place" on a stop.
                         LaunchedEffect(Unit) { if (acct.profile == null) account.refresh() }
+                        // Before the stop sheet asks, so its board has them too.
+                        map.publicBuses = acct.profile?.publicBuses == true
                         MapScreen(
                             map,
                             onGoThere = { code, name ->

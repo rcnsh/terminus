@@ -96,7 +96,7 @@ object Spoken {
      */
     fun eta(etaS: Int?, quality: String, withQuality: Boolean = true): String? {
         val s = etaS ?: return null
-        if (s < 45) return L.s(R.string.map_arriving)
+        if (s < BusTimes.ARRIVING_S) return L.s(R.string.map_arriving)
         val m = minutes(s.toLong())
         return when {
             quality == "scheduled" -> L.s(if (withQuality) R.string.a11y_eta_timetable else R.string.a11y_eta_about, m)

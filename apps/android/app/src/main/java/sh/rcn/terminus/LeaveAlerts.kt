@@ -367,13 +367,17 @@ object LeaveAlerts {
 
 /**
  * An alarm at [at] that runs in Doze too: exact when "Alarms & reminders" is
- * allowed, otherwise inexact, which Doze may run a few minutes late.
+ * allowed, otherwise inexact, which Doze may run a few minutes late. Without
+ * [wake] it doesn't wake the phone: with the screen off it runs when the
+ * screen next comes on, which is all a widget's redraw or refresh needs.
+ * The leave alerts, the live notification and the server's `refreshAt` wake it.
  */
 // Exact only when canScheduleExactAlarms() says so; lint can't see the check.
 @android.annotation.SuppressLint("MissingPermission")
-internal fun AlarmManager.setWhileIdle(at: Long, pi: PendingIntent) {
-    if (canScheduleExactAlarms()) setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-    else setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+internal fun AlarmManager.setWhileIdle(at: Long, pi: PendingIntent, wake: Boolean = true) {
+    val type = if (wake) AlarmManager.RTC_WAKEUP else AlarmManager.RTC
+    if (canScheduleExactAlarms()) setExactAndAllowWhileIdle(type, at, pi)
+    else setAndAllowWhileIdle(type, at, pi)
 }
 
 class LeaveReceiver : BroadcastReceiver() {

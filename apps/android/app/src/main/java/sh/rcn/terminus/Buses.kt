@@ -30,7 +30,12 @@ data class Board(
     val oppositeAcross: Boolean = true,
     /** [opposite]'s full name, for "This stop | Prince George's Park". */
     val oppositeName: String? = null,
+    /** When this phone got the board, on the server's clock ([ServerClock]); null: not known. See [BusTimes.aged]. */
+    val gotMs: Long? = null,
 ) {
+    /** The board as it stands at [nowMs]: its rows [BusTimes.aged]. */
+    fun aged(nowMs: Long): Board = if (gotMs == null) this else copy(rows = rows.map { BusTimes.aged(it, gotMs, nowMs) })
+
     companion object {
         fun parse(o: JSONObject): Board {
             val stop = o.optJSONObject("stop") ?: JSONObject()
@@ -80,7 +85,13 @@ data class Line(
     val running: Boolean = true,
     val stopped: String? = null,
     val resumesAtMs: Long? = null,
+    /** When this phone got the line, on the server's clock; null: not known. See [BusTimes.aged]. */
+    val gotMs: Long? = null,
 ) {
+    /** The line as it stands at [nowMs]: your stop's row [BusTimes.aged]. */
+    fun aged(nowMs: Long): Line =
+        if (gotMs == null || here?.row == null) this else copy(here = here.copy(row = BusTimes.aged(here.row, gotMs, nowMs)))
+
     /**
      * The line as it's drawn, top to bottom: every stop with the buses at
      * it, and between two stops a row for the buses on the way. A bus whose
@@ -142,10 +153,43 @@ sealed interface LineItem {
 
 /** How the tab shows one time. */
 object BusTimes {
-    /** Under a minute away: "Arriving", not "0 min". */
-    const val ARRIVING_S = 60
+    /** Under this long away: "Arriving", not "0 min" (the server's own threshold, format.ts). */
+    const val ARRIVING_S = 45
 
-    /** Rounded to the nearest minute, never below 1 (under a minute is [ARRIVING_S]). */
+    /** The tab refreshes the page in view this often (the API caches arrivals 15 s). */
+    const val REFRESH_MS = 15_000L
+
+    /**
+     * Times got longer ago than this have missed a refresh at least: counted
+     * down here from when they came, and no longer shown as live.
+     */
+    const val OLD_MS = 2 * REFRESH_MS
+
+    /**
+     * Row [r] from an answer this phone got at [gotMs], as it stands at
+     * [nowMs] (both on the server's clock). The server counts its times down
+     * to when it answered, so they're counted from [gotMs], never from the
+     * feed's `asOf` (that would take the same seconds off twice). Once the
+     * answer is [OLD_MS] old (refreshes failing), its times are counted down,
+     * a bus over a minute past has no time, and a live time says "Last
+     * known": nothing old passes for live. As the web's `aged()`.
+     */
+    fun aged(r: BoardRow, gotMs: Long, nowMs: Long): BoardRow {
+        val ms = nowMs - gotMs
+        if (r.etaS == null || ms <= OLD_MS) return r
+        val s = (ms / 1000).toInt()
+        val left = r.etaS - s
+        return r.copy(
+            etaS = if (left > -60) maxOf(0, left) else null,
+            // Worded here from etaS, not the server's words from then.
+            eta = null,
+            quality = if (r.quality == "live") "stale" else r.quality,
+            laterText = null,
+            later = r.later.map { it.copy(etaS = it.etaS - s, eta = null) }.filter { it.etaS > 0 },
+        )
+    }
+
+    /** Rounded to the nearest minute, never below 1 (under [ARRIVING_S] is "Arriving"). */
     fun minutes(etaS: Int): Int = maxOf(1, (etaS + 30) / 60)
 
     /** The later buses as minutes, soonest first: "then 12, 20 min". Only the ones the API gave. */

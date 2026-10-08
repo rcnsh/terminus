@@ -646,7 +646,7 @@ open class ApiError(val status: Int, message: String) : IOException(sentence(mes
 
 /**
  * 426: the server no longer serves this version (KV `config:minClient`).
- * Nothing is asked again for hours ([Outdated]); the app offers the update.
+ * Nothing is asked again for a while ([Outdated]); the app offers the update.
  */
 class UpdateRequired(message: String) : ApiError(426, message)
 
@@ -707,13 +707,11 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     /** One service's live buses, for the map. */
     suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/buses?svc=${enc(svc)}")) }
 
-    /** What's coming at one stop, for the map's stop sheet. */
-    suspend fun arrivals(stop: String): StopBoard = parsing { StopBoard.parse(request("GET", "/arrivals?stop=${enc(stop)}")) }
-
     /**
-     * The same board whole, for the Buses tab: every row, the stop's name and
-     * its twin, and the services not running now (`stopped=1`), greyed. With
-     * [public], the public buses there too (the profile's `publicBuses`).
+     * What's coming at one stop, for the Buses tab and the map's stop sheet:
+     * every row, the stop's name and its twin, and the services not running
+     * now (`stopped=1`), greyed. With [public], the public buses there too
+     * (the profile's `publicBuses`).
      */
     suspend fun board(stop: String, public: Boolean = false): Board =
         parsing { Board.parse(request("GET", "/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else "")) }
@@ -1112,7 +1110,8 @@ object Quiet {
  * comes or this version is replaced.
  */
 object Outdated {
-    private const val HOLD_MS = 6 * 3_600_000L
+    /** Half an hour, as the Mac app holds. */
+    private const val HOLD_MS = 30 * 60_000L
     private const val KEY_AT = "outdated-at"
     private const val KEY_VERSION = "outdated-version"
 

@@ -100,6 +100,9 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun api(token: String?) = Api(token)
 
+    /** The profile's "public buses": a stop's sheet has them too, as its Buses tab board does. */
+    var publicBuses = false
+
     /** Nothing to draw the map with: no stops and routes, or no style, and the last try for it failed. */
     private fun failed(s: MapUi) = (s.campus == null && campusFailed) || (s.style == null && styleFailed)
 
@@ -225,7 +228,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         val token = store.token ?: return
         fun open() = (_state.value.sheet as? MapSheet.Stop)?.code == code
         try {
-            val board = api(token).board(code)
+            val board = api(token).board(code, publicBuses)
             if (open()) _state.update { it.copy(board = board, boardFailed = false, boardError = false) }
         } catch (e: CancellationException) {
             throw e
