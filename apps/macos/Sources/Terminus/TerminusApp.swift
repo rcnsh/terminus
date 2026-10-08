@@ -102,23 +102,34 @@ private struct MenuBarLabel: View {
 
 /// A fixed "now" for snapshot renders, which can't run a TimelineView.
 struct FixedNowKey: EnvironmentKey { static let defaultValue: Date? = nil }
+/// Whether anyone can see it tick: false while the popover is closed.
+struct TickingKey: EnvironmentKey { static let defaultValue = true }
 extension EnvironmentValues {
     var fixedNow: Date? {
         get { self[FixedNowKey.self] }
         set { self[FixedNowKey.self] = newValue }
     }
+    var ticking: Bool {
+        get { self[TickingKey.self] }
+        set { self[TickingKey.self] = newValue }
+    }
 }
 
 /// Re-renders its content every `every` seconds with the current time, on
 /// the server's clock (ServerClock): it's compared with the answer's times.
+/// Not while the popover is closed (`ticking`): its views stay alive then,
+/// and a countdown nobody sees would redraw every second all day.
 struct Ticking<Content: View>: View {
     let every: TimeInterval
     @ViewBuilder let content: (Date) -> Content
     @Environment(\.fixedNow) private var fixedNow
+    @Environment(\.ticking) private var ticking
 
     var body: some View {
         if let fixedNow {
             content(fixedNow)
+        } else if !ticking {
+            content(ServerClock.now)
         } else {
             TimelineView(.periodic(from: .now, by: every)) { ctx in content(ServerClock.now(local: ctx.date)) }
         }
@@ -166,6 +177,7 @@ struct Popover: View {
             }
             Footer(model: model)
         }
+        .environment(\.ticking, model.popoverOpen)
         .frame(width: 360)
         .fixedSize(horizontal: false, vertical: true)
         // The menu bar window grows to fit taller content but never shrinks

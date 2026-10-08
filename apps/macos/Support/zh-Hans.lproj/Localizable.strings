@@ -166,7 +166,7 @@
 "The sign-in was cancelled from the email. If that was you, send a new one." = "登录已在邮件中取消。如果是你取消的，请重新发送。";
 "The trip home" = "回家的行程";
 "This Mac" = "这台 Mac";
-"This Mac was signed out of your account. Sign in at %@/account and pair it again." = "这台 Mac 已从你的账户退出登录。请在 %@/account 登录并重新配对。";
+"This Mac was signed out of your account. Sign in again to carry on." = "这台 Mac 已从你的账户退出登录。请重新登录以继续使用。";
 "Today" = "今天";
 "Try again" = "重试";
 "Turn on leave alerts" = "开启出发提醒";
@@ -386,4 +386,7 @@
 "Destinations" = "目的地";
 "Email" = "邮箱";
 "NUSMods share link" = "NUSMods 分享链接";
+"This Mac's setup was removed after a long time unused. Start again or sign in." = "这台 Mac 的设置因长时间未使用已被删除。请重新开始或登录。";
+"That sign-in was already used. Send a new one." = "这次登录已经用过了。请重新发送。";
+"That code expired. Choose Add a device for a new one." = "这个配对代码已过期。请选择“添加设备”获取新的代码。";
 "Update terminus to keep using it." = "请更新 terminus 以继续使用。";

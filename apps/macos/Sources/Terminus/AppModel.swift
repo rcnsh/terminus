@@ -19,6 +19,15 @@ final class AppModel {
     var paired = false
     var pairing = false
     var pairError: String?
+    /// Why this Mac is back on the sign-in screen when it didn't sign out
+    /// itself, on every way in; gone once a new sign-in starts.
+    var signedOutReason: String?
+    /// Bumped whenever the token changes (signed in, signed out): a reply to
+    /// a request made with the old one is dropped, not shown for this account.
+    private var session = 0
+    /// The server answered 426: this version is too old for it. Polling stops
+    /// (Outdated) and the popover offers the update.
+    var updateRequired = false
 
     /// An email sign-in waiting for its approval: the number to show.
     var signInWaiting: (email: String, match: Int)?
@@ -50,14 +59,20 @@ final class AppModel {
         didSet { UserDefaults.standard.set(try? JSONEncoder().encode(added), forKey: "addedPlaces") }
     }
 
-    /// Always the planned trip: this is what the menu bar shows.
-    var plan: NextAnswer? { answers[.plan] }
+    /// Always the planned trip: this is what the menu bar shows. Kept apart
+    /// from the other tabs' answers, so one of those arriving doesn't redraw
+    /// the menu bar.
+    private(set) var plan: NextAnswer?
+    private var otherAnswers: [Target: NextAnswer] = [:]
     var target: Target = .plan
     /// The last answer per view. Switching views shows the cached one at once
     /// and refreshes it in place, instead of blanking the popover (which made
     /// it collapse and then grow back when the data arrived).
-    var answers: [Target: NextAnswer] = [:]
-    var shown: NextAnswer? { answers[target] }
+    var answers: [Target: NextAnswer] {
+        get { var a = otherAnswers; a[.plan] = plan; return a }
+        set { plan = newValue[.plan]; otherAnswers = newValue.filter { $0.key != .plan } }
+    }
+    var shown: NextAnswer? { target == .plan ? plan : otherAnswers[target] }
     var showNearby = false
     var nearby: [NearbyStop]?
     var loading = false
@@ -103,7 +118,18 @@ final class AppModel {
     /// The answer on screen when the form opened; the refresh loop may replace it meanwhile.
     private var reported: Data?
     var popoverOpen = false {
-        didSet { if popoverOpen { refreshLoginItem(); kick() } else { Updater.shared.popoverClosed() } }
+        didSet {
+            guard popoverOpen != oldValue else { return }
+            if popoverOpen {
+                // Someone is clicking it: whatever said the Mac was asleep or
+                // locked, it isn't now (a missed wake would stop refreshes).
+                asleep = false; screensAsleep = false; locked = false
+                refreshLoginItem()
+                kick()
+            } else {
+                Updater.shared.popoverClosed()
+            }
+        }
     }
     var needsLocation: Bool { !isSnapshot && locator.undecided }
     /// A render for screenshots: native controls (text fields, menus), which
@@ -170,7 +196,13 @@ final class AppModel {
     private var clockTask: Task<Void, Never>?
 
     private let locator = Locator()
-    private var paused = false
+    /// Each on its own: the Mac asleep, its screens asleep, the screen locked.
+    /// Refreshes wait while any of them is so, and come back once none is.
+    private var asleep = false
+    private var screensAsleep = false
+    private var locked = false
+    private var paused: Bool { asleep || screensAsleep || locked }
+    private var resumeTask: Task<Void, Never>?
     private var loop: Task<Void, Never>?
 
     /// `snapshot` builds an inert model for rendering previews: no refresh
@@ -190,12 +222,17 @@ final class AppModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30), tolerance: .seconds(5))
                 guard let self, !self.paused else { continue }
-                // Only when the title would change: every assignment redraws the menu bar.
-                let now = ServerClock.now
-                if self.menuTitle(at: now) != self.menuTitle(at: self.clock) || self.isOld(self.plan, at: now) != self.isOld(self.plan, at: self.clock) {
-                    self.clock = now
-                }
+                self.catchUpClock()
             }
+        }
+    }
+
+    /// The clock moved on, set only when the title or the dimming would
+    /// change: every assignment redraws the menu bar.
+    private func catchUpClock() {
+        let now = ServerClock.now
+        if menuTitle(at: now) != menuTitle(at: clock) || isOld(plan, at: now) != isOld(plan, at: clock) {
+            clock = now
         }
     }
 
@@ -246,6 +283,7 @@ final class AppModel {
         guard !pairing else { return }
         pairing = true
         pairError = nil
+        signedOutReason = nil
         Task {
             do {
                 let token = try await Api(token: nil).pair(code: code, name: deviceName)
@@ -254,6 +292,7 @@ final class AppModel {
                     pairError = L("Couldn't save the pairing on this Mac. Check that there's enough disk space, then pair again.")
                     return
                 }
+                session += 1
                 paired = true
                 pairing = false
                 if locator.undecided { locator.ask() }
@@ -352,10 +391,13 @@ final class AppModel {
     /// unless the caller shows it itself).
     @discardableResult
     private func send(_ action: CardAction, token: String, showingError: Bool = true) async -> String? {
+        let gen = session
         do {
             let api = Api(token: token)
             let a = try await api.signal(action)
-            answers[.plan] = a
+            // Signed out meanwhile: the reply is the old account's.
+            guard gen == session else { return nil }
+            plan = a
             updated = ServerClock.now
             planFetched = Date()
             error = nil
@@ -363,9 +405,12 @@ final class AppModel {
             dayFetched = Date()
             // A failed fetch keeps the plan there was (offline falls back to
             // it), and the next refresh asks again.
-            if let d = try? await api.day() { day = d } else { dayFetched = nil }
+            let d = try? await api.day()
+            guard gen == session else { return nil }
+            if let d { day = d } else { dayFetched = nil }
             return nil
         } catch {
+            guard gen == session else { return nil }
             let message = failureMessage(error, otherwise: L("Offline"))
             if showingError { self.error = message }
             return message
@@ -398,6 +443,7 @@ final class AppModel {
         guard !startingAnon else { return }
         startingAnon = true
         signInError = nil
+        signedOutReason = nil
         Task {
             defer { startingAnon = false }
             do {
@@ -406,6 +452,7 @@ final class AppModel {
                     signInError = L("Couldn't save the sign-in on this Mac. Check that there's enough disk space, then try again.")
                     return
                 }
+                session += 1
                 anonymous = true
                 needsSetup = true
                 paired = true
@@ -449,15 +496,19 @@ final class AppModel {
     /// "Go later today at…": a one-off trip to what's on screen, planned like a class.
     func goLater(atMin: Int) async -> String? {
         guard let token = TokenStore.read(), target != .plan else { return nil }
+        let gen = session
         do {
             let a = try await Api(token: token).once(target, atMin: atMin)
-            answers[.plan] = a
+            guard gen == session else { return nil }
+            plan = a
             updated = ServerClock.now
             planFetched = Date()
             LeaveNotifier.shared.update(a)
             select(.plan)
             dayFetched = Date()
-            if let d = try? await Api(token: token).day() { day = d } else { dayFetched = nil }
+            let d = try? await Api(token: token).day()
+            guard gen == session else { return nil }
+            if let d { day = d } else { dayFetched = nil }
             return nil
         } catch {
             return failureMessage(error, otherwise: L("Couldn't add it. Check your connection."))
@@ -472,12 +523,14 @@ final class AppModel {
     func signIn(email: String) {
         signingIn = true
         signInError = nil
+        signedOutReason = nil
         signInTask?.cancel()
         signInTask = Task {
             do {
                 // Adding an email to this Mac's own account: it's sent, so the server keeps or merges its setup.
                 anonToken = anonymous ? TokenStore.read() : nil
                 let r = try await Api(token: anonToken).signInStart(email: email, name: deviceName)
+                if Task.isCancelled { return }
                 signingIn = false
                 signInRequest = r
                 signInWaiting = (email, r.match)
@@ -498,13 +551,23 @@ final class AppModel {
             do {
                 let p = try await Api(token: nil).signInCode(r, code: code)
                 signingIn = false
+                // Approved meanwhile by the email's link, or given up on.
+                guard signInRequest == r else { return }
                 if p.status == "approved" {
                     signInTask?.cancel()
                     signedIn(p)
                 }
             } catch {
                 signingIn = false
+                guard signInRequest == r else { return }
                 signInError = failureMessage(error)
+                // Too many wrong codes, or out of time: this request is over,
+                // so the wait ends with that, not "cancelled from the email".
+                if let e = error as? ApiError, e.state == "denied" || e.state == "expired" {
+                    signInTask?.cancel()
+                    signInRequest = nil
+                    signInWaiting = nil
+                }
             }
         }
     }
@@ -548,12 +611,17 @@ final class AppModel {
 
     private func finishSignIn(_ p: SignInPoll) {
         anonToken = nil
-        guard let token = p.token, TokenStore.write(token) else {
-            signInWaiting = nil
+        signInWaiting = nil
+        // Approved, but the token was handed out already (an earlier poll whose reply was lost).
+        guard let token = p.token else {
+            signInError = L("That sign-in was already used. Send a new one.")
+            return
+        }
+        guard TokenStore.write(token) else {
             signInError = L("Couldn't save the sign-in on this Mac. Check that there's enough disk space, then try again.")
             return
         }
-        signInWaiting = nil
+        session += 1
         // A brand-new account has nothing to show yet.
         needsSetup = p.outcome == "created"
         anonymous = false
@@ -574,8 +642,12 @@ final class AppModel {
         let until = Date().addingTimeInterval(15 * 60)
         while Date() < until {
             try? await Task.sleep(for: .seconds(3))
-            if Task.isCancelled { return }
-            guard let p = try? await Api(token: nil).signInPoll(r) else { continue }
+            if Task.isCancelled || signInRequest != r { return }
+            let p = try? await Api(token: nil).signInPoll(r)
+            // The code typed meanwhile may have signed in already (or the wait
+            // was given up): this answer is for a request that's over.
+            if Task.isCancelled || signInRequest != r { return }
+            guard let p else { continue }
             switch p.status {
             case "pending":
                 continue
@@ -583,16 +655,20 @@ final class AppModel {
                 signedIn(p)
                 return
             case "denied":
+                signInRequest = nil
                 signInWaiting = nil
                 signInError = L("The sign-in was cancelled from the email. If that was you, send a new one.")
                 return
             default:
                 // Expired, or already used.
+                signInRequest = nil
                 signInWaiting = nil
                 signInError = L("That request expired. Send a new one.")
                 return
             }
         }
+        guard signInRequest == r else { return }
+        signInRequest = nil
         signInWaiting = nil
         signInError = L("That request expired. Send a new one.")
     }
@@ -606,7 +682,19 @@ final class AppModel {
         Task { try? await Api(token: token).logout() }
     }
 
+    /// Everything of the account's on this Mac goes, and any request still
+    /// in flight for it is dropped when it answers (`session`).
     private func clearLocal() {
+        session += 1
+        signedOutReason = nil
+        updateRequired = false
+        signInTask?.cancel()
+        signInRequest = nil
+        signInWaiting = nil
+        chooseSetup = nil
+        anonToken = nil
+        langSynced = false
+        Clock.pref = "auto"
         paired = false
         needsSetup = false
         anonymous = false
@@ -729,7 +817,8 @@ final class AppModel {
     /// shows from the next launch; one chosen here first goes to the account.
     private var langSynced = false
     private func syncLang(_ api: Api) async {
-        guard !langSynced, let data = try? await api.profile(), var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+        let gen = session
+        guard !langSynced, let data = try? await api.profile(), gen == session, var p = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
         langSynced = true
         guard let mine = Lang.followAccount(p["lang"] as? String ?? "auto"), let body = try? JSONSerialization.data(withJSONObject: { p["lang"] = mine; return p }()) else { return }
         _ = try? await api.saveProfile(body)
@@ -750,32 +839,53 @@ final class AppModel {
 
     // MARK: refresh loop
 
+    /// How a refresh went: the loop retries sooner after a failure, and the
+    /// leave reminders are confirmed only by a fetch that really happened.
+    enum Fetch { case done, failed, skipped }
+
     /// 30 s while the popover is open, 5 min otherwise, 10 min while
-    /// resting; nothing while asleep or locked. Also right after the bus
-    /// leaves or the plan changes, and soon after a failure. The API caches
-    /// each stop for 15 s, so faster shows nothing new.
+    /// resting, twice as long in Low Power Mode; nothing while asleep,
+    /// locked or offline. Also right after the bus leaves or the plan
+    /// changes, and soon after a failure. The API caches each stop for 15 s,
+    /// so faster shows nothing new.
     private func start() {
         loop?.cancel()
         loop = Task {
             while !Task.isCancelled {
-                var ok = true
+                var result = Fetch.skipped
                 if !paused && paired {
-                    ok = await refresh()
+                    if online {
+                        result = await refresh()
+                    } else if error == nil {
+                        // Nothing to ask without a network; the loop starts again when it's back.
+                        error = L("Offline")
+                    }
                     // The leave reminders say whether their times still stand.
-                    if ok { LeaveNotifier.shared.confirmed(plan) } else { LeaveNotifier.shared.unconfirmed(since: updated) }
+                    switch result {
+                    case .done: LeaveNotifier.shared.confirmed(plan)
+                    case .failed: LeaveNotifier.shared.unconfirmed(since: updated)
+                    case .skipped: if !online { LeaveNotifier.shared.unconfirmed(since: updated) }
+                    }
                 }
-                try? await Task.sleep(for: .seconds(nextDelay(failed: !ok)))
+                try? await Task.sleep(for: .seconds(nextDelay(failed: result == .failed)))
             }
         }
     }
 
     private var failures = 0
+    /// How long the server last asked to be left alone (Retry-After on a 429 or 503).
+    private var serverWait: TimeInterval?
 
     private func nextDelay(failed: Bool) -> TimeInterval {
         failures = failed ? failures + 1 : 0
+        // Too old for the server: every ask would be refused until an update.
+        if updateRequired { return Outdated.holdS }
+        // Never sooner than the server asked, up to an hour.
+        let floor = failed ? min(serverWait ?? 0, 3600) : 0
         // Wi-Fi is often not up yet right after a wake: retry soon, then back off.
-        if failed && failures <= 3 { return [5, 15, 45][failures - 1] }
-        var d: TimeInterval = popoverOpen ? 30 : resting ? 600 : 300
+        if failed && failures <= 3 { return max([5, 15, 45][failures - 1], floor) }
+        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        var d: TimeInterval = (popoverOpen ? 30 : resting ? 600 : 300) * (lowPower ? 2 : 1)
         let now = ServerClock.now
         // nextChange: when the card's phase moves on by itself (the leave-by, a class start).
         for mark in [plan?.departure?.addingTimeInterval(31), plan?.planChanges, plan?.nextChange].compactMap({ $0 }) where mark > now {
@@ -783,7 +893,7 @@ final class AppModel {
         }
         // A leave-by that keeps sliding (a late bus) would otherwise bring the
         // refresh down to seconds; the server's own trip engine waits 30 s too.
-        return max(d, 30)
+        return max(d, lowPower ? 60 : 30, floor)
     }
 
     private func kick() { start() }
@@ -803,9 +913,10 @@ final class AppModel {
         return marks.contains { $0 <= now }
     }
 
-    /// Returns false when the fetch failed, so the loop can retry sooner.
+    /// `.failed` when the fetch failed, so the loop can retry sooner;
+    /// `.skipped` when nothing was fetched (one already running, signed out).
     @discardableResult
-    func refresh() async -> Bool {
+    func refresh() async -> Fetch {
         guard let token = TokenStore.read() else {
             // Only a missing file means unpaired; a read that failed for
             // another reason must not strand the Mac on the pairing screen.
@@ -813,13 +924,13 @@ final class AppModel {
                 log.notice("no token; showing pairing")
                 paired = false
             }
-            return true
+            return .skipped
         }
         // One in flight already (say, one a tab switch just cancelled): run
         // again once it's done, or the new tab would wait out the whole delay.
         guard !refreshing else {
             rerun = true
-            return true
+            return .skipped
         }
         refreshing = true
         defer {
@@ -830,9 +941,13 @@ final class AppModel {
             }
         }
         log.debug("refreshing against \(Api.base, privacy: .public)")
+        // Signed out or in again while a request is out: its answer is dropped.
+        let gen = session
         let api = Api(token: token)
         if !langSynced { Task { await syncLang(api) } }
-        let fix = await locator.current(maxAge: popoverOpen ? 120 : 600)
+        // Resting with the popover closed, nothing is planned until the day
+        // starts: no need to wake CoreLocation for it.
+        let fix = popoverOpen || !resting ? await locator.current(maxAge: popoverOpen ? 120 : 600) : nil
         let acc = fix.flatMap { fixUncertaintyM(accuracy: $0.horizontalAccuracy, ageS: -$0.timestamp.timeIntervalSinceNow) }
         // An invalid fix is no location at all.
         let loc = acc == nil ? nil : fix
@@ -843,22 +958,31 @@ final class AppModel {
             // What's on screen first; the plan (for the menu bar) after.
             let onPlan = !showNearby && target == .plan
             if showNearby {
-                nearby = try await api.nearby(lat: lat, lon: lon, acc: acc)
+                let n = try await api.nearby(lat: lat, lon: lon, acc: acc)
+                guard gen == session else { return .skipped }
+                nearby = n
             } else if target != .plan {
-                answers[target] = try await api.next(target, lat: lat, lon: lon, acc: acc)
+                let t = target
+                let a = try await api.next(t, lat: lat, lon: lon, acc: acc)
+                guard gen == session else { return .skipped }
+                otherAnswers[t] = a
             }
             if onPlan || planDue(at: ServerClock.now) {
                 let p = try await api.next(.plan, lat: lat, lon: lon, acc: acc)
-                answers[.plan] = p
+                guard gen == session else { return .skipped }
+                plan = p
                 planFetched = Date()
-                places = p.places ?? []
+                let newPlaces = p.places ?? []
+                if newPlaces != places { places = newPlaces }
                 // A favourite removed elsewhere leaves no tab to show it under.
                 if case .place(let key) = target, !places.contains(where: { $0.key == key }) { target = .plan }
                 LeaveNotifier.shared.update(p)
             }
-            error = nil
+            if error != nil { error = nil }
+            if updateRequired { updateRequired = false }
+            serverWait = nil
             updated = ServerClock.now
-            clock = ServerClock.now
+            catchUpClock()
             // Today: while the popover is open, at most every 2 minutes; and,
             // for when the Mac goes offline (OfflineDay), whenever the one kept
             // is another day's or an hour old.
@@ -866,32 +990,52 @@ final class AppModel {
             if (popoverOpen && dayAge > 120) || dayAge > 3600 || day?.date != OfflineDay.sgtDate(ServerClock.now) {
                 dayFetched = Date()
                 // A failed fetch keeps the plan there was: it's what offline falls back to.
-                if let d = try? await api.day(lat: lat, lon: lon, acc: acc) { day = d }
+                let d = try? await api.day(lat: lat, lon: lon, acc: acc)
+                guard gen == session else { return .skipped }
+                if let d { day = d }
             }
-            return true
+            return .done
+        } catch where gen != session {
+            // Signed out, or in again, while this was in flight: not this account's.
+            return .skipped
         } catch let e as ApiError where e.status == 401 && TokenStore.read() != token {
             // Signed in again while this was in flight: the new token stands.
-            return false
+            return .skipped
         } catch let e as ApiError where e.status == 401 {
+            // Adding an email to this Mac's own account: the server may remove
+            // that account a moment before it hands over the new token
+            // (applogin.ts). Not signed out; ask again shortly.
+            if anonymous && (signInRequest != nil || anonToken != nil || chooseSetup != nil) { return .failed }
+            // Worded before clearLocal forgets which kind of account it was:
+            // one without an email goes after 60 days unused.
+            let reason = anonymous
+                ? L("This Mac's setup was removed after a long time unused. Start again or sign in.")
+                : L("This Mac was signed out of your account. Sign in again to carry on.")
             TokenStore.write(nil)
             clearLocal()
-            pairError = L("This Mac was signed out of your account. Sign in at %@/account and pair it again.", Api.siteHost)
-            return true
+            signedOutReason = reason
+            return .skipped
+        } catch let e as ApiError where e.updateRequired {
+            log.notice("426: this version is too old for the server")
+            updateRequired = true
+            error = e.message
+            return .failed
         } catch let e as ApiError {
             log.error("api error \(e.status): \(e.message, privacy: .public)")
+            serverWait = e.retryAfter
             error = e.message
-            return false
+            return .failed
         } catch is DecodingError {
             // Not the network: the API sent something this version can't read.
             error = update != nil ? L("Update terminus to continue") : L("terminus sent something this version can't read.")
-            return false
+            return .failed
         } catch {
             // kick() restarts the loop and cancels a refresh in flight; that
             // is not an outage.
-            if Task.isCancelled || (error as? URLError)?.code == .cancelled { return true }
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled { return .skipped }
             log.error("refresh failed: \(error.localizedDescription, privacy: .public)")
             self.error = L("Offline")
-            return false
+            return .failed
         }
     }
 
@@ -899,35 +1043,58 @@ final class AppModel {
     /// A refresh was asked for while one was running.
     private var rerun = false
 
-    /// Paused while the Mac sleeps, its screens sleep or it's locked; back
-    /// with a refresh and the clock caught up when any of them ends.
+    /// Paused while the Mac sleeps, its screens sleep or it's locked, each
+    /// kept apart: back with one refresh and the clock caught up once none
+    /// of them is so (the lock screen after a wake still counts as locked).
     private func observeSleep() {
         let ws = NSWorkspace.shared.notificationCenter
         let dist = DistributedNotificationCenter.default()
-        let pauses: [(NotificationCenter, Notification.Name)] = [
-            (ws, NSWorkspace.willSleepNotification),
-            (ws, NSWorkspace.screensDidSleepNotification),
-            (dist, .init("com.apple.screenIsLocked")),
+        let events: [(NotificationCenter, Notification.Name, Pause, Bool)] = [
+            (ws, NSWorkspace.willSleepNotification, .sleep, true),
+            (ws, NSWorkspace.didWakeNotification, .sleep, false),
+            (ws, NSWorkspace.screensDidSleepNotification, .screens, true),
+            (ws, NSWorkspace.screensDidWakeNotification, .screens, false),
+            (dist, .init("com.apple.screenIsLocked"), .lock, true),
+            (dist, .init("com.apple.screenIsUnlocked"), .lock, false),
         ]
-        let resumes: [(NotificationCenter, Notification.Name)] = [
-            (ws, NSWorkspace.didWakeNotification),
-            (ws, NSWorkspace.screensDidWakeNotification),
-            (dist, .init("com.apple.screenIsUnlocked")),
-        ]
-        for (center, name) in pauses {
+        for (center, name, flag, on) in events {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.paused = true
-                    // Nothing refreshes them until it's back.
-                    LeaveNotifier.shared.unconfirmed(since: self?.updated)
-                }
+                MainActor.assumeIsolated { self?.set(flag, on) }
             }
         }
-        for (center, name) in resumes {
-            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.paused = false; self?.clock = ServerClock.now; self?.kick() }
+    }
+
+    private enum Pause { case sleep, screens, lock }
+
+    private func set(_ flag: Pause, _ on: Bool) {
+        let was = paused
+        switch flag {
+        case .sleep: asleep = on
+        case .screens: screensAsleep = on
+        case .lock: locked = on
+        }
+        // Waking, the screen may still be locked: ask rather than assume,
+        // as the lock notice may have come before the sleep, or not at all.
+        if !on && flag != .lock { locked = Self.screenLocked() }
+        if paused {
+            resumeTask?.cancel()
+            // Nothing refreshes them until it's back.
+            LeaveNotifier.shared.unconfirmed(since: updated)
+        } else if was {
+            // A wake brings several of these at once (the Mac, its screens,
+            // the unlock): one refresh, after the last of them.
+            resumeTask?.cancel()
+            resumeTask = Task {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, !paused else { return }
+                catchUpClock()
+                kick()
             }
         }
+    }
+
+    private static func screenLocked() -> Bool {
+        (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool ?? false
     }
 
     private let pathMonitor = NWPathMonitor()
