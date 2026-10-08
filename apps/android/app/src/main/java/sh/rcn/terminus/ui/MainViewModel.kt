@@ -63,7 +63,6 @@ data class UiState(
     val leaveAlerts: Boolean = false,
     /** The live notification during your day. */
     val liveUpdates: Boolean = false,
-    val detectTrips: Boolean = false,
     /** An "Is this wrong?" report on its way, why it failed, and where it was sent for. */
     val reportSending: Boolean = false,
     val reportResult: String? = null,
@@ -97,7 +96,7 @@ data class PendingPair(val code: String, val account: String)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
     private val _state = MutableStateFlow(
-        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), detectTrips = store.detectTrips && Locator.hasPrecise(app), day = store.lastDay()?.first, swipeHint = !store.swipedToday, swipePeek = !store.swipedToday && store.swipePeeks < SWIPE_PEEKS)
+        UiState(paired = store.paired, places = store.lastAnswer()?.first?.places.orEmpty(), added = store.addedPlaces, leaveAlerts = store.leaveAlerts && LeaveAlerts.canNotify(app), liveUpdates = store.liveUpdates && LeaveAlerts.canNotify(app), day = store.lastDay()?.first, swipeHint = !store.swipedToday, swipePeek = !store.swipedToday && store.swipePeeks < SWIPE_PEEKS)
             .let { s -> seen()?.let { (a, at) -> s.copy(answers = mapOf(Target.Plan to a), fetchedAt = at) } ?: s },
     )
 
@@ -206,13 +205,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(error = L.s(R.string.cant_add)) }
             }
         }
-    }
-
-    /** "Notice when I board". Needs the live notification, so turning it on turns that on too. */
-    fun setDetectTrips(on: Boolean) {
-        store.detectTrips = on
-        _state.update { it.copy(detectTrips = on) }
-        if (on && !store.liveUpdates) setLiveUpdates(true) else if (on) LiveService.watch(getApplication()) else LiveService.start(getApplication())
     }
 
     fun dismissPairLink() = _state.update { it.copy(pendingPair = null) }

@@ -5,7 +5,9 @@ import android.content.Intent
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -15,10 +17,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -32,16 +36,20 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,25 +59,33 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collapse
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -129,7 +145,15 @@ import sh.rcn.terminus.MapStop
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Slides
 import sh.rcn.terminus.Spoken
+import sh.rcn.terminus.BusStrip
 import kotlin.math.abs
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.layout.layout
 
 /** The map file's extent (MAP_BOUNDS in apps/api/src/map.ts), with room to spare. */
 private val PAN_LIMIT = BoundingBox(west = 103.735, south = 1.26, east = 103.85, north = 1.352)
@@ -238,7 +262,10 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                     when (sheet) {
                         is MapSheet.Stop -> campus.stop(sheet.code)?.let { StopSheet(it, ui, campus, actions) }
-                        is MapSheet.Bus -> ui.buses.firstOrNull { it.id == sheet.id }?.let { BusSheet(it, ui.selected.orEmpty(), actions.closeSheet) }
+                        is MapSheet.Bus -> ui.buses.firstOrNull { it.id == sheet.id }?.let { bus ->
+                            val svc = ui.selected.orEmpty()
+                            BusSheet(bus, svc, campus.routes[svc]?.color?.color() ?: Color.Gray, actions.closeSheet)
+                        }
                     }
                 }
             }
@@ -584,7 +611,7 @@ internal fun SvcTag(svc: String, color: Color, onClick: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge: String? = null, content: @Composable () -> Unit) {
+private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, content: @Composable () -> Unit) {
     // A pane of its own, named for what's in it, and a screen reader's focus
     // moved to its title when it opens or shows another stop or bus.
     val focus = remember { FocusRequester() }
@@ -598,16 +625,7 @@ private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
-                        // A bus's number plate by its name, like the plate on the bus.
-                        badge?.let {
-                            Spacer(Modifier.width(8.dp))
-                            Surface(shape = RoundedCornerShape(5.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = Color.Transparent) {
-                                Text(it, modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp), style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace, letterSpacing = 0.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
+                    Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
                     sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
                 IconButton(onClick = onClose) {
@@ -619,81 +637,318 @@ private fun SheetSurface(title: String, sub: String?, onClose: () -> Unit, badge
     }
 }
 
+/**
+ * A tapped bus: its service, where it is or is going next, and where its line
+ * ends; its plate, whether it's moving and how full it is; and, dragged or
+ * tapped open, the stops ahead of it on a strip of its line. What's ahead is
+ * the server's ([LiveBus.upcoming]): the app doesn't walk the route.
+ */
 @Composable
-private fun crowdWord(c: String?): String? = when (c) {
-    "low" -> stringResource(R.string.crowd_low)
-    "medium" -> stringResource(R.string.crowd_medium)
-    "high" -> stringResource(R.string.crowd_high)
-    else -> null
-}
-
-@Composable
-private fun BusSheet(bus: LiveBus, svc: String, onClose: () -> Unit) {
-    val sub = when {
+private fun BusSheet(bus: LiveBus, svc: String, color: Color, onClose: () -> Unit) {
+    val c = MaterialTheme.colorScheme
+    val strip = BusStrip.of(bus)
+    val title = when {
         bus.at != null -> stringResource(R.string.map_bus_at, bus.at)
-        bus.stretch != null && bus.nextStop != null -> stringResource(R.string.map_bus_between, bus.stretch.last, bus.nextStop)
-        else -> null
+        bus.nextStop != null -> stringResource(R.string.map_bus_next, bus.nextStop)
+        else -> stringResource(R.string.a11y_bus, svc)
     }
-    SheetSurface(stringResource(R.string.map_bus_title, svc), sub, onClose, badge = bus.plate) {
-        bus.nextStop?.let { SheetRow(stringResource(R.string.map_next_stop), it) }
-        crowdWord(bus.crowd)?.let { SheetRow(stringResource(R.string.map_crowding), it) }
+    var expanded by rememberSaveable(bus.id) { mutableStateOf(false) }
+    // A pane of its own, named for its bus, and a screen reader's focus moved
+    // to its title when it opens or shows another bus.
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(bus.id) { runCatching { focus.requestFocus() } }
+    val paneName = stringResource(R.string.a11y_bus, svc)
+    // Dragged up past a few dp, the stops open; down, they close.
+    var dragged by remember { mutableFloatStateOf(0f) }
+    val drag = rememberDraggableState { dragged += it }
+    val dragMin = with(LocalDensity.current) { 24.dp.toPx() }
+    Surface(
+        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).semantics { paneTitle = paneName },
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        color = c.surface,
+        shadowElevation = 8.dp,
+    ) {
+        Column(Modifier.verticalScroll(rememberScrollState()).animateContentSize()) {
+            Column(
+                Modifier.draggable(
+                    drag,
+                    Orientation.Vertical,
+                    enabled = strip.any,
+                    onDragStopped = {
+                        if (dragged < -dragMin) expanded = true else if (dragged > dragMin) expanded = false
+                        dragged = 0f
+                    },
+                ),
+            ) {
+                // The grab handle; the "Stops ahead" row does the same for a screen reader.
+                Box(
+                    Modifier.fillMaxWidth().height(20.dp).then(if (strip.any) Modifier.clearAndSetSemantics {}.clickable { expanded = !expanded } else Modifier),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(width = 36.dp, height = 4.dp).background(c.outlineVariant, RoundedCornerShape(2.dp)))
+                }
+                Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SvcPill(svc, color)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.focusRequester(focus).focusable().semantics { heading() })
+                        bus.towards?.let { Text(stringResource(R.string.map_bus_towards, it), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant) }
+                    }
+                    IconButton(onClick = onClose) {
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close))
+                    }
+                }
+                BusFacts(bus)
+            }
+            if (strip.any) {
+                StopsAheadToggle(expanded) { expanded = !expanded }
+                if (expanded) BusStripList(strip, color)
+            }
+            Spacer(Modifier.height(16.dp))
+        }
     }
 }
 
+/** A service's code, large, on its colour: the bus sheet's lead. */
 @Composable
-private fun SheetRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.weight(1f))
-        Text(value, fontWeight = FontWeight.SemiBold)
+private fun SvcPill(svc: String, color: Color) {
+    val said = stringResource(R.string.a11y_bus, svc)
+    Box(Modifier.heightIn(min = 44.dp).widthIn(min = 48.dp).background(color, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp).semantics { contentDescription = said }, contentAlignment = Alignment.Center) {
+        Text(svc, color = inkOn(color), fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, maxLines = 1)
+    }
+}
+
+/** The bus's plate, whether it's moving, and how full it is. */
+@Composable
+private fun BusFacts(bus: LiveBus) {
+    val c = MaterialTheme.colorScheme
+    val muted = c.onSurfaceVariant
+    FlowRow(
+        Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The number plate, like the one on the bus.
+        bus.plate?.let {
+            Surface(shape = RoundedCornerShape(5.dp), border = BorderStroke(1.dp, c.outline), color = Color.Transparent) {
+                Text(it, modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp), style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace, letterSpacing = 0.5.sp, color = muted)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(c.outline, CircleShape))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(if (bus.moving) R.string.map_bus_moving else R.string.map_bus_stopped), style = MaterialTheme.typography.bodyMedium, color = muted)
+        }
+        val level = when (bus.crowd) {
+            "low" -> 1
+            "medium" -> 2
+            "high" -> 3
+            else -> 0
+        }
+        if (level > 0) {
+            val word = stringResource(
+                when (level) {
+                    1 -> R.string.map_bus_seats_free
+                    2 -> R.string.buses_busy
+                    else -> R.string.buses_packed
+                },
+            )
+            val fill = when (level) {
+                1 -> goodColor()
+                2 -> c.tertiary
+                else -> c.error
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Three rising bars, as many filled as it's full; the word says it.
+                Row(Modifier.clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
+                    for ((i, h) in listOf(6.dp, 10.dp, 14.dp).withIndex()) {
+                        Box(Modifier.size(width = 4.dp, height = h).background(if (i < level) fill else c.outlineVariant, RoundedCornerShape(1.dp)))
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(word, style = MaterialTheme.typography.bodyMedium, color = muted)
+            }
+        }
+    }
+}
+
+/** "Stops ahead", opening and closing the strip. */
+@Composable
+private fun StopsAheadToggle(expanded: Boolean, onToggle: () -> Unit) {
+    val c = MaterialTheme.colorScheme
+    val turn by animateFloatAsState(if (expanded) -90f else 90f, label = "chevron")
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    Row(
+        Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onToggle)
+            .semantics { if (expanded) collapse { onToggle(); true } else expand { onToggle(); true } }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.map_bus_stops_ahead), style = MaterialTheme.typography.labelLarge, color = c.onSurfaceVariant, modifier = Modifier.weight(1f))
+        // The chevron is mirrored right to left, so it turns the other way there.
+        Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = c.onSurfaceVariant, modifier = Modifier.rotate(if (rtl) -turn else turn))
+    }
+}
+
+/** One row of the strip: what's on the line beside it. */
+private enum class StripMark { Passed, Bus, Here, Next, Ahead }
+
+/** The stops ahead of a bus as a strip of its line, the bus on it. */
+@Composable
+private fun BusStripList(strip: BusStrip, color: Color) {
+    val c = MaterialTheme.colorScheme
+    val muted = c.onSurfaceVariant
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        val rows = buildList {
+            strip.passed?.let { add(StripMark.Passed to it) }
+            if (strip.between) add(StripMark.Bus to null) else add(StripMark.Here to strip.here)
+            strip.next?.let { add(StripMark.Next to it) }
+            for (s in strip.after) add(StripMark.Ahead to s)
+        }
+        rows.forEachIndexed { i, (mark, name) ->
+            val first = i == 0
+            val last = i == rows.lastIndex && strip.more == 0
+            Row(Modifier.fillMaxWidth().height(if (mark == StripMark.Next) 34.dp else 30.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+                StripRail(color, mark, first, last)
+                Spacer(Modifier.width(10.dp))
+                when (mark) {
+                    StripMark.Bus -> Text(stringResource(R.string.map_bus_on_its_way), style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.weight(1f))
+                    else -> Text(
+                        name.orEmpty(),
+                        style = if (mark == StripMark.Next) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (mark == StripMark.Next) FontWeight.Bold else null,
+                        color = if (mark == StripMark.Passed) muted.copy(alpha = 0.7f) else c.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                when (mark) {
+                    StripMark.Passed -> Text(stringResource(R.string.map_bus_passed), style = MaterialTheme.typography.bodyMedium, color = muted.copy(alpha = 0.7f))
+                    StripMark.Here -> Text(stringResource(R.string.map_bus_here), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    StripMark.Next -> Text(stringResource(R.string.map_bus_next_tag), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    else -> Unit
+                }
+            }
+        }
+        if (strip.more > 0) {
+            Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                StripRail(color, null, first = false, last = true)
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.map_bus_more, strip.more), style = MaterialTheme.typography.bodyMedium, color = muted)
+            }
+        }
+    }
+}
+
+/**
+ * The line beside one row of the strip, in the service's [color] (grey up to
+ * the bus, where it's been), and the row's stop dot or the bus. [mark] null:
+ * just the line, fading out ("+3 more"). As the Buses tab's line, smaller.
+ */
+@Composable
+private fun StripRail(color: Color, mark: StripMark?, first: Boolean, last: Boolean) {
+    val paper = MaterialTheme.colorScheme.surface
+    val been = MaterialTheme.colorScheme.outlineVariant
+    Canvas(Modifier.width(20.dp).fillMaxHeight()) {
+        val x = size.width / 2
+        val y = size.height / 2
+        val w = 3.dp.toPx()
+        // Above the bus (the passed stop's row, and the bus's own top half) is grey.
+        val above = if (mark == StripMark.Passed || mark == StripMark.Bus || mark == StripMark.Here) been else color
+        val below = if (mark == StripMark.Passed) been else color
+        if (!first) drawLine(above, Offset(x, 0f), Offset(x, y), w)
+        if (mark == null) {
+            drawLine(color.copy(alpha = 0.35f), Offset(x, 0f), Offset(x, size.height / 2), w)
+            return@Canvas
+        }
+        if (!last) drawLine(below, Offset(x, y), Offset(x, size.height), w)
+        when (mark) {
+            StripMark.Bus, StripMark.Here -> {
+                drawCircle(paper, 9.dp.toPx(), Offset(x, y))
+                drawCircle(color, 7.dp.toPx(), Offset(x, y))
+            }
+            else -> {
+                val r = if (mark == StripMark.Next) 6.dp.toPx() else 4.5.dp.toPx()
+                val ring = if (mark == StripMark.Passed) been else color
+                drawCircle(paper, r, Offset(x, y))
+                drawCircle(ring, r, Offset(x, y), style = Stroke(if (mark == StripMark.Next) 3.dp.toPx() else 2.dp.toPx()))
+            }
+        }
     }
 }
 
 /** Saving a stop as a place, from the account's profile (Settings' favourites). */
 internal class PlacesForMap(val savedAs: (code: String) -> String?, val full: () -> Boolean, val save: (code: String, name: String) -> Unit)
 
+/** The rows a stop's sheet shows before "Show more", so the map stays in view. */
+private const val PEEK_ROWS = 3
+
+/**
+ * A stop: its board as the Buses tab has it, the first few rows until asked
+ * for the rest, and ways to go there. A row tapped shows its service on the map.
+ */
 @Composable
 private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapActions) {
     val places = actions.places
     val ctx = LocalContext.current
-    SheetSurface(stop.name, null, actions.closeSheet) {
+    var all by remember(stop.code) { mutableStateOf(false) }
+    SheetSurface(stop.name, stop.longName?.takeIf { it != stop.name }, actions.closeSheet) {
         val board = ui.board
-        when {
-            ui.boardFailed -> Text(stringResource(R.string.map_times_need_connection), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            board == null -> Text(stringResource(R.string.refreshing), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            board.rows.isEmpty() -> Text(stringResource(if (board.available) R.string.map_no_buses_due else R.string.map_no_times), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (r in board.rows) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        SvcTag(r.svc, campus.routes[r.svc]?.color?.color() ?: Color.Gray)
-                        Spacer(Modifier.weight(1f))
-                        // The server's words ("4 min", "~6 min", "now"); for an older
-                        // server, worded as Nearby words them, so the two never differ.
-                        // Said in words: "about 6 minutes, timetable", where the screen has "~6 min".
-                        val said = Spoken.eta(r.etaS, r.quality)
-                        Text(
-                            r.eta ?: eta(r.etaS, r.quality),
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = if (said == null) Modifier else Modifier.semantics { contentDescription = said },
-                        )
-                    }
+        val note = when {
+            ui.boardFailed -> R.string.map_times_need_connection
+            board == null -> R.string.refreshing
+            board.rows.isEmpty() -> if (board.available) R.string.map_no_buses_due else R.string.map_no_times
+            else -> null
+        }
+        if (note != null || board == null) {
+            Text(stringResource(note ?: R.string.refreshing), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // No times to list them by: the services here, each showing its line.
+            if (note != R.string.refreshing) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (svc in stop.services) SvcTag(svc, campus.routes[svc]?.color?.color() ?: Color.Gray) { if (ui.selected != svc) actions.choose(svc) }
+                }
+            }
+        } else {
+            val rows = runningFirst(board.rows)
+            val more = rows.size - PEEK_ROWS
+            val colors = remember(campus) { campus.routes.mapValues { it.value.color } }
+            // Edge to edge, as on the Buses tab: out past the sheet's own padding.
+            Column(Modifier.layout { m, c ->
+                val wide = c.maxWidth + 32.dp.roundToPx()
+                val p = m.measure(c.copy(minWidth = wide, maxWidth = wide))
+                layout(c.maxWidth, p.height) { p.place(-16.dp.roundToPx(), 0) }
+            }) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                BoardRows(
+                    if (all || more <= 1) rows else rows.take(PEEK_ROWS),
+                    colors,
+                    compact = true,
+                    clickLabel = { stringResource(R.string.on_the_map, it) },
+                ) { if (ui.selected != it.svc) actions.choose(it.svc) }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+            if (more > 1) {
+                TextButton(onClick = { all = !all }, modifier = Modifier.offset(x = (-12).dp)) {
+                    Text(if (all) stringResource(R.string.map_show_fewer) else stringResource(R.string.map_show_more, more))
                 }
             }
         }
-        Text(stringResource(R.string.map_services_here), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (svc in stop.services) SvcTag(svc, campus.routes[svc]?.color?.color() ?: Color.Gray) { if (ui.selected != svc) actions.choose(svc) }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { actions.goThere(stop.code, stop.name) }) { Text(stringResource(R.string.map_go_there)) }
-            OutlinedButton(onClick = {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = { actions.goThere(stop.code, stop.name) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.map_go_there)) }
+            OutlinedIconButton(onClick = {
                 val uri = "https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lon}&travelmode=walking".toUri()
                 runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-            }) { Text(stringResource(R.string.map_walking_directions)) }
-            val saved = places.savedAs(stop.code)
-            when {
-                saved != null -> OutlinedButton(onClick = {}, enabled = false) { Text(stringResource(R.string.map_saved_as)) }
-                places.full() -> OutlinedButton(onClick = {}, enabled = false) { Text(stringResource(R.string.map_places_full)) }
-                else -> OutlinedButton(onClick = { places.save(stop.code, stop.name) }) { Text(stringResource(R.string.map_save_place)) }
+            }) { Icon(painterResource(R.drawable.ic_walk), contentDescription = stringResource(R.string.map_walking_directions)) }
+            val saved = places.savedAs(stop.code) != null
+            val full = !saved && places.full()
+            OutlinedIconButton(onClick = { places.save(stop.code, stop.name) }, enabled = !saved && !full) {
+                Icon(
+                    painterResource(if (saved) R.drawable.ic_star_filled else R.drawable.ic_star),
+                    contentDescription = stringResource(if (saved) R.string.map_saved_as else if (full) R.string.map_places_full else R.string.map_save_place),
+                    tint = if (saved) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                )
             }
         }
         Spacer(Modifier.height(4.dp))

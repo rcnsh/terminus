@@ -79,7 +79,6 @@
     "remind": true,
     "suggestion": null,
     "ride": null,
-    "detected": false,
     "walkTo": {
       "name": "COM 3",
       "lat": 1.294431,

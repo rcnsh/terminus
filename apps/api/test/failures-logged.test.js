@@ -1,7 +1,7 @@
 /**
  * Faults that must cost only what they touch: Turnstile's own error, a push
- * address the export can't read, a metric that won't write, a ride time or
- * a trip's state that can't be stored or read. Each is logged or reported
+ * address the export can't read, a metric that won't write, or a trip's
+ * state that can't be read. Each is logged or reported
  * as itself, and never takes the request down with it.
  */
 import test from 'node:test';
@@ -10,10 +10,7 @@ import assert from 'node:assert/strict';
 import { makeD1 } from './_d1.mjs';
 import { checkTurnstile, exportAccount } from '../src/accounts.ts';
 import { logAnswer, logCronError, logError, logPoll } from '../src/analytics.ts';
-import { recordRide } from '../src/ridetimes.ts';
 import { loadDay } from '../src/trip.ts';
-import { GRAPH } from '../src/graph.ts';
-import { indexGraph, rideStops } from '../src/resolve.ts';
 
 const NOW = Date.parse('2026-08-27T01:00:00Z');
 
@@ -61,19 +58,6 @@ test('an analytics write that throws is swallowed by every logger', () => {
   assert.doesNotThrow(() => logCronError(env, 'upstream'));
   assert.doesNotThrow(() => logPoll(env, 'upstream', 'D2', 3));
   assert.equal(tries, 4, 'each one tried to write');
-});
-
-test('a ride time the database will not store is logged and dropped', async () => {
-  const stops = rideStops(indexGraph(GRAPH), 'D2', 'PGP', 'UTOWN');
-  const hops = stops.length - 1;
-  const ride = { svc: 'D2', stop: 'PGP', stopCode: 'PGP', alightCode: 'UTOWN', board: null, arrive: null, departed: new Date(NOW).toISOString() };
-  const arrived = NOW + hops * 90_000;
-  const working = makeD1();
-  assert.equal(await recordRide(working, GRAPH, ride, arrived), hops * 90, 'kept when the database works');
-  const broken = { prepare: () => ({ bind: () => ({ run: async () => { throw new Error('D1_ERROR'); } }) }) };
-  const { value, lines } = await logged(() => recordRide(broken, GRAPH, ride, arrived));
-  assert.equal(value, null);
-  assert.deepEqual(lines, ['ride time not saved Error']);
 });
 
 test("a trip's state that can't be read is logged and the answer goes on without it", async () => {

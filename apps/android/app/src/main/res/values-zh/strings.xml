@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="close">关闭</string>
-    <string name="crowd_high">高</string>
-    <string name="crowd_low">低</string>
-    <string name="crowd_medium">中</string>
     <string name="map_arriving">即将到站</string>
     <string name="map_bus_at">在 %1$s</string>
-    <string name="map_bus_between">在 %1$s 和 %2$s 之间</string>
-    <string name="map_bus_title">%1$s 巴士</string>
+    <string name="map_bus_next">下一站：%1$s</string>
+    <string name="map_bus_towards">开往 %1$s</string>
+    <string name="map_bus_moving">行驶中</string>
+    <string name="map_bus_stopped">已停下</string>
+    <string name="map_bus_seats_free">有座位</string>
+    <string name="map_bus_stops_ahead">前方车站</string>
+    <string name="map_bus_passed">已过</string>
+    <string name="map_bus_next_tag">下一站</string>
+    <string name="map_bus_here">在这里</string>
+    <string name="map_bus_on_its_way">在路上</string>
+    <string name="map_bus_more">还有 %1$d 站</string>
     <string name="map_buses">%2$s 有 %1$d 辆巴士</string>
     <string name="map_buses_unavailable">暂时看不到实时巴士。</string>
     <string name="map_buses_stale">巴士位置可能不是最新的</string>
@@ -15,9 +21,7 @@
     <string name="map_downloading">正在下载街道地图（约 4 MB）…</string>
     <string name="map_finding_buses">正在查找 %1$s 巴士…</string>
     <string name="map_go_there">去这里</string>
-    <string name="map_crowding">拥挤程度</string>
     <string name="map_needs_connection">第一次打开地图需要联网。</string>
-    <string name="map_next_stop">下一站</string>
     <string name="map_no_buses">%1$s 现在没有巴士在运行。</string>
     <string name="map_no_buses_due">暂时没有巴士</string>
     <string name="map_no_times">暂时没有时间</string>
@@ -26,7 +30,8 @@
     <string name="map_recentre">回到校园</string>
     <string name="map_save_place">加入收藏</string>
     <string name="map_saved_as">已收藏</string>
-    <string name="map_services_here">经过这里的线路</string>
+    <string name="map_show_more">再显示 %1$d 条线路</string>
+    <string name="map_show_fewer">收起</string>
     <string name="map_times_need_connection">实时时间需要联网。</string>
     <string name="map_walking_directions">步行路线</string>
     <string name="tab_map">地图</string>
@@ -130,9 +135,6 @@
     <string name="delete_account">删除这个账户</string>
     <string name="delete_account_text">你的课表和设置将被立即删除，应用会重置。由于账户未绑定邮箱，删除后无法恢复。</string>
     <string name="delete_account_title">删除这个账户？</string>
-    <string name="detect">自动检测上车</string>
-    <string name="detect_hint">行程中，实时通知会使用你的位置判断你是否已上车、错过巴士或已到达，并在你的所有设备上同步行程。它会在行程中你打开 terminus，或点按其通知或小组件时开始。不会保存你的位置，只保存判断结果。</string>
-    <string name="detect_needs">这需要 terminus 获得精确位置和通知权限。</string>
     <string name="device_removed">设备已移除。请在应用里重新配对。</string>
     <string name="directions_to">到 %1$s 的路线</string>
     <string name="done">完成</string>
@@ -144,7 +146,6 @@
     <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。每周都去的地方，可以加到课表里。</string>
     <string name="finding_stop">正在找最近的车站…</string>
     <string name="follow_device">跟随手机设置</string>
-    <string name="follow_trip">跟踪这次行程</string>
     <string name="free_hint_none">点按“附近”查看你周围的巴士。</string>
     <string name="friday">星期五</string>
     <string name="friday_short">周五</string>
@@ -328,7 +329,6 @@
     <string name="send_pair_code">发送配对代码</string>
     <string name="sending">正在发送…</string>
     <string name="settings">设置</string>
-    <string name="short_detect">上车识别</string>
     <string name="short_leave_alerts">出发提醒</string>
     <string name="short_live">实时通知</string>
     <string name="shortcut_bus_to">去 %1$s 的巴士</string>
@@ -351,7 +351,6 @@
     <string name="starts_at">%1$s 开始</string>
     <string name="step_of">第 %1$d 步，共 %2$d 步</string>
     <string name="stop_departures">%1$s：%2$s</string>
-    <string name="stop_following">停止跟踪</string>
     <string name="stop_suffix">%1$s 站</string>
     <string name="sunday">星期日</string>
     <string name="sunday_short">周日</string>
@@ -525,8 +524,7 @@
     <string name="notify_leave_short">在需要出发前 5 分钟提醒你</string>
     <string name="notify_leave_more">之后更新你的乘车情况或下一种到达方式。</string>
     <string name="live_notification_short">下一班巴士和倒计时，直到你到达</string>
-    <string name="detect_short">在你的所有设备上同步行程</string>
-    <string name="during_trip_hint">实时通知每 30 秒检查一次新时间，会更耗电。自动检测上车会在行程中使用你的位置，从你打开 terminus，或点按其通知或小组件时开始。不会保存你的位置，只保存判断结果。</string>
+    <string name="during_trip_hint">实时通知每 30 秒检查一次新时间，会更耗电。</string>
     <string name="heading_your_devices">你的设备</string>
     <string name="this_phone_tag">这部手机</string>
     <string name="auto">自动</string>

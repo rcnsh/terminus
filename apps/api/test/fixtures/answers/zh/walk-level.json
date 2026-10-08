@@ -97,7 +97,6 @@
     "remind": true,
     "suggestion": null,
     "ride": null,
-    "detected": false,
     "walkTo": {
       "name": "PGP",
       "lat": 1.291765,
