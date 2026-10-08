@@ -198,6 +198,11 @@ data class LiveBus(
     val slot: Int = 0,
     /** Between stops, the stretch of its line it's somewhere on; null at a stop or from an older API. */
     val stretch: Stretch? = null,
+    /** The stops still ahead on its line, [nextStop] first, to where the line
+     *  ends; empty past a one-way line's end or from an older API. */
+    val upcoming: List<String> = emptyList(),
+    /** Where its line ends (a loop's first stop); null from an older API. */
+    val towards: String? = null,
     val ox: Double = 0.0,
     val oy: Double = 0.0,
 ) {
@@ -209,6 +214,37 @@ data class LiveBus(
         /** As the web map (apps/web/public/app/map.js). */
         const val AT_STOP_SIDE_DP = 22.0
         const val AT_STOP_STEP_DP = 26.0
+    }
+}
+
+/**
+ * A tapped bus's stops, as its sheet lists them, from what `/buses` said
+ * (the server walks the line, not the app): the stop it [passed] (between
+ * stops) or the one it's [here] at, its [next], then [after] it at most
+ * [AFTER] more, and how many [more] there are past those.
+ */
+data class BusStrip(val passed: String?, val here: String?, val next: String?, val after: List<String>, val more: Int) {
+    /** Between stops: the bus is drawn on the line after [passed], not at a stop. */
+    val between: Boolean get() = here == null
+
+    /** Anything ahead of the bus to list. */
+    val any: Boolean get() = next != null
+
+    companion object {
+        const val AFTER = 4
+
+        fun of(bus: LiveBus): BusStrip {
+            // An older API has nextStop but no upcoming.
+            val ahead = bus.upcoming.ifEmpty { listOfNotNull(bus.nextStop) }
+            val rest = ahead.drop(1)
+            return BusStrip(
+                passed = if (bus.at == null) bus.stretch?.last else null,
+                here = bus.at,
+                next = ahead.firstOrNull(),
+                after = rest.take(AFTER),
+                more = (rest.size - AFTER).coerceAtLeast(0),
+            )
+        }
     }
 }
 
@@ -247,6 +283,10 @@ data class BusList(val svc: String, val available: Boolean, val buses: List<Live
                             val last = st.optJSONObject("last")?.optString("name")?.ifEmpty { null }
                             if (from != null && to != null && last != null) Stretch(from, to, last) else null
                         },
+                        upcoming = b.optJSONArray("upcoming")?.let { u ->
+                            (0 until u.length()).mapNotNull { j -> u.optJSONObject(j)?.optString("name")?.ifEmpty { null } }
+                        }.orEmpty(),
+                        towards = b.optJSONObject("towards")?.optString("name")?.ifEmpty { null },
                     )
                 },
                 stale = o.optBoolean("stale", false),

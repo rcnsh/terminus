@@ -410,9 +410,45 @@ body.on-map > .nav, body.on-map #tab-now { display: none; }
 .sheet-head { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
 .sheet-head h2 { margin: 0; font: 600 1.15rem/1.25 var(--display); }
 .sheet-head .hint { margin: 2px 0 0; font-size: 0.85rem; }
-/* A bus's number plate by its name, like the plate on the bus. */
-.sheet-head .plate { display: inline-block; margin-left: 6px; padding: 1px 7px; border: 1px solid var(--line-strong); border-radius: 5px; font: 600 0.78rem/1.5 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.05em; color: var(--muted); vertical-align: 0.15em; }
+.sheet-titles { flex: 1; min-width: 0; }
+/* A bus's number plate, like the plate on the bus. */
+.map-sheet .plate { display: inline-block; padding: 1px 7px; border: 1px solid var(--line-strong); border-radius: 5px; font: 600 0.78rem/1.5 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.05em; color: var(--muted); }
 .sheet-close { flex: none; width: 36px; height: 36px; margin: -6px -6px 0 0; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--ink); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+/* A bus: its service as a pill by the title, a handle to drag the stop list open. */
+.sheet-head .bus-svc { flex: none; min-width: 2.4em; padding: 6px 10px; border-radius: 10px; font: 700 1.25rem/1.15 var(--display); }
+.sheet-grab { justify-self: center; width: 56px; height: 20px; margin: -12px 0 -14px; cursor: grab; touch-action: none; position: relative; }
+.sheet-grab::before { content: ""; position: absolute; left: 10px; right: 10px; top: 7px; height: 4px; border-radius: 2px; background: var(--line-strong); opacity: 0.6; }
+.bus-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 0.85rem; color: var(--muted); }
+.bus-moving, .bus-crowd { display: inline-flex; align-items: center; gap: 6px; }
+.bus-moving .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+/* Three rising bars, as many filled as the bus is full. */
+.bus-crowd .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.bus-crowd .bars i { width: 4px; border-radius: 1px; background: var(--line); }
+.bus-crowd .bars i:nth-child(1) { height: 6px; }
+.bus-crowd .bars i:nth-child(2) { height: 10px; }
+.bus-crowd .bars i:nth-child(3) { height: 14px; }
+.bus-crowd.low .bars i:nth-child(-n + 1) { background: var(--good); }
+.bus-crowd.medium .bars i:nth-child(-n + 2) { background: var(--warn); }
+.bus-crowd.high .bars i { background: var(--bad); }
+.bus-ahead { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 9px 12px; border: 0; border-radius: 10px; background: var(--surface-2); color: var(--ink); font: 600 0.9rem/1.2 var(--font); cursor: pointer; }
+.bus-ahead .chev { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
+.bus-ahead[aria-expanded="true"] .chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .bus-ahead .chev { transition: none; } }
+/* The stops ahead on a rail in the route's colour, grey up to the bus. */
+.bus-strip { list-style: none; margin: 0; padding: 0; }
+.bus-stop { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; min-height: 30px; }
+.bus-stop .rail { position: relative; align-self: stretch; display: grid; place-items: center; }
+.bus-stop .rail::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(50% - 1.5px); width: 3px; background: linear-gradient(var(--top) 50%, var(--bottom) 50%); }
+.bus-stop .dot { position: relative; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2.5px solid var(--svc); background: var(--surface); }
+.bus-stop .marker { position: relative; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--svc); box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgb(0 0 0 / 0.15); }
+.bus-stop .marker svg { width: 12px; height: 12px; fill: none; stroke: var(--svc-ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.bus-stop .tag { font-size: 0.8rem; color: var(--muted); }
+.bus-stop.passed .name, .bus-stop.passed .tag { color: var(--faint); }
+.bus-stop.passed .dot { border-color: var(--line-strong); }
+.bus-stop.bus .name, .bus-stop.more .name { font-size: 0.85rem; color: var(--muted); }
+.bus-stop.next .name { font-weight: 700; font-size: 1.05rem; }
+.bus-stop.next .tag, .bus-stop.here .tag { font-weight: 600; color: var(--ink); }
+.bus-stop.here .name { font-weight: 700; }
 .sheet-rows { display: grid; gap: 2px; }
 .sheet-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
 .sheet-row .when { font-weight: 600; }

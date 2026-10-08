@@ -1285,7 +1285,11 @@ it is in the route:
   detour), or on a service with no line, isn't shown.
 
 `heading` is the way the road runs at the place it's drawn, and `nextStop`
-the stop after the one it's at, or the one it's heading to.
+the stop after the one it's at, or the one it's heading to. `upcoming`
+lists the stops still ahead, `nextStop` first, to where the line ends
+(round a loop, back at its first stop), and `towards` is that end: the
+map's bus sheet says "Towards COM 3" and lists the stops from these, so no
+client walks the route itself.
 
 The hard part is the side of the road. Most of D1, D2 and K, and parts of
 the others, use one road both ways, and the two directions of the line are

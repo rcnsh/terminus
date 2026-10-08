@@ -392,3 +392,24 @@ test('/line: after a loop’s last stop the bus is heading back to its first; a 
   // A stop the list doesn't have (the route changed since the shapes were made): left off.
   assert.equal(indexOnLine(loop, true, between('ZZ', 'A')), null);
 });
+
+test('a real D1 bus lists the stops still ahead, to COM 3 where its loop ends; a K bus at its last stop has none', async () => {
+  const shape = SHAPES.D1;
+  const k = shape.stops.indexOf('CLB');
+  const mid = (shape.at[k] + shape.at[k + 1]) / 2;
+  const p = pointAlong(shape, mid);
+  const q = pointAlong(shape, mid + 5);
+  const bus = { plate: 'PD539C', lat: p.lat, lon: p.lon, heading: bearingOf([p.lon, p.lat], [q.lon, q.lat]), speed: 20, crowd: 'low' };
+  const [b] = (await placeBuses(GRAPH, 'D1', [bus], 0, {})).buses;
+  assert.equal(b.nextStop.code, 'LT13');
+  assert.deepEqual(b.upcoming.map((s) => s.code), ['LT13', 'AS5', 'BIZ2', 'COM3']);
+  assert.deepEqual(b.upcoming[0], b.nextStop, 'nextStop first');
+  assert.deepEqual(b.towards, { code: 'COM3', name: 'COM 3' });
+
+  const ks = SHAPES.K;
+  const end = pointAlong(ks, ks.at.at(-1));
+  const [last] = (await placeBuses(GRAPH, 'K', [{ plate: 'PK1', lat: end.lat, lon: end.lon, heading: 0, speed: 0, crowd: null }], 0, {})).buses;
+  assert.equal(last.at.code, 'PGPR');
+  assert.deepEqual(last.upcoming, []);
+  assert.equal(last.towards.code, 'PGPR');
+});

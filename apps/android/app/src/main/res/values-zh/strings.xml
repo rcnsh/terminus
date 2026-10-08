@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="close">关闭</string>
-    <string name="crowd_high">高</string>
-    <string name="crowd_low">低</string>
-    <string name="crowd_medium">中</string>
     <string name="map_about">约 %1$s</string>
     <string name="map_arriving">即将到站</string>
     <string name="map_bus_at">在 %1$s</string>
-    <string name="map_bus_between">在 %1$s 和 %2$s 之间</string>
-    <string name="map_bus_title">%1$s 巴士</string>
+    <string name="map_bus_next">下一站：%1$s</string>
+    <string name="map_bus_towards">开往 %1$s</string>
+    <string name="map_bus_moving">行驶中</string>
+    <string name="map_bus_stopped">已停下</string>
+    <string name="map_bus_seats_free">有座位</string>
+    <string name="map_bus_stops_ahead">前方车站</string>
+    <string name="map_bus_passed">已过</string>
+    <string name="map_bus_next_tag">下一站</string>
+    <string name="map_bus_here">在这里</string>
+    <string name="map_bus_on_its_way">在路上</string>
+    <string name="map_bus_more">还有 %1$d 站</string>
     <string name="map_buses">%2$s 有 %1$d 辆巴士</string>
     <string name="map_buses_unavailable">暂时看不到实时巴士。</string>
     <string name="map_buses_stale">巴士位置可能不是最新的</string>
@@ -16,10 +22,8 @@
     <string name="map_downloading">正在下载街道地图（约 4 MB）…</string>
     <string name="map_finding_buses">正在查找 %1$s 巴士…</string>
     <string name="map_go_there">去这里</string>
-    <string name="map_crowding">拥挤程度</string>
     <string name="map_min">%1$d 分钟</string>
     <string name="map_needs_connection">第一次打开地图需要联网。</string>
-    <string name="map_next_stop">下一站</string>
     <string name="map_no_buses">%1$s 现在没有巴士在运行。</string>
     <string name="map_no_buses_due">暂时没有巴士</string>
     <string name="map_no_times">暂时没有时间</string>

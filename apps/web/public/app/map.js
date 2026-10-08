@@ -675,9 +675,6 @@ function directions(s) {
 
 /* ---------- drawing ---------- */
 
-/** How crowded a bus is, as the feed says: low, medium or high. */
-const crowdWord = (c) => ({ low: t('Low'), medium: t('Medium'), high: t('High') })[c] ?? null;
-
 /** A service here, when there are no times to list it by: tapped, its line on the map. */
 const SvcTag = ({ svc, onClick }) => html`<button type="button" class="svc-tag" style=${svcVars(svc)} aria-label=${t('Show {0} on the map', svc)} onClick=${onClick}>${svc}</button>`;
 
@@ -750,7 +747,7 @@ function Status() {
  * The sheet's frame: the title, a line under it, and Close. Opened, the focus
  * is on its title (`id` changes with what it's about); Escape closes it.
  */
-function Frame({ id, title, sub, children, box }) {
+function Frame({ id, title, sub, lead, top, children, box }) {
   const head = useRef(null);
   useEffect(() => {
     head.current?.focus({ preventScroll: true });
@@ -778,8 +775,10 @@ function Frame({ id, title, sub, children, box }) {
         openSheet(null);
       }}
     >
+      ${top}
       <div class="sheet-head">
-        <div><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
+        ${lead}
+        <div class="sheet-titles"><h2 id="sheet-title" tabindex="-1" ref=${head}>${title}</h2>${sub && html`<p class="hint">${sub}</p>`}</div>
         <button type="button" class="sheet-close" aria-label=${t('Close')} onClick=${() => openSheet(null)}>×</button>
       </div>
       ${children}
@@ -787,10 +786,64 @@ function Frame({ id, title, sub, children, box }) {
   `;
 }
 
-/** A bus: where it's going next and how full it is, following its updates while open. */
+/** How full a bus is, as three rising bars (as many filled as it's full) and a word. */
+function CrowdMeter({ crowd }) {
+  const word = { low: t('Seats free'), medium: t('Busy'), high: t('Packed') }[crowd];
+  if (!word) return null;
+  return html`<span class=${`bus-crowd ${crowd}`}><span class="bars" aria-hidden="true"><i></i><i></i><i></i></span>${word}</span>`;
+}
+
+/** Stops after the next one shown in the bus's list before "+N more". */
+const AHEAD_SHOWN = 4;
+const CHEVRON_DOWN = '<path d="m6 9 6 6 6-6" />';
+
+/**
+ * The bus's line from the stop it passed (or the one it's at) on through the
+ * stops ahead, as the server lists them (`upcoming`): the client never walks
+ * the route itself. An older server without `upcoming` gives its next stop only.
+ */
+function StopStrip({ b }) {
+  let ahead = b.upcoming ?? (b.nextStop ? [b.nextStop] : []);
+  if (b.at && ahead[0]?.code === b.at.code) ahead = ahead.slice(1);
+  const rows = [];
+  if (b.at) rows.push({ key: `at-${b.at.code}`, name: b.at.name, kind: 'here', tag: t('here') });
+  else if (b.stretch) {
+    rows.push({ key: `last-${b.stretch.last.code}`, name: b.stretch.last.name, kind: 'passed', tag: t('passed') });
+    rows.push({ key: 'bus', name: t('On its way'), kind: 'bus' });
+  }
+  ahead.slice(0, AHEAD_SHOWN + 1).forEach((s, i) => rows.push({ key: `${i}-${s.code}`, name: s.name, kind: i === 0 ? 'next' : 'stop', tag: i === 0 ? t('next') : null }));
+  const more = ahead.length - (AHEAD_SHOWN + 1);
+  if (more > 0) rows.push({ key: 'more', name: t('+{0} more', more), kind: 'more' });
+  // The rail's colour above and below each row's dot: grey up to the bus, the route's colour after it.
+  const grey = 'var(--line-strong)';
+  const svc = 'var(--svc)';
+  return html`
+    <ol class="bus-strip" id="bus-strip" style=${svcVars(b.svc)}>
+      ${rows.map((r, i) => {
+        const top = i === 0 ? 'transparent' : rows[i - 1].kind === 'passed' ? grey : svc;
+        const bottom = i === rows.length - 1 ? 'transparent' : r.kind === 'passed' ? grey : svc;
+        return html`
+          <li key=${r.key} class=${`bus-stop ${r.kind}`} style=${`--top:${top};--bottom:${bottom}`}>
+            <span class="rail" aria-hidden="true">${r.kind === 'more' ? null : r.kind === 'bus' || r.kind === 'here' ? html`<span class="marker"><${Icon} paths=${CHEVRON_DOWN} /></span>` : html`<span class="dot"></span>`}</span>
+            <span class="name">${r.name}</span>
+            ${r.tag && html`<span class="tag">${r.tag}</span>`}
+          </li>
+        `;
+      })}
+    </ol>
+  `;
+}
+
+/**
+ * A bus: its service, where it is and where it's heading, its plate, whether
+ * it's moving and how full it is; opened up (a tap, or the handle dragged
+ * up), the stops still ahead. Follows its updates while open.
+ */
 function BusSheet({ id, box }) {
   const buses = useStore(shown);
   const b = buses.get(id);
+  const [open, setOpen] = useState(false);
+  const drag = useRef(null);
   useEffect(() => {
     if (!b) openSheet(null);
   }, [b]);
@@ -798,13 +851,41 @@ function BusSheet({ id, box }) {
     markOpen(b ?? null);
   }, [b?.id, b?.stretch?.from, b?.stretch?.to, b?.svc]);
   useEffect(() => () => markOpen(null), []);
+  useEffect(() => setOpen(false), [id]);
   if (!b) return null;
+  // The handle: dragged up opens the list, down closes it; a tap toggles it.
+  const handle = html`
+    <div
+      class="sheet-grab"
+      aria-hidden="true"
+      onPointerDown=${(e) => {
+        drag.current = e.clientY;
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerUp=${(e) => {
+        if (drag.current == null) return;
+        const dy = e.clientY - drag.current;
+        drag.current = null;
+        setOpen(Math.abs(dy) < 12 ? !open : dy < 0);
+      }}
+      onPointerCancel=${() => (drag.current = null)}
+    ></div>
+  `;
+  const pill = html`<span class="svc-tag bus-svc" style=${svcVars(b.svc)} aria-hidden="true">${b.svc}</span>`;
+  // The pill is the service to the eye; a screen reader hears it in the title.
+  const where = b.at ? t('At {0}', b.at.name) : b.nextStop ? t('Next: {0}', b.nextStop.name) : null;
+  const title = where ? html`<span class="sr-only">${t('{0} bus', b.svc)} </span>${where}` : t('{0} bus', b.svc);
   return html`
-    <${Frame} id=${`bus-${id}`} title=${html`${t('{0} bus', b.svc)}${b.plate && html` <span class="plate">${b.plate}</span>`}`} sub=${b.at ? t('At {0}', b.at.name) : b.stretch && b.nextStop ? t('Between {0} and {1}', b.stretch.last.name, b.nextStop.name) : null} box=${box}>
-      <div class="sheet-rows">
-        ${b.nextStop && html`<div class="sheet-row"><span>${t('Next stop')}</span><span class="when">${b.nextStop.name}</span></div>`}
-        ${b.crowd && html`<div class="sheet-row"><span>${t('Crowding')}</span><span class="when">${crowdWord(b.crowd)}</span></div>`}
+    <${Frame} id=${`bus-${id}`} title=${title} sub=${b.towards && t('Towards {0}', b.towards.name)} lead=${pill} top=${handle} box=${box}>
+      <div class="bus-info">
+        ${b.plate && html`<span class="plate">${b.plate}</span>`}
+        ${b.moving != null && html`<span class="bus-moving"><span class="dot" aria-hidden="true"></span>${b.moving ? t('Moving') : t('Stopped')}</span>`}
+        <${CrowdMeter} crowd=${b.crowd} />
       </div>
+      <button type="button" class="bus-ahead" aria-expanded=${String(open)} aria-controls=${open ? 'bus-strip' : undefined} onClick=${() => setOpen(!open)}>
+        ${t('Stops ahead')}<${Icon} paths=${CHEVRON_DOWN} class="chev" />
+      </button>
+      ${open && html`<${StopStrip} b=${b} />`}
     <//>
   `;
 }
