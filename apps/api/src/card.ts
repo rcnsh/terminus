@@ -523,11 +523,12 @@ function v1(a: MeAnswer, h12: boolean): V1 {
   } else {
     card.catchLine = card.catch;
   }
-  // The headline bus, when it isn't the one to wait for.
+  // The headline bus, when it isn't the one to wait for. A guessed time
+  // gets there at a guessed time too.
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const same = timed && l.board && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt!)) < 60_000;
   if (timed && !same) {
-    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(roughly(a), at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
+    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(roughly(a), at(a.departsAt!)), a.timing.reachAt ? approx(roughly(a), at(a.timing.reachAt)) : null);
   }
   card.note = l.note ?? null;
   card.estimate = l.estimated ? m().estimateNote : null;
