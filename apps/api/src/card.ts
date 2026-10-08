@@ -642,7 +642,8 @@ function v2(
   // A clock time, never "4 min": a glance (the Mac's menu bar, a tile) can
   // sit unrefreshed for minutes, and a clock time stays true until the bus
   // leaves. The label as it is when there's no time to give.
-  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}` : a.label.replace(' · ', ' ');
+  // With no bus at all, the walk: "No bus · walk 27 min" cut to fit read "No bus walk ".
+  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}` : (a.quality === 'ended' && a.foot ? m().walkLabel(mins(a.foot.s)) : a.label).replace(' · ', ' ');
   if (card.kind === 'rest') {
     const from = slotOf(a.label, m().dayStarts);
     glance = from ? m().fromGlance(from) : m().doneToday;
