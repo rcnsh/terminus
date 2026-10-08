@@ -103,8 +103,9 @@ final class AppModel {
     /// once shown. A report from an account without an email asks for Account.
     var settingsPane: SettingsPane?
 
-    /// "Is this wrong?": the form is open, what's typed, and how sending went.
+    /// "Is this wrong?": the form is open, the reason picked, what's typed, and how sending went.
     var reporting = false
+    var reportReason: String?
     var reportNote = ""
     var reportSending = false
     var reportResult: String?
@@ -765,6 +766,7 @@ final class AppModel {
 
     func startReport() {
         reported = showNearby ? nil : shown?.raw
+        reportReason = nil
         reportNote = ""
         reportResult = nil
         reportSent = false
@@ -778,13 +780,14 @@ final class AppModel {
 
     func sendReport() {
         let note = reportNote.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The server takes no report without a note; Send is off until there is one.
-        guard !note.isEmpty else { return }
+        // The server takes no report without a reason or a note; Send is off until there is one.
+        guard reportReason != nil || !note.isEmpty else { return }
+        let reason = reportReason
         reportSending = true
         Task {
             defer { reportSending = false }
             do {
-                try await Api(token: TokenStore.read()).report(note: note, answer: reported)
+                try await Api(token: TokenStore.read()).report(reason: reason, note: note, answer: reported)
                 reporting = false
                 reportSent = true
                 reportSentLine = shown?.card?.line
@@ -913,8 +916,8 @@ final class AppModel {
     ) -> TimeInterval {
         // Too old for the server: every ask would be refused until an update.
         if updateRequired { return Outdated.holdS }
-        // Never sooner than the server asked, up to an hour.
-        let floor = failures > 0 ? min(serverWait ?? 0, 3600) : 0
+        // Never sooner than the server asked, as long as Quiet honours it.
+        let floor = failures > 0 ? serverWait.map(Quiet.cap) ?? 0 : 0
         // Wi-Fi is often not up yet right after a wake: retry soon, then back off.
         if failures > 0 && failures <= 3 { return max([5, 15, 45][failures - 1], floor) }
         var d: TimeInterval = (popoverOpen ? 30 : resting ? 600 : 300) * (lowPower ? 2 : 1)
@@ -1072,7 +1075,9 @@ final class AppModel {
         } catch let e as ApiError where e.updateRequired {
             log.notice("426: this version is too old for the server")
             updateRequired = true
-            error = e.message
+            // The update banner says it all: no red status line besides, nor
+            // the offline day plan in the card's place while online.
+            error = nil
             return .failed
         } catch let e as ApiError {
             log.error("api error \(e.status): \(e.message, privacy: .public)")

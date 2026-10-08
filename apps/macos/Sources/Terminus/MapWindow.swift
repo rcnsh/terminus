@@ -130,8 +130,18 @@ final class MapModel {
     /// "need a connection" when this Mac is offline (`online`). Once the last
     /// answer is 15 s old (three polls) they're faded, so last places don't
     /// pass for live. Refused (401, 426): it stops, and says why (`refused`).
-    func refreshBuses(app: AppModel) async {
-        guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return }
+    /// How long a polling loop waits before asking again: `base` while the
+    /// API answers, doubling with each failure in a row up to a minute, and
+    /// never sooner than a 429's or a 503's Retry-After (`quiet`, Quiet.wait).
+    nonisolated static func pollDelay(base: TimeInterval, failures: Int, quiet: TimeInterval) -> TimeInterval {
+        max(min(base * pow(2, Double(min(failures, 6))), max(base, 60)), quiet)
+    }
+
+    /// Whether the poll failed (no answer, or one that couldn't be read):
+    /// the loop backs off. Not asking, or refused, isn't a failure here.
+    @discardableResult
+    func refreshBuses(app: AppModel) async -> Bool {
+        guard let svc = selected, let q = svc.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return false }
         let online = app.online
         let token = TokenStore.read()
         let list: BusList?
@@ -140,18 +150,18 @@ final class MapModel {
         } catch {
             if let e = Self.refusal(error) {
                 refuse(e, token: token, app: app)
-                return
+                return false
             }
             if !Task.isCancelled, svc == selected {
                 busStatus = online ? .unavailable : .offline
                 if let heardAt, Date().timeIntervalSince(heardAt) > 15 { busesStale = true }
             }
-            return
+            return true
         }
-        guard svc == selected else { return }
+        guard svc == selected else { return false }
         guard let list else {
             busStatus = .unavailable
-            return
+            return true
         }
         buses = list.buses
         busesStale = list.available && list.stale
@@ -159,6 +169,7 @@ final class MapModel {
         busAnswers += 1
         busStatus = !list.available ? .unavailable : list.stale ? .stale : list.buses.isEmpty ? .noneRunning : .running(list.buses.count)
         if case .bus(let id) = sheet, !buses.contains(where: { $0.id == id }) { sheet = nil }
+        return false
     }
 
     func open(stop code: String) {
@@ -177,8 +188,12 @@ final class MapModel {
         focusCount += 1
     }
 
-    func refreshBoard(app: AppModel) async {
-        guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return }
+    /// The open stop's times. A failed refresh drops the last ones, as the
+    /// web map does: minutes from before it would pass for current. Whether
+    /// it failed, for the loop's back-off (as `refreshBuses`).
+    @discardableResult
+    func refreshBoard(app: AppModel) async -> Bool {
+        guard let code = openStop, let q = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), mayAsk() else { return false }
         let token = TokenStore.read()
         var b: StopBoard?
         do {
@@ -186,11 +201,14 @@ final class MapModel {
         } catch {
             if let e = Self.refusal(error) {
                 refuse(e, token: token, app: app)
-                return
+                return false
             }
+            if Task.isCancelled { return false }
         }
-        guard code == openStop else { return }
-        if let b { board = b; boardFailed = false } else if board == nil { boardFailed = true }
+        guard code == openStop else { return false }
+        board = b
+        boardFailed = b == nil
+        return b == nil
     }
 
     /// Your dot, only with location already allowed: the map never asks.
@@ -283,20 +301,23 @@ struct MapWindow: View {
         // Again after signing in, so a map refused while signed out loads.
         .task(id: "\(scheme)|\(app.paired)") { await map.open(dark: scheme == .dark, zh: Lang.zh, app: app) }
         // Live buses every 5 s while a pill is on (the API caches 5 s), not
-        // while the window is hidden behind others or minimised.
+        // while the window is hidden behind others or minimised. Failures in
+        // a row back off, and a 429's or 503's Retry-After is waited out.
         .task(id: "\(map.selected ?? "")|\(shown)") {
             guard map.selected != nil else { return }
+            var failures = 0
             while !Task.isCancelled {
-                if visible { await map.refreshBuses(app: app) }
-                try? await Task.sleep(for: .seconds(5))
+                if visible { failures = await map.refreshBuses(app: app) ? failures + 1 : 0 }
+                try? await Task.sleep(for: .seconds(MapModel.pollDelay(base: 5, failures: failures, quiet: Quiet.wait())))
             }
         }
-        // The open stop's times every 15 s (cached 15 s).
+        // The open stop's times every 15 s (cached 15 s), backing off the same.
         .task(id: "\(map.openStop ?? "")|\(shown)") {
             guard map.openStop != nil else { return }
+            var failures = 0
             while !Task.isCancelled {
-                if visible { await map.refreshBoard(app: app) }
-                try? await Task.sleep(for: .seconds(15))
+                if visible { failures = await map.refreshBoard(app: app) ? failures + 1 : 0 }
+                try? await Task.sleep(for: .seconds(MapModel.pollDelay(base: 15, failures: failures, quiet: Quiet.wait())))
             }
         }
         .task {
@@ -726,7 +747,7 @@ private struct StopCard: View {
                 if let refused = map.refused {
                     Text(refused.text).foregroundStyle(.secondary)
                 } else if map.boardFailed {
-                    Text(L("Live times need a connection.")).foregroundStyle(.secondary)
+                    Text(app.online ? L("No times right now") : L("Live times need a connection.")).foregroundStyle(.secondary)
                 } else if let board = map.board {
                     if board.rows.isEmpty {
                         Text(board.available ? L("No buses due") : L("No times right now")).foregroundStyle(.secondary)

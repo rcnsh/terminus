@@ -82,8 +82,9 @@ struct Header: View {
         if old {
             let text = L("Updating times…")
             out.status = (.gray, text, text)
-        } else if !model.showNearby, let a, a.isClassPlan, let at = a.leaveAt {
+        } else if !model.showNearby, let a, a.isClassPlan, let at = a.countdownAt {
             // Once it's time, the headline says "Leave now" and this line goes, as on the phone and the web.
+            // At the stop the headline is the bus ("D2 at 09:41"): this counts to it, not the leave-by.
             if let left = Self.secondsLeft(to: at, now: now) {
                 let spoken = left >= 60 ? L("in %@ min", "\((left + 30) / 60)") : L("in under a minute")
                 out.status = (a.leaveLate ? .red : .brand, sure(Self.leaveIn(left)), sure(spoken))

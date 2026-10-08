@@ -67,7 +67,11 @@ struct Main: View {
                     // Offline, the stale answer's details would mislead: how to the day plan's next thing.
                     OfflineDetail(pick: p).transition(.opacity.combined(with: .offset(y: 6)))
                 } else {
-                    AnswerDetail(answer: answer, busy: model.signalling, undoShownFor: model.removed?.key, onAction: model.signal, onChoice: model.choose).transition(.opacity.combined(with: .offset(y: 6)))
+                    AnswerDetail(
+                        answer: answer, busy: model.signalling, undoShownFor: model.removed?.key,
+                        old: !model.resting && answer?.arrived != true && model.isOld(answer, at: model.clock),
+                        onAction: model.signal, onChoice: model.choose
+                    ).transition(.opacity.combined(with: .offset(y: 6)))
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 120, alignment: .top)
@@ -186,12 +190,29 @@ struct GoLater: View {
     }
 }
 
-/// "Is this wrong?": a note, sent with the answer on screen. The server takes
-/// reports only from an account with an email, so without one it asks for one.
+/// "Is this wrong?": a reason picked from a few, a note, or both, sent with
+/// the answer on screen. The server takes reports only from an account with
+/// an email, so without one it asks for one.
 struct ReportForm: View {
     @Bindable var model: AppModel
     @FocusState private var focused: Bool
     @Environment(\.openWindow) private var openWindow
+
+    /// The reasons, as /me/feedback takes them (REASONS in apps/api/src/feedback.ts)
+    /// and worded as the phone and the web offer them.
+    static var reasons: [(id: String, label: String)] {
+        [
+            ("never-came", L("Bus never came")),
+            ("times-off", L("Times were off")),
+            ("wrong-stop", L("Wrong stop")),
+            ("walk-longer", L("Walk is longer")),
+            ("wrong-class", L("Wrong class")),
+        ]
+    }
+
+    private var ready: Bool {
+        model.reportReason != nil || !model.reportNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         if model.anonymous { needsEmail } else { form }
@@ -220,7 +241,19 @@ struct ReportForm: View {
     private var form: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L("What was wrong?")).font(.callout.weight(.semibold))
-            TextField(L("The D2 never came, the walk is longer…"), text: $model.reportNote, axis: .vertical)
+            Text(L("Pick one, or say what happened")).font(.caption).foregroundStyle(.secondary)
+            // One reason at most; picking it again lets it go.
+            Flow(spacing: 6) {
+                ForEach(Self.reasons, id: \.id) { r in
+                    let on = model.reportReason == r.id
+                    Button(r.label) { model.reportReason = on ? nil : r.id }
+                        .buttonStyle(.bordered)
+                        .tint(on ? Color.brand : nil)
+                        .controlSize(.small)
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            TextField(L("What happened? A time or a stop helps."), text: $model.reportNote, axis: .vertical)
                 .lineLimit(2...4)
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
@@ -234,7 +267,7 @@ struct ReportForm: View {
                 Button(L("Send")) { model.sendReport() }
                     .controlSize(.small)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(model.reportSending || model.reportNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(model.reportSending || !ready)
             }
         }
         .card(padding: 10)

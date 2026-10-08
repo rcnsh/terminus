@@ -19,6 +19,25 @@ private func answer(departsIn: TimeInterval? = nil, changesIn: TimeInterval? = n
     #expect(delays == [5, 15, 45, 300])
 }
 
+/// The server's Retry-After (a 429's or a 503's) holds the loop back, as
+/// long as Quiet honours one and no longer.
+@Test func failuresWaitOutTheServersRetryAfter() {
+    #expect(AppModel.nextDelay(failures: 1, popoverOpen: true, resting: false, plan: nil, now: now, serverWait: 30) == 30)
+    #expect(AppModel.nextDelay(failures: 1, popoverOpen: true, resting: false, plan: nil, now: now, serverWait: 7200) == Quiet.maxS)
+    #expect(AppModel.nextDelay(failures: 0, popoverOpen: true, resting: false, plan: nil, now: now, serverWait: 120) == 30)
+}
+
+/// The map's polls: their usual wait while the API answers, doubling with
+/// each failure up to a minute, and never inside a Retry-After.
+@Test func theMapsPollsBackOff() {
+    let buses = (0...5).map { MapModel.pollDelay(base: 5, failures: $0, quiet: 0) }
+    #expect(buses == [5, 10, 20, 40, 60, 60])
+    #expect(MapModel.pollDelay(base: 5, failures: 100, quiet: 0) == 60)
+    #expect(MapModel.pollDelay(base: 15, failures: 0, quiet: 0) == 15)
+    #expect(MapModel.pollDelay(base: 15, failures: 3, quiet: 0) == 60)
+    #expect(MapModel.pollDelay(base: 5, failures: 0, quiet: 30) == 30)
+}
+
 @Test func theUsualWaits() {
     #expect(AppModel.nextDelay(failures: 0, popoverOpen: true, resting: false, plan: nil, now: now) == 30)
     #expect(AppModel.nextDelay(failures: 0, popoverOpen: false, resting: false, plan: nil, now: now) == 300)

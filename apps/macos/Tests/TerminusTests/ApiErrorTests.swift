@@ -23,7 +23,9 @@ import Testing
     #expect(Quiet.scope("/auth/anon") == .signIn)
     #expect(Quiet.scope("/pair") == .signIn)
     #expect(Quiet.scope("/me/next") == .app)
-    #expect(Quiet.scope("/me/pair-code") == .app)
+    // A pairing code is part of pairing, as on Android: its 429 doesn't stop the menu bar.
+    #expect(Quiet.scope("/me/pair-code") == .signIn)
+    #expect(Quiet.scope("/me/pair") == .app)
 
     let appBefore = Quiet.until(.app)
     Quiet.after("120", scope: .signIn)
@@ -35,6 +37,23 @@ import Testing
     // Over again, so no other test meets it.
     Quiet.after("1", scope: .signIn, now: .distantPast)
     #expect(Quiet.until(.signIn) < Date())
+}
+
+/// A 503's Retry-After isn't a gate, only a wait for the polling loops, held
+/// to the same 5 minutes as a 429's. None at all leaves the loops as they were.
+@Test func a503sRetryAfterIsWaitedOutByThePolls() {
+    let at = Date().addingTimeInterval(86_400)
+    #expect(Quiet.wait(now: at) == 0)
+    Quiet.later(nil, now: at)
+    #expect(Quiet.wait(now: at) == 0)
+    Quiet.later("30", now: at)
+    #expect(Quiet.wait(now: at) == 30)
+    #expect(Quiet.until(.app) < at)
+    Quiet.later("3600", now: at)
+    #expect(Quiet.wait(now: at) == Quiet.maxS)
+    // Over again, so no other test meets it.
+    Quiet.later("1", now: .distantPast)
+    #expect(Quiet.wait(now: at) == 0)
 }
 
 /// As the server: signing in or out and leaving still go to an outdated app.
