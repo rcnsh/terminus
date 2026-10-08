@@ -22,8 +22,10 @@ import sh.rcn.terminus.Device
 import sh.rcn.terminus.ImportResult
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Lang
+import sh.rcn.terminus.ParseError
 import sh.rcn.terminus.ProfileDoc
 import sh.rcn.terminus.R
+import sh.rcn.terminus.Session
 import sh.rcn.terminus.SignInRequest
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.deviceName
@@ -76,26 +78,48 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(AccountState(email = store.email))
     val state: StateFlow<AccountState> = _state
 
+    init {
+        // Signed out by a refused token (here or anywhere else): nothing of the account stays on screen.
+        viewModelScope.launch { Session.signedOut.collect { reset() } }
+    }
+
     private fun api() = Api(store.token)
 
-    private fun fail(e: Exception): String = when (e) {
+    private fun fail(e: Throwable): String = when (e) {
         is ApiError -> e.message ?: L.s(R.string.something_wrong)
+        // The server answered, with something this version can't read.
+        is ParseError -> L.s(R.string.unexpected_answer)
         else -> L.s(R.string.cant_reach)
+    }
+
+    /**
+     * What to say about [e], or null for nothing: a 401 for [sent], this
+     * phone's token, signs the phone out ([Session.rejected]) and the
+     * welcome screen says why. Cancellation goes on up.
+     */
+    private suspend fun failure(e: Throwable, sent: String?): String? {
+        if (e is CancellationException) throw e
+        if (e is ApiError && e.status == 401 && Session.rejected(getApplication(), sent)) return null
+        return fail(e)
     }
 
     /**
      * Runs [block]; a failure is said in the message (the server's words for
      * a refusal, else that it can't be reached), with [failed] putting back
-     * what was under way (busy, importing).
+     * what was under way (busy, importing). With [session], a 401 is this
+     * phone's token refused, which signs it out; off for the requests that
+     * carry another token, or none.
      */
-    private fun attempt(failed: (AccountState) -> AccountState = { it }, block: suspend () -> Unit) {
+    private fun attempt(failed: (AccountState) -> AccountState = { it }, session: Boolean = true, block: suspend () -> Unit) {
+        val sent = store.token.takeIf { session }
         viewModelScope.launch {
             try {
                 block()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { failed(it).copy(message = fail(e)) }
+                val message = failure(e, sent)
+                _state.update { failed(it).copy(message = message ?: it.message) }
             }
         }
     }
@@ -106,10 +130,15 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun start(onDone: () -> Unit) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
-        attempt({ it.copy(busy = false) }) {
-            store.token = Api(null).anon(deviceName())
-            store.email = null
-            store.needsSetup = true
+        attempt({ it.copy(busy = false) }, session = false) {
+            val token = Api(null).anon(deviceName())
+            // Off the main thread: a Keystore round trip and a write to disk.
+            withContext(Dispatchers.IO) {
+                store.token = token
+                store.email = null
+                store.anonymous = true
+                store.needsSetup = true
+            }
             _state.update { it.copy(busy = false, email = null) }
             onDone()
         }
@@ -117,22 +146,30 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Who this phone is signed in as, and the profile, for settings and setup. */
     fun refresh() {
-        if (store.token == null) return
+        val token = store.token ?: return
         _state.update { it.copy(message = null) }
         viewModelScope.launch {
-            runCatching { api().me() }.onSuccess { me ->
+            try {
+                val me = Api(token).me()
                 store.email = me.email
+                store.anonymous = me.anonymous
                 _state.update { it.copy(email = me.email, needsReimport = me.needsReimport, term = me.term) }
+            } catch (e: Exception) {
+                // Said below, with the profile, unless it signed the phone out.
+                if (failure(e, token) == null) return@launch
             }
-            runCatching { ProfileDoc(api().profile()) }
-                .onSuccess { p ->
-                    // A change still being saved stays on screen.
-                    if (saveJob?.isActive == true) return@onSuccess
+            try {
+                val p = ProfileDoc(Api(token).profile())
+                // A change still being saved stays on screen.
+                if (saveJob?.isActive != true) {
                     _state.update { it.copy(profile = p) }
                     syncLang(p)
                     Clock.keep(getApplication(), p.clock)
                 }
-                .onFailure { e -> if (_state.value.profile == null) _state.update { it.copy(message = fail(e as? Exception ?: Exception(e))) } }
+            } catch (e: Exception) {
+                val message = failure(e, token) ?: return@launch
+                if (_state.value.profile == null) _state.update { it.copy(message = message) }
+            }
             loadCampus()
         }
     }
@@ -140,7 +177,17 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun loadCampus() {
         if (_state.value.campus != null) return
         viewModelScope.launch {
-            runCatching { Api(store.token).campus() }.onSuccess { c -> _state.update { it.copy(campus = c) } }
+            try {
+                val c = Api(store.token).campus()
+                _state.update { it.copy(campus = c) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ParseError) {
+                // Offline, the pickers wait for the next try; a reply this version can't read is said.
+                _state.update { it.copy(message = fail(e)) }
+            } catch (e: Exception) {
+                // Tried again when a picker opens.
+            }
         }
     }
 
@@ -168,14 +215,16 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         saveJob = viewModelScope.launch {
             delay(400)
             waiting = null
+            val sent = store.token
             try {
-                val saved = ProfileDoc(api().saveProfile(next.json))
+                val saved = ProfileDoc(Api(sent).saveProfile(next.json))
                 confirmed = saved
                 if (mine == edits) _state.update { it.copy(profile = saved) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (mine == edits) _state.update { it.copy(profile = confirmed ?: current, message = L.s(R.string.not_saved, fail(e))) }
+                val message = failure(e, sent) ?: return@launch
+                if (mine == edits) _state.update { it.copy(profile = confirmed ?: current, message = L.s(R.string.not_saved, message)) }
             }
         }
     }
@@ -267,7 +316,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         val r = request ?: return
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
-        attempt({ it.copy(busy = false) }) {
+        attempt({ it.copy(busy = false) }, session = false) {
             val p = Api(null).signInCode(r, code)
             if (p.status == "approved" && p.token != null && p.email != null) {
                 pollJob?.cancel()
@@ -354,21 +403,25 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         val anon = anonToken
         val email = (state.value.signIn as? SignIn.Choose)?.email ?: return
         _state.update { it.copy(busy = true) }
-        attempt({ it.copy(busy = false) }) {
+        attempt({ it.copy(busy = false) }, session = false) {
             if (anon != null) Api(token).merge(anon, keepPhone)
             signedIn(token, email, onSignedIn)
         }
     }
 
     private fun signedIn(token: String, email: String, onSignedIn: () -> Unit) {
-        store.token = token
-        store.email = email
         approvedToken = null
         anonToken = null
         // The page stays as it is, busy, until the app moves on: cleared
         // first, it fell back to the email step for a moment.
         _state.update { it.copy(busy = true, message = null) }
         viewModelScope.launch {
+            // Off the main thread: a Keystore round trip and a write to disk.
+            withContext(Dispatchers.IO) {
+                store.token = token
+                store.email = email
+                store.anonymous = false
+            }
             // A new account, or one that was never set up, goes through setup.
             val me = runCatching { Api(token).me() }.getOrNull()
             store.needsSetup = me?.needsSetup == true
@@ -381,25 +434,29 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     /* ---------- trip choices (phase 3) ---------- */
 
     fun loadChoices() {
+        val sent = store.token
         viewModelScope.launch {
-            runCatching { api().choices() }
-                .onSuccess { (c, history) -> _state.update { it.copy(choices = c, history = history) } }
+            try {
+                val (c, history) = Api(sent).choices()
+                _state.update { it.copy(choices = c, history = history) }
+            } catch (e: Exception) {
+                // Left as it was; a refused token still signs the phone out.
+                failure(e, sent)
+            }
         }
     }
 
     fun undoChoice(c: sh.rcn.terminus.TripChoice) {
-        viewModelScope.launch {
-            runCatching { api().choice("undo", trip = c.trip, pref = c.pref) }
-                .onSuccess { list -> _state.update { it.copy(choices = list) } }
-                .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
+        attempt {
+            val list = api().choice("undo", trip = c.trip, pref = c.pref)
+            _state.update { it.copy(choices = list) }
         }
     }
 
     fun clearHistory() {
-        viewModelScope.launch {
-            runCatching { api().clearHistory() }
-                .onSuccess { _state.update { it.copy(history = 0, message = L.s(R.string.history_cleared)) } }
-                .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
+        attempt {
+            api().clearHistory()
+            _state.update { it.copy(history = 0, message = L.s(R.string.history_cleared)) }
         }
     }
 
@@ -429,10 +486,9 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     /* ---------- devices ---------- */
 
     fun loadDevices() {
-        viewModelScope.launch {
-            runCatching { api().devices() }
-                .onSuccess { d -> _state.update { it.copy(devices = d) } }
-                .onFailure { e -> _state.update { it.copy(message = fail(e as Exception)) } }
+        attempt {
+            val d = api().devices()
+            _state.update { it.copy(devices = d) }
         }
     }
 
@@ -451,7 +507,11 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
     fun removeDevice(d: Device, onSelf: () -> Unit) {
         attempt {
             api().removeDevice(d.id)
-            if (d.current) onSelf() else loadDevices()
+            if (d.current) {
+                // This phone's session is gone with it: signed out here too.
+                reset()
+                onSelf()
+            } else loadDevices()
         }
     }
 

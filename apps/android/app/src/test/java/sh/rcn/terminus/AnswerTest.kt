@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.rcn.terminus.widget.Refresher
@@ -28,11 +29,34 @@ class AnswerTest {
 
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
 
+    /** Every golden, English and Chinese, each read as what it is: a new one is checked here without being listed. */
     @Test fun everyGoldenAnswerParses() {
-        for (name in listOf("class-bus", "class-walk", "class-late", "class-from-dorm", "class-room", "class-started", "place", "landmark", "room", "arrived", "free", "rest", "home", "home-reached", "evening-home", "setup", "riding", "scheduled", "no-timetable")) {
-            val a = golden(name)
-            assertNotNull("$name has a card", a.card)
+        val dir = listOf("../../api/test/fixtures/answers", "../api/test/fixtures/answers").map(::File).first { it.isDirectory }
+        val files = dir.walk().filter { it.extension == "json" }.toList()
+        assertTrue("goldens found", files.size > 20)
+        for (f in files) {
+            val json = JSONObject(f.readText())
+            when (f.name) {
+                "day.json" -> assertTrue("${f.path} has items", DayPlan.parse(json).items.isNotEmpty())
+                "nearby-list.json" -> assertTrue("${f.path} has stops", parseNearby(json).isNotEmpty())
+                else -> assertNotNull("${f.path} has a card", NextAnswer.parse(json).card)
+            }
         }
+    }
+
+    @Test fun aReplyOfTheWrongShapeIsAParseErrorNotOffline() {
+        // Read as offline before: "Couldn't reach terminus" for a server that answered.
+        assertThrows(ParseError::class.java) { parseNearby(JSONObject("""{"stops":[{"board":[]}]}""")) }
+        assertThrows(ParseError::class.java) { Campus.parse(JSONObject("{}")) }
+        assertThrows(ParseError::class.java) { DayPlan.parse(JSONObject("""{"items":[1]}""")) }
+        assertThrows(ParseError::class.java) { ImportResult.parse(JSONObject("{}")) }
+    }
+
+    @Test fun anythingButALiveTimeIsApproximate() {
+        val a = golden("place").copy(card = null)
+        val fmt = { _: Long -> "09:42" }
+        assertEquals("${a.label.substringBefore(" · ")} · 09:42", a.copy(quality = "live").clockLabel(fmt))
+        for (q in listOf("scheduled", "stale", "something-new")) assertEquals("${a.label.substringBefore(" · ")} · ~09:42", a.copy(quality = q).clockLabel(fmt))
     }
 
     @Test fun classCardLinesComeFromTheServer() {
@@ -166,6 +190,32 @@ class AnswerTest {
         assertEquals(change - 5_000 + 15_000, Refresher.nextRefreshAt(a, fetched, change - 5_000))
         // Without a widget, only when the plan moves on (refreshAt).
         assertEquals(a.refreshAtMs, Refresher.nextRefreshAt(a, fetched, fetched, widget = false))
+    }
+
+    @Test fun refreshDoesNotChaseTheLeaveTimeOrTheRidesStops() {
+        // Past the card's change, the leave-by is next on screen, but the network
+        // waits for the plan's own moment: "Leave now" is a redraw.
+        val a = golden("class-bus")
+        val now = ms("2026-08-27T01:10:00Z")
+        assertEquals(a.refreshAtMs, Refresher.nextRefreshAt(a, ms(a.asOf), now))
+        assertEquals(a.leaveAtMs, Refresher.redrawAt(a, now))
+        // On the bus: the next stop is a redraw; the network waits for the plan's moment.
+        val r = golden("riding")
+        val ride = r.card!!.ride!!
+        assertEquals(r.refreshAtMs, Refresher.nextRefreshAt(r, ms(r.asOf), ride.boardMs))
+        assertEquals(RideStyle.nextRedrawAt(ride, ride.boardMs), Refresher.redrawAt(r, ride.boardMs))
+    }
+
+    @Test fun theFloorLeavesTheNetworkAloneWhileOnTrack() {
+        val a = golden("rest")
+        val now = ms(a.asOf)
+        val alarm = a.card!!.nextChangeAtMs!!
+        assertTrue(Refresher.onTrack(a, null, alarm, now))
+        // Failing, no alarm ahead, past staleAt, or nothing kept: it fetches.
+        assertFalse(Refresher.onTrack(a, "Offline", alarm, now))
+        assertFalse(Refresher.onTrack(a, null, now - 1, now))
+        assertFalse(Refresher.onTrack(a, null, alarm + 60_000, a.card.staleAtMs!!))
+        assertFalse(Refresher.onTrack(null, null, alarm, now))
     }
 
     @Test fun aBrokenPartOfTheCardIsLeftOutAndTheRestStands() {

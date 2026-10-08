@@ -4,10 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.Board
@@ -15,6 +17,7 @@ import sh.rcn.terminus.CampusMap
 import sh.rcn.terminus.Line
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapFiles
+import sh.rcn.terminus.Session
 import sh.rcn.terminus.Store
 import sh.rcn.terminus.parseInstant
 import sh.rcn.terminus.parseNearby
@@ -64,7 +67,18 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     /** When each board or line was last asked for, so swiping back and forth doesn't ask again at once. */
     private val asked = mutableMapOf<String, Long>()
 
-    private fun api() = Api(store.token)
+    private fun api(token: String) = Api(token)
+
+    /**
+     * A 401: this phone's token refused, so it's signed out
+     * ([Session.rejected]), and the screen follows. Nothing is asked again
+     * with it: every request here first needs a token. True when [e] was that.
+     */
+    private suspend fun refused(e: Exception, token: String): Boolean {
+        if (e !is ApiError || e.status != 401) return false
+        Session.rejected(getApplication(), token)
+        return true
+    }
 
     /**
      * The profile's "public buses": boards then have them too, as the web's
@@ -83,11 +97,22 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun mark(key: String) { asked[key] = System.currentTimeMillis() }
 
+    private var campusJob: kotlinx.coroutines.Job? = null
+
     fun loadCampus() {
-        if (_state.value.campus != null) return
-        viewModelScope.launch {
-            runCatching { MapFiles.campus(getApplication(), api()) }.getOrNull()?.let { json ->
-                runCatching { CampusMap.parse(json).first }.onSuccess { c -> _state.update { it.copy(campus = c) } }
+        if (_state.value.campus != null || campusJob?.isActive == true) return
+        val token = store.token ?: return
+        campusJob = viewModelScope.launch {
+            try {
+                val json = MapFiles.campus(getApplication(), api(token)) ?: return@launch
+                // Reading it takes a moment: not on the main thread.
+                val c = withContext(Dispatchers.Default) { CampusMap.parse(json).first }
+                _state.update { it.copy(campus = c) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Without it, names come with the boards.
+                refused(e, token)
             }
         }
     }
@@ -95,11 +120,12 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     /** The nearest stop, by location, else the home stop; its twin across the road comes with it. */
     suspend fun refreshNearest(force: Boolean = false) {
         if (!force && fresh(NEAREST)) return
+        val token = store.token ?: return
         mark(NEAREST)
         val ctx = getApplication<Application>()
         val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
         try {
-            val json = api().nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
+            val json = api(token).nearbyJson(loc?.latitude, loc?.longitude, Locator.accOf(loc), stopped = true)
             val asOf = json.optString("asOf").takeIf { it.isNotEmpty() }?.let(::parseInstant)
             val stops = parseNearby(json).map { Board.of(it, asOf) }
             val first = stops.firstOrNull()
@@ -115,6 +141,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiError) {
+            if (refused(e, token)) return
             // No location and no home stop: nothing to call nearest.
             _state.update { it.copy(nearest = null, nearestState = if (e.status == 400) Nearest.None else Nearest.Failed) }
         } catch (e: Exception) {
@@ -124,13 +151,15 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun refreshBoard(code: String, force: Boolean = false) {
         if (!force && fresh(code)) return
+        val token = store.token ?: return
         mark(code)
         try {
-            val board = api().board(code, publicBuses)
+            val board = api(token).board(code, publicBuses)
             _state.update { it.copy(boards = it.boards + (code to board.copy(code = board.code.ifEmpty { code })), failed = it.failed - code) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (refused(e, token)) return
             _state.update { it.copy(failed = it.failed + code) }
         }
     }
@@ -154,17 +183,19 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun refreshLine(svc: String, from: String?, force: Boolean = false) {
         val key = lineKey(svc, from)
         if (!force && fresh("line:$key")) return
+        val token = store.token ?: return
         mark("line:$key")
         try {
-            val line = api().line(svc, from)
+            val line = api(token).line(svc, from)
             _state.update { it.copy(lines = it.lines + (key to line), lineFailed = it.lineFailed - key) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiError) {
+            if (refused(e, token)) return
             // The stop isn't on this service (or an older server without /line): the line without it.
             if (from != null && e.status == 400) {
                 try {
-                    val line = api().line(svc)
+                    val line = api(token).line(svc)
                     _state.update { it.copy(lines = it.lines + (key to line), lineFailed = it.lineFailed - key) }
                     return
                 } catch (e: CancellationException) {

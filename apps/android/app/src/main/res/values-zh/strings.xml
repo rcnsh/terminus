@@ -30,6 +30,7 @@
     <string name="map_saved_as">已收藏</string>
     <string name="map_services_here">经过这里的线路</string>
     <string name="map_times_need_connection">实时时间需要联网。</string>
+    <string name="map_times_failed">无法加载时间，正在重试。</string>
     <string name="map_walking_directions">步行路线</string>
     <string name="tab_map">地图</string>
     <string name="tab_now">现在</string>
@@ -136,13 +137,14 @@
     <string name="detect_hint">行程中，实时通知会使用你的位置判断你是否已上车、错过巴士或已到达，并在你的所有设备上同步行程。它会在行程中你打开 terminus，或点按其通知或小组件时开始。不会保存你的位置，只保存判断结果。</string>
     <string name="detect_needs">这需要 terminus 获得精确位置和通知权限。</string>
     <string name="device_removed">设备已移除。请在应用里重新配对。</string>
+    <string name="device_removed_unused">因长时间未使用已被删除。打开 terminus 重新开始。</string>
     <string name="directions_to">到 %1$s 的路线</string>
     <string name="done">完成</string>
     <string name="email_me_code">给我发验证码</string>
     <string name="ends">结束</string>
     <string name="estimated_gap">~ 根据通常的班次间隔估计</string>
     <string name="eta_ended">已停运</string>
-    <string name="exact_off">terminus 的“闹钟和提醒”已关闭。提醒可能会晚几分钟，实时通知也可能延迟开始。</string>
+    <string name="exact_off">terminus 的“闹钟和提醒”已关闭。提醒可能会晚几分钟，实时通知也可能要等你打开应用才会开始。</string>
     <string name="favourites_hint">在应用、小组件和 Mac 菜单栏中一键可达。每周都去的地方，可以加到课表里。</string>
     <string name="finding_stop">正在找最近的车站…</string>
     <string name="follow_device">跟随手机设置</string>
@@ -342,7 +344,9 @@
     <string name="sign_out">退出登录</string>
     <string name="sign_out_text">应用和小组件将不再显示你的课表。你的账户和设置会保留，可用 %1$s 重新登录。</string>
     <string name="sign_out_title">在这部手机上退出登录？</string>
+    <string name="signed_out_key_lost">这部手机无法再读取登录信息，已退出登录。请重新登录，或重新开始。</string>
     <string name="signed_out_removed">这部手机已从你的账户退出登录。请用你的邮箱重新登录。</string>
+    <string name="signed_out_unused">这部手机的设置因长时间未使用已被删除。请重新开始或登录。</string>
     <string name="signin_cancelled">登录已在邮件中取消。如果是你取消的，请重新发送。</string>
     <string name="skip_setup">跳过设置</string>
     <string name="skips_class">这节课不去</string>
@@ -386,6 +390,7 @@
     <string name="unexpected_answer">terminus 返回了意外的响应</string>
     <string name="update">更新</string>
     <string name="update_out">terminus %1$s 已发布</string>
+    <string name="update_required">请更新 terminus 以继续使用。</string>
     <string name="update_to_continue">请更新 terminus 以继续使用</string>
     <string name="updated_at">%1$s 更新</string>
     <string name="updating">正在更新…</string>

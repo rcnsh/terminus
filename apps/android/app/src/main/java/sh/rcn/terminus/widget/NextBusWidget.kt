@@ -4,7 +4,6 @@ import sh.rcn.terminus.ServerClock
 import android.content.Context
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -56,7 +55,6 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import org.json.JSONObject
 import sh.rcn.terminus.CardStyle
-import sh.rcn.terminus.Destinations
 import sh.rcn.terminus.L
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NearbyStop
@@ -91,14 +89,18 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val store = Store(context)
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
+        // SizeMode.Exact composes once per size: what's read and parsed is
+        // shared between them, made again only when it changes.
+        val snaps = Latest<Long, Snap>()
+        val modes = Latest<ModeState, ModeState>()
         provideContent {
             // redrawWidgets() bumps VERSION. Reading the cache keyed on it is
             // what makes a running Glance session pick up a new answer; values
             // read once outside the composition would stay stale.
             val version = currentState(VERSION) ?: 0L
-            val snap = remember(version) { Snap(store.paired, store.lastAnswer(), store.lastError, store.liveUpdates, store.addedPlaces) }
+            val snap = snaps.get(version) { Snap(store) }
             // This widget's own choice (phase 8.3): the timetable, Nearby or a place.
-            val chosen = ModeState(
+            val state = ModeState(
                 Mode.of(currentState(WidgetModes.MODE), currentState(WidgetModes.MODE_LABEL)),
                 currentState(WidgetModes.MODE_AT),
                 currentState(WidgetModes.MODE_JSON),
@@ -108,29 +110,55 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
                     NearbySwap.Swap(from, currentState(NearbySwap.TO) ?: "", currentState(NearbySwap.AT) ?: 0L)
                 },
             )
+            val chosen = modes.get(state) { state }
             GlanceTheme(colors = BrandColors) {
-                Content(snap.paired, snap.last?.first, snap.last?.second, snap.error, snap.live, snap.added, chosen, store, appWidgetId)
+                Content(snap, chosen, appWidgetId)
             }
         }
     }
 
+    /** The value made for the last key, made again for a new one. */
+    private class Latest<K, V : Any> {
+        private var key: K? = null
+        private var value: V? = null
+
+        fun get(k: K, make: () -> V): V = value?.takeIf { key == k } ?: make().also { key = k; value = it }
+    }
+
     /** What the widget shows from the app, read again on each redraw (and only then, so it's all in here). */
-    private data class Snap(val paired: Boolean, val last: Pair<NextAnswer, Long>?, val error: String?, val live: Boolean, val added: List<Destinations.Dest>)
+    private class Snap(store: Store) {
+        val paired = store.paired
+        val last = store.lastAnswer()
+        val error = store.lastError
+        val live = store.liveUpdates
+        val added = store.addedPlaces
+        /** Read only when they're shown. */
+        val day by lazy { store.lastDay()?.first }
+        val uses by lazy { store.destinationUses() }
+    }
 
     private data class ModeState(val mode: Mode, val at: Long?, val json: String?, val fetchedAt: Long?, val error: String?, val swap: NearbySwap.Swap? = null) {
         /** Nearby's stops in the API's order (nearest first); null before any, or when they can't be read. */
-        fun nearbyStops(): List<NearbyStop>? = json?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() }
+        val nearbyStops: List<NearbyStop>? by lazy { json?.takeIf { mode == Mode.Nearby }?.let { runCatching { parseNearby(JSONObject(it)) }.getOrNull() } }
+
+        /** A place's answer; null before any, or when it can't be read. */
+        val answer: NextAnswer? by lazy { json?.takeIf { mode is Mode.To }?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() } }
 
         /** Nearby's stops as shown: the API's order, or the twin first after a swap. */
-        fun nearby(now: Long): List<NearbyStop>? = nearbyStops()?.let { NearbySwap.order(it, swap, now) }
+        fun nearby(now: Long): List<NearbyStop>? = nearbyStops?.let { NearbySwap.order(it, swap, now) }
     }
 
     /** The row of buttons, worked out once for the layout. */
     private data class Bottom(val chips: List<Mode>, val mode: Mode, val appWidgetId: Int)
 
     @Composable
-    private fun Content(paired: Boolean, plan: NextAnswer?, planAt: Long?, planError: String?, live: Boolean, added: List<Destinations.Dest>, chosen: ModeState, store: Store, appWidgetId: Int) {
+    private fun Content(snap: Snap, chosen: ModeState, appWidgetId: Int) {
         val ctx = LocalContext.current
+        val paired = snap.paired
+        val plan = snap.last?.first
+        val planAt = snap.last?.second
+        val planError = snap.error
+        val live = snap.live
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
         val tiny = TextStyle(color = colors.onSurfaceVariant, fontSize = 11.sp)
@@ -143,14 +171,14 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // Buttons for Timetable, Nearby and the usual places, as many as fit;
         // none on a compact widget, which then always shows the timetable.
         val now0 = System.currentTimeMillis()
-        val chips = if (large && paired) WidgetModes.chips(store, plan?.places.orEmpty(), added, LocalSize.current.width.value - 28f, now0) else emptyList()
+        val chips = if (large && paired) WidgetModes.chips(snap.uses, plan?.places.orEmpty(), snap.added, LocalSize.current.width.value - 28f, now0) else emptyList()
         val mode = WidgetModes.effective(chosen.mode, chosen.at, plan, chips.isNotEmpty(), now0)
         val bottom = Bottom(chips, mode, appWidgetId)
         val onTimetable = mode == Mode.Timetable
         // What's shown: the plan, or this widget's own answer for a place.
         val answer = when (mode) {
             Mode.Timetable -> plan
-            is Mode.To -> chosen.json?.let { runCatching { NextAnswer.parse(JSONObject(it)) }.getOrNull() }
+            is Mode.To -> chosen.answer
             Mode.Nearby -> null
         }
         val fetchedAt = if (onTimetable) planAt else chosen.fetchedAt
@@ -158,7 +186,7 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         // Offline (the last refresh failed) with the plan gone stale, or none
         // kept: the next thing on the day plan kept for it.
         val offline = if (onTimetable && paired && error != null && error != UPDATING && (answer == null || isOld(answer, ServerClock.now()))) {
-            OfflineDay.next(store.lastDay()?.first, ServerClock.now())
+            OfflineDay.next(snap.day, ServerClock.now())
         } else {
             null
         }
@@ -461,10 +489,10 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
         val colors = GlanceTheme.colors
         val muted = TextStyle(color = colors.onSurfaceVariant, fontSize = 12.sp)
         val now = System.currentTimeMillis()
-        val api = chosen.nearbyStops()
+        val api = chosen.nearbyStops
         val stops = api?.let { NearbySwap.order(it, chosen.swap, now) }
         val age = chosen.fetchedAt?.let { (now - it) / 1000 } ?: 0L
-        val old = age > NEARBY_OLD_S
+        val old = age * 1000 > WidgetModes.NEARBY_OLD_MS
         val first = stops?.firstOrNull()
         if (first == null) {
             Text(L.s(R.string.chip_nearby), style = muted, maxLines = 1)
@@ -521,9 +549,6 @@ abstract class BaseWidget(private val large: Boolean) : GlanceAppWidget() {
     }
 
     companion object {
-        /** Nearby's countdowns are guesses past this. */
-        private const val NEARBY_OLD_S = 180L
-
         /** The server's own words for a time are kept while they're this fresh; then the widget counts down itself. */
         private const val SERVER_ETA_S = 30L
 
@@ -598,7 +623,8 @@ class RefreshAction : ActionCallback {
         store.lastError = UPDATING
         redrawWidgets(context)
         try {
-            Refresher.refresh(context, fast = true)
+            // A tap's broadcast has seconds: the rest of a refresh follows in a job.
+            Refresher.refresh(context, fast = true, extras = false)
         } catch (e: kotlinx.coroutines.CancellationException) {
             // Stopped before an answer: "Updating…" mustn't stay, nor keep
             // the widget from its offline day plan.

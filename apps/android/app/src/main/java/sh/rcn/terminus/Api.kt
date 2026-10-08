@@ -1,7 +1,12 @@
 package sh.rcn.terminus
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import androidx.core.content.edit
 import androidx.core.net.toUri
 import org.json.JSONArray
 import org.json.JSONObject
@@ -88,20 +93,16 @@ data class NextAnswer(
     val title: String get() = card?.title ?: label
 
     /** [title], or for an older server without it, "D2 · 09:42" from the label and departure time;
-     *  a timetable estimate gets a "~": it is not a live time. */
+     *  anything but a live time gets a "~". */
     fun clockLabel(format: (Long) -> String): String {
         card?.title?.let { return it }
         val at = departsAtMs ?: return label
         if (quality == "unknown" || quality == "ended") return label
-        return "${label.substringBefore(" · ")} · ${if (quality == "scheduled") L.s(R.string.approx, format(at)) else format(at)}"
+        return "${label.substringBefore(" · ")} · ${if (quality != "live") L.s(R.string.approx, format(at)) else format(at)}"
     }
 
     companion object {
-        fun parse(o: JSONObject): NextAnswer = try {
-            parseOrThrow(o)
-        } catch (e: org.json.JSONException) {
-            throw ParseError(e.message ?: "bad answer")
-        }
+        fun parse(o: JSONObject): NextAnswer = parsing { parseOrThrow(o) }
 
         private fun parseOrThrow(o: JSONObject): NextAnswer {
             val dest = o.optJSONObject("dest")
@@ -233,6 +234,17 @@ private inline fun <T> lenient(parse: () -> T?): T? = try {
     parse()
 } catch (_: org.json.JSONException) {
     null
+}
+
+/**
+ * A reply read whole: one that isn't the shape this version reads (a field
+ * missing or the wrong type) is a [ParseError], "unexpected response", and
+ * not taken for the network failing ("Offline").
+ */
+internal inline fun <T> parsing(read: () -> T): T = try {
+    read()
+} catch (e: org.json.JSONException) {
+    throw ParseError(e.message ?: "unexpected answer")
 }
 
 /**
@@ -480,9 +492,9 @@ data class OnBus(val svc: String, val off: String?, val arriveMs: Long?)
 /** `date` is the SGT day it's for (YYYY-MM-DD): a plan kept for offline is only used that day. */
 data class DayPlan(val items: List<DayItem>, val note: String?, val date: String? = null) {
     companion object {
-        fun parse(o: JSONObject): DayPlan {
+        fun parse(o: JSONObject): DayPlan = parsing {
             val a = o.optJSONArray("items") ?: JSONArray()
-            return DayPlan(
+            DayPlan(
                 items = (0 until a.length()).map {
                     val x = a.getJSONObject(it)
                     val leave = x.optJSONObject("leave")
@@ -630,7 +642,13 @@ sealed interface Target {
 }
 
 /** The server said no. [message] is a sentence to show: the API's own errors are lowercase phrases, written for API users. */
-class ApiError(val status: Int, message: String) : IOException(sentence(message))
+open class ApiError(val status: Int, message: String) : IOException(sentence(message))
+
+/**
+ * 426: the server no longer serves this version (KV `config:minClient`).
+ * Nothing is asked again for hours ([Outdated]); the app offers the update.
+ */
+class UpdateRequired(message: String) : ApiError(426, message)
 
 /** "not a valid NUSMods share link" -> "Not a valid NUSMods share link." */
 internal fun sentence(text: String): String {
@@ -652,12 +670,12 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     suspend fun pair(code: String, name: String): String {
         val body = JSONObject().put("code", code).put("name", name)
-        return request("POST", "/pair", body).getString("token")
+        return parsing { request("POST", "/pair", body).getString("token") }
     }
 
     /** First launch: an account with no email, so the app works before any sign-in. */
     suspend fun anon(name: String): String =
-        request("POST", "/auth/anon", JSONObject().put("name", name).put("platform", "android")).getString("token")
+        parsing { request("POST", "/auth/anon", JSONObject().put("name", name).put("platform", "android")).getString("token") }
 
     suspend fun me(): Me = Me.parse(request("GET", "/me"))
 
@@ -667,7 +685,7 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     suspend fun saveProfile(profile: JSONObject): JSONObject = request("PUT", "/me/profile", profile)
 
     /** Imports a NUSMods share link; the server replaces the imported classes only if it all worked. */
-    suspend fun import(share: String): ImportResult = ImportResult.parse(request("POST", "/me/import", JSONObject().put("share", share)))
+    suspend fun import(share: String): ImportResult = parsing { ImportResult.parse(request("POST", "/me/import", JSONObject().put("share", share))) }
 
     /** Stops and residences, for the home and place pickers. */
     suspend fun campus(): Campus = Campus.parse(request("GET", "/campus"))
@@ -687,10 +705,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** One service's live buses, for the map. */
-    suspend fun buses(svc: String): BusList = BusList.parse(request("GET", "/buses?svc=${enc(svc)}"))
+    suspend fun buses(svc: String): BusList = parsing { BusList.parse(request("GET", "/buses?svc=${enc(svc)}")) }
 
     /** What's coming at one stop, for the map's stop sheet. */
-    suspend fun arrivals(stop: String): StopBoard = StopBoard.parse(request("GET", "/arrivals?stop=${enc(stop)}"))
+    suspend fun arrivals(stop: String): StopBoard = parsing { StopBoard.parse(request("GET", "/arrivals?stop=${enc(stop)}")) }
 
     /**
      * The same board whole, for the Buses tab: every row, the stop's name and
@@ -698,27 +716,27 @@ class Api(private val token: String?, private val fast: Boolean = false, private
      * [public], the public buses there too (the profile's `publicBuses`).
      */
     suspend fun board(stop: String, public: Boolean = false): Board =
-        Board.parse(request("GET", "/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else ""))
+        parsing { Board.parse(request("GET", "/arrivals?stop=${enc(stop)}&stopped=1" + if (public) "&public=1" else "")) }
 
     /** One service's whole line; with [stop], that stop's board row for it too. */
     suspend fun line(svc: String, stop: String? = null): Line =
-        Line.parse(request("GET", "/line?svc=${enc(svc)}" + (stop?.let { "&stop=${enc(it)}" } ?: "")))
+        parsing { Line.parse(request("GET", "/line?svc=${enc(svc)}" + (stop?.let { "&stop=${enc(it)}" } ?: ""))) }
 
     /** Starts a sign-in approved from the email; send it with this device's anonymous token to keep its setup. */
     suspend fun signInStart(email: String, name: String): SignInRequest {
         val o = request("POST", "/auth/app/start", JSONObject().put("email", email).put("name", name))
-        return SignInRequest(o.getString("request"), o.getString("poll"), o.getInt("match"))
+        return parsing { SignInRequest(o.getString("request"), o.getString("poll"), o.getInt("match")) }
     }
 
     suspend fun signInPoll(r: SignInRequest): SignInPoll {
         val o = request("POST", "/auth/app/poll", JSONObject().put("request", r.request).put("poll", r.poll))
-        return SignInPoll(o.getString("status"), o.optStringOrNull("token"), o.optStringOrNull("email"), o.optStringOrNull("outcome"))
+        return parsing { SignInPoll(o.getString("status"), o.optStringOrNull("token"), o.optStringOrNull("email"), o.optStringOrNull("outcome")) }
     }
 
     /** The code from the email, typed here. A wrong one throws with the server's message. */
     suspend fun signInCode(r: SignInRequest, code: String): SignInPoll {
         val o = request("POST", "/auth/app/code", JSONObject().put("request", r.request).put("poll", r.poll).put("code", code))
-        return SignInPoll(o.getString("status"), o.optStringOrNull("token"), o.optStringOrNull("email"), o.optStringOrNull("outcome"))
+        return parsing { SignInPoll(o.getString("status"), o.optStringOrNull("token"), o.optStringOrNull("email"), o.optStringOrNull("outcome")) }
     }
 
     /** After a "choose" outcome: which setup to keep. `anon` is the device's old token. */
@@ -727,16 +745,19 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** A code another device can pair with (accounts with an email only). */
-    suspend fun pairCode(): String = request("POST", "/me/pair-code", JSONObject()).getString("code")
+    suspend fun pairCode(): String = parsing { request("POST", "/me/pair-code", JSONObject()).getString("code") }
 
     suspend fun devices(): List<Device> {
-        val list = request("GET", "/me/devices").getJSONArray("devices")
-        return (0 until list.length()).map {
-            val d = list.getJSONObject(it)
-            Device(
-                d.getString("id"), d.optStringOrNull("name") ?: L.s(R.string.device_unnamed), d.optStringOrNull("platform"),
-                d.optLong("created"), d.optLong("lastSeen"), d.optBoolean("current", false),
-            )
+        val o = request("GET", "/me/devices")
+        return parsing {
+            val list = o.getJSONArray("devices")
+            (0 until list.length()).map {
+                val d = list.getJSONObject(it)
+                Device(
+                    d.getString("id"), d.optStringOrNull("name") ?: L.s(R.string.device_unnamed), d.optStringOrNull("platform"),
+                    d.optLong("created"), d.optLong("lastSeen"), d.optBoolean("current", false),
+                )
+            }
         }
     }
 
@@ -781,8 +802,11 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     suspend fun destinations(): List<Destination> {
-        val list = request("GET", "/campus").getJSONArray("destinations")
-        return (0 until list.length()).map { parseDestination(list.getJSONObject(it)) }
+        val o = request("GET", "/campus")
+        return parsing {
+            val list = o.getJSONArray("destinations")
+            (0 until list.length()).map { parseDestination(list.getJSONObject(it)) }
+        }
     }
 
     /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /me/next. */
@@ -810,6 +834,11 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     /** This phone's Firebase token, so the server can say when the card changes. */
     suspend fun registerPush(token: String) {
         request("POST", "/me/push", JSONObject().put("token", token))
+    }
+
+    /** No more pushes to this session: nothing on the phone would show them. */
+    suspend fun unregisterPush() {
+        request("DELETE", "/me/push")
     }
 
     /** A suggestion accepted or turned down (`id`), or a choice undone (`trip` and `pref`). */
@@ -841,9 +870,9 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         request("DELETE", "/me/history")
     }
 
-    private fun parseChoices(o: JSONObject): List<TripChoice> {
-        val a = o.optJSONArray("choices") ?: return emptyList()
-        return (0 until a.length()).map { a.getJSONObject(it).let { c -> TripChoice(c.getString("trip"), c.getString("pref"), c.optStringOrNull("label")) } }
+    private fun parseChoices(o: JSONObject): List<TripChoice> = parsing {
+        val a = o.optJSONArray("choices") ?: return@parsing emptyList()
+        (0 until a.length()).map { a.getJSONObject(it).let { c -> TripChoice(c.getString("trip"), c.getString("pref"), c.optStringOrNull("label")) } }
     }
 
     /** Today's timeline. */
@@ -867,10 +896,10 @@ class Api(private val token: String?, private val fast: Boolean = false, private
 
     /** Whose account a pairing code belongs to (masked), without spending it. */
     suspend fun pairCheck(code: String): String =
-        request("POST", "/pair/check", JSONObject().put("code", code)).getString("account")
+        parsing { request("POST", "/pair/check", JSONObject().put("code", code)).getString("account") }
 
     /** The released version, from /download/latest.json. */
-    suspend fun latestVersion(): String = request("GET", "/download/latest.json").getString("version")
+    suspend fun latestVersion(): String = parsing { request("GET", "/download/latest.json").getString("version") }
 
     /** "Is this wrong?": the answer as the server sent it, and a note (required). Needs an account with an email. */
     suspend fun report(note: String, answer: JSONObject?, appVersion: String) {
@@ -901,72 +930,219 @@ class Api(private val token: String?, private val fast: Boolean = false, private
         seen: ((HttpURLConnection) -> Unit)? = null,
     ): JSONObject =
         withContext(Dispatchers.IO) {
+            // Refused as too old: nothing goes out until the hold is up (or the app is updated).
+            if (Outdated.holding()) throw UpdateRequired(L.s(R.string.update_required))
             // Asked to slow down: nothing goes out until Retry-After is up.
-            if (System.currentTimeMillis() < Quiet.untilMs) throw ApiError(429, L.s(R.string.busy_try_again))
+            if (Quiet.blocked(path)) throw ApiError(429, L.s(R.string.busy_try_again))
             val conn = URL(BuildConfig.API_BASE + path).openConnection() as HttpURLConnection
             try {
-                conn.requestMethod = method
                 // Fast (widgets, a push, an alarm's broadcast, the live
                 // notification) must finish inside the ~10 s a broadcast or a
-                // push handler gets: 2 s to connect plus 7 s to read stays
-                // under it. The Worker gives each NUS call up to 5 s, and a
-                // cold /me/next mints a guest token first, which usually
-                // fits in 7 s. A connection is up in well under a second, or
-                // not at all within 2. The read timeout counts each wait for
-                // bytes, but the answer is one small JSON body sent at once,
-                // so it is in effect the wait for the reply. The rare worst
-                // case (a re-mint and a retry, ~20 s) is left to the next
-                // refresh rather than overrunning the budget.
-                conn.connectTimeout = if (fast) 2_000 else 8_000
-                conn.readTimeout = if (fast) 7_000 else 10_000
-                conn.setRequestProperty("accept", "application/json")
-                // So the server can tell apps and versions apart (the User-Agent only says Dalvik).
-                conn.setRequestProperty("x-terminus-client", CLIENT)
-                // The server writes answers, cards and errors in the app's language.
-                conn.setRequestProperty("accept-language", L.header())
-                token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
-                ifNoneMatch?.let { conn.setRequestProperty("if-none-match", it) }
-                if (body != null) {
-                    conn.doOutput = true
-                    conn.setRequestProperty("content-type", "application/json")
-                    conn.outputStream.use { it.write(body.toString().toByteArray()) }
+                // push handler gets. The timeouts below are per step (and per
+                // address tried, with none for the DNS lookup), so the whole
+                // exchange has a deadline of its own too, which also ends it
+                // when the caller is cancelled.
+                withTimeout(if (fast) FAST_DEADLINE_MS else DEADLINE_MS) {
+                    blocking(conn) { exchange(conn, method, path, body, ifNoneMatch, seen) }
                 }
-                val status = conn.responseCode
-                // How far the phone's clock is out, from a reply fresh from the server.
-                val cached = (conn.getHeaderField("age")?.trim()?.toLongOrNull() ?: 0) > 0 || conn.getHeaderField("cf-cache-status").equals("HIT", ignoreCase = true)
-                ServerClock.observe(conn.getHeaderField("date"), System.currentTimeMillis(), cached)
-                if (status == 429) Quiet.after(conn.getHeaderField("retry-after"))
-                if (status == 304 && ifNoneMatch != null) throw NotModified()
-                seen?.invoke(conn)
-                val stream = if (status in 200..299) conn.inputStream else conn.errorStream
-                val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                val json = runCatching { JSONObject(text) }.getOrNull()
-                // Without the API's own words (an HTML error page from in front
-                // of the Worker), a plain sentence rather than "HTTP 502".
-                if (status !in 200..299) throw ApiError(status, json?.optStringOrNull("error") ?: L.s(R.string.server_not_answering))
-                // A 200 that isn't JSON is not "offline": the server said something this version can't read.
-                json ?: throw ParseError("not JSON")
+            } catch (e: TimeoutCancellationException) {
+                throw java.net.SocketTimeoutException("no answer within the deadline")
             } finally {
                 conn.disconnect()
             }
         }
 
+    private fun exchange(
+        conn: HttpURLConnection,
+        method: String,
+        path: String,
+        body: JSONObject?,
+        ifNoneMatch: String?,
+        seen: ((HttpURLConnection) -> Unit)?,
+    ): JSONObject {
+        conn.requestMethod = method
+        // Fast: 2 s to connect plus 7 s to read stays under the broadcast's
+        // budget. The Worker gives each NUS call up to 5 s, and a cold
+        // /me/next mints a guest token first, which usually fits in 7 s. A
+        // connection is up in well under a second, or not at all within 2.
+        // The read timeout counts each wait for bytes, but the answer is one
+        // small JSON body sent at once, so it is in effect the wait for the
+        // reply. The rare worst case (a re-mint and a retry, ~20 s) is left
+        // to the next refresh rather than overrunning the budget.
+        conn.connectTimeout = if (fast) 2_000 else 8_000
+        conn.readTimeout = if (fast) 7_000 else 10_000
+        conn.setRequestProperty("accept", "application/json")
+        // So the server can tell apps and versions apart (the User-Agent only says Dalvik).
+        conn.setRequestProperty("x-terminus-client", CLIENT)
+        // The server writes answers, cards and errors in the app's language.
+        conn.setRequestProperty("accept-language", L.header())
+        token?.let { conn.setRequestProperty("authorization", "Bearer $it") }
+        ifNoneMatch?.let { conn.setRequestProperty("if-none-match", it) }
+        if (body != null) {
+            conn.doOutput = true
+            conn.setRequestProperty("content-type", "application/json")
+            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+        }
+        val status = conn.responseCode
+        // How far the phone's clock is out, from a reply fresh from the server.
+        val cached = (conn.getHeaderField("age")?.trim()?.toLongOrNull() ?: 0) > 0 || conn.getHeaderField("cf-cache-status").equals("HIT", ignoreCase = true)
+        ServerClock.observe(conn.getHeaderField("date"), System.currentTimeMillis(), cached)
+        val retryAfter = conn.getHeaderField("retry-after")
+        if (status == 429) Quiet.after(path, retryAfter)
+        // Down for a moment (the accounts database): the polling loops wait it out.
+        if (status == 503) Quiet.later(retryAfter)
+        if (status == 304 && ifNoneMatch != null) throw NotModified()
+        seen?.invoke(conn)
+        val stream = if (status in 200..299) conn.inputStream else conn.errorStream
+        val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        val json = runCatching { JSONObject(text) }.getOrNull()
+        if (status == 426) {
+            Outdated.refused()
+            throw UpdateRequired(L.s(R.string.update_required))
+        }
+        // Without the API's own words (an HTML error page from in front
+        // of the Worker), a plain sentence rather than "HTTP 502".
+        if (status !in 200..299) throw ApiError(status, json?.optStringOrNull("error") ?: L.s(R.string.server_not_answering))
+        // Only an account's routes are refused as too old, so only they say it's over.
+        if (token != null) Outdated.served()
+        // A 200 that isn't JSON is not "offline": the server said something this version can't read.
+        return json ?: throw ParseError("not JSON")
+    }
+
     private fun query(parts: List<String>) = if (parts.isEmpty()) "" else "?" + parts.joinToString("&")
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+}
+
+/** The whole exchange, connecting included, for a fast request (a broadcast's ~10 s) and any other. */
+private const val FAST_DEADLINE_MS = 9_000L
+private const val DEADLINE_MS = 20_000L
+
+/**
+ * Runs [block] on an IO thread and waits for it, cancellably: cancelled (or
+ * past [withTimeout]'s deadline), [conn] is disconnected, which ends a
+ * connect or a read under way, and the caller goes on at once rather than
+ * waiting out a blocking call, such as a DNS lookup, that has no timeout.
+ */
+private suspend fun <T> blocking(conn: HttpURLConnection, block: () -> T): T = suspendCancellableCoroutine { cont ->
+    val io = Dispatchers.IO.asExecutor()
+    // Off the cancelling thread, which may be the main one.
+    cont.invokeOnCancellation { io.execute { conn.disconnect() } }
+    // A result after cancellation is dropped by the continuation.
+    io.execute { cont.resumeWith(runCatching(block)) }
 }
 
 /**
  * After a 429, every request on this phone (the app, its widgets, the live
  * notification) waits out the server's Retry-After, at most 5 minutes: a
  * loop that kept asking would only keep the limit tripped, and each refused
- * request still costs the server one.
+ * request still costs the server one. Sign-in, pairing and code routes have
+ * limits of their own, so a 429 from one holds back only those, not the
+ * widget's answers. The wait goes by the time since boot (the phone's clock
+ * can be changed), and is kept in the settings by the wall clock, so a
+ * process started for a widget or a push honours it too.
  */
 object Quiet {
-    @Volatile var untilMs = 0L
+    private const val MAX_S = 300L
+    private const val DEFAULT_S = 60L
+    private const val KEY = "quiet-until"
 
-    fun after(retryAfter: String?) {
-        val s = retryAfter?.trim()?.toLongOrNull()?.takeIf { it > 0 } ?: 60
-        untilMs = System.currentTimeMillis() + s.coerceAtMost(300) * 1000
+    /** For tests: the time since boot, and the wall clock. */
+    internal var elapsed: () -> Long = { android.os.SystemClock.elapsedRealtime() }
+    internal var wall: () -> Long = { System.currentTimeMillis() }
+
+    @Volatile private var prefs: android.content.SharedPreferences? = null
+    @Volatile private var untilElapsed = 0L
+    @Volatile private var authUntilElapsed = 0L
+    /** A 503's Retry-After: not a gate, only how long the polling loops wait. */
+    @Volatile private var laterElapsed = 0L
+
+    /** At process start ([TerminusApp]): a wait a process before this one was told. */
+    fun init(ctx: android.content.Context) {
+        val p = ctx.applicationContext.getSharedPreferences("terminus-net", android.content.Context.MODE_PRIVATE)
+        prefs = p
+        val left = p.getLong(KEY, 0) - wall()
+        if (left > 0) untilElapsed = maxOf(untilElapsed, elapsed() + left.coerceAtMost(MAX_S * 1000))
+    }
+
+    fun blocked(path: String): Boolean {
+        val now = elapsed()
+        return now < untilElapsed || (auth(path) && now < authUntilElapsed)
+    }
+
+    fun after(path: String, retryAfter: String?) {
+        val s = (retryAfter?.trim()?.toLongOrNull()?.takeIf { it > 0 } ?: DEFAULT_S).coerceAtMost(MAX_S)
+        val until = elapsed() + s * 1000
+        if (auth(path)) {
+            authUntilElapsed = until
+            return
+        }
+        untilElapsed = until
+        prefs?.edit { putLong(KEY, wall() + s * 1000) }
+    }
+
+    fun later(retryAfter: String?) {
+        val s = retryAfter?.trim()?.toLongOrNull()?.takeIf { it > 0 } ?: return
+        laterElapsed = elapsed() + s.coerceAtMost(MAX_S) * 1000
+    }
+
+    /** How long until requests go out again, ms (0: now): a retry waits at least this. */
+    fun remainingMs(): Long = (untilElapsed - elapsed()).coerceAtLeast(0)
+
+    /** How long a polling loop waits before asking again, at least: a 429's wait or a 503's. */
+    fun waitMs(): Long = maxOf(remainingMs(), laterElapsed - elapsed(), 0)
+
+    internal fun auth(path: String) = path.startsWith("/auth/") || path.startsWith("/pair") || path.startsWith("/me/pair-code")
+
+    /** For tests. */
+    internal fun reset() {
+        untilElapsed = 0
+        authUntilElapsed = 0
+        laterElapsed = 0
+    }
+}
+
+/**
+ * The server refused this version (426, below KV `config:minClient`).
+ * Nothing is asked for [HOLD_MS] after that, from the app, the widgets or
+ * the notifications: then one request finds out whether the minimum has
+ * come down. Kept in the settings, for every process, until an answer
+ * comes or this version is replaced.
+ */
+object Outdated {
+    private const val HOLD_MS = 6 * 3_600_000L
+    private const val KEY_AT = "outdated-at"
+    private const val KEY_VERSION = "outdated-version"
+
+    internal var wall: () -> Long = { System.currentTimeMillis() }
+    @Volatile private var prefs: android.content.SharedPreferences? = null
+    @Volatile private var at = 0L
+
+    fun init(ctx: android.content.Context) {
+        val p = ctx.applicationContext.getSharedPreferences("terminus-net", android.content.Context.MODE_PRIVATE)
+        prefs = p
+        // Refused as another version: this one may be new enough.
+        at = if (p.getString(KEY_VERSION, null) == BuildConfig.VERSION_NAME) p.getLong(KEY_AT, 0) else 0
+    }
+
+    /** Refused lately: what the app shows is the update, not an error. */
+    val required: Boolean get() = at != 0L
+
+    fun holding(): Boolean = at != 0L && wall() - at in 0 until HOLD_MS
+
+    fun refused() {
+        at = wall()
+        prefs?.edit { putLong(KEY_AT, at).putString(KEY_VERSION, BuildConfig.VERSION_NAME) }
+    }
+
+    fun served() {
+        if (at == 0L) return
+        at = 0
+        prefs?.edit { remove(KEY_AT).remove(KEY_VERSION) }
+    }
+
+    /** For tests. */
+    internal fun reset() {
+        at = 0
     }
 }
 
@@ -1008,12 +1184,12 @@ data class Campus(val stops: List<Stop>, val residences: List<Residence>, val de
     fun stop(code: String) = stops.firstOrNull { it.code == code }
 
     companion object {
-        fun parse(o: JSONObject): Campus {
+        fun parse(o: JSONObject): Campus = parsing {
             val s = o.getJSONArray("stops")
             val r = o.optJSONArray("residences") ?: JSONArray()
             val d = o.optJSONArray("destinations") ?: JSONArray()
             val routes = o.optJSONObject("routes")
-            return Campus(
+            Campus(
                 stops = (0 until s.length()).map {
                     val x = s.getJSONObject(it)
                     Stop(x.getString("code"), x.optString("name", x.getString("code")), x.optDouble("lat"), x.optDouble("lon"), x.optJSONArray("services").stringList())
@@ -1036,11 +1212,11 @@ data class Unplaced(val module: String, val venue: String, val day: Int, val arr
 
 data class ImportResult(val profile: JSONObject, val classes: Int, val unresolved: List<String>, val missing: List<String>, val term: String, val unplaced: List<Unplaced> = emptyList()) {
     companion object {
-        fun parse(o: JSONObject): ImportResult {
+        fun parse(o: JSONObject): ImportResult = parsing {
             val profile = o.getJSONObject("profile")
             val un = o.optJSONArray("unresolved") ?: JSONArray()
             val miss = o.optJSONArray("missing") ?: JSONArray()
-            return ImportResult(
+            ImportResult(
                 profile = profile,
                 classes = profile.optJSONArray("trips")?.length() ?: 0,
                 unresolved = (0 until un.length()).map { un.getJSONObject(it).let { u -> L.s(R.string.module_at_venue, u.optString("module"), u.optString("venue")) } },
@@ -1136,9 +1312,9 @@ fun isNewer(latest: String, current: String): Boolean {
 fun JSONObject.optStringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else optString(key)
 
 /** /me/nearby's stops, nearest first. */
-fun parseNearby(json: JSONObject): List<NearbyStop> {
+fun parseNearby(json: JSONObject): List<NearbyStop> = parsing {
     val stops = json.getJSONArray("stops")
-    return (0 until stops.length()).map { i ->
+    (0 until stops.length()).map { i ->
         val s = stops.getJSONObject(i)
         val board = s.getJSONArray("board")
         NearbyStop(

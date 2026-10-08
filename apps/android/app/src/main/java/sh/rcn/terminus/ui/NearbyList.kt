@@ -134,10 +134,10 @@ private fun Road(row: BoardRow, color: Color, modifier: Modifier) {
 }
 
 /** A row's time worded here, for an older server that doesn't send `eta`. */
-/** The local wording, for an older server and the widget's own countdown: a timetable guess keeps its "~", as the server's `eta` does. */
+/** The local wording, for an older server and the widget's own countdown: anything but a live time keeps its "~", as the server's `eta` does. */
 internal fun eta(s: Int?, quality: String) = when {
     s == null -> if (quality == "ended") L.s(R.string.eta_ended) else "–"
     s < 45 -> L.s(R.string.now)
-    quality == "scheduled" -> L.s(R.string.approx, L.s(R.string.n_min, (s + 30) / 60))
+    quality != "live" -> L.s(R.string.approx, L.s(R.string.n_min, (s + 30) / 60))
     else -> L.s(R.string.n_min, (s + 30) / 60)
 }

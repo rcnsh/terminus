@@ -88,7 +88,6 @@ class MainActivity : ComponentActivity() {
         // that opened the app and yank the user back to that view.
         if (savedInstanceState == null) handle(intent)
         vm.checkForUpdate(BuildConfig.VERSION_NAME)
-        sh.rcn.terminus.Push.register(this)
         setContent { TerminusTheme { App(vm, account, map, buses) } }
     }
 
@@ -114,6 +113,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Notifications blocked or allowed in the phone's settings meanwhile;
+        // push asked for, or sent again when due (Push.sync).
+        vm.recheckNotifications()
         // In the front during a trip: the live notification can follow it by location from here on.
         sh.rcn.terminus.LiveService.watch(this)
     }

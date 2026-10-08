@@ -648,7 +648,7 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
         hasLocation = Locator.hasForeground(ctx)
     }
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) main.setLeaveAlerts(true)
+        if (granted && LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL)) main.setLeaveAlerts(true)
     }
     StepPage(state.message, { StepButtons(next = next, back = back, nextLabel = stringResource(R.string.start_using)) }) {
         Title(stringResource(R.string.two_things), stringResource(R.string.two_things_sub))
@@ -660,8 +660,12 @@ private fun ColumnScope.PermissionsStep(state: AccountState, main: MainViewModel
             doneText = stringResource(R.string.on_),
             ask = stringResource(R.string.turn_on_alerts),
         ) {
-            if (LeaveAlerts.canNotify(ctx)) main.setLeaveAlerts(true)
-            else @Suppress("InlinedApi") askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+            when {
+                LeaveAlerts.canNotify(ctx, LeaveAlerts.CHANNEL) -> main.setLeaveAlerts(true)
+                LeaveAlerts.needsPermission(ctx) -> @Suppress("InlinedApi") askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                // Off in the phone's settings: only there can they be turned on.
+                else -> ctx.openAppSettings()
+            }
         }
         Spacer(Modifier.height(12.dp))
         PermissionCard(

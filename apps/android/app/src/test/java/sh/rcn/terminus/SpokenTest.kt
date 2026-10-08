@@ -93,6 +93,8 @@ class SpokenTest {
         assertEquals("1 minute, live", Spoken.eta(60, "live"))
         assertEquals("Arriving", Spoken.eta(20, "live"))
         assertEquals(null, Spoken.eta(null, "unknown"))
+        // A quality this version doesn't know is no live time.
+        assertEquals("about 6 minutes", Spoken.eta(360, "stale"))
     }
 
     @Test fun inChinese() {
