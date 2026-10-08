@@ -390,8 +390,10 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
         request = null
         if (outcome == "choose") {
             // Both have a setup: keep the old token until the choice is made.
+            // Not busy: a typed code leaves it set, and the choice's buttons
+            // are off while it is.
             approvedToken = token
-            _state.update { it.copy(signIn = SignIn.Choose(email)) }
+            _state.update { it.copy(signIn = SignIn.Choose(email), busy = false) }
             return
         }
         signedIn(token, email, onSignedIn)
