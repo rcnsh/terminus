@@ -12,6 +12,8 @@ import {
   type SessionInfo,
   authenticate,
   clientFrom,
+  clientOutdated,
+  UPDATE_REQUIRED,
   createAnonymous,
   createPairCode,
   mailDeviceAdded,
@@ -1222,6 +1224,12 @@ export async function handleMe(
     if (tokenFrom(req) && (await limited(env, req, 'badtoken'))) return json({ error: 'too many attempts, try again in a minute' }, 429);
     return json({ error: 'sign in first' }, 401);
   }
+  // An app too old to keep serving (config:minClient): it shows "update" and
+  // stops asking, rather than breaking on an answer it can't read. It can
+  // still take itself off pushes, and delete its account (an anonymous one
+  // has no account page), as it can still sign out.
+  const leaving = req.method === 'DELETE' && (path === '/me/push' || path === '/me');
+  if (!leaving && (await clientOutdated(env, req, nowMs))) return json(UPDATE_REQUIRED, 426);
 
   // Per account: generous for a widget, an app and a browser tab together.
   if (env.RL_ME) {

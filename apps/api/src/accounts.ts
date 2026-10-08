@@ -11,6 +11,7 @@ import type { Env } from './types.ts';
 import { DEVICE_IDLE_MS } from './monitor.ts';
 import { mailName, siteOrigin } from './site.ts';
 import { m } from './i18n.ts';
+import { TTL } from './config.ts';
 
 export const ACCOUNT_TTL = {
   linkMs: 15 * 60_000,
@@ -512,6 +513,80 @@ export function clientFrom(req: Request): Client {
   const platform = m ? PLATFORMS.find((p) => p === m[1]) : undefined;
   if (m && platform) return { platform, client: raw };
   return { platform: platformFromAgent(req.headers.get('user-agent')), client: null };
+}
+
+/** The oldest app versions still served, per platform: {"android":"2.6.0","mac":"2.6.0"}. */
+export const KV_MIN_CLIENT = 'config:minClient';
+/** The answer to an app older than that, with HTTP 426. */
+export const UPDATE_REQUIRED = { error: 'Update terminus to keep using it.', update: true } as const;
+const minClientMemos = new WeakMap<object, { value: Record<string, string>; atMs: number }>();
+
+/**
+ * A version as numbers to compare: "2.6.0" is [2, 6, 0] with no
+ * pre-release; "2.6.0-beta.3" is [2, 6, 0] before the release, beta 3.
+ * Null for anything else, which is never refused.
+ */
+function versionParts(v: string): { core: number[]; pre: number[] | null } | null {
+  const m = /^(\d+(?:\.\d+)*)(?:-[a-z]*\.?(\d+(?:\.\d+)*)?)?(?:\+.*)?$/.exec(v.trim().toLowerCase());
+  if (!m) return null;
+  const pre = v.includes('-') ? (m[2] ?? '0').split('.').map(Number) : null;
+  return { core: m[1].split('.').map(Number), pre };
+}
+
+function compareNums(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d !== 0) return Math.sign(d);
+  }
+  return 0;
+}
+
+/** Whether `version` is older than `min`; false when either can't be read. */
+export function versionBelow(version: string, min: string): boolean {
+  const v = versionParts(version);
+  const lo = versionParts(min);
+  if (!v || !lo) return false;
+  const core = compareNums(v.core, lo.core);
+  if (core !== 0) return core < 0;
+  // The same version: a pre-release comes before the release.
+  if (v.pre && !lo.pre) return true;
+  if (!v.pre || !lo.pre) return false;
+  return compareNums(v.pre, lo.pre) < 0;
+}
+
+/**
+ * `config:minClient`, read once per TTL.versionMemoMs per isolate (like
+ * config:appVersion), so raising the minimum is one KV write and costs
+ * no KV read per request. Missing or unreadable means no minimum.
+ */
+async function minClients(env: Env, nowMs: number): Promise<Record<string, string>> {
+  const memo = minClientMemos.get(env.KV);
+  if (memo && nowMs - memo.atMs < TTL.versionMemoMs) return memo.value;
+  let value: Record<string, string> = {};
+  try {
+    const parsed: unknown = await env.KV.get(KV_MIN_CLIENT, 'json');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      value = Object.fromEntries(Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === 'string'));
+    }
+  } catch (err) {
+    // Malformed JSON or KV failing: serve everyone rather than lock apps out.
+    console.error(`ignoring ${KV_MIN_CLIENT}:`, err instanceof Error ? err.message : String(err));
+  }
+  minClientMemos.set(env.KV, { value, atMs: nowMs });
+  return value;
+}
+
+/**
+ * Whether this request comes from an app older than its platform's
+ * minimum. Only the x-terminus-client header counts: the web app and API
+ * users send none and are never refused, nor is an app on a platform
+ * with no minimum set.
+ */
+export async function clientOutdated(env: Env, req: Request, nowMs: number): Promise<boolean> {
+  const { platform, client } = clientFrom(req);
+  if (!platform || !client) return false;
+  const min = (await minClients(env, nowMs))[platform];
+  return min !== undefined && versionBelow(client.slice(client.indexOf('/') + 1), min);
 }
 
 /** Starts an account with no email for an app's first launch; returns its device token. */

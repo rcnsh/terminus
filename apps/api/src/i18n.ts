@@ -694,6 +694,7 @@ export const ERRORS_ZH: Record<string, string> = {
   "send anon (the device's old token) and keep: 'account' or 'device'": "请发送 anon（设备的旧令牌）和 keep：'account' 或 'device'",
   'that token is not an anonymous account': '这个令牌不是匿名账户',
   'sign in first': '请先登录',
+  'Update terminus to keep using it.': '请更新 terminus 以继续使用。',
   'sign in to send feedback': '请先登录再发送反馈',
   'do this from the account page': '请在账户页面进行',
   'add an email to this account first': '请先给这个账户添加邮箱',
