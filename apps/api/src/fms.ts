@@ -564,7 +564,7 @@ export async function getArrivals(
   code: string,
   nowMs: number = Date.now(),
 ): Promise<StopArrivals> {
-  return cachedFetch<StopArrivals>({
+  const sa = await cachedFetch<StopArrivals>({
     ctx,
     nowMs,
     key: `${cacheBase()}/arrivals/${encodeURIComponent(code)}`,
@@ -578,6 +578,18 @@ export async function getArrivals(
     breaker: { ...BREAKER, onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
     inflight,
   });
+  return withEnds(sa);
+}
+
+/**
+ * A board kept in the edge cache by a Worker from before normalize() read
+ * the run ending here (`ends`) has only its `-E` berth to say so: read the
+ * same way, so a bus that can't be boarded is never the one to catch. Such
+ * an entry lasts staleMaxS at most; this can go once none can be left.
+ */
+export function withEnds(sa: StopArrivals): StopArrivals {
+  if (!sa.arrivals.some((a) => !a.ends && a.berth?.toUpperCase().endsWith('-E'))) return sa;
+  return { ...sa, arrivals: sa.arrivals.map((a) => (!a.ends && a.berth?.toUpperCase().endsWith('-E') ? { ...a, ends: true as const } : a)) };
 }
 
 /**
