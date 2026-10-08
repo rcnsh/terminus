@@ -91,6 +91,7 @@ export default defineConfig(({ mode }) => {
 			},
 			domains: [
 				s.domain,
+				s.oldDomain,
 			],
 			// The trip engine: one Durable Object per user with today's trip signals,
 			// and the timelapse recorder, one per Singapore day (src/timelapsedo.ts).
