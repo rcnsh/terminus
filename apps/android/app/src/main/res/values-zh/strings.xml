@@ -30,6 +30,7 @@
     <string name="map_saved_as">已收藏</string>
     <string name="map_services_here">经过这里的线路</string>
     <string name="map_times_need_connection">实时时间需要联网。</string>
+    <string name="map_times_failed">无法加载时间，正在重试。</string>
     <string name="map_walking_directions">步行路线</string>
     <string name="tab_map">地图</string>
     <string name="tab_now">现在</string>

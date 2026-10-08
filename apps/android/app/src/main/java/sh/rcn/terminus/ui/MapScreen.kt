@@ -41,7 +41,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +58,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -81,6 +84,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import org.maplibre.compose.camera.CameraAnimation
 import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.expressions.ast.Expression
 import org.maplibre.compose.expressions.dsl.asDpOffset
 import org.maplibre.compose.expressions.dsl.asNumber
 import org.maplibre.compose.expressions.dsl.asString
@@ -98,6 +102,7 @@ import org.maplibre.compose.expressions.dsl.zoom
 import org.maplibre.compose.expressions.value.IconRotationAlignment
 import org.maplibre.compose.expressions.value.LineCap
 import org.maplibre.compose.expressions.value.LineJoin
+import org.maplibre.compose.expressions.value.NumberValue
 import org.maplibre.compose.expressions.value.SymbolAnchor
 import org.maplibre.compose.interaction.ClickResult
 import org.maplibre.compose.interaction.MapInteractions
@@ -117,6 +122,7 @@ import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.compose.util.DpPadding
+import org.maplibre.compose.util.MaplibreComposable
 import org.maplibre.spatialk.geojson.BoundingBox
 import org.maplibre.spatialk.geojson.Position
 import sh.rcn.terminus.CampusMap
@@ -126,6 +132,7 @@ import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapGeoJson
 import sh.rcn.terminus.MapStop
+import sh.rcn.terminus.Quiet
 import sh.rcn.terminus.R
 import sh.rcn.terminus.Slides
 import sh.rcn.terminus.Spoken
@@ -154,7 +161,9 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     val ui by map.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val dark = isSystemInDarkTheme()
-    val zh = Lang.current(ctx) == Lang.ZH
+    // Read again only when the language changes (it does in place, on Android 13 and later).
+    val locales = LocalConfiguration.current.locales
+    val zh = remember(locales) { Lang.current(ctx) == Lang.ZH }
     LaunchedEffect(dark, zh) { map.open(dark, zh) }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -175,11 +184,11 @@ internal fun MapScreen(map: MapViewModel, onGoThere: (code: String, name: String
     MapLayout(ui, dark, MapActions(map::choose, map::openStop, map::openBus, map::closeSheet, onGoThere, places, onShowList))
 }
 
-/** [block], then again every [ms], while the app is in front. */
+/** [block], then again every [ms] (longer while the server asked for a wait), while the app is in front. */
 private suspend fun Lifecycle.every(ms: Long, block: suspend () -> Unit) = repeatOnLifecycle(Lifecycle.State.RESUMED) {
     while (true) {
         block()
-        delay(ms)
+        delay(maxOf(ms, Quiet.waitMs()))
     }
 }
 
@@ -201,7 +210,7 @@ internal fun MapLayout(ui: MapUi, dark: Boolean, actions: MapActions) {
     val campus = ui.campus
     val style = ui.style
     // "Back to campus": bumped by the button, watched by the map.
-    var recentre by remember { mutableStateOf(0) }
+    var recentre by remember { mutableIntStateOf(0) }
     Box(Modifier.fillMaxSize()) {
         when {
             campus != null && style != null -> CampusMapView(ui, campus, style, dark, actions, recentre)
@@ -256,8 +265,9 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // in the ink there, so it stands out. In the dark, the paper does that.
     val edge = if (dark) paper else ink
     val edgeAlpha = if (dark) 1f else 0.6f
-    val routes = remember(campus) { MapGeoJson.routes(campus) }
-    val stops = remember(campus) { MapGeoJson.stops(campus) }
+    // Made with the campus, off the main thread (MapViewModel).
+    val routes = ui.routesJson
+    val stops = ui.stopsJson
 
     // Buses slide to each new place along their line (see Slides): a plain
     // holder, not state, redrawn by the frame clock while one moves. With
@@ -265,23 +275,23 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     // Every answer is planned again, the same list or not, so a bus that
     // hasn't moved for a while still slides when it does. The clock keeps
     // counting while the phone sleeps, so a map left that long is seen as stale.
+    // The clock is read only in BusLayers, so a frame redraws the buses and
+    // not every layer of the map.
     val slides = remember(ui.selected) { Slides() }
-    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    val now = remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val path = ui.selected?.let { campus.routes[it]?.path }
     LaunchedEffect(ui.busAnswers, ui.buses, slides) {
         slides.update(ui.buses, path, SystemClock.elapsedRealtime(), still = !ValueAnimator.areAnimatorsEnabled())
         do {
-            withFrameMillis { now = SystemClock.elapsedRealtime() }
-        } while (slides.moving(now))
+            withFrameMillis { now.longValue = SystemClock.elapsedRealtime() }
+        } while (slides.moving(now.longValue))
     }
-    val drawn = slides.at(now)
     val color = ui.selected?.let { campus.routes[it]?.color } ?: 0xFF8A939CL
-    val buses = MapGeoJson.buses(ui.selected.orEmpty(), color, drawn)
-    val me = ui.me?.let { (lat, lon) -> MapGeoJson.me(lat, lon) } ?: MapGeoJson.EMPTY
+    val me = remember(ui.me) { ui.me?.let { (lat, lon) -> MapGeoJson.me(lat, lon) } ?: MapGeoJson.EMPTY }
     // A tapped bus between stops: its stretch, the part of the route it's
     // somewhere on (its midpoint can be a long way from the bus).
     val openBus = (ui.sheet as? MapSheet.Bus)?.let { sheet -> ui.buses.firstOrNull { it.id == sheet.id } }
-    val stretch = MapGeoJson.stretch(color, path, openBus?.stretch)
+    val stretch = remember(color, path, openBus?.stretch) { MapGeoJson.stretch(color, path, openBus?.stretch) }
     val stretchOn = stretch != MapGeoJson.EMPTY
 
     val heading = painterResource(R.drawable.ic_heading)
@@ -297,7 +307,6 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
     val state = rememberMapState(baseStyle = BaseStyle.Json(style)) {
         val routeSource = rememberGeoJsonSource(GeoJsonData.JsonString(routes))
         val stopSource = rememberGeoJsonSource(GeoJsonData.JsonString(stops))
-        val busSource = rememberGeoJsonSource(GeoJsonData.JsonString(buses))
         val meSource = rememberGeoJsonSource(GeoJsonData.JsonString(me))
         val stretchSource = rememberGeoJsonSource(GeoJsonData.JsonString(stretch))
         val lineWidth = interpolate(linear(), zoom(), 13 to const(1.5.dp), 16 to const(4.dp), 18 to const(7.dp))
@@ -390,51 +399,7 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
         )
         CircleLayer(id = "me-halo", source = meSource, radius = const(14.dp), color = const(Color(0xFF2B7BF3)), opacity = const(0.18f))
         CircleLayer(id = "me", source = meSource, radius = const(6.5.dp), color = const(Color(0xFF2B7BF3)), strokeColor = const(Color.White), strokeWidth = const(2.5.dp))
-        // The tapped bus, ringed. The offset is in the bus's own frame, so
-        // the ring turns with the bus too, or it lands beside it.
-        SymbolLayer(
-            id = "bus-on",
-            source = busSource,
-            iconOpacity = busOpacity,
-            filter = feature["id"].asString() eq const(openBus?.id.orEmpty()),
-            iconImage = image(ringIcon, size = DpSize(40.dp, 40.dp)),
-            iconSize = busSize,
-            iconRotate = feature["heading"].asNumber(),
-            iconRotationAlignment = const(IconRotationAlignment.Map),
-            iconOffset = feature["offset"].asDpOffset(),
-            iconAllowOverlap = const(true),
-            iconIgnorePlacement = const(true),
-        )
-        SymbolLayer(
-            id = "buses",
-            source = busSource,
-            iconOpacity = busOpacity,
-            iconImage = image(busIcon, size = DpSize(27.dp, 27.dp)),
-            iconSize = busSize,
-            iconRotate = feature["heading"].asNumber(),
-            iconRotationAlignment = const(IconRotationAlignment.Map),
-            iconOffset = feature["offset"].asDpOffset(),
-            iconAllowOverlap = const(true),
-            // Stop names keep clear of buses (they move to another side of their dot).
-            iconIgnorePlacement = const(false),
-            hitPadding = 8.dp,
-            onClick = { features ->
-                features.firstOrNull()?.properties?.get("id")?.toString()?.trim('"')?.let(actions.openBus)
-                ClickResult.Consume
-            },
-        )
-        SymbolLayer(
-            id = "bus-heading",
-            source = busSource,
-            iconOpacity = busOpacity,
-            iconImage = image(heading, size = DpSize(12.dp, 12.dp)),
-            iconSize = busSize,
-            iconOffset = feature["offset"].asDpOffset(),
-            iconRotate = feature["heading"].asNumber(),
-            iconRotationAlignment = const(IconRotationAlignment.Map),
-            iconAllowOverlap = const(true),
-            iconIgnorePlacement = const(true),
-        )
+        BusLayers(BusLook(selected.orEmpty(), color, openBus?.id.orEmpty(), busOpacity, busSize, busIcon, ringIcon, heading), slides, now, actions.openBus)
     }
 
     // First view: your nearest stop when you're on campus, otherwise the whole
@@ -509,6 +474,76 @@ private fun CampusMapView(ui: MapUi, campus: CampusMap, style: String, dark: Boo
             }
         },
         overlay = { include(MapOverlay.AttributionOnly) },
+    )
+}
+
+/** How the buses are drawn, apart from where: the same from frame to frame. */
+private class BusLook(
+    val svc: String,
+    val color: Long,
+    /** The tapped bus, ringed; empty for none. */
+    val openId: String,
+    val opacity: Expression<NumberValue<Number>>,
+    val size: Expression<NumberValue<Number>>,
+    val icon: Painter,
+    val ring: Painter,
+    val heading: Painter,
+)
+
+/**
+ * The live buses, where [slides] has them at [now]. Its own scope, the only
+ * one that reads the frame clock: a sliding bus redraws these three layers,
+ * not the routes and stops under them.
+ */
+@Composable
+@MaplibreComposable
+private fun BusLayers(look: BusLook, slides: Slides, now: LongState, onOpen: (String) -> Unit) {
+    val drawn = slides.at(now.longValue)
+    val busSource = rememberGeoJsonSource(GeoJsonData.JsonString(MapGeoJson.buses(look.svc, look.color, drawn)))
+    // The tapped bus, ringed. The offset is in the bus's own frame, so
+    // the ring turns with the bus too, or it lands beside it.
+    SymbolLayer(
+        id = "bus-on",
+        source = busSource,
+        iconOpacity = look.opacity,
+        filter = feature["id"].asString() eq const(look.openId),
+        iconImage = image(look.ring, size = DpSize(40.dp, 40.dp)),
+        iconSize = look.size,
+        iconRotate = feature["heading"].asNumber(),
+        iconRotationAlignment = const(IconRotationAlignment.Map),
+        iconOffset = feature["offset"].asDpOffset(),
+        iconAllowOverlap = const(true),
+        iconIgnorePlacement = const(true),
+    )
+    SymbolLayer(
+        id = "buses",
+        source = busSource,
+        iconOpacity = look.opacity,
+        iconImage = image(look.icon, size = DpSize(27.dp, 27.dp)),
+        iconSize = look.size,
+        iconRotate = feature["heading"].asNumber(),
+        iconRotationAlignment = const(IconRotationAlignment.Map),
+        iconOffset = feature["offset"].asDpOffset(),
+        iconAllowOverlap = const(true),
+        // Stop names keep clear of buses (they move to another side of their dot).
+        iconIgnorePlacement = const(false),
+        hitPadding = 8.dp,
+        onClick = { features ->
+            features.firstOrNull()?.properties?.get("id")?.toString()?.trim('"')?.let(onOpen)
+            ClickResult.Consume
+        },
+    )
+    SymbolLayer(
+        id = "bus-heading",
+        source = busSource,
+        iconOpacity = look.opacity,
+        iconImage = image(look.heading, size = DpSize(12.dp, 12.dp)),
+        iconSize = look.size,
+        iconOffset = feature["offset"].asDpOffset(),
+        iconRotate = feature["heading"].asNumber(),
+        iconRotationAlignment = const(IconRotationAlignment.Map),
+        iconAllowOverlap = const(true),
+        iconIgnorePlacement = const(true),
     )
 }
 
@@ -659,6 +694,7 @@ private fun StopSheet(stop: MapStop, ui: MapUi, campus: CampusMap, actions: MapA
         val board = ui.board
         when {
             ui.boardFailed -> Text(stringResource(R.string.map_times_need_connection), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ui.boardError -> Text(stringResource(R.string.map_times_failed), color = MaterialTheme.colorScheme.onSurfaceVariant)
             board == null -> Text(stringResource(R.string.refreshing), color = MaterialTheme.colorScheme.onSurfaceVariant)
             board.rows.isEmpty() -> Text(stringResource(if (board.available) R.string.map_no_buses_due else R.string.map_no_times), color = MaterialTheme.colorScheme.onSurfaceVariant)
             else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

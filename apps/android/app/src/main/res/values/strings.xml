@@ -30,6 +30,7 @@
     <string name="map_saved_as">In your favourites</string>
     <string name="map_services_here">Services here</string>
     <string name="map_times_need_connection">Live times need a connection.</string>
+    <string name="map_times_failed">Couldn\'t load the times. Trying again.</string>
     <string name="map_walking_directions">Walking directions</string>
     <string name="tab_map">Map</string>
     <string name="tab_now">Now</string>
