@@ -156,7 +156,7 @@ internal fun WelcomeScreen(busy: Boolean, message: String?, onStart: () -> Unit,
  * (campus.ts) is the source, and every other screen takes the colours from
  * /campus; this one shows before there's an account to ask with.
  */
-private val LIVERY = listOf(
+internal val LIVERY = listOf(
     "A1" to 0xFFD32F2F, "A2" to 0xFFD9A000, "D1" to 0xFFEC4FA0, "D2" to 0xFF8E44C9,
     "K" to 0xFF2B9AD6, "R1" to 0xFFF57C1F, "R2" to 0xFF34A853, "P" to 0xFF8A939C,
 )

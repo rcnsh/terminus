@@ -20,7 +20,7 @@
 //   the pieces MapLibre asks for. So the campus map works offline after the
 //   first look. Live buses and arrivals are never kept.
 
-const SHELL = 'shell-v19';
+const SHELL = 'shell-v20';
 const DATA = 'data-v3';
 const MAP = 'map-v1';
 const TILES = '/map/campus.pmtiles';
@@ -32,6 +32,7 @@ const SHELL_FILES = [
   '/app/offline.js',
   '/app/map-files.js',
   '/app/timing.js',
+  '/app/pull.js',
   // The Buses tab too, so it opens offline and says it needs a connection.
   '/app/buses.js',
   '/app/board.js',

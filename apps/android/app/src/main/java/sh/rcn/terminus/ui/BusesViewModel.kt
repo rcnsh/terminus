@@ -7,6 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -17,6 +18,8 @@ import sh.rcn.terminus.CampusMap
 import sh.rcn.terminus.Line
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapFiles
+import sh.rcn.terminus.Pull
+import sh.rcn.terminus.PullOutcome
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Session
 import sh.rcn.terminus.Store
@@ -101,6 +104,45 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun mark(key: String) { asked[key] = System.currentTimeMillis() }
 
+    /** When each board or line last came back, for a pull sooner than [Pull.FRESH_MS] to ask nothing. */
+    private val answeredAt = mutableMapOf<String, Long>()
+
+    /** The boards and lines on their way, so a pull waits for one rather than asking twice. */
+    private val asking = MutableStateFlow<Set<String>>(emptySet())
+
+    /** [fetch] for [key], said to be on its way while it is. */
+    private suspend fun fetching(key: String, fetch: suspend () -> Unit) {
+        asking.update { it + key }
+        try {
+            fetch()
+        } finally {
+            asking.update { it - key }
+        }
+    }
+
+    private fun answered(key: String) { answeredAt[key] = System.currentTimeMillis() }
+
+    /**
+     * Pulled down: [key] asked for again by [fetch] (the screen's own
+     * refresh), or the one already on its way waited for; nothing within
+     * [Pull.FRESH_MS] of its last answer, as the server would send the same.
+     */
+    private suspend fun pulled(key: String, fetch: suspend () -> Unit): PullOutcome {
+        val start = System.currentTimeMillis()
+        when {
+            key in asking.value -> asking.first { key !in it }
+            Pull.shouldFetch(answeredAt[key], start) -> fetch()
+            else -> return PullOutcome.UpToDate
+        }
+        return Pull.outcome(fetched = true, ok = (answeredAt[key] ?: 0) >= start)
+    }
+
+    /** The page for [code] (null: the nearest stop) pulled down. */
+    suspend fun pullPage(code: String?): PullOutcome = pulled(pageBoard(code) ?: NEAREST) { refreshPage(code, force = true) }
+
+    /** A service's line pulled down. */
+    suspend fun pullLine(svc: String, from: String?): PullOutcome = pulled("line:${lineKey(svc, from)}") { refreshLine(svc, from, force = true) }
+
     private var campusJob: kotlinx.coroutines.Job? = null
 
     fun loadCampus() {
@@ -126,6 +168,10 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         if (!force && fresh(NEAREST)) return
         val token = store.token ?: return
         mark(NEAREST)
+        fetching(NEAREST) { nearest(token) }
+    }
+
+    private suspend fun nearest(token: String) {
         val ctx = getApplication<Application>()
         val loc = Locator.lastKnown(ctx, maxAgeMs = 60_000) ?: Locator.current(ctx)
         try {
@@ -134,6 +180,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
             val got = ServerClock.now()
             val stops = parseNearby(json).map { Board.of(it, asOf).copy(gotMs = got) }
             val first = stops.firstOrNull()
+            answered(NEAREST)
             _state.update { s ->
                 s.copy(
                     nearest = first,
@@ -158,15 +205,18 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         if (!force && fresh(code)) return
         val token = store.token ?: return
         mark(code)
-        try {
-            val board = api(token).board(code, publicBuses)
-            val got = board.copy(code = board.code.ifEmpty { code }, gotMs = ServerClock.now())
-            _state.update { it.copy(boards = it.boards + (code to got), failed = it.failed - code) }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (refused(e, token)) return
-            _state.update { it.copy(failed = it.failed + code) }
+        fetching(code) {
+            try {
+                val board = api(token).board(code, publicBuses)
+                val got = board.copy(code = board.code.ifEmpty { code }, gotMs = ServerClock.now())
+                answered(code)
+                _state.update { it.copy(boards = it.boards + (code to got), failed = it.failed - code) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (refused(e, token)) return@fetching
+                _state.update { it.copy(failed = it.failed + code) }
+            }
         }
     }
 
@@ -175,15 +225,17 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
      * twin's when it's switched across the road. The nearest stop's twin
      * comes with /me/nearby, so that page asks only for that.
      */
-    suspend fun refreshPage(code: String?) {
+    suspend fun refreshPage(code: String?, force: Boolean = false) {
+        val board = pageBoard(code)
+        if (board == null) refreshNearest(force) else refreshBoard(board, force)
+    }
+
+    /** The board the page for [code] shows: its own, or its twin's across the road; null for the nearest stop's page. */
+    private fun pageBoard(code: String?): String? {
+        if (code == null) return null
         val s = _state.value
-        val own = code ?: s.nearest?.code
-        if (code == null || own == null) {
-            refreshNearest()
-            return
-        }
-        val opposite = s.boards[own]?.opposite
-        if (own in s.across && opposite != null) refreshBoard(opposite) else refreshBoard(own)
+        val opposite = s.boards[code]?.opposite
+        return if (code in s.across && opposite != null) opposite else code
     }
 
     suspend fun refreshLine(svc: String, from: String?, force: Boolean = false) {
@@ -191,8 +243,13 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
         if (!force && fresh("line:$key")) return
         val token = store.token ?: return
         mark("line:$key")
+        fetching("line:$key") { line(token, svc, from, key) }
+    }
+
+    private suspend fun line(token: String, svc: String, from: String?, key: String) {
         try {
             val line = api(token).line(svc, from).copy(gotMs = ServerClock.now())
+            answered("line:$key")
             _state.update { it.copy(lines = it.lines + (key to line), lineFailed = it.lineFailed - key) }
         } catch (e: CancellationException) {
             throw e
@@ -202,6 +259,7 @@ class BusesViewModel(app: Application) : AndroidViewModel(app) {
             if (from != null && e.status == 400) {
                 try {
                     val line = api(token).line(svc).copy(gotMs = ServerClock.now())
+                    answered("line:$key")
                     _state.update { it.copy(lines = it.lines + (key to line), lineFailed = it.lineFailed - key) }
                     return
                 } catch (e: CancellationException) {

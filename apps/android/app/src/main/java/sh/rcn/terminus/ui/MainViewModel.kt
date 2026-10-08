@@ -24,6 +24,8 @@ import sh.rcn.terminus.Locator
 import sh.rcn.terminus.NearbyStop
 import sh.rcn.terminus.NextAnswer
 import sh.rcn.terminus.Place
+import sh.rcn.terminus.Pull
+import sh.rcn.terminus.PullOutcome
 import sh.rcn.terminus.Push
 import sh.rcn.terminus.ServerClock
 import sh.rcn.terminus.Store
@@ -137,6 +139,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     val state: StateFlow<UiState> = _state
     private var loadJob: Job? = null
+
+    /** When each view's answer last came back ([viewOf]), for a pull sooner than [Pull.FRESH_MS] to ask nothing. */
+    private val answeredAt = mutableMapOf<Any, Long>()
+
+    /** Which view [s] shows: Nearby, or the answer for its target. */
+    private fun viewOf(s: UiState): Any = if (s.showNearby) NEARBY else s.target
 
     fun pair(code: String) {
         _state.update { it.copy(pairing = true, pairError = null, pendingPair = null) }
@@ -570,7 +578,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 if (s.showNearby) {
                     val stops = api.nearby(loc?.latitude, loc?.longitude, Locator.accOf(loc))
-                    _state.update { it.copy(nearby = stops, loading = false, error = null, fetchedAt = System.currentTimeMillis(), updateRequired = false) }
+                    val now = System.currentTimeMillis()
+                    answeredAt[NEARBY] = now
+                    _state.update { it.copy(nearby = stops, loading = false, error = null, fetchedAt = now, updateRequired = false) }
                 } else {
                     val json = api.nextJson(s.target, loc?.latitude, loc?.longitude, Locator.accOf(loc))
                     val now = System.currentTimeMillis()
@@ -592,6 +602,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         store.lastError = null
                         redrawWidgets(ctx)
                     }
+                    answeredAt[s.target] = now
                     _state.update {
                         it.copy(
                             answers = it.answers + (s.target to answer),
@@ -621,6 +632,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Pulled down: what's on screen asked for again, exactly as the 30 s
+     * refresh asks ([load]), or the one already on its way waited for. Not
+     * asked within [Pull.FRESH_MS] of the last answer: the server would send
+     * the same. Says how it went, for the chip.
+     */
+    suspend fun pull(): PullOutcome {
+        val start = System.currentTimeMillis()
+        if (loadJob?.isActive != true && !Pull.shouldFetch(answeredAt[viewOf(_state.value)], start)) return PullOutcome.UpToDate
+        load()
+        // A view switched meanwhile drops the load for the new one's: that's the one to wait for.
+        while (true) {
+            val job = loadJob ?: break
+            job.join()
+            if (loadJob === job) break
+        }
+        return Pull.outcome(fetched = true, ok = (answeredAt[viewOf(_state.value)] ?: 0) >= start)
+    }
+
     private var destinationsJob: Job? = null
 
     fun loadDestinations() {
@@ -645,6 +675,9 @@ internal fun installedFromPlay(ctx: android.content.Context): Boolean =
  * engine wait 30 s too.
  */
 internal const val POLL_MS = 30_000L
+
+/** Nearby's place in the views pulled ([MainViewModel.pull]), beside the targets. */
+private const val NEARBY = "nearby"
 
 /** Today is fetched again with the answer once it's this old. */
 private const val DAY_MAX_AGE_MS = 120_000L

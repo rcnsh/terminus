@@ -601,4 +601,10 @@
     <string name="buses_back_tomorrow">Back tomorrow at %1$s</string>
     <string name="buses_back_on">Back %1$s at %2$s</string>
     <string name="buses_starts_at">Starts at %1$s</string>
+    <!-- Pull to refresh (Now and Buses): the words over the road, and how it went. -->
+    <string name="pull_to_refresh">Pull to refresh</string>
+    <string name="pull_let_go">Let go to refresh</string>
+    <string name="pull_updated">Updated just now</string>
+    <string name="pull_up_to_date">Up to date</string>
+    <string name="pull_failed">Couldn\'t update</string>
 </resources>

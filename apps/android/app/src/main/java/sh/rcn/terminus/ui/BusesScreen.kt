@@ -196,10 +196,14 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
         }
     }
     val scope = rememberCoroutineScope()
+    val phase = skyPhase()
+    // Pulled down, the page in view asks again, as its 15 s refresh does; not while searching.
+    val inView = pages.getOrNull(boards.settledPage)
+    BusPull(boardLivery(state, inView), top, phase, chipLow = true, enabled = query.isBlank(), onRefresh = { vm.pullPage(inView) }) {
     Column(Modifier.fillMaxSize()) {
         // The dots' line has room for the moon on the right.
         // Searching, just the field over the hills, so the results start right under it.
-        SkyBand(skyPhase(), top, moonLow = true, moonLine = query.isBlank() && pages.size <= 1, padded = false, moon = query.isBlank()) {
+        SkyBand(phase, top, moonLow = true, moonLine = query.isBlank() && pages.size <= 1, padded = false, moon = query.isBlank()) {
             Column {
                 SearchBox(query, { query = it }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 if (query.isBlank()) {
@@ -238,6 +242,19 @@ private fun Home(state: BusesUi, vm: BusesViewModel, pins: List<String>, onPin: 
             }
         }
     }
+    }
+}
+
+/**
+ * The pull's bus for the page of stop [code] (null: the nearest stop): the
+ * first service on the board it shows, in its colour; null before there's one.
+ */
+private fun boardLivery(state: BusesUi, code: String?): Long? {
+    val own = code ?: state.nearest?.code ?: return null
+    val opposite = state.boards[own]?.opposite
+    val shown = if (own in state.across && opposite != null) opposite else own
+    val row = state.boards[shown]?.rows?.let(::runningFirst)?.firstOrNull() ?: return null
+    return row.color?.let(::parseColor) ?: state.campus?.routes?.get(row.svc)?.color
 }
 
 /** Page [i]'s header in the sky: the nearest stop ([code] null until it's known) or a pinned one. */
@@ -372,9 +389,11 @@ private fun NoNearest(state: BusesUi, vm: BusesViewModel) {
 @Composable
 private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: List<String>, onPin: (String) -> Unit, top: Dp) {
     Refreshing(code, state.across) { vm.refreshPage(code) }
+    val phase = skyPhase()
+    BusPull(boardLivery(state, code), top, phase, chipLow = true, onRefresh = { vm.pullPage(code) }) {
     Column(Modifier.fillMaxSize()) {
         // Back, and the stop, in the sky, as on the tab's own pages.
-        SkyBand(skyPhase(), top, moonLow = true) {
+        SkyBand(phase, top, moonLow = true) {
             Column {
                 BackRow(stringResource(R.string.back)) { vm.back() }
                 val label = if (code in pins) stringResource(R.string.buses_pinned) else null
@@ -384,6 +403,7 @@ private fun StopRoute(state: BusesUi, vm: BusesViewModel, code: String, pins: Li
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
             StopBody(state, vm, code)
         }
+    }
     }
 }
 
@@ -886,9 +906,12 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
             scroll.animateScrollTo((y - gap).coerceAtLeast(0))
         }
     }
+    val phase = skyPhase()
+    // Pulled down, the line asks again, its bus in the service's colour.
+    BusPull(color, top, phase, chipLow = true, onRefresh = { vm.pullLine(route.svc, route.from) }) {
     Column(Modifier.fillMaxSize()) {
     // Back, the service and how many buses it has out, in the sky; the line on the page.
-    SkyBand(skyPhase(), top, moonLow = true) { Column {
+    SkyBand(phase, top, moonLow = true) { Column {
         BackRow(
             route.from?.let { stopName(state, it) } ?: stringResource(R.string.back),
             trailing = {
@@ -940,6 +963,7 @@ private fun LineRoute(state: BusesUi, vm: BusesViewModel, route: BusRoute.Line, 
                 if (line.here != null && line.running) Text(stringResource(R.string.buses_times_here_only), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
             }
         }
+    }
     }
     }
 }

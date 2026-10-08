@@ -17,6 +17,7 @@ import { SearchBox } from '/account/search-box.js';
 import { Celestial, Horizon } from '/account/sky.js';
 import { busesTabIndex } from '/account/search.js';
 import { Big, Chip, Crowd, Quality, Row, colorOf, stoppedWords, svcVars, thenText } from '/app/board.js';
+import { PULL_FRESH_MS } from '/app/timing.js';
 
 /** The page on screen refreshes this often (the API caches arrivals 15 s). */
 const REFRESH_MS = 15_000;
@@ -188,6 +189,31 @@ function refreshNow() {
   if (r.kind === 'line') return loadLine(r.svc, r.stop);
   const code = r.kind === 'stop' ? r.code : homePages()[active.get()]?.code;
   return code ? loadBoard(shownCode(code)) : null;
+}
+
+/**
+ * Pulled down to refresh (pull.js): what's on screen fetched again, the
+ * nearest stop found again too (you may have moved), unless its times came
+ * under PULL_FRESH_MS ago. How it went: 'updated', 'fresh' or 'failed'.
+ */
+export async function pullRefresh() {
+  const r = route.get();
+  const page = r.kind === 'home' ? homePages()[active.get()] : null;
+  const shown = () => {
+    if (r.kind === 'line') return line.get()?.key === lineKey() ? line.get() : null;
+    const code = r.kind === 'stop' ? r.code : page?.kind === 'nearest' ? nearest.get().code : page?.code;
+    return code ? boards.get().get(shownCode(code)) : null;
+  };
+  const was = shown();
+  if (was?.at && !was.error && Date.now() - was.at < PULL_FRESH_MS) return 'fresh';
+  const asked = Date.now();
+  // The nearest stop's page, or the page still finding it: found again, its board with it.
+  if (page && page.kind !== 'pinned') {
+    await findNearest();
+    if (nearest.get().status === 'none') return 'failed';
+  } else await refreshNow();
+  const now = shown();
+  return now?.at >= asked && !now.error ? 'updated' : 'failed';
 }
 
 /** A board just brought on screen: fetched unless it's fresh. */
