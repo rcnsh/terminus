@@ -530,13 +530,17 @@ final class AppModel {
                 // Adding an email to this Mac's own account: it's sent, so the server keeps or merges its setup.
                 anonToken = anonymous ? TokenStore.read() : nil
                 let r = try await Api(token: anonToken).signInStart(email: email, name: deviceName)
+                // Given up (cancelSignIn, signed out) or replaced by a newer
+                // signIn, which owns signingIn and anonToken from here.
                 if Task.isCancelled { return }
                 signingIn = false
                 signInRequest = r
                 signInWaiting = (email, r.match)
                 await pollSignIn(r)
             } catch {
+                if Task.isCancelled { return }
                 signingIn = false
+                anonToken = nil
                 signInError = failureMessage(error)
             }
         }
@@ -567,6 +571,7 @@ final class AppModel {
                     signInTask?.cancel()
                     signInRequest = nil
                     signInWaiting = nil
+                    anonToken = nil
                 }
             }
         }
@@ -635,6 +640,7 @@ final class AppModel {
         signInTask?.cancel()
         signInWaiting = nil
         signingIn = false
+        anonToken = nil
     }
 
     /// Every 3 seconds, for the request's 15 minutes.
@@ -657,12 +663,14 @@ final class AppModel {
             case "denied":
                 signInRequest = nil
                 signInWaiting = nil
+                anonToken = nil
                 signInError = L("The sign-in was cancelled from the email. If that was you, send a new one.")
                 return
             default:
                 // Expired, or already used.
                 signInRequest = nil
                 signInWaiting = nil
+                anonToken = nil
                 signInError = L("That request expired. Send a new one.")
                 return
             }
@@ -670,6 +678,7 @@ final class AppModel {
         guard signInRequest == r else { return }
         signInRequest = nil
         signInWaiting = nil
+        anonToken = nil
         signInError = L("That request expired. Send a new one.")
     }
 
@@ -691,6 +700,7 @@ final class AppModel {
         signInTask?.cancel()
         signInRequest = nil
         signInWaiting = nil
+        signingIn = false
         chooseSetup = nil
         anonToken = nil
         langSynced = false
@@ -921,6 +931,15 @@ final class AppModel {
         return marks.contains { $0 <= now }
     }
 
+    /// Whether a refresh asks where the Mac is: not while resting with the
+    /// popover closed, unless one of the plan's own times has passed (the
+    /// rest ending), when the next card's walk needs the place it starts from.
+    func wantsFix(at now: Date) -> Bool {
+        guard !popoverOpen, resting, let plan else { return true }
+        let marks = [plan.planChanges, plan.nextChange, plan.staleAt].compactMap { $0 }
+        return marks.contains { $0 <= now }
+    }
+
     /// `.failed` when the fetch failed, so the loop can retry sooner;
     /// `.skipped` when nothing was fetched (one already running, signed out).
     @discardableResult
@@ -955,7 +974,8 @@ final class AppModel {
         if !langSynced { Task { await syncLang(api) } }
         // Resting with the popover closed, nothing is planned until the day
         // starts: no need to wake CoreLocation for it.
-        let fix = popoverOpen || !resting ? await locator.current(maxAge: popoverOpen ? 120 : 600) : nil
+        let located = wantsFix(at: ServerClock.now)
+        let fix = located ? await locator.current(maxAge: popoverOpen ? 120 : 600) : nil
         let acc = fix.flatMap { fixUncertaintyM(accuracy: $0.horizontalAccuracy, ageS: -$0.timestamp.timeIntervalSinceNow) }
         // An invalid fix is no location at all.
         let loc = acc == nil ? nil : fix
@@ -985,6 +1005,9 @@ final class AppModel {
                 // A favourite removed elsewhere leaves no tab to show it under.
                 if case .place(let key) = target, !places.contains(where: { $0.key == key }) { target = .plan }
                 LeaveNotifier.shared.update(p)
+                // The rest ended earlier than its marks said: this card's walk
+                // starts from home, so ask again from where the Mac is.
+                if !located && p.mode != "rest" { rerun = true }
             }
             if error != nil { error = nil }
             if updateRequired { updateRequired = false }
@@ -1012,8 +1035,10 @@ final class AppModel {
         } catch let e as ApiError where e.status == 401 {
             // Adding an email to this Mac's own account: the server may remove
             // that account a moment before it hands over the new token
-            // (applogin.ts). Not signed out; ask again shortly.
-            if anonymous && (signInRequest != nil || anonToken != nil || chooseSetup != nil) { return .failed }
+            // (applogin.ts). Not signed out; ask again shortly. Only while the
+            // request is open (15 minutes at most) or the choice is up: one
+            // given up on or expired leaves a 401 that means signed out.
+            if anonymous && (signInRequest != nil || chooseSetup != nil) { return .failed }
             // Worded before clearLocal forgets which kind of account it was:
             // one without an email goes after 60 days unused.
             let reason = anonymous
