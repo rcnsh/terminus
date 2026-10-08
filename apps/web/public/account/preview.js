@@ -2,7 +2,7 @@
 // page ("Your widget right now") and on the web app's Now. Every line comes
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
-import { announce, focusSoon, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
+import { Fill, MARK, announce, focusSoon, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
 import { api, clock, hour12, sentences, serverNow, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle, spokenJourney } from './journey.js';
@@ -350,132 +350,132 @@ export const Message = ({ text, children, cls = 'widget', quiet = false }) => ht
   <div class=${cls}><div class="detail">${text}</div>${children}${!quiet && html`<${Say} text=${text} />`}</div>
 `;
 
-/** How long "✓ Reported, thanks" stays before "Is this wrong?" comes back. */
-const REPORTED_SHOWN_MS = 6_000;
+/**
+ * The reasons offered as chips, as /me/feedback takes them (REASONS in the
+ * API's feedback.ts). A pick is enough to send; a note can say more.
+ */
+export const REPORT_REASONS = [
+  ['never-came', 'Bus never came'],
+  ['times-off', 'Times were off'],
+  ['wrong-stop', 'Wrong stop'],
+  ['walk-longer', 'Walk is longer'],
+  ['wrong-class', 'Wrong class'],
+];
 
 /**
- * "Is this wrong?": sends the answer on screen (`answer`, as it was when the
- * form was opened: the card refreshes meanwhile) with a note, which it needs.
- * Once sent, the link says so in its place for a few seconds, or until the
- * card says something else; give it a new `key` for a new answer. Without an
- * email the server takes no reports, so the link asks for one instead
- * (`onAddEmail`, the web app's way there by default).
+ * "Is this wrong?": a link that opens a bottom sheet (a modal dialog) about
+ * the answer on screen (`answer`, as it was when the sheet opened: the card
+ * refreshes meanwhile). The sheet shows that answer's line, the reasons as
+ * chips, a note, and who the reply goes to (`email`); a reason or a note
+ * sends it, and the sheet then says it went: that's the only confirmation.
+ * Without an email the server takes no reports, so the sheet asks for one
+ * instead (`onAddEmail`, the web app's way there by default).
  */
-export function Report({ answer, anonymous = false, onAddEmail = () => location.assign('/account/?add=1&next=/app/') }) {
+export function Report({ answer, anonymous = false, email = null, onAddEmail = () => location.assign('/account/?add=1&next=/app/') }) {
   const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState(null);
   const [note, setNote] = useState('');
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
   const [reported, setReported] = useState(null);
-  // The card's line when the report went ("Leave by ~09:36 · R2 from PGP"); null when not just sent.
-  const [done, setDone] = useState(null);
-  const box = useRef(null);
+  const dialog = useRef(null);
   const opener = useRef(null);
-  const tick = useRef(null);
-  // Where focus goes when what had it goes: the box when the form opens, the
-  // tick once it's sent, the link back after Cancel or once the tick goes.
-  const refocus = useRef(null);
   useEffect(() => {
-    if (open) box.current?.focus();
+    const d = dialog.current;
+    if (!d) return;
+    if (open && !d.open) d.showModal();
+    if (!open && d.open) d.close();
   }, [open]);
-  useEffect(() => {
-    const to = refocus.current;
-    if (!to) return;
-    refocus.current = null;
-    focusSoon(() => (to === 'tick' ? tick.current : opener.current));
-  });
-  const line = answer?.card?.line ?? '';
-  // The line now, for when the send returns: the card may have refreshed meanwhile.
-  const lineNow = useRef(line);
-  lineNow.current = line;
-  // The tick is a moment's acknowledgement, then the link is back for the next answer.
-  useEffect(() => {
-    if (done === null) return;
-    if (line !== done) {
-      if (document.activeElement === tick.current) refocus.current = 'link';
-      setDone(null);
-      return;
-    }
-    const id = setTimeout(() => {
-      if (document.activeElement === tick.current) refocus.current = 'link';
-      setDone(null);
-    }, REPORTED_SHOWN_MS);
-    return () => clearTimeout(id);
-  }, [done, line]);
+  const close = () => setOpen(false);
+  const ready = !sending && (reason !== null || note.trim() !== '');
   const send = async (e) => {
     e.preventDefault();
-    if (!note.trim()) return box.current?.focus();
+    if (!ready) return;
     setSending(true);
+    setMsg('');
     try {
-      await api('/me/feedback', { method: 'POST', body: { kind: 'wrong', note: note.trim(), platform: 'web', context: reported ?? undefined } });
-      setOpen(false);
+      await api('/me/feedback', {
+        method: 'POST',
+        body: { kind: 'wrong', reason: reason ?? undefined, note: note.trim(), platform: 'web', context: reported ?? undefined },
+      });
+      setSent(true);
+      setReason(null);
       setNote('');
-      setDone(lineNow.current);
-      refocus.current = 'tick';
+      focusSoon(() => dialog.current?.querySelector('.report-sent h2'));
     } catch (err) {
       setMsg(err.message);
     } finally {
       setSending(false);
     }
   };
+  const line = reported?.card?.line || reported?.label || '';
+  const body = sent
+    ? html`<div class="report-sent">
+        <div class="report-tick" aria-hidden="true">✓</div>
+        <h2 tabindex="-1" id="report-title">${t('Thanks, it’s sent')}</h2>
+        <p class="hint">${email ? html`<${Fill} text=${t('We’ll look at this answer, and reply to {0} if we need to know more.', MARK)} parts=${[html`<strong>${email}</strong>`]} />` : t('We’ll look at this answer.')}</p>
+        <button type="button" class="btn report-send" onClick=${close}>${t('Done')}</button>
+      </div>`
+    : anonymous
+      ? html`<h2 id="report-title">${t('What was wrong?')}</h2>
+          <p class="hint">${t('Add an email to report a wrong answer, so we can reply to you.')}</p>
+          <button type="button" class="btn accent report-send" onClick=${onAddEmail}>${t('Add an email')}</button>`
+      : html`<form onSubmit=${send}>
+          <h2 id="report-title">${t('What was wrong?')}</h2>
+          ${line && html`<div class="report-quote"><span class="report-quote-line">${line}</span></div>`}
+          <p class="hint report-pick" id="report-pick">${t('Pick one, or say what happened')}</p>
+          <div class="report-chips" role="group" aria-labelledby="report-pick">
+            ${REPORT_REASONS.map(
+              ([key, label]) => html`<button
+                type="button"
+                key=${key}
+                class="report-chip"
+                aria-pressed=${String(reason === key)}
+                onClick=${() => setReason(reason === key ? null : key)}
+              >${t(label)}</button>`,
+            )}
+          </div>
+          <textarea
+            class="report-note"
+            rows="3"
+            maxlength="1000"
+            aria-label=${t('Your note')}
+            placeholder=${t('What happened? A time or a stop helps.')}
+            value=${note}
+            onInput=${(e) => setNote(e.currentTarget.value)}
+          ></textarea>
+          ${email && html`<p class="hint report-who"><${Fill} text=${t('We’ll reply to {0}. This answer is sent with your report.', MARK)} parts=${[html`<strong>${email}</strong>`]} /></p>`}
+          <button type="submit" class="btn accent report-send" disabled=${!ready}>${sending ? t('Sending…') : t('Send')}</button>
+          <p class="hint report-error" role="status">${msg}</p>
+        </form>`;
   return html`
-    ${done !== null && html`<span class="report-done" tabindex="-1" ref=${tick}>✓ ${t('Reported, thanks')}</span>`}
-    ${!open &&
-    done === null &&
-    html`<button
+    <button
       type="button"
       class="link-btn report-open"
       ref=${opener}
+      aria-haspopup="dialog"
       onClick=${() => {
         setReported(answer);
         setMsg('');
+        setSent(false);
         setOpen(true);
       }}
-    >${t('Is this wrong?')}</button>`}
-    ${open &&
-    anonymous &&
-    html`<div class="report">
-      <p class="hint">${t('Add an email to report a wrong answer, so we can reply to you.')}</p>
-      <div class="actions">
-        <button type="button" class="btn small accent" onClick=${onAddEmail}>${t('Add an email')}</button>
-        <button
-          type="button"
-          class="btn small ghost"
-          onClick=${() => {
-            refocus.current = 'link';
-            setOpen(false);
-          }}
-        >${t('Cancel')}</button>
+    >${t('Is this wrong?')}</button>
+    <dialog
+      class="report-sheet"
+      ref=${dialog}
+      aria-labelledby="report-title"
+      onClose=${() => {
+        setOpen(false);
+        focusSoon(() => opener.current);
+      }}
+      onClick=${(e) => e.target === e.currentTarget && close()}
+    >
+      <div class="report-inner">
+        <div class="report-grab" aria-hidden="true"></div>
+        ${open && body}
       </div>
-    </div>`}
-    ${open &&
-    !anonymous &&
-    html`<form class="report" onSubmit=${send}>
-      <label for="report-note">${t('What was wrong?')}</label>
-      <textarea
-        id="report-note"
-        rows="3"
-        maxlength="1000"
-        placeholder=${t('The D2 never came, the walk is longer than that…')}
-        value=${note}
-        onInput=${(e) => setNote(e.currentTarget.value)}
-        ref=${box}
-        required
-      ></textarea>
-      <p class="hint">${t('This sends the answer above and your note, with your email address so you can get a reply.')}</p>
-      <div class="actions">
-        <button type="submit" class="btn small accent" disabled=${sending || !note.trim()}>${t('Send')}</button>
-        <button
-          type="button"
-          class="btn small ghost"
-          onClick=${() => {
-            refocus.current = 'link';
-            setOpen(false);
-            setNote('');
-          }}
-        >${t('Cancel')}</button>
-      </div>
-    </form>`}
-    <p class="hint" role="status">${msg}</p>
+    </dialog>
   `;
 }

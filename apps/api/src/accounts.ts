@@ -853,9 +853,9 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
     .bind(user.id)
     .all<{ name: string; hint: string; created: number; lastUsed: number | null }>();
   const { results: feedback } = await db
-    .prepare('SELECT created, kind, note, platform, app_version AS appVersion, context, reply_to AS replyTo FROM feedback WHERE user_id = ? ORDER BY created')
+    .prepare('SELECT created, kind, reason, note, platform, app_version AS appVersion, context, reply_to AS replyTo FROM feedback WHERE user_id = ? ORDER BY created')
     .bind(user.id)
-    .all<{ created: number; kind: string; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null }>();
+    .all<{ created: number; kind: string; reason: string | null; note: string; platform: string; appVersion: string | null; context: string | null; replyTo: string | null }>();
   const trips = await exportOutcomes(db, user.id);
   return {
     email: user.email,
@@ -888,6 +888,7 @@ export async function exportAccount(db: D1Database, user: User, today: unknown =
     feedback: feedback.map((f) => ({
       created: new Date(f.created).toISOString(),
       kind: f.kind,
+      reason: f.reason,
       note: f.note,
       platform: f.platform,
       appVersion: f.appVersion,

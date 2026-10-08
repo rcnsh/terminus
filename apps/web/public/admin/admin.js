@@ -212,7 +212,8 @@ function Dashboard({ s, note }) {
               (f) => html`
                 <li>
                   <div class="meta">${`${when(f.created)} · ${f.email ?? (f.replyTo ? `reply to ${f.replyTo} (not checked)` : 'no email')} · ${f.platform}${f.appVersion ? ` ${f.appVersion}` : ''}`}</div>
-                  <div class="note">${f.note || '(no note)'}</div>
+                  ${f.reason && html`<div class="note"><b>${f.reason}</b></div>`}
+                  ${(f.note || !f.reason) && html`<div class="note">${f.note || '(no note)'}</div>`}
                   <div class="meta">${`Answer: ${f.answer}`}</div>
                   ${f.context && html`<details><summary>The answer they saw</summary><pre>${JSON.stringify(f.context, null, 2)}</pre></details>`}
                 </li>
