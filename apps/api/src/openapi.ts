@@ -2413,15 +2413,17 @@ const UPDATE_REQUIRED_426 = errorResponse(
 /**
  * Lists the 426 on every operation an app reaches with its device token:
  * the bus answers and /me, but not sign-in, pairing or sign-out, which
- * answer before the version is checked.
+ * answer before the version is checked, nor DELETE /me/push and DELETE /me,
+ * which an outdated app may still do.
  */
 function withUpdateRequired(spec: Record<string, unknown>): Record<string, unknown> {
   const paths = spec.paths as Record<string, Record<string, { security?: { bearer?: unknown }[]; responses?: Record<string, unknown> }>>;
   for (const [path, ops] of Object.entries(paths)) {
     const me = path === '/me' || path.startsWith('/me/');
     if (!me && (path.startsWith('/auth/') || path.startsWith('/pair'))) continue;
-    for (const op of Object.values(ops)) {
+    for (const [method, op] of Object.entries(ops)) {
       if (!op || typeof op !== 'object' || !op.responses) continue;
+      if (method === 'delete' && (path === '/me' || path === '/me/push')) continue;
       // The overview's default security takes a bearer token; an operation's own must list one.
       const bearer = op.security === undefined ? !me : op.security.some((s) => s && 'bearer' in s);
       if (bearer) op.responses['426'] ??= UPDATE_REQUIRED_426;

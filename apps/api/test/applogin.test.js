@@ -347,8 +347,12 @@ test('an app older than config:minClient is told to update; everyone else is ser
   // No header (the web app, API users), or a platform with no minimum.
   assert.equal((await call(strict, '/me/profile', as(null))).status, 200);
   assert.equal((await call(strict, '/me/profile', as('mac/1.0.0'))).status, 200);
-  // Signing out still works.
+  // It can still stop its pushes, and sign out.
+  assert.equal((await call(strict, '/me/push', { ...as('android/2.5.9'), method: 'DELETE' })).status, 200);
   assert.equal((await call(strict, '/auth/logout', { ...as('android/2.5.9'), method: 'POST' })).status, 200);
+  // And an anonymous app can still delete its account.
+  const other = await anon(env);
+  assert.equal((await call(strict, '/me', { token: other, headers: { 'x-terminus-client': 'android/2.5.9' }, method: 'DELETE' })).status, 200);
 });
 
 test('the bus answers refuse an old app too, in Chinese for zh', async () => {
