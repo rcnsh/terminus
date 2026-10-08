@@ -209,7 +209,8 @@ enum MapFiles {
     /// A GET to the API with the app's headers; the body of a 200. It keeps
     /// to the same Retry-After as the answers (Quiet) and stops with them on
     /// a 426 (Outdated): the map polls every few seconds, and asking through
-    /// a 429 only keeps it tripped.
+    /// a 429 only keeps it tripped. A 503's Retry-After is noted for the map's
+    /// polling loops (`Quiet.later`).
     static func get(_ path: String, token: String?) async throws -> Data {
         if token != nil, Outdated.gated("GET", path), Outdated.active { throw ApiError(status: 426, message: "HTTP 426") }
         if Date() < Quiet.until(.app) { throw ApiError(status: 429, message: "HTTP 429") }
@@ -219,7 +220,9 @@ enum MapFiles {
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
         let (data, resp) = try await URLSession.shared.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        if status == 429 { Quiet.after((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after"), scope: .app) }
+        let retryAfter = (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")
+        if status == 429 { Quiet.after(retryAfter, scope: .app) }
+        if status == 503 { Quiet.later(retryAfter) }
         if status == 426 { Outdated.mark() }
         guard status == 200 else { throw ApiError(status: status, message: "HTTP \(status)") }
         return data

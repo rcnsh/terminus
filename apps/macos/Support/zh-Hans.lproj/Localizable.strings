@@ -142,7 +142,6 @@
 "Refresh now" = "立即刷新";
 "Refreshing" = "正在刷新";
 "Remove" = "移除";
-"Remove %@ from today" = "从今天移除 %@";
 "Remove from today" = "从今天移除";
 "Removing a device signs it out. You'll get an email whenever a device is added or removed." = "移除设备会让它退出登录。每当添加或移除设备时，你都会收到邮件。";
 "Report a wrong answer…" = "报告错误的答案…";
@@ -164,7 +163,13 @@
 "Stops for %@: %@. terminus won't direct you home when you're already there." = "%@ 的车站：%@。你已经在宿舍时，terminus 不会再引导你回家。";
 "Reported, thanks" = "已反馈，谢谢";
 "That request expired. Send a new one." = "请求已失效。请重新发送。";
-"The D2 never came, the walk is longer…" = "D2 一直没来、步行比说的久……";
+"What happened? A time or a stop helps." = "发生了什么？写上时间或车站会更有帮助。";
+"Pick one, or say what happened" = "选一个，或者说说发生了什么";
+"Bus never came" = "车一直没来";
+"Times were off" = "时间不准";
+"Wrong stop" = "车站不对";
+"Walk is longer" = "步行更久";
+"Wrong class" = "课不对";
 "The number to choose: %@" = "要选择的数字：%@";
 "The sign-in was cancelled from the email. If that was you, send a new one." = "登录已在邮件中取消。如果是你取消的，请重新发送。";
 "The trip home" = "回家的行程";
@@ -358,7 +363,6 @@
 "Added to terminus in the menu bar" = "已加到菜单栏的 terminus 里";
 "Go there" = "去这里";
 "Walking directions" = "步行路线";
-"Arriving" = "即将到站";
 "The map needs the built app (./build.sh)." = "地图需要构建好的应用（./build.sh）。";
 "Sent to %@. Not there after a minute? Check your spam folder. The code works for 15 minutes." = "已发送到 %@。一分钟后还没收到？请检查垃圾邮件。验证码 15 分钟内有效。";
 "Reading it on another device?" = "在另一台设备上看邮件？";

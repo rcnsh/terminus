@@ -139,11 +139,10 @@ enum Snapshots {
             m.updated = now
             m.clock = now
             for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.95))] {
-                let r = ImageRenderer(content: Popover(model: m, startShown: true).environment(\.fixedNow, now).background(bg).environment(\.colorScheme, scheme))
-                r.scale = 2
-                guard let img = r.nsImage, let tiff = img.tiffRepresentation,
-                      let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
-                try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
+                write(
+                    Popover(model: m, startShown: true).environment(\.fixedNow, now).background(bg).environment(\.colorScheme, scheme),
+                    scale: 2, to: dir, as: "\(name)-\(scheme == .dark ? "dark" : "light")"
+                )
             }
         }
     }
@@ -157,11 +156,7 @@ enum Snapshots {
         .padding(.vertical, 12)
         .frame(width: 360, alignment: .leading)
         for (scheme, bg) in [(ColorScheme.dark, Color(white: 0.16)), (.light, Color(white: 0.85))] {
-            let r = ImageRenderer(content: view.background(bg).environment(\.colorScheme, scheme))
-            r.scale = 2
-            guard let img = r.nsImage, let tiff = img.tiffRepresentation,
-                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { continue }
-            try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("map-status-\(scheme == .dark ? "dark" : "light").png"))
+            write(view.background(bg).environment(\.colorScheme, scheme), scale: 2, to: dir, as: "map-status-\(scheme == .dark ? "dark" : "light")")
         }
     }
 

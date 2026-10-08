@@ -229,6 +229,12 @@ struct NextAnswer: Decodable {
     /// The service, for an older server's answer without a card (the menu bar's fallback).
     var service: String { label.components(separatedBy: " · ").first ?? label }
     var leaveAt: Date? { leave.flatMap { parseISODate($0.at) } }
+    /// What the header counts down to: the leave-by, or at the stop (phase
+    /// `waiting`, where the headline names the bus) the bus's own time.
+    var countdownAt: Date? {
+        if card?.phase == "waiting", let board = leave?.board.flatMap(parseISODate) { return board }
+        return leaveAt
+    }
     var classAt: Date? { timing?.classAt.flatMap(parseISODate) }
     /// Dim from this instant (the bus has gone, the plan moved on, or it's old).
     var staleAt: Date? { card?.staleAt.flatMap(parseISODate) }
@@ -731,25 +737,48 @@ struct SignInPoll: Decodable {
 }
 
 /// After a 429, every request of the same kind from this Mac waits out the
-/// server's Retry-After, at most 5 minutes: asking again sooner only keeps
-/// the limit tripped, and each refused request still costs the server one.
-/// Signing in and the answers are limited apart on the server, so they wait
-/// apart here: a mistyped code doesn't stop the menu bar, nor the other way.
+/// server's Retry-After, at most 5 minutes (`maxS`): asking again sooner only
+/// keeps the limit tripped, and each refused request still costs the server
+/// one. Signing in and the answers are limited apart on the server, so they
+/// wait apart here: a mistyped code doesn't stop the menu bar, nor the other
+/// way. A 503's Retry-After (the accounts database or the map file down for
+/// a moment) isn't a gate: only the polling loops wait it out (`later`).
 enum Quiet {
     enum Scope { case signIn, app }
 
+    /// The longest any Retry-After is honoured, a 429's or a 503's.
+    static let maxS: TimeInterval = 300
+
     private static let lock = NSLock()
     nonisolated(unsafe) private static var untilDates: [Scope: Date] = [:]
+    nonisolated(unsafe) private static var laterDate = Date.distantPast
 
-    /// Sign-in and pairing (`/auth/…`, `/pair`), or everything else.
-    static func scope(_ path: String) -> Scope { path == "/pair" || path.hasPrefix("/auth/") ? .signIn : .app }
+    /// Sign-in and pairing (`/auth/…`, `/pair`, `/me/pair-code`), or everything else.
+    static func scope(_ path: String) -> Scope {
+        path == "/pair" || path == "/me/pair-code" || path.hasPrefix("/auth/") ? .signIn : .app
+    }
 
     static func until(_ scope: Scope) -> Date { lock.withLock { untilDates[scope] ?? .distantPast } }
 
     static func after(_ retryAfter: String?, scope: Scope, now: Date = Date()) {
         let s = retryAfterS(retryAfter, now: now) ?? 60
-        lock.withLock { untilDates[scope] = now.addingTimeInterval(min(max(s, 1), 300)) }
+        lock.withLock { untilDates[scope] = now.addingTimeInterval(cap(s)) }
     }
+
+    /// A 503: the polling loops wait its Retry-After, when it gives one.
+    static func later(_ retryAfter: String?, now: Date = Date()) {
+        guard let s = retryAfterS(retryAfter, now: now) else { return }
+        lock.withLock { laterDate = now.addingTimeInterval(cap(s)) }
+    }
+
+    /// How long a polling loop waits before asking again, at least: a 429's
+    /// wait or a 503's (0: now).
+    static func wait(now: Date = Date()) -> TimeInterval {
+        max(until(.app).timeIntervalSince(now), lock.withLock { laterDate }.timeIntervalSince(now), 0)
+    }
+
+    /// A Retry-After as honoured: at least a second, at most `maxS`.
+    static func cap(_ s: TimeInterval) -> TimeInterval { min(max(s, 1), maxS) }
 }
 
 /// Retry-After in seconds, from either form HTTP allows ("120", or a date);
@@ -898,9 +927,11 @@ struct Api {
         _ = try await send("POST", "/me/choice", json: try JSONSerialization.data(withJSONObject: body))
     }
 
-    /// "Is this wrong?": the answer as it came from the server, and a note (required). Needs an account with an email.
-    func report(note: String, answer: Data?) async throws {
-        try await feedback(kind: "wrong", note: note, context: answer.flatMap { try? JSONSerialization.jsonObject(with: $0) })
+    /// "Is this wrong?": the answer as it came from the server, with a reason
+    /// (an id from `ReportForm.reasons`, as /me/feedback takes them), a note,
+    /// or both. Needs an account with an email.
+    func report(reason: String?, note: String, answer: Data?) async throws {
+        try await feedback(kind: "wrong", note: note, reason: reason, context: answer.flatMap { try? JSONSerialization.jsonObject(with: $0) })
     }
 
     // MARK: setup and devices: the account page's routes, from the app
@@ -996,8 +1027,9 @@ struct Api {
     }
 
     /// A note to /me/feedback with this build's version, and for a report the answer it's about.
-    private func feedback(kind: String, note: String, context: Any? = nil) async throws {
+    private func feedback(kind: String, note: String, reason: String? = nil, context: Any? = nil) async throws {
         var body: [String: Any] = ["kind": kind, "note": note, "platform": "mac"]
+        if let reason { body["reason"] = reason }
         if let v = Api.version { body["appVersion"] = v }
         if let context { body["context"] = context }
         _ = try await send("POST", "/me/feedback", json: try JSONSerialization.data(withJSONObject: body))
@@ -1098,6 +1130,7 @@ struct Api {
         if let http { ServerClock.observe(http) }
         let retryAfter = http?.value(forHTTPHeaderField: "retry-after")
         if status == 429 { Quiet.after(retryAfter, scope: scope) }
+        if status == 503 { Quiet.later(retryAfter) }
         if status == 426 { Outdated.mark() }
         guard (200..<300).contains(status) else {
             let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

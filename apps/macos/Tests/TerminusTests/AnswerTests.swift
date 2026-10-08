@@ -503,3 +503,14 @@ private func editCard(_ o: inout [String: Any], _ edit: (inout [String: Any]) ->
     #expect(!m.wantsFix(at: ends.addingTimeInterval(-60)), "resting, popover closed")
     #expect(m.wantsFix(at: ends), "the rest's end has come")
 }
+
+/// At the stop the headline names the bus, so the header counts to the bus
+/// (`leave.board`), not to the leave-by that has already come.
+@Test func atTheStopTheCountdownIsToTheBus() throws {
+    let idle = try goldenEdited("class-bus") { _ in }
+    #expect(idle.countdownAt == idle.leaveAt)
+    let a = try goldenEdited("class-bus") { o in editCard(&o) { $0["phase"] = "waiting" } }
+    let board = try #require(a.leave?.board.flatMap(parseISODate))
+    #expect(a.countdownAt == board)
+    #expect(board > a.leaveAt!)
+}

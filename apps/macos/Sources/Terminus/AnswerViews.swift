@@ -7,6 +7,10 @@ struct AnswerDetail: View {
     var busy = false
     /// Today's entry just taken off, whose row has Undo: the card doesn't offer it as well.
     var undoShownFor: String? = nil
+    /// Past the card's staleAt (AppModel.isOld): its times may be gone, so
+    /// they're left out until the refresh lands, as on the phone and the
+    /// web; the header says "Updating times…" meanwhile.
+    var old = false
     var onAction: (CardAction) -> Void = { _ in }
     var onChoice: (Suggestion, Bool) -> Void = { _, _ in }
 
@@ -21,6 +25,9 @@ struct AnswerDetail: View {
                     // Nothing to catch: no bus to mistake for advice.
                     NextClass(answer: a)
                     Row(icon: "location", text: L("Buses near you are under Nearby.")).foregroundStyle(.secondary)
+                } else if old {
+                    // Nothing timed: an old "by 4:01 PM" would pass for current.
+                    EmptyView()
                 } else if a.isClassPlan {
                     // Each arrival next to the bus it belongs to.
                     // The bus to catch (it names the stop), then when it gets you there.
@@ -43,7 +50,7 @@ struct AnswerDetail: View {
                 // On a ride, the detail already says when you get there, with
                 // its "~" on an estimate; the timing pill would say it again.
                 let timing = a.card?.ride == nil ? a.timing?.text : nil
-                if !a.isClassPlan, !a.isFree, timing != nil || a.crowdText != nil {
+                if !old, !a.isClassPlan, !a.isFree, timing != nil || a.crowdText != nil {
                     HStack(spacing: 6) {
                         if let t = a.timing, let text = timing { Pill(text: text, color: t.status == "late" ? .bad : t.status == "tight" ? .warn : .good) }
                         if let c = a.crowdText { Pill(text: c, color: .secondary) }
