@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 // that never answers, or a page that isn't the API's (a captive portal),
 // must fail, so the page says it couldn't update rather than waiting or
 // taking it for an answer.
-import { api, send } from '../../web/public/account/dom.js';
+import { api, send, sentences } from '../../web/public/account/dom.js';
 
 globalThis.window ??= {};
 const realFetch = globalThis.fetch;
@@ -67,4 +67,16 @@ test('a write waits longer than a read before giving up', async () => {
 test('no connection at all reads as a sentence, not the browser words', async () => {
   globalThis.fetch = () => Promise.reject(new TypeError('Failed to fetch'));
   await assert.rejects(api('/me/profile', { method: 'PUT', body: {} }), { message: "Couldn't reach terminus. Check your connection." });
+});
+
+test('what a screen reader says is stopped as the page writes it: ". " in English, "。" in Chinese', () => {
+  const parts = ['To COM3', null, 'Leave by 09:03', '', 'D2 from PGP 09:08'];
+  assert.equal(sentences(parts), 'To COM3. Leave by 09:03. D2 from PGP 09:08');
+  const was = globalThis.window.i18n;
+  globalThis.window.i18n = { lang: 'zh', t: (en) => en };
+  try {
+    assert.equal(sentences(['去 COM3', '约 09:03 前出发']), '去 COM3。约 09:03 前出发');
+  } finally {
+    globalThis.window.i18n = was;
+  }
 });

@@ -3,7 +3,7 @@
 // from the server's card (apps/api/src/card.ts); this only lays them out.
 
 import { announce, focusSoon, html, useEffect, useRef, useState, useStore } from '../assets/ui.js';
-import { api, clock, hour12, serverNow, t } from './dom.js';
+import { api, clock, hour12, sentences, serverNow, t } from './dom.js';
 import { lists } from './profile.js';
 import { Journey, cardStyle, spokenJourney } from './journey.js';
 import { Celestial, Horizon, NightSky } from './sky.js';
@@ -71,14 +71,14 @@ export function Say({ text }) {
  */
 function spoken(a, now) {
   const c = a.card;
-  if (a.mode === 'rest' || a.mode === 'free' || a.arrived) return [a.label, c?.upcoming ? `${c.upcoming.when} ${c.upcoming.title}` : a.detail].filter(Boolean).join('. ');
+  if (a.mode === 'rest' || a.mode === 'free' || a.arrived) return sentences([a.label, c?.upcoming ? `${c.upcoming.when} ${c.upcoming.title}` : a.detail]);
   if (isStale(a)) return null;
   if (c?.journey) return spokenJourney(a, now);
   if (c?.kind === 'class') {
     const head = c.phase !== 'waiting' && now >= Date.parse(a.leave.at) ? t('Leave now') : c.leaveBy;
-    return [`${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}`, head, c.catch, c.late ? c.arrive : null].filter(Boolean).join('. ');
+    return sentences([`${a.dest.label} · ${t('starts {0}', clock(a.timing.classAt))}`, head, c.catch, c.late ? c.arrive : null]);
   }
-  return [a.card?.title ?? a.label, a.detail].filter(Boolean).join('. ');
+  return sentences([a.card?.title ?? a.label, a.detail]);
 }
 
 /** Says card `a` when what it means changes, checking each few seconds for "Leave now". */

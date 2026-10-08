@@ -6,7 +6,7 @@
 // server, or the service worker's kept copy) is worded here as it was.
 
 import { Fill, Icon, MARK, html, store, useEffect, useState } from '../assets/ui.js';
-import { clock, inkOn, serverNow, t } from './dom.js';
+import { clock, inkOn, sentences, serverNow, t } from './dom.js';
 import { Celestial, Horizon } from './sky.js';
 
 const KEY = 'terminus-card-style';
@@ -108,7 +108,7 @@ export function spokenJourney(a, now) {
         ? t('Leave in {0} min', Math.max(1, Math.round(left / 60)))
         : (a.card.leaveBy ?? t('Leave in {0} min', Math.round(left / 300) * 5));
   const bus = j.bus ? `${named(j.bus)} ${t('from {0}', j.bus.stop)} ${j.bus.board}` : walkText(j);
-  return [to(a, j), head, bus, a.card.late ? arrive(j) : null].filter(Boolean).join('. ');
+  return sentences([to(a, j), head, bus, a.card.late ? arrive(j) : null]);
 }
 
 /** The server's line `key` when it sent the journey's lines, else `old()`. */
