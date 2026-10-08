@@ -4,7 +4,6 @@
     <string name="crowd_high">High</string>
     <string name="crowd_low">Low</string>
     <string name="crowd_medium">Medium</string>
-    <string name="map_about">~%1$s</string>
     <string name="map_arriving">Arriving</string>
     <string name="map_bus_at">At %1$s</string>
     <string name="map_bus_between">Between %1$s and %2$s</string>
@@ -17,7 +16,6 @@
     <string name="map_finding_buses">Finding %1$s buses…</string>
     <string name="map_go_there">Go there</string>
     <string name="map_crowding">Crowding</string>
-    <string name="map_min">%1$d min</string>
     <string name="map_needs_connection">The map needs a connection the first time.</string>
     <string name="map_next_stop">Next stop</string>
     <string name="map_no_buses">No %1$s buses running right now.</string>

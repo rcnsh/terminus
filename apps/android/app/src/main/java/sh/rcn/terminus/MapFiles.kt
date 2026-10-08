@@ -106,36 +106,51 @@ object MapFiles {
      * streams it, and the next visit tries again.
      */
     suspend fun keepTiles(ctx: Context) = withContext(Dispatchers.IO) {
-        val tiles = File(dir(ctx), TILES)
-        val meta = File(dir(ctx), "$TILES.json")
+        keepTiles(dir(ctx), System.currentTimeMillis(), { metered(ctx) }, ::fetchTiles)
+    }
+
+    /** What the map file's URL answered: its status, ETag and Content-Length. */
+    data class Fetched(val code: Int, val etag: String?, val length: Long?)
+
+    /**
+     * [keepTiles] in [dir] at [now]. [fetch] asks for the map file (with the
+     * kept ETag, if any) and, on a 200, writes the body to its second argument.
+     */
+    internal fun keepTiles(dir: File, now: Long, metered: () -> Boolean, fetch: (etag: String?, into: File) -> Fetched) {
+        val tiles = File(dir, TILES)
+        val meta = File(dir, "$TILES.json")
         val kept = runCatching { JSONObject(meta.readText()) }.getOrNull()
-        val now = System.currentTimeMillis()
-        if (tiles.exists() && kept != null && now - kept.optLong("checked") < CHECK_MS) return@withContext
+        if (tiles.exists() && kept != null && now - kept.optLong("checked") < CHECK_MS) return
         // A newer map (twice a year) can wait for Wi-Fi; the first one can't, or there's no map.
-        if (tiles.exists() && metered(ctx)) return@withContext
+        if (tiles.exists() && metered()) return
         runCatching {
-            val conn = URL("${BuildConfig.API_BASE}/map/$TILES").openConnection() as HttpURLConnection
-            try {
-                conn.connectTimeout = 8_000
-                conn.readTimeout = 30_000
-                conn.setRequestProperty("x-terminus-client", CLIENT)
-                if (tiles.exists()) kept?.optString("etag")?.takeIf { it.isNotEmpty() }?.let { conn.setRequestProperty("if-none-match", it) }
-                when (conn.responseCode) {
-                    304 -> {}
-                    200 -> {
-                        val part = File(dir(ctx), "$TILES.part")
-                        conn.inputStream.use { input -> part.outputStream().use { input.copyTo(it) } }
-                        // A cut-off download must not replace a good file.
-                        val length = conn.getHeaderField("content-length")?.toLongOrNull()
-                        if (length != null && part.length() != length) error("short download")
-                        if (!part.renameTo(tiles)) error("couldn't keep the map file")
-                    }
-                    else -> error("HTTP ${conn.responseCode}")
+            val part = File(dir, "$TILES.part")
+            val got = fetch(if (tiles.exists()) kept?.optString("etag")?.takeIf { it.isNotEmpty() } else null, part)
+            when (got.code) {
+                304 -> {}
+                200 -> {
+                    // A cut-off download must not replace a good file.
+                    if (got.length != null && part.length() != got.length) error("short download")
+                    if (!part.renameTo(tiles)) error("couldn't keep the map file")
                 }
-                meta.writeText(JSONObject().put("etag", conn.getHeaderField("etag") ?: kept?.optString("etag").orEmpty()).put("checked", now).toString())
-            } finally {
-                conn.disconnect()
+                else -> error("HTTP ${got.code}")
             }
+            meta.writeText(JSONObject().put("etag", got.etag ?: kept?.optString("etag").orEmpty()).put("checked", now).toString())
+        }
+    }
+
+    private fun fetchTiles(etag: String?, into: File): Fetched {
+        val conn = URL("${BuildConfig.API_BASE}/map/$TILES").openConnection() as HttpURLConnection
+        try {
+            conn.connectTimeout = 8_000
+            conn.readTimeout = 30_000
+            conn.setRequestProperty("x-terminus-client", CLIENT)
+            etag?.let { conn.setRequestProperty("if-none-match", it) }
+            val code = conn.responseCode
+            if (code == 200) conn.inputStream.use { input -> into.outputStream().use { input.copyTo(it) } }
+            return Fetched(code, conn.getHeaderField("etag"), conn.getHeaderField("content-length")?.toLongOrNull())
+        } finally {
+            conn.disconnect()
         }
     }
 

@@ -204,7 +204,7 @@ class LiveService : Service() {
             )
 
         /** What the header counts down to: getting off, leaving for a class, or the bus. */
-        private fun countdownAt(answer: NextAnswer): Long? {
+        internal fun countdownAt(answer: NextAnswer): Long? {
             val card = answer.card
             return when {
                 card?.phase == "riding" && card.ride != null -> card.ride.arriveMs

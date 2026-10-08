@@ -2,7 +2,10 @@ package sh.rcn.terminus.widget
 
 import sh.rcn.terminus.TestStrings
 import org.json.JSONObject
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import sh.rcn.terminus.Destinations
 import sh.rcn.terminus.NextAnswer
@@ -70,5 +73,30 @@ class WidgetModesTest {
         assertEquals(WidgetModes.MAX_BUTTONS, WidgetModes.pick(many, null, 2000f).size)
         // Only Timetable and Nearby fit: they stay.
         assertEquals(listOf("Timetable", "Nearby"), WidgetModes.pick(all, com3, 175f).map { it.label })
+    }
+
+    /**
+     * Signing out leaves no widget holding the old account's place or
+     * answer. Every key the modes and the nearby swap declare is filled,
+     * so a key added later and left out of forget() fails here.
+     */
+    @Test fun forgetLeavesNothingOfTheOldAccount() {
+        val keys = listOf(WidgetModes, NearbySwap).flatMap { o ->
+            o.javaClass.declaredFields.filter { Preferences.Key::class.java.isAssignableFrom(it.type) }.map { f ->
+                f.isAccessible = true
+                f.get(o) as Preferences.Key<*>
+            }
+        }
+        assertTrue("found the keys: $keys", keys.size >= 9)
+        val prefs = mutablePreferencesOf()
+        @Suppress("UNCHECKED_CAST")
+        for (k in keys) {
+            if (k.name.endsWith("-at") || k.name.endsWith("-fetched")) prefs[k as Preferences.Key<Long>] = now
+            else prefs[k as Preferences.Key<String>] = "place:utown"
+        }
+        assertEquals(keys.size, prefs.asMap().size)
+        WidgetModes.forget(prefs)
+        assertEquals(emptyMap<Preferences.Key<*>, Any>(), prefs.asMap())
+        assertEquals(Mode.Timetable, Mode.of(prefs[WidgetModes.MODE], prefs[WidgetModes.MODE_LABEL]))
     }
 }
