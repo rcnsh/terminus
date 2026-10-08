@@ -5,16 +5,22 @@ import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import sh.rcn.terminus.Api
 import sh.rcn.terminus.ApiError
 import sh.rcn.terminus.CampusMap
 import sh.rcn.terminus.LiveBus
 import sh.rcn.terminus.Locator
 import sh.rcn.terminus.MapFiles
+import sh.rcn.terminus.MapGeoJson
+import sh.rcn.terminus.ParseError
+import sh.rcn.terminus.Session
 import sh.rcn.terminus.StopBoard
 import sh.rcn.terminus.Store
 
@@ -36,6 +42,9 @@ data class MapUi(
     val campus: CampusMap? = null,
     /** Codes of the main campus's stops, for the first view. */
     val core: Set<String> = emptySet(),
+    /** The route lines and the stops as GeoJSON, made with [campus], off the main thread. */
+    val routesJson: String = MapGeoJson.EMPTY,
+    val stopsJson: String = MapGeoJson.EMPTY,
     /** The style JSON for the current theme and language. */
     val style: String? = null,
     /** Nothing to show: no connection the first time. */
@@ -55,6 +64,8 @@ data class MapUi(
     val board: StopBoard? = null,
     /** True when the board couldn't be fetched at all (offline). */
     val boardFailed: Boolean = false,
+    /** True when the server answered, but not with the board (down, or busy). */
+    val boardError: Boolean = false,
     /** Where the phone is, only with location already allowed. */
     val me: Pair<Double, Double>? = null,
     /** The street map file is downloading (the first open): the map is plain until it's here. */
@@ -76,50 +87,79 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(MapUi())
     val state: StateFlow<MapUi> = _state
 
+    /** The theme and language of the style shown or being fetched; null: none yet, or the last try got nothing. */
     private var styleKey: Pair<Boolean, Boolean>? = null
+    private var styleJob: Job? = null
+    private var campusJob: Job? = null
+    private var tilesJob: Job? = null
+    private var styleFailed = false
+    private var campusFailed = false
 
     /** When /buses last answered (elapsedRealtime, which counts on in sleep), to tell when the buses shown are old. */
     private var busesAt = 0L
 
-    private fun api() = Api(store.token)
+    private fun api(token: String?) = Api(token)
 
-    /** The stops, routes and style; again when the theme or language changes. */
+    /** Nothing to draw the map with: no stops and routes, or no style, and the last try for it failed. */
+    private fun failed(s: MapUi) = (s.campus == null && campusFailed) || (s.style == null && styleFailed)
+
+    /**
+     * The stops, routes and style; again when the theme or language changes,
+     * and whatever didn't come last time. Nothing already on its way is
+     * asked for twice.
+     */
     fun open(dark: Boolean, zh: Boolean) {
         val ctx = getApplication<Application>()
-        if (styleKey != dark to zh) {
-            styleKey = dark to zh
-            viewModelScope.launch {
+        val key = dark to zh
+        if (styleKey != key || (_state.value.style == null && styleJob?.isActive != true)) {
+            styleKey = key
+            styleJob?.cancel()
+            styleJob = viewModelScope.launch {
                 val style = MapFiles.style(ctx, dark, zh)
-                _state.update { it.copy(style = style ?: it.style, failed = style == null && it.style == null) }
+                styleFailed = style == null
+                // Nothing came: the next open asks again, rather than the map waiting on it for good.
+                if (style == null && styleKey == key) styleKey = null
+                _state.update { s -> s.copy(style = style ?: s.style).let { it.copy(failed = failed(it)) } }
             }
         }
-        if (_state.value.campus == null) {
-            viewModelScope.launch {
+        if (_state.value.campus == null && campusJob?.isActive != true) {
+            campusJob = viewModelScope.launch {
+                val token = store.token
                 try {
-                    val json = MapFiles.campus(ctx, api())
+                    val json = MapFiles.campus(ctx, api(token))
+                    campusFailed = json == null
                     if (json == null) {
-                        _state.update { it.copy(failed = true) }
+                        _state.update { it.copy(failed = failed(it)) }
                     } else {
-                        val (campus, core) = CampusMap.parse(json)
-                        _state.update { it.copy(campus = campus, core = core, failed = false) }
+                        // Reading it and making the GeoJSON takes a moment: not on the main thread.
+                        val (campus, core, lines) = withContext(Dispatchers.Default) {
+                            val (campus, core) = CampusMap.parse(json)
+                            Triple(campus, core, MapGeoJson.routes(campus) to MapGeoJson.stops(campus))
+                        }
+                        _state.update { s -> s.copy(campus = campus, core = core, routesJson = lines.first, stopsJson = lines.second).let { it.copy(failed = failed(it)) } }
                     }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    _state.update { it.copy(failed = true) }
+                    if (e is ApiError && e.status == 401) Session.rejected(ctx, token)
+                    campusFailed = true
+                    _state.update { it.copy(failed = failed(it)) }
                 }
             }
-            // The whole map file for offline, in the background. The first
-            // time, the map is plain until it's here; then the streets appear.
-            viewModelScope.launch {
-                val had = MapFiles.hasTiles(ctx)
-                if (!had) _state.update { it.copy(downloading = true, downloadFailed = false) }
-                MapFiles.keepTiles(ctx)
-                val got = MapFiles.hasTiles(ctx)
-                _state.update { it.copy(downloading = false, downloadFailed = !got) }
-                val key = styleKey
-                if (!had && got && key != null) {
-                    MapFiles.style(ctx, key.first, key.second)?.let { style -> _state.update { it.copy(style = style) } }
+        }
+        // The whole map file for offline, in the background. The first
+        // time, the map is plain until it's here; then the streets appear.
+        // After a failed try, the next open tries again.
+        if ((_state.value.campus == null || _state.value.downloadFailed) && tilesJob?.isActive != true) {
+            tilesJob = viewModelScope.launch {
+                val before = MapFiles.tilesPath(ctx)
+                if (before == null) _state.update { it.copy(downloading = true, downloadFailed = false) }
+                val after = MapFiles.keepTiles(ctx)
+                _state.update { it.copy(downloading = false, downloadFailed = after == null) }
+                // A new file, the first or a newer version under a name of its own: the style points at it.
+                val shown = styleKey
+                if (after != null && after != before && shown != null) {
+                    MapFiles.style(ctx, shown.first, shown.second)?.let { style -> _state.update { it.copy(style = style) } }
                 }
             }
         }
@@ -138,8 +178,10 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun refreshBuses() {
         val svc = _state.value.selected ?: return
+        // Signed out (a 401 below): nothing to ask with.
+        val token = store.token ?: return
         try {
-            val list = api().buses(svc)
+            val list = api(token).buses(svc)
             if (svc != _state.value.selected) return
             val status = when {
                 !list.available -> BusStatus.Unavailable
@@ -155,6 +197,10 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (e is ApiError && e.status == 401) {
+                Session.rejected(getApplication(), token)
+                return
+            }
             // No answer: the buses stay where they were last seen, faded once
             // that's a few polls ago, as when the feed itself is down.
             val old = SystemClock.elapsedRealtime() - busesAt > BUSES_OLD_MS
@@ -162,12 +208,12 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun openStop(code: String) = _state.update { it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false) }
+    fun openStop(code: String) = _state.update { it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false, boardError = false) }
 
     /** A stop from Nearby: its sheet, and the map moved to it. Unknown codes are ignored. */
     fun showStop(code: String) = _state.update {
         if (it.campus != null && it.campus.stop(code) == null) it
-        else it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false, focus = code)
+        else it.copy(sheet = MapSheet.Stop(code), board = null, boardFailed = false, boardError = false, focus = code)
     }
 
     fun openBus(id: String) = _state.update { it.copy(sheet = MapSheet.Bus(id)) }
@@ -176,15 +222,25 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun refreshBoard() {
         val code = (_state.value.sheet as? MapSheet.Stop)?.code ?: return
+        val token = store.token ?: return
+        fun open() = (_state.value.sheet as? MapSheet.Stop)?.code == code
         try {
-            val board = api().arrivals(code)
-            if ((_state.value.sheet as? MapSheet.Stop)?.code == code) _state.update { it.copy(board = board, boardFailed = false) }
+            val board = api(token).arrivals(code)
+            if (open()) _state.update { it.copy(board = board, boardFailed = false, boardError = false) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiError) {
-            if ((_state.value.sheet as? MapSheet.Stop)?.code == code) _state.update { it.copy(board = StopBoard(false, emptyList())) }
+            when (e.status) {
+                401 -> Session.rejected(getApplication(), token)
+                // A stop the server doesn't know: no times, which is true.
+                404 -> if (open()) _state.update { it.copy(board = StopBoard(false, emptyList()), boardFailed = false, boardError = false) }
+                // Down or busy: not "no times", which would say no buses are coming.
+                else -> if (open()) _state.update { it.copy(boardError = true, boardFailed = false) }
+            }
+        } catch (e: ParseError) {
+            if (open()) _state.update { it.copy(boardError = true, boardFailed = false) }
         } catch (e: Exception) {
-            if ((_state.value.sheet as? MapSheet.Stop)?.code == code) _state.update { it.copy(boardFailed = true) }
+            if (open()) _state.update { it.copy(boardFailed = true, boardError = false) }
         }
     }
 
