@@ -116,7 +116,6 @@ const AT_COM3 = 'lat=1.294431&lon=103.775217';
 const AT_UTOWN = 'lat=1.303876&lon=103.774621';
 const AT_PGP = 'lat=1.291765&lon=103.780419'; // the PGP bus stop
 const AT_IT = 'lat=1.297204&lon=103.772688';
-const AT_MUSEUM = 'lat=1.301081&lon=103.77369';
 const AT_KR_MRT = 'lat=1.29482&lon=103.784413';
 const THU_DATE = '2026-08-27';
 
