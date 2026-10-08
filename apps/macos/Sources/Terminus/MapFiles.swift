@@ -96,7 +96,7 @@ enum MapFiles {
         size >= minTilesBytes && head.count >= 8 && head.prefix(7) == Data("PMTiles".utf8) && head[head.startIndex + 7] == 3
     }
 
-    private static func looksLikeTiles(_ file: URL) -> Bool {
+    static func looksLikeTiles(_ file: URL) -> Bool {
         guard let h = try? FileHandle(forReadingFrom: file) else { return false }
         defer { try? h.close() }
         let head = (try? h.read(upToCount: 8)) ?? Data()

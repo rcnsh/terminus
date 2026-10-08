@@ -107,8 +107,11 @@ final class MapModel {
 
     /// MapLibre couldn't load a style reading the map file: the file goes
     /// (the next look downloads it again) and the map is plain meanwhile.
+    /// Only when the file itself fails the check: a load can fail for other
+    /// reasons (its style file replaced meanwhile), and a good file kept is
+    /// one the Mac needn't download again, offline perhaps.
     func tilesFailed(_ shown: URL) async {
-        guard MapFiles.readsTiles(shown) else { return }
+        guard MapFiles.readsTiles(shown), let file = MapFiles.current, !MapFiles.looksLikeTiles(file) else { return }
         MapFiles.dropTiles()
         style = await MapFiles.style(dark: look.dark, zh: look.zh)
     }
@@ -770,8 +773,9 @@ private struct CampusMapView: NSViewRepresentable {
 
         /// A map file MapLibre can't read: dropped, and the plain map instead.
         func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: any Error) {
-            guard let styleURL else { return }
-            Task { await map.tilesFailed(styleURL) }
+            // A style already replaced (the look changed) failing is no news.
+            guard let failed = mapView.styleURL, failed == styleURL else { return }
+            Task { await map.tilesFailed(failed) }
         }
 
         /// Never far off campus: the map file ends a little way out.
