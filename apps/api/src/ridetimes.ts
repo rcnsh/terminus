@@ -26,7 +26,7 @@ import { sgtDate } from './calendar.ts';
 
 /** Below this many rides a service (or an hour of it) keeps the guess. */
 export const MIN_RIDES = 10;
-/** A ride this far from the guess is a mistake, not a slow bus: dropped. */
+/** A ride faster than MIN_HOP_S or slower than MAX_HOP_S a stop is a mistake, not a slow bus: dropped. */
 const MIN_HOP_S = 30;
 const MAX_HOP_S = 300;
 /** The table never moves the guess further than this either way. */

@@ -154,8 +154,10 @@ function sides(s: Stop, byCode: Map<string, Stop>): Stop[] {
 
 /**
  * Within `tolM` of the service's path from the boarding stop to where you get
- * off, drawn as straight lines between its stops. Campus stops are a few
- * hundred metres apart, so the roads between them are nearly straight.
+ * off, drawn as straight lines between its stops. Most campus stops are a
+ * few hundred metres apart, so the roads between them are nearly straight;
+ * route P's are kilometres apart, and its road can stray further from the
+ * straight line than `tolM`.
  */
 export function onRoute(graph: Graph, bus: Boarded, fix: Fix, tolM: number): boolean {
   const idx = indexGraph(graph);
