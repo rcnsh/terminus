@@ -23,12 +23,14 @@ class LeaveAlertsTest {
         remind: Boolean = true,
         phase: String = "idle",
         nextChangeAt: Long? = null,
+        leaveBy: String? = "Leave by 09:38",
     ) = NextAnswer.parse(
         JSONObject(
             """{"label":"R2 · 9:42","detail":"","quality":"live","mode":"trip",
             "leave":{"at":"${iso(leaveAt)}","svc":"R2","stop":"PGP"},
             "timing":{"classAt":"${iso(classAt)}"},
             "card":{"kind":"class","phase":"$phase","actions":[],"remind":$remind,
+              "leaveBy":${leaveBy?.let { "\"$it\"" } ?: "null"},
               "remindAt":${remindAt?.let { "\"${iso(it)}\"" } ?: "null"},
               "nextChangeAt":${nextChangeAt?.let { "\"${iso(it)}\"" } ?: "null"}}}""",
         ),
@@ -80,6 +82,25 @@ class LeaveAlertsTest {
         assertEquals(Step.CheckAt(remindAt - 2 * 60_000), run(plan(leaveAt = remindAt + 5 * 60_000), fresh, now).first)
         // Within the two minutes: post now.
         assertTrue(run(plan(leaveAt = now + 6 * 60_000), fresh, now).first is Step.HeadsUp)
+    }
+
+    @Test fun withExactAlarmsTheHeadsUpWaitsForRemindAt() {
+        val exact = fresh.copy(exact = true)
+        val a = plan(leaveAt = now + 6 * 60_000)
+        // Fresh times in hand a minute early: posted at remindAt, so "5 minutes before" is true.
+        assertEquals(Step.PostAt(now + 60_000), run(a, exact, now).first)
+        assertEquals(Step.HeadsUp(classAt, now + 6 * 60_000), run(a, exact, now + 60_000).first)
+    }
+
+    @Test fun nothingToSayIsTriedAgainThenGivenUp() {
+        // No leave time to word yet (no bus to catch): not marked as shown.
+        val quiet = plan(leaveAt = now + 4 * 60_000, leaveBy = null, nextChangeAt = now + 30_000)
+        assertEquals(Step.CheckAt(now + 2 * 60_000), run(quiet, fresh, now).first)
+        assertEquals(Step.CheckAt(now + 5 * 60_000 + 2_000), run(plan(leaveAt = now + 4 * 60_000, leaveBy = null, nextChangeAt = now + 5 * 60_000), fresh, now).first)
+        assertEquals(Step.StopChecking, run(plan(leaveAt = now + 4 * 60_000, leaveBy = null), fresh, now).first)
+        // Well past the reminder: counted as done, as a shown heads-up would be.
+        val unsaid = plan(leaveAt = now + 30 * 60_000, remindAt = now - 60_000, leaveBy = null)
+        assertEquals(Step.GiveUp(classAt), run(unsaid, fresh, now + 11 * 60_000).first)
     }
 
     @Test fun aLeaveTimeAlreadyPastHasNoLeaveNowAlarm() {
