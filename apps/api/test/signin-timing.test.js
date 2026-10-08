@@ -20,7 +20,7 @@ function setup() {
   // KV's own cooldown mark is a second guard and only eventually consistent
   // across data centres; dropping it leaves D1's check, which must hold alone.
   const forgetKvCooldown = () => {
-    for (const k of [...env.KV._map.keys()]) if (k.startsWith('mail:')) env.KV._map.delete(k);
+    for (const k of env.KV._map.keys()) if (k.startsWith('mail:')) env.KV._map.delete(k);
   };
   return { env, email, forgetKvCooldown };
 }
