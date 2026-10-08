@@ -786,13 +786,9 @@ class Api(private val token: String?, private val fast: Boolean = false, private
     }
 
     /** Something that happened on the trip ("boarded", "missed", ...). Answers with the new /me/next. */
-    suspend fun signal(kind: String, trip: String?, lat: Double? = null, lon: Double? = null, speed: Double? = null, acc: Double? = null): JSONObject {
+    suspend fun signal(kind: String, trip: String?): JSONObject {
         val body = JSONObject().put("kind", kind)
         trip?.let { body.put("trip", it) }
-        if (lat != null && lon != null) body.put("lat", coord(lat).toDouble()).put("lon", coord(lon).toDouble())
-        // What the server needs to tell a bus from a walk (detect.ts), rounded.
-        speed?.let { body.put("speed", Math.round(it * 10) / 10.0) }
-        acc?.let { body.put("acc", Math.round(it).toDouble()) }
         return request("POST", "/me/signal" + if (hour12) "?h12=1" else "", body)
     }
 

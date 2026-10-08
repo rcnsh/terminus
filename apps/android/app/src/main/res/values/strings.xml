@@ -132,9 +132,6 @@
     <string name="delete_account">Delete this account</string>
     <string name="delete_account_text">Your timetable and settings will be deleted immediately and the app will reset. Without an email on the account, they can\'t be recovered.</string>
     <string name="delete_account_title">Delete this account?</string>
-    <string name="detect">Notice when I board</string>
-    <string name="detect_hint">During a trip, the live notification uses your location to detect when you board, miss a bus or arrive, and keeps your plan in sync across your devices. It starts when you open terminus, or tap its notification or widget, during a trip. Your location isn\'t stored, only the result.</string>
-    <string name="detect_needs">terminus needs precise location and notifications for this.</string>
     <string name="device_removed">Device removed. Pair again in the app.</string>
     <string name="directions_to">Directions to %1$s</string>
     <string name="done">Done</string>
@@ -146,7 +143,6 @@
     <string name="favourites_hint">Available in one tap from the app, the widget and the Mac\'s menu bar. To go somewhere every week, add it to your timetable.</string>
     <string name="finding_stop">Finding the nearest stop…</string>
     <string name="follow_device">Follow this phone</string>
-    <string name="follow_trip">Follow this trip</string>
     <string name="free_hint_none">Tap Nearby for buses around you.</string>
     <string name="friday">Friday</string>
     <string name="friday_short">Fri</string>
@@ -330,7 +326,6 @@
     <string name="send_pair_code">Send the pairing code</string>
     <string name="sending">Sending…</string>
     <string name="settings">Settings</string>
-    <string name="short_detect">Boarding</string>
     <string name="short_leave_alerts">Leave alerts</string>
     <string name="short_live">Live notification</string>
     <string name="shortcut_bus_to">Bus to %1$s</string>
@@ -353,7 +348,6 @@
     <string name="starts_at">starts %1$s</string>
     <string name="step_of">Step %1$d of %2$d</string>
     <string name="stop_departures">%1$s: %2$s</string>
-    <string name="stop_following">Stop following</string>
     <string name="stop_suffix">%1$s stop</string>
     <string name="sunday">Sunday</string>
     <string name="sunday_short">Sun</string>
@@ -527,8 +521,7 @@
     <string name="notify_leave_short">A reminder 5 minutes before you need to leave</string>
     <string name="notify_leave_more">Then updates on your ride or the next way there.</string>
     <string name="live_notification_short">The next bus and a countdown, until you arrive</string>
-    <string name="detect_short">Keeps your plan in sync across your devices</string>
-    <string name="during_trip_hint">The live notification checks for new times every 30 seconds, which uses more battery. Noticing when you board uses your location during a trip, from when you open terminus or tap its notification or widget. Your location isn\'t stored, only the result.</string>
+    <string name="during_trip_hint">The live notification checks for new times every 30 seconds, which uses more battery.</string>
     <string name="heading_your_devices">Your devices</string>
     <string name="this_phone_tag">This phone</string>
     <string name="auto">Auto</string>
