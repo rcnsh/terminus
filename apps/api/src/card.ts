@@ -523,11 +523,12 @@ function v1(a: MeAnswer, h12: boolean): V1 {
   } else {
     card.catchLine = card.catch;
   }
-  // The headline bus, when it isn't the one to wait for.
+  // The headline bus, when it isn't the one to wait for. A guessed time
+  // gets there at a guessed time too.
   const timed = a.departsAt && a.quality !== 'unknown' && a.quality !== 'ended';
   const same = timed && l.board && Math.abs(Date.parse(l.board) - Date.parse(a.departsAt!)) < 60_000;
   if (timed && !same) {
-    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(roughly(a), at(a.departsAt!)), a.timing.reachAt ? at(a.timing.reachAt) : null);
+    card.goNow = m().goNow(a.bus?.paid ? named({ svc, paid: true }) : svc, approx(roughly(a), at(a.departsAt!)), a.timing.reachAt ? approx(roughly(a), at(a.timing.reachAt)) : null);
   }
   card.note = l.note ?? null;
   card.estimate = l.estimated ? m().estimateNote : null;
@@ -641,7 +642,8 @@ function v2(
   // A clock time, never "4 min": a glance (the Mac's menu bar, a tile) can
   // sit unrefreshed for minutes, and a clock time stays true until the bus
   // leaves. The label as it is when there's no time to give.
-  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}` : a.label.replace(' · ', ' ');
+  // With no bus at all, the walk: "No bus · walk 27 min" cut to fit read "No bus walk ".
+  let glance = timedAt(a) ? `${a.label.split(' · ')[0]} ${approx(roughly(a), short(a.departsAt!))}` : (a.quality === 'ended' && a.foot ? m().walkLabel(mins(a.foot.s)) : a.label).replace(' · ', ' ');
   if (card.kind === 'rest') {
     const from = slotOf(a.label, m().dayStarts);
     glance = from ? m().fromGlance(from) : m().doneToday;

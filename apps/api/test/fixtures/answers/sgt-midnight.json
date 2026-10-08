@@ -1,0 +1,66 @@
+{
+  "label": "Day starts 06:00",
+  "detail": "Next: CS2030 @ COM1, today 10:00",
+  "alt": null,
+  "stop": {
+    "code": "",
+    "name": "",
+    "confidence": 0
+  },
+  "quality": "ended",
+  "asOf": "2026-08-27T16:20:00.000Z",
+  "arrivals": [],
+  "mode": "rest",
+  "dest": null,
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-08-27T22:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "rest",
+    "staleAt": "2026-08-27T22:00:00Z",
+    "crowd": null,
+    "quality": null,
+    "leaveBy": null,
+    "leaveVia": null,
+    "catch": null,
+    "arrive": null,
+    "catchLine": null,
+    "late": false,
+    "goNow": null,
+    "note": null,
+    "estimate": null,
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "From 06:00",
+    "line": "Day starts 06:00 · Next: CS2030 @ COM1, today 10:00",
+    "actions": [],
+    "warning": null,
+    "nextChangeAt": "2026-08-27T22:00:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": null,
+    "notice": null,
+    "h12": false,
+    "journey": null,
+    "upcoming": {
+      "when": "Today",
+      "title": "CS2030 at 10:00",
+      "where": "At COM 3",
+      "off": null
+    },
+    "title": "Day starts 06:00",
+    "heading": null,
+    "remindAt": null
+  }
+}

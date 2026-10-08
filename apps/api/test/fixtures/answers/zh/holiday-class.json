@@ -1,0 +1,149 @@
+{
+  "stop": {
+    "code": "PGP",
+    "name": "PGP",
+    "confidence": 0.75
+  },
+  "quality": "scheduled",
+  "asOf": "2026-11-09T00:30:00.000Z",
+  "arrivals": [],
+  "label": "D2 · 约 36 分钟",
+  "detail": "PGP · 步行 5 分钟 · 约 46 分钟到 GEA1000 @ UTown · 估计",
+  "alt": null,
+  "departsAt": "2026-11-09T01:06:00Z",
+  "arriveAt": "2026-11-09T01:15:30Z",
+  "bus": {
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "walkS": 300,
+    "rideS": 570,
+    "board": "2026-11-09T01:06:00Z",
+    "arrive": "2026-11-09T01:15:30Z",
+    "estimated": true,
+    "toStop": "UTown"
+  },
+  "altBus": null,
+  "leave": {
+    "at": "2026-11-09T01:30:10Z",
+    "estimated": true,
+    "svc": "D2",
+    "stop": "PGP",
+    "stopCode": "PGP",
+    "board": "2026-11-09T01:35:30Z",
+    "arrive": "2026-11-09T01:57:00Z",
+    "note": null,
+    "walkS": 300,
+    "rideS": 570,
+    "toStop": "UTown"
+  },
+  "mode": "trip",
+  "dest": {
+    "to": "UTOWN",
+    "label": "GEA1000 @ UTown",
+    "why": "class"
+  },
+  "timing": {
+    "status": "on-time",
+    "text": "约 09:15 到达 · 早到 45 分钟",
+    "classAt": "2026-11-09T02:00:00Z",
+    "reachAt": "2026-11-09T01:15:30Z"
+  },
+  "places": [
+    {
+      "key": "mrt",
+      "label": "KR MRT"
+    },
+    {
+      "key": "deck",
+      "label": "The Deck"
+    }
+  ],
+  "refreshAt": "2026-11-09T01:00:00Z",
+  "walkSpeedMs": 1.3,
+  "card": {
+    "kind": "class",
+    "staleAt": "2026-11-09T00:45:00Z",
+    "crowd": null,
+    "quality": "按时刻表估计",
+    "leaveBy": "约 09:30 前出发",
+    "leaveVia": "在 PGP 搭约 09:35 的 D2",
+    "catch": "在 PGP 搭约 09:35 的 D2",
+    "arrive": "约 09:57 到达 · 早到 3 分钟",
+    "catchLine": "在 PGP 搭约 09:35 的 D2 · 约 09:57 到达，早到 3 分钟",
+    "late": false,
+    "goNow": "或现在走：约 09:06 的 D2 · 约 09:15 到达",
+    "note": null,
+    "estimate": "根据巴士平常的间隔估计，临近时会显示实时时间。",
+    "phase": "idle",
+    "phaseText": null,
+    "glance": "09:30 出发",
+    "line": "约 09:30 前出发 · 在 PGP 搭 D2",
+    "actions": [
+      {
+        "id": "skipped",
+        "label": "不去了",
+        "trip": "1:600:UTOWN"
+      },
+      {
+        "id": "away",
+        "label": "今天不在学校",
+        "trip": "1:600:UTOWN"
+      }
+    ],
+    "warning": null,
+    "nextChangeAt": "2026-11-09T00:45:00Z",
+    "remind": true,
+    "suggestion": null,
+    "ride": null,
+    "detected": false,
+    "walkTo": {
+      "name": "PGP",
+      "lat": 1.291765,
+      "lon": 103.780419
+    },
+    "notice": null,
+    "h12": false,
+    "journey": {
+      "leave": "约 09:30",
+      "walk": "5 分钟",
+      "bus": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP",
+        "board": "约 09:35"
+      },
+      "boardAt": "2026-11-09T01:35:30Z",
+      "ride": "10 分钟",
+      "off": null,
+      "to": "GEA1000 @ UTown",
+      "toStop": "UTown",
+      "arrive": "约 09:57",
+      "walkEnd": null,
+      "arriveStop": "约 09:57",
+      "slack": "早到 3 分钟",
+      "live": false,
+      "backup": {
+        "svc": "D2",
+        "color": "#8e44c9",
+        "stop": "PGP",
+        "board": "约 09:06"
+      },
+      "why": null,
+      "title": "去 GEA1000 @ UTown · 10:00 开始",
+      "place": "GEA1000",
+      "byText": "约 09:30 前出发",
+      "walkText": "步行 5 分钟",
+      "rideText": "乘车 10 分钟",
+      "walkEndText": null,
+      "arriveText": "约 09:57 到达 · 早到 3 分钟",
+      "arriveWhere": "在 UTown",
+      "backupText": "或现在走：在 PGP 搭约 09:06 的 D2",
+      "summary": "约 09:57 到达 · 在 PGP 搭约 09:35 的 D2"
+    },
+    "upcoming": null,
+    "title": "D2 · 约 09:06",
+    "heading": "下一节课 · GEA1000 @ UTown",
+    "remindAt": "2026-11-09T01:25:10Z"
+  }
+}

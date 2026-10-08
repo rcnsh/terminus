@@ -335,6 +335,8 @@ the Mac.
 - `GET /me/next` is the widget's one call. It picks the destination from the
   timetable (see `planFor` in [src/profile.ts](../src/profile.ts)) or from
   `?place=`/`?to=`, and returns the usual answer plus `dest` and `places`.
+  A `place` or `to` that names nothing it knows is ignored: the answer is
+  the timetable's.
 - `GET /me/nearby` lists departures at up to three stops near you, each with
   its service's colour (`color`, as on the buses and the map). Each row
   (as on `/stops/{code}`) has the next bus in `etaS` and the ones after it
@@ -1092,7 +1094,8 @@ from LTA DataMall accessed via the Singapore Open Data Licence.
 ended`. A stale answer keeps its **original** `asOf` timestamp. A three-minute-
 old answer labelled as such beats a spinner, and beats an empty tile that
 reads as "no buses". Only a real arrival becomes `stale`; a headway guess
-from an old answer stays `scheduled`. Arrival times count from when they were
+from an old answer stays `scheduled`. A stale bus's leg (`bus`, `altBus`) is
+`estimated`, as a guess's is, so its times are drawn with a `~`. Arrival times count from when they were
 fetched, so a bus that has left since then (by the walk to it) is never
 offered as catchable.
 
