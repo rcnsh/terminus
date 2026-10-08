@@ -19,6 +19,7 @@ import type { Arrival, Crowd, Env, Graph, StopArrivals } from './types.ts';
 import { MAX_ETA_S, TTL } from './config.ts';
 import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch } from './edgecache.ts';
+import { noteTrip } from './feedwatch.ts';
 import { indexGraph } from './resolve.ts';
 
 export const LTA_BASE = 'https://datamall2.mytransport.sg/ltaodataservice/';
@@ -199,7 +200,12 @@ export async function getPublicArrivals(env: Env, ctx: ExecutionContext, graph: 
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
-    breaker: { key: `${cacheBase()}/breaker-public`, trips: (err) => err instanceof LtaRefused || err instanceof UpstreamUnreachable, maxAgeS: TTL.breakerS },
+    breaker: {
+      key: `${cacheBase()}/breaker-public`,
+      trips: (err) => err instanceof LtaRefused || err instanceof UpstreamUnreachable,
+      maxAgeS: TTL.breakerS,
+      onTrip: (err) => noteTrip(env, 'lta', err, nowMs),
+    },
     inflight,
   });
 }

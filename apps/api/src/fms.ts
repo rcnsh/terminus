@@ -12,6 +12,7 @@ import type { Arrival, Crowd, Env, StopArrivals } from './types.ts';
 import { MAX_ETA_S, TTL } from './config.ts';
 import { UpstreamUnreachable, timedFetch } from './http.ts';
 import { cacheBase, cachedFetch, flagged } from './edgecache.ts';
+import { noteTrip } from './feedwatch.ts';
 import { UpstreamHttpError, UpstreamRejected, getSession, markIfOutdated, mintWith, proxyEnvelope, proxyHeaders, renewSession } from './auth.ts';
 import type { Session } from './auth.ts';
 import graphJson from '../data/stops.json' with { type: 'json' };
@@ -553,7 +554,7 @@ export async function getArrivals(
     failMemoS: TTL.failMemoS,
     raceMs: TTL.staleRaceMs,
     memoes: notOutdated,
-    breaker: BREAKER,
+    breaker: { ...BREAKER, onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
     inflight,
   });
 }
@@ -684,7 +685,7 @@ export async function getBuses(env: Env, ctx: ExecutionContext, svc: string, now
     staleMaxS: TTL.staleMaxS,
     failMemoS: TTL.failMemoS,
     memoes: notOutdated,
-    breaker: BREAKER,
+    breaker: { ...BREAKER, onTrip: (err) => noteTrip(env, 'nus', err, nowMs) },
     inflight: inflightBuses,
   });
 }
