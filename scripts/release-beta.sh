@@ -11,7 +11,10 @@
 # A beta version is the next stable version's pre-release (after 2.0.0:
 # 2.0.1-beta.1, 2.0.1-beta.2, ...). The build number is the commit count, so
 # it only goes up along main; it must be above the live beta's. Nothing is
-# uploaded until the beta Worker answers with this commit's API. A release's
+# uploaded until the deploy has finished and the beta Worker answers with an
+# API version (API_VERSION) at least this commit's. A beta doesn't bump
+# API_VERSION, so that check can't tell the new Worker from the one before
+# it: the Worker exposes no commit or build id to wait for. A release's
 # own version (2.0.0) can go out on the beta too, so the beta apps move onto
 # it from their betas. Nothing touches the stable site, its data or its
 # downloads. It runs on this Mac from origin/main once CI has passed on it,
@@ -93,7 +96,8 @@ if [ "$LIVE_VERSION" = "$VERSION" ]; then
 fi
 build_goes_up "commit to main and run again (the build is the commit count)"
 
-# Whether the live beta's API is this commit's (scripts/release-check.py).
+# Whether the live beta's API version is at least this commit's
+# (scripts/release-check.py).
 # A dry run reports and carries on.
 live_check() {
   python3 scripts/release-check.py "$@" && return 0
@@ -191,8 +195,11 @@ echo "== beta Worker"
 STAGE=deploy
 # deploy:beta applies the beta D1's pending migrations first.
 (cd apps/api && pnpm run deploy:beta)
-# Before the appcast: the deploy landed, and nothing went up since the
-# first check. A new deploy can take a few seconds to answer everywhere.
+# Before the appcast: nothing went up since the first check, and the beta
+# answers with an API version at least this commit's. That's all it can
+# tell: with the same API_VERSION the Worker from before passes too, so the
+# finished deploy above is what says the new one is up. A new deploy can
+# take a few seconds to answer everywhere.
 echo "== live beta"
 live_release "$SITE"
 build_goes_up "commit to main and run again (the build is the commit count)"

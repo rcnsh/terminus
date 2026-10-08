@@ -112,6 +112,18 @@ test('the release and map scripts upload to the buckets each site serves downloa
   }
 });
 
+test('a release takes the scrape commit for the same data files and bot that scrape.yml commits with', () => {
+  const lib = readFileSync(new URL('../../../scripts/release-lib.sh', import.meta.url), 'utf8');
+  const yml = readFileSync(new URL('../../../.github/workflows/scrape.yml', import.meta.url), 'utf8');
+  const words = (s) => s.split(/\s+/).filter(Boolean).sort();
+  const data = yml.match(/^\s*DATA="([^"]+)"/m);
+  assert.ok(data, 'scrape.yml commits a DATA list');
+  assert.deepEqual(words(lib.match(/^SCRAPE_DATA="([^"]+)"/m)[1]), words(data[1]), 'SCRAPE_DATA in scripts/release-lib.sh');
+  const name = yml.match(/user\.name="([^"]+)"/)[1];
+  const email = yml.match(/user\.email="([^"]+)"/)[1];
+  assert.equal(lib.match(/^SCRAPE_BOT="([^"]+)"/m)[1], `${name} <${email}>`, 'SCRAPE_BOT in scripts/release-lib.sh');
+});
+
 const MIGRATIONS = new URL('../migrations/', import.meta.url);
 const migrationFiles = () => readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
 

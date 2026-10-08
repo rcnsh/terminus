@@ -26,11 +26,36 @@ no_api_base() {
 }
 
 # The ci workflow must have passed on this very commit: the release runs only
-# the API tests, not Android's lint and tests or the Mac's.
-ci_passed() {
-  sha=$(git rev-parse HEAD)
-  runs=$(gh run list --workflow ci.yml --commit "$sha" --limit 20 --json status,conclusion,event,url) ||
-    die "couldn't ask GitHub for CI on $sha; check gh and the network"
+# the API tests, not Android's lint and tests or the Mac's. The one exception
+# is the weekly scrape's commit (.github/workflows/scrape.yml, its commit
+# job): pushed with github.token, it never starts CI, but it changes only
+# the data files on top of a commit that was tested, and the scrape's own
+# test job ran the tests on that data. Such a commit (or a run of them)
+# counts as passed when the commit under it passed.
+SCRAPE_DATA="apps/api/data/stops.json apps/api/data/calendar.json apps/api/data/shapes.json apps/api/data/public.json"
+SCRAPE_BOT="github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+
+# Whether $1 is a scrape commit: one parent, the bot as author and committer,
+# and only SCRAPE_DATA changed. scrape.yml's DATA is the same list (a test
+# checks).
+scrape_commit() {
+  [ "$(git rev-list --no-walk --parents "$1" | wc -w | tr -d ' ')" = 2 ] || return 1
+  [ "$(git show -s --format='%an <%ae>' "$1")" = "$SCRAPE_BOT" ] || return 1
+  [ "$(git show -s --format='%cn <%ce>' "$1")" = "$SCRAPE_BOT" ] || return 1
+  files=$(git diff --name-only "$1^" "$1") || return 1
+  [ -n "$files" ] || return 1
+  # Changed in place: nothing added, deleted, renamed or retyped.
+  [ -z "$(git diff --name-only --no-renames --diff-filter=ADTUXB "$1^" "$1")" ] || return 1
+  for f in $files; do
+    case " $SCRAPE_DATA " in *" $f "*) ;; *) return 1 ;; esac
+  done
+}
+
+# The newest ci run on $1 as "status conclusion url", or "none", in state.
+# Not printed for $(...): die would only leave the subshell, its words lost.
+ci_state() {
+  runs=$(gh run list --workflow ci.yml --commit "$1" --limit 20 --json status,conclusion,event,url) ||
+    die "couldn't ask GitHub for CI on $1; check gh and the network"
   # The newest run of the push to main, else the newest of any.
   state=$(printf '%s' "$runs" | python3 -c '
 import json, sys
@@ -38,7 +63,17 @@ runs = json.load(sys.stdin)
 push = [r for r in runs if r["event"] == "push"]
 r = (push or runs or [None])[0]
 print("none" if r is None else " ".join([r["status"], r["conclusion"] or "-", r["url"]]))') ||
-    die "couldn't read GitHub's answer about CI on $sha"
+    die "couldn't read GitHub's answer about CI on $1"
+}
+
+ci_passed() {
+  sha=$(git rev-parse HEAD)
+  ci_state "$sha"
+  while [ "$state" = none ] && scrape_commit "$sha"; do
+    echo "$sha is the scrape's data-only commit, which CI doesn't run on; checking the commit under it"
+    sha=$(git rev-parse "$sha^")
+    ci_state "$sha"
+  done
   case "$state" in
     none) die "no ci run found for $sha: push main and wait for CI" ;;
     "completed success "*) echo "ci passed on $sha" ;;
