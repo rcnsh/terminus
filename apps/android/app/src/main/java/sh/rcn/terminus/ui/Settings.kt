@@ -231,13 +231,21 @@ internal fun SettingsScreen(
                         }
                     }.background(MaterialTheme.colorScheme.background).padding(bottom = bottom),
                 ) {
-                    // The title in a slim band of the list's sky; the page itself plain.
-                    SkyBand(skyPhase(), if (state.message != null) 0.dp else top) {
-                        BackHeader(stringResource(page.title)) { open = null }
-                    }
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-                        SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
-                        Spacer(Modifier.height(32.dp))
+                    // The title in a slim band of the list's sky, scrolling away with the page; the page itself plain.
+                    val phase = skyPhase()
+                    val band = if (state.message != null) 0.dp else top
+                    val scroll = rememberScrollState()
+                    Box(Modifier.weight(1f)) {
+                        Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                            SkyBand(phase, band) {
+                                BackHeader(stringResource(page.title)) { open = null }
+                            }
+                            Column(Modifier.padding(horizontal = 16.dp)) {
+                                SettingsPageContent(page, state, account, main, onAddEmail, onSignedOut)
+                                Spacer(Modifier.height(32.dp))
+                            }
+                        }
+                        StatusStrip(phase, band, scroll)
                     }
                 }
             }
@@ -259,22 +267,21 @@ internal fun SettingsScreen(
 private fun SettingsList(state: AccountState, main: MainViewModel, top: Dp, bottom: Dp, onOpen: (SettingsPage) -> Unit) {
     val ui by main.state.collectAsStateWithLifecycle()
     val profile = state.profile
-    Column(Modifier.fillMaxSize()) {
-        SkyBand(skyPhase(), top) {
-            TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
+    val phase = skyPhase()
+    val scroll = rememberScrollState()
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = bottom)) {
+            SkyBand(phase, top) {
+                TabHeader { Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge) }
+            }
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Spacer(Modifier.height(12.dp))
+                AccountTile(state, ui, onOpen)
+                Spacer(Modifier.height(20.dp))
+                SettingsGround(state, ui, profile, onOpen)
+            }
         }
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = bottom)
-                .padding(horizontal = 16.dp),
-        ) {
-            Spacer(Modifier.height(12.dp))
-            AccountTile(state, ui, onOpen)
-            Spacer(Modifier.height(20.dp))
-            SettingsGround(state, ui, profile, onOpen)
-        }
+        StatusStrip(phase, top, scroll)
     }
 }
 
