@@ -1903,7 +1903,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 type: 'object',
                 properties: {
                   seq: { type: 'array', items: { type: 'string' }, description: 'Stop codes in route order.' },
-                  loop: { type: 'boolean' },
+                  loop: { type: 'boolean', description: 'True when the service runs round and starts again where it began. A bus on a loop goes on past the start of `line` (its `along` starts again from 0); the two ends of `line` need not meet.' },
                   color: { type: 'string', description: "The service's colour, as on the buses." },
                   line: {
                     type: 'array',
