@@ -168,7 +168,7 @@ async function world() {
     }
     if (url.includes('challenges.cloudflare.com')) {
       if (w.turnstile === 'down') throw new TypeError('fetch failed');
-      return Response.json({ success: w.turnstile === 'ok' });
+      return Response.json({ success: w.turnstile === 'ok', action: 'signin', hostname: 'terminus.run' });
     }
     return feed(input, init);
   });
@@ -219,6 +219,7 @@ const mailFails = (w) => {
 const turnstile = (state) => (w) => {
   w.env.TURNSTILE_SECRET = 's';
   w.env.TURNSTILE_SITE_KEY = 'site';
+  w.env.TURNSTILE_HOSTNAMES = 'terminus.run';
   w.turnstile = state;
 };
 const r2Fails = (w) => {
